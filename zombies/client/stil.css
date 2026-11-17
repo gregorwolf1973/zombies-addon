@@ -69,16 +69,16 @@ button:disabled { opacity: .6; }
 #popup .titel { font-weight: 700; margin: 2px 4px 8px; }
 #popup button { display: block; width: 100% !important; font-size: 15px; padding: 9px; margin-top: 6px !important; border-radius: 9px; }
 #popup button.zweit, #kiste .zweit { background: #ffffff22; color: #fff; }
-#kiste {
+#raetsel, #kiste {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #0008; z-index: 25;
   padding: 16px;
 }
-#kiste .fenster {
+#raetsel .fenster, #kiste .fenster {
   background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 12px 14px; width: min(520px, 100%);
   max-height: 85vh; overflow: auto;
 }
-#kiste .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-#kistezu { background: #ffffff22; color: #fff; padding: 4px 10px; font-size: 16px; }
+#raetsel .kopfzeile, #kiste .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#raetselzu, #kistezu { background: #ffffff22; color: #fff; padding: 4px 10px; font-size: 16px; }
 #kiste .kopf { font-size: 13px; opacity: .85; margin: 10px 0 6px; }
 #kiste .raster { display: flex; flex-wrap: wrap; gap: 6px; }
 #kiste .ding { font-size: 14px; padding: 7px 10px; border-radius: 9px; background: #ffffff1f; color: #fff; }
@@ -104,4 +104,17 @@ button:disabled { opacity: .6; }
 #verbindung {
   position: fixed; top: 0; left: 0; right: 0; background: #b71c1c; text-align: center; padding: 6px;
   font-weight: 700; display: none; z-index: 20;
+}
+#raetsel button { pointer-events: auto; }
+#raetselfrage { font-size: 18px; font-weight: 700; line-height: 1.35; }
+#raetselantworten { display: flex; flex-direction: column; gap: 8px; }
+#raetsel .antwort { width: 100% !important; text-align: left; font-size: 16px; padding: 12px; border-radius: 10px; background: #ffffff1f; color: #fff; }
+#raetsel .antwort.gewaehlt { outline: 2px solid #ffd54f; }
+#raetsel .antwort.richtig { background: #2e7d32; }
+#raetsel .antwort.falsch { background: #b71c1c; }
+#raetselergebnis { min-height: 1.2em; line-height: 1.45; }
+#raetselergebnis a { color: #90caf9; }
+#gruen {
+  position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1s;
+  background: radial-gradient(circle, transparent 35%, #3f8f1f 100%); mix-blend-mode: multiply; z-index: 1;
 }

@@ -1,11 +1,14 @@
 // Spielraum: der Server entscheidet über Bewegung, Zombies, Treffer, Gegenstände und Safe Rooms.
 import crypto from 'node:crypto';
+import { holeFragen } from './fragenquelle.mjs';
+import { mischeAntworten, waehleFrage } from './raetsel.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen,
   bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
+  INFEKTION_DAUER, ZOMBIE_ZEIT,
 } from '../client/welt.mjs';
 
 export const Spieler = schema({
@@ -27,6 +30,8 @@ export const Spieler = schema({
   aktion: t.string(),       // "durchsuchen" | "barrikade" | ""
   fortschritt: t.number(),
   besiegt: t.uint16(),
+  infektion: t.number(),    // Sekunden bis zur Verwandlung, 0 = gesund
+  zombie: t.number(),       // Sekunden, die man noch Zombie ist, 0 = Mensch
 }, 'Spieler');
 
 export const Zombie = schema({
@@ -44,6 +49,7 @@ export const Zustand = schema({
   phase: t.string(),        // "spiel" | "erwischt"
   zeit: t.number(),         // Spielzeit in Sekunden (wird gespeichert)
   besiegt: t.uint16(),
+  torGeloest: t.uint8(),    // richtig beantwortete Rätsel am Tor (3 = offen)
   spieler: t.map(Spieler),
   zombies: t.map(Zombie),
   behaelter: t.map(Behaelter),   // nur schon durchsuchte
@@ -56,10 +62,14 @@ const PISTOLE_SCHADEN = 34, PISTOLE_PAUSE = 0.45;
 const SCHLAEGER_SCHADEN = 40, SCHLAEGER_PAUSE = 0.6, SCHLAEGER_REICHWEITE = 42;
 const STOSS_SCHADEN = 20, STOSS_PAUSE = 0.7, STOSS_WEG = 34;
 const BISS_PRO_SEK = 14;
+const BISS_CHANCE = 0.12;   // pro Sekunde Kontakt: Wahrscheinlichkeit für einen infizierenden Biss
+const SPRITZE_ABSTAND = 50;
 const START_MUNITION = 24;
 const DURST_DAUER = 3600, HUNGER_DAUER = 5400;   // Sekunden von voll bis leer
 const SPEICHER_TAKT = 30;
 const ID_MUSTER = /^[a-f0-9]{32}$/;
+export const TOR_RAETSEL = 3;
+const TOR_ABSTAND = 70;
 
 function winkelDiff(a, b) {
   let d = a - b;
@@ -103,6 +113,9 @@ export class SpielRaum extends Room {
     this.state.phase = 'spiel';
     this.state.zeit = stand?.zeit ?? 0;
     this.state.besiegt = stand?.besiegt ?? 0;
+    this.state.torGeloest = Math.min(TOR_RAETSEL, Number(stand?.torGeloest) || 0);
+    this.gestellt = new Set(stand?.gestellt ?? []);
+    this.offeneRaetsel = new Map();   // sessionId → { id, richtigIndex, seite, richtig, bis }
 
     this.inhalte = new Map();     // Behälter-Id → verbliebene Gegenstände
     for (const s of this.welt.safeRooms) {
@@ -144,6 +157,7 @@ export class SpielRaum extends Room {
     this.onMessage('wegwerfen', (client, m) => this.wegwerfen(client, m));
     this.onMessage('kiste', (client, m) => this.kiste(client, m));
     this.onMessage('ausruhen', client => this.ausruhen(client));
+    this.onMessage('antwort', (client, m) => this.antwort(client, m));
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
     this.setSimulationInterval(dt => this.schritt(dt / 1000), TICK);
@@ -182,7 +196,7 @@ export class SpielRaum extends Room {
     p.name = name;
     p.farbe = this.freieFarbe();
     p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0;
-    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = '';
+    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0;
     const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null };
     const gespeichert = this.speicher?.ladeSpieler(spielerId);
     if (gespeichert) {
@@ -192,6 +206,7 @@ export class SpielRaum extends Room {
       p.waffe = DINGE[gespeichert.waffe]?.waffe ? gespeichert.waffe : '';
       p.munition = Math.max(0, Math.min(99, Number(gespeichert.munition) || 0));
       p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
+      p.infektion = Math.max(0, Math.min(INFEKTION_DAUER, Number(gespeichert.infektion) || 0));
       for (const d of (gespeichert.rucksack ?? []).slice(0, RUCKSACK_PLAETZE)) if (DINGE[d]) p.rucksack.push(d);
       extra.letzterSafe = gespeichert.letzterSafe ?? '';
       const ort = gespeichert.draussen || !Number.isFinite(gespeichert.x)
@@ -265,6 +280,7 @@ export class SpielRaum extends Room {
 
   onLeave(client) {
     this.wiederkehr.delete(client.sessionId);
+    this.offeneRaetsel.delete(client.sessionId);
     const p = this.state.spieler.get(client.sessionId);
     if (!p) return;
     this.speichereSpieler(client.sessionId);
@@ -282,7 +298,7 @@ export class SpielRaum extends Room {
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
       waffe: p.waffe, munition: p.munition, rucksack: [...p.rucksack], besiegt: p.besiegt,
-      letzterSafe: x.letzterSafe, draussen: !p.sicher,
+      letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion,
     });
   }
 
@@ -293,6 +309,7 @@ export class SpielRaum extends Room {
     for (const [id, s] of this.state.safes) safes[id] = { barrikade: Math.round(s.barrikade), kiste: [...s.kiste] };
     this.speicher.speichereWelt({
       version: WELT_VERSION, seed: this.state.seed, zeit: this.state.zeit, besiegt: this.state.besiegt, behaelter, safes,
+      torGeloest: this.state.torGeloest, gestellt: [...this.gestellt].slice(-500),
     });
   }
 
@@ -309,7 +326,7 @@ export class SpielRaum extends Room {
   // ---------- Aktionen der Spieler ----------
 
   kontext(p) {
-    if (p.unten || this.state.phase !== 'spiel') return null;
+    if (p.unten || p.zombie > 0 || this.state.phase !== 'spiel') return null;
     const safe = safeRoomAn(this.welt, p.x, p.y);
     if (safe) {
       const tx = (safe.haus.tuer.x + 0.5) * KACHEL, ty = (safe.haus.tuer.y + 0.5) * KACHEL;
@@ -318,6 +335,7 @@ export class SpielRaum extends Room {
         return { art: 'barrikade', safe, dauer: 3 };
       }
     }
+    if (this.state.torGeloest < TOR_RAETSEL && this.amTor(p)) return { art: 'raetsel' };
     let best = null, bd = AKTION_ABSTAND;
     for (const b of this.welt.behaelter) {
       const d = Math.hypot(b.x - p.x, b.y - p.y);
@@ -331,11 +349,17 @@ export class SpielRaum extends Room {
     return null;
   }
 
+  amTor(p) {
+    const t = this.welt.tor;
+    return Math.hypot(p.x - (t.x + 1) * KACHEL, p.y - (t.y + 1) * KACHEL) < TOR_ABSTAND;
+  }
+
   starteAktion(client) {
     const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
     if (!p || !x || p.aktion) return;
     const k = this.kontext(p);
     if (!k) return;
+    if (k.art === 'raetsel') return this.stelleRaetsel(client);
     p.aktion = k.art; p.fortschritt = 0;
     x.aktionZiel = k;
     x.laermUhr = 0;
@@ -393,8 +417,9 @@ export class SpielRaum extends Room {
   benutze(client, m) {
     const p = this.state.spieler.get(client.sessionId);
     const i = Number(m?.platz);
-    if (!p || p.unten || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
+    if (!p || p.unten || p.zombie > 0 || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
     const d = p.rucksack[i];
+    if (d === 'spritze') return this.spritze(client, p, i);
     if (d === 'wasser') { p.durst = Math.min(100, p.durst + 45); p.rucksack.splice(i, 1); }
     else if (d === 'essen') { p.hunger = Math.min(100, p.hunger + 45); p.rucksack.splice(i, 1); }
     else if (d === 'verband') {
@@ -408,6 +433,25 @@ export class SpielRaum extends Room {
     } else if (d === 'bretter') {
       client.send('meldung', { text: 'Bretter: im Safe Room an der Tür verbarrikadieren' });
     }
+  }
+
+  spritze(client, p, i) {
+    // zuerst sich selbst, sonst den nächsten infizierten Mitspieler daneben
+    let ziel = p.infektion > 0 ? p : null;
+    if (!ziel) {
+      let bd = SPRITZE_ABSTAND;
+      for (const o of this.state.spieler.values()) {
+        if (o === p || o.infektion <= 0 || o.zombie > 0) continue;
+        const d = Math.hypot(o.x - p.x, o.y - p.y);
+        if (d < bd) { bd = d; ziel = o; }
+      }
+    }
+    if (!ziel) return client.send('meldung', { text: 'Niemand hier ist infiziert – hebe die Spritze auf' });
+    p.rucksack.splice(i, 1);
+    ziel.infektion = 0;
+    this.broadcast('meldung', {
+      text: ziel === p ? `💉 ${p.name} hat sich die Rettungsspritze gesetzt` : `💉 ${p.name} hat ${ziel.name} die Rettungsspritze gesetzt`,
+    });
   }
 
   wegwerfen(client, m) {
@@ -431,6 +475,41 @@ export class SpielRaum extends Room {
       if (!Number.isInteger(i) || i < 0 || i >= kiste.length || p.rucksack.length >= RUCKSACK_PLAETZE) return;
       p.rucksack.push(kiste[i]); kiste.splice(i, 1);
     }
+  }
+
+  stelleRaetsel(client) {
+    const offen = this.offeneRaetsel.get(client.sessionId);
+    if (offen && offen.bis > Date.now()) return;   // schon eine Frage offen
+    const fragen = holeFragen();
+    const f = waehleFrage(fragen, this.gestellt, this.rnd);
+    if (!f) return client.send('meldung', { text: 'Das Schloss klemmt – keine Rätsel gefunden' });
+    this.gestellt.add(f.id);
+    const { antworten, richtigIndex } = mischeAntworten(f, this.rnd);
+    this.offeneRaetsel.set(client.sessionId, { id: f.id, richtigIndex, seite: f.seite, richtig: f.richtig, bis: Date.now() + 120000 });
+    client.send('raetsel', { id: f.id, thema: f.thema, frage: f.frage, antworten, geloest: this.state.torGeloest, noetig: TOR_RAETSEL });
+  }
+
+  antwort(client, m) {
+    const offen = this.offeneRaetsel.get(client.sessionId);
+    const p = this.state.spieler.get(client.sessionId);
+    if (!offen || !p || m?.id !== offen.id) return;
+    this.offeneRaetsel.delete(client.sessionId);
+    const richtig = Number(m.index) === offen.richtigIndex && offen.bis > Date.now();
+    const tor = this.welt.tor;
+    if (richtig && this.state.torGeloest < TOR_RAETSEL) {
+      this.state.torGeloest++;
+      const offenJetzt = this.state.torGeloest >= TOR_RAETSEL;
+      this.broadcast('meldung', {
+        text: offenJetzt ? `🔓 ${p.name} hat das letzte Schloss geknackt – das Tor ist offen!`
+          : `🔐 ${p.name} hat ein Schloss geknackt (${this.state.torGeloest}/${TOR_RAETSEL})`, lang: true,
+      });
+      if (offenJetzt) this.broadcast('tor', {});
+    } else if (!richtig) {
+      // falsche Antwort: das Schloss klappert laut
+      this.laerm((tor.x + 1) * KACHEL, (tor.y + 1) * KACHEL, 420, true);
+      this.broadcast('meldung', { text: `${p.name}: falsche Antwort – das Schloss klappert laut!` }, { except: client });
+    }
+    client.send('aufloesung', { richtig, loesung: offen.richtig, seite: offen.seite });
   }
 
   ausruhen(client) {
@@ -468,7 +547,7 @@ export class SpielRaum extends Room {
     this.aufhelfen(dt);
     this.zombiesAuffuellen(dt);
 
-    const stehend = [...s.spieler.values()].filter(p => !p.unten);
+    const stehend = [...s.spieler.values()].filter(p => !p.unten && !(p.zombie > 0));
     if (stehend.length === 0) {
       s.phase = 'erwischt';
       this.erwischtSeit = 0;
@@ -483,8 +562,10 @@ export class SpielRaum extends Room {
     if (p.unten) return;
     const e = x.eingabe;
     const laenge = Math.hypot(e.dx, e.dy);
+    if (p.zombie > 0) return this.zombieSpielerSchritt(p, x, e, laenge, dt);
     p.schleicht = e.s || (laenge > 0 && laenge < 0.55);
-    const tempo = p.schleicht ? W.tempoSchleichen : W.tempoGehen;
+    // infiziert: langsamer
+    const tempo = (p.schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1);
     if (laenge > 0.05) {
       const f = Math.min(1, laenge / (p.schleicht ? 0.55 : 1)) * tempo * dt;
       bewege(this.welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
@@ -497,7 +578,7 @@ export class SpielRaum extends Room {
       const mitPistole = p.waffe === 'pistole' && p.munition > 0;
       const mitSchlaeger = p.waffe === 'schlaeger';
       const reichweite = mitPistole ? W.pistoleReichweite : mitSchlaeger ? SCHLAEGER_REICHWEITE : W.nahkampfReichweite;
-      const ziel = this.naechsterZombie(p.x, p.y, reichweite);
+      const ziel = this.naechsterZombie(p.x, p.y, reichweite, p);
       if (ziel) {
         const [zid, z] = ziel;
         const w = Math.atan2(z.y - p.y, z.x - p.x);
@@ -519,8 +600,35 @@ export class SpielRaum extends Room {
     x.pause = Math.max(0, pause);
   }
 
+  // als Zombie: schnell, beißt Menschen bei Berührung, sonst nichts
+  zombieSpielerSchritt(p, x, e, laenge, dt) {
+    p.schleicht = false;
+    if (laenge > 0.05) {
+      const f = Math.min(1, laenge) * W.zombieTempoJagen * 1.15 * dt;
+      bewege(this.welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
+      p.richtung = Math.atan2(e.dy, e.dx);
+    }
+    for (const o of this.state.spieler.values()) {
+      if (o === p || o.unten || o.zombie > 0) continue;
+      if (Math.hypot(o.x - p.x, o.y - p.y) < W.spielerRadius * 2 + 6) {
+        o.hp = Math.max(0, o.hp - BISS_PRO_SEK * dt);
+        if (o.hp <= 0) this.liegtAmBoden(o);
+      }
+    }
+  }
+
   beduerfnisse(p, x, dt) {
     if (!p.verbunden) return;
+    if (p.zombie > 0) {
+      p.zombie = Math.max(0, p.zombie - dt);
+      if (p.zombie === 0) this.zurueckverwandeln(p, x, 'Die Verwandlung lässt nach');
+      return;
+    }
+    // Infektion läuft nur draußen
+    if (p.infektion > 0 && !p.sicher) {
+      p.infektion = Math.max(0, p.infektion - dt);
+      if (p.infektion === 0) return this.verwandeln(p);
+    }
     p.durst = Math.max(0, p.durst - dt * 100 / DURST_DAUER);
     p.hunger = Math.max(0, p.hunger - dt * 100 / HUNGER_DAUER);
     if (p.unten) return;
@@ -532,21 +640,46 @@ export class SpielRaum extends Room {
     }
   }
 
+  verwandeln(p) {
+    p.zombie = ZOMBIE_ZEIT; p.hp = 100; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0;
+    this.broadcast('meldung', { text: `🧟 ${p.name} hat sich verwandelt! Lauft!`, lang: true });
+    this.broadcast('verwandelt', { name: p.name });
+  }
+
+  zurueckverwandeln(p, x, grund) {
+    const safe = this.safeFuer(x?.letzterSafe, p.x, p.y);
+    const pos = this.freierPlatz(safe.innen);
+    p.x = pos.x; p.y = pos.y;
+    p.zombie = 0; p.infektion = 0; p.hp = 50; p.unten = false; p.hilfe = 0;
+    this.broadcast('meldung', { text: `${grund}: ${p.name} wacht im ${safe.name} wieder als Mensch auf`, lang: true });
+  }
+
   liegtAmBoden(p) {
     p.unten = true; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0;
     this.broadcast('meldung', { text: `${p.name} liegt am Boden – hilf ihm auf!`, lang: true });
   }
 
-  naechsterZombie(x, y, reichweite) {
+  naechsterZombie(x, y, reichweite, selbst = null) {
     let best = null, bd = reichweite;
     for (const [id, z] of this.state.zombies) {
       const d = Math.hypot(z.x - x, z.y - y);
       if (d < bd && sichtfrei(this.welt, x, y, z.x, z.y)) { bd = d; best = [id, z]; }
     }
+    // verwandelte Mitspieler sind auch Ziele
+    for (const [sid, o] of this.state.spieler) {
+      if (o === selbst || !(o.zombie > 0)) continue;
+      const d = Math.hypot(o.x - x, o.y - y);
+      if (d < bd && sichtfrei(this.welt, x, y, o.x, o.y)) { bd = d; best = ['spieler:' + sid, o]; }
+    }
     return best;
   }
 
   schaden(id, z, menge, von) {
+    if (id.startsWith('spieler:')) {
+      z.hp = Math.max(0, z.hp - menge);
+      if (z.hp === 0) this.zurueckverwandeln(z, this.extra.get(id.slice(8)), `${von.name} hat den Zombie erledigt`);
+      return;
+    }
     z.hp = Math.max(0, z.hp - menge);
     const info = this.zombieInfo.get(id);
     if (info && !info.ziel) info.punkt = { x: von.x, y: von.y };
@@ -574,7 +707,7 @@ export class SpielRaum extends Room {
     const feld = new Int16Array(BREITE * HOEHE).fill(-1);
     const q = [];
     for (const p of this.state.spieler.values()) {
-      if (p.unten) continue;
+      if (p.unten || p.zombie > 0) continue;
       const i = Math.floor(p.y / KACHEL) * BREITE + Math.floor(p.x / KACHEL);
       if (feld[i] === -1) { feld[i] = 0; q.push(i); }
     }
@@ -612,7 +745,7 @@ export class SpielRaum extends Room {
     // Sehen: Kegel in Blickrichtung, schleichende Spieler erst später
     if (!info.ziel) {
       for (const [sid, p] of this.state.spieler) {
-        if (p.unten) continue;
+        if (p.unten || p.zombie > 0) continue;
         const d = Math.hypot(p.x - z.x, p.y - z.y);
         const weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
         const imKegel = winkelDiff(Math.atan2(p.y - z.y, p.x - z.x), z.richtung) < W.sichtWinkel / 2;
@@ -624,7 +757,7 @@ export class SpielRaum extends Room {
       }
     }
     let ziel = info.ziel ? this.state.spieler.get(info.ziel) : null;
-    if (ziel && ziel.unten) { info.ziel = null; ziel = null; }
+    if (ziel && (ziel.unten || ziel.zombie > 0)) { info.ziel = null; ziel = null; }
     z.jagt = !!ziel;
 
     if (ziel) {
@@ -639,6 +772,10 @@ export class SpielRaum extends Room {
         if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * dt, dt);
         if (d < W.spielerRadius + W.zombieRadius + 6) {
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt);
+          if (!(ziel.infektion > 0) && this.rnd() < BISS_CHANCE * dt) {
+            ziel.infektion = INFEKTION_DAUER;
+            this.broadcast('meldung', { text: `🦠 ${ziel.name} wurde gebissen! Eine Rettungsspritze hilft.`, lang: true });
+          }
           if (ziel.hp <= 0) this.liegtAmBoden(ziel);
         }
         return;
@@ -709,7 +846,7 @@ export class SpielRaum extends Room {
     for (const [, p] of alle) {
       if (!p.unten) continue;
       const helfer = alle.find(([hid, h]) => {
-        if (h.unten || h === p) return false;
+        if (h.unten || h === p || h.zombie > 0) return false;
         const e = this.extra.get(hid)?.eingabe;
         const steht = !e || Math.hypot(e.dx, e.dy) < 0.05;
         return steht && Math.hypot(h.x - p.x, h.y - p.y) < W.aufhelfenAbstand;
@@ -769,7 +906,7 @@ export class SpielRaum extends Room {
       besetzt.set(safe.id, n + 1);
       const pos = this.freierPlatz(safe.innen, n);
       p.x = pos.x; p.y = pos.y;
-      p.hp = 50; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0;
+      p.hp = 50; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0; p.zombie = 0;
     }
     // Zombies rund um die Safe Rooms vertreiben
     for (const [id, z] of s.zombies) {

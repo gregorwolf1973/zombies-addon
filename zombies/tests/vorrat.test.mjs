@@ -197,3 +197,91 @@ test('Durst sinkt, bei 0 verliert man Lebenspunkte', async () => {
   } finally { await c.leave(); }
   assert.ok(SpielRaum.speicher);
 });
+
+test('Tor-Rätsel: falsch macht Lärm, drei richtige öffnen das Tor, Stand wird gespeichert', async () => {
+  const { setzeFragenquelle } = await import('../server/fragenquelle.mjs');
+  const datei = path.join(ordner, 'fragen.txt');
+  fs.writeFileSync(datei, `^ Thema ^ Frage ^ Richtig ^ Falsch 1 ^ Falsch 2 ^ Seite ^
+${[1, 2, 3, 4, 5].map(i => `| T | Frage ${i}? | R${i} | F${i}a | F${i}b | [[a:k${i}]] |`).join('\n')}`);
+  setzeFragenquelle(datei);
+  const { c, raum, p } = await beitreten('Rätsler');
+  try {
+    const tor = raum.welt.tor;
+    p.x = (tor.x + 1.6) * KACHEL; p.y = (tor.y + 1) * KACHEL;
+    const fragen = [], aufloesungen = [];
+    c.onMessage('raetsel', m => fragen.push(m));
+    c.onMessage('aufloesung', m => aufloesungen.push(m));
+    // Zombie in Hörweite, der wandert
+    raum.neuerZombie(0);
+    const [zid, z] = [...raum.state.zombies.entries()].at(-1);
+    z.x = p.x + 300; z.y = p.y;
+    raum.zombieInfo.get(zid).punkt = null;
+
+    c.send('aktion');
+    assert.ok(await bis(() => fragen.length === 1), 'keine Frage');
+    const f = fragen[0];
+    assert.equal(f.antworten.length, 3);
+    const nr = f.frage.match(/\d/)[0];
+    const falsch = f.antworten.findIndex(a => a !== 'R' + nr);
+    c.send('antwort', { id: f.id, index: falsch });
+    assert.ok(await bis(() => aufloesungen.length === 1));
+    assert.equal(aufloesungen[0].richtig, false);
+    assert.equal(aufloesungen[0].loesung, 'R' + nr);
+    assert.equal(aufloesungen[0].seite, 'a:k' + nr);
+    assert.ok(raum.zombieInfo.get(zid)?.punkt, 'Zombie hat den Lärm nicht gehört');
+    assert.equal(raum.state.torGeloest, 0);
+
+    for (let i = 0; i < 3; i++) {
+      c.send('aktion');
+      assert.ok(await bis(() => fragen.length === i + 2), 'keine neue Frage');
+      const g = fragen.at(-1);
+      assert.ok(!fragen.slice(0, -1).some(x => x.id === g.id), 'Frage doppelt gestellt');
+      const n = g.frage.match(/\d/)[0];
+      c.send('antwort', { id: g.id, index: g.antworten.indexOf('R' + n) });
+      assert.ok(await bis(() => aufloesungen.length === i + 2));
+      assert.equal(aufloesungen.at(-1).richtig, true);
+    }
+    assert.equal(raum.state.torGeloest, 3);
+    assert.ok(await bis(() => c.state.torGeloest === 3));
+    // offenes Tor: keine Rätsel mehr
+    c.send('aktion');
+    await warte(300);
+    assert.equal(fragen.length, 4);
+    raum.speichereWelt();
+    assert.equal(SpielRaum.speicher.ladeWelt().torGeloest, 3);
+  } finally { await c.leave(); }
+});
+
+test('Infektion: läuft draußen, ruht im Safe Room, Spritze heilt Mitspieler, Verwandlung und zurück', async () => {
+  const a = await beitreten('Biss');
+  const b = await beitreten('Arzt');
+  try {
+    const { raum } = a;
+    const pa = a.p, pb = b.p;
+    pa.infektion = 100;
+    pa.x = raum.welt.start.x; pa.y = raum.welt.start.y;
+    await warte(400);
+    assert.ok(pa.infektion < 100, 'Timer läuft draußen nicht');
+    const s = raum.welt.safeRooms[0];
+    pa.x = s.innen.x; pa.y = s.innen.y;
+    assert.ok(await bis(() => pa.sicher === s.id));
+    const stand = pa.infektion; await warte(400);
+    assert.ok(Math.abs(pa.infektion - stand) < 0.01, 'Timer läuft im Safe Room weiter');
+    // Spritze vom Mitspieler
+    pb.x = pa.x + 20; pb.y = pa.y; pb.rucksack.clear(); pb.rucksack.push('spritze');
+    b.c.send('benutze', { platz: 0 });
+    assert.ok(await bis(() => pa.infektion === 0), 'Spritze wirkt nicht');
+    assert.equal(pb.rucksack.length, 0);
+    // Verwandlung
+    pa.x = raum.welt.start.x; pa.y = raum.welt.start.y; pa.infektion = 0.1;
+    assert.ok(await bis(() => pa.zombie > 0), 'keine Verwandlung');
+    // der andere schießt/stößt den Zombie-Spieler um → zurück im Safe Room
+    pb.waffe = 'schlaeger';
+    // der Helfer bleibt dicht dran (der Schläger stößt den Zombie jedes Mal weg)
+    const nachruecken = setInterval(() => { if (pa.zombie > 0) { pb.x = pa.x + 25; pb.y = pa.y; pb.hp = 100; } }, 100);
+    try { assert.ok(await bis(() => pa.zombie === 0, 8000), 'Zombie-Spieler nicht erledigt'); }
+    finally { clearInterval(nachruecken); }
+    assert.ok(await bis(() => pa.sicher !== ''), 'nicht im Safe Room aufgewacht');
+    assert.equal(pa.infektion, 0);
+  } finally { await a.c.leave(); await b.c.leave(); }
+});

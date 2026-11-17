@@ -20,7 +20,7 @@
 
 ---
 
-> **Early stage (0.x):** multiplayer, safe rooms, inventory and saving work; infection, puzzles and further levels are still to come.
+> **Early stage (0.x):** multiplayer, safe rooms, inventory, saving, infection and the level-1 gate puzzles work; further levels are still to come.
 > The game itself is in German.
 
 ## What works today
@@ -35,6 +35,8 @@
 - Search cupboards, fridges, lockers and car boots (takes time and makes noise); 8-slot backpack
 - Water, food, first-aid kits, planks, pistol, baseball bat and ammo; thirst and hunger slowly drop
 - Persistent world in SQLite: you can only rest and log out in a safe room – leave outside and you wake up in your last safe room
+- Zombie bites can infect you: 90 minutes until you turn (paused in safe rooms) unless someone gives you a rescue syringe – turned players hunt the others for 3 minutes
+- Level 1 goal: the village gate has three locks, each opened by a first-aid or preparedness question read from a DokuWiki page; wrong answers make noise
 - Virtual joystick on phones, WASD on desktop; installable as a web app
 
 ## Installation
@@ -52,7 +54,7 @@ If you expose the game to the internet (reverse proxy or Cloudflare Tunnel, WebS
 The map is generated from a seed on both sides, so only the game state travels over the network (20 updates per second).
 
 ```sh
-cd zombies && npm install && npm test   # 24 tests
+cd zombies && npm install && npm test   # 32 tests
 npm start                               # http://localhost:2567
 ```
 

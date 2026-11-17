@@ -187,18 +187,21 @@ export const DINGE = {
   pistole: { name: 'Pistole', zeichen: '🔫', waffe: true },
   schlaeger: { name: 'Baseballschläger', zeichen: '🏏', waffe: true },
   munition: { name: 'Munition', zeichen: '🧰' },
+  spritze: { name: 'Rettungsspritze', zeichen: '💉' },
 };
 export const RUCKSACK_PLAETZE = 8;
 export const KISTE_PLAETZE = 24;
 export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
-  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', null, null],
-  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', null, null],
-  auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', null, null],
+  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', null, null],
+  auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', 'spritze', null],
 };
 export const MUNITION_PRO_FUND = 12;
 export const AKTION_ABSTAND = 40;
+export const INFEKTION_DAUER = 5400;   // 90 Minuten bis zur Verwandlung
+export const ZOMBIE_ZEIT = 180;        // so lange spielt man als Zombie gegen die anderen
 
 export function blockiert(welt, px, py) {
   return BLOCKIERT.has(welt.hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL)));

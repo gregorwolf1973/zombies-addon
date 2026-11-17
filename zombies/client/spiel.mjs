@@ -1,7 +1,7 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn,
-  DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND,
+  DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER,
 } from './welt.mjs';
 
 const FARBEN = [0x42a5f5, 0xffca28, 0xab47bc, 0xff7043, 0x26c6da, 0xec407a, 0x9ccc65, 0xd7ccc8, 0xffffff, 0x5c6bc0];
@@ -14,6 +14,7 @@ const BASIS = location.href.replace(/[?#].*$/, '').replace(/\/[^/]*$/, '');
 
 let raum = null;
 let meineId = null;
+let wikiAdresse = '';
 
 // fester, geheimer Spieler-Schlüssel dieses Browsers – daran hängt der Spielstand
 function spielerId() {
@@ -36,7 +37,7 @@ try {
   const m = sessionStorage.getItem('zob_meldung');
   if (m) { $('fehler').textContent = m; $('fehler').classList.add('gut'); sessionStorage.removeItem('zob_meldung'); }
 } catch {}
-fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; }).catch(() => {});
+fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; }).catch(() => {});
 $('los').addEventListener('click', () => mitspielen());
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
@@ -185,10 +186,14 @@ class Ort extends Phaser.Scene {
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
     });
     raum.onMessage('pong', () => {});
+    raum.onMessage('raetsel', m => zeigeRaetsel(m));
+    raum.onMessage('aufloesung', m => zeigeAufloesung(m));
+    raum.onMessage('tor', () => meldung('🎉 Level 1 geschafft! Level 2 – der Wald an der Isar – kommt bald.', true));
 
     $('aktion').onclick = () => this.aktion();
     $('ausruhen').onclick = () => raum.send('ausruhen');
     $('kistezu').onclick = () => kisteZu();
+    $('raetselzu').onclick = () => raetselZu();
     this.hudZeit = 0;
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
     if (new URLSearchParams(location.search).has('debug')) { window.szene = this; window.raum = raum; window.meineId = meineId; }
@@ -238,6 +243,8 @@ class Ort extends Phaser.Scene {
     const mx = (m.x + m.b / 2) * KACHEL, my = (m.y + m.h / 2) * KACHEL;
     this.add.circle(mx, my - 40, 7, 0x1565c0).setDepth(1);
     this.add.circle(mx, my - 40, 3, 0xffffff).setDepth(1);
+    this.torGrafik = this.add.graphics().setDepth(1.5);
+    this.torStand = -1;
     this.add.text((this.welt.tor.x + 1) * KACHEL + 4, (this.welt.tor.y) * KACHEL + 18, 'Ortsausgang', {
       fontSize: '12px', fontStyle: 'bold', color: '#ffe082',
     }).setDepth(1);
@@ -321,7 +328,7 @@ class Ort extends Phaser.Scene {
     const hp = this.add.rectangle(-12, -16, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(14, -14, '', { fontSize: '13px' }).setOrigin(0.5);
     box.add([schatten, koerper, nase, name, hp, tun]);
-    return { box, koerper, nase, name, hp, tun, x: p.x, y: p.y };
+    return { box, koerper, nase, name, hp, tun, farbe, x: p.x, y: p.y };
   }
 
   neuerZombie(z) {
@@ -372,16 +379,34 @@ class Ort extends Phaser.Scene {
       if (o) o.setAlpha(b.rest === 0 ? 0.45 : 1);
     }
     this.zeichneBarrikaden();
+    this.zeichneTor();
+  }
+
+  zeichneTor() {
+    const n = raum.state.torGeloest ?? 0;
+    if (n === this.torStand) return;
+    this.torStand = n;
+    const g = this.torGrafik.clear(), t = this.welt.tor;
+    const offen = n >= 3;
+    g.fillStyle(offen ? 0x66bb6a : 0xffb300, 1).fillRect(t.x * KACHEL, t.y * KACHEL, KACHEL, KACHEL * 2);
+    for (let i = 0; i < 3; i++) {
+      g.fillStyle(i < n ? 0x66bb6a : 0x5d4037, 1).fillCircle(t.x * KACHEL + 16, t.y * KACHEL + 12 + i * 20, 6);
+      g.lineStyle(2, 0x212121, 1).strokeCircle(t.x * KACHEL + 16, t.y * KACHEL + 12 + i * 20, 6);
+    }
   }
 
   figurDarstellen(f, p) {
     f.box.setRotation(0);
+    const zombie = p.zombie > 0;
+    const fuellung = zombie ? 0x7cb342 : f.farbe;
+    if (f.koerper.fillColor !== fuellung) f.koerper.setFillStyle(fuellung);
+    f.nase.setFillStyle(zombie ? 0xd50000 : 0xffe0b2);
     f.nase.setPosition(Math.cos(p.richtung) * 9, Math.sin(p.richtung) * 9);
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
     if (p.unten) { f.koerper.setScale(1.15, 0.6); f.nase.setVisible(false); }
     else { f.koerper.setScale(p.schleicht ? 0.85 : 1); f.nase.setVisible(true); }
-    const tun = p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : '';
+    const tun = zombie ? '🧟' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.infektion > 0 ? '🦠' : '';
     if (f.tun.text !== tun) f.tun.setText(tun);
   }
 
@@ -395,9 +420,10 @@ class Ort extends Phaser.Scene {
     const e = this.eingabe;
     const l = Math.hypot(e.dx, e.dy);
     if (!p.unten && raum.state.phase === 'spiel' && l > 0.05) {
-      const schleicht = e.s || l < 0.55;
-      const tempo = schleicht ? W.tempoSchleichen : W.tempoGehen;
-      const weg = Math.min(1, l / (schleicht ? 0.55 : 1)) * tempo * dt;
+      const schleicht = !(p.zombie > 0) && (e.s || l < 0.55);
+      const tempo = p.zombie > 0 ? W.zombieTempoJagen * 1.15
+        : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1);
+      const weg = (p.zombie > 0 ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * dt;
       bewege(this.welt, this.lokal, e.dx / l * weg, e.dy / l * weg, W.spielerRadius);
     }
     // sanft zum Server hinziehen, bei großem Abstand springen
@@ -461,6 +487,10 @@ class Ort extends Phaser.Scene {
         return { art: 'kiste', text: '📦 Vorräte', safe };
       }
     }
+    const tor = this.welt.tor;
+    if ((raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
+      return { art: 'raetsel', text: `🔐 Schloss knacken (${raum.state.torGeloest ?? 0}/3)` };
+    }
     let best = null, bd = AKTION_ABSTAND;
     for (const b of this.welt.behaelter) {
       const d = Math.hypot(b.x - x, b.y - y);
@@ -478,6 +508,7 @@ class Ort extends Phaser.Scene {
     if (!k) return;
     if (k.art === 'kiste') kisteAuf(k.safe);
     else raum.send('aktion');
+    if (k.art === 'raetsel') $('aktion').style.display = 'none';
   }
 
   // ---------- Effekte ----------
@@ -547,6 +578,9 @@ class Ort extends Phaser.Scene {
         textSetzen('sichername', `🛡 ${safe.name} · Barrikade ${bar} %`);
       }
       this.rucksackZeigen(ich);
+      const gruen = ich.zombie > 0 ? 0.35 : ich.infektion > 0 ? 0.08 + 0.3 * (1 - ich.infektion / INFEKTION_DAUER) : 0;
+      const g = $('gruen');
+      if (g.style.opacity !== gruen.toFixed(2)) g.style.opacity = gruen.toFixed(2);
     }
     textSetzen('zeit', zeitText(s.zeit));
     const liste = [...s.spieler.entries()].map(([id, p]) => {
@@ -566,6 +600,7 @@ class Ort extends Phaser.Scene {
 
     let hinweis = '';
     if (s.phase === 'erwischt') hinweis = 'Erwischt! 🧟<br>Ihr schleppt euch in die Safe Rooms …';
+    else if (ich && ich.zombie > 0) hinweis = `🧟 Du bist ein Zombie! Beiß die anderen.<br>Noch ${zeitText(ich.zombie)}, dann wachst du im Safe Room auf.`;
     else if (ich && ich.unten) hinweis = `Du liegst am Boden.<br>Ein Mitspieler muss dir aufhelfen.${balken(ich.hilfe)}`;
     else if (ich && ich.aktion) hinweis = `${ich.aktion === 'barrikade' ? '🔨 Verbarrikadieren' : '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
     else if (ich) {
@@ -577,6 +612,10 @@ class Ort extends Phaser.Scene {
           hinweis = `${escapeHtml(p.name)} liegt am Boden – bleib bei ihm stehen${mit}.${balken(p.hilfe)}`;
           break;
         }
+      }
+      if (!hinweis && ich.infektion > 0) {
+        const spritze = ich.rucksack.includes('spritze') ? ' – du hast eine 💉 im Rucksack!' : ' – du brauchst eine 💉 Rettungsspritze!';
+        hinweis = `🦠 Infiziert: noch ${zeitText(ich.infektion)}${ich.sicher ? ' (ruht im Safe Room)' : ''}${spritze}`;
       }
       if (!hinweis && (ich.durst < 15 || ich.hunger < 15)) hinweis = ich.durst < ich.hunger ? '💧 Du hast großen Durst!' : '🥫 Du hast großen Hunger!';
     }
@@ -651,6 +690,39 @@ function kisteZeigen(ich, safe) {
   fuellen($('kisteinhalt'), kiste, KISTE_PLAETZE, 'raus', 'Kiste');
   fuellen($('kisterucksack'), ich.rucksack, RUCKSACK_PLAETZE, 'rein', 'Rucksack');
 }
+
+// ---------- Rätsel am Tor ----------
+let raetselId = null;
+function zeigeRaetsel(m) {
+  raetselId = m.id;
+  $('raetseltitel').textContent = `🔐 Schloss ${m.geloest + 1} von ${m.noetig}` + (m.thema ? ` · ${m.thema}` : '');
+  $('raetselfrage').textContent = m.frage;
+  const box = $('raetselantworten');
+  box.innerHTML = '';
+  m.antworten.forEach((a, i) => {
+    const b = document.createElement('button');
+    b.className = 'ding antwort'; b.textContent = a;
+    b.onclick = () => {
+      for (const x of box.children) x.disabled = true;
+      b.classList.add('gewaehlt');
+      raum.send('antwort', { id: m.id, index: i });
+    };
+    box.appendChild(b);
+  });
+  $('raetselergebnis').innerHTML = '';
+  $('raetsel').style.display = 'flex';
+}
+function zeigeAufloesung(m) {
+  const box = $('raetselantworten');
+  for (const b of box.children) {
+    if (b.textContent === m.loesung) b.classList.add('richtig');
+    else if (b.classList.contains('gewaehlt')) b.classList.add('falsch');
+  }
+  const link = m.seite && wikiAdresse
+    ? ` <a href="${escapeHtml(wikiAdresse.replace(/\/$/, ''))}/doku.php?id=${encodeURIComponent(m.seite)}" target="_blank" rel="noopener">Mehr dazu im Wiki ↗</a>` : '';
+  $('raetselergebnis').innerHTML = (m.richtig ? '✅ Richtig! Das Schloss springt auf.' : `❌ Falsch – richtig ist: <b>${escapeHtml(m.loesung)}</b>. Die Zombies haben es gehört!`) + link;
+}
+function raetselZu() { raetselId = null; $('raetsel').style.display = 'none'; }
 
 function balkenSetzen(id, wert) {
   const el = $(id).firstElementChild;

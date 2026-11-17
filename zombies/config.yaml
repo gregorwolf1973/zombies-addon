@@ -1,6 +1,6 @@
 name: "Zombies in Oberbayern"
 description: "Kooperatives Zombie-Survival für 2–10 Spieler im Handy-Browser – Spielserver mit Colyseus"
-version: "0.3.0"
+version: "0.4.0"
 slug: "zombies"
 url: "https://github.com/gregorwolf1973/zombies-addon"
 init: false
@@ -14,6 +14,8 @@ ingress_port: 2567
 panel_icon: "mdi:biohazard"
 panel_title: "Zombies"
 panel_admin: false
+map:
+  - share:ro
 ports:
   2567/tcp: 8775
 ports_description:
@@ -21,6 +23,8 @@ ports_description:
 options:
   zombie_faktor: 1.0
   zugangscode: ""
+  wiki_adresse: ""
 schema:
   zombie_faktor: float(0.2,3)
   zugangscode: str?
+  wiki_adresse: str?

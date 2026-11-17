@@ -18,6 +18,14 @@ Alle landen im selben Spiel.
 |---|---|
 | `zombie_faktor` | Mehr oder weniger Zombies (0,2–3, Standard 1) |
 | `zugangscode` | Wenn gesetzt, braucht jeder Mitspieler außerhalb der Seitenleiste diesen Code |
+| `wiki_adresse` | Adresse eines DokuWiki (z. B. `https://wiki.example.org`) für die Links nach jedem Rätsel |
+
+## Rätsel
+
+Das Tor am Ortsausgang hat drei Schlösser. Die Fragen liest das Add-on aus der DokuWiki-Seite
+`krisenvorsorge:spielfragen` (Datei `/share/dokuwiki/data/pages/krisenvorsorge/spielfragen.txt`),
+sonst nimmt es die mitgelieferten Fragen. Format: eine Tabelle
+`^ Thema ^ Frage ^ Richtig ^ Falsch 1 ^ Falsch 2 ^ Seite ^`, eine Zeile pro Frage.
 
 Wer das Spiel aus dem Internet erreichbar macht, sollte einen Zugangscode setzen.
 
