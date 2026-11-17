@@ -3,6 +3,7 @@ import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER,
 } from './welt.mjs';
+import { zeichneBoden, zeichneOben, zeichneDach, DACH_RAND } from './aussehen.mjs';
 
 const FARBEN = [0x42a5f5, 0xffca28, 0xab47bc, 0xff7043, 0x26c6da, 0xec407a, 0x9ccc65, 0xd7ccc8, 0xffffff, 0x5c6bc0];
 const AUTOFARBEN = [0xc62828, 0x1565c0, 0x2e7d32, 0xf9a825, 0x6d4c41, 0xeceff1];
@@ -205,22 +206,13 @@ class Ort extends Phaser.Scene {
   }
 
   zeichneKarte() {
-    const g = this.add.graphics().setDepth(0);
-    const r = (x, y) => ((x * 73856093) ^ (y * 19349663)) % 7;
-    const farbe = {
-      [T.WIESE]: 0x4a7a3a, [T.STRASSE]: 0x5a5a5a, [T.WAND]: 0x5d4037, [T.BODEN]: 0xb8a48c,
-      [T.TUER]: 0x8d6e63, [T.WASSER]: 0x2a6fa8, [T.BAUM]: 0x4a7a3a, [T.PLATZ]: 0x9e9a92,
-      [T.ZAUN]: 0x3e2723, [T.TOR]: 0xffb300,
-    };
-    for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) {
-      const t = this.welt.hole(x, y);
-      let f = farbe[t];
-      if (t === T.WIESE || t === T.BAUM) f = Phaser.Display.Color.IntegerToColor(f).darken(r(x, y)).color;
-      g.fillStyle(f, 1).fillRect(x * KACHEL, y * KACHEL, KACHEL, KACHEL);
-      if (t === T.STRASSE && (x + y) % 3 === 0) g.fillStyle(0x666666, 1).fillRect(x * KACHEL + 6, y * KACHEL + 6, 3, 3);
-      if (t === T.PLATZ) g.lineStyle(1, 0x8a867e, 1).strokeRect(x * KACHEL, y * KACHEL, KACHEL, KACHEL);
-      if (t === T.WASSER) g.fillStyle(0x3b82c0, 1).fillRect(x * KACHEL + (y * 7) % 20, y * KACHEL + 12, 10, 2);
-    }
+    const W = BREITE * KACHEL, H = HOEHE * KACHEL;
+    // Boden und Deko im Stil des Prototyps, einmal in große Canvas-Texturen gezeichnet
+    const boden = this.textures.createCanvas('boden', W, H);
+    zeichneBoden(boden.getContext(), this.welt);
+    boden.refresh();
+    this.add.image(0, 0, 'boden').setOrigin(0).setDepth(0);
+    const g = this.add.graphics().setDepth(0.5);
     // Böden der Safe Rooms etwas wärmer
     for (const s of this.welt.safeRooms) {
       const h = s.haus;
@@ -230,19 +222,10 @@ class Ort extends Phaser.Scene {
       g.lineStyle(2, 0x3e2723, 1).strokeRect(s.kiste.x - 12, s.kiste.y - 9, 24, 18);
       g.fillStyle(0xffca28, 1).fillRect(s.kiste.x - 2, s.kiste.y - 3, 4, 5);
     }
-    // Bäume als Kronen etwas größer als die Kachel
-    for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) {
-      if (this.welt.hole(x, y) !== T.BAUM) continue;
-      const cx = x * KACHEL + 16, cy = y * KACHEL + 16;
-      this.add.circle(cx + 3, cy + 4, 19, 0x000000, 0.25).setDepth(5);
-      this.add.circle(cx, cy, 19, 0x2e5d2a).setDepth(5);
-      this.add.circle(cx - 5, cy - 5, 9, 0x3d7a37).setDepth(5);
-    }
-    // Maibaum auf dem Marktplatz
-    const m = this.welt.markt;
-    const mx = (m.x + m.b / 2) * KACHEL, my = (m.y + m.h / 2) * KACHEL;
-    this.add.circle(mx, my - 40, 7, 0x1565c0).setDepth(1);
-    this.add.circle(mx, my - 40, 3, 0xffffff).setDepth(1);
+    const oben = this.textures.createCanvas('oben', W, H);
+    zeichneOben(oben.getContext(), this.welt);
+    oben.refresh();
+    this.add.image(0, 0, 'oben').setOrigin(0).setDepth(5);
     this.torGrafik = this.add.graphics().setDepth(1.5);
     this.torStand = -1;
     this.add.text((this.welt.tor.x + 1) * KACHEL + 4, (this.welt.tor.y) * KACHEL + 18, 'Ortsausgang', {
@@ -274,21 +257,14 @@ class Ort extends Phaser.Scene {
       this.behaelterObj.set(b.id, c);
     }
 
-    // Dächer: verdecken, was drinnen ist, solange man draußen steht
-    this.daecher = this.welt.haeuser.map(h => {
-      const d = this.add.graphics().setDepth(5);
-      const x = h.x * KACHEL, y = h.y * KACHEL, b = h.b * KACHEL, hh = h.h * KACHEL;
-      const [hell, dunkel, first] = h.safe ? [0x607d8b, 0x546e7a, 0x37474f] : [0xa1442f, 0x8a3826, 0x6d2a1c];
-      d.fillStyle(0x000000, 0.3).fillRect(x + 4, y + 5, b, hh);
-      d.fillStyle(hell, 1).fillRect(x, y, b, hh);
-      d.fillStyle(dunkel, 1).fillRect(x, y + hh / 2, b, hh / 2);
-      d.lineStyle(2, first, 1).lineBetween(x, y + hh / 2, x + b, y + hh / 2);
-      // Tür auch von außen erkennbar: Vordach über dem Eingang
-      const tx = h.tuer.x * KACHEL, oben = h.tuer.y === h.y;
-      const ty = oben ? y - 4 : y + hh - 6;
-      d.fillStyle(0x3e2723, 1).fillRect(tx + 3, ty, KACHEL - 6, 10);
-      d.fillStyle(0xffe082, 1).fillRect(tx + 13, oben ? ty : ty + 7, 6, 3);
-      return { haus: h, grafik: d };
+    // Dächer: Häuser aus dem Prototyp; verdecken, was drinnen ist, solange man draußen steht
+    this.daecher = this.welt.haeuser.map((h, nr) => {
+      const schluessel = 'dach' + nr;
+      const tex = this.textures.createCanvas(schluessel, h.b * KACHEL + DACH_RAND * 2, h.h * KACHEL + DACH_RAND * 2);
+      zeichneDach(tex.getContext(), h, nr);
+      tex.refresh();
+      const bild = this.add.image(h.x * KACHEL - DACH_RAND, h.y * KACHEL - DACH_RAND, schluessel).setOrigin(0).setDepth(5.2);
+      return { haus: h, grafik: bild };
     });
     // Schilder und Barrikaden der Safe Rooms
     this.barrikaden = new Map();
