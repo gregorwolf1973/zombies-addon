@@ -100,8 +100,105 @@ export function baueWelt(seed) {
   }
 
   const start = { x: (markt.x + markt.b / 2) * KACHEL, y: (markt.y + markt.h / 2) * KACHEL };
-  return { seed, kacheln: k, hole, haeuser, markt, tor, start };
+
+  // Safe Rooms: vier Häuser an festen Gegenden des Orts
+  const r2 = zufall(seed ^ 0x9e3779b9);
+  const safeOrte = [
+    { name: 'Feuerwehrhaus', x: markt.x + markt.b / 2, y: markt.y + markt.h / 2 },
+    { name: 'Sakristei', x: 12, y: 40 },
+    { name: 'Lagerraum', x: 50, y: 10 },
+    { name: 'Keller', x: 48, y: 42 },
+  ];
+  const safeRooms = [];
+  for (const ort of safeOrte) {
+    let best = null, bd = Infinity;
+    for (const h of haeuser) {
+      if (h.safe) continue;
+      const d = Math.hypot(h.x + h.b / 2 - ort.x, h.y + h.h / 2 - ort.y);
+      if (d < bd) { bd = d; best = h; }
+    }
+    if (!best) continue;
+    best.safe = ort.name;
+    const id = 's' + safeRooms.length;
+    best.safeId = id;
+    // Vorratskiste in die Ecke gegenüber der Tür
+    const kx = best.tuer.x - best.x < best.b / 2 ? best.x + best.b - 2 : best.x + 1;
+    const ky = best.tuer.y === best.y ? best.y + best.h - 2 : best.y + 1;
+    const innen = { x: (best.x + best.b / 2) * KACHEL, y: (best.y + best.h / 2) * KACHEL };
+    safeRooms.push({ id, name: ort.name, haus: best, kiste: { x: (kx + 0.5) * KACHEL, y: (ky + 0.5) * KACHEL }, innen });
+  }
+
+  // Behälter zum Durchsuchen: in Häusern an den Wänden, Autos am Straßenrand
+  const behaelter = [];
+  const arten = ['schrank', 'kuehlschrank', 'spind'];
+  for (const h of haeuser) {
+    const plaetze = [];
+    for (let y = h.y + 1; y <= h.y + h.h - 2; y++) for (let x = h.x + 1; x <= h.x + h.b - 2; x++) {
+      const anWand = x === h.x + 1 || x === h.x + h.b - 2 || y === h.y + 1 || y === h.y + h.h - 2;
+      const vorTuer = Math.abs(x - h.tuer.x) <= 1 && Math.abs(y - h.tuer.y) <= 1;
+      const kiste = h.safe && safeRooms.find(s => s.haus === h && Math.floor(s.kiste.x / KACHEL) === x && Math.floor(s.kiste.y / KACHEL) === y);
+      if (anWand && !vorTuer && !kiste) plaetze.push([x, y]);
+    }
+    const anzahl = Math.min(plaetze.length, h.safe ? 1 : 1 + Math.floor(r2() * 2));
+    for (let i = 0; i < anzahl; i++) {
+      const [x, y] = plaetze.splice(Math.floor(r2() * plaetze.length), 1)[0];
+      behaelter.push({ id: 'b' + behaelter.length, art: arten[Math.floor(r2() * arten.length)], x: (x + 0.5) * KACHEL, y: (y + 0.5) * KACHEL });
+    }
+  }
+  for (let i = 0, versuche = 0; i < 14 && versuche < 400; versuche++) {
+    const senkrecht = r2() < 0.5;
+    const sx = strassenX[Math.floor(r2() * strassenX.length)], sy = strassenY[Math.floor(r2() * strassenY.length)];
+    const x = senkrecht ? sx + (r2() < 0.5 ? 0 : 1) : 2 + Math.floor(r2() * (BREITE - 12));
+    const y = senkrecht ? 2 + Math.floor(r2() * (HOEHE - 4)) : sy + (r2() < 0.5 ? 0 : 1);
+    if (hole(x, y) !== T.STRASSE) continue;
+    // nicht auf Kreuzungen und nicht zu nah an anderen Autos
+    const kreuzung = strassenX.some(s => x >= s && x <= s + 1) && strassenY.some(s => y >= s && y <= s + 1);
+    const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
+    if (kreuzung || behaelter.some(b => b.art === 'auto' && Math.hypot(b.x - px, b.y - py) < KACHEL * 4)) continue;
+    behaelter.push({ id: 'b' + behaelter.length, art: 'auto', x: px, y: py, senkrecht, farbe: Math.floor(r2() * 6) });
+    i++;
+  }
+
+  return { seed, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter };
 }
+
+// Safe Room, in dem der Punkt liegt (Innenraum oder Tür), sonst null
+export function safeRoomAn(welt, x, y) {
+  const kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
+  for (const s of welt.safeRooms) {
+    const h = s.haus;
+    if (kx >= h.x && kx < h.x + h.b && ky >= h.y && ky < h.y + h.h) {
+      const t = welt.hole(kx, ky);
+      if (t === T.BODEN || t === T.TUER) return s;
+    }
+  }
+  return null;
+}
+
+// Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
+export const WELT_VERSION = 3;
+
+// ---------- Gegenstände ----------
+export const DINGE = {
+  wasser: { name: 'Wasser', zeichen: '💧' },
+  essen: { name: 'Konserve', zeichen: '🥫' },
+  verband: { name: 'Verbandskasten', zeichen: '🩹' },
+  bretter: { name: 'Bretter', zeichen: '🪵' },
+  pistole: { name: 'Pistole', zeichen: '🔫', waffe: true },
+  schlaeger: { name: 'Baseballschläger', zeichen: '🏏', waffe: true },
+  munition: { name: 'Munition', zeichen: '🧰' },
+};
+export const RUCKSACK_PLAETZE = 8;
+export const KISTE_PLAETZE = 24;
+export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum' };
+export const BEUTE = {
+  kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', null, null],
+  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', null, null],
+  auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', null],
+};
+export const MUNITION_PRO_FUND = 12;
+export const AKTION_ABSTAND = 40;
 
 export function blockiert(welt, px, py) {
   return BLOCKIERT.has(welt.hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL)));

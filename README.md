@@ -20,7 +20,7 @@
 
 ---
 
-> **Early stage (0.x):** the multiplayer core works; safe rooms, inventory, puzzles and levels are still to come.
+> **Early stage (0.x):** multiplayer, safe rooms, inventory and saving work; infection, puzzles and further levels are still to come.
 > The game itself is in German.
 
 ## What works today
@@ -31,6 +31,10 @@
 - Sneaking, an automatic pistol for 40 % of the players, shoving for the rest
 - Downed players get back up when a teammate stays next to them for 3 seconds
 - Dropped connections: your character waits for 2 minutes and you rejoin automatically, even after a page reload
+- Four safe rooms with a shared supply chest; barricade the door with planks while zombies wear it down
+- Search cupboards, fridges, lockers and car boots (takes time and makes noise); 8-slot backpack
+- Water, food, first-aid kits, planks, pistol, baseball bat and ammo; thirst and hunger slowly drop
+- Persistent world in SQLite: you can only rest and log out in a safe room – leave outside and you wake up in your last safe room
 - Virtual joystick on phones, WASD on desktop; installable as a web app
 
 ## Installation
@@ -48,7 +52,7 @@ If you expose the game to the internet (reverse proxy or Cloudflare Tunnel, WebS
 The map is generated from a seed on both sides, so only the game state travels over the network (20 updates per second).
 
 ```sh
-cd zombies && npm install && npm test   # 15 tests
+cd zombies && npm install && npm test   # 24 tests
 npm start                               # http://localhost:2567
 ```
 

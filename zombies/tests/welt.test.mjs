@@ -68,3 +68,28 @@ test('Ecken-Hilfe: knapp neben der Tür gegen die Wand laufen führt hinein', as
     assert.ok(geschafft > 10);
   }
 });
+
+test('Safe Rooms und Behälter: vier verschiedene, erreichbar, nicht in Wänden', async () => {
+  const { safeRoomAn, blockiert } = await import('../client/welt.mjs');
+  for (const seed of [1, 42, 1234, 77777]) {
+    const w = baueWelt(seed);
+    assert.equal(w.safeRooms.length, 4, `Seed ${seed}`);
+    assert.equal(new Set(w.safeRooms.map(s => s.haus)).size, 4);
+    assert.deepEqual(w.safeRooms.map(s => s.name), ['Feuerwehrhaus', 'Sakristei', 'Lagerraum', 'Keller']);
+    const sx = Math.floor(w.start.x / KACHEL), sy = Math.floor(w.start.y / KACHEL);
+    const ok = erreichbar(w, sx, sy);
+    for (const s of w.safeRooms) {
+      assert.equal(safeRoomAn(w, s.innen.x, s.innen.y), s, `${s.name}: Mitte nicht im Safe Room`);
+      assert.equal(safeRoomAn(w, s.kiste.x, s.kiste.y), s, `${s.name}: Kiste nicht drin`);
+      assert.ok(frei(w, s.innen.x, s.innen.y, WERTE.spielerRadius), `${s.name}: Mitte blockiert`);
+    }
+    assert.equal(safeRoomAn(w, w.start.x, w.start.y), null);
+    assert.ok(w.behaelter.length > 30, `zu wenige Behälter: ${w.behaelter.length}`);
+    assert.ok(w.behaelter.filter(b => b.art === 'auto').length >= 8, 'zu wenige Autos');
+    for (const b of w.behaelter) {
+      assert.ok(!blockiert(w, b.x, b.y), `${b.id} steht in einer Wand`);
+      assert.ok(ok[Math.floor(b.y / KACHEL) * BREITE + Math.floor(b.x / KACHEL)], `${b.id} nicht erreichbar`);
+    }
+    assert.equal(new Set(w.behaelter.map(b => b.id)).size, w.behaelter.length);
+  }
+});

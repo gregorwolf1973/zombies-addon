@@ -26,4 +26,14 @@ Wer das Spiel aus dem Internet erreichbar macht, sollte einen Zugangscode setzen
 - Handy: auf den Bildschirm tippen und ziehen; wenig ziehen heißt schleichen.
 - PC: WASD oder Pfeiltasten, Umschalttaste zum Schleichen.
 - Angegriffen wird automatisch: mit Pistole auf Abstand, sonst wird gestoßen.
-- Wer am Boden liegt, steht wieder auf, wenn ein Mitspieler 3 Sekunden neben ihm stehen bleibt.
+- Wer am Boden liegt, steht wieder auf, wenn ein Mitspieler neben ihm stehen bleibt
+  (mit Verbandskasten 3 Sekunden, ohne 8 Sekunden).
+- Aktionsknopf unten rechts oder Taste E: durchsuchen, verbarrikadieren, Vorratskiste öffnen.
+- Rucksack unten: antippen zum Benutzen oder Wegwerfen, am PC Tasten 1–8.
+
+## Spielstand
+
+Welt, Safe Rooms und Spieler werden in `/data/zombies.db` gespeichert und sind damit in den
+HA-Backups enthalten. Jeder Browser bekommt einen geheimen Spieler-Schlüssel; wer Browserdaten
+löscht, beginnt neu. Abmelden geht nur in einem Safe Room – wer draußen geht, wartet 2 Minuten
+und taucht beim nächsten Mal im letzten Safe Room auf.

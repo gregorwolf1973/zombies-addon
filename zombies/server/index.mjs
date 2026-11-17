@@ -8,6 +8,7 @@ import express from 'express';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { SpielRaum } from './raum.mjs';
+import { Speicher } from './speicher.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -22,7 +23,13 @@ export function entferneFremdenIngress(req, res, next) {
   next?.();
 }
 
-export async function starte({ port = Number(process.env.PORT) || 2567, optionen = leseOptionen(), leise = false } = {}) {
+export async function starte({
+  port = Number(process.env.PORT) || 2567,
+  optionen = leseOptionen(),
+  leise = false,
+  datenbank = process.env.ZOMBIES_DB || '/data/zombies.db',
+} = {}) {
+  SpielRaum.speicher = new Speicher(datenbank);
   const app = express();
   app.disable('x-powered-by');
   const nocache = (req, res, next) => { res.set('Cache-Control', 'no-cache'); next(); };
@@ -61,6 +68,10 @@ export async function starte({ port = Number(process.env.PORT) || 2567, optionen
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  // Sicherheitsnetz: ein einzelner Fehler soll nie das ganze Spiel beenden
+  process.on('unhandledRejection', e => console.error('Unbehandelter Fehler:', e?.message ?? e));
+  // Datenbank beim Beenden schließen (schreibt die WAL-Datei zurück)
+  process.on('exit', () => SpielRaum.speicher?.schliessen());
   // Colyseus fängt SIGTERM/SIGINT selbst ab und fährt sauber herunter
   await starte();
 }

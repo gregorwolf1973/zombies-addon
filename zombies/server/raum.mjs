@@ -1,9 +1,11 @@
-// Spielraum: der Server entscheidet über Bewegung, Zombies, Treffer und Aufhelfen.
+// Spielraum: der Server entscheidet über Bewegung, Zombies, Treffer, Gegenstände und Safe Rooms.
+import crypto from 'node:crypto';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen,
-  bewaffnetSoll, zombieSoll, zufall,
+  bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
+  DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
 } from '../client/welt.mjs';
 
 export const Spieler = schema({
@@ -11,13 +13,19 @@ export const Spieler = schema({
   x: t.number(), y: t.number(),
   richtung: t.number(),
   hp: t.number(),
+  durst: t.number(),        // 100 = satt, 0 = verdurstet
+  hunger: t.number(),
   unten: t.boolean(),
   hilfe: t.number(),        // Fortschritt beim Aufhelfen 0..1
-  waffe: t.string(),        // "pistole" oder ""
+  waffe: t.string(),        // "pistole", "schlaeger" oder ""
   munition: t.uint8(),
+  rucksack: t.array("string"),
   farbe: t.uint8(),
   schleicht: t.boolean(),
   verbunden: t.boolean(),
+  sicher: t.string(),       // Id des Safe Rooms, in dem man steht, sonst ""
+  aktion: t.string(),       // "durchsuchen" | "barrikade" | ""
+  fortschritt: t.number(),
   besiegt: t.uint16(),
 }, 'Spieler');
 
@@ -28,21 +36,30 @@ export const Zombie = schema({
   hp: t.uint8(),
 }, 'Zombie');
 
+export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
+export const Safe = schema({ barrikade: t.number(), kiste: t.array("string") }, 'Safe');
+
 export const Zustand = schema({
   seed: t.number(),
   phase: t.string(),        // "spiel" | "erwischt"
-  zeit: t.number(),         // Sekunden seit Rundenstart
+  zeit: t.number(),         // Spielzeit in Sekunden (wird gespeichert)
   besiegt: t.uint16(),
   spieler: t.map(Spieler),
   zombies: t.map(Zombie),
+  behaelter: t.map(Behaelter),   // nur schon durchsuchte
+  safes: t.map(Safe),
 }, 'Zustand');
 
 const TICK = 50; // ms → 20 Updates pro Sekunde
 const ZOMBIE_HP = 100;
 const PISTOLE_SCHADEN = 34, PISTOLE_PAUSE = 0.45;
+const SCHLAEGER_SCHADEN = 40, SCHLAEGER_PAUSE = 0.6, SCHLAEGER_REICHWEITE = 42;
 const STOSS_SCHADEN = 20, STOSS_PAUSE = 0.7, STOSS_WEG = 34;
 const BISS_PRO_SEK = 14;
-const START_MUNITION = 40;
+const START_MUNITION = 24;
+const DURST_DAUER = 3600, HUNGER_DAUER = 5400;   // Sekunden von voll bis leer
+const SPEICHER_TAKT = 30;
+const ID_MUSTER = /^[a-f0-9]{32}$/;
 
 function winkelDiff(a, b) {
   let d = a - b;
@@ -62,6 +79,7 @@ export class SpielRaum extends Room {
 
   // vom Server beim Start gesetzt (nicht über Client-Optionen änderbar)
   static einstellungen = { zugangscode: '', zombieFaktor: 1 };
+  static speicher = null;
 
   // läuft bei der Anfrage zum Beitreten: Zugangscode prüfen.
   // Wer über die HA-Seitenleiste (Ingress) kommt, ist schon bei HA angemeldet.
@@ -75,20 +93,42 @@ export class SpielRaum extends Room {
   }
 
   onCreate(optionen = {}) {
+    this.speicher = SpielRaum.speicher;
+    const stand = this.speicher?.ladeWelt() ?? null;
     this.state = new Zustand();
-    this.state.seed = Number.isInteger(optionen.seed) ? optionen.seed : Math.floor(Math.random() * 2 ** 31);
+    this.state.seed = Number.isInteger(optionen.seed) ? optionen.seed
+      : stand?.seed ?? Math.floor(Math.random() * 2 ** 31);
     this.welt = baueWelt(this.state.seed);
-    this.rnd = zufall(this.state.seed ^ 0x5bd1e995);
-    this.eingaben = new Map();   // sessionId → {dx, dy, s}
-    this.pausen = new Map();     // sessionId → Sekunden bis zum nächsten Angriff
-    this.zombieInfo = new Map(); // id → {ziel, punkt, wechsel, verloren}
+    this.rnd = zufall((this.state.seed ^ 0x5bd1e995) + Date.now() % 100000);
+    this.state.phase = 'spiel';
+    this.state.zeit = stand?.zeit ?? 0;
+    this.state.besiegt = stand?.besiegt ?? 0;
+
+    this.inhalte = new Map();     // Behälter-Id → verbliebene Gegenstände
+    for (const s of this.welt.safeRooms) {
+      const safe = new Safe(); safe.barrikade = 0;
+      this.state.safes.set(s.id, safe);
+    }
+    const passt = stand && stand.version === WELT_VERSION && stand.seed === this.state.seed;
+    if (passt) {
+      for (const [id, inhalt] of Object.entries(stand.behaelter ?? {})) this.setzeInhalt(id, inhalt);
+      for (const [id, s] of Object.entries(stand.safes ?? {})) {
+        const safe = this.state.safes.get(id);
+        if (!safe) continue;
+        safe.barrikade = Math.max(0, Math.min(100, Number(s.barrikade) || 0));
+        for (const d of (s.kiste ?? []).slice(0, KISTE_PLAETZE)) if (DINGE[d]) safe.kiste.push(d);
+      }
+    }
+
+    this.extra = new Map();       // sessionId → { spielerId, letzterSafe, pause, eingabe, aktionZiel }
+    this.wiederkehr = new Map();  // sessionId → Deferred der erlaubten Wiederverbindung
+    this.zombieInfo = new Map();
     this.naechsteZombieId = 1;
     this.feldZeit = 0;
     this.nachspawn = 0;
+    this.ersteWelle = true;
     this.erwischtSeit = 0;
-    this.state.phase = 'spiel';
-    this.state.zeit = 0;
-    this.state.besiegt = 0;
+    this.speicherUhr = SPEICHER_TAKT;
     this.zombieFaktor = SpielRaum.einstellungen.zombieFaktor;
 
     this.onMessage('eingabe', (client, m) => {
@@ -96,49 +136,309 @@ export class SpielRaum extends Room {
       let dx = Number(m.dx) || 0, dy = Number(m.dy) || 0;
       const l = Math.hypot(dx, dy);
       if (l > 1) { dx /= l; dy /= l; }
-      this.eingaben.set(client.sessionId, { dx, dy, s: !!m.s });
+      const x = this.extra.get(client.sessionId);
+      if (x) x.eingabe = { dx, dy, s: !!m.s };
     });
+    this.onMessage('aktion', client => this.starteAktion(client));
+    this.onMessage('benutze', (client, m) => this.benutze(client, m));
+    this.onMessage('wegwerfen', (client, m) => this.wegwerfen(client, m));
+    this.onMessage('kiste', (client, m) => this.kiste(client, m));
+    this.onMessage('ausruhen', client => this.ausruhen(client));
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
     this.setSimulationInterval(dt => this.schritt(dt / 1000), TICK);
   }
 
+  setzeInhalt(id, inhalt) {
+    const liste = (inhalt ?? []).filter(d => DINGE[d]);
+    this.inhalte.set(id, liste);
+    let b = this.state.behaelter.get(id);
+    if (!b) { b = new Behaelter(); this.state.behaelter.set(id, b); }
+    b.rest = liste.length;
+  }
+
+  // ---------- Beitreten, Verlassen, Speichern ----------
+
   onJoin(client, optionen = {}) {
+    const spielerId = ID_MUSTER.test(String(optionen.spielerId ?? '')) ? optionen.spielerId : crypto.randomBytes(16).toString('hex');
+    const name = sauberName(optionen.name);
+
+    // dieselbe Person schon da? Verbunden → ablehnen, weg → Figur übernehmen
+    for (const [sid, x] of this.extra) {
+      if (x.spielerId !== spielerId) continue;
+      const alt = this.state.spieler.get(sid);
+      if (alt?.verbunden) throw new ServerError(409, 'Du spielst schon in einem anderen Fenster');
+      this.wiederkehr.get(sid)?.reject?.(new Error('übernommen'));
+      this.wiederkehr.delete(sid);
+      this.state.spieler.delete(sid);
+      this.extra.delete(sid);
+      alt.name = name; alt.verbunden = true;
+      this.state.spieler.set(client.sessionId, alt);
+      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false } });
+      return;
+    }
+
     const p = new Spieler();
-    p.name = sauberName(optionen.name);
-    const n = this.state.spieler.size;
-    const winkel = n * 2.4;
-    p.x = this.welt.start.x + Math.cos(winkel) * 40;
-    p.y = this.welt.start.y + Math.sin(winkel) * 40;
-    p.hp = 100; p.unten = false; p.hilfe = 0; p.richtung = 0;
-    p.farbe = n % 10; p.verbunden = true; p.besiegt = 0;
-    const bewaffnet = [...this.state.spieler.values()].filter(s => s.waffe).length;
-    if (bewaffnet < bewaffnetSoll(n + 1)) { p.waffe = 'pistole'; p.munition = START_MUNITION; }
-    else { p.waffe = ''; p.munition = 0; }
+    p.name = name;
+    p.farbe = this.freieFarbe();
+    p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0;
+    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = '';
+    const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null };
+    const gespeichert = this.speicher?.ladeSpieler(spielerId);
+    if (gespeichert) {
+      p.hp = Math.max(25, Math.min(100, Number(gespeichert.hp) || 100));
+      p.durst = Math.max(20, Math.min(100, Number(gespeichert.durst) || 100));
+      p.hunger = Math.max(20, Math.min(100, Number(gespeichert.hunger) || 100));
+      p.waffe = DINGE[gespeichert.waffe]?.waffe ? gespeichert.waffe : '';
+      p.munition = Math.max(0, Math.min(99, Number(gespeichert.munition) || 0));
+      p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
+      for (const d of (gespeichert.rucksack ?? []).slice(0, RUCKSACK_PLAETZE)) if (DINGE[d]) p.rucksack.push(d);
+      extra.letzterSafe = gespeichert.letzterSafe ?? '';
+      const ort = gespeichert.draussen || !Number.isFinite(gespeichert.x)
+        ? this.safeFuer(extra.letzterSafe, gespeichert.x, gespeichert.y)?.innen
+        : { x: gespeichert.x, y: gespeichert.y };
+      const pos = this.freierPlatz(ort ?? this.welt.start);
+      p.x = pos.x; p.y = pos.y;
+    } else {
+      p.hp = 100; p.durst = 100; p.hunger = 100; p.besiegt = 0;
+      const pos = this.freierPlatz(this.welt.start, this.state.spieler.size);
+      p.x = pos.x; p.y = pos.y;
+      const bewaffnet = [...this.state.spieler.values()].filter(s => s.waffe === 'pistole').length;
+      if (bewaffnet < bewaffnetSoll(this.state.spieler.size + 1)) { p.waffe = 'pistole'; p.munition = START_MUNITION; }
+      else { p.waffe = ''; p.munition = 0; }
+      p.rucksack.push('wasser');
+    }
     this.state.spieler.set(client.sessionId, p);
-    this.pausen.set(client.sessionId, 0);
+    this.extra.set(client.sessionId, extra);
+    this.speichereSpieler(client.sessionId);
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
+  }
+
+  freieFarbe() {
+    const belegt = new Set([...this.state.spieler.values()].map(s => s.farbe));
+    for (let i = 0; i < 10; i++) if (!belegt.has(i)) return i;
+    return Math.floor(this.rnd() * 10);
+  }
+
+  // freier Platz in der Nähe eines Punkts (für mehrere Spieler leicht versetzt)
+  freierPlatz(ort, n = 0) {
+    for (let ring = 0; ring < 8; ring++) {
+      for (let i = 0; i < 8; i++) {
+        const w = (n + i) * 2.4, d = ring === 0 && i === 0 && n === 0 ? 0 : 18 + ring * 14;
+        const x = ort.x + Math.cos(w) * d, y = ort.y + Math.sin(w) * d;
+        if (frei(this.welt, x, y, W.spielerRadius)) return { x, y };
+      }
+    }
+    return { ...this.welt.start };
+  }
+
+  safeFuer(id, x, y) {
+    const s = this.welt.safeRooms.find(r => r.id === id);
+    if (s) return s;
+    let best = this.welt.safeRooms[0], bd = Infinity;
+    for (const r of this.welt.safeRooms) {
+      const d = Number.isFinite(x) ? Math.hypot(r.innen.x - x, r.innen.y - y) : 0;
+      if (d < bd) { bd = d; best = r; }
+    }
+    return best;
   }
 
   onDrop(client) {
     // Verbindung weg: Figur bleibt 2 Minuten stehen und wartet
     const p = this.state.spieler.get(client.sessionId);
-    if (p) p.verbunden = false;
-    this.eingaben.delete(client.sessionId);
-    this.allowReconnection(client, 120);
+    if (!p) return;   // Beitritt wurde abgelehnt – nichts zu halten
+    p.verbunden = false; p.aktion = '';
+    const x = this.extra.get(client.sessionId);
+    if (x) x.eingabe = { dx: 0, dy: 0, s: false };
+    const zusage = this.allowReconnection(client, 120);
+    // läuft die Zeit ab oder wird die Figur übernommen, ist das kein Fehler
+    zusage?.catch?.(() => {});
+    zusage?.promise?.catch?.(() => {});
+    this.wiederkehr.set(client.sessionId, zusage);
   }
 
   onReconnect(client) {
+    this.wiederkehr.delete(client.sessionId);
     const p = this.state.spieler.get(client.sessionId);
     if (p) p.verbunden = true;
   }
 
   onLeave(client) {
+    this.wiederkehr.delete(client.sessionId);
     const p = this.state.spieler.get(client.sessionId);
-    if (p) this.broadcast('meldung', { text: `${p.name} hat das Spiel verlassen` });
+    if (!p) return;
+    this.speichereSpieler(client.sessionId);
+    const text = p.sicher ? `${p.name} ruht sich aus` : `${p.name} hat sich versteckt`;
+    this.broadcast('meldung', { text });
     this.state.spieler.delete(client.sessionId);
-    this.eingaben.delete(client.sessionId);
-    this.pausen.delete(client.sessionId);
+    this.extra.delete(client.sessionId);
+  }
+
+  onDispose() { this.speichereAlles(); }
+
+  speichereSpieler(sid) {
+    const p = this.state.spieler.get(sid), x = this.extra.get(sid);
+    if (!p || !x || !this.speicher) return;
+    this.speicher.speichereSpieler(x.spielerId, p.name, {
+      x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
+      waffe: p.waffe, munition: p.munition, rucksack: [...p.rucksack], besiegt: p.besiegt,
+      letzterSafe: x.letzterSafe, draussen: !p.sicher,
+    });
+  }
+
+  speichereWelt() {
+    if (!this.speicher) return;
+    const behaelter = {}, safes = {};
+    for (const [id, inhalt] of this.inhalte) behaelter[id] = inhalt;
+    for (const [id, s] of this.state.safes) safes[id] = { barrikade: Math.round(s.barrikade), kiste: [...s.kiste] };
+    this.speicher.speichereWelt({
+      version: WELT_VERSION, seed: this.state.seed, zeit: this.state.zeit, besiegt: this.state.besiegt, behaelter, safes,
+    });
+  }
+
+  speichereAlles() {
+    if (!this.speicher) return;
+    try {
+      this.speicher.transaktion(() => {
+        this.speichereWelt();
+        for (const sid of this.state.spieler.keys()) this.speichereSpieler(sid);
+      });
+    } catch (e) { console.error('Speichern fehlgeschlagen:', e.message); }
+  }
+
+  // ---------- Aktionen der Spieler ----------
+
+  kontext(p) {
+    if (p.unten || this.state.phase !== 'spiel') return null;
+    const safe = safeRoomAn(this.welt, p.x, p.y);
+    if (safe) {
+      const tx = (safe.haus.tuer.x + 0.5) * KACHEL, ty = (safe.haus.tuer.y + 0.5) * KACHEL;
+      const zustand = this.state.safes.get(safe.id);
+      if (Math.hypot(p.x - tx, p.y - ty) < 56 && p.rucksack.includes('bretter') && zustand.barrikade < 100) {
+        return { art: 'barrikade', safe, dauer: 3 };
+      }
+    }
+    let best = null, bd = AKTION_ABSTAND;
+    for (const b of this.welt.behaelter) {
+      const d = Math.hypot(b.x - p.x, b.y - p.y);
+      if (d >= bd) continue;
+      const zustand = this.state.behaelter.get(b.id);
+      if (zustand && zustand.rest === 0) continue;
+      if (!sichtfrei(this.welt, p.x, p.y, b.x, b.y)) continue;
+      bd = d; best = b;
+    }
+    if (best) return { art: 'durchsuchen', behaelter: best, dauer: best.art === 'auto' ? 3.5 : 2.5 };
+    return null;
+  }
+
+  starteAktion(client) {
+    const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
+    if (!p || !x || p.aktion) return;
+    const k = this.kontext(p);
+    if (!k) return;
+    p.aktion = k.art; p.fortschritt = 0;
+    x.aktionZiel = k;
+    x.laermUhr = 0;
+  }
+
+  aktionSchritt(sid, p, x, dt) {
+    if (!p.aktion) return;
+    const e = x.eingabe;
+    if (p.unten || Math.hypot(e.dx, e.dy) > 0.05 || this.state.phase !== 'spiel') {
+      p.aktion = ''; p.fortschritt = 0; x.aktionZiel = null;
+      return;
+    }
+    const k = x.aktionZiel;
+    p.fortschritt = Math.min(1, p.fortschritt + dt / k.dauer);
+    // Durchsuchen und Hämmern machen Lärm – auch durch Wände
+    x.laermUhr -= dt;
+    if (x.laermUhr <= 0) { this.laerm(p.x, p.y, k.art === 'barrikade' ? 220 : 150, true); x.laermUhr = 1; }
+    if (p.fortschritt < 1) return;
+    p.aktion = ''; p.fortschritt = 0; x.aktionZiel = null;
+    const client = this.clients.find(c => c.sessionId === sid);
+    if (k.art === 'durchsuchen') this.durchsucht(client, p, k.behaelter);
+    else if (k.art === 'barrikade') {
+      const i = p.rucksack.indexOf('bretter');
+      if (i < 0) return;
+      p.rucksack.splice(i, 1);
+      const safe = this.state.safes.get(k.safe.id);
+      safe.barrikade = Math.min(100, safe.barrikade + 35);
+      client?.send('meldung', { text: `Tür verbarrikadiert (${Math.round(safe.barrikade)} %)` });
+    }
+  }
+
+  durchsucht(client, p, b) {
+    if (!this.inhalte.has(b.id)) {
+      const tabelle = BEUTE[b.art] ?? [];
+      const funde = [];
+      const n = 1 + (this.rnd() < 0.45 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        const d = tabelle[Math.floor(this.rnd() * tabelle.length)];
+        if (d) funde.push(d);
+      }
+      this.setzeInhalt(b.id, funde);
+    }
+    const inhalt = this.inhalte.get(b.id);
+    const genommen = [];
+    for (let i = 0; i < inhalt.length;) {
+      const d = inhalt[i];
+      if (d === 'munition') { p.munition = Math.min(99, p.munition + MUNITION_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (p.rucksack.length < RUCKSACK_PLAETZE) { p.rucksack.push(d); genommen.push(d); inhalt.splice(i, 1); continue; }
+      i++;
+    }
+    this.setzeInhalt(b.id, inhalt);
+    client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+  }
+
+  benutze(client, m) {
+    const p = this.state.spieler.get(client.sessionId);
+    const i = Number(m?.platz);
+    if (!p || p.unten || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
+    const d = p.rucksack[i];
+    if (d === 'wasser') { p.durst = Math.min(100, p.durst + 45); p.rucksack.splice(i, 1); }
+    else if (d === 'essen') { p.hunger = Math.min(100, p.hunger + 45); p.rucksack.splice(i, 1); }
+    else if (d === 'verband') {
+      if (p.hp >= 100) return client.send('meldung', { text: 'Du bist nicht verletzt' });
+      p.hp = Math.min(100, p.hp + 45); p.rucksack.splice(i, 1);
+    } else if (DINGE[d]?.waffe) {
+      const alt = p.waffe;
+      p.waffe = d;
+      if (alt) p.rucksack[i] = alt; else p.rucksack.splice(i, 1);
+      client.send('meldung', { text: `${DINGE[d].name} in der Hand` });
+    } else if (d === 'bretter') {
+      client.send('meldung', { text: 'Bretter: im Safe Room an der Tür verbarrikadieren' });
+    }
+  }
+
+  wegwerfen(client, m) {
+    const p = this.state.spieler.get(client.sessionId);
+    const i = Number(m?.platz);
+    if (!p || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
+    p.rucksack.splice(i, 1);
+  }
+
+  kiste(client, m) {
+    const p = this.state.spieler.get(client.sessionId);
+    if (!p || p.unten) return;
+    const s = safeRoomAn(this.welt, p.x, p.y);
+    if (!s || Math.hypot(s.kiste.x - p.x, s.kiste.y - p.y) > AKTION_ABSTAND + 24) return;
+    const kiste = this.state.safes.get(s.id).kiste;
+    const i = Number(m?.platz);
+    if (m?.richtung === 'rein') {
+      if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length || kiste.length >= KISTE_PLAETZE) return;
+      kiste.push(p.rucksack[i]); p.rucksack.splice(i, 1);
+    } else if (m?.richtung === 'raus') {
+      if (!Number.isInteger(i) || i < 0 || i >= kiste.length || p.rucksack.length >= RUCKSACK_PLAETZE) return;
+      p.rucksack.push(kiste[i]); kiste.splice(i, 1);
+    }
+  }
+
+  ausruhen(client) {
+    const p = this.state.spieler.get(client.sessionId);
+    if (!p || !p.sicher) return client.send('meldung', { text: 'Abmelden geht nur in einem Safe Room' });
+    this.speichereSpieler(client.sessionId);
+    this.speichereWelt();
+    client.send('ausgeruht', {});
   }
 
   // ---------- Simulation ----------
@@ -146,16 +446,24 @@ export class SpielRaum extends Room {
   schritt(dt) {
     const s = this.state;
     if (s.spieler.size === 0) return;
+    this.speicherUhr -= dt;
+    if (this.speicherUhr <= 0) { this.speicherUhr = SPEICHER_TAKT; this.speichereAlles(); }
     if (s.phase === 'erwischt') {
       this.erwischtSeit += dt;
-      if (this.erwischtSeit > 6) this.neueRunde();
+      if (this.erwischtSeit > 6) this.zurueckInDieSafeRooms();
       return;
     }
     s.zeit += dt;
     this.feldZeit -= dt;
     if (this.feldZeit <= 0) { this.baueFeld(); this.feldZeit = 0.4; }
 
-    for (const [id, p] of s.spieler) this.spielerSchritt(id, p, dt);
+    for (const [id, p] of s.spieler) {
+      const x = this.extra.get(id);
+      if (!x) continue;
+      this.spielerSchritt(id, p, x, dt);
+      this.beduerfnisse(p, x, dt);
+      this.aktionSchritt(id, p, x, dt);
+    }
     for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
     this.aufhelfen(dt);
     this.zombiesAuffuellen(dt);
@@ -164,13 +472,16 @@ export class SpielRaum extends Room {
     if (stehend.length === 0) {
       s.phase = 'erwischt';
       this.erwischtSeit = 0;
-      this.broadcast('meldung', { text: 'Alle erwischt! Neue Runde in 6 Sekunden …', lang: true });
+      this.broadcast('meldung', { text: 'Alle erwischt! Ihr schleppt euch in die Safe Rooms …', lang: true });
     }
   }
 
-  spielerSchritt(id, p, dt) {
+  spielerSchritt(id, p, x, dt) {
+    const safe = safeRoomAn(this.welt, p.x, p.y);
+    p.sicher = safe ? safe.id : '';
+    if (safe) x.letzterSafe = safe.id;
     if (p.unten) return;
-    const e = this.eingaben.get(id) ?? { dx: 0, dy: 0, s: false };
+    const e = x.eingabe;
     const laenge = Math.hypot(e.dx, e.dy);
     p.schleicht = e.s || (laenge > 0 && laenge < 0.55);
     const tempo = p.schleicht ? W.tempoSchleichen : W.tempoGehen;
@@ -178,17 +489,18 @@ export class SpielRaum extends Room {
       const f = Math.min(1, laenge / (p.schleicht ? 0.55 : 1)) * tempo * dt;
       bewege(this.welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
       p.richtung = Math.atan2(e.dy, e.dx);
-      // Rennen ist laut
       if (!p.schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen, false);
     }
-    // automatischer Angriff
-    let pause = (this.pausen.get(id) ?? 0) - dt;
-    if (pause <= 0) {
+    // automatischer Angriff (nicht während man durchsucht)
+    let pause = x.pause - dt;
+    if (pause <= 0 && !p.aktion) {
       const mitPistole = p.waffe === 'pistole' && p.munition > 0;
-      const reichweite = mitPistole ? W.pistoleReichweite : W.nahkampfReichweite;
+      const mitSchlaeger = p.waffe === 'schlaeger';
+      const reichweite = mitPistole ? W.pistoleReichweite : mitSchlaeger ? SCHLAEGER_REICHWEITE : W.nahkampfReichweite;
       const ziel = this.naechsterZombie(p.x, p.y, reichweite);
       if (ziel) {
         const [zid, z] = ziel;
+        const w = Math.atan2(z.y - p.y, z.x - p.x);
         if (mitPistole) {
           p.munition--;
           this.broadcast('schuss', { x1: p.x, y1: p.y, x2: z.x, y2: z.y });
@@ -196,16 +508,33 @@ export class SpielRaum extends Room {
           this.schaden(zid, z, PISTOLE_SCHADEN, p);
           pause = PISTOLE_PAUSE;
         } else {
-          const w = Math.atan2(z.y - p.y, z.x - p.x);
           bewege(this.welt, z, Math.cos(w) * STOSS_WEG, Math.sin(w) * STOSS_WEG, W.zombieRadius);
-          this.broadcast('stoss', { x: p.x, y: p.y, w });
-          this.schaden(zid, z, STOSS_SCHADEN, p);
-          pause = STOSS_PAUSE;
+          this.broadcast('stoss', { x: p.x, y: p.y, w, schlag: mitSchlaeger });
+          this.schaden(zid, z, mitSchlaeger ? SCHLAEGER_SCHADEN : STOSS_SCHADEN, p);
+          pause = mitSchlaeger ? SCHLAEGER_PAUSE : STOSS_PAUSE;
         }
-        p.richtung = Math.atan2(z.y - p.y, z.x - p.x);
+        p.richtung = w;
       } else pause = 0;
     }
-    this.pausen.set(id, pause);
+    x.pause = Math.max(0, pause);
+  }
+
+  beduerfnisse(p, x, dt) {
+    if (!p.verbunden) return;
+    p.durst = Math.max(0, p.durst - dt * 100 / DURST_DAUER);
+    p.hunger = Math.max(0, p.hunger - dt * 100 / HUNGER_DAUER);
+    if (p.unten) return;
+    if (p.durst === 0 || p.hunger === 0) {
+      p.hp = Math.max(0, p.hp - dt * 0.25);
+      if (p.hp === 0) this.liegtAmBoden(p);
+    } else if (p.sicher && p.durst > 20 && p.hunger > 20 && p.hp < 100) {
+      p.hp = Math.min(100, p.hp + dt * 0.6);   // ausruhen im Safe Room
+    }
+  }
+
+  liegtAmBoden(p) {
+    p.unten = true; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0;
+    this.broadcast('meldung', { text: `${p.name} liegt am Boden – hilf ihm auf!`, lang: true });
   }
 
   naechsterZombie(x, y, reichweite) {
@@ -220,7 +549,7 @@ export class SpielRaum extends Room {
   schaden(id, z, menge, von) {
     z.hp = Math.max(0, z.hp - menge);
     const info = this.zombieInfo.get(id);
-    if (info && !info.ziel) { info.punkt = { x: von.x, y: von.y }; }
+    if (info && !info.ziel) info.punkt = { x: von.x, y: von.y };
     if (z.hp === 0) {
       this.state.zombies.delete(id);
       this.zombieInfo.delete(id);
@@ -230,13 +559,12 @@ export class SpielRaum extends Room {
     }
   }
 
-  laerm(x, y, weite, schuss) {
+  laerm(x, y, weite, durchWaende) {
     for (const [id, z] of this.state.zombies) {
       if (Math.hypot(z.x - x, z.y - y) > weite) continue;
       const info = this.zombieInfo.get(id);
       if (!info || info.ziel) continue;
-      // Schüsse hört man auch durch Wände, Schritte nur im Freien
-      if (!schuss && !sichtfrei(this.welt, z.x, z.y, x, y)) continue;
+      if (!durchWaende && !sichtfrei(this.welt, z.x, z.y, x, y)) continue;
       info.punkt = { x, y };
     }
   }
@@ -308,15 +636,10 @@ export class SpielRaum extends Room {
       } else {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y) ?? z.richtung);
         z.richtung = w;
-        if (d > W.spielerRadius + W.zombieRadius - 2) {
-          this.zombieGehen(z, w, W.zombieTempoJagen * dt);
-        }
+        if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * dt, dt);
         if (d < W.spielerRadius + W.zombieRadius + 6) {
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt);
-          if (ziel.hp <= 0) {
-            ziel.unten = true; ziel.hilfe = 0;
-            this.broadcast('meldung', { text: `${ziel.name} liegt am Boden – hilf ihm auf!`, lang: true });
-          }
+          if (ziel.hp <= 0) this.liegtAmBoden(ziel);
         }
         return;
       }
@@ -327,8 +650,9 @@ export class SpielRaum extends Room {
       const d = Math.hypot(info.punkt.x - z.x, info.punkt.y - z.y);
       if (d < 16) { info.punkt = null; info.wechsel = 0; }
       else {
-        z.richtung = Math.atan2(info.punkt.y - z.y, info.punkt.x - z.x);
-        if (!this.zombieGehen(z, z.richtung, W.zombieTempoJagen * 0.7 * dt)) info.punkt = null;
+        const sieht = sichtfrei(this.welt, z.x, z.y, info.punkt.x, info.punkt.y);
+        z.richtung = sieht ? Math.atan2(info.punkt.y - z.y, info.punkt.x - z.x) : (this.feldRichtung(z.x, z.y) ?? z.richtung);
+        if (!this.zombieGehen(z, z.richtung, W.zombieTempoJagen * 0.7 * dt, dt)) info.punkt = null;
       }
       return;
     }
@@ -340,14 +664,34 @@ export class SpielRaum extends Room {
       info.steht = this.rnd() < 0.4;
       if (!info.steht) z.richtung = this.rnd() * Math.PI * 2;
     }
-    if (!info.steht && !this.zombieGehen(z, z.richtung, W.zombieTempoWandern * dt)) {
+    if (!info.steht && !this.zombieGehen(z, z.richtung, W.zombieTempoWandern * dt, dt)) {
       z.richtung += Math.PI * (0.5 + this.rnd());
     }
   }
 
-  zombieGehen(z, w, weg) {
+  // verbarrikadierte Tür eines Safe Rooms an dieser Stelle?
+  barrikadeAn(x, y) {
+    const kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
+    for (const s of this.welt.safeRooms) {
+      if (s.haus.tuer.x === kx && s.haus.tuer.y === ky) {
+        const zustand = this.state.safes.get(s.id);
+        if (zustand.barrikade > 0) return zustand;
+      }
+    }
+    return null;
+  }
+
+  zombieGehen(z, w, weg, dt) {
     const x0 = z.x, y0 = z.y;
     bewege(this.welt, z, Math.cos(w) * weg, Math.sin(w) * weg, W.zombieRadius);
+    // Barrikade: nicht durch, sondern dagegen hämmern
+    const sperre = this.barrikadeAn(z.x + Math.cos(w) * W.zombieRadius, z.y + Math.sin(w) * W.zombieRadius)
+      ?? this.barrikadeAn(z.x, z.y);
+    if (sperre) {
+      z.x = x0; z.y = y0;
+      if (z.jagt || weg > W.zombieTempoWandern * dt * 1.5) sperre.barrikade = Math.max(0, sperre.barrikade - dt * 2);
+      return false;
+    }
     // Abstand zu anderen Zombies halten
     for (const o of this.state.zombies.values()) {
       if (o === z) continue;
@@ -366,15 +710,20 @@ export class SpielRaum extends Room {
       if (!p.unten) continue;
       const helfer = alle.find(([hid, h]) => {
         if (h.unten || h === p) return false;
-        const e = this.eingaben.get(hid);
+        const e = this.extra.get(hid)?.eingabe;
         const steht = !e || Math.hypot(e.dx, e.dy) < 0.05;
         return steht && Math.hypot(h.x - p.x, h.y - p.y) < W.aufhelfenAbstand;
       });
       if (helfer) {
-        p.hilfe = Math.min(1, p.hilfe + dt / W.aufhelfenDauer);
+        const h = helfer[1];
+        const mitVerband = h.rucksack.includes('verband');
+        p.hilfe = Math.min(1, p.hilfe + dt / (mitVerband ? W.aufhelfenDauer : 8));
         if (p.hilfe >= 1) {
-          p.unten = false; p.hp = 40; p.hilfe = 0;
-          this.broadcast('meldung', { text: `${helfer[1].name} hat ${p.name} aufgeholfen` });
+          if (mitVerband) h.rucksack.splice(h.rucksack.indexOf('verband'), 1);
+          p.unten = false; p.hp = mitVerband ? 70 : 25; p.hilfe = 0;
+          this.broadcast('meldung', {
+            text: mitVerband ? `${h.name} hat ${p.name} verbunden und aufgeholfen` : `${h.name} hat ${p.name} notdürftig aufgeholfen`,
+          });
         }
       } else p.hilfe = Math.max(0, p.hilfe - dt / 6);
     }
@@ -384,9 +733,10 @@ export class SpielRaum extends Room {
     this.nachspawn -= dt;
     const soll = Math.round(zombieSoll(this.state.spieler.size) * this.zombieFaktor);
     if (this.state.zombies.size >= soll || this.nachspawn > 0) return;
-    // beim Rundenstart viele auf einmal, danach langsam nachrücken
-    const anzahl = this.state.zeit < 1 ? soll - this.state.zombies.size : 1;
-    for (let i = 0; i < anzahl; i++) this.neuerZombie(this.state.zeit < 1 ? 380 : 520);
+    // beim Start viele auf einmal, danach langsam nachrücken
+    const anzahl = this.ersteWelle ? soll - this.state.zombies.size : 1;
+    for (let i = 0; i < anzahl; i++) this.neuerZombie(this.ersteWelle ? 380 : 520);
+    this.ersteWelle = false;
     this.nachspawn = 2.5;
   }
 
@@ -394,6 +744,7 @@ export class SpielRaum extends Room {
     for (let versuch = 0; versuch < 60; versuch++) {
       const x = (1 + this.rnd() * (BREITE - 8)) * KACHEL, y = (1 + this.rnd() * (HOEHE - 2)) * KACHEL;
       if (!frei(this.welt, x, y, W.zombieRadius + 2)) continue;
+      if (safeRoomAn(this.welt, x, y)) continue;
       const nah = [...this.state.spieler.values()].some(p => Math.hypot(p.x - x, p.y - y) < abstand);
       if (nah) continue;
       // in Häusern lauern auch welche, aber seltener
@@ -407,19 +758,27 @@ export class SpielRaum extends Room {
     }
   }
 
-  neueRunde() {
+  // alle am Boden: jeder wacht in seinem letzten Safe Room auf, die Welt bleibt erhalten
+  zurueckInDieSafeRooms() {
     const s = this.state;
-    s.zombies.clear();
-    this.zombieInfo.clear();
-    s.zeit = 0; s.besiegt = 0; s.phase = 'spiel';
-    let n = 0;
-    for (const p of s.spieler.values()) {
-      const w = n++ * 2.4;
-      p.x = this.welt.start.x + Math.cos(w) * 40; p.y = this.welt.start.y + Math.sin(w) * 40;
-      p.hp = 100; p.unten = false; p.hilfe = 0; p.besiegt = 0;
-      if (p.waffe) p.munition = START_MUNITION;
+    const besetzt = new Map();
+    for (const [sid, p] of s.spieler) {
+      const x = this.extra.get(sid);
+      const safe = this.safeFuer(x?.letzterSafe, p.x, p.y);
+      const n = besetzt.get(safe.id) ?? 0;
+      besetzt.set(safe.id, n + 1);
+      const pos = this.freierPlatz(safe.innen, n);
+      p.x = pos.x; p.y = pos.y;
+      p.hp = 50; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0;
     }
-    this.nachspawn = 0;
-    this.broadcast('meldung', { text: 'Neue Runde – haltet zusammen!', lang: true });
+    // Zombies rund um die Safe Rooms vertreiben
+    for (const [id, z] of s.zombies) {
+      if (this.welt.safeRooms.some(r => Math.hypot(r.innen.x - z.x, r.innen.y - z.y) < 320)) {
+        s.zombies.delete(id); this.zombieInfo.delete(id);
+      }
+    }
+    for (const info of this.zombieInfo.values()) { info.ziel = null; info.punkt = null; }
+    s.phase = 'spiel';
+    this.broadcast('meldung', { text: 'Ihr seid im Safe Room aufgewacht – mit Kopfweh, aber lebendig.', lang: true });
   }
 }

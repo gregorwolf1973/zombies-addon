@@ -15,7 +15,7 @@ async function bis(bedingung, ms = 3000) {
   return bedingung();
 }
 
-before(async () => { server = await starte({ port: PORT, optionen: {}, leise: true }); });
+before(async () => { server = await starte({ port: PORT, optionen: {}, leise: true, datenbank: ':memory:' }); });
 after(async () => { await server.gracefullyShutdown(false); });
 
 test('Namen werden bereinigt', () => {
@@ -73,10 +73,12 @@ test('Aufhelfen: stehen bleiben bringt den Mitspieler wieder hoch', async () => 
     const hans = raum.state.spieler.get(a.sessionId), resi = raum.state.spieler.get(b.sessionId);
     hans.unten = true; hans.hp = 0; hans.hilfe = 0;
     resi.x = hans.x + 20; resi.y = hans.y;
+    resi.rucksack.push('verband');
     b.send('eingabe', { dx: 0, dy: 0, s: false });
     assert.ok(await bis(() => hans.hilfe > 0.2, 2000), 'Hilfe beginnt nicht');
     assert.ok(await bis(() => !hans.unten, 5000), 'Hans steht nicht auf');
-    assert.equal(hans.hp, 40);
+    assert.equal(hans.hp, 70);
+    assert.ok(!resi.rucksack.includes('verband'), 'Verbandskasten verbraucht');
     // b sieht das auch
     assert.ok(await bis(() => b.state.spieler.get(a.sessionId).unten === false));
   } finally {
@@ -84,7 +86,7 @@ test('Aufhelfen: stehen bleiben bringt den Mitspieler wieder hoch', async () => 
   }
 });
 
-test('alle am Boden → Erwischt und neue Runde', async () => {
+test('alle am Boden → Erwischt, Aufwachen im Safe Room', async () => {
   const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Toni' });
   try {
     const raum = matchMaker.getLocalRoomById(a.roomId);
@@ -93,9 +95,10 @@ test('alle am Boden → Erwischt und neue Runde', async () => {
     const toni = raum.state.spieler.get(a.sessionId);
     toni.unten = true; toni.hp = 0;
     assert.ok(await bis(() => a.state.phase === 'erwischt'));
-    assert.ok(await bis(() => a.state.phase === 'spiel', 8000), 'keine neue Runde');
+    assert.ok(await bis(() => a.state.phase === 'spiel', 8000), 'kein Aufwachen');
     assert.equal(toni.unten, false);
-    assert.equal(toni.hp, 100);
+    assert.ok(toni.hp >= 50 && toni.hp < 55, 'hp nach dem Aufwachen: ' + toni.hp);
+    assert.ok(await bis(() => toni.sicher !== ''), 'nicht im Safe Room');
   } finally {
     await a.leave();
   }

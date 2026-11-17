@@ -33,8 +33,56 @@ button:disabled { opacity: .6; }
   padding-top: max(10px, env(safe-area-inset-top));
 }
 #hud .zeile { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-#hp { flex: 1; max-width: 240px; height: 10px; background: #0008; border-radius: 5px; overflow: hidden; }
-#hp > div { height: 100%; width: 100%; background: #e53935; transition: width .2s; }
+#hud .anzeigen { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; }
+.anzeige { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.bar { width: 70px; height: 8px; background: #0008; border-radius: 4px; overflow: hidden; }
+.bar > div { height: 100%; width: 100%; transition: width .25s; }
+.bar.rot > div { background: #e53935; }
+.bar.blau > div { background: #42a5f5; }
+.bar.gelb > div { background: #ffca28; }
+#sicher {
+  display: none; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px;
+  background: #263238cc; border: 1px solid #90a4ae66; border-radius: 10px; padding: 5px 8px; width: fit-content;
+}
+#sicher button, #unten button, #popup button, #kiste button { width: auto; margin: 0; pointer-events: auto; }
+#ausruhen { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: #b0bec5; color: #102027; }
+.fehler.gut { color: #a5d6a7; }
+
+#unten {
+  position: fixed; left: 0; right: 0; bottom: 0; display: none; flex-direction: column; align-items: center;
+  gap: 8px; padding: 0 10px max(10px, env(safe-area-inset-bottom)); pointer-events: none; z-index: 5;
+}
+#aktion {
+  display: none; align-self: flex-end; font-size: 16px; padding: 12px 16px; border-radius: 14px;
+  background: #ffd54f; color: #2b1d00; box-shadow: 0 3px 10px #0008;
+}
+#rucksack { display: flex; gap: 5px; pointer-events: auto; background: #0007; padding: 5px; border-radius: 12px; }
+.platz {
+  width: 40px !important; height: 40px; padding: 0 !important; font-size: 22px; border-radius: 9px !important;
+  background: #ffffff1c !important; border: 1px solid #ffffff33 !important; color: #fff;
+}
+.platz.leer { opacity: .4; }
+#popup {
+  position: fixed; display: none; z-index: 30; background: #1e2a1e; border: 1px solid #fff3; border-radius: 12px;
+  padding: 8px; box-shadow: 0 6px 20px #000a; min-width: 160px;
+}
+#popup .titel { font-weight: 700; margin: 2px 4px 8px; }
+#popup button { display: block; width: 100% !important; font-size: 15px; padding: 9px; margin-top: 6px !important; border-radius: 9px; }
+#popup button.zweit, #kiste .zweit { background: #ffffff22; color: #fff; }
+#kiste {
+  position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #0008; z-index: 25;
+  padding: 16px;
+}
+#kiste .fenster {
+  background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 12px 14px; width: min(520px, 100%);
+  max-height: 85vh; overflow: auto;
+}
+#kiste .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#kistezu { background: #ffffff22; color: #fff; padding: 4px 10px; font-size: 16px; }
+#kiste .kopf { font-size: 13px; opacity: .85; margin: 10px 0 6px; }
+#kiste .raster { display: flex; flex-wrap: wrap; gap: 6px; }
+#kiste .ding { font-size: 14px; padding: 7px 10px; border-radius: 9px; background: #ffffff1f; color: #fff; }
+#kiste .leer { opacity: .6; font-size: 13px; }
 #liste { list-style: none; margin: 0; padding: 0; font-size: 12px; opacity: .9; }
 #liste li { margin: 2px 0; }
 #liste .punkt { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
@@ -47,7 +95,7 @@ button:disabled { opacity: .6; }
 }
 #meldungen div { transition: opacity .5s; margin: 4px 0; }
 #hinweis {
-  position: fixed; left: 50%; bottom: 14%; transform: translateX(-50%); display: none;
+  position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); display: none;
   background: #000b; padding: 10px 16px; border-radius: 12px; font-weight: 700; text-align: center;
   pointer-events: none; max-width: 86vw;
 }

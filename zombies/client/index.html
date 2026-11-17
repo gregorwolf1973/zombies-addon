@@ -25,7 +25,9 @@
     <p class="klein">
       <b>Steuerung:</b> Am Handy links auf den Bildschirm tippen und ziehen – wenig ziehen heißt schleichen.
       Am PC WASD oder Pfeiltasten, Umschalt zum Schleichen. Angegriffen wird automatisch.<br>
-      Wer am Boden liegt, braucht Hilfe: daneben stehen bleiben, bis er wieder aufsteht.
+      Wer am Boden liegt, braucht Hilfe: daneben stehen bleiben, bis er wieder aufsteht.<br>
+      <b>Überleben:</b> Schränke, Kühlschränke und Autos durchsuchen (Knopf unten rechts oder Taste E).
+      Gespeichert und abgemeldet wird nur in einem 🛡 Safe Room.
     </p>
     <p id="fehler" class="fehler"></p>
   </div>
@@ -33,14 +35,34 @@
 
 <div id="hud">
   <div class="zeile">
-    <div id="hp"><div></div></div>
+    <div class="anzeigen">
+      <div class="anzeige" title="Gesundheit"><span>❤️</span><div id="hp" class="bar rot"><div></div></div></div>
+      <div class="anzeige" title="Durst"><span>💧</span><div id="durst" class="bar blau"><div></div></div></div>
+      <div class="anzeige" title="Hunger"><span>🥫</span><div id="hunger" class="bar gelb"><div></div></div></div>
+    </div>
     <span id="zeit">00:00</span>
   </div>
   <div class="zeile klein">
     <span id="waffe"></span>
     <span id="besiegt"></span>
   </div>
+  <div id="sicher">
+    <span id="sichername"></span>
+    <button id="ausruhen">💤 Ausruhen &amp; abmelden</button>
+  </div>
   <ul id="liste"></ul>
+</div>
+<div id="unten">
+  <button id="aktion"></button>
+  <div id="rucksack"></div>
+</div>
+<div id="popup"></div>
+<div id="kiste">
+  <div class="fenster">
+    <div class="kopfzeile"><b id="kistetitel">📦 Vorräte</b><button id="kistezu">✕</button></div>
+    <div id="kisteinhalt"></div>
+    <div id="kisterucksack"></div>
+  </div>
 </div>
 <div id="meldungen"></div>
 <div id="hinweis"></div>

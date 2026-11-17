@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0 – 17.11.2026
+
+- Spielstand wird gespeichert (SQLite unter /data): Welt, Behälter, Barrikaden, Vorratskisten und jeder Spieler
+- Spieler werden am Browser wiedererkannt (geheimer Schlüssel), der Name darf sich ändern
+- Vier Safe Rooms: Feuerwehrhaus, Sakristei, Lagerraum, Keller – mit Vorratskiste (24 Plätze)
+- Tür verbarrikadieren mit Brettern; Zombies hämmern dagegen und nutzen die Barrikade ab
+- „Ausruhen & abmelden“ nur im Safe Room; wer draußen geht, versteckt sich und taucht im letzten Safe Room wieder auf
+- Schränke, Kühlschränke, Spinde und Kofferräume durchsuchen (dauert, macht Lärm); Rucksack mit 8 Plätzen
+- Gegenstände: Wasser, Konserve, Verbandskasten, Bretter, Pistole, Baseballschläger, Munition
+- Durst und Hunger sinken; im Safe Room erholt man sich
+- Aufhelfen mit Verbandskasten in 3 s (70 Lebenspunkte), ohne in 8 s (25)
+- Alle am Boden: Aufwachen im Safe Room statt Neustart der Welt
+- Fehlerbehebung: abgelehnter Beitritt konnte eine unbehandelte Ablehnung auslösen
+
 ## 0.2.0 – 17.11.2026
 
 - Option `zugangscode`: Wer nicht über die HA-Seitenleiste kommt, braucht den Code zum Mitspielen
