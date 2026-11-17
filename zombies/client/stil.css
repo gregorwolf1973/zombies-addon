@@ -1,0 +1,59 @@
+html, body {
+  margin: 0; height: 100%; overflow: hidden; background: #1b2a1b; color: #fff;
+  font-family: system-ui, -apple-system, sans-serif; touch-action: none;
+  -webkit-user-select: none; user-select: none;
+}
+canvas { display: block; }
+
+.schirm {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 30%, #2e4a2e, #0f180f); z-index: 10; padding: 16px;
+}
+.karte {
+  max-width: 420px; width: 100%; background: #0008; border: 1px solid #fff2; border-radius: 16px;
+  padding: 20px 22px; box-shadow: 0 8px 30px #0009;
+}
+h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.15; }
+label { display: block; font-weight: 600; margin: 14px 0 6px; }
+input {
+  width: 100%; box-sizing: border-box; font-size: 18px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid #fff4; background: #fff1; color: #fff; user-select: text; -webkit-user-select: text;
+}
+button {
+  margin-top: 14px; width: 100%; font-size: 19px; font-weight: 700; padding: 12px; border: 0;
+  border-radius: 12px; background: #ffd54f; color: #2b1d00; cursor: pointer;
+}
+button:disabled { opacity: .6; }
+.klein { font-size: 13px; opacity: .85; line-height: 1.45; }
+.fehler { color: #ff8a80; font-weight: 600; min-height: 1em; }
+
+#hud {
+  position: fixed; top: 0; left: 0; right: 0; padding: 10px 14px; pointer-events: none;
+  font-weight: 600; font-size: 14px; text-shadow: 0 1px 2px #000; display: none;
+  padding-top: max(10px, env(safe-area-inset-top));
+}
+#hud .zeile { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+#hp { flex: 1; max-width: 240px; height: 10px; background: #0008; border-radius: 5px; overflow: hidden; }
+#hp > div { height: 100%; width: 100%; background: #e53935; transition: width .2s; }
+#liste { list-style: none; margin: 0; padding: 0; font-size: 12px; opacity: .9; }
+#liste li { margin: 2px 0; }
+#liste .punkt { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+#liste .unten { color: #ff8a80; }
+#liste .weg { opacity: .5; }
+
+#meldungen {
+  position: fixed; left: 0; right: 0; top: 30%; text-align: center; pointer-events: none;
+  font-weight: 800; font-size: 18px; text-shadow: 0 2px 5px #000;
+}
+#meldungen div { transition: opacity .5s; margin: 4px 0; }
+#hinweis {
+  position: fixed; left: 50%; bottom: 14%; transform: translateX(-50%); display: none;
+  background: #000b; padding: 10px 16px; border-radius: 12px; font-weight: 700; text-align: center;
+  pointer-events: none; max-width: 86vw;
+}
+#hinweis .balken { height: 8px; background: #fff2; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+#hinweis .balken > div { height: 100%; background: #66bb6a; }
+#verbindung {
+  position: fixed; top: 0; left: 0; right: 0; background: #b71c1c; text-align: center; padding: 6px;
+  font-weight: 700; display: none; z-index: 20;
+}

@@ -1,0 +1,45 @@
+// Einstieg: liefert die Spieldateien aus und startet den Colyseus-Spielserver.
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import express from 'express';
+import { Server } from '@colyseus/core';
+import { WebSocketTransport } from '@colyseus/ws-transport';
+import { SpielRaum } from './raum.mjs';
+
+const hier = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+
+export function leseOptionen(datei = process.env.ZOMBIES_OPTIONS || '/data/options.json') {
+  try { return JSON.parse(fs.readFileSync(datei, 'utf8')); } catch { return {}; }
+}
+
+export async function starte({ port = Number(process.env.PORT) || 2567, optionen = leseOptionen(), leise = false } = {}) {
+  const app = express();
+  app.disable('x-powered-by');
+  const nocache = (req, res, next) => { res.set('Cache-Control', 'no-cache'); next(); };
+  app.get('/vendor/phaser.min.js', nocache, (req, res) =>
+    res.sendFile(require.resolve('phaser/dist/phaser.min.js')));
+  app.get('/vendor/colyseus.js', nocache, (req, res) =>
+    res.sendFile(path.join(path.dirname(require.resolve('@colyseus/sdk/package.json')), 'dist/colyseus.js')));
+  app.get('/gesund', (req, res) => res.json({ ok: true }));
+  app.use(nocache, express.static(path.join(hier, '..', 'client'), { extensions: ['html'] }));
+
+  const httpServer = http.createServer(app);
+  const spielServer = new Server({
+    transport: new WebSocketTransport({ server: httpServer }),
+    greet: false,
+    logger: leise ? { info() {}, warn() {}, error: console.error, debug() {}, trace() {} } : undefined,
+  });
+  spielServer.define('zombies', SpielRaum, { zombieFaktor: Number(optionen.zombie_faktor) || 1 });
+  await spielServer.listen(port);
+  if (!leise) console.log(`Zombies in Oberbayern läuft auf Port ${port}`);
+  return spielServer;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  // Colyseus fängt SIGTERM/SIGINT selbst ab und fährt sauber herunter
+  await starte();
+}

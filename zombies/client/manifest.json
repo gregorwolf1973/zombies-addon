@@ -1,0 +1,11 @@
+{
+  "name": "Zombies in Oberbayern",
+  "short_name": "Zombies",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#1b2a1b",
+  "theme_color": "#1b2a1b",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
