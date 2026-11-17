@@ -1,5 +1,5 @@
 // Spielraum: der Server entscheidet über Bewegung, Zombies, Treffer und Aufhelfen.
-import { Room } from '@colyseus/core';
+import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen,
@@ -60,6 +60,20 @@ export class SpielRaum extends Room {
   maxClients = 10;
   patchRate = TICK;
 
+  // vom Server beim Start gesetzt (nicht über Client-Optionen änderbar)
+  static einstellungen = { zugangscode: '', zombieFaktor: 1 };
+
+  // läuft bei der Anfrage zum Beitreten: Zugangscode prüfen.
+  // Wer über die HA-Seitenleiste (Ingress) kommt, ist schon bei HA angemeldet.
+  static async onAuth(_token, optionen = {}, kontext = {}) {
+    const code = SpielRaum.einstellungen.zugangscode;
+    if (!code) return true;
+    const ingress = kontext.headers?.get?.('x-ingress-path');
+    if (ingress) return true;
+    if (String(optionen.code ?? '').trim() !== code) throw new ServerError(403, 'Falscher Zugangscode');
+    return true;
+  }
+
   onCreate(optionen = {}) {
     this.state = new Zustand();
     this.state.seed = Number.isInteger(optionen.seed) ? optionen.seed : Math.floor(Math.random() * 2 ** 31);
@@ -75,7 +89,7 @@ export class SpielRaum extends Room {
     this.state.phase = 'spiel';
     this.state.zeit = 0;
     this.state.besiegt = 0;
-    this.zombieFaktor = optionen.zombieFaktor ?? 1;
+    this.zombieFaktor = SpielRaum.einstellungen.zombieFaktor;
 
     this.onMessage('eingabe', (client, m) => {
       if (!m || typeof m !== 'object') return;

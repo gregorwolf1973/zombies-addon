@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 – 17.11.2026
+
+- Option `zugangscode`: Wer nicht über die HA-Seitenleiste kommt, braucht den Code zum Mitspielen
+- Der Ingress-Header gilt nur noch für Anfragen vom HA-Supervisor
+- Breitere Häuser, Türen auch von außen erkennbar, Ecken-Hilfe an Türen
+- README, Doku und MIT-Lizenz
+
 ## 0.1.0 – 17.11.2026
 
 - Erstes Grundgerüst: Spielserver mit Colyseus 0.18 (Node.js 22), Client mit Phaser 3.90

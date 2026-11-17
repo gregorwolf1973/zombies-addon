@@ -122,3 +122,22 @@ test('Pistole trifft Zombie in Reichweite und verbraucht Munition', async () => 
     await a.leave();
   }
 });
+
+test('Zugangscode: ohne Code abgewiesen, mit Code dabei, Ingress-Header von außen zählt nicht', async () => {
+  const { SpielRaum } = await import('../server/raum.mjs');
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, zugangscode: 'Brezn' };
+  try {
+    await assert.rejects(new Client(URL_).joinOrCreate('zombies', { name: 'Fremder' }), /Zugangscode/);
+    await assert.rejects(new Client(URL_).joinOrCreate('zombies', { name: 'Falsch', code: 'Weißwurst' }), /Zugangscode/);
+    const mitHeader = new Client(URL_, { headers: { 'X-Ingress-Path': '/api/hassio_ingress/x' } });
+    await assert.rejects(mitHeader.joinOrCreate('zombies', { name: 'Trickser' }), /Zugangscode/);
+    const info = await (await fetch(URL_ + '/info', { headers: { 'X-Ingress-Path': '/x' } })).json();
+    assert.equal(info.code, true);
+    const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Freund', code: ' Brezn ' });
+    assert.ok(a.sessionId);
+    await a.leave();
+  } finally {
+    SpielRaum.einstellungen = vorher;
+  }
+});

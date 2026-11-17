@@ -14,13 +14,17 @@ let meineId = null;
 // ---------- Startschirm ----------
 const nameFeld = $('name');
 try { nameFeld.value = localStorage.getItem('zob_name') || ''; } catch {}
+try { $('code').value = localStorage.getItem('zob_code') || ''; } catch {}
+fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; }).catch(() => {});
 $('los').addEventListener('click', () => mitspielen());
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 
 async function mitspielen() {
   const name = nameFeld.value.trim();
   if (!name) { $('fehler').textContent = 'Bitte gib einen Namen ein.'; nameFeld.focus(); return; }
-  try { localStorage.setItem('zob_name', name); } catch {}
+  const code = $('code').value.trim();
+  try { localStorage.setItem('zob_name', name); localStorage.setItem('zob_code', code); } catch {}
   $('los').disabled = true;
   $('fehler').textContent = '';
   try {
@@ -29,7 +33,7 @@ async function mitspielen() {
     let token = null;
     try { token = sessionStorage.getItem('zob_token'); } catch {}
     if (token) { try { r = await client.reconnect(token); } catch { r = null; } }
-    if (!r) r = await client.joinOrCreate('zombies', { name });
+    if (!r) r = await client.joinOrCreate('zombies', { name, code });
     raum = r;
     meineId = r.sessionId;
     try { sessionStorage.setItem('zob_token', r.reconnectionToken); } catch {}
@@ -47,7 +51,9 @@ async function mitspielen() {
     else raum.onStateChange.once(() => starteSpiel());
   } catch (e) {
     console.error(e);
-    $('fehler').textContent = 'Verbindung zum Spielserver fehlgeschlagen: ' + (e.message || e);
+    const text = String(e.message || e);
+    if (/Zugangscode/.test(text)) { $('codeblock').hidden = false; $('fehler').textContent = 'Der Zugangscode stimmt nicht.'; $('code').focus(); }
+    else $('fehler').textContent = 'Verbindung zum Spielserver fehlgeschlagen: ' + text;
     $('los').disabled = false;
   }
 }

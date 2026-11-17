@@ -16,6 +16,12 @@ export function leseOptionen(datei = process.env.ZOMBIES_OPTIONS || '/data/optio
   try { return JSON.parse(fs.readFileSync(datei, 'utf8')); } catch { return {}; }
 }
 
+const SUPERVISOR = new Set(['172.30.32.2', '::ffff:172.30.32.2']);
+export function entferneFremdenIngress(req, res, next) {
+  if (!SUPERVISOR.has(req.socket?.remoteAddress)) delete req.headers['x-ingress-path'];
+  next?.();
+}
+
 export async function starte({ port = Number(process.env.PORT) || 2567, optionen = leseOptionen(), leise = false } = {}) {
   const app = express();
   app.disable('x-powered-by');
@@ -24,7 +30,15 @@ export async function starte({ port = Number(process.env.PORT) || 2567, optionen
     res.sendFile(require.resolve('phaser/dist/phaser.min.js')));
   app.get('/vendor/colyseus.js', nocache, (req, res) =>
     res.sendFile(path.join(path.dirname(require.resolve('@colyseus/sdk/package.json')), 'dist/colyseus.js')));
+  SpielRaum.einstellungen = {
+    zugangscode: String(optionen.zugangscode ?? '').trim(),
+    zombieFaktor: Number(optionen.zombie_faktor) || 1,
+  };
   app.get('/gesund', (req, res) => res.json({ ok: true }));
+  // sagt dem Client, ob er nach dem Zugangscode fragen muss
+  app.get('/info', (req, res) => res.json({
+    code: !!SpielRaum.einstellungen.zugangscode && !req.get('x-ingress-path'),
+  }));
   app.use(nocache, express.static(path.join(hier, '..', 'client'), { extensions: ['html'] }));
 
   const httpServer = http.createServer(app);
@@ -33,8 +47,15 @@ export async function starte({ port = Number(process.env.PORT) || 2567, optionen
     greet: false,
     logger: leise ? { info() {}, warn() {}, error: console.error, debug() {}, trace() {} } : undefined,
   });
-  spielServer.define('zombies', SpielRaum, { zombieFaktor: Number(optionen.zombie_faktor) || 1 });
+  spielServer.define('zombies', SpielRaum);
   await spielServer.listen(port);
+  // Auch die Anfragen zum Beitreten (Colyseus hängt eigene Handler an) laufen durch die Prüfung
+  const handler = httpServer.listeners('request');
+  httpServer.removeAllListeners('request');
+  httpServer.on('request', (req, res) => {
+    entferneFremdenIngress(req);
+    for (const h of handler) h.call(httpServer, req, res);
+  });
   if (!leise) console.log(`Zombies in Oberbayern läuft auf Port ${port}`);
   return spielServer;
 }
