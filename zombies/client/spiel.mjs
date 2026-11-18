@@ -81,6 +81,10 @@ try {
 } catch {}
 fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; ton.toeneZuordnen(i.toene); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); mitspielen(); });
+// Startmusik: der Browser erlaubt Ton erst nach einer Berührung – also beim ersten Antippen der Startseite
+const musikAn = () => { if ($('start').style.display !== 'none') ton.musikStarten(); };
+document.addEventListener('pointerdown', musikAn, { once: true });
+document.addEventListener('keydown', musikAn, { once: true });
 
 // ---------- Figurenwahl ----------
 let meinAussehen = aussehenLesen(null);
@@ -138,6 +142,7 @@ async function mitspielen() {
     if (token) { try { r = await client.reconnect(token); } catch { r = null; } }
     if (!r) r = await client.joinOrCreate('zombies', { name, code, spielerId: spielerId(), aussehen: aussehenText(meinAussehen) });
     raum = r;
+    ton.musikAusblenden(4);   // Startmusik sanft ausblenden
     meineId = r.sessionId;
     try { sessionStorage.setItem('zob_token', r.reconnectionToken); } catch {}
     raum.onDrop(() => { $('verbindung').style.display = 'block'; });
@@ -310,7 +315,7 @@ class Ort extends Phaser.Scene {
       this.schuss(m);
       // Schrot kommt als mehrere Linien – nur ein Knall
       const jetzt = performance.now();
-      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'schrotflinte' ? 1.2 : 1); this.letzterKnall = jetzt; }
+      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; }
     });
     raum.onMessage('stoss', m => { this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
@@ -327,7 +332,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('sirene', () => {});   // die Sirene läuft dauernd am Fahrzeug (fahrzeuge in abgleichen)
     raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
     raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
-    raum.onMessage('meldung', m => meldung(m.text, m.lang));
+    raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     raum.onMessage('gefunden', m => {
       if (m.dinge.length) ton.aufheben(); else ton.suchen();
       if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : dingText(d)).join(', '));
@@ -1017,6 +1022,17 @@ class Ort extends Phaser.Scene {
       o.r = Phaser.Math.Angle.RotateTo(o.r, f.richtung, dt * 6);
       o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
       o.licht.clear();
+      // dicht vorbeifahrende Autos und Busse rauschen vorbei; jedes dritte Auto hat das Radio an
+      if ((f.art === 'auto' || f.art === 'bus') && this.lokal && !this.aktEbene) {
+        const d = Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y);
+        if (d < 170 && o.vorher !== undefined && d > o.vorher && !o.vorbei && !f.haelt) { ton.ereignis('autoVorbei', o.x, o.y); o.vorbei = true; }
+        if (d > 400) o.vorbei = false;
+        if (f.art === 'auto' && (id.charCodeAt(id.length - 1) % 3 === 0)) {
+          if (!o.radio) o.radio = ton.schleifeStarten('autoradio');
+          if (o.radio) ton.sireneLage(o.radio, o.x, o.y, o.vorher === undefined ? 0 : (o.vorher - d) / Math.max(dt, 0.001));
+        }
+        o.vorher = d;
+      }
       if (f.art === 'polizei' || f.art === 'feuerwehr') {
         // Dauersirene: blendet mit der Entfernung ein und aus, Tonhöhe nach Annäherung (Doppler)
         if (!o.sirene) o.sirene = ton.sireneStarten();
@@ -1032,7 +1048,10 @@ class Ort extends Phaser.Scene {
         o.licht.fillStyle(0x448aff, 0.18).fillCircle(vx, 0, blink ? 26 : 18);
       }
     }
-    for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id)) { ton.sireneStoppen(o.sirene); o.box.destroy(); this.busObj.delete(id); }
+    for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id) || s.fahrzeuge.get(id).art === 'wrack') {
+      ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); o.sirene = o.radio = null;
+      if (!s.fahrzeuge?.has(id)) { o.box.destroy(); this.busObj.delete(id); }
+    }
     this.feuerDarstellen(s);
     this.spurenDarstellen(s);
     // liegende Gegenstände

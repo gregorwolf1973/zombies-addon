@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.1 – 18.11.2026
+
+- Neue Geräusch-Ereignisse mit Tondateien: Schüsse je Waffe (Pistole, Jagdgewehr, Schrotflinte), Tür auf und zu,
+  Auto fährt vorbei, Autoradio (läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren), Startmusik (nach
+  dem ersten Antippen der Startseite, blendet beim Spielbeginn aus), Funkgerät-Klick bei wichtigen Meldungen,
+  Wasser (für Level 2)
+
 ## 0.22.0 – 18.11.2026
 
 - Feines Kollisionsraster (1 m statt 4 m) draußen: Man stößt genau an der gezeichneten Hauswand und am gezeichneten

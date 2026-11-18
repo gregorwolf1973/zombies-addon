@@ -140,7 +140,9 @@ function ton(ziel, dauer, { typ = 'sine', freq = 440, freqEnde, start = 0, a = 0
 }
 
 // ---------- einzelne Geräusche ----------
-export function schuss(x, y, laut = 1) {
+const SCHUSS_EREIGNIS = { pistole: 'schussPistole', gewehr: 'schussGewehr', schrotflinte: 'schussSchrot' };
+export function schuss(x, y, laut = 1, art = 'pistole') {
+  if (probe(SCHUSS_EREIGNIS[art] ?? 'schussPistole', x, y, art === 'schrotflinte' ? 1.1 : 1)) return;
   const z = ort(x, y, laut); if (!z) return;
   rauschen(z, 0.35, { freq: 2500, freqEnde: 300, a: 0.002, laut: 1 });
   ton(z, 0.18, { typ: 'triangle', freq: 140, freqEnde: 45, a: 0.002, laut: 0.8 });
@@ -184,6 +186,7 @@ export function entdeckt(x, y) {
 }
 
 export function tuer(offen) {
+  if (probe(offen ? 'tuerAuf' : 'tuerZu')) return;
   const z = ort(null, null, 0.5); if (!z) return;
   // Knarzen: kurze Folge rauer Töne, dann der Anschlag beim Schließen
   for (let i = 0; i < 4; i++) ton(z, 0.07, { typ: 'sawtooth', freq: 300 + i * 40 + Math.random() * 30, start: i * 0.05, laut: 0.06 });
@@ -255,6 +258,19 @@ export function knistern(x, y, staerke = 1) {
 
 // ---------- Sirene: läuft dauernd, solange das Fahrzeug da ist; Lautstärke, Richtung und Tonhöhe folgen der Entfernung ----------
 // Mit zugeordneter Datei (Ereignis „Sirene“) als Schleife, sonst ein erzeugtes Martinshorn (a' 440 Hz / d'' 587 Hz).
+// allgemeine Schleife an einem bewegten Ding (z. B. Autoradio); ohne zugeordnete Datei: null
+export function schleifeStarten(id) {
+  if (!ctx) return null;
+  const t = zuordnung[id], liste = (t?.dateien ?? []).map(geladen).filter(Boolean);
+  if (!liste.length) { (t?.dateien ?? []).forEach(laden); return null; }
+  const g = ctx.createGain(); g.gain.value = 0;
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  if (pan) { g.connect(pan); pan.connect(haupt); } else g.connect(haupt);
+  const buf = liste[Math.floor(Math.random() * liste.length)];
+  const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(g); src.start(0, Math.random() * buf.duration);
+  return { g, pan, laut: (t?.laut ?? 50) / 100, quellen: [src], rate: src.playbackRate };
+}
+
 export function sireneStarten() {
   if (!ctx) return null;
   const g = ctx.createGain(); g.gain.value = 0;
@@ -304,4 +320,27 @@ export function brandRauschen(staerke) {
   }
   brand.g.gain.setTargetAtTime(an ? Math.min(0.35, staerke * 0.3) : 0, ctx.currentTime, 0.4);
   brand.f.frequency.setTargetAtTime(500 + Math.random() * 300, ctx.currentTime, 0.1);   // flackernd
+}
+
+// ---------- Startmusik: nach dem ersten Antippen der Startseite, blendet beim Spielbeginn aus ----------
+let musik = null;
+export function musikStarten() {
+  tonStarten();
+  if (!ctx || musik) return;
+  const t = zuordnung.startmusik, liste = (t?.dateien ?? []);
+  if (!liste.length) return;
+  const buf = liste.map(geladen).filter(Boolean);
+  if (!buf.length) { Promise.all(liste.map(laden)).then(() => { if (!musik && !musikAus) musikStarten(); }); return; }
+  const g = ctx.createGain(); g.gain.value = 0; g.connect(haupt);
+  const src = ctx.createBufferSource(); src.buffer = buf[Math.floor(Math.random() * buf.length)]; src.loop = true; src.connect(g); src.start();
+  g.gain.setTargetAtTime((t.laut ?? 55) / 100, ctx.currentTime, 0.8);
+  musik = { g, src };
+}
+let musikAus = false;
+export function musikAusblenden(sek = 4) {
+  musikAus = true;
+  if (!musik || !ctx) return;
+  const m = musik; musik = null;
+  m.g.gain.setTargetAtTime(0, ctx.currentTime, sek / 3);
+  setTimeout(() => { try { m.src.stop(); } catch { /* schon aus */ } }, sek * 1500);
 }
