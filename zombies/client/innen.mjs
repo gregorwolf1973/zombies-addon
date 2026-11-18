@@ -171,14 +171,35 @@ function platziereMoebel(kacheln, moebelListe, behaelterListe, art, x, y, b, h, 
   return true;
 }
 
-// Hilfsfunktion: Zufällige Position für Möbel in einem Zimmer finden
-function findeMoebelPosition(kacheln, raum, moebelB, moebelH, ox, oy, hausB, hausH, rng) {
+// (Claude) Position für ein Möbelstück: bündig an einer Wand (ganze Seite liegt an), davor ein freier
+// Streifen Boden. Tische stehen frei im Raum, aber mit einem Ring freien Bodens rundherum.
+const FREISTEHEND = new Set(['esstisch', 'couchtisch']);
+function findeMoebelPosition(kacheln, raum, moebelB, moebelH, ox, oy, hausB, hausH, rng, art) {
   const { x: rx, y: ry, b: rb, h: rh } = raum;
+  const istWand = (x, y) => kacheln[idx(x, y)] === T.WAND;
+  const istBoden = (x, y) => kacheln[idx(x, y)] === T.BODEN;
   const kandidaten = [];
-  for (let y = ry; y < ry + rh - moebelH + 1; y++) {
-    for (let x = rx; x < rx + rb - moebelB + 1; x++) {
-      if (moebelPlatzFrei(kacheln, x, y, moebelB, moebelH, ox, oy, hausB, hausH)) {
-        kandidaten.push({ x, y });
+  for (const [b, h] of moebelB === moebelH ? [[moebelB, moebelH]] : [[moebelB, moebelH], [moebelH, moebelB]]) {
+    for (let y = ry; y <= ry + rh - h; y++) {
+      for (let x = rx; x <= rx + rb - b; x++) {
+        if (!moebelPlatzFrei(kacheln, x, y, b, h, ox, oy, hausB, hausH)) continue;
+        if (FREISTEHEND.has(art)) {
+          let ring = true;
+          for (let dy = -1; dy <= h && ring; dy++) for (let dx = -1; dx <= b; dx++) {
+            if ((dy === -1 || dy === h || dx === -1 || dx === b) && !istBoden(x + dx, y + dy)) { ring = false; break; }
+          }
+          if (ring) kandidaten.push({ x, y, b, h });
+          continue;
+        }
+        // eine ganze Seite an der Wand, gegenüber frei
+        const reihe = (x0, y0, n, ddx, ddy, f) => { for (let i = 0; i < n; i++) if (!f(x0 + i * ddx, y0 + i * ddy)) return false; return true; };
+        const seiten = [
+          reihe(x, y - 1, b, 1, 0, istWand) && reihe(x, y + h, b, 1, 0, istBoden),
+          reihe(x, y + h, b, 1, 0, istWand) && reihe(x, y - 1, b, 1, 0, istBoden),
+          reihe(x - 1, y, h, 0, 1, istWand) && reihe(x + b, y, h, 0, 1, istBoden),
+          reihe(x + b, y, h, 0, 1, istWand) && reihe(x - 1, y, h, 0, 1, istBoden),
+        ];
+        if (seiten.some(Boolean)) kandidaten.push({ x, y, b, h });
       }
     }
   }
@@ -186,7 +207,6 @@ function findeMoebelPosition(kacheln, raum, moebelB, moebelH, ox, oy, hausB, hau
   return kandidaten[Math.floor(rng() * kandidaten.length)];
 }
 
-// Hauptfunktion
 export function baueInnenraum(seed, nr, stock) {
   const rng = zufall(seed ^ Math.imul(nr + 1, 7919) ^ (stock === 'eg' ? 0 : stock === 'keller' ? 0x51ed : 0xa77e));
   const kacheln = new Uint8Array(BREITE * HOEHE).fill(T.LEER);
@@ -651,9 +671,9 @@ export function baueInnenraum(seed, nr, stock) {
     // Möbel platzieren
     for (const m of moebelArten) {
       // Versuche, eine Position zu finden
-      const pos = findeMoebelPosition(kacheln, raum, m.b, m.h, ox, oy, b, h, rng);
+      const pos = findeMoebelPosition(kacheln, raum, m.b, m.h, ox, oy, b, h, rng, m.art);
       if (pos) {
-        platziereMoebel(kacheln, moebel, behaelter, m.art, pos.x, pos.y, m.b, m.h, ox, oy, b, h, behaelterZaehler);
+        platziereMoebel(kacheln, moebel, behaelter, m.art, pos.x, pos.y, pos.b, pos.h, ox, oy, b, h, behaelterZaehler);
       }
     }
   }

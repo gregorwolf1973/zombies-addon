@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1 – 18.11.2026
+
+- Fehler behoben: Wer mit gehaltener Taste ein Haus betrat oder eine Treppe nahm, landete sofort wieder auf der anderen Seite –
+  ein Übergang löst jetzt erst aus, wenn man sich vom Ankunftsort entfernt hat
+- Möbel stehen bündig an den Wänden mit freiem Streifen davor, Tische frei mit Abstand rundherum – nichts versperrt mehr den Weg
+- Licht: Taschenlampe hält etwa eine Stunde, schaltet sich in Häusern selbst ein und draußen aus, danach kommt die nächste aus
+  dem Rucksack; ohne Lampe nur ein kleiner, schwacher Lichtkreis und alles schwarz-weiß
+
 ## 0.9.0 – 18.11.2026
 
 - Phase B: Häuser sind betretbar – beim Betreten zoomt die Kamera hinein, innen ein eigener Grundriss

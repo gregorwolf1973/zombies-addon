@@ -25,6 +25,7 @@ export const Spieler = schema({
   waffe: t.string(),        // "pistole", "schlaeger" oder ""
   munition: t.uint8(),
   ebene: t.string(),        // '' = draußen, sonst z. B. 'h5eg', 'h5keller', 'h5dach'
+  lampe: t.number(),        // Restzeit der Taschenlampe in Sekunden (leuchtet drinnen von selbst)
   rucksack: t.array("string"),
   plaetze: t.uint8(),       // Größe des Rucksacks (8, 12 oder 16)
   farbe: t.uint8(),
@@ -80,6 +81,7 @@ const BISS_PRO_SEK = 14;
 const KRIECHER_CHANCE = 0.25, KRIECHER_HP = 35, KRIECHER_TEMPO = 0.28, KRIECHER_SPUERT = 110;
 const BISS_CHANCE = 0.12;   // pro Sekunde Kontakt: Wahrscheinlichkeit für einen infizierenden Biss
 const SPRITZE_ABSTAND = 50;
+const LAMPE_DAUER = 3600;   // eine Taschenlampe leuchtet etwa eine Stunde
 const START_MUNITION = 24;
 const DURST_DAUER = 3600, HUNGER_DAUER = 5400;   // Sekunden von voll bis leer
 const SPEICHER_TAKT = 30;
@@ -228,7 +230,7 @@ export class SpielRaum extends Room {
     p.name = name;
     p.farbe = this.freieFarbe();
     p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0;
-    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = '';
+    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0;
     const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null };
     const gespeichert = this.speicher?.ladeSpieler(spielerId);
     if (gespeichert) {
@@ -240,6 +242,7 @@ export class SpielRaum extends Room {
       p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
       p.infektion = Math.max(0, Math.min(INFEKTION_DAUER, Number(gespeichert.infektion) || 0));
       p.kleidung = Math.max(0, Math.min(100, Number(gespeichert.kleidung) || 0));
+      p.lampe = Math.max(0, Math.min(LAMPE_DAUER, Number(gespeichert.lampe) || 0));
       p.plaetze = [8, 12, 16].includes(Number(gespeichert.plaetze)) ? Number(gespeichert.plaetze) : RUCKSACK_PLAETZE;
       for (const d of (gespeichert.rucksack ?? []).slice(0, p.plaetze)) if (DINGE[d]) p.rucksack.push(d);
       extra.letzterSafe = gespeichert.letzterSafe ?? '';
@@ -281,7 +284,7 @@ export class SpielRaum extends Room {
       const p = new Spieler();
       p.name = name + ' 🤖'; p.farbe = this.freieFarbe();
       p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0; p.schleicht = false;
-      p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = '';
+      p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0;
       p.hp = 100; p.durst = 100; p.hunger = 100; p.besiegt = 0;
       // in die Nähe des ersten Menschen
       const mensch = [...this.state.spieler.entries()].find(([s]) => !this.extra.get(s)?.bot)?.[1];
@@ -370,7 +373,7 @@ export class SpielRaum extends Room {
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
       waffe: p.waffe, munition: p.munition, rucksack: [...p.rucksack], plaetze: p.plaetze, besiegt: p.besiegt,
-      letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung,
+      letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
     });
   }
 
@@ -493,6 +496,12 @@ export class SpielRaum extends Room {
     if (!x) return;
     x.wechselSperre = Math.max(0, (x.wechselSperre ?? 0) - dt);
     if (x.wechselSperre > 0) return;
+    // nach einem Wechsel erst wieder, wenn man sich vom Ankunftsort entfernt hat
+    // (sonst läuft man mit gehaltener Taste sofort zurück durch Tür oder Treppe)
+    if (x.ankunft) {
+      if (Math.hypot(p.x - x.ankunft.x, p.y - x.ankunft.y) < 44) return;
+      x.ankunft = null;
+    }
     // Bots wechseln nur, wenn sie genau diesen Übergang ansteuern (nicht beim Vorbeilaufen)
     if (x.bot && (!x.bot.uebergangZiel || Math.hypot(p.x - x.bot.uebergangZiel.x, p.y - x.bot.uebergangZiel.y) > 24)) return;
     const welt = this.wv(p.ebene);
@@ -517,7 +526,7 @@ export class SpielRaum extends Room {
     } else return;
     const platz = this.freierPlatz(pos, 0, ziel);
     p.ebene = ziel; p.x = platz.x; p.y = platz.y; p.aktion = ''; p.fortschritt = 0;
-    x.wechselSperre = 0.8;
+    x.wechselSperre = 0.3; x.ankunft = { x: platz.x, y: platz.y };
     if (x.bot) { x.bot.weg = null; x.bot.uebergangZiel = null; }
   }
 
@@ -832,7 +841,7 @@ export class SpielRaum extends Room {
       client.send('meldung', { text: '🧥 Feste Kleidung angezogen – Bisse gehen seltener durch' });
     }
     else if (d === 'seil') { client.send('meldung', { text: '🪢 Ein Seil – brauchst du später am Fluss' }); }
-    else if (d === 'taschenlampe') { client.send('meldung', { text: '🔦 Für dunkle Räume – leuchtet bald in den Häusern' }); }
+    else if (d === 'taschenlampe') { client.send('meldung', { text: '🔦 Schaltet sich in Häusern von selbst ein (hält etwa eine Stunde)' }); }
     else if (d === 'verband') {
       if (p.hp >= 100) return client.send('meldung', { text: 'Du bist nicht verletzt' });
       p.hp = Math.min(100, p.hp + 45); p.rucksack.splice(i, 1);
@@ -1069,6 +1078,12 @@ export class SpielRaum extends Room {
 
   beduerfnisse(p, x, dt) {
     if (!p.verbunden) return;
+    if (p.ebene) {
+      if (p.lampe <= 0) {
+        const i = p.rucksack.indexOf('taschenlampe');
+        if (i >= 0) { p.rucksack.splice(i, 1); p.lampe = LAMPE_DAUER; }
+      } else p.lampe = Math.max(0, p.lampe - dt);
+    }
     if (p.zombie > 0) {
       p.zombie = Math.max(0, p.zombie - dt);
       if (p.zombie === 0) this.zurueckverwandeln(p, x, 'Die Verwandlung lässt nach');

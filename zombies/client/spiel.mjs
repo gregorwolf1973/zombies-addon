@@ -421,7 +421,7 @@ class Ort extends Phaser.Scene {
       const a = this.innenAnsicht(ebene);
       for (const o of [a.bild, a.tueren, a.dunkel]) o.setVisible(true);
       cam.setBounds(a.X - 200, a.Y - 200, a.B + 400, a.H + 400);
-    } else cam.setBounds(0, 0, BREITE * KACHEL, HOEHE * KACHEL);
+    } else { cam.setBounds(0, 0, BREITE * KACHEL, HOEHE * KACHEL); this.setzeGrau(false); }
     cam.setBackgroundColor(ebene ? '#0b0b0d' : '#1b2a1b');
     // weich hinein- bzw. herauszoomen
     cam.zoomTo(this.grundZoom * (ebene ? INNEN_ZOOM : 1), 450, 'Sine.easeInOut');
@@ -457,15 +457,26 @@ class Ort extends Phaser.Scene {
         }
       });
     }
-    // Dunkelheit: Licht um die eigene Figur, mit Taschenlampe ein langer Kegel in Blickrichtung
+    // Dunkelheit: mit Taschenlampe ein langer Kegel; ohne nur ein kleiner, schwacher Lichtkreis in Grau
     const d = a.dunkel;
+    const lampe = ich.lampe > 0;
     d.clear();
-    d.fill(0x05070a, w.stock === 'keller' ? 0.93 : w.stock === 'dach' ? 0.85 : 0.78);
+    d.fill(0x030405, lampe ? (w.stock === 'keller' ? 0.94 : 0.88) : 0.965);
     const lx = this.lokal.x - a.X, ly = this.lokal.y - a.Y;
-    const lampe = ich.rucksack.includes('taschenlampe');
-    this.lichtPinsel.setScale(lampe ? 0.9 : 0.85);
+    this.lichtPinsel.setScale(lampe ? 0.42 : 0.36).setAlpha(lampe ? 1 : 0.8);
     d.erase(this.lichtPinsel, lx, ly);
-    if (lampe) { this.lampenPinsel.setRotation(ich.richtung).setScale(0.75); d.erase(this.lampenPinsel, lx, ly); }
+    if (lampe) { this.lampenPinsel.setRotation(ich.richtung).setScale(0.8); d.erase(this.lampenPinsel, lx, ly); }
+    this.setzeGrau(!lampe);
+  }
+
+  // drinnen ohne Licht: alles schwarz-weiß (Farbmatrix der Kamera, nur mit WebGL)
+  setzeGrau(an) {
+    if (this.grauAn === an) return;
+    this.grauAn = an;
+    const fx = this.cameras.main.postFX;
+    if (!fx) return;
+    if (!this.grau) this.grau = fx.addColorMatrix();
+    if (an) this.grau.grayscale(1); else this.grau.reset();
   }
 
   // sichtbar = gleiche Ebene; drinnen zusätzlich nur bei freier Sicht (Türen verdecken)
@@ -800,7 +811,8 @@ class Ort extends Phaser.Scene {
         : ich.waffe === 'schlaeger' ? `🏏 Baseballschläger${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`
         : ich.waffe === 'messer' ? `🔪 Messer${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`
         : `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`;
-      textSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : ''));
+      textSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
+        + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
       textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${s.besiegt} gesamt`);
       const safe = ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';

@@ -47,14 +47,14 @@ test('Betreten, Treppe in den Keller, wieder hinauf und hinaus', async () => {
     assert.ok(await bis(() => c.state.spieler.get(c.sessionId)?.ebene === `h${h.nr}eg`), 'Client sieht Ebene nicht');
     const eg = raum.wv(p.ebene);
     const treppe = eg.treppen.find(t => t.ziel === 'keller');
-    await warte(900);   // Wechselsperre
+    await warte(400); raum.extra.get(c.sessionId).ankunft = null;
     const t = mitte(treppe); p.x = t.x; p.y = t.y;
     assert.ok(await bis(() => p.ebene === `h${h.nr}keller`, 2000), 'nicht in den Keller');
-    await warte(900);
+    await warte(400); raum.extra.get(c.sessionId).ankunft = null;
     const k = raum.wv(p.ebene), hoch = mitte(k.treppen.find(t => t.ziel === 'eg'));
     p.x = hoch.x; p.y = hoch.y;
     assert.ok(await bis(() => p.ebene === `h${h.nr}eg`, 2000), 'nicht zurück ins EG');
-    await warte(900);
+    await warte(400); raum.extra.get(c.sessionId).ankunft = null;
     const a = mitte(eg.ausgang); p.x = a.x; p.y = a.y;
     assert.ok(await bis(() => p.ebene === '', 2000), 'nicht hinaus');
     assert.ok(Math.hypot(p.x - vor.x, p.y - vor.y) < 70, 'nicht vor der Haustür gelandet');
@@ -180,4 +180,40 @@ test('Bot folgt ins Haus und in den Keller', async () => {
     await c.leave();
     SpielRaum.einstellungen = vorher;
   }
+});
+
+test('Nach dem Betreten läuft man mit gehaltener Taste nicht sofort wieder hinaus', async () => {
+  const { c, raum, p } = await beitreten('Tastenhalter');
+  try {
+    const h = raum.welt.haeuser.find(h => h.betretbar && h.tuer.y !== h.y) ?? raum.welt.haeuser.find(h => h.betretbar);
+    const vor = mitte(h.tuer), raus = h.tuer.y === h.y ? -1 : 1;
+    p.x = vor.x; p.y = vor.y + raus * KACHEL;
+    c.send('eingabe', { dx: 0, dy: -raus });          // auf die Tür zu …
+    assert.ok(await bis(() => p.ebene !== '', 4000), 'nicht hineingekommen');
+    c.send('eingabe', { dx: 0, dy: 1 });              // … und mit gedrückter Taste nach unten weiter (Ausgang liegt unten)
+    await warte(1500);
+    assert.notEqual(p.ebene, '', 'sofort wieder draußen');
+    // weggehen und zurück: dann geht es hinaus
+    c.send('eingabe', { dx: 0, dy: -1 }); await warte(700);
+    c.send('eingabe', { dx: 0, dy: 1 });
+    assert.ok(await bis(() => p.ebene === '', 4000), 'kommt nicht mehr hinaus');
+    c.send('eingabe', { dx: 0, dy: 0 });
+  } finally { await c.leave(); }
+});
+
+test('Taschenlampe: schaltet drinnen ein, verbraucht sich, nächste aus dem Rucksack', async () => {
+  const { c, raum, p } = await beitreten('Lampenträger');
+  try {
+    p.rucksack.clear(); p.rucksack.push('taschenlampe'); p.rucksack.push('taschenlampe');
+    await warte(300);
+    assert.equal(p.lampe, 0, 'leuchtet draußen');
+    const h = raum.welt.haeuser.find(h => h.betretbar);
+    p.ebene = `h${h.nr}eg`; const w = raum.wv(p.ebene); p.x = w.start.x; p.y = w.start.y;
+    assert.ok(await bis(() => p.lampe > 3590), 'schaltet nicht ein');
+    assert.equal(p.rucksack.length, 1);
+    const l0 = p.lampe; await warte(500);
+    assert.ok(p.lampe < l0, 'verbraucht sich nicht');
+    p.lampe = 0.01;
+    assert.ok(await bis(() => p.rucksack.length === 0 && p.lampe > 3590), 'nächste Lampe nicht genommen');
+  } finally { await c.leave(); }
 });
