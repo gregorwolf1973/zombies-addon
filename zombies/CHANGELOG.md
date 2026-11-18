@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0 – 18.11.2026
+
+- Anschleichen: Wer schleicht oder still steht, kann sich von hinten an Zombies heranpirschen – sie merken es erst
+  beim ersten Schlag. Der Überraschungsschlag macht viel mehr Schaden (Messer von hinten: ein Stich genügt)
+- Getroffene Zombies greifen sofort an, statt erst zum Geräusch zu laufen; schleichende Spieler wecken schlafende
+  Zombies in Häusern erst aus der Nähe
+- Neue Waffen: Schrotflinte (trifft alle im Kegel, kurze Reichweite), Jagdgewehr (sehr weit, ein Schuss genügt meist),
+  Sense (mäht alle Zombies im Bogen vor dir); Gewehre in Spinden, Schrotflinten auch im Kofferraum, Sensen in Schränken
+- Alle Waffenwerte stehen in einer gemeinsamen Tabelle; Bots nehmen die neuen Waffen auch
+
 ## 0.17.1 – 18.11.2026
 
 - Einstellungsseite: Zeitraffer-Knöpfe, Unsterblich-Schalter und die Namensliste zeigen nach dem Klicken sofort den

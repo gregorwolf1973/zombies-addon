@@ -352,6 +352,9 @@ export const DINGE = {
   schluessel: { name: 'Schlüsselbund', zeichen: '🔑' },
   brechstange: { name: 'Brechstange', zeichen: '⚒️' },
   messer: { name: 'Messer', zeichen: '🔪', waffe: true },
+  schrotflinte: { name: 'Schrotflinte', zeichen: '💥', waffe: true },
+  gewehr: { name: 'Jagdgewehr', zeichen: '🎯', waffe: true },
+  sense: { name: 'Sense', zeichen: '🌾', waffe: true },
   kleidung: { name: 'Feste Kleidung', zeichen: '🧥' },
   seil: { name: 'Seil', zeichen: '🪢' },
   taschenlampe: { name: 'Taschenlampe', zeichen: '🔦' },
@@ -362,7 +365,7 @@ export const DINGE = {
 export const BODEN_DAUER = 180;      // weggeworfene Gegenstände bleiben 3 Minuten liegen
 export const TAUSCH_ABSTAND = 34;    // so nah muss man sich sein (berühren), um zu tauschen
 // Beute bei toten Zombies: selten (etwa jeder 20.) eine Waffe, sonst oft Alltagszeug
-export const LEICHE_SELTEN = ['pistole', 'munition', 'messer'];
+export const LEICHE_SELTEN = ['pistole', 'munition', 'messer', 'schrotflinte'];
 export const LEICHE_OFT = ['kleidung', 'seil', 'taschenlampe', 'schokoriegel'];
 export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
 export const LEICHEN_MAX = 30;
@@ -372,10 +375,10 @@ export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank'
   laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
-  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', null, null],
-  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', null, null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', null, null],
+  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', 'gewehr', 'schrotflinte', null, null],
   // Kofferraum geht nur mit Brechstange auf – darum liegt drin keine, dafür etwas mehr Gutes
-  auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', null],
+  auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', null],
   laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
   laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
   laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', null],
@@ -551,4 +554,22 @@ export const fensterLicht = nr => hausHash(nr * 7 + 3) < 0.2;
 export function uhrText(uhr) {
   const u = Math.floor(((uhr % 1440) + 1440) % 1440);
   return `${String(Math.floor(u / 60)).padStart(2, '0')}:${String(u % 60).padStart(2, '0')}`;
+}
+
+// ---------- Waffen ----------
+// fern: braucht Munition (eine pro Schuss); kegel: Schrot trifft alle im Kegel; bogen: Sense trifft alle im Bogen.
+// ueberraschung: Schadensfaktor gegen Zombies, die einen noch nicht bemerkt haben (von hinten anschleichen).
+export const WAFFEN = {
+  pistole: { fern: true, reichweite: WERTE.pistoleReichweite, schaden: 34, pause: 0.45, laut: 1, ueberraschung: 1.5, bild: 1 },
+  gewehr: { fern: true, reichweite: WERTE.pistoleReichweite * 1.8, schaden: 100, pause: 1.2, laut: 1.4, ueberraschung: 1.5, bild: 1 },
+  schrotflinte: { fern: true, reichweite: 160, schaden: 70, nebenSchaden: 45, kegel: 0.45, pause: 0.95, laut: 1.3, ueberraschung: 1.5, bild: 1 },
+  schlaeger: { reichweite: 42, schaden: 40, pause: 0.6, stoss: true, ueberraschung: 3, bild: 2 },
+  sense: { reichweite: 58, schaden: 55, bogen: 1.1, pause: 0.85, ueberraschung: 3, bild: 2 },
+  messer: { reichweite: 36, schaden: 30, pause: 0.45, ueberraschung: 4, bild: 3 },
+  faust: { reichweite: WERTE.nahkampfReichweite, schaden: 20, pause: 0.7, stoss: true, ueberraschung: 2.5, bild: 0 },
+};
+// womit kämpft der Spieler gerade? (Fernwaffe ohne Munition → Faust)
+export function aktiveWaffe(p) {
+  const w = WAFFEN[p.waffe];
+  return w && (!w.fern || p.munition > 0) ? [p.waffe, w] : ['faust', WAFFEN.faust];
 }

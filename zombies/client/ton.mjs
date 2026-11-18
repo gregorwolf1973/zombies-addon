@@ -140,8 +140,8 @@ function ton(ziel, dauer, { typ = 'sine', freq = 440, freqEnde, start = 0, a = 0
 }
 
 // ---------- einzelne Geräusche ----------
-export function schuss(x, y) {
-  const z = ort(x, y, 1); if (!z) return;
+export function schuss(x, y, laut = 1) {
+  const z = ort(x, y, laut); if (!z) return;
   rauschen(z, 0.35, { freq: 2500, freqEnde: 300, a: 0.002, laut: 1 });
   ton(z, 0.18, { typ: 'triangle', freq: 140, freqEnde: 45, a: 0.002, laut: 0.8 });
 }

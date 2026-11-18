@@ -1,6 +1,6 @@
 // Steuerung der simulierten Mitspieler (zweite Fassung, Claude): Wegsuche über Kacheln, feste Plätze hinter
 // dem Anführer, Abstand zu allen Figuren, bewaffnete Bots kämpfen. Ein Bot steuert sich nur über x.eingabe.
-import { frei, sichtfrei, safeRoomAn, findeWeg, KACHEL } from '../client/welt.mjs';
+import { frei, sichtfrei, safeRoomAn, findeWeg, KACHEL, WAFFEN } from '../client/welt.mjs';
 
 export const BOT_NAMEN = ['Resi', 'Vroni', 'Sepp', 'Wastl', 'Kathi', 'Hias', 'Burgi', 'Girgl', 'Loisl', 'Zenzi'];
 
@@ -8,8 +8,9 @@ const RAD = 11;
 const abstand = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function bewaffnet(p) {
-  if (p.waffe === 'pistole' && p.munition > 0) return 'fern';
-  if (p.waffe === 'messer' || p.waffe === 'schlaeger') return 'nah';
+  const w = WAFFEN[p.waffe];
+  if (w?.fern && p.munition > 0) return 'fern';
+  if (w && !w.fern) return 'nah';
   return null;
 }
 
@@ -21,7 +22,7 @@ function versorgen(p, b, jetzt) {
   if (p.hp < 40 && nimm('verband', () => { p.hp = Math.min(100, p.hp + 45); })) return;
   if (p.durst < 35 && nimm('wasser', () => { p.durst = Math.min(100, p.durst + 45); })) return;
   if (p.hunger < 35 && (nimm('essen', () => { p.hunger = Math.min(100, p.hunger + 45); }) || nimm('schokoriegel', () => { p.hunger = Math.min(100, p.hunger + 20); }))) return;
-  if (!p.waffe) for (const w of ['messer', 'schlaeger', 'pistole']) if (nimm(w, () => { p.waffe = w; })) return;
+  if (!p.waffe) for (const w of ['gewehr', 'schrotflinte', 'sense', 'schlaeger', 'messer', 'pistole']) if (nimm(w, () => { p.waffe = w; })) return;
 }
 
 // zum Ziel gehen: Weg berechnen (gelegentlich neu), Wegpunkten folgen, Abstand zu anderen halten

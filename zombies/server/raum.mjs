@@ -8,7 +8,7 @@ import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe,
   bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, setzeKartengroesse, seiteVon, ladenArt, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
@@ -24,7 +24,7 @@ export const Spieler = schema({
   hunger: t.number(),
   unten: t.boolean(),
   hilfe: t.number(),        // Fortschritt beim Aufhelfen 0..1
-  waffe: t.string(),        // "pistole", "schlaeger" oder ""
+  waffe: t.string(),        // Name aus WAFFEN (pistole, gewehr, schrotflinte, schlaeger, sense, messer) oder ""
   munition: t.uint8(),
   ebene: t.string(),        // '' = draußen, sonst z. B. 'h5eg', 'h5keller', 'h5dach'
   lampe: t.number(),        // Restzeit der Taschenlampe in Sekunden (leuchtet drinnen von selbst)
@@ -78,10 +78,7 @@ export const Zustand = schema({
 
 const TICK = 50; // ms → 20 Updates pro Sekunde
 const ZOMBIE_HP = 100;
-const PISTOLE_SCHADEN = 34, PISTOLE_PAUSE = 0.45;
-const SCHLAEGER_SCHADEN = 40, SCHLAEGER_PAUSE = 0.6, SCHLAEGER_REICHWEITE = 42;
-const MESSER_SCHADEN = 30, MESSER_PAUSE = 0.45, MESSER_REICHWEITE = 36;
-const STOSS_SCHADEN = 20, STOSS_PAUSE = 0.7, STOSS_WEG = 34;
+const STOSS_WEG = 34;   // Schläger und Faust stoßen den Zombie zurück (Waffenwerte: WAFFEN in client/welt.mjs)
 const BISS_PRO_SEK = 14;
 const KRIECHER_CHANCE = 0.25, KRIECHER_HP = 35, KRIECHER_TEMPO = 0.28, KRIECHER_SPUERT = 110;
 const BISS_CHANCE = 0.12;   // pro Sekunde Kontakt: Wahrscheinlichkeit für einen infizierenden Biss
@@ -1132,30 +1129,41 @@ export class SpielRaum extends Room {
     // automatischer Angriff (nicht während man durchsucht)
     let pause = x.pause - dt;
     if (pause <= 0 && !p.aktion) {
-      const mitPistole = p.waffe === 'pistole' && p.munition > 0;
-      const mitSchlaeger = p.waffe === 'schlaeger';
-      const mitMesser = p.waffe === 'messer';
-      const reichweite = mitPistole ? W.pistoleReichweite : mitSchlaeger ? SCHLAEGER_REICHWEITE : mitMesser ? MESSER_REICHWEITE : W.nahkampfReichweite;
-      const ziel = this.naechsterZombie(p.x, p.y, reichweite, p);
+      const [name, wf] = aktiveWaffe(p);
+      const ziel = this.naechsterZombie(p.x, p.y, wf.reichweite, p);
       if (ziel) {
         const [zid, z] = ziel;
         const w = Math.atan2(z.y - p.y, z.x - p.x);
-        if (mitPistole) {
+        // Überraschung: Zombie hat noch niemanden im Visier → deutlich mehr Schaden (von hinten anschleichen)
+        const faktor = t => { if (t[0].startsWith('spieler:')) return 1; const info = this.zombieInfo.get(t[0]); return !t[1].jagt && !info?.ziel ? wf.ueberraschung : 1; };
+        const treffer = (liste, menge) => { for (const t of liste) this.schaden(t[0], t[1], menge * faktor(t), p, id); };
+        // mehrere Ziele: alle Zombies im Kegel bzw. Bogen
+        const imWinkel = winkel => [...this.state.zombies.entries()].filter(([, q]) => (q.ebene ?? '') === (p.ebene ?? '')
+          && Math.hypot(q.x - p.x, q.y - p.y) <= wf.reichweite && winkelDiff(Math.atan2(q.y - p.y, q.x - p.x), w) <= winkel
+          && sichtfrei(welt, p.x, p.y, q.x, q.y));
+        if (wf.fern) {
           p.munition--;
-          this.broadcast('schuss', { x1: p.x, y1: p.y, x2: z.x, y2: z.y });
-          this.laerm(p.x, p.y, W.hoerweiteSchuss, true, p.ebene);
-          this.schaden(zid, z, PISTOLE_SCHADEN, p);
-          pause = PISTOLE_PAUSE;
-        } else if (mitMesser) {
-          this.broadcast('stoss', { x: p.x, y: p.y, w, messer: true });
-          this.schaden(zid, z, MESSER_SCHADEN, p);
-          pause = MESSER_PAUSE;
+          this.laerm(p.x, p.y, W.hoerweiteSchuss * (wf.laut ?? 1), true, p.ebene);
+          if (wf.kegel) {
+            const alle = imWinkel(wf.kegel).filter(t => t[0] !== zid);
+            for (let i = -2; i <= 2; i++) {   // Schrotgarbe
+              const ww = w + i * wf.kegel / 2.5;
+              this.broadcast('schuss', { x1: p.x, y1: p.y, x2: p.x + Math.cos(ww) * wf.reichweite, y2: p.y + Math.sin(ww) * wf.reichweite, art: name });
+            }
+            treffer([ziel], wf.schaden); treffer(alle, wf.nebenSchaden);
+          } else {
+            this.broadcast('schuss', { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name });
+            treffer([ziel], wf.schaden);
+          }
+        } else if (wf.bogen) {
+          this.broadcast('stoss', { x: p.x, y: p.y, w, sense: true });
+          treffer(imWinkel(wf.bogen), wf.schaden);
         } else {
-          bewege(welt, z, Math.cos(w) * STOSS_WEG, Math.sin(w) * STOSS_WEG, W.zombieRadius);
-          this.broadcast('stoss', { x: p.x, y: p.y, w, schlag: mitSchlaeger });
-          this.schaden(zid, z, mitSchlaeger ? SCHLAEGER_SCHADEN : STOSS_SCHADEN, p);
-          pause = mitSchlaeger ? SCHLAEGER_PAUSE : STOSS_PAUSE;
+          if (wf.stoss) bewege(welt, z, Math.cos(w) * STOSS_WEG, Math.sin(w) * STOSS_WEG, W.zombieRadius);
+          this.broadcast('stoss', { x: p.x, y: p.y, w, messer: name === 'messer', schlag: name === 'schlaeger' });
+          treffer([ziel], wf.schaden);
         }
+        pause = wf.pause;
         p.richtung = w;
       } else pause = 0;
     }
@@ -1245,7 +1253,7 @@ export class SpielRaum extends Room {
     return best;
   }
 
-  schaden(id, z, menge, von) {
+  schaden(id, z, menge, von, vonSid = null) {
     if (id.startsWith('spieler:')) {
       z.hp = Math.max(0, z.hp - menge);
       if (z.hp === 0) this.zurueckverwandeln(z, this.extra.get(id.slice(8)), `${von.name} hat den Zombie erledigt`);
@@ -1253,7 +1261,11 @@ export class SpielRaum extends Room {
     }
     z.hp = Math.max(0, z.hp - menge);
     const info = this.zombieInfo.get(id);
-    if (info && !info.ziel) info.punkt = { x: von.x, y: von.y };
+    if (info && !info.ziel) {
+      // getroffen: jetzt hat er dich bemerkt
+      if (vonSid && z.hp > 0) { info.ziel = vonSid; info.verloren = 0; info.punkt = null; info.schlaeft = false; z.jagt = true; this.broadcast('entdeckt', { x: z.x, y: z.y }); }
+      else info.punkt = { x: von.x, y: von.y };
+    }
     if (z.hp === 0 && !z.kriecht && this.rnd() < (this.kriecherChance ?? KRIECHER_CHANCE)) {
       // nicht ganz tot: bricht zusammen und kriecht weiter
       z.kriecht = true; z.hp = KRIECHER_HP; z.jagt = false;
@@ -1334,8 +1346,12 @@ export class SpielRaum extends Room {
         const d = Math.hypot(p.x - z.x, p.y - z.y);
         const weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
         const imKegel = winkelDiff(Math.atan2(p.y - z.y, p.x - z.x), z.richtung) < W.sichtWinkel / 2;
+        // wer schleicht oder still steht, kann sich von hinten bis zum ersten Schlag heranpirschen
+        const e = this.extra.get(sid)?.eingabe;
+        const leise = p.schleicht || !e || Math.hypot(e.dx, e.dy) < 0.05;
+        const ganzNah = d < (leise && !imKegel ? 8 : 28);
         // Kriecher spüren ringsum, schlafende (lauernde) Zombies in Häusern auch – aber nur bei freier Sicht
-        const bemerkt = z.kriecht ? d < KRIECHER_SPUERT : info.schlaeft ? d < 140 : (d < 28 || (d < weite && imKegel));
+        const bemerkt = z.kriecht ? d < (leise ? KRIECHER_SPUERT * 0.5 : KRIECHER_SPUERT) : info.schlaeft ? d < (leise ? 70 : 140) : (ganzNah || (d < weite && imKegel));
         if (bemerkt && sichtfrei(welt, z.x, z.y, p.x, p.y)) {
           info.ziel = sid; info.verloren = 0; info.punkt = null; info.schlaeft = false;
           this.broadcast('entdeckt', { x: z.x, y: z.y });

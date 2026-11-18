@@ -2,7 +2,7 @@
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn, setzeKartengroesse, seiteVon, ladenArt,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, TAUSCH_ABSTAND, helligkeit, istNacht, hausHell, fensterLicht, uhrText,
+  BODEN_DAUER, TAUSCH_ABSTAND, WAFFEN, aktiveWaffe, helligkeit, istNacht, hausHell, fensterLicht, uhrText,
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
@@ -281,7 +281,12 @@ class Ort extends Phaser.Scene {
     this.input.on('pointerup', loslassen);
     this.input.on('pointerupoutside', loslassen);
 
-    raum.onMessage('schuss', m => { this.schuss(m); ton.schuss(m.x1, m.y1); });
+    raum.onMessage('schuss', m => {
+      this.schuss(m);
+      // Schrot kommt als mehrere Linien – nur ein Knall
+      const jetzt = performance.now();
+      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'schrotflinte' ? 1.2 : 1); this.letzterKnall = jetzt; }
+    });
     raum.onMessage('stoss', m => { this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
     raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
@@ -835,7 +840,7 @@ class Ort extends Phaser.Scene {
     else if (zombie) { textur = 'figuren'; bild = this.figurBild('zombie_hemd', geht ? Math.floor(f.lauf / 11) : 0); }
     else {
       textur = this.menschTextur(p.aussehen);
-      bild = p.waffe === 'pistole' && p.munition > 0 ? 1 : p.waffe === 'schlaeger' ? 2 : p.waffe === 'messer' ? 3 : 0;
+      bild = aktiveWaffe(p)[1].bild;
     }
     if (f.bild.texture.key !== textur || f.bild.frame.name != bild) f.bild.setTexture(textur, bild);   // eslint-disable-line eqeqeq
     // beim Gehen leicht wippen
@@ -998,7 +1003,7 @@ class Ort extends Phaser.Scene {
 
   // ---------- Effekte ----------
   schuss(m) {
-    const l = this.add.line(0, 0, m.x1, m.y1, m.x2, m.y2, 0xfff176, 0.9).setOrigin(0).setLineWidth(2).setDepth(7);
+    const l = this.add.line(0, 0, m.x1, m.y1, m.x2, m.y2, 0xfff176, m.art === 'schrotflinte' ? 0.6 : 0.9).setOrigin(0).setLineWidth(m.art === 'gewehr' ? 3 : m.art === 'schrotflinte' ? 1.2 : 2).setDepth(7);
     this.tweens.add({ targets: l, alpha: 0, duration: 140, onComplete: () => l.destroy() });
     const blitz = this.add.circle(m.x1, m.y1, 7, 0xffeb3b, 0.8).setDepth(7);
     this.tweens.add({ targets: blitz, alpha: 0, scale: 1.6, duration: 120, onComplete: () => blitz.destroy() });
@@ -1006,7 +1011,8 @@ class Ort extends Phaser.Scene {
 
   stoss(m) {
     const g = this.add.graphics().setDepth(7);
-    if (m.messer) g.lineStyle(2, 0xeceff1, 0.95).beginPath().arc(m.x, m.y, 24, m.w - 0.5, m.w + 0.5).strokePath();
+    if (m.sense) { g.lineStyle(4, 0xe0e0e0, 0.9).beginPath().arc(m.x, m.y, 52, m.w - 1.1, m.w + 1.1).strokePath(); g.lineStyle(2, 0x8d6e63, 0.9).beginPath().arc(m.x, m.y, 40, m.w - 0.9, m.w + 0.9).strokePath(); }
+    else if (m.messer) g.lineStyle(2, 0xeceff1, 0.95).beginPath().arc(m.x, m.y, 24, m.w - 0.5, m.w + 0.5).strokePath();
     else g.lineStyle(m.schlag ? 5 : 3, m.schlag ? 0xd7ccc8 : 0xffffff, 0.85).beginPath().arc(m.x, m.y, m.schlag ? 34 : 26, m.w - 0.8, m.w + 0.8).strokePath();
     this.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
   }
@@ -1082,11 +1088,10 @@ class Ort extends Phaser.Scene {
       balkenSetzen('hp', ich.hp);
       balkenSetzen('durst', ich.durst);
       balkenSetzen('hunger', ich.hunger);
-      const waffe = ich.waffe === 'pistole'
-        ? (ich.munition > 0 ? `🔫 Pistole · ${ich.munition} Schuss` : `🔫 Keine Munition – stoßen`)
-        : ich.waffe === 'schlaeger' ? `🏏 Baseballschläger${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`
-        : ich.waffe === 'messer' ? `🔪 Messer${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`
-        : `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`;
+      const wf = WAFFEN[ich.waffe], d = DINGE[ich.waffe];
+      const waffe = !wf ? `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`
+        : wf.fern ? (ich.munition > 0 ? `${d.zeichen} ${d.name} · ${ich.munition} Schuss` : `${d.zeichen} ${d.name} – keine Munition, stoßen`)
+        : `${d.zeichen} ${d.name}${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`;
       textSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
         + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
       textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${s.besiegt} gesamt`);
