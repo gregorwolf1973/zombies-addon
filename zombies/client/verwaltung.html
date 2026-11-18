@@ -281,6 +281,7 @@
     font-size: 0.9rem;
     user-select: none;
   }
+  .feld > label.schalter { display: inline-flex; margin-bottom: 0; }   /* allgemeine Feldbeschriftung nicht auf Schalter anwenden */
   .schalter input {
     position: absolute;
     opacity: 0;
@@ -550,6 +551,25 @@
   #tagNachtKarte .tn-status { min-height: 1.2em; font-size: .85rem; }
 </style>
 <script>
+  // Farben des Home-Assistant-Designs übernehmen (die Seite läuft im HA-Rahmen auf derselben Adresse)
+  (function () {
+    try {
+      var p = getComputedStyle(window.parent.document.documentElement), r = document.documentElement.style;
+      var holen = function (n) { return (p.getPropertyValue(n) || '').trim(); };
+      var paare = { '--bg': '--primary-background-color', '--card': '--card-background-color', '--text': '--primary-text-color',
+        '--text-soft': '--secondary-text-color', '--border': '--divider-color', '--akzent': '--primary-color', '--gefahr': '--error-color' };
+      var gefunden = 0;
+      Object.keys(paare).forEach(function (k) { var v = holen(paare[k]); if (v) { r.setProperty(k, v); gefunden++; } });
+      if (gefunden >= 3) {
+        var bg = holen('--primary-background-color'), m = bg.match(/\d+/g);
+        var dunkel = m && m.length >= 3 ? (Number(m[0]) + Number(m[1]) + Number(m[2])) / 3 < 128 : /^#([0-4])/i.test(bg);
+        r.setProperty('--chip', dunkel ? 'rgba(3,169,244,.18)' : '#e1f5fe');
+        r.setProperty('--track', dunkel ? '#555' : '#d6d6d6');
+        r.colorScheme = dunkel ? 'dark' : 'light';
+      }
+    } catch (e) { /* außerhalb von HA: Farben nach Systemeinstellung */ }
+  })();
+
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var komma = function (v) { return '×' + (v / 10).toFixed(1).replace('.', ','); };
@@ -927,8 +947,11 @@
     };
   }
 
+  var nachschicken = {};
   function speichereEreignis(id, objekt) {
-    if (!daten || speicherLaeuft[id]) return;
+    if (!daten) return;
+    // läuft schon ein Speichern für dieses Ereignis: den neuesten Stand danach nachschicken
+    if (speicherLaeuft[id]) { nachschicken[id] = { dateien: objekt.dateien.slice(), laut: objekt.laut }; return; }
     speicherLaeuft[id] = true;
     var body = {};
     body.toene = {};
@@ -947,12 +970,14 @@
         throw new Error((res.json && res.json.fehler) || ('Fehler ' + res.status));
       }
       daten = res.json;
-      neuAufbauen();
+      if (!nachschicken[id]) neuAufbauen();
       zeigeStatus('✓ Gespeichert', 'ok');
     }).catch(function (err) {
       zeigeFehler('Speichern fehlgeschlagen: ' + err.message);
     }).then(function () {
       speicherLaeuft[id] = false;
+      var weiter = nachschicken[id];
+      if (weiter) { delete nachschicken[id]; speichereEreignis(id, weiter); }
     });
   }
 
@@ -1007,12 +1032,13 @@
         cb.type = 'checkbox';
         cb.checked = einst.dateien.indexOf(datei) !== -1;
         cb.value = datei;
-        cb.addEventListener('change', function (dateiname, istAktiv) {
+        cb.addEventListener('change', function (dateiname, e) {
+          var istAktiv = e.target.checked;   // neuer Zustand des Häkchens (nicht der beim Aufbau)
           var idx = einst.dateien.indexOf(dateiname);
           if (istAktiv && idx === -1) einst.dateien.push(dateiname);
           else if (!istAktiv && idx !== -1) einst.dateien.splice(idx, 1);
           speichereEreignis(ev.id, einst);
-        }.bind(null, datei, cb.checked));
+        }.bind(null, datei));
         var txt = document.createElement('span');
         txt.className = 'tk-datei-text';
         txt.textContent = kuerzen(datei, 40);
@@ -1368,6 +1394,10 @@
     return apiPost(teil).then(function (neu) {
       if (neu && neu.einstellungen) {
         mergeDaten(neu);
+        // gespeicherten Stand sofort anzeigen (Knöpfe behalten sonst den alten Zustand)
+        rendereSpielBereich(neu);
+        rendereZeitraffer(neu);
+        if (!istFokussiert($("unsterblichEingabe"))) rendereUnsterblichChips(neu);
       }
       kurzMeldung("✓ Gespeichert", false);
       return neu;
@@ -1677,23 +1707,10 @@
         }
       }
     }
-    var fokusImSpielerbereich = bereich.contains(document.activeElement);
-    if (!gleich || !fokusImSpielerbereich) {
-      rendereSpielBereich(d);
-    }
-
-    var seg = $("zeitrafferSegment");
-    var fokusImSegment = seg.contains(document.activeElement);
-    if (!fokusImSegment) {
-      rendereZeitraffer(d);
-    }
-
-    var chips = $("unsterblichChips");
-    var fokusImChips = chips.contains(document.activeElement);
-    var eingabeFokus = istFokussiert($("unsterblichEingabe"));
-    if (!fokusImChips && !eingabeFokus) {
-      rendereUnsterblichChips(d);
-    }
+    // Knöpfe und Schalter immer nach dem Server-Stand zeichnen; nur ein Eingabefeld, in dem getippt wird, bleibt unberührt
+    rendereSpielBereich(d);
+    rendereZeitraffer(d);
+    if (!istFokussiert($("unsterblichEingabe"))) rendereUnsterblichChips(d);
 
     if (typeof aktualisiereKarteHinweis === "function") {
       aktualisiereKarteHinweis(d, $("karteAuswahl").value);

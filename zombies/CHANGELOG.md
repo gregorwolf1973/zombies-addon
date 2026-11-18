@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.1 – 18.11.2026
+
+- Einstellungsseite: Zeitraffer-Knöpfe, Unsterblich-Schalter und die Namensliste zeigen nach dem Klicken sofort den
+  gespeicherten Stand (blieben vorher auf dem alten stehen)
+- Geräusche: Ankreuzen einer Tondatei wird jetzt gespeichert, auch bei schnellem Anklicken mehrerer Dateien
+- Schalter „Jede Spielrunde mit frischer Welt beginnen“ wird richtig dargestellt (lag über dem Text)
+- Die Seite übernimmt in der Seitenleiste die Farben des Home-Assistant-Designs (hell oder dunkel)
+
 ## 0.17.0 – 18.11.2026
 
 - Neue Figuren: Zombies mit Laufanimation von oben – Tarnjacke, Dirndl, Feuerwehr, Hemd und Lederhose –, beim
