@@ -88,8 +88,13 @@ test('Safe Rooms und Behälter: vier verschiedene, erreichbar, nicht in Wänden'
     assert.ok(w.behaelter.length >= 10, `zu wenige Behälter: ${w.behaelter.length}`);   // draußen nur Autos + Safe Rooms
     assert.ok(w.behaelter.filter(b => b.art === 'auto').length >= 8, 'zu wenige Autos');
     for (const b of w.behaelter) {
+      const bx = Math.floor(b.x / KACHEL), by = Math.floor(b.y / KACHEL);
+      if (b.art === 'bus') {   // Bus ist ein Hindernis – durchsucht wird von der Seite
+        assert.ok([[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => ok[(by + dy) * BREITE + bx + dx]), `${b.id} von keiner Seite erreichbar`);
+        continue;
+      }
       assert.ok(!blockiert(w, b.x, b.y), `${b.id} steht in einer Wand`);
-      assert.ok(ok[Math.floor(b.y / KACHEL) * BREITE + Math.floor(b.x / KACHEL)], `${b.id} nicht erreichbar`);
+      assert.ok(ok[by * BREITE + bx], `${b.id} nicht erreichbar`);
     }
     assert.equal(new Set(w.behaelter.map(b => b.id)).size, w.behaelter.length);
   }

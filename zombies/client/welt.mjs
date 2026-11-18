@@ -19,7 +19,8 @@ export const T = {
   TUER_OFFEN: 17,     // geöffnete Zimmertür
 };
 
-export const BLOCKIERT = new Set([T.WAND, T.WASSER, T.BAUM, T.ZAUN, T.TOR, T.DEKO, T.INNENTUER, T.MOEBEL, T.LEER]);
+// Bäume sind kein Hindernis (man kann sich darunter verstecken – die Krone verdeckt die Sicht)
+export const BLOCKIERT = new Set([T.WAND, T.WASSER, T.ZAUN, T.TOR, T.DEKO, T.INNENTUER, T.MOEBEL, T.LEER]);
 
 export function zufall(seed) {
   // mulberry32: klein und auf allen Plattformen gleich
@@ -168,6 +169,7 @@ export function baueWelt(seed) {
   }
 
   const deko = baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, safeRooms);
+  deko.filter(d => d.art === 'bus').forEach((d, i) => behaelter.push({ id: 'bus' + i, art: 'bus', x: d.x, y: d.y }));
   const imHaus = (b, h) => b.x >= h.x * KACHEL && b.x < (h.x + h.b) * KACHEL && b.y >= h.y * KACHEL && b.y < (h.y + h.h) * KACHEL;
   const draussenBehaelter = behaelter.filter(b => b.art === 'auto' || haeuser.some(h => h.safe && imHaus(b, h)));
   haeuser.forEach((h, i) => {
@@ -180,7 +182,7 @@ export function baueWelt(seed) {
 
 // Hindernisse (Traktor, Heu, Kühe …) und Zäune. Jedes Stück wird verworfen, wenn es einen Teil
 // der begehbaren Fläche abschneiden würde.
-const BEGEHBAR = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ]);
+const BEGEHBAR = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ, T.BAUM]);
 function baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, safeRooms) {
   const r = zufall(seed ^ 0x2545f491);
   const sx = Math.floor(start.x / KACHEL), sy = Math.floor(start.y / KACHEL);
@@ -276,9 +278,27 @@ function baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, s
   setzeEinzeln('heu', 4, 1, 1);
   setzeEinzeln('kuh', 3, 2, 1);
   setzeEinzeln('vogelscheuche', 1, 1, 1);
-  setzeEinzeln('hochsitz', 1, 1, 1);
   setzeEinzeln('fels', 3, 1, 1);
   setzeEinzeln('busch', 5, 1, 1);    // Büsche bleiben begehbar
+  // Busse: auf einer Fahrspur einer geraden Straße, nie auf Kreuzungen
+  for (let n = 0, i = 0; n < 3 && i < 400; i++) {
+    const senkrecht = r() < 0.5;
+    const x = 2 + Math.floor(r() * (BREITE - 12)), y = 2 + Math.floor(r() * (HOEHE - 6));
+    const kacheln = [];
+    for (let j = 0; j < 4; j++) kacheln.push(senkrecht ? [x, y + j] : [x + j, y]);
+    // Spur: auf Straße, daneben (quer) ebenfalls Straße (zweite Spur bleibt frei), Kreuzungsfrei
+    const ok = kacheln.every(([a, b]) => hole(a, b) === T.STRASSE
+      && (senkrecht ? (hole(a - 1, b) === T.STRASSE) !== (hole(a + 1, b) === T.STRASSE) : (hole(a, b - 1) === T.STRASSE) !== (hole(a, b + 1) === T.STRASSE)));
+    if (!ok || deko.some(d => Math.abs(d.kx - x) < 8 && Math.abs(d.ky - y) < 8)) continue;
+    // nicht auf geparkte Autos
+    if (behaelter.some(bh => kacheln.some(([a, b]) => Math.abs(Math.floor(bh.x / KACHEL) - a) <= 1 && Math.abs(Math.floor(bh.y / KACHEL) - b) <= 1))) continue;
+    for (const [a, b] of kacheln) setze(a, b, T.DEKO);
+    if (erreichbar() < zahl - 4) { for (const [a, b] of kacheln) setze(a, b, T.STRASSE); continue; }
+    zahl = erreichbar();
+    const b = senkrecht ? 1 : 4, hh = senkrecht ? 4 : 1;
+    deko.push({ art: 'bus', kx: x, ky: y, b, h: hh, x: px(x, b), y: (y + hh / 2) * KACHEL, senkrecht, v: r() });
+    n++;
+  }
   return deko;
 }
 
@@ -327,12 +347,13 @@ export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
 export const LEICHEN_MAX = 30;
 export const RUCKSACK_PLAETZE = 8;   // Grundausstattung; größere Taschen erhöhen p.plaetze
 export const KISTE_PLAETZE = 24;
-export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie' };
+export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
   schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', null, null],
   spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', null, null],
   auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'brechstange', null],
+  bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
 };
 export const MUNITION_PRO_FUND = 12;
 
@@ -435,7 +456,7 @@ export function zombieSoll(n) {
 }
 
 // ---------- Wegsuche (für Bots) ----------
-export const BEGEHBAR_WEG = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ, T.AUSGANG, T.TREPPE_RUNTER, T.TREPPE_HOCH, T.TUER_OFFEN]);
+export const BEGEHBAR_WEG = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ, T.BAUM, T.AUSGANG, T.TREPPE_RUNTER, T.TREPPE_HOCH, T.TUER_OFFEN]);
 
 // gerade Strecke mit Radius rad frei?
 export function linieFrei(welt, x1, y1, x2, y2, rad) {

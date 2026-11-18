@@ -432,7 +432,7 @@ export class SpielRaum extends Room {
       if (d >= bd) continue;
       const zustand = this.state.behaelter.get(b.id);
       if (zustand && zustand.rest === 0) continue;
-      if (!sichtfrei(welt, p.x, p.y, b.x, b.y) && !p.ebene) continue;
+      if (b.art !== 'bus' && !sichtfrei(welt, p.x, p.y, b.x, b.y) && !p.ebene) continue;
       bd = d; best = b;
     }
     for (const [id, l] of this.state.leichen) {
@@ -441,7 +441,7 @@ export class SpielRaum extends Room {
       if (d >= bd || l.rest === 0) continue;
       bd = d; best = { id, art: 'leiche', x: l.x, y: l.y };
     }
-    if (best) return { art: 'durchsuchen', behaelter: best, dauer: best.art === 'auto' ? 3.5 : best.art === 'leiche' ? 1.5 : 2.5 };
+    if (best) return { art: 'durchsuchen', behaelter: best, dauer: best.art === 'auto' || best.art === 'bus' ? 3.5 : best.art === 'leiche' ? 1.5 : 2.5 };
     return this.tuerKontext(p, true);
   }
 
@@ -728,7 +728,12 @@ export class SpielRaum extends Room {
     else if (k.art === 'aufheben') {
       const b = this.state.boden.get(k.id);
       if (!b || p.rucksack.length >= p.plaetze) return;
-      p.rucksack.push(b.ding); this.state.boden.delete(k.id);
+      const d = b.ding;
+      if (DINGE[d]?.waffe && !p.waffe) p.waffe = d;
+      else if (d === 'taschenlampe' && !(p.lampe > 0)) p.lampe = LAMPE_DAUER;
+      else if (d === 'kleidung' && !(p.kleidung > 0)) p.kleidung = 100;
+      else p.rucksack.push(d);
+      this.state.boden.delete(k.id);
       client?.send('meldung', { text: `Aufgehoben: ${DINGE[b.ding]?.zeichen ?? ''} ${DINGE[b.ding]?.name ?? b.ding}` });
     }
     else if (k.art === 'wegziehen') {
@@ -777,6 +782,10 @@ export class SpielRaum extends Room {
     for (let i = 0; i < inhalt.length;) {
       const d = inhalt[i];
       if (d === 'munition') { p.munition = Math.min(99, p.munition + MUNITION_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
+      // in die Hand bzw. anziehen, wenn frei – das braucht keinen Rucksackplatz
+      if (DINGE[d]?.waffe && !p.waffe) { p.waffe = d; genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (d === 'taschenlampe' && !(p.lampe > 0)) { p.lampe = LAMPE_DAUER; genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (d === 'kleidung' && !(p.kleidung > 0)) { p.kleidung = 100; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (p.rucksack.length < p.plaetze) { p.rucksack.push(d); genommen.push(d); inhalt.splice(i, 1); continue; }
       i++;
     }

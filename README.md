@@ -63,6 +63,10 @@ cd zombies && npm install && npm test   # 53 tests
 npm start                               # http://localhost:2567
 ```
 
+## Credits
+
+Character, tree and prop graphics: [Kenney](https://www.kenney.nl) – Topdown Shooter pack (CC0).
+
 ## License
 
 MIT – see [LICENSE](LICENSE).

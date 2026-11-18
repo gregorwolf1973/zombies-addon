@@ -167,8 +167,17 @@ function zeitText(s) {
 const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 
 // ---------- Szene ----------
+const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
+// Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
+const PERSONEN = ['manBlue', 'womanGreen', 'manBrown', 'survivor1', 'manOld', 'hitman1', 'soldier1', 'manBlue', 'womanGreen', 'manBrown'];
+
 class Ort extends Phaser.Scene {
   constructor() { super('ort'); }
+
+  preload() {
+    for (const g of GRAFIK) this.load.image(g, 'grafik/' + g + '.png');
+    for (const p of new Set([...PERSONEN, 'zombie'])) for (const pose of ['stand', 'gun', 'hold']) this.load.image(`${p}_${pose}`, `grafik/${p}_${pose}.png`);
+  }
 
   create() {
     const s = raum.state;
@@ -278,7 +287,8 @@ class Ort extends Phaser.Scene {
       g.fillStyle(0xffca28, 1).fillRect(s.kiste.x - 2, s.kiste.y - 3, 4, 5);
     }
     const oben = this.textures.createCanvas('oben', W, H);
-    zeichneOben(oben.getContext(), this.welt);
+    const bilder = Object.fromEntries(GRAFIK.map(g => [g, this.textures.get(g).getSourceImage()]));
+    zeichneOben(oben.getContext(), this.welt, bilder);
     oben.refresh();
     this.add.image(0, 0, 'oben').setOrigin(0).setDepth(5);
     this.torGrafik = this.add.graphics().setDepth(1.5);
@@ -355,7 +365,7 @@ class Ort extends Phaser.Scene {
     const n = p.farbe % FARBEN.length;
     // eigener Spieler: heller Ring am Boden
     const ring = this.add.ellipse(0, 0, 34, 34).setStrokeStyle(2, 0xffffff, ich ? 0.7 : 0).setFillStyle(0x000000, 0);
-    const bild = this.add.image(0, 0, 'mensch-' + n, 0);
+    const bild = this.add.image(0, 0, PERSONEN[n] + '_stand').setScale(0.62);
     const name = this.add.text(0, -28, p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
@@ -365,7 +375,7 @@ class Ort extends Phaser.Scene {
 
   neuerZombie(z) {
     const box = this.add.container(z.x, z.y).setDepth(3);
-    const bild = this.add.image(0, 0, (z.kriecht ? 'kriecher-' : 'zombie-') + ((z.variante ?? 0) % 4), 0);
+    const bild = z.kriecht ? this.add.image(0, 0, 'kriecher-' + ((z.variante ?? 0) % 4), 0) : this.add.image(0, 0, 'zombie_hold').setScale(0.62);
     box.add([bild]);
     return { box, bild, x: z.x, y: z.y, r: z.richtung };
   }
@@ -390,10 +400,15 @@ class Ort extends Phaser.Scene {
     const g = c.createRadialGradient(128, 128, 10, 128, 128, 128);
     g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.6, 'rgba(255,255,255,.85)'); g.addColorStop(1, 'rgba(255,255,255,0)');
     c.fillStyle = g; c.fillRect(0, 0, 256, 256); licht.refresh();
+    // Lichtkegel mit weichen Rändern: viele übereinandergelegte, immer breitere Kegel mit wenig Deckkraft
     const lampe = this.textures.createCanvas('lampe', 512, 512), d = lampe.getContext();
-    const h = d.createRadialGradient(0, 256, 20, 0, 256, 512);
-    h.addColorStop(0, 'rgba(255,255,255,1)'); h.addColorStop(0.75, 'rgba(255,255,255,.8)'); h.addColorStop(1, 'rgba(255,255,255,0)');
-    d.fillStyle = h; d.beginPath(); d.moveTo(0, 256); d.arc(0, 256, 512, -0.42, 0.42); d.closePath(); d.fill(); lampe.refresh();
+    for (let i = 0; i < 14; i++) {
+      const w = 0.16 + i * 0.03;
+      const h = d.createRadialGradient(0, 256, 10, 0, 256, 512);
+      h.addColorStop(0, 'rgba(255,255,255,0.14)'); h.addColorStop(0.55, 'rgba(255,255,255,0.09)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+      d.fillStyle = h; d.beginPath(); d.moveTo(0, 256); d.arc(0, 256, 512, -w, w); d.closePath(); d.fill();
+    }
+    lampe.refresh();
     this.lichtPinsel = this.make.image({ key: 'licht', add: false });
     this.lampenPinsel = this.make.image({ key: 'lampe', add: false }).setOrigin(0, 0.5);
   }
@@ -466,7 +481,13 @@ class Ort extends Phaser.Scene {
     const lx = this.lokal.x - a.X, ly = this.lokal.y - a.Y;
     this.lichtPinsel.setScale(lampe ? 0.42 : 0.36).setAlpha(lampe ? 1 : 0.8);
     d.erase(this.lichtPinsel, lx, ly);
-    if (lampe) { this.lampenPinsel.setRotation(ich.richtung).setScale(0.8); d.erase(this.lampenPinsel, lx, ly); }
+    if (lampe) {
+      // Kegel folgt der Laufrichtung weich (nicht jedem Ruck, z. B. beim automatischen Zielen)
+      const e = this.eingabe, ziel = Math.hypot(e.dx, e.dy) > 0.1 ? Math.atan2(e.dy, e.dx) : (this.lampenWinkel ?? ich.richtung);
+      this.lampenWinkel = Phaser.Math.Angle.RotateTo(this.lampenWinkel ?? ziel, ziel, this.game.loop.delta / 1000 * 3.5);
+      this.lampenPinsel.setRotation(this.lampenWinkel).setScale(0.8);
+      d.erase(this.lampenPinsel, lx, ly);
+    }
     this.setzeGrau(!lampe);
   }
 
@@ -517,11 +538,18 @@ class Ort extends Phaser.Scene {
       f.box.setPosition(f.x, f.y).setRotation(f.r);
       const zeigen = this.sichtbar(z);
       f.box.setVisible(zeigen);
-      const textur = (z.kriecht ? 'kriecher-' : 'zombie-') + ((z.variante ?? 0) % 4);
       const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
-      if (f.bild.texture.key !== textur) f.bild.setTexture(textur, 0);
-      f.bild.setFrame(bildNr < 0 ? 0 : bildNr);
-      if (z.jagt) f.bild.setTint(0xffd0c0); else f.bild.clearTint();
+      if (z.kriecht) {
+        const textur = 'kriecher-' + ((z.variante ?? 0) % 4);
+        if (f.bild.texture.key !== textur) f.bild.setTexture(textur, 0).setScale(1);
+        f.bild.setFrame(bildNr < 0 ? 0 : bildNr).setRotation(0);
+      } else {
+        if (f.bild.texture.key !== 'zombie_hold') f.bild.setTexture('zombie_hold').setScale(0.62);
+        // schlurfen: wanken statt laufen
+        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.12);
+      }
+      const farbe = [0xffffff, 0xd8e6b8, 0xc8d4e0, 0xe6ccb0][(z.variante ?? 0) % 4];
+      f.bild.setTint(z.jagt ? 0xffb8a8 : farbe);
       if (zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
         if (z.kriecht) {
           // Kriecher sehen nicht, sie spüren ringsum
@@ -583,16 +611,21 @@ class Ort extends Phaser.Scene {
   figurDarstellen(f, p, dt = 0.016) {
     f.box.setRotation(0);
     const zombie = p.zombie > 0;
-    const bildNr = laufBild(f, f.x - f.altX, f.y - f.altY, dt, 40);
+    const weg = Math.hypot(f.x - f.altX, f.y - f.altY);
     f.altX = f.x; f.altY = f.y;
-    let textur, nr = 0;
+    f.lauf = (f.lauf ?? 0) + weg;
+    const geht = weg / Math.max(dt, 0.001) > 12;
+    // Haltung nach Ausrüstung: Pistole, Nahkampf/Lampe in der Hand, sonst ohne
+    let textur;
     if (p.unten) textur = 'liegend-' + f.n;
-    else if (zombie) { textur = 'zombie-' + (f.n % 4); nr = bildNr < 0 ? 0 : bildNr; }
-    else { textur = 'mensch-' + f.n; nr = bildNr < 0 ? 0 : bildNr + 1; }
-    if (f.bild.texture.key !== textur) f.bild.setTexture(textur, 0);
-    f.bild.setFrame(nr);
-    f.bild.setRotation(p.unten ? 0 : p.richtung);
-    f.bild.setScale(p.schleicht && !p.unten ? 0.9 : 1);
+    else if (zombie) textur = 'zombie_hold';
+    else textur = PERSONEN[f.n] + (p.waffe === 'pistole' && p.munition > 0 ? '_gun' : p.waffe ? '_hold' : '_stand');
+    if (f.bild.texture.key !== textur) f.bild.setTexture(textur);
+    // beim Gehen leicht wippen
+    const wipp = geht ? Math.sin(f.lauf / 7) : 0;
+    f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
+    const s0 = p.unten ? 1 : 0.62;
+    f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
     const tun = zombie ? '🧟' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.infektion > 0 ? '🦠' : '';

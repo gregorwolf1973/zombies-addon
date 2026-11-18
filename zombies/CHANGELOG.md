@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0 – 18.11.2026
+
+- Neue Figuren: Menschen und Zombies aus dem Kenney-Paket „Topdown Shooter“ (CC0, kenney.nl), Haltung je nach Ausrüstung
+- Bäume, Büsche und Felsen von oben (Kenney); Bäume sind kein Hindernis mehr (darunter kann man sich verstecken)
+- Traktor von oben, Hochsitz entfernt, Busse auf den Straßen (versperren eine Spur, lassen sich durchsuchen)
+- Ausrüstung braucht keinen Rucksackplatz: Waffe in der Hand, Taschenlampe und Kleidung werden beim Finden direkt
+  angelegt, wenn frei – erst weitere Stücke wandern in den Rucksack
+- Lichtkegel der Taschenlampe mit weichen Rändern, folgt der Laufrichtung ruhig statt zu zappeln
+
 ## 0.9.2 – 18.11.2026
 
 - Der Ausgang liegt innen auf derselben Seite wie die Haustür draußen (oben bzw. unten) –

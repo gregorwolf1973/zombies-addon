@@ -111,7 +111,7 @@ export function zeichneBoden(ctx, welt) {
 }
 
 // ---------- obere Ebene: Bäume und Deko aus dem Prototyp ----------
-export function zeichneOben(ctx, welt) {
+export function zeichneOben(ctx, welt, bilder = {}) {
   const z = erzeugeZeichner(ctx);
   const dinge = [];   // [y, zeichnen] – nach y sortiert, damit hintere zuerst kommen
   const wiese = (kx, ky, r = 1) => {
@@ -123,11 +123,15 @@ export function zeichneOben(ctx, welt) {
   for (let ky = 0; ky < HOEHE; ky++) for (let kx = 0; kx < BREITE; kx++) {
     const t = welt.hole(kx, ky);
     if (t === T.BAUM) {
+      // Bäume von oben (Kenney, CC0): große und kleine Kronen, ein paar herbstliche
       const h = hash(kx * 31, ky * 17);
-      const x = mitte(kx), y = mitte(ky) - 8;
-      if (h < 0.55) dinge.push([y, () => z.fichte(x, y, 0.62, hash(kx, ky))]);
-      else if (h < 0.88) dinge.push([y, () => z.laubbaum(x, y, 0.62, hash(ky, kx))]);
-      else dinge.push([y, () => z.birke(x, y, 0.7)]);
+      const x = mitte(kx), y = mitte(ky);
+      const art = h < 0.62 ? 'baum_gross' : h < 0.82 ? 'baum_klein' : h < 0.93 ? 'baum_herbst' : 'baum_herbst_klein';
+      const bild = bilder[art], gr = art.endsWith('klein') ? 40 : 58, dreh = hash(ky, kx) * Math.PI * 2;
+      if (bild) dinge.push([y, () => {
+        ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + 5, y + 6, gr / 2, gr / 2.3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.translate(x, y); ctx.rotate(dreh); ctx.drawImage(bild, -gr / 2, -gr / 2, gr, gr);
+      }]);
     } else if (t === T.WASSER && hash(kx * 5, ky * 3) < 0.25) {
       // Schilf am Ufer
       const land = [[-1, 0], [1, 0]].some(([dx]) => { const n = welt.hole(kx + dx, ky); return n !== T.WASSER && n !== T.ZAUN; });
@@ -147,11 +151,12 @@ export function zeichneOben(ctx, welt) {
       biertisch: () => z.biertisch(x, y),
       kuh: () => z.kuh(x, y, v),
       heu: () => z.heu(x, y, v),
-      traktor: () => z.traktor(x, y),
+      traktor: () => traktorVonOben(ctx, x, y),
+      bus: () => busVonOben(ctx, x, y, d.senkrecht, v),
       vogelscheuche: () => z.vogelscheuche(x, y),
       hochsitz: () => z.hochsitz(x, y),
-      fels: () => z.fels(x, y, 0.7 + v * 0.3),
-      busch: () => z.busch(x, y, 0.7, v),
+      fels: () => bildZeichnen(ctx, bilder[v < 0.5 ? 'fels1' : 'fels2'], x, y, 30, v * 6),
+      busch: () => bildZeichnen(ctx, bilder[v < 0.75 ? 'busch' : 'busch_herbst'], x, y, 30, v * 6),
     }[d.art];
     if (f) dinge.push([y, f]);
   }
@@ -167,6 +172,45 @@ export function zeichneOben(ctx, welt) {
 
   dinge.sort((a, b) => a[0] - b[0]);
   for (const [, f] of dinge) { ctx.save(); f(); ctx.restore(); }
+}
+
+function bildZeichnen(ctx, bild, x, y, gr, dreh = 0) {
+  if (!bild) return;
+  ctx.translate(x, y); ctx.rotate(dreh);
+  const f = gr / Math.max(bild.width, bild.height);
+  ctx.drawImage(bild, -bild.width * f / 2, -bild.height * f / 2, bild.width * f, bild.height * f);
+}
+
+// Traktor von oben (Blickrichtung nach rechts): große Hinterräder, kleine Vorderräder, Kabine
+function traktorVonOben(ctx, x, y) {
+  ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-24, -20, 54, 44);
+  ctx.fillStyle = '#212121';
+  ctx.fillRect(-22, -24, 20, 9); ctx.fillRect(-22, 15, 20, 9);      // Hinterräder
+  ctx.fillRect(12, -18, 12, 6); ctx.fillRect(12, 12, 12, 6);         // Vorderräder
+  ctx.fillStyle = '#424242'; for (let i = -20; i < 0; i += 4) { ctx.fillRect(i, -24, 2, 9); ctx.fillRect(i, 15, 2, 9); }
+  ctx.fillStyle = '#2e7d32'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-18, -14, 44, 28, 5) : ctx.rect(-18, -14, 44, 28); ctx.fill();
+  ctx.fillStyle = '#43a047'; ctx.fillRect(4, -9, 20, 18);             // Motorhaube
+  ctx.fillStyle = '#1b5e20'; for (let i = 8; i < 22; i += 4) ctx.fillRect(i, -8, 1.5, 16);
+  ctx.fillStyle = '#e8f5e9'; ctx.fillRect(-16, -12, 18, 24);          // Kabinendach
+  ctx.strokeStyle = '#1b5e20'; ctx.lineWidth = 2; ctx.strokeRect(-16, -12, 18, 24);
+  ctx.fillStyle = '#616161'; ctx.beginPath(); ctx.arc(8, -11, 2.5, 0, Math.PI * 2); ctx.fill();   // Auspuff
+}
+
+// Bus von oben: lang, mit Fensterreihen und Dachaufbauten
+function busVonOben(ctx, x, y, senkrecht, v) {
+  ctx.translate(x, y);
+  if (senkrecht) ctx.rotate(Math.PI / 2);
+  const L = 122, B = 28;
+  const farbe = v < 0.5 ? '#c62828' : v < 0.8 ? '#1565c0' : '#f9a825';
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(-L / 2 + 4, -B / 2 + 5, L, B);
+  ctx.fillStyle = farbe; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-L / 2, -B / 2, L, B, 6) : ctx.rect(-L / 2, -B / 2, L, B); ctx.fill();
+  ctx.fillStyle = '#eceff1'; ctx.fillRect(-L / 2 + 6, -B / 2 + 4, L - 12, B - 8);    // helles Dach
+  ctx.fillStyle = '#263238';
+  for (let i = -L / 2 + 10; i < L / 2 - 14; i += 14) { ctx.fillRect(i, -B / 2 + 1, 10, 3); ctx.fillRect(i, B / 2 - 4, 10, 3); }   // Fenster
+  ctx.fillRect(L / 2 - 8, -B / 2 + 4, 5, B - 8);                                     // Frontscheibe
+  ctx.fillStyle = '#b0bec5'; ctx.fillRect(-14, -7, 22, 14); ctx.fillRect(-40, -5, 10, 10);   // Klimaanlage, Luke
+  ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1.5; ctx.strokeRect(-L / 2 + 0.75, -B / 2 + 0.75, L - 1.5, B - 1.5);
 }
 
 // ---------- Dächer: Häuser aus dem Prototyp, auf unsere Größe skaliert ----------

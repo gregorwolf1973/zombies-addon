@@ -2,3 +2,4 @@ node_modules/
 *.log
 tools/osm/roh_*.json
 tools/osm/*_test.json
+tools/kenney_roh/
