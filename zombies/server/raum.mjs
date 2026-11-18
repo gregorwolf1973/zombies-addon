@@ -844,7 +844,7 @@ export class SpielRaum extends Room {
       if (k.art === 'aufbrechen') client?.send('meldung', { text: '⚒️ Tür aufgebrochen – das war laut!' });
     }
     else if (k.art === 'tuer_zu') this.setzeTuer(k.key, false);
-    else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; this.broadcast('klettern', { x: p.x, y: p.y }); }
+    else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; this.broadcast('klettern', { x: p.x, y: p.y, id: sid }); }
     else if (k.art === 'aufheben') {
       const b = this.state.boden.get(k.id);
       if (!b || p.rucksack.length >= p.plaetze) return;
@@ -1223,7 +1223,7 @@ export class SpielRaum extends Room {
     if (x.kletter < 0.8) return;
     x.kletter = 0;
     p.x = z.x; p.y = z.y;
-    this.broadcast('klettern', { x: z.x, y: z.y });
+    this.broadcast('klettern', { x: z.x, y: z.y, id });
   }
 
   // als Zombie: schnell, beißt Menschen bei Berührung, sonst nichts

@@ -316,6 +316,8 @@ class Ort extends Phaser.Scene {
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
     raum.onMessage('klettern', m => {
+      // eigene Figur: in einem kurzen Sprung hinübergleiten statt springen
+      if (m.id === meineId && this.lokal) this.sprung = { vx: this.lokal.x, vy: this.lokal.y, nx: m.x, ny: m.y, t: 0 };
       ton.schritt(false); ton.schritt(false);
       for (let i = 0; i < 5; i++) {
         const c = this.add.circle(m.x + (Math.random() - 0.5) * 16, m.y + 8, 3 + Math.random() * 3, 0xa1887f, 0.7).setDepth(3.9);
@@ -1102,6 +1104,17 @@ class Ort extends Phaser.Scene {
     const f = this.figuren.get(meineId);
     if (!f) return p;
     if (!this.lokal) { this.lokal = { x: p.x, y: p.y }; this.cameras.main.startFollow(f.box, true, 0.15, 0.15); }
+    if (this.sprung) {
+      const sp = this.sprung;
+      sp.t = Math.min(1, sp.t + dt / 0.32);
+      const k = sp.t * sp.t * (3 - 2 * sp.t);
+      this.lokal.x = sp.vx + (sp.nx - sp.vx) * k; this.lokal.y = sp.vy + (sp.ny - sp.vy) * k;
+      f.x = this.lokal.x; f.y = this.lokal.y;
+      f.box.setPosition(f.x, f.y).setScale(1 + Math.sin(sp.t * Math.PI) * 0.18);   // kleiner Hüpfer
+      if (sp.t >= 1) { this.sprung = null; f.box.setScale(1); }
+      this.figurDarstellen(f, p, dt);
+      return p;
+    }
     const e = this.eingabe;
     const l = Math.hypot(e.dx, e.dy);
     if (!p.unten && raum.state.phase === 'spiel' && l > 0.05) {

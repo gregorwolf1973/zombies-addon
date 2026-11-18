@@ -102,11 +102,14 @@ for w in wege:
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             ix, iy = x - dx, y - dy
             if (ix, iy) not in menge or k[iy][ix] != BODEN: continue
-            for s in range(1, 8):
+            # zur Straße zeigen; ein Fußweg oder Platz zählt nur, wenn keine Straße in der Nähe ist (sonst stehen
+            # sich zwei Haustüren am Fußweg zwischen den Häusern gegenüber)
+            for s in range(1, 12):
                 ax, ay = x + dx * s, y + dy * s
                 if not (0 <= ax < B and 0 <= ay < H): break
                 if k[ay][ax] in (STRASSE, PLATZ):
-                    if s < bd: bd, beste = s, (x, y)
+                    kosten = s if k[ay][ax] == STRASSE else s + 6
+                    if kosten < bd: bd, beste = kosten, (x, y)
                     break
                 if k[ay][ax] in (WAND, WASSER): break
     if beste: k[beste[1]][beste[0]] = TUER

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.2 – 18.11.2026
+
+- Haustüren zeigen zur Straße statt zum Fußweg zwischen zwei Häusern (35 Türen verlegt, 18 Häuser mehr betretbar);
+  die Welt beginnt deshalb einmal neu (Rucksäcke bleiben)
+- Beim Drübersteigen gleitet die eigene Figur in einem kurzen Hüpfer hinüber, statt dass das Bild springt
+
 ## 0.21.1 – 18.11.2026
 
 - Drübersteigen per Knopf: An Hecke, Zaun oder Gartenmauer zeigt der Aktionsknopf (Taste E) „Über die Hecke steigen“;
