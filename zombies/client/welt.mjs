@@ -188,10 +188,20 @@ export const DINGE = {
   schlaeger: { name: 'Baseballschläger', zeichen: '🏏', waffe: true },
   munition: { name: 'Munition', zeichen: '🧰' },
   spritze: { name: 'Rettungsspritze', zeichen: '💉' },
+  messer: { name: 'Messer', zeichen: '🔪', waffe: true },
+  kleidung: { name: 'Feste Kleidung', zeichen: '🧥' },
+  seil: { name: 'Seil', zeichen: '🪢' },
+  taschenlampe: { name: 'Taschenlampe', zeichen: '🔦' },
+  schokoriegel: { name: 'Schokoriegel', zeichen: '🍫' },
 };
+// Beute bei toten Zombies: selten (etwa jeder 20.) eine Waffe, sonst oft Alltagszeug
+export const LEICHE_SELTEN = ['pistole', 'munition', 'messer'];
+export const LEICHE_OFT = ['kleidung', 'seil', 'taschenlampe', 'schokoriegel'];
+export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
+export const LEICHEN_MAX = 30;
 export const RUCKSACK_PLAETZE = 8;
 export const KISTE_PLAETZE = 24;
-export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum' };
+export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
   schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', null, null],

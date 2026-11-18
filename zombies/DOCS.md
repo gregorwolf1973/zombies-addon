@@ -18,6 +18,7 @@ Alle landen im selben Spiel.
 |---|---|
 | `zombie_faktor` | Mehr oder weniger Zombies (0,2–3, Standard 1) |
 | `zugangscode` | Wenn gesetzt, braucht jeder Mitspieler außerhalb der Seitenleiste diesen Code |
+| `bots` | Simulierte Mitspieler (0–9), solange nur ein Mensch spielt – zum Testen allein |
 | `wiki_adresse` | Adresse eines DokuWiki (z. B. `https://wiki.example.org`) für die Links nach jedem Rätsel |
 
 ## Rätsel

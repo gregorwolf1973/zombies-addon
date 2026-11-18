@@ -40,6 +40,7 @@ export async function starte({
   SpielRaum.einstellungen = {
     zugangscode: String(optionen.zugangscode ?? '').trim(),
     zombieFaktor: Number(optionen.zombie_faktor) || 1,
+    bots: Math.max(0, Math.min(9, Number(optionen.bots) || 0)),
   };
   app.get('/gesund', (req, res) => res.json({ ok: true }));
   // sagt dem Client, ob er nach dem Zugangscode fragen muss

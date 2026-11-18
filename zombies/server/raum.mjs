@@ -2,13 +2,14 @@
 import crypto from 'node:crypto';
 import { holeFragen } from './fragenquelle.mjs';
 import { mischeAntworten, waehleFrage } from './raetsel.mjs';
+import { botSchritt, BOT_NAMEN } from './bots.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen,
   bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
-  INFEKTION_DAUER, ZOMBIE_ZEIT,
+  INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX,
 } from '../client/welt.mjs';
 
 export const Spieler = schema({
@@ -30,6 +31,7 @@ export const Spieler = schema({
   aktion: t.string(),       // "durchsuchen" | "barrikade" | ""
   fortschritt: t.number(),
   besiegt: t.uint16(),
+  kleidung: t.number(),     // Haltbarkeit der festen Kleidung 0..100 (Schutz vor Bissen)
   infektion: t.number(),    // Sekunden bis zur Verwandlung, 0 = gesund
   zombie: t.number(),       // Sekunden, die man noch Zombie ist, 0 = Mensch
 }, 'Spieler');
@@ -42,6 +44,7 @@ export const Zombie = schema({
 }, 'Zombie');
 
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
+export const Leiche = schema({ x: t.number(), y: t.number(), richtung: t.number(), rest: t.uint8(), alter: t.number() }, 'Leiche');
 export const Safe = schema({ barrikade: t.number(), kiste: t.array("string") }, 'Safe');
 
 export const Zustand = schema({
@@ -53,6 +56,7 @@ export const Zustand = schema({
   spieler: t.map(Spieler),
   zombies: t.map(Zombie),
   behaelter: t.map(Behaelter),   // nur schon durchsuchte
+  leichen: t.map(Leiche),       // tote Zombies, die eine Weile liegen bleiben
   safes: t.map(Safe),
 }, 'Zustand');
 
@@ -60,6 +64,7 @@ const TICK = 50; // ms → 20 Updates pro Sekunde
 const ZOMBIE_HP = 100;
 const PISTOLE_SCHADEN = 34, PISTOLE_PAUSE = 0.45;
 const SCHLAEGER_SCHADEN = 40, SCHLAEGER_PAUSE = 0.6, SCHLAEGER_REICHWEITE = 42;
+const MESSER_SCHADEN = 30, MESSER_PAUSE = 0.45, MESSER_REICHWEITE = 36;
 const STOSS_SCHADEN = 20, STOSS_PAUSE = 0.7, STOSS_WEG = 34;
 const BISS_PRO_SEK = 14;
 const BISS_CHANCE = 0.12;   // pro Sekunde Kontakt: Wahrscheinlichkeit für einen infizierenden Biss
@@ -88,7 +93,7 @@ export class SpielRaum extends Room {
   patchRate = TICK;
 
   // vom Server beim Start gesetzt (nicht über Client-Optionen änderbar)
-  static einstellungen = { zugangscode: '', zombieFaktor: 1 };
+  static einstellungen = { zugangscode: '', zombieFaktor: 1, bots: 0 };
   static speicher = null;
 
   // läuft bei der Anfrage zum Beitreten: Zugangscode prüfen.
@@ -118,6 +123,8 @@ export class SpielRaum extends Room {
     this.offeneRaetsel = new Map();   // sessionId → { id, richtigIndex, seite, richtig, bis }
 
     this.inhalte = new Map();     // Behälter-Id → verbliebene Gegenstände
+    this.leichenInhalt = new Map(); // Leichen-Id → Gegenstände
+    this.naechsteLeichenId = 1;
     for (const s of this.welt.safeRooms) {
       const safe = new Safe(); safe.barrikade = 0;
       this.state.safes.set(s.id, safe);
@@ -196,7 +203,7 @@ export class SpielRaum extends Room {
     p.name = name;
     p.farbe = this.freieFarbe();
     p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0;
-    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0;
+    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0;
     const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null };
     const gespeichert = this.speicher?.ladeSpieler(spielerId);
     if (gespeichert) {
@@ -207,6 +214,7 @@ export class SpielRaum extends Room {
       p.munition = Math.max(0, Math.min(99, Number(gespeichert.munition) || 0));
       p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
       p.infektion = Math.max(0, Math.min(INFEKTION_DAUER, Number(gespeichert.infektion) || 0));
+      p.kleidung = Math.max(0, Math.min(100, Number(gespeichert.kleidung) || 0));
       for (const d of (gespeichert.rucksack ?? []).slice(0, RUCKSACK_PLAETZE)) if (DINGE[d]) p.rucksack.push(d);
       extra.letzterSafe = gespeichert.letzterSafe ?? '';
       const ort = gespeichert.draussen || !Number.isFinite(gespeichert.x)
@@ -227,6 +235,40 @@ export class SpielRaum extends Room {
     this.extra.set(client.sessionId, extra);
     this.speichereSpieler(client.sessionId);
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
+    this.botsAnpassen();
+  }
+
+  // Simulierte Mitspieler: bei einem Menschen so viele wie eingestellt, jeder weitere Mensch ersetzt einen
+  botsAnpassen() {
+    const menschen = [...this.extra.values()].filter(x => !x.bot).length;
+    const botIds = [...this.extra.entries()].filter(([, x]) => x.bot).map(([sid]) => sid);
+    const soll = menschen > 0 ? Math.max(0, (SpielRaum.einstellungen.bots || 0) + 1 - menschen) : 0;
+    while (botIds.length > soll) {
+      const sid = botIds.pop();
+      this.state.spieler.delete(sid); this.extra.delete(sid);
+    }
+    let n = 0;
+    while (botIds.length < soll && n++ < 20) {
+      const belegt = new Set([...this.state.spieler.values()].map(s => s.name));
+      const name = BOT_NAMEN.find(b => !belegt.has(b + ' 🤖')) ?? 'Bot';
+      const sid = 'bot-' + (this.naechsteBotId = (this.naechsteBotId ?? 0) + 1);
+      const p = new Spieler();
+      p.name = name + ' 🤖'; p.farbe = this.freieFarbe();
+      p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0; p.schleicht = false;
+      p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0;
+      p.hp = 100; p.durst = 100; p.hunger = 100; p.besiegt = 0;
+      // in die Nähe des ersten Menschen
+      const mensch = [...this.state.spieler.entries()].find(([s]) => !this.extra.get(s)?.bot)?.[1];
+      const pos = this.freierPlatz(mensch ?? this.welt.start, this.state.spieler.size);
+      p.x = pos.x; p.y = pos.y;
+      const bewaffnet = [...this.state.spieler.values()].filter(s => s.waffe === 'pistole').length;
+      if (bewaffnet < bewaffnetSoll(this.state.spieler.size + 1)) { p.waffe = 'pistole'; p.munition = START_MUNITION; }
+      else { p.waffe = ''; p.munition = 0; }
+      p.rucksack.push('wasser'); p.rucksack.push('essen');
+      this.state.spieler.set(sid, p);
+      this.extra.set(sid, { spielerId: null, bot: {}, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null });
+      botIds.push(sid);
+    }
   }
 
   freieFarbe() {
@@ -288,17 +330,18 @@ export class SpielRaum extends Room {
     this.broadcast('meldung', { text });
     this.state.spieler.delete(client.sessionId);
     this.extra.delete(client.sessionId);
+    this.botsAnpassen();
   }
 
   onDispose() { this.speichereAlles(); }
 
   speichereSpieler(sid) {
     const p = this.state.spieler.get(sid), x = this.extra.get(sid);
-    if (!p || !x || !this.speicher) return;
+    if (!p || !x || x.bot || !this.speicher) return;
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
       waffe: p.waffe, munition: p.munition, rucksack: [...p.rucksack], besiegt: p.besiegt,
-      letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion,
+      letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung,
     });
   }
 
@@ -345,7 +388,12 @@ export class SpielRaum extends Room {
       if (!sichtfrei(this.welt, p.x, p.y, b.x, b.y)) continue;
       bd = d; best = b;
     }
-    if (best) return { art: 'durchsuchen', behaelter: best, dauer: best.art === 'auto' ? 3.5 : 2.5 };
+    for (const [id, l] of this.state.leichen) {
+      const d = Math.hypot(l.x - p.x, l.y - p.y);
+      if (d >= bd || l.rest === 0) continue;
+      bd = d; best = { id, art: 'leiche', x: l.x, y: l.y };
+    }
+    if (best) return { art: 'durchsuchen', behaelter: best, dauer: best.art === 'auto' ? 3.5 : best.art === 'leiche' ? 1.5 : 2.5 };
     return null;
   }
 
@@ -392,6 +440,7 @@ export class SpielRaum extends Room {
   }
 
   durchsucht(client, p, b) {
+    if (b.art === 'leiche') return this.leicheDurchsucht(client, p, b.id);
     if (!this.inhalte.has(b.id)) {
       const tabelle = BEUTE[b.art] ?? [];
       const funde = [];
@@ -403,6 +452,13 @@ export class SpielRaum extends Room {
       this.setzeInhalt(b.id, funde);
     }
     const inhalt = this.inhalte.get(b.id);
+    const genommen = this.einpacken(p, inhalt);
+    this.setzeInhalt(b.id, inhalt);
+    client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+  }
+
+  // Gegenstände in den Rucksack (Munition direkt zur Pistole); Rest bleibt liegen
+  einpacken(p, inhalt) {
     const genommen = [];
     for (let i = 0; i < inhalt.length;) {
       const d = inhalt[i];
@@ -410,8 +466,40 @@ export class SpielRaum extends Room {
       if (p.rucksack.length < RUCKSACK_PLAETZE) { p.rucksack.push(d); genommen.push(d); inhalt.splice(i, 1); continue; }
       i++;
     }
-    this.setzeInhalt(b.id, inhalt);
+    return genommen;
+  }
+
+  leicheDurchsucht(client, p, id) {
+    const l = this.state.leichen.get(id);
+    if (!l) return;
+    const inhalt = this.leichenInhalt.get(id) ?? [];
+    const genommen = this.einpacken(p, inhalt);
+    l.rest = inhalt.length;
     client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+  }
+
+  neueLeiche(z) {
+    const inhalt = [];
+    const w = this.rnd();
+    if (w < 0.05) inhalt.push(LEICHE_SELTEN[Math.floor(this.rnd() * LEICHE_SELTEN.length)]);
+    else if (w < 0.6) inhalt.push(LEICHE_OFT[Math.floor(this.rnd() * LEICHE_OFT.length)]);
+    const id = 'l' + (this.naechsteLeichenId++);
+    const l = new Leiche();
+    l.x = z.x; l.y = z.y; l.richtung = z.richtung; l.rest = inhalt.length; l.alter = 0;
+    this.state.leichen.set(id, l);
+    this.leichenInhalt.set(id, inhalt);
+    // höchstens LEICHEN_MAX: die älteste verschwindet
+    if (this.state.leichen.size > LEICHEN_MAX) {
+      const aelteste = this.state.leichen.keys().next().value;
+      this.state.leichen.delete(aelteste); this.leichenInhalt.delete(aelteste);
+    }
+  }
+
+  leichenAltern(dt) {
+    for (const [id, l] of this.state.leichen) {
+      l.alter += dt;
+      if (l.alter > LEICHE_DAUER) { this.state.leichen.delete(id); this.leichenInhalt.delete(id); }
+    }
   }
 
   benutze(client, m) {
@@ -422,6 +510,14 @@ export class SpielRaum extends Room {
     if (d === 'spritze') return this.spritze(client, p, i);
     if (d === 'wasser') { p.durst = Math.min(100, p.durst + 45); p.rucksack.splice(i, 1); }
     else if (d === 'essen') { p.hunger = Math.min(100, p.hunger + 45); p.rucksack.splice(i, 1); }
+    else if (d === 'schokoriegel') { p.hunger = Math.min(100, p.hunger + 20); p.rucksack.splice(i, 1); }
+    else if (d === 'kleidung') {
+      if (p.kleidung >= 100) return client.send('meldung', { text: 'Du trägst schon feste Kleidung' });
+      p.kleidung = 100; p.rucksack.splice(i, 1);
+      client.send('meldung', { text: '🧥 Feste Kleidung angezogen – Bisse gehen seltener durch' });
+    }
+    else if (d === 'seil') { client.send('meldung', { text: '🪢 Ein Seil – brauchst du später am Fluss' }); }
+    else if (d === 'taschenlampe') { client.send('meldung', { text: '🔦 Für dunkle Räume – leuchtet bald in den Häusern' }); }
     else if (d === 'verband') {
       if (p.hp >= 100) return client.send('meldung', { text: 'Du bist nicht verletzt' });
       p.hp = Math.min(100, p.hp + 45); p.rucksack.splice(i, 1);
@@ -539,12 +635,16 @@ export class SpielRaum extends Room {
     for (const [id, p] of s.spieler) {
       const x = this.extra.get(id);
       if (!x) continue;
+      if (x.bot) {
+        try { botSchritt(this, id, p, x, dt); } catch (e) { x.eingabe = { dx: 0, dy: 0, s: false }; if (!x.fehlerGemeldet) { console.error('Bot-Fehler:', e.message); x.fehlerGemeldet = true; } }
+      }
       this.spielerSchritt(id, p, x, dt);
       this.beduerfnisse(p, x, dt);
       this.aktionSchritt(id, p, x, dt);
     }
     for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
     this.aufhelfen(dt);
+    this.leichenAltern(dt);
     this.zombiesAuffuellen(dt);
 
     const stehend = [...s.spieler.values()].filter(p => !p.unten && !(p.zombie > 0));
@@ -577,7 +677,8 @@ export class SpielRaum extends Room {
     if (pause <= 0 && !p.aktion) {
       const mitPistole = p.waffe === 'pistole' && p.munition > 0;
       const mitSchlaeger = p.waffe === 'schlaeger';
-      const reichweite = mitPistole ? W.pistoleReichweite : mitSchlaeger ? SCHLAEGER_REICHWEITE : W.nahkampfReichweite;
+      const mitMesser = p.waffe === 'messer';
+      const reichweite = mitPistole ? W.pistoleReichweite : mitSchlaeger ? SCHLAEGER_REICHWEITE : mitMesser ? MESSER_REICHWEITE : W.nahkampfReichweite;
       const ziel = this.naechsterZombie(p.x, p.y, reichweite, p);
       if (ziel) {
         const [zid, z] = ziel;
@@ -588,6 +689,10 @@ export class SpielRaum extends Room {
           this.laerm(p.x, p.y, W.hoerweiteSchuss, true);
           this.schaden(zid, z, PISTOLE_SCHADEN, p);
           pause = PISTOLE_PAUSE;
+        } else if (mitMesser) {
+          this.broadcast('stoss', { x: p.x, y: p.y, w, messer: true });
+          this.schaden(zid, z, MESSER_SCHADEN, p);
+          pause = MESSER_PAUSE;
         } else {
           bewege(this.welt, z, Math.cos(w) * STOSS_WEG, Math.sin(w) * STOSS_WEG, W.zombieRadius);
           this.broadcast('stoss', { x: p.x, y: p.y, w, schlag: mitSchlaeger });
@@ -688,6 +793,7 @@ export class SpielRaum extends Room {
       this.zombieInfo.delete(id);
       this.state.besiegt++;
       von.besiegt++;
+      this.neueLeiche(z);
       this.broadcast('weg', { x: z.x, y: z.y });
     }
   }
@@ -771,8 +877,10 @@ export class SpielRaum extends Room {
         z.richtung = w;
         if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * dt, dt);
         if (d < W.spielerRadius + W.zombieRadius + 6) {
-          ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt);
-          if (!(ziel.infektion > 0) && this.rnd() < BISS_CHANCE * dt) {
+          const schutz = ziel.kleidung > 0;
+          ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1));
+          if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);
+          if (!(ziel.infektion > 0) && this.rnd() < BISS_CHANCE * dt * (schutz ? 0.5 : 1)) {
             ziel.infektion = INFEKTION_DAUER;
             this.broadcast('meldung', { text: `🦠 ${ziel.name} wurde gebissen! Eine Rettungsspritze hilft.`, lang: true });
           }

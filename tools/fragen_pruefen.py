@@ -10,7 +10,8 @@ prompt = ("Prüfe diese Quizfragen zur Krisenvorsorge/Erste Hilfe für ein Lerns
           "Problem: eine 'FALSCH'-Antwort ist nach gängigem Fachwissen (Rotes Kreuz, BBK, Feuerwehr) ebenfalls richtig "
           "oder vertretbar, die RICHTIG-Antwort ist fachlich falsch, oder die Frage ist ohne Zusammenhang unverständlich. "
           'Antworte nur mit JSON: [{"nr": 0, "problem": "kurz"}], leeres Array wenn alles passt.\n\n' + liste)
-a = Bridge().frage(sys.argv[2] if len(sys.argv) > 2 else "gemini", prompt, temperature=0, max_tokens=6000)
+prov = sys.argv[2] if len(sys.argv) > 2 else "gemini"
+a = Bridge().frage(prov, prompt, temperature=0, max_tokens=6000, **({"model": "deepseek-flash"} if prov == "deepseek" else {}))
 m = re.search(r"\[\s*(\{.*\})?\s*\]", a.split("\n", 1)[1] if a.startswith("[") else a, re.S)
 if not m: print(a[:1500]); sys.exit(1)
 for f in json.loads(m.group(0)):

@@ -285,3 +285,92 @@ test('Infektion: läuft draußen, ruht im Safe Room, Spritze heilt Mitspieler, V
     assert.equal(pa.infektion, 0);
   } finally { await a.c.leave(); await b.c.leave(); }
 });
+
+test('Leichen: bleiben liegen, Beute durchsuchbar, altern weg, höchstens 30', async () => {
+  const { c, raum, p } = await beitreten('Leichensucher');
+  try {
+    raum.neuerZombie(0);
+    const [zid, z] = [...raum.state.zombies.entries()].at(-1);
+    z.x = raum.welt.start.x; z.y = raum.welt.start.y;
+    raum.schaden(zid, z, 999, p);
+    assert.equal(raum.state.leichen.size, 1, 'keine Leiche');
+    const [lid, l] = [...raum.state.leichen.entries()][0];
+    raum.leichenInhalt.set(lid, ['schokoriegel', 'messer']); l.rest = 2;
+    p.rucksack.clear(); p.x = l.x + 10; p.y = l.y;
+    c.send('aktion');
+    assert.ok(await bis(() => p.aktion === 'durchsuchen'));
+    assert.ok(await bis(() => l.rest === 0, 3000), 'Leiche nicht durchsucht');
+    assert.deepEqual([...p.rucksack], ['schokoriegel', 'messer']);
+    // Messer in die Hand, Schokoriegel essen
+    p.hunger = 50;
+    c.send('benutze', { platz: 0 });
+    assert.ok(await bis(() => p.hunger >= 69));
+    c.send('benutze', { platz: 0 });
+    assert.ok(await bis(() => p.waffe === 'messer'));
+    // Altern
+    l.alter = 999;
+    assert.ok(await bis(() => !raum.state.leichen.has(lid)), 'Leiche verschwindet nicht');
+    // Obergrenze
+    for (let i = 0; i < 40; i++) raum.neueLeiche({ x: 100, y: 100, richtung: 0 });
+    assert.equal(raum.state.leichen.size, 30);
+    // Beute-Verteilung: selten ~5 %, oft ~55 %
+    let selten = 0, oft = 0;
+    for (let i = 0; i < 4000; i++) {
+      raum.neueLeiche({ x: 0, y: 0, richtung: 0 });
+      const inhalt = raum.leichenInhalt.get([...raum.state.leichen.keys()].at(-1));
+      if (['pistole', 'munition', 'messer'].includes(inhalt[0])) selten++; else if (inhalt.length) oft++;
+    }
+    assert.ok(selten > 120 && selten < 290, `selten: ${selten}`);
+    assert.ok(oft > 1900 && oft < 2500, `oft: ${oft}`);
+  } finally { await c.leave(); }
+});
+
+test('Feste Kleidung schützt und nutzt sich ab', async () => {
+  const { c, raum, p } = await beitreten('Angezogen');
+  try {
+    p.rucksack.clear(); p.rucksack.push('kleidung');
+    c.send('benutze', { platz: 0 });
+    assert.ok(await bis(() => p.kleidung === 100));
+    raum.neuerZombie(0);
+    const [zid, z] = [...raum.state.zombies.entries()].at(-1);
+    p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.hp = 100;
+    z.x = p.x + 18; z.y = p.y;
+    raum.zombieInfo.get(zid).ziel = c.sessionId;
+    p.waffe = ''; p.munition = 0;
+    await warte(1000);
+    assert.ok(p.kleidung < 100, 'Kleidung nutzt sich nicht ab');
+    assert.ok(p.hp > 100 - 14 * 1.2, 'Kleidung schützt nicht: ' + p.hp);
+  } finally { await c.leave(); }
+});
+
+test('Bots: fünf Mitspieler, folgen, helfen auf, weichen echten Spielern', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 5 };
+  const a = await beitreten('Tester');
+  try {
+    const { raum, p } = a;
+    const bots = () => [...raum.extra.entries()].filter(([, x]) => x.bot).map(([sid]) => raum.state.spieler.get(sid));
+    assert.equal(bots().length, 5);
+    assert.ok(bots().every(b => b.name.endsWith('🤖')));
+    // Anführer läuft weg → Bots folgen
+    p.x = raum.welt.start.x; p.y = raum.welt.start.y;
+    const ziel = raum.welt.safeRooms[0].innen;
+    a.c.send('eingabe', { dx: 0, dy: 0 });
+    for (const b of bots()) { b.x = p.x + 150; b.y = p.y; }
+    await warte(2500);
+    const naeher = bots().filter(b => Math.hypot(b.x - p.x, b.y - p.y) < 140).length;
+    assert.ok(naeher >= 3, `nur ${naeher} Bots folgen`);
+    // Mensch liegt am Boden → ein Bot hilft auf
+    p.unten = true; p.hp = 0; p.hilfe = 0;
+    assert.ok(await bis(() => !p.unten, 15000), 'kein Bot hilft auf');
+    // zweiter Mensch kommt → ein Bot weniger
+    const b2 = await beitreten('Zweiter');
+    assert.equal(bots().length, 4);
+    await b2.c.leave();
+    assert.ok(await bis(() => bots().length === 5));
+    void ziel;
+  } finally {
+    await a.c.leave();
+    SpielRaum.einstellungen = vorher;
+  }
+});

@@ -179,29 +179,57 @@ export function zeichneOben(ctx, welt) {
 // ---------- Dächer: Häuser aus dem Prototyp, auf unsere Größe skaliert ----------
 export const DACH_RAND = 24;   // Platz für Dachüberstand und Schatten rundherum
 
-// Dachfarbe des Prototyps hängt am Hash: passenden Schlüssel suchen (0 rot, 1 braun, 2 grau)
-function schluesselFuer(farbe, start) {
-  for (let k = start; k < start + 500; k++) if (Math.floor(hash(k, 1) * 3) === farbe) return k / 1000 + 0.0000001;
-  return start / 1000;
-}
-
+// Dächer von oben (Gregor: Hausfassaden des Prototyps gefallen nicht) – Walmdach mit Ziegelreihen
 export function zeichneDach(ctx, haus, nr) {
-  const z = erzeugeZeichner(ctx);
   const b = haus.b * KACHEL, h = haus.h * KACHEL;
+  const art = haus.safe === 'Sakristei' ? 'kirche' : haus.safe ? 'safe' : 'normal';
+  const farben = {
+    normal: [['#b5523f', '#9c4030', '#6e2c1f'], ['#a0522d', '#8b4513', '#5d3418']][nr % 2],
+    safe: ['#90a4ae', '#78909c', '#455a64'],
+    kirche: ['#78858c', '#607078', '#37474f'],
+  }[art];
   ctx.save();
   ctx.translate(DACH_RAND, DACH_RAND);
-  if (haus.safe === 'Sakristei') {
-    // Kirche: 150×110 plus Turm (75 nach oben)
-    ctx.save(); ctx.scale(b / 150, h / 185); z.kirche(-20, 55, -9999, -9999); ctx.restore();
-  } else {
-    ctx.save(); ctx.scale(b / 210, h / 142);
-    z.house(-12, -6, schluesselFuer(haus.safe ? 2 : nr % 2, 1000 + nr * 37), -9999, -9999);
-    ctx.restore();
+  // Schatten
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(6, 7, b, h);
+  // Dachflächen: oben/unten heller/dunkler, Seiten als Walm
+  const f = Math.min(b, h) / 2;
+  const flaeche = (pts, farbe) => { ctx.fillStyle = farbe; ctx.beginPath(); ctx.moveTo(...pts[0]); for (const q of pts.slice(1)) ctx.lineTo(...q); ctx.closePath(); ctx.fill(); };
+  flaeche([[0, 0], [b, 0], [b - f, f], [f, f]], farbe(0));
+  flaeche([[0, h], [b, h], [b - f, h - f], [f, h - f]], farbe(1));
+  flaeche([[0, 0], [f, f], [f, h - f], [0, h]], farbe(1));
+  flaeche([[b, 0], [b - f, f], [b - f, h - f], [b, h]], farbe(0));
+  function farbe(i) { return farben[i]; }
+  // Ziegel- bzw. Blechlinien
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+  for (let y = 6; y < h; y += 6) {
+    const rand = y < h / 2 ? Math.min(y, f) : Math.min(h - y, f);
+    ctx.beginPath(); ctx.moveTo(rand, y + 0.5); ctx.lineTo(b - rand, y + 0.5); ctx.stroke();
   }
-  // unsere echte Tür als Vordach markieren (die Fassade des Prototyps zeigt immer nach unten)
+  // First und Grate
+  ctx.strokeStyle = farben[2]; ctx.lineWidth = 3; ctx.beginPath();
+  ctx.moveTo(f, f); ctx.lineTo(b - f, f); ctx.lineTo(b - f, h - f); ctx.lineTo(f, h - f); ctx.closePath();
+  if (b >= h) { ctx.moveTo(f, h / 2); ctx.lineTo(b - f, h / 2); } else { ctx.moveTo(b / 2, f); ctx.lineTo(b / 2, h - f); }
+  ctx.moveTo(0, 0); ctx.lineTo(f, f); ctx.moveTo(b, 0); ctx.lineTo(b - f, f); ctx.moveTo(0, h); ctx.lineTo(f, h - f); ctx.moveTo(b, h); ctx.lineTo(b - f, h - f);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.5; ctx.strokeRect(0.75, 0.75, b - 1.5, h - 1.5);
+  if (art === 'kirche') {
+    // kleiner Turm mit Zwiebelhaube von oben
+    const tx = b - 26, ty = 26;
+    ctx.fillStyle = '#efe4d8'; ctx.fillRect(tx - 14, ty - 14, 28, 28);
+    ctx.fillStyle = '#2e7d32'; ctx.beginPath(); ctx.arc(tx, ty, 11, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#43a047'; ctx.beginPath(); ctx.arc(tx - 3, ty - 3, 5, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffd54f'; ctx.beginPath(); ctx.arc(tx, ty, 2.5, 0, TAU); ctx.fill();
+  } else if (art === 'normal') {
+    // Kamin
+    const kx = Math.floor(b * (0.25 + hash(nr, 3) * 0.5)), ky = Math.floor(h * 0.3);
+    ctx.fillStyle = '#8d6e63'; ctx.fillRect(kx, ky, 10, 10);
+    ctx.fillStyle = '#4e342e'; ctx.fillRect(kx + 2, ky + 2, 6, 6);
+  }
+  // unsere Tür als Vordach
   const tx = (haus.tuer.x - haus.x) * KACHEL, oben = haus.tuer.y === haus.y;
   const ty = oben ? -6 : h - 8;
-  ctx.fillStyle = '#3e2723'; ctx.fillRect(tx + 3, ty, KACHEL - 6, 12);
-  ctx.fillStyle = '#ffd54f'; ctx.fillRect(tx + 13, oben ? ty : ty + 9, 6, 3);
+  ctx.fillStyle = '#3e2723'; ctx.fillRect(tx + 3, ty, KACHEL - 6, 14);
+  ctx.fillStyle = '#ffd54f'; ctx.fillRect(tx + 13, oben ? ty : ty + 11, 6, 3);
   ctx.restore();
 }

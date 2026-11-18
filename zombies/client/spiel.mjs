@@ -1,7 +1,7 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn,
-  DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER,
+  DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
 } from './welt.mjs';
 import { zeichneBoden, zeichneOben, zeichneDach, DACH_RAND } from './aussehen.mjs';
 
@@ -138,6 +138,7 @@ class Ort extends Phaser.Scene {
 
     this.figuren = new Map();   // sessionId → {box, ...}
     this.zombies = new Map();
+    this.leichen = new Map();
     this.kegel = this.add.graphics().setDepth(2);
     this.lokal = null;          // vorhergesagte eigene Position
     this.eingabe = { dx: 0, dy: 0, s: false };
@@ -349,6 +350,23 @@ class Ort extends Phaser.Scene {
       }
     }
     for (const [id, f] of this.zombies) if (!s.zombies.has(id)) { f.box.destroy(); this.zombies.delete(id); }
+    // Leichen: liegen flach, leere sind blasser, die letzten 20 s blenden sie aus
+    for (const [id, l] of s.leichen) {
+      let o = this.leichen.get(id);
+      if (!o) {
+        o = this.add.container(l.x, l.y).setDepth(1.6).setRotation(l.richtung);
+        o.add([
+          this.add.ellipse(0, 0, 30, 18, 0x5a1a1a, 0.55),
+          this.add.ellipse(-2, 0, 22, 14, 0x558b2f),
+          this.add.rectangle(10, -6, 10, 4, 0x4e7a29), this.add.rectangle(9, 6, 10, 4, 0x4e7a29),
+          this.add.circle(-9, 0, 5, 0x689f38),
+        ]);
+        this.leichen.set(id, o);
+      }
+      const ausblenden = Math.min(1, (LEICHE_DAUER - l.alter) / 20);
+      o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
+    }
+    for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.destroy(); this.leichen.delete(id); }
     // leere Behälter blasser
     for (const [id, b] of s.behaelter) {
       const o = this.behaelterObj.get(id);
@@ -475,6 +493,10 @@ class Ort extends Phaser.Scene {
       if (!sichtfrei(this.welt, x, y, b.x, b.y)) continue;
       bd = d; best = b;
     }
+    for (const l of raum.state.leichen.values()) {
+      const d = Math.hypot(l.x - x, l.y - y);
+      if (d < bd && l.rest !== 0) { bd = d; best = { art: 'leiche' }; }
+    }
     if (best) return { art: 'durchsuchen', text: `🔍 ${BEHAELTER_NAME[best.art]} durchsuchen` };
     return null;
   }
@@ -497,7 +519,8 @@ class Ort extends Phaser.Scene {
 
   stoss(m) {
     const g = this.add.graphics().setDepth(7);
-    g.lineStyle(m.schlag ? 5 : 3, m.schlag ? 0xd7ccc8 : 0xffffff, 0.85).beginPath().arc(m.x, m.y, m.schlag ? 34 : 26, m.w - 0.8, m.w + 0.8).strokePath();
+    if (m.messer) g.lineStyle(2, 0xeceff1, 0.95).beginPath().arc(m.x, m.y, 24, m.w - 0.5, m.w + 0.5).strokePath();
+    else g.lineStyle(m.schlag ? 5 : 3, m.schlag ? 0xd7ccc8 : 0xffffff, 0.85).beginPath().arc(m.x, m.y, m.schlag ? 34 : 26, m.w - 0.8, m.w + 0.8).strokePath();
     this.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
   }
 
@@ -544,8 +567,9 @@ class Ort extends Phaser.Scene {
       const waffe = ich.waffe === 'pistole'
         ? (ich.munition > 0 ? `🔫 Pistole · ${ich.munition} Schuss` : `🔫 Keine Munition – stoßen`)
         : ich.waffe === 'schlaeger' ? `🏏 Baseballschläger${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`
+        : ich.waffe === 'messer' ? `🔪 Messer${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`
         : `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`;
-      textSetzen('waffe', waffe);
+      textSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : ''));
       textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${s.besiegt} gesamt`);
       const safe = ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
