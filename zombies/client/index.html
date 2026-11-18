@@ -72,6 +72,15 @@
 <button id="ton" title="Ton an/aus">🔊</button>
 <button id="zoomraus" class="zoomknopf" title="Herauszoomen (−)" aria-label="Herauszoomen">−</button>
 <button id="zoomrein" class="zoomknopf" title="Hineinzoomen (+)" aria-label="Hineinzoomen">+</button>
+<button id="chatknopf" title="Chat" aria-label="Chat">💬<span id="chatzaehler"></span></button>
+<div id="chat" role="dialog" aria-label="Chat">
+  <div class="kopfzeile"><b>💬 Chat</b><button id="chatzu" aria-label="Chat schließen">✕</button></div>
+  <div id="chatliste"></div>
+  <form id="chatform" autocomplete="off">
+    <input id="chattext" type="text" maxlength="300" placeholder="Nachricht …" enterkeyhint="send" aria-label="Nachricht">
+    <button id="chatsenden" type="submit" aria-label="Senden">➤</button>
+  </form>
+</div>
 <div id="unten">
   <button id="aktion"></button>
   <div id="rucksack"></div>

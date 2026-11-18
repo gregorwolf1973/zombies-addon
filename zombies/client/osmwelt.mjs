@@ -1,7 +1,7 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
-import { randParkplaetze } from './vektor.mjs';
+import { randParkplaetze, strassenBuchten } from './vektor.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -119,30 +119,43 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
       randStrasse.push([x, y, senkrecht]);
     }
   }
-  const autos = Math.round(Math.min(260, randStrasse.length / 16) * autoFaktor);
-  if (karte.strassen) {
-    // längs am Rand der echten Straßenlinie, gerade nach der Straße ausgerichtet
-    const plaetze = randParkplaetze(karte.strassen);
-    const PLATZ_OK = new Set([T.STRASSE, T.PLATZ, T.WIESE, T.TUER]);
-    const passt = q => [-20, 0, 20].every(d => {
-      const kx = Math.floor((q.x + q.ux * d) / KACHEL), ky = Math.floor((q.y + q.uy * d) / KACHEL);
-      return PLATZ_OK.has(hole(kx, ky)) && hole(kx, ky) !== T.TUER;
-    });
-    for (let n = 0, v = 0; n < autos && v < autos * 20 && plaetze.length; v++) {
-      const q = plaetze[Math.floor(r() * plaetze.length)];
-      if (!passt(q)) continue;
-      if (behaelter.some(b => Math.hypot(b.x - q.x, b.y - q.y) < 52)) continue;
-      if (Math.hypot(q.x - start.x, q.y - start.y) < KACHEL * 4) continue;
-      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', x: q.x, y: q.y, winkel: q.winkel, farbe: Math.floor(r() * 6) });
-      n++;
+  // Parkbuchten an Wohnstraßen: nur auf freiem Gelände, nicht vor Haustüren, ohne Überlappung
+  const BUCHT_OK = new Set([T.WIESE, T.STRASSE, T.PLATZ]);
+  const imRechteck = (b, px, py, rand = 0) => {
+    const dx = px - b.x, dy = py - b.y, lx = dx * b.ux + dy * b.uy, ly = -dx * b.uy + dy * b.ux;
+    return Math.abs(lx) <= b.laenge / 2 + rand && Math.abs(ly) <= b.tiefe / 2 + rand;
+  };
+  const abstandRechteck = (b, px, py) => {
+    const dx = px - b.x, dy = py - b.y, lx = dx * b.ux + dy * b.uy, ly = -dx * b.uy + dy * b.ux;
+    return Math.hypot(Math.max(0, Math.abs(lx) - b.laenge / 2), Math.max(0, Math.abs(ly) - b.tiefe / 2));
+  };
+  const bPunkte = b => {
+    const pts = [];
+    const ls = []; for (let l = -b.laenge / 2; l < b.laenge / 2; l += 12) ls.push(l);
+    ls.push(b.laenge / 2);   // Ende immer mitprüfen
+    for (const l of ls) for (const q of [-1, 0, 1]) {
+      const t = q * b.tiefe / 2, wx = b.x + b.ux * l - b.uy * t, wy = b.y + b.uy * l + b.ux * t;
+      pts.push([wx, wy]);
     }
-  } else for (let n = 0, v = 0; n < autos && v < autos * 20; v++) {
-    const [x, y, senkrecht] = randStrasse[Math.floor(r() * randStrasse.length)];
-    const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
-    if (behaelter.some(b => Math.hypot(b.x - px, b.y - py) < KACHEL * 2.6)) continue;
-    if (Math.hypot(px - start.x, py - start.y) < KACHEL * 4) continue;
-    behaelter.push({ id: 'b' + behaelter.length, art: 'auto', x: px, y: py, senkrecht, farbe: Math.floor(r() * 6) });
-    n++;
+    return pts;
+  };
+  const vorTueren = haeuser.filter(h => h.tuer).map(h => [(h.tuer.x + h.raus.dx + 0.5) * KACHEL, (h.tuer.y + h.raus.dy + 0.5) * KACHEL]);
+  const buchten = [];
+  if (karte.strassen && autoFaktor > 0) {
+    for (const b of strassenBuchten(karte.strassen)) {
+      if (!bPunkte(b).every(([px, py]) => BUCHT_OK.has(hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL))))) continue;
+      if (vorTueren.some(([px, py]) => abstandRechteck(b, px, py) < 2 * KACHEL)) continue;
+      if (abstandRechteck(b, start.x, start.y) < KACHEL * 4) continue;
+      if (buchten.some(o => Math.hypot(o.x - b.x, o.y - b.y) < o.laenge / 2 + b.laenge / 2 + 30 && (bPunkte(b).some(([px, py]) => imRechteck(o, px, py, 3)) || bPunkte(o).some(([px, py]) => imRechteck(b, px, py, 3))))) continue;
+      buchten.push(b);
+    }
+  }
+  // Autos auf Buchtplätzen: etwa 70 % belegt, Lücken dazwischen
+  let nBucht = 0;
+  for (const b of buchten) for (const q of b.plaetze) {
+    if (r() > 0.7 * autoFaktor) continue;
+    behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'bucht', x: q.x, y: q.y, winkel: b.winkel + (r() < 0.5 ? Math.PI : 0), farbe: Math.floor(r() * 6) });
+    nBucht++;
   }
 
   // Parkplätze (OSM-Flächen): Autos in Reihen, Lücken dazwischen
@@ -153,6 +166,7 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     }
     return drin;
   };
+  let nPark = 0;
   for (const f of karte.flaechen ?? []) {
     if (f.a !== 'parkplatz' || autoFaktor <= 0) continue;
     const xs = f.p.filter((_, i) => i % 2 === 0), ys = f.p.filter((_, i) => i % 2 === 1);
@@ -166,8 +180,38 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
       const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
       if (Math.hypot(px - start.x, py - start.y) < KACHEL * 3) continue;
       if (behaelter.some(b => Math.abs(b.x - px) < KACHEL * (quer ? 0.9 : 1.6) && Math.abs(b.y - py) < KACHEL * (quer ? 1.6 : 0.9))) continue;
-      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', x: px, y: py, senkrecht: quer, farbe: Math.floor(r() * 6) });
+      if (behaelter.some(b => Math.hypot(b.x - px, b.y - py) < 40)) continue;   // nie übereinander
+      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'parkplatz', x: px, y: py, senkrecht: quer, farbe: Math.floor(r() * 6) });
+      nPark++;
     }
+  }
+
+  const autos = Math.round(Math.min(260, randStrasse.length / 16) * autoFaktor);
+  if (karte.strassen) {
+    // Rest: längs am Fahrbahnrand
+    const nRand = Math.max(Math.round(autos * 0.1), Math.round((nBucht + nPark) / 9), autos - nBucht - nPark);
+    // längs am Rand der echten Straßenlinie, gerade nach der Straße ausgerichtet
+    const plaetze = randParkplaetze(karte.strassen);
+    const PLATZ_OK = new Set([T.STRASSE, T.PLATZ, T.WIESE, T.TUER]);
+    const passt = q => [-20, 0, 20].every(d => {
+      const kx = Math.floor((q.x + q.ux * d) / KACHEL), ky = Math.floor((q.y + q.uy * d) / KACHEL);
+      return PLATZ_OK.has(hole(kx, ky)) && hole(kx, ky) !== T.TUER;
+    });
+    for (let n = 0, v = 0; n < nRand && v < nRand * 20 && plaetze.length; v++) {
+      const q = plaetze[Math.floor(r() * plaetze.length)];
+      if (!passt(q)) continue;
+      if (behaelter.some(b => Math.hypot(b.x - q.x, b.y - q.y) < 52)) continue;
+      if (Math.hypot(q.x - start.x, q.y - start.y) < KACHEL * 4) continue;
+      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'rand', x: q.x, y: q.y, winkel: q.winkel, farbe: Math.floor(r() * 6) });
+      n++;
+    }
+  } else for (let n = 0, v = 0; n < autos && v < autos * 20; v++) {
+    const [x, y, senkrecht] = randStrasse[Math.floor(r() * randStrasse.length)];
+    const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
+    if (behaelter.some(b => Math.hypot(b.x - px, b.y - py) < KACHEL * 2.6)) continue;
+    if (Math.hypot(px - start.x, py - start.y) < KACHEL * 4) continue;
+    behaelter.push({ id: 'b' + behaelter.length, art: 'auto', x: px, y: py, senkrecht, farbe: Math.floor(r() * 6) });
+    n++;
   }
 
   // Deko: Maibaum auf dem Platz, Busse auf Straßen, Büsche auf Wiesen
@@ -184,6 +228,7 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     if (haeuser.some(h => h.tuer && kacheln.some(([a, c]) => Math.abs(h.tuer.x + h.raus.dx - a) <= 2 && Math.abs(h.tuer.y + h.raus.dy - c) <= 2))) continue;
     // Straße muss danach noch passierbar sein: neben jeder Buskachel quer noch Straße
     if (!kacheln.every(([a, b]) => senkrecht ? (hole(a - 1, b) === T.STRASSE || hole(a + 1, b) === T.STRASSE) : (hole(a, b - 1) === T.STRASSE || hole(a, b + 1) === T.STRASSE))) continue;
+    if (buchten.some(bu => kacheln.some(([a, c]) => abstandRechteck(bu, (a + 0.5) * KACHEL, (c + 0.5) * KACHEL) < KACHEL * 0.75))) continue;
     for (const [a, b] of kacheln) setze(a, b, T.DEKO);
     const bb = senkrecht ? 1 : 4, hh = senkrecht ? 4 : 1;
     const d = { art: 'bus', kx: x, ky: y, b: bb, h: hh, x: (x + bb / 2) * KACHEL, y: (y + hh / 2) * KACHEL, senkrecht, v: r() };
@@ -209,7 +254,7 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
   for (const h of haeuser) h.umriss = karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss;
   // Gärten, Zaunarten und Gartenausstattung (tools/osm_karte.py) – nur fürs Aussehen; das Raster enthält sie schon
   const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [], zaeune: karte.zaeune ?? null } : null;
-  const welt = { seed, karte: true, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details };
+  const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details };
   if (karte.zaeune) welt.fein = baueFein(welt, karte);
   return welt;
 }

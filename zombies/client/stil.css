@@ -183,3 +183,40 @@ button:disabled { opacity: .6; }
 
 .figurknoepfe.fest .farben, .figurknoepfe.fest .farbtitel { opacity: .35; pointer-events: none; }
 .grafiknachweis { font-size: 10px; opacity: .6; margin-top: 8px; }
+
+/* Text-Chat „wie WhatsApp“ */
+#chatknopf {
+  position: fixed; right: 316px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
+  margin: 0 !important; padding: 0 !important; font-size: 16px; line-height: 1; border-radius: 8px; background: #0007; color: #fff;
+  display: none; z-index: 6;
+}
+#chatzaehler {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; box-sizing: border-box;
+  background: #e53935; color: #fff; font-size: 11px; font-weight: 700; line-height: 16px; display: none;
+}
+#chat {
+  position: fixed; right: 10px; top: max(70px, calc(env(safe-area-inset-top) + 62px)); bottom: 16px; width: min(360px, calc(100vw - 32px));
+  display: none; flex-direction: column; z-index: 26; box-sizing: border-box;
+  background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 10px; box-shadow: 0 6px 20px #000a;
+}
+#chat.offen { display: flex; }
+#chat .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#chatzu { background: #ffffff22; color: #fff; width: auto; margin: 0; padding: 4px 10px; font-size: 16px; }
+#chatliste {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 6px;
+  padding: 6px; border-radius: 10px; background: #0f180f;
+}
+#chatliste .nachricht {
+  max-width: 85%; padding: 6px 9px; border-radius: 10px; background: #2c3a2c; align-self: flex-start;
+  overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.35;
+}
+#chatliste .nachricht.ich { align-self: flex-end; background: #2e7d32; }
+#chatliste .nachricht .absender { font-weight: 700; font-size: 12px; margin-bottom: 2px; }
+#chatliste .nachricht .fuss { font-size: 10px; opacity: .65; margin-top: 3px; text-align: right; }
+#chatliste .leer { opacity: .6; font-size: 13px; text-align: center; margin: auto; }
+#chatform { display: flex; gap: 6px; margin-top: 8px; }
+#chattext { flex: 1; min-width: 0; margin: 0; font-size: 16px; padding: 9px 10px; border-radius: 10px; }
+#chatsenden { width: auto; margin: 0; padding: 0 14px; border-radius: 10px; }
+@media (max-width: 600px) {
+  #chat { left: 16px; right: 16px; width: auto; }
+}

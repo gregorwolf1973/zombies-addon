@@ -253,6 +253,71 @@ export function randParkplaetze(strassen) {
   return liste;
 }
 
+// Parkbuchten: Längsbuchten für 2–4 Autos direkt außen an der Fahrbahnkante gerader Straßenstücke (Ergebnis in Pixeln).
+// Rechteck längs zur Straße, Mittelpunkt (x, y), Drehung winkel; seite = +1/−1 (Außenkante liegt bei seite·tiefe/2 in Eigenkoordinaten).
+// osmwelt.mjs behält nur die, die auf freiem Gelände liegen.
+export const BUCHT_TIEFE = 23, BUCHT_PLATZ = 52;
+export function strassenBuchten(strassen) {
+  const liste = [];
+  let zaehler = 0;
+  for (const s of strassen ?? []) {
+    if (!PARKEN.has(s.t) || !s.p || s.p.length < 4) continue;
+    const fb = fahrbahn({ t: s.t, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0 });
+    for (let i = 0; i + 3 < s.p.length; i += 2) {
+      const ax = s.p[i] * K, ay = s.p[i + 1] * K, bx = s.p[i + 2] * K, by = s.p[i + 3] * K, len = Math.hypot(bx - ax, by - ay);
+      if (len < 2 * BUCHT_PLATZ + 48) continue;   // zu kurz (Kurven, Kreuzungen)
+      const ux = (bx - ax) / len, uy = (by - ay) / len, w = Math.atan2(uy, ux);
+      for (const seite of [1, -1]) {
+        let d = 24 + hash(zaehler++ * 7 + 3) * 30;
+        while (true) {
+          const n = 2 + Math.floor(hash(zaehler++ * 13 + 1) * 3), L = n * BUCHT_PLATZ;
+          if (d + L > len - 24) break;
+          if (hash(zaehler++ * 11 + 5) > 0.2) {   // etwa jede fünfte Stelle bleibt frei
+            const mitte = d + L / 2, ab = fb / 2 + BUCHT_TIEFE / 2;
+            const x = ax + ux * mitte - uy * ab * seite, y = ay + uy * mitte + ux * ab * seite;
+            const plaetze = [];
+            for (let j = 0; j < n; j++) {
+              const t = d + BUCHT_PLATZ * (j + 0.5);
+              plaetze.push({ x: ax + ux * t - uy * ab * seite, y: ay + uy * t + ux * ab * seite });
+            }
+            liste.push({ x, y, winkel: w, laenge: L, tiefe: BUCHT_TIEFE, seite, ux, uy, plaetze });
+          }
+          d += L + 36 + hash(zaehler++ * 3 + 9) * 40;
+        }
+      }
+    }
+  }
+  return liste;
+}
+
+function zeichneBuchten(ctx, welt, r, m) {
+  const liste = welt.parkbuchten ?? (welt.parkbuchten = strassenBuchten(welt.vektor.strassen));
+  for (const b of liste) {
+    const rad = b.laenge / 2 + b.tiefe;
+    if (b.x + rad < r.x0 || b.x - rad > r.x1 || b.y + rad < r.y0 || b.y - rad > r.y1) continue;
+    ctx.save();
+    ctx.translate(b.x, b.y); ctx.rotate(b.winkel);
+    const L = b.laenge, T = b.tiefe, y0 = -T / 2;
+    // schräge Ein-/Ausfahrten an den Enden (kleine Keile zur Fahrbahn hin)
+    const innen = -b.seite * T / 2, aussen = b.seite * T / 2;
+    ctx.fillStyle = '#6b6d70';
+    ctx.beginPath();
+    ctx.moveTo(-L / 2 - 9, innen); ctx.lineTo(-L / 2, aussen); ctx.lineTo(L / 2, aussen); ctx.lineTo(L / 2 + 9, innen);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = m.asphalt; ctx.fillRect(-L / 2, y0, L, T);
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(-L / 2, y0, L, T);
+    // Trennstriche zwischen den Plätzen und Anfangs-/Endstrich
+    ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.6; ctx.lineCap = 'butt';
+    ctx.beginPath();
+    for (let x = -L / 2; x <= L / 2 + 0.1; x += BUCHT_PLATZ) { ctx.moveTo(x, y0 + 1); ctx.lineTo(x, y0 + T - 1); }
+    ctx.stroke();
+    // Bordsteinkante außen
+    ctx.strokeStyle = '#b4b0a4'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-L / 2, aussen); ctx.lineTo(L / 2, aussen); ctx.stroke();
+    ctx.restore();
+  }
+}
+
 export function zeichneStrassen(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect), m = musterHolen(ctx);
   const hier = v.linien.filter(l => schneidet(l.box, r) && l.pts.length > 1);
@@ -276,6 +341,8 @@ export function zeichneStrassen(ctx, welt, rect) {
   const fahr = hier.filter(l => AUTO.has(l.t) || l.t === 'service');
   for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = '#34363a'; ctx.lineWidth = fahrbahn(l) + 5; ctx.stroke(); }
   for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = m.asphalt; ctx.lineWidth = fahrbahn(l); ctx.stroke(); }
+  // 3b. Parkbuchten (Autos zeichnet später zeichneBoden)
+  if (welt.vektor?.strassen) zeichneBuchten(ctx, welt, r, m);
   // 4. Straßennamen leicht sichtbar auf der Fahrbahn (B 11, St 2369 als Nummer dazu)
   strassenNamen(ctx, v, r);
   // 5. Mittellinie nur auf großen Straßen

@@ -172,6 +172,7 @@ async function mitspielen() {
       $('verbindung').textContent = 'Verbindung beendet – Seite neu laden, um wieder mitzuspielen.';
       $('verbindung').style.display = 'block';
     });
+    chatAnschliessen(raum);
     raum.onMessage('ausgeruht', async () => {
       abgemeldet = true;
       try {
@@ -230,6 +231,101 @@ function meldung(text, lang = false) {
   while (box.children.length > 3) box.firstElementChild.remove();   // höchstens drei auf einmal
   setTimeout(() => { d.style.opacity = '0'; }, lang ? 3500 : 2200);
   setTimeout(() => d.remove(), lang ? 4100 : 2800);
+}
+
+// ---------- Chat (Nachrichten 'chat' / 'chatVerlauf' vom Server) ----------
+let chatSzene = null, chatUngelesen = 0;
+const chatOffen = () => $('chat').classList.contains('offen');
+function chatTasten(an) { if (chatSzene) chatSzene.input.keyboard.enabled = an; }
+
+function chatZaehler() {
+  const z = $('chatzaehler');
+  z.textContent = chatUngelesen > 99 ? '99+' : String(chatUngelesen);
+  z.style.display = chatUngelesen ? 'block' : 'none';
+}
+
+function chatZeile(n) {
+  const d = document.createElement('div');
+  d.className = 'nachricht' + (n.ich ? ' ich' : '');
+  if (!n.ich) {
+    const a = document.createElement('div');
+    a.className = 'absender'; a.textContent = n.name;
+    a.style.color = css(FARBEN[(Number(n.farbe) || 0) % FARBEN.length]);
+    d.appendChild(a);
+  }
+  const t = document.createElement('div');
+  t.textContent = n.text;
+  const f = document.createElement('div');
+  f.className = 'fuss';
+  const z = new Date(n.zeit);
+  f.textContent = String(z.getHours()).padStart(2, '0') + ':' + String(z.getMinutes()).padStart(2, '0') + (n.ort ? ' · ' + n.ort : '');
+  d.append(t, f);
+  return d;
+}
+
+function chatAnhaengen(n) {
+  const liste = $('chatliste');
+  liste.querySelector('.leer')?.remove();
+  const unten = liste.scrollHeight - liste.scrollTop - liste.clientHeight < 40;
+  liste.appendChild(chatZeile(n));
+  while (liste.children.length > 100) liste.firstElementChild.remove();
+  if (unten || n.ich) liste.scrollTop = liste.scrollHeight;
+}
+
+function chatOeffnen() {
+  $('chat').classList.add('offen');
+  chatUngelesen = 0; chatZaehler();
+  $('chatliste').scrollTop = $('chatliste').scrollHeight;
+  $('chattext').focus();
+}
+function chatSchliessen() {
+  if (!chatOffen()) return;
+  $('chat').classList.remove('offen');
+  $('chattext').blur();
+  chatTasten(true);
+}
+
+function chatAnschliessen(raum) {
+  $('chatknopf').style.display = 'block';
+  $('chatknopf').onclick = () => (chatOffen() ? chatSchliessen() : chatOeffnen());
+  $('chatzu').onclick = chatSchliessen;
+  $('chatform').onsubmit = e => {
+    e.preventDefault();
+    const text = $('chattext').value.trim();
+    if (!text) return;
+    raum.send('chat', { text });
+    $('chattext').value = '';
+  };
+  // solange getippt wird, steuern Tasten nicht die Spielfigur
+  $('chattext').addEventListener('focus', () => chatTasten(false));
+  $('chattext').addEventListener('blur', () => chatTasten(true));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && chatOffen()) chatSchliessen(); });
+  // eigene Nachrichten erkennt man an der Kurzkennung, die der Server beim Beitritt schickt (ältere: am Namen)
+  const meinName = () => raum.state?.spieler?.get?.(meineId)?.name;
+  let meineKennung = '';
+  const vonMir = n => meineKennung && n.von ? n.von === meineKennung : n.name === meinName();
+  const verlaufZeigen = liste => {
+    $('chatliste').replaceChildren();
+    if (!liste.length) {
+      const l = document.createElement('div'); l.className = 'leer'; l.textContent = 'Noch keine Nachrichten'; $('chatliste').appendChild(l);
+    }
+    for (const n of liste) chatAnhaengen({ ...n, ich: vonMir(n) });
+    $('chatliste').scrollTop = $('chatliste').scrollHeight;
+  };
+  raum.onMessage('chatVerlauf', m => {
+    const liste = m.nachrichten ?? [];
+    meineKennung = m.ich ?? '';
+    if (meinName()) verlaufZeigen(liste);
+    else raum.onStateChange.once(() => verlaufZeigen(liste));   // Zustand ist noch nicht da
+  });
+  raum.onMessage('chat', n => {
+    const ich = vonMir(n);
+    chatAnhaengen({ ...n, ich });
+    if (ich || chatOffen()) return;
+    chatUngelesen++; chatZaehler();
+    const kurz = n.text.length > 60 ? n.text.slice(0, 59) + '…' : n.text;
+    meldung(`💬 ${n.name}: ${kurz}`);
+  });
 }
 
 function zeitText(s) {
@@ -293,6 +389,7 @@ class Ort extends Phaser.Scene {
     this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,SPACE,ESC');
     this.tasten.E.on('down', () => this.aktion());
     this.tasten.SPACE.on('down', () => this.aktion());
+    chatSzene = this;
     this.tasten.ESC.on('down', () => { kisteZu(); popupZu(); });
     for (let i = 1; i <= 8; i++) {
       this.input.keyboard.on('keydown-' + ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT'][i - 1],

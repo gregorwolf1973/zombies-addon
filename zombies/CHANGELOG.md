@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.25.0 – 18.11.2026
+
+- Text-Chat für alle Mitspieler, egal wie weit weg: Knopf 💬 oben rechts mit Zähler für Ungelesenes, Fenster wie
+  WhatsApp (eigene Nachrichten rechts, Uhrzeit und Ort des Absenders). Der Verlauf (letzte 100 Nachrichten) wird mit
+  der Welt gespeichert; neue Nachrichten erscheinen bei geschlossenem Fenster kurz als Meldung. Beim Tippen bewegt sich
+  die Figur nicht
+- Parkbuchten an Wohn- und Nebenstraßen; etwa 90 % der geparkten Autos stehen in Buchten oder auf Parkplätzen, der
+  Rest längs am Fahrbahnrand. Die Welt wird einmal neu erzeugt
+
 ## 0.24.0 – 18.11.2026
 
 - Safe Rooms sind jetzt echte Innenräume: Man betritt sie durch die Haustür wie andere Häuser. Drinnen ist es immer

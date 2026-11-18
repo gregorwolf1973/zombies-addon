@@ -336,7 +336,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 7;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume
+export const WELT_VERSION = 8;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen
 
 // ---------- Gegenstände ----------
 export const DINGE = {

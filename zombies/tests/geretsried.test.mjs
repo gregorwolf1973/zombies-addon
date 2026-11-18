@@ -33,6 +33,27 @@ test('Geretsried: Karte, Safe Rooms, Häuser, Start und Ortsausgang', () => {
   setzeKartengroesse(64, 48);
 });
 
+test('Geretsried: Autos meist in Parkbuchten/auf Parkplätzen, Buchten frei, keine Überlappung', () => {
+  setzeKartengroesse(karte.breite, karte.hoehe);
+  const w = baueWeltAusKarte(karte, 7);
+  const autos = w.behaelter.filter(b => b.art === 'auto');
+  const geordnet = autos.filter(b => b.platz === 'bucht' || b.platz === 'parkplatz').length;
+  assert.ok(autos.every(b => ['bucht', 'parkplatz', 'rand'].includes(b.platz)), 'Auto ohne Platzart');
+  assert.ok(geordnet >= autos.length * 0.8, `nur ${geordnet}/${autos.length} Autos in Buchten/auf Parkplätzen`);
+  assert.ok(w.parkbuchten.length >= 20, 'zu wenige Parkbuchten');
+  const OK = new Set([T.WIESE, T.STRASSE, T.PLATZ]);
+  for (const b of w.parkbuchten) {
+    for (const l of [-b.laenge / 2, 0, b.laenge / 2]) for (const q of [-b.tiefe / 2, 0, b.tiefe / 2]) {
+      const px = b.x + b.ux * l - b.uy * q, py = b.y + b.uy * l + b.ux * q;
+      assert.ok(OK.has(w.hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL))), 'Bucht auf Haus/Zaun');
+    }
+  }
+  for (let i = 0; i < autos.length; i++) for (let j = i + 1; j < autos.length; j++) {
+    assert.ok(Math.hypot(autos[i].x - autos[j].x, autos[i].y - autos[j].y) >= 40, 'Autos überlappen sich');
+  }
+  setzeKartengroesse(64, 48);
+});
+
 let server;
 const PORT = 27700 + Math.floor(Math.random() * 200);
 const warte = ms => new Promise(r => setTimeout(r, ms));

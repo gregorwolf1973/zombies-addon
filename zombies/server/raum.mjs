@@ -114,6 +114,8 @@ export function sauberName(n) {
   return s || 'Unbekannt';
 }
 
+const CHAT_MAX = 300, CHAT_VERLAUF = 100, CHAT_ANZAHL = 5, CHAT_FENSTER = 10000;
+
 export class SpielRaum extends Room {
   maxClients = 10;
   patchRate = TICK;
@@ -170,6 +172,9 @@ export class SpielRaum extends Room {
     this.ebenen = new Map();      // Ebene → Innenraum-Karte (wird beim ersten Betreten gebaut)
     this.felder = new Map();      // Ebene → Wegfeld für Zombies
     this.gespeicherteTueren = {};
+    this.chatVerlauf = Array.isArray(stand?.chat) ? stand.chat.slice(-CHAT_VERLAUF) : [];   // letzte Nachrichten, mit der Welt gespeichert
+    this.naechsteChatId = (this.chatVerlauf.at(-1)?.id ?? 0) + 1;
+    this.chatZeiten = new Map();  // sessionId → Zeitstempel der letzten Nachrichten (Flutbremse)
     this.tausche = new Map();     // sessionId → laufender Tausch (beide Seiten zeigen auf dasselbe Objekt)
     for (const s of this.welt.safeRooms) {
       const safe = new Safe(); safe.barrikade = 0;
@@ -226,6 +231,7 @@ export class SpielRaum extends Room {
     this.onMessage('tausch_zurueck', (client, m) => this.tauschZurueck(client, m));
     this.onMessage('tausch_ok', client => this.tauschOk(client));
     this.onMessage('tausch_ende', client => { const t = this.tausche.get(client.sessionId); if (t) this.tauschEnde(t, 'abgebrochen'); });
+    this.onMessage('chat', (client, m) => this.chat(client, m));
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
     this.setSimulationInterval(dt => {
@@ -265,6 +271,7 @@ export class SpielRaum extends Room {
       if (AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
       this.state.spieler.set(client.sessionId, alt);
       this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false } });
+      client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
       return;
     }
 
@@ -307,8 +314,38 @@ export class SpielRaum extends Room {
     this.state.spieler.set(client.sessionId, p);
     this.extra.set(client.sessionId, extra);
     this.speichereSpieler(client.sessionId);
+    client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
     this.botsAnpassen();
+  }
+
+  // Text-Chat für alle im Raum, unabhängig von der Entfernung
+  // Kurzkennung des Absenders (aus der Spieler-ID abgeleitet, die ID selbst geht nicht an andere – sonst könnte man Figuren übernehmen)
+  chatKennung(sid) {
+    const id = this.extra.get(sid)?.spielerId ?? sid;
+    return crypto.createHash('sha256').update('chat:' + id).digest('hex').slice(0, 12);
+  }
+
+  chat(client, m) {
+    const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
+    if (!p || !x || x.bot) return;
+    const text = String(m?.text ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, CHAT_MAX).trim();
+    if (!text) return;
+    const jetzt = Date.now();
+    const zeiten = (this.chatZeiten.get(client.sessionId) ?? []).filter(z => jetzt - z < CHAT_FENSTER);
+    if (zeiten.length >= CHAT_ANZAHL) { this.chatZeiten.set(client.sessionId, zeiten); client.send('meldung', { text: 'Langsam – zu viele Nachrichten' }); return; }
+    zeiten.push(jetzt); this.chatZeiten.set(client.sessionId, zeiten);
+    let ort = 'draußen';
+    const safe = safeRoomVon(this.welt, p);
+    if (safe) ort = '🛡 ' + safe.name;
+    else if (p.ebene) {
+      const e = EBENE_MUSTER.exec(p.ebene);
+      ort = (e && this.welt.haeuser?.[Number(e[1])]?.name) || 'in einem Haus';
+    }
+    const nachricht = { id: this.naechsteChatId++, von: this.chatKennung(client.sessionId), name: p.name, farbe: p.farbe, zeit: jetzt, text, ort };
+    this.chatVerlauf.push(nachricht);
+    if (this.chatVerlauf.length > CHAT_VERLAUF) this.chatVerlauf.splice(0, this.chatVerlauf.length - CHAT_VERLAUF);
+    this.broadcast('chat', nachricht);
   }
 
   // Simulierte Mitspieler: bei einem Menschen so viele wie eingestellt, jeder weitere Mensch ersetzt einen
@@ -463,6 +500,7 @@ export class SpielRaum extends Room {
   // von der Verwaltungsseite: alle bekommen Bescheid, die Welt wird verworfen und beim nächsten Beitritt neu gebaut
   weltNeuStarten(spielerLoeschen = false) {
     this.nichtSpeichern = true;
+    this.chatVerlauf = [];   // der Chat gehört zur Welt
     this.speicher?.loescheWelt();
     if (spielerLoeschen) this.speicher?.loescheSpieler();
     else for (const [sid, p] of this.state.spieler) {
@@ -497,6 +535,7 @@ export class SpielRaum extends Room {
       torGeloest: this.state.torGeloest, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen]])),
       verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
+      chat: this.chatVerlauf,
     });
   }
 
