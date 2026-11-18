@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.28.0 – 18.11.2026
+
+- Safe Rooms als Notlager: Feldbetten, Vorratsregale und Erste-Hilfe-Kasten (durchsuchbar), Funktisch, Generator,
+  Kanister; wer neben einem Feldbett stillsteht, ruht (💤: Leben steigt, Hunger und Durst sinken langsamer);
+  Sandsäcke vor der Haustür
+- Türen: Zombies folgen Spielern durch offene Haustüren in jedes Haus. Geschlossene Haus- und Zimmertüren müssen sie
+  erst zerbrechen (Barrikade zuerst, dann die Tür); zerbrochene Türen bleiben offen. Jede Tür lässt sich mit
+  Brettern verbarrikadieren; zweiter Aktionsknopf (z. B. „Haustür schließen“ neben „verbarrikadieren“)
+- Level 2 „Isarauen“ (Wolfratshausen/Gelting) mit Isar, Brücke und 5 Safe Rooms, in der Verwaltung wählbar;
+  Wasserrauschen in der Nähe von Wasser
+- Karte: dezente Gehwege, Blumenbeete, Mülltonnen (grau, gelb, grün, braun, blau) an den Häusern, Container und
+  Glas-Iglus zum Durchsuchen, 1–2 Straßensperren (Autos fahren außen herum), Parkbuchten mit freien Plätzen
+- Bots: kein Stau mehr an Türen, folgen dem Menschen vor Kiste/Ablegen, Gegenangebote beim Tauschen (nie die einzige
+  Waffe), gehen langsamer durch Hecken und über Holzzäune – Zombies ebenso; Metallzäune und Mauern bleiben dicht
+- Durchsuchen geht schneller (Schrank 1,5 s, Auto 2,2 s, Leiche 0,9 s)
+- Laster im Verkehr, ein neues Auto-Modell (CC0) in 8 Farben, Polizisten unter den Stadtbewohnern
+- Startseite: bei http-Adressen Link zur https-Adresse (neue Option externe_adresse)
+- Kamera folgt der Figur auch, wenn man im Safe Room startet (0.27.1)
+- Die Welt wird einmal neu erzeugt
+
 ## 0.27.0 – 18.11.2026
 
 - Startseite fragt gleich nach dem Mikrofon und zeigt den Stand (erlaubt, gesperrt – mit Hinweis, wie man es
