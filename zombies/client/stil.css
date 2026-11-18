@@ -93,6 +93,22 @@ button:disabled { opacity: .6; }
 #liste .unten { color: #ff8a80; }
 #liste .weg { opacity: .5; }
 
+/* Gemeinsame Aufgaben (links oben unter den Anzeigen), einklappbar */
+#aufgaben { margin-top: 6px; max-width: min(300px, calc(100vw - 150px)); font-size: 12px; font-weight: 500; }
+#aufgabenknopf { pointer-events: auto; width: auto; margin: 0; padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #000a; color: #fff; border: 1px solid #fff3; cursor: pointer; }
+#aufgabenkoerper { background: #000a; border-radius: 10px; padding: 6px 9px; margin-top: 4px; overflow-wrap: anywhere; }
+#aufgaben.zu #aufgabenkoerper { display: none; }
+#aufgabenliste { list-style: none; margin: 0; padding: 0; }
+#aufgabenliste li { margin: 2px 0; line-height: 1.3; }
+#aufgabenliste li.fertig { opacity: .65; }
+#aufgabenliste li.fertig .ag-text { text-decoration: line-through; }
+#aufgabenliste .ag-zahl { opacity: .8; font-variant-numeric: tabular-nums; }
+#busanzeige { margin-top: 5px; padding-top: 4px; border-top: 1px solid #fff3; font-weight: 700; }
+@media (max-width: 600px) {
+  #aufgaben { max-width: calc(100vw - 130px); font-size: 11px; }
+  #aufgabenkoerper { padding: 4px 7px; }
+}
+
 /* Meldungen oben unter der Anzeige, klein und halbdurchsichtig – nicht mehr mitten im Bild */
 #meldungen {
   position: fixed; left: 50%; transform: translateX(-50%); top: 44px; width: min(520px, 70vw);

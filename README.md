@@ -71,7 +71,7 @@ Map data: © OpenStreetMap contributors, available under the Open Database Licen
 Character, tree and prop graphics: [Kenney](https://www.kenney.nl) – Topdown Shooter pack (CC0).
 Survivor player, zombies „z6“/„z7“: Riley Gombart on OpenGameArt ([survivor](https://opengameart.org/content/animated-top-down-survivor-player) CC-BY 3.0, tds_zombie CC0, [zombie set](https://opengameart.org/content/top-down-animated-zombie-set) OGA-BY 3.0).
 Citizens and police officers: KonitaTutorials ([civilians](https://opengameart.org/content/top-down-civillians-and-police-man), CC-BY 3.0). Weapon images and muzzle flash: „Survivor Spine“ (OpenGameArt, CC-BY 3.0).
-Parked and driving cars: „Red Car (top-down)“ (OpenGameArt, CC0), recoloured.
+Parked and driving cars, police cars, ambulances, trucks: [Free Top Down Car Sprites](https://opengameart.org/content/free-top-down-car-sprites-by-unlucky-studio) by Unlucky Studio (CC0), „Red Car (top-down)“ (CC0, recoloured), TopDownCar 2/3/4 by looneybits ([2](https://opengameart.org/content/topdowncar2), [3](https://opengameart.org/content/topdowncar3), [4](https://opengameart.org/content/topdowncar4), CC0), [Car Sedan](https://opengameart.org/content/car-sedan) by TRBRY (CC-BY 3.0 / OGA-BY 3.0), [Top Down Car Sprite](https://opengameart.org/content/top-down-car-sprite) by Cliipso (CC-BY 3.0).
 Details: `zombies/client/grafik/LIZENZ.txt`.
 
 ## License

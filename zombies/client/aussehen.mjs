@@ -4,6 +4,7 @@
 import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
 import { erzeugeZeichner } from './proto_grafik.mjs';
 import { zeichneSafeMoebel } from './safe_moebel.mjs';
+import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
 import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach } from './vektor.mjs';
 
 const TAU = Math.PI * 2;
@@ -44,6 +45,44 @@ function wiesenWolken(ctx, x0, y0, x1, y1) {
 
 const begehbarWiese = t => t === T.WIESE || t === T.BAUM;
 
+// ---------- Bäume: Lage/Größe je Kachel (Kronen in eigener Ebene, Schatten und Stamm im Boden) ----------
+// Kronen sind 1,3- bis 1,6-mal so groß wie früher (gemischt); der Stamm bleibt klein, die Kollision ändert sich nicht.
+const BAUM_RAND = 3;   // Kacheln: so weit ragen Kronen über ihre Kachel (und damit über Stückgrenzen) hinaus
+export function baumVon(kx, ky) {
+  const h = hash(kx * 31, ky * 17);
+  const art = h < 0.62 ? 'baum_gross' : h < 0.82 ? 'baum_klein' : h < 0.93 ? 'baum_herbst' : 'baum_herbst_klein';
+  const faktor = 1.3 + hash(kx * 7 + 3, ky * 11 + 5) * 0.3;
+  const gr = (art.endsWith('klein') ? 40 : 58) * faktor;
+  return { art, gr, x: kx * KACHEL + KACHEL / 2, y: ky * KACHEL + KACHEL / 2, dreh: hash(ky, kx) * Math.PI * 2 };
+}
+function baumKacheln(welt, rect) {
+  const l = [];
+  for (let ky = Math.max(0, rect.y0 - BAUM_RAND); ky < Math.min(HOEHE, rect.y1 + BAUM_RAND); ky++) for (let kx = Math.max(0, rect.x0 - BAUM_RAND); kx < Math.min(BREITE, rect.x1 + BAUM_RAND); kx++) {
+    if (welt.hole(kx, ky) === T.BAUM) l.push(baumVon(kx, ky));
+  }
+  return l;
+}
+export function hatBaeume(welt, rect) { return baumKacheln(welt, rect).length > 0; }
+// Kronen eines Kartenstücks (auch Bäume aus Nachbarstücken, die hineinragen); Bild wird später halbtransparent über den Figuren gezeigt
+export function zeichneKronen(ctx, welt, bilder, rect) {
+  ctx.save();
+  ctx.translate(-rect.x0 * KACHEL, -rect.y0 * KACHEL);
+  for (const b of baumKacheln(welt, rect).sort((a, c) => a.y - c.y)) {
+    const bild = bilder[b.art];
+    if (!bild) continue;
+    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.dreh); ctx.drawImage(bild, -b.gr / 2, -b.gr / 2, b.gr, b.gr); ctx.restore();
+  }
+  ctx.restore();
+}
+// Schatten und kleiner Stamm in der Bodenebene
+function zeichneBaumSockel(ctx, welt, rect) {
+  for (const b of baumKacheln(welt, rect)) {
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(b.x + 5, b.y + 6, b.gr / 2, b.gr / 2.3, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#4e342e'; ctx.beginPath(); ctx.arc(b.x, b.y, 3.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#6d4c41'; ctx.beginPath(); ctx.arc(b.x - 0.8, b.y - 0.8, 1.8, 0, TAU); ctx.fill();
+  }
+}
+
 // ---------- Bodenebene: alles Flache ----------
 
 export function zeichneBoden(ctx, welt, rect = null) {
@@ -78,7 +117,6 @@ export function zeichneBoden(ctx, welt, rect = null) {
         const b = blumen[Math.floor(hash(kx, ky * 9) * 4)], bx = px + hash(kx, ky) * 28 + 2, by = py + hash(ky, kx) * 28 + 2;
         b.moveTo(bx + 1.8, by); b.arc(bx, by, 1.8, 0, TAU);
       }
-      if (t === T.WIESE && beetHier(welt, kx, ky, gart)) zeichneBeet(ctx, px, py, kx, ky);
     }
     if (t === T.STRASSE) {
       const n = hash(kx, ky) * 10;
@@ -149,6 +187,8 @@ export function zeichneBoden(ctx, welt, rect = null) {
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
   zeichneMuell(ctx, welt, { x0, y0, x1, y1 });
   zeichneSperren(ctx, welt, { x0, y0, x1, y1 });
+  zeichneStuetzpunktBoden(ctx, welt, { x0, y0, x1, y1 });
+  zeichneBaumSockel(ctx, welt, { x0, y0, x1, y1 });
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
     if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
@@ -174,17 +214,8 @@ export function zeichneOben(ctx, welt, bilder = {}, rect = null) {
 
   for (let ky = ay0; ky < ay1; ky++) for (let kx = ax0; kx < ax1; kx++) {
     const t = welt.hole(kx, ky);
-    if (t === T.BAUM) {
-      // Bäume von oben (Kenney, CC0): große und kleine Kronen, ein paar herbstliche
-      const h = hash(kx * 31, ky * 17);
-      const x = mitte(kx), y = mitte(ky);
-      const art = h < 0.62 ? 'baum_gross' : h < 0.82 ? 'baum_klein' : h < 0.93 ? 'baum_herbst' : 'baum_herbst_klein';
-      const bild = bilder[art], gr = art.endsWith('klein') ? 40 : 58, dreh = hash(ky, kx) * Math.PI * 2;
-      if (bild) dinge.push([y, () => {
-        ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + 5, y + 6, gr / 2, gr / 2.3, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.translate(x, y); ctx.rotate(dreh); ctx.drawImage(bild, -gr / 2, -gr / 2, gr, gr);
-      }]);
-    } else if (t === T.WASSER && hash(kx * 5, ky * 3) < 0.25) {
+    // Bäume (T.BAUM) kommen in die eigene Kronen-Ebene (zeichneKronen) und in den Boden (Schatten, Stamm)
+    if (t === T.WASSER && hash(kx * 5, ky * 3) < 0.25) {
       // Schilf am Ufer
       const land = [[-1, 0], [1, 0]].some(([dx]) => { const n = welt.hole(kx + dx, ky); return n !== T.WASSER && n !== T.ZAUN; });
       if (land) dinge.push([mitte(ky), () => z.schilf(mitte(kx), mitte(ky) + 6, 0.8)]);
@@ -225,6 +256,7 @@ export function zeichneOben(ctx, welt, bilder = {}, rect = null) {
 
   dinge.sort((a, b) => a[0] - b[0]);
   for (const [, f] of dinge) { ctx.save(); f(); ctx.restore(); }
+  zeichneStuetzpunktOben(ctx, welt, { x0, y0, x1, y1 });
   ctx.restore();
 }
 
@@ -317,16 +349,40 @@ let autoBild = null, autoListe = null;
 export function setzeAutoBilder(bild, liste) {
   autoBild = bild && liste?.autos?.length ? bild : null; autoListe = autoBild ? liste : null;
 }
-// PKW-artige Varianten (nicht Polizei/Krankenwagen/Laster/Bus), deterministisch nach Farbe und Ort; Taxi nur selten
+// Einträge einer Art (ohne Blaulicht-Bilder); leer, solange kein Bogen geladen ist
+export function autoEintraege(art) { return autoListe ? autoListe.autos.filter(a => a.art === art && !a.anim) : []; }
+// Blaulicht-Bild 1..3 zum Eintrag e (Polizei, Krankenwagen); sonst e selbst
+export function autoAnimEintrag(e, anim) { return autoListe?.autos.find(a => a.art === e.art && a.anim === anim && a.laenge === e.laenge) ?? e; }
+// Bild-Auto ohne Drehung mittig bei cx, cy zeichnen (Front nach rechts); die Felder liegen zeilenweise im Bogen
+export function zeichneAutoBild(ctx, a, cx, cy) {
+  const m = autoListe.mass ?? 2, bw = autoListe.feldB, bh = autoListe.feldH, sp = autoListe.spalten;
+  ctx.drawImage(autoBild, (a.nr % sp) * bw, Math.floor(a.nr / sp) * bh, bw, bh, cx - bw / m / 2, cy - bh / m / 2, bw / m, bh / m);
+}
+function hashText(b) {
+  const s = String(b.id ?? ''); let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h ? h : Math.abs(Math.round(b.x) * 7 + Math.round(b.y) * 13);
+}
+// Variante deterministisch nach Id/Ort und Farbe. Geparkt: PKW und Sportwagen, selten Taxi, Kleinbus oder Transporter – nur,
+// wenn sie in die Lücke passen (b.platz 'bucht'/'parkplatz': höchstens PKW-Länge, 'rand' etwas länger). Fahrend (b.vorwaerts): PKW/Sport.
+// Polizei, Krankenwagen und Laster stehen nie geparkt. Ohne passendes Bild null (gezeichnete Fassung).
 function autoVariante(b) {
   if (!autoListe || b.gezeichnet) return null;
-  const pkw = autoListe.autos.filter(a => a.art === 'pkw' || a.art === 'kombi' || a.art === 'kleinbus' || (a.art === 'taxi' && b.farbe === 5));
-  if (!pkw.length) return null;
-  const h = Math.abs(b.farbe * 7 + (b.vorwaerts ? 0 : Math.round(b.x) * 3 + Math.round(b.y) * 7));
-  if (h % 5 >= 2) return null;   // etwa 40 % Bilder-Autos, der Rest bleibt gezeichnet
-  const farbige = pkw.filter(a => a.farbe === b.farbe % AUTO_FARBEN.length);
-  const wahl = farbige.length ? farbige : pkw;
-  return wahl[Math.floor(h / 5) % wahl.length];
+  const h = hashText(b), farbe = (b.farbe ?? 0) % AUTO_FARBEN.length;
+  const maxLang = b.vorwaerts || b.platz === 'bucht' || b.platz === 'parkplatz' ? 46 : 58;
+  let art = h % 11 === 0 ? 'sport' : 'pkw';
+  if (!b.vorwaerts) {
+    const w = Math.floor(h / 11) % 20;
+    if (w === 0 && farbe === 5) art = 'taxi';
+    else if (w === 1) art = 'kleinbus';
+    else if (w === 2 || w === 3) art = 'transporter';
+  } else if (farbe === 5 && h % 3 === 0) art = 'taxi';
+  let pool = autoEintraege(art).filter(a => a.laenge <= maxLang);
+  if (!pool.length) pool = [...autoEintraege('pkw'), ...autoEintraege('sport')].filter(a => a.laenge <= maxLang);
+  if (!pool.length) return null;
+  const farbige = pool.filter(a => a.farbe === farbe);
+  const wahl = farbige.length && h % 3 !== 0 ? farbige : pool;
+  return wahl[Math.floor(h / 220) % wahl.length];
 }
 export function autoVonOben(ctx, b) {
   const lang = 46, breit = 21, f = AUTO_FARBEN[b.farbe % AUTO_FARBEN.length];
@@ -337,9 +393,9 @@ export function autoVonOben(ctx, b) {
   else if (b.senkrecht) ctx.rotate(Math.PI / 2);
   if (!b.vorwaerts && (b.farbe + Math.round(b.x)) % 2) ctx.rotate(Math.PI);   // mal vorwärts, mal rückwärts geparkt
   if (bildAuto) {
-    const m = autoListe.mass ?? 2, bw = autoListe.feldB, bh = autoListe.feldH;
-    ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.roundRect(-lang / 2 + 3, -breit / 2 + 4, lang, breit, 7); ctx.fill();
-    ctx.drawImage(autoBild, bildAuto.nr * bw, 0, bw, bh, -bw / m / 2, -bh / m / 2, bw / m, bh / m);
+    const l = bildAuto.laenge, br = bildAuto.breite ?? breit;
+    ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.roundRect(-l / 2 + 3, -br / 2 + 4, l, br, 7); ctx.fill();
+    zeichneAutoBild(ctx, bildAuto, 0, 0);
     ctx.restore();
     return;
   }
@@ -654,59 +710,7 @@ export function zeichneInnen(ctx, w) {
   ctx.restore();
 }
 
-// ---------- Straßendeko: Blumenbeete, Mülltonnen, Container, Straßensperren (nur Grafik; Lage kommt aus osmwelt.mjs) ----------
-
-// Beete: in Gärten, auf Wiesen am Platz und gelegentlich in Grünflächen (Parks) – dezent, höchstens ein Beet je Kachel
-function imPolygonT(px, py, p) {
-  let drin = false;
-  for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
-    if ((p[i + 1] > py) !== (p[j + 1] > py) && px < (p[j] - p[i]) * (py - p[i + 1]) / (p[j + 1] - p[i + 1]) + p[i]) drin = !drin;
-  }
-  return drin;
-}
-function beetHier(welt, kx, ky, gart) {
-  const h = hash(kx * 41 + 7, ky * 29 + 3);
-  if (gart && gart !== '.') return h < 0.03;
-  if (h > 0.09) return false;
-  const platz = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => welt.hole(kx + dx, ky + dy) === T.PLATZ);
-  if (platz) return h < 0.06;
-  if (h > 0.025) return false;
-  return (welt.vektor?.flaechen ?? []).some(f => (f.a === 'gruen' || f.a === 'spielplatz') && imPolygonT(kx + 0.5, ky + 0.5, f.p));
-}
-const BEET_BLUMEN = ['#e53935', '#fdd835', '#ab47bc', '#fafafa', '#ff7043', '#f48fb1', '#42a5f5'];
-function zeichneBeet(ctx, px, py, kx, ky) {
-  const h = (a) => hash(kx * 17 + a, ky * 13 + a * 3);
-  const cx = px + 9 + h(1) * 14, cy = py + 9 + h(2) * 14, form = Math.floor(h(3) * 5), dreh = h(4) * Math.PI;
-  ctx.save();
-  ctx.translate(cx, cy); ctx.rotate(dreh);
-  const erde = '#6d4c41', rand = '#4e342e';
-  const punkt = (x, y, i) => { ctx.fillStyle = BEET_BLUMEN[Math.floor(h(10 + i) * BEET_BLUMEN.length)]; ctx.beginPath(); ctx.arc(x, y, 1.6 + h(30 + i) * 0.7, 0, TAU); ctx.fill(); };
-  const gruen = (x, y) => { ctx.fillStyle = '#3f7d34'; ctx.beginPath(); ctx.arc(x, y, 1.3, 0, TAU); ctx.fill(); };
-  if (form === 0) {            // Oval
-    ctx.fillStyle = rand; ctx.beginPath(); ctx.ellipse(0, 0, 11, 7.5, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = erde; ctx.beginPath(); ctx.ellipse(0, 0, 9.6, 6.2, 0, 0, TAU); ctx.fill();
-    for (let i = 0; i < 7; i++) { const a = h(50 + i) * TAU, d = Math.sqrt(h(60 + i)) * 0.8; gruen(Math.cos(a) * 9 * d, Math.sin(a) * 5.5 * d); punkt(Math.cos(a) * 9 * d + 1, Math.sin(a) * 5.5 * d, i); }
-  } else if (form === 1) {     // Rechteck mit abgerundeten Ecken
-    ctx.fillStyle = rand; ctx.beginPath(); ctx.roundRect(-11, -6.5, 22, 13, 3); ctx.fill();
-    ctx.fillStyle = erde; ctx.beginPath(); ctx.roundRect(-9.8, -5.3, 19.6, 10.6, 2); ctx.fill();
-    for (let i = 0; i < 8; i++) { const x = -7.5 + (i % 4) * 5, y = i < 4 ? -2.4 : 2.4; gruen(x, y); punkt(x + 0.6, y, i); }
-  } else if (form === 2) {     // Rundbeet mit Steinring und Mittelpflanze
-    ctx.fillStyle = '#b0aca0'; ctx.beginPath(); ctx.arc(0, 0, 8.8, 0, TAU); ctx.fill();
-    ctx.fillStyle = erde; ctx.beginPath(); ctx.arc(0, 0, 7.2, 0, TAU); ctx.fill();
-    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; punkt(Math.cos(a) * 4.6, Math.sin(a) * 4.6, i); }
-    ctx.fillStyle = '#2e7d32'; ctx.beginPath(); ctx.arc(0, 0, 2.4, 0, TAU); ctx.fill();
-    punkt(0, 0, 9);
-  } else if (form === 3) {     // Nierenform aus zwei Kreisen
-    ctx.fillStyle = rand; ctx.beginPath(); ctx.arc(-5, 0, 7.4, 0, TAU); ctx.arc(5, 1.5, 6.4, 0, TAU); ctx.fill();
-    ctx.fillStyle = erde; ctx.beginPath(); ctx.arc(-5, 0, 6.2, 0, TAU); ctx.arc(5, 1.5, 5.2, 0, TAU); ctx.fill();
-    for (let i = 0; i < 7; i++) { const x = -9 + i * 2.9, y = Math.sin(i * 1.7) * 2.5; gruen(x, y); punkt(x + 0.5, y, i); }
-  } else {                     // schmaler Streifen am Rand
-    ctx.fillStyle = rand; ctx.fillRect(-13, -3.8, 26, 7.6);
-    ctx.fillStyle = erde; ctx.fillRect(-12, -2.8, 24, 5.6);
-    for (let i = 0; i < 7; i++) punkt(-9.5 + i * 3.2, (i % 2 ? 1 : -1) * 0.9, i);
-  }
-  ctx.restore();
-}
+// ---------- Straßendeko: Mülltonnen, Container, Straßensperren (nur Grafik; Lage kommt aus osmwelt.mjs) ----------
 
 // Mülltonnen in Gruppen an Hauswänden (welt.muell.tonnen) und Container (welt.behaelter, art 'container'), von oben
 const TONNEN_FARBE = { grau: ['#6a7075', '#868d92'], gelb: ['#e0b400', '#f6cf2a'], gruen: ['#2e7d3a', '#43a354'], braun: ['#5d4128', '#7a5a3a'], blau: ['#2a5fa8', '#4580cc'] };

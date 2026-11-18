@@ -45,6 +45,7 @@ export function bereinige(e = {}, alt = {}) {
   const z = { ...a.zombies, ...(e.zombies ?? {}) };
   const t = { ...a.test, ...(e.test ?? {}) };
   const sp = { ...a.sprache, ...(e.sprache ?? {}) };
+  const ag = { ...a.aufgaben, ...(e.aufgaben ?? {}) };
   const funde = { ...a.funde };
   for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10));
   const toene = {};
@@ -56,6 +57,9 @@ export function bereinige(e = {}, alt = {}) {
       laut: Math.round(zahl(neu.laut ?? alt.laut, 0, 100, 80)),
     };
   }
+  // Wellen: 0 = aus, sonst mindestens alle 5 Minuten; Maximum nie kleiner als Minimum
+  if (z.welle > 0 && z.welle < 5) z.welle = 5;
+  z.welleMin = Math.round(zahl(z.welleMin, 5, 50, 20)); z.welleMax = Math.max(z.welleMin, Math.round(zahl(z.welleMax, 5, 50, 50)));
   return {
     zugangscode: String(e.zugangscode ?? a.zugangscode ?? '').trim().slice(0, 40),
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
@@ -63,6 +67,8 @@ export function bereinige(e = {}, alt = {}) {
     frischerStart: typeof e.frischerStart === 'boolean' ? e.frischerStart : !!a.frischerStart,
     autos: Math.round(zahl(e.autos ?? a.autos, 0, 50, 10)),            // geparkte Autos, 10 = normal (gilt für neue Welten)
     tagMinuten: Math.round(zahl(e.tagMinuten ?? a.tagMinuten, 10, 240, 48)),   // so viele echte Minuten dauert ein Spieltag
+    tagAb: Math.round(zahl(e.tagAb ?? a.tagAb, 240, 660, 420) / 15) * 15,      // ab dieser Uhrzeit (Minuten) ganz hell, 2 h Dämmerung davor
+    nachtAb: Math.round(zahl(e.nachtAb ?? a.nachtAb, 1080, 1439, 1290) / 15) * 15,   // ab dieser Uhrzeit ganz dunkel
     menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50)),         // Bewohner zu Beginn einer Welt
     ansteckung: Math.round(zahl(e.ansteckung ?? a.ansteckung, 1, 30, 5)),     // Minuten vom Biss bis zur Verwandlung
     biss: Math.round(zahl(e.biss ?? a.biss, 0, 100, 100)),                   // Stadtbewohner: Chance in % je Bissversuch (einmal pro Sekunde bei Berührung)
@@ -70,6 +76,7 @@ export function bereinige(e = {}, alt = {}) {
     feuerPhase: Math.round(zahl(e.feuerPhase ?? a.feuerPhase, 0, 240, 20)),  // so lange (Spielminuten ab Weltbeginn) brennt es immer wieder
     verkehr: Math.round(zahl(e.verkehr ?? a.verkehr, 0, 30, 6)),             // fahrende Autos am Anfang
     verkehrPhase: Math.round(zahl(e.verkehrPhase ?? a.verkehrPhase, 0, 240, 25)),
+    blaulicht: ['aus', 'selten', 'normal'].includes(e.blaulicht) ? e.blaulicht : (['aus', 'selten', 'normal'].includes(a.blaulicht) ? a.blaulicht : 'selten'),   // Polizei/Feuerwehr-Durchfahrten
     sichtkegel: typeof e.sichtkegel === 'boolean' ? e.sichtkegel : !!a.sichtkegel,   // Sichtkegel der Zombies anzeigen
     reichweite: Object.fromEntries(Object.entries(REICHWEITE_VORGABE).map(([w, v]) => [w, Math.round(zahl(e.reichweite?.[w] ?? a.reichweite?.[w], 5, 80, v))])),   // automatische Schussreichweite in Metern
     toeneVorbelegt: Array.isArray(e.toeneVorbelegt) ? e.toeneVorbelegt.filter(x => typeof x === 'string').slice(0, 50) : (a.toeneVorbelegt ?? []),
@@ -78,6 +85,9 @@ export function bereinige(e = {}, alt = {}) {
       haeuser: Math.round(zahl(z.haeuser, 0, 50, 10)),   // schlafende Zombies in Häusern, 10 = normal
       tempo: Math.round(zahl(z.tempo, 50, 150, 100)),    // Laufgeschwindigkeit in Prozent
       nacht: Math.round(zahl(z.nacht, 10, 30, 15)),      // nachts so viel mehr draußen (15 = ×1,5)
+      welle: Math.round(zahl(z.welle, 0, 120, 20)),      // alle so viele Spielminuten kommt eine Zombiewelle (0 = aus; sonst mindestens 5)
+      welleMin: Math.round(zahl(z.welleMin, 5, 50, 20)), // Größe der Welle: kleinste Zahl
+      welleMax: Math.round(zahl(z.welleMax, 5, 50, 50)), // … größte Zahl (höchstens 50)
     },
     sprache: {
       an: typeof sp.an === 'boolean' ? sp.an : true,                          // Sprachübertragung zwischen Mitspielern
@@ -86,6 +96,12 @@ export function bereinige(e = {}, alt = {}) {
       drinnenDraussen: Math.round(zahl(sp.drinnenDraussen, 0, 50, 10)),       // % Lautstärke zwischen drinnen und draußen (an der Tür)
       funk: Math.round(zahl(sp.funk, 0, 100, 70)),                            // % Lautstärke über Funkgeräte
       redenLockt: typeof sp.redenLockt === 'boolean' ? sp.redenLockt : false, // Reden lockt Zombies an
+    },
+    aufgaben: {
+      an: typeof ag.an === 'boolean' ? ag.an : true,                          // gemeinsame Aufgaben und Evakuierungsbus
+      stunde: Math.round(zahl(ag.stunde, 6, 23, 18)),                         // Uhrzeit (Spieluhr), zu der der Bus am Ortsausgang ankommt
+      wartezeit: Math.round(zahl(ag.wartezeit, 10, 180, 60)),                 // Spielminuten, die der Bus wartet
+      anzahl: Math.round(zahl(ag.anzahl, 3, 6, 4)),                           // Aufgaben je Level
     },
     funde,
     toene,
@@ -98,9 +114,10 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, menschen: 50, ansteckung: 5, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE },
-    zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15 },
+    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, menschen: 50, ansteckung: 5, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE },
+    zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50 },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
+    aufgaben: { an: true, stunde: 18, wartezeit: 60, anzahl: 4 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     toene: {},

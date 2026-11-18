@@ -6,6 +6,8 @@ import { botSchritt, BOT_NAMEN, botGegenangebot, botEinverstanden } from './bots
 import { Mensch, Stadtleben } from './menschen.mjs';
 import { Fahrzeug, Verkehr } from './verkehr.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
+import { Zombiewelle } from './welle.mjs';
+import { Aufgabe, Aufgaben } from './aufgaben.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
@@ -13,7 +15,7 @@ import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
-  bewaffnetSoll, zombieSoll, zufall, safeRoomVon, WELT_VERSION,
+  bewaffnetSoll, zombieSoll, zufall, safeRoomVon, WELT_VERSION, setzeTageszeiten,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
 } from '../client/welt.mjs';
@@ -77,7 +79,17 @@ export const Zustand = schema({
   zeit: t.number(),         // Spielzeit in Sekunden (wird gespeichert)
   besiegt: t.uint16(),
   torGeloest: t.uint8(),    // richtig beantwortete Rätsel am Tor (3 = offen)
+  level: t.uint8(),         // 1 = erste Karte, nach jedem geschafften Evakuierungsbus eins mehr (server/aufgaben.mjs)
+  funk: t.boolean(),        // Funkspruch abgesetzt: der Evakuierungsbus kommt
+  busAnkunft: t.number(),   // Ankunftszeit des Busses (Spielminuten am Tag), -1 = noch kein Funkspruch
+  busAb: t.number(),        // Abfahrtszeit des wartenden Busses (Spielminuten am Tag)
+  busDa: t.boolean(),       // der Bus steht am Ortsausgang
+  busBord: t.uint8(),       // so viele sind an Bord ...
+  busGesamt: t.uint8(),     // ... von so vielen lebenden Spielern (mit Bots)
+  aufgaben: t.map(Aufgabe), // gemeinsame Aufgaben dieses Levels
   uhr: t.number(),          // Tageszeit in Spielminuten (0–1439)
+  tagAb: t.number(),        // ab hier ganz hell (Einstellung, für die Clients)
+  nachtAb: t.number(),      // ab hier ganz dunkel
   autos: t.uint8(),         // Autodichte der Welt (10 = normal), gilt bis zum Neustart der Welt
   spieler: t.map(Spieler),
   zombies: t.map(Zombie),
@@ -149,6 +161,7 @@ export class SpielRaum extends Room {
   static einstellungen = { zugangscode: '', zombieFaktor: 1, haeuserFaktor: 1, tempoFaktor: 1, bots: 0, funde: {}, zeitraffer: 1, unsterblich: new Set() };
   static speicher = null;
   static aktiv = null;   // laufender Raum (für die Verwaltungsseite)
+  static kartenWechsel = null;   // vom Server gesetzt: stellt die Karte für die nächste Welt ein (Levelwechsel)
 
   // läuft bei der Anfrage zum Beitreten: Zugangscode prüfen.
   // Wer über die HA-Seitenleiste (Ingress) kommt, ist schon bei HA angemeldet.
@@ -167,6 +180,7 @@ export class SpielRaum extends Room {
     // „frischer Start“: jede neue Spielrunde beginnt mit einer neuen Welt (Spielerstände bleiben)
     const stand = SpielRaum.einstellungen.frischerStart ? null : (this.speicher?.ladeWelt() ?? null);
     this.state = new Zustand();
+    this.tageszeitenUebernehmen();
     this.state.seed = Number.isInteger(optionen.seed) ? optionen.seed
       : stand?.seed ?? Math.floor(Math.random() * 2 ** 31);
     const karte = SpielRaum.einstellungen.karte;
@@ -240,6 +254,9 @@ export class SpielRaum extends Room {
     this.verkehr = new Verkehr(this);
     if (this.welt.karte) this.verkehr.start(this.stadt.haltestellen, SpielRaum.einstellungen.verkehr ?? 6);
     this.brand = new Brandstifter(this);
+    this.welle = new Zombiewelle(this);
+    this.aufgaben = new Aufgaben(this);
+    this.aufgaben.start(stand, !!passt);
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === WELT_VERSION) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
 
@@ -664,7 +681,15 @@ export class SpielRaum extends Room {
     return !m || !hausHell(Number(m[1]), m[2], this.state.uhr);
   }
 
+  // Tag/Nacht-Zeiten aus den Einstellungen: für die Regeln auf dem Server und im Zustand für die Clients
+  tageszeitenUebernehmen() {
+    const e = SpielRaum.einstellungen ?? {};
+    setzeTageszeiten(e.tagAb ?? 420, e.nachtAb ?? 1290);
+    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; }
+  }
+
   einstellungenGeaendert() {
+    this.tageszeitenUebernehmen();
     this.botsAnpassen();
     const sprache = this.sprachEinst();
     if (!sprache.an) for (const p of this.state.spieler.values()) p.spricht = false;
@@ -672,7 +697,7 @@ export class SpielRaum extends Room {
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     const soll = this.zombieSollJetzt();
     // zu viele Zombies draußen: die am weitesten entfernten, nicht jagenden verschwinden
-    const draussen = [...this.state.zombies.entries()].filter(([, z]) => !z.ebene && !z.jagt);
+    const draussen = [...this.state.zombies.entries()].filter(([id, z]) => !z.ebene && !z.jagt && !this.zombieInfo.get(id)?.welle);
     const spieler = [...this.state.spieler.values()].filter(p => !p.ebene);
     const abstand = z => Math.min(...spieler.map(p => Math.hypot(p.x - z.x, p.y - z.y)), Infinity);
     draussen.sort((a, b) => abstand(b[1]) - abstand(a[1]));
@@ -685,10 +710,12 @@ export class SpielRaum extends Room {
   unsterblich(p) { return SpielRaum.einstellungen.unsterblich?.has?.(String(p.name).toLowerCase()); }
 
   // von der Verwaltungsseite: alle bekommen Bescheid, die Welt wird verworfen und beim nächsten Beitritt neu gebaut
-  weltNeuStarten(spielerLoeschen = false) {
+  // neuerStand: Levelwechsel – statt der leeren Welt wird dieser Anfangsstand (neue Karte, Level) gespeichert
+  weltNeuStarten(spielerLoeschen = false, neuerStand = null) {
     this.nichtSpeichern = true;
     this.chatVerlauf = [];   // der Chat gehört zur Welt
     this.speicher?.loescheWelt();
+    if (neuerStand) this.speicher?.speichereWelt(neuerStand);
     if (spielerLoeschen) this.speicher?.loescheSpieler();
     else for (const [sid, p] of this.state.spieler) {
       const x = this.extra.get(sid);
@@ -698,7 +725,7 @@ export class SpielRaum extends Room {
       const { name, ...daten } = this.speicher.ladeSpieler(x.spielerId) ?? {};
       this.speicher.speichereSpieler(x.spielerId, p.name, { ...daten, x: null, y: null, letzterSafe: '', draussen: true });
     }
-    this.broadcast('neustart', {});
+    this.broadcast('neustart', neuerStand ? { level: neuerStand.level } : {});
     this.clock.setTimeout(() => this.disconnect(), 400);
   }
 
@@ -713,13 +740,13 @@ export class SpielRaum extends Room {
   }
 
   speichereWelt() {
-    if (!this.speicher) return;
+    if (!this.speicher || this.nichtSpeichern) return;
     const behaelter = {}, safes = {};
     for (const [id, inhalt] of this.inhalte) behaelter[id] = inhalt;
     for (const [id, s] of this.state.safes) safes[id] = { barrikade: Math.round(s.barrikade), kiste: [...s.kiste] };
     this.speicher.speichereWelt({
       version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, behaelter, safes,
-      torGeloest: this.state.torGeloest, gestellt: [...this.gestellt].slice(-500),
+      torGeloest: this.state.torGeloest, level: this.state.level, aufgaben: this.aufgaben?.speichern() ?? null, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen, Math.round(t.barrikade), Math.round(t.hp), t.kaputt]])),
       verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
       chat: this.chatVerlauf,
@@ -727,7 +754,7 @@ export class SpielRaum extends Room {
   }
 
   speichereAlles() {
-    if (!this.speicher) return;
+    if (!this.speicher || this.nichtSpeichern) return;
     try {
       this.speicher.transaktion(() => {
         this.speichereWelt();
@@ -754,6 +781,8 @@ export class SpielRaum extends Room {
         if (imWeg) return { art: 'wegziehen', leiche: imWeg, safe, dauer: 1.5 };
         if (p.rucksack.includes('bretter') && zustand.barrikade < 100) return { art: 'barrikade', safe, key: 'haus:' + safe.haus.nr, dauer: 3 };
       }
+      const funk = this.aufgaben?.funkKontext(p);
+      if (funk) return funk;
     }
     // Gegenstand am Boden aufheben
     let nahDing = null, nd = AKTION_ABSTAND;
@@ -832,7 +861,8 @@ export class SpielRaum extends Room {
     z.kriecht = false; z.variante = Math.floor(this.rnd() * 7); z.ebene = ebene;
     const id = 'z' + (this.naechsteZombieId++);
     this.state.zombies.set(id, z);
-    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft });
+    // tempo: fester Tempofaktor 0,9–1,1, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen)
+    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: 0.9 + this.rnd() * 0.2 });
     return id;
   }
 
@@ -1240,7 +1270,7 @@ export class SpielRaum extends Room {
     // Durchsuchen und Hämmern machen Lärm – auch durch Wände
     x.laermUhr -= dt;
     if (x.laermUhr <= 0) {
-      const weite = { barrikade: 220, aufbrechen: 340, tuer_auf: 60, tuer_zu: 60, aufschliessen: 40, aufheben: 0 }[k.art] ?? 150;
+      const weite = { barrikade: 220, funk: 420, aufbrechen: 340, tuer_auf: 60, tuer_zu: 60, aufschliessen: 40, aufheben: 0 }[k.art] ?? 150;
       if (weite) this.laerm(p.x, p.y, weite, true, p.ebene);
       x.laermUhr = 1;
     }
@@ -1252,6 +1282,7 @@ export class SpielRaum extends Room {
       this.setzeTuer(k.key, true);
       if (k.art === 'aufbrechen') client?.send('meldung', { text: '⚒️ Tür aufgebrochen – das war laut!' });
     }
+    else if (k.art === 'funk') this.aufgaben?.funkAbsetzen(p, k.safe);
     else if (k.art === 'tuer_zu') this.setzeTuer(k.key, false);
     else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; this.broadcast('klettern', { x: p.x, y: p.y, id: sid }); }
     else if (k.art === 'aufheben') {
@@ -1303,6 +1334,7 @@ export class SpielRaum extends Room {
     const inhalt = this.inhalte.get(b.id);
     const genommen = this.einpacken(p, inhalt);
     this.setzeInhalt(b.id, inhalt);
+    this.aufgaben?.gefunden(b, genommen);
     client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
   }
 
@@ -1567,6 +1599,7 @@ export class SpielRaum extends Room {
     }
     this.messen('spieler', t0); t0 = performance.now();
     this.spiegleSafeTueren();
+    this.welle?.schritt(dt);
     for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
     this.messen('zombies', t0); t0 = performance.now();
     this.stadt?.schritt(dt);
@@ -1574,6 +1607,7 @@ export class SpielRaum extends Room {
     this.verkehr?.schritt(dt);
     this.messen('verkehr', t0); t0 = performance.now();
     this.brand?.schritt(dt);
+    this.aufgaben?.schritt(dt);
     this.messen('feuer', t0);
     this.sprachSchritt(dt);
     this.aufhelfen(dt);
@@ -1900,7 +1934,7 @@ export class SpielRaum extends Room {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
         z.richtung = w;
         const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
-        if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt);
+        if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt, info);
         if (d < W.spielerRadius + W.zombieRadius + 6) {
           const schutz = ziel.kleidung > 0;
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1));
@@ -1922,11 +1956,13 @@ export class SpielRaum extends Room {
       else {
         const sieht = sichtfrei(welt, z.x, z.y, info.punkt.x, info.punkt.y);
         z.richtung = sieht ? Math.atan2(info.punkt.y - z.y, info.punkt.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
-        if (!this.zombieGehen(z, z.richtung, W.zombieTempoJagen * 0.7 * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt)) info.punkt = null;
+        if (!this.zombieGehen(z, z.richtung, W.zombieTempoJagen * 0.7 * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt, info)) info.punkt = null;
       }
       return;
     }
 
+    // Zombiewelle: gemeinsam zum Gruppenziel
+    if (info.welle) return this.welle.gehen(id, z, info, dt);
     // schlafende Zombies (in Häusern) bewegen sich nicht, bis sie jemanden sehen oder hören
     if (info.schlaeft) return;
     // Wandern
@@ -1936,7 +1972,7 @@ export class SpielRaum extends Room {
       info.steht = this.rnd() < 0.4;
       if (!info.steht) z.richtung = this.rnd() * Math.PI * 2;
     }
-    if (!info.steht && !this.zombieGehen(z, z.richtung, W.zombieTempoWandern * (z.kriecht ? 0.5 : 1) * dt, dt)) {
+    if (!info.steht && !this.zombieGehen(z, z.richtung, W.zombieTempoWandern * (z.kriecht ? 0.5 : 1) * dt, dt, info)) {
       z.richtung += Math.PI * (0.5 + this.rnd());
     }
   }
@@ -1978,9 +2014,10 @@ export class SpielRaum extends Room {
     return pruefe(z.x + Math.cos(w) * (W.zombieRadius + 3), z.y + Math.sin(w) * (W.zombieRadius + 3)) ?? pruefe(z.x, z.y);
   }
 
-  zombieGehen(z, w, weg, dt) {
+  zombieGehen(z, w, weg, dt, info = null) {
     const eifrig = z.jagt || weg > W.zombieTempoWandern * dt * 1.5;   // jagt oder folgt einem Geräusch (nicht nur Umherirren)
     weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
+    if (info && !z.kriecht) weg *= info.tempo ?? 1;     // eigener Tempofaktor des Zombies (0,9–1,1)
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
     // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)

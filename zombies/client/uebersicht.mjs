@@ -176,9 +176,17 @@ export class Uebersicht {
     const pos = (kx, ky) => [(kx - x0) * m, (ky - y0) * m];
     const t = this.welt.tor;
     if (t) { const [x, y] = pos(t.x + 0.5, t.y + 1); c.font = `${Math.round(14 * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🚧', x + 8 * dpr, y); }
+    if (this.bus) { const [x, y] = pos(this.bus.x, this.bus.y); c.font = `${Math.round((this.gross ? 18 : 13) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🚌', x, y); }
     for (const sr of this.welt.safeRooms) {
       const [x, y] = pos(sr.haus.x + sr.haus.b / 2, sr.haus.y + sr.haus.h / 2);
       c.font = `${Math.round((this.gross ? 16 : 11) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🛡', x, y);
+    }
+    // Bundeswehr-Stützpunkt
+    const sp = this.welt.stuetzpunkt;
+    if (sp) {
+      const [x, y] = pos(sp.x + sp.b / 2, sp.y + sp.h / 2);
+      c.font = `bold ${Math.round((this.gross ? 18 : 12) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.lineWidth = 3 * dpr; c.strokeStyle = '#fff'; c.strokeText('✚', x, y); c.fillStyle = '#c62828'; c.fillText('✚', x, y);
     }
     for (const p of [...punkte].sort((a, b) => a.ich - b.ich)) {
       const [x, y] = pos(p.kx, p.ky), rad = (p.ich ? 5.5 : 4) * dpr;

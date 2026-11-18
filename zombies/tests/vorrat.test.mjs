@@ -48,8 +48,11 @@ test('Durchsuchen füllt den Rucksack, leerer Behälter bleibt leer', async () =
   try {
     // Schränke stehen in Innenräumen – hier im ersten Safe Room (dort schlafen keine Zombies)
     const iw = raum.wv(raum.welt.safeRooms[0].ebene);
-    const b = iw.behaelter[0];
-    p.ebene = iw.ebene; p.x = b.x; p.y = b.y + 1;
+    // einen Behälter nehmen, an dem die Aktionstaste wirklich „Durchsuchen“ anbietet (nicht Kiste, Funktisch, Tür daneben)
+    p.ebene = iw.ebene;
+    const b = iw.behaelter.find(c => { p.x = c.x; p.y = c.y + 1; const k = raum.kontext(p); return k?.art === 'durchsuchen' && k.behaelter?.id === c.id; });
+    assert.ok(b, 'kein freistehender Behälter im Safe Room');
+    p.x = b.x; p.y = b.y + 1;
     raum.setzeInhalt(b.id, ['wasser', 'munition', 'verband']);
     const m0 = p.munition, r0 = p.rucksack.length;
     c.send('aktion');
@@ -59,7 +62,8 @@ test('Durchsuchen füllt den Rucksack, leerer Behälter bleibt leer', async () =
     assert.equal(p.rucksack.length, r0 + 2);
     assert.ok(await bis(() => c.state.behaelter.get(b.id)?.rest === 0), 'Client sieht leeren Behälter nicht');
     // Bewegen bricht ab
-    const b2 = iw.behaelter.find(x => x.id !== b.id);
+    const b2 = iw.behaelter.find(x => { if (x.id === b.id) return false; p.x = x.x; p.y = x.y + 1; const k = raum.kontext(p); return k?.art === 'durchsuchen' && k.behaelter?.id === x.id; });
+    assert.ok(b2, 'kein zweiter freistehender Behälter');
     p.x = b2.x; p.y = b2.y + 1;
     c.send('aktion');
     assert.ok(await bis(() => p.aktion === 'durchsuchen'));
@@ -641,6 +645,47 @@ test('Bots nutzen die Vorratskiste im Safe Room', async () => {
 });
 
 // ---------- Türen: Bots blockieren sich nicht ----------
+// Platzierung für die Tür-Tests: Punkte draußen vor der Haustür, auf denen eine Figur wirklich stehen kann
+// (nicht in Deko/Zaun/Beeten, nicht auf einer Tür, mit Weg zur Haustür) – die Welt ist je Lauf zufällig
+function aussenPunkte(raum, h, anzahl, vonAbstand, schritt = 14) {
+  const w = raum.wv(''), tuer = { x: (h.tuer.x + 0.5) * KACHEL, y: (h.tuer.y + 0.5) * KACHEL };
+  const tuerNah = (x, y) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const k = w.hole(Math.floor(x / KACHEL) + dx, Math.floor(y / KACHEL) + dy);
+    if ((k === W.T.TUER || k === W.T.AUSGANG) && !(Math.floor(x / KACHEL) + dx === h.tuer.x && Math.floor(y / KACHEL) + dy === h.tuer.y) && Math.hypot((Math.floor(x / KACHEL) + dx + 0.5) * KACHEL - x, (Math.floor(y / KACHEL) + dy + 0.5) * KACHEL - y) < 56) return true;
+  } return false; };
+  const kand = [];
+  for (let r = vonAbstand; r <= vonAbstand + 160; r += 8) for (let ang = 0; ang < 24; ang++) {
+    const wi = ang / 24 * Math.PI * 2, x = tuer.x + Math.cos(wi) * r, y = tuer.y + Math.sin(wi) * r;
+    // nur vor dem Haus (Seite der Haustür), frei, keine Tür in der Nähe, Weg zur Tür vorhanden
+    if ((x - tuer.x) * h.raus.dx + (y - tuer.y) * h.raus.dy < r * 0.5) continue;
+    if (!W.frei(w, x, y, 12) || tuerNah(x, y) || !W.findeWeg(w, x, y, tuer.x, tuer.y, 11, 40000, true)) continue;
+    kand.push({ x, y, r });
+  }
+  const wahl = [];
+  for (const k of kand) { if (wahl.length < anzahl && wahl.every(o => Math.hypot(o.x - k.x, o.y - k.y) >= schritt)) wahl.push(k); }
+  return wahl.length === anzahl ? wahl : null;
+}
+
+// Mensch geht ins Haus (ebene) und wieder hinaus; alle Bots müssen jedes Mal durch die Haustür folgen
+async function botsDurchDieTuer(raum, p, haus, ebene, innen) {
+  const bots = () => [...raum.extra.entries()].filter(([, x]) => x.bot).map(([sid]) => raum.state.spieler.get(sid));
+  assert.equal(bots().length, 4);
+  const h = haus;
+  // Mensch steht im Haus, Bots dicht gedrängt vor der Tür
+  const w = raum.wv(ebene);
+  p.ebene = ebene; p.x = w.start.x; p.y = w.start.y;
+  const start = aussenPunkte(raum, h, 4, 20), [aus] = aussenPunkte(raum, h, 1, 90) ?? [];
+  assert.ok(start && aus, `keine freien Plätze vor der Haustür (Haus ${h.nr}, Tür ${JSON.stringify(h.tuer)}, raus ${JSON.stringify(h.raus)})`);
+  start.forEach((pt, i) => { const b = bots()[i]; b.ebene = ''; b.waffe = ''; b.munition = 0; b.x = pt.x; b.y = pt.y; });
+  const bericht = () => bots().map(b => `${b.ebene}@${Math.round(b.x)},${Math.round(b.y)}`).join(' ') + ' ' + [...raum.extra.entries()].filter(([, x]) => x.bot)
+    .map(([sid, x]) => JSON.stringify({ z: x.bot.uebergangZiel, w: x.bot.wartetSeit, e: x.eingabe, f: x.bot.festZahl, ak: raum.state.spieler.get(sid).aktion })).join(' ');
+  assert.ok(await bis(() => bots().every(b => innen(b)), 20000), 'nicht alle Bots kommen ins Haus: ' + bericht());
+  // wieder hinaus: Mensch geht vor die Tür, die Bots müssen alle durch den Ausgang folgen
+  p.ebene = ''; p.x = aus.x; p.y = aus.y;
+  assert.ok(await bis(() => bots().every(b => b.ebene === '' && Math.hypot(b.x - p.x, b.y - p.y) < 260), 20000),
+    'nicht alle Bots kommen heraus: ' + bericht() + ' Mensch ' + p.ebene + '@' + Math.round(p.x) + ',' + Math.round(p.y));
+}
+
 test('Mehrere Bots folgen einem Menschen durch die Haustür ins Haus und wieder hinaus', async () => {
   const vorher = SpielRaum.einstellungen;
   SpielRaum.einstellungen = { ...vorher, bots: 4, zombieFaktor: 0 };
@@ -648,22 +693,25 @@ test('Mehrere Bots folgen einem Menschen durch die Haustür ins Haus und wieder 
   try {
     const { raum, p } = a;
     raum.state.zombies.clear(); raum.zombieInfo.clear();
-    const bots = () => [...raum.extra.entries()].filter(([, x]) => x.bot).map(([sid]) => raum.state.spieler.get(sid));
-    assert.equal(bots().length, 4);
-    const s = raum.welt.safeRooms[0], h = s.haus;
-    const tuerAussen = { x: (h.tuer.x + 0.5 + h.raus.dx * 1.3) * KACHEL, y: (h.tuer.y + 0.5 + h.raus.dy * 1.3) * KACHEL };
-    // Mensch steht im Haus, Bots dicht gedrängt vor der Tür
-    inDenSafeRoom(raum, p, s, 'mitte');
-    bots().forEach((b, i) => { b.ebene = ''; b.waffe = ''; b.munition = 0; b.x = tuerAussen.x + h.raus.dx * (20 + i * 14); b.y = tuerAussen.y + h.raus.dy * (20 + i * 14); });
-    const t0 = Date.now();
-    assert.ok(await bis(() => bots().every(b => safeRoomVon(raum.welt, b) === s), 20000),
-      'nicht alle Bots kommen ins Haus: ' + bots().map(b => `${b.ebene}@${Math.round(b.x)},${Math.round(b.y)}`).join(' '));
-    // wieder hinaus: Mensch geht vor die Tür, die Bots müssen alle durch den Ausgang folgen
-    p.ebene = ''; p.x = tuerAussen.x + h.raus.dx * 90; p.y = tuerAussen.y + h.raus.dy * 90;
-    assert.ok(await bis(() => bots().every(b => b.ebene === '' && Math.hypot(b.x - p.x, b.y - p.y) < 260), 20000),
-      'nicht alle Bots kommen heraus: ' + bots().map(b => `${b.ebene}@${Math.round(b.x)},${Math.round(b.y)}`).join(' ')
-      + ' Ausgang ' + JSON.stringify(raum.wv(s.ebene).ausgang) + ' ' + [...raum.extra.values()].filter(x => x.bot).map(x => JSON.stringify({ z: x.bot.uebergangZiel, w: x.bot.wartetSeit, o: x.bot.warteOrt, e: x.eingabe, f: x.bot.festZahl, zw: x.bot.zweig, ak: raum.state.spieler.get([...raum.extra.entries()].find(([, y]) => y === x)[0])?.aktion })).join(' '));
-    assert.ok(Date.now() - t0 < 40000);
+    const s = raum.welt.safeRooms[0];
+    await botsDurchDieTuer(raum, p, s.haus, s.ebene, b => safeRoomVon(raum.welt, b) === s);
+  } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
+});
+
+test('Mehrere Bots folgen einem Menschen auch durch die Tür eines normalen Hauses (kein Safe Room) hinein und hinaus', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 4, zombieFaktor: 0 };
+  const a = await beitreten('Tuerfuehrer2');
+  try {
+    const { raum, p } = a;
+    raum.state.zombies.clear(); raum.zombieInfo.clear();
+    const sicher = new Set(raum.welt.safeRooms.map(r => r.haus));
+    const h = raum.welt.haeuser.find(x => x.betretbar && !sicher.has(x) && aussenPunkte(raum, x, 4, 20) && aussenPunkte(raum, x, 1, 90));
+    assert.ok(h, 'kein normales betretbares Haus');
+    const ebene = `h${h.nr}eg`;
+    // Zombies im Haus (und vor der Tür) entfernen, damit nur das Folgen geprüft wird
+    for (const [id, z] of [...raum.state.zombies]) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); }
+    await botsDurchDieTuer(raum, p, h, ebene, b => b.ebene === ebene);
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });
 

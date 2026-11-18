@@ -336,7 +336,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 9;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen
+export const WELT_VERSION = 11;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -372,7 +372,7 @@ export const LEICHEN_MAX = 30;
 export const RUCKSACK_PLAETZE = 8;   // Grundausstattung; größere Taschen erhöhen p.plaetze
 export const KISTE_PLAETZE = 24;
 export const BEHAELTER_NAME = { container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
-  vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
+  vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
   schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', null, null],
@@ -386,6 +386,10 @@ export const BEUTE = {
   laden: ['essen', 'wasser', 'schokoriegel', null, null],
   vorratsregal: ['wasser', 'wasser', 'wasser', 'essen', 'essen', 'essen', 'verband', 'bretter', 'schokoriegel', 'schokoriegel', 'spritze', 'funkgeraet', null],
   erstehilfe: ['verband', 'verband', 'verband', 'spritze', null],
+  // Bundeswehr-Stützpunkt (Teil 2 ergänzt hier die neuen Waffen)
+  bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', null],
+  bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', null],
+  sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
   container: ['essen', 'essen', 'schokoriegel', 'schokoriegel', 'bretter', 'bretter', 'kleidung', 'kleidung', 'tasche', null, null, null],   // Müll: meist Krempel, selten eine Tasche
 };
@@ -409,6 +413,7 @@ export function ziehe(tabelle, faktoren, rnd, bonus = null) {
 // Dauer des Durchsuchens (Sekunden) je Behälterart – Spieler und Bots gleich
 export const durchsuchDauer = art => art === 'auto' || art === 'bus' ? 2.2 : art === 'leiche' ? 0.9 : 1.5;
 export const AKTION_ABSTAND = 40;
+export const BUS_ABSTAND = 86;   // Abstand zur Mitte des Evakuierungsbusses (Pixel, Busmitte bis Spieler): wer so nah steht, ist an Bord
 export const INFEKTION_DAUER = 5400;   // 90 Minuten bis zur Verwandlung
 export const ZOMBIE_ZEIT = 180;        // so lange spielt man als Zombie gegen die anderen
 
@@ -637,11 +642,20 @@ function findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, zaunOk) 
 
 // ---------- Tag und Nacht (Server und Browser rechnen gleich) ----------
 // uhr = Spielminute 0–1439. Abenddämmerung 19:30–21:30, Morgendämmerung 5:00–7:00.
+// Tageszeiten (Spielminuten): ab tagAb ganz hell, ab nachtAb ganz dunkel, davor je 2 Stunden Dämmerung.
+// Einstellbar (Verwaltung „Tag beginnt“/„Nacht beginnt“); der Server schickt die Werte im Zustand an die Clients.
+const DAEMMERUNG = 120;
+let TAG_AB = 420, NACHT_AB = 1290;
+export function setzeTageszeiten(tagAb, nachtAb) {
+  const t = Number(tagAb), n = Number(nachtAb);
+  if (Number.isFinite(t) && Number.isFinite(n) && n - t >= 2 * DAEMMERUNG) { TAG_AB = t; NACHT_AB = n; }
+}
+export const tageszeiten = () => ({ tagAb: TAG_AB, nachtAb: NACHT_AB });
 export function helligkeit(uhr) {
   const u = ((uhr % 1440) + 1440) % 1440;
-  if (u >= 1290 || u < 300) return 0;
-  if (u >= 1170) return 1 - (u - 1170) / 120;
-  if (u < 420) return (u - 300) / 120;
+  if (u >= NACHT_AB || u < TAG_AB - DAEMMERUNG) return 0;
+  if (u >= NACHT_AB - DAEMMERUNG) return 1 - (u - (NACHT_AB - DAEMMERUNG)) / DAEMMERUNG;
+  if (u < TAG_AB) return (u - (TAG_AB - DAEMMERUNG)) / DAEMMERUNG;
   return 1;
 }
 export const istNacht = uhr => helligkeit(uhr) < 0.35;

@@ -6,7 +6,7 @@ import { KACHEL, BREITE, HOEHE } from '../client/welt.mjs';
 
 export const Fahrzeug = schema({
   x: t.number(), y: t.number(), richtung: t.number(),
-  art: t.string(),          // 'bus' | 'auto' | 'laster' | 'polizei' | 'feuerwehr' | 'wrack'
+  art: t.string(),          // 'bus' | 'auto' | 'laster' | 'polizei' | 'feuerwehr' | 'wrack' | 'evakuierung' (stehender Bus am Tor, server/aufgaben.mjs)
   farbe: t.uint8(),
   haelt: t.boolean(),
 }, 'Fahrzeug');
@@ -15,7 +15,7 @@ const FAHRBAR = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unc
 const KOSTEN = { primary: 0.55, secondary: 0.6, tertiary: 0.75, unclassified: 1, residential: 1.2, living_street: 1.6, service: 3 };
 export const LASTER_ANTEIL = 0.1;   // Anteil Laster im normalen Verkehr
 const HAUPT = new Set(['primary', 'secondary', 'tertiary']);
-export const LAENGE = { auto: 46, laster: 90, bus: 124, polizei: 50, feuerwehr: 74 };   // Fahrzeuglänge in Pixeln (für den Abstand)
+export const LAENGE = { auto: 46, laster: 90, bus: 124, evakuierung: 124, polizei: 50, feuerwehr: 74 };   // Fahrzeuglänge in Pixeln (für den Abstand)
 const TEMPO = { bus: 85, auto: 115, laster: 90, polizei: 175, feuerwehr: 160 };
 const SPUR = { bus: 0.22, auto: 0.22, laster: 0.22, polizei: 0.12, feuerwehr: 0.12 };   // Abstand zur Mitte in Kacheln je Meter Fahrbahn
 
@@ -118,7 +118,7 @@ export class Verkehr {
     this.graph = strassenGraph(raum.welt);
     this.info = new Map();      // id → { weg, pos, halt, ... }
     this.naechsteId = 1;
-    this.blaulichtUhr = 90 + raum.rnd() * 120;
+    this.blaulichtUhr = this.naechsteBlaulichtPause();
   }
 
   neu(art, startKnoten, extra = {}) {
@@ -172,9 +172,16 @@ export class Verkehr {
     return (this._rand = liste.slice(0, Math.max(2, Math.min(12, liste.length))));
   }
 
+  // Abstand bis zur nächsten zufälligen Durchfahrt in Spielsekunden: selten 8–15 min, normal 2,5–6,5 min
+  naechsteBlaulichtPause() {
+    const modus = this.raum.einstellungen?.().blaulicht ?? 'selten';
+    return (modus === 'normal' ? 150 + this.raum.rnd() * 240 : 480 + this.raum.rnd() * 420);
+  }
+
   // Polizei oder Feuerwehr: von einem Rand zum anderen, die Feuerwehr zum Brand
   blaulicht(brand = null) {
     const g = this.graph, r = this.raum.rnd;
+    if ((this.raum.einstellungen?.().blaulicht ?? 'selten') === 'aus') return;
     if (!g.haupt.length) return;
     const rand = this.randKnoten();
     const start = rand[Math.floor(r() * rand.length)];
@@ -185,12 +192,30 @@ export class Verkehr {
     this.raum.broadcast('sirene', { id });
   }
 
+  // Evakuierungsbus (Aufgaben): steht ab sofort an dieser Stelle und wartet, bis er losfährt
+  evakuierungBus(x, y, richtung = 0) {
+    const id = this.neu('evakuierung', { x, y }, { halt: 1e12, evakuierung: true });
+    const f = this.raum.state.fahrzeuge.get(id);
+    f.richtung = richtung; f.haelt = true; f.farbe = 0;
+    return id;
+  }
+
+  // der Evakuierungsbus fährt zum am weitesten entfernten Rand und verschwindet dort
+  evakuierungAb(id) {
+    const f = this.raum.state.fahrzeuge.get(id), inf = this.info.get(id);
+    if (!f || !inf) return;
+    inf.halt = 0; inf.abfahrt = true; f.haelt = false;
+    const rand = this.graph.knoten.length ? this.randKnoten() : [];
+    const ziel = rand.length ? rand.reduce((a, b) => Math.hypot(b.x - f.x, b.y - f.y) > Math.hypot(a.x - f.x, a.y - f.y) ? b : a) : null;
+    if (!ziel || !this.fahreNach(id, ziel)) { this.raum.state.fahrzeuge.delete(id); this.info.delete(id); }
+  }
+
   schritt(dt) {
     const s = this.raum.state;
     const zeitMin = (s.zeit ?? 0) / 60;
     const e = this.raum.einstellungen?.() ?? {};
-    this.blaulichtUhr -= dt;
-    if (this.blaulichtUhr <= 0) { this.blaulichtUhr = 150 + this.raum.rnd() * 240; this.blaulicht(); }
+    this.blaulichtUhr -= dt * (this.raum.zeitraffer?.() ?? 1);
+    if (this.blaulichtUhr <= 0) { this.blaulichtUhr = this.naechsteBlaulichtPause(); this.blaulicht(); }
     for (const [id, f] of s.fahrzeuge) {
       const inf = this.info.get(id);
       if (!inf || f.art === 'wrack') continue;
@@ -235,9 +260,13 @@ export class Verkehr {
 
   angekommen(id, f, inf, zeitMin, e) {
     const s = this.raum.state;
+    if (inf.evakuierung) {   // Evakuierungsbus: steht am Tor, nach der Abfahrt verschwindet er am Rand
+      if (inf.abfahrt) { s.fahrzeuge.delete(id); this.info.delete(id); } else { inf.halt = 1e12; f.haelt = true; }
+      return;
+    }
     if (f.art === 'bus') { inf.halt = 8; this.raum.stadt?.busHalt(inf, inf.linie[inf.stopp]); return; }
     if (inf.durchfahrt) {
-      if (inf.brand && !inf.amBrand) { inf.amBrand = true; inf.halt = 25; return; }   // Feuerwehr löscht eine Weile
+      if (inf.brand && !inf.amBrand) { inf.amBrand = true; inf.halt = 25; return; }   // (die Sirene ist dabei nach wenigen Sekunden aus, siehe Client)   // Feuerwehr löscht eine Weile
       s.fahrzeuge.delete(id); this.info.delete(id); return;
     }
     // normaler Verkehr: nach der Anfangsphase verschwinden die Autos am Ziel

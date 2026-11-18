@@ -301,3 +301,26 @@ test('Geretsried: Mülltonnen, Container, Straßensperren, freie Parkplätze', a
     assert.ok(lang >= w.parkbuchten.length * 0.15, `zu wenige längere Buchten: ${lang}/${w.parkbuchten.length}`);
   } finally { setzeKartengroesse(64, 48); }
 });
+
+test('Mehr Bäume: ca. +50 %, nie auf Haustür-Vorkacheln, Parkbuchten, Containern, Sperren oder am Start', async () => {
+  const { baumVon, zeichneBoden } = await import('../client/aussehen.mjs');
+  setzeKartengroesse(karte.breite, karte.hoehe);
+  const w = baueWeltAusKarte(karte, 7);
+  const zahl = t => { let n = 0; for (const x of w.kacheln) if (x === T.BAUM) n++; return n; };
+  let roh = 0; for (let i = 0; i < karte.kacheln.length; i++) if (karte.kacheln.charCodeAt(i) - 48 === T.BAUM) roh++;
+  const jetzt = zahl();
+  assert.ok(jetzt >= roh * 1.4 && jetzt <= roh * 1.6, `Bäume ${roh} -> ${jetzt}`);
+  for (const h of w.haeuser) if (h.tuer) {
+    const fx = h.tuer.x + h.raus.dx, fy = h.tuer.y + h.raus.dy;
+    assert.notEqual(w.hole(fx, fy), T.BAUM, 'Baum vor Haustür ' + h.nr);
+  }
+  for (const b of w.behaelter) assert.notEqual(w.hole(Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL)), T.BAUM, 'Baum unter ' + b.art);
+  for (const s of w.sperren) assert.notEqual(w.hole(Math.floor(s.x / KACHEL), Math.floor(s.y / KACHEL)), T.BAUM, 'Baum auf Sperre');
+  assert.notEqual(w.hole(Math.floor(w.start.x / KACHEL), Math.floor(w.start.y / KACHEL)), T.BAUM);
+  // Kronen sind 1,3- bis 1,6-mal so groß wie die alten (58 bzw. 40 px)
+  for (let i = 0; i < 50; i++) { const b = baumVon(i, 3 * i); const basis = b.art.endsWith('klein') ? 40 : 58; assert.ok(b.gr >= basis * 1.3 - 1e-9 && b.gr <= basis * 1.6 + 1e-9); }
+  assert.equal(typeof zeichneBoden, 'function');
+  // Blumenbeete gibt es nicht mehr
+  const quelle = fs.readFileSync(new URL('../client/aussehen.mjs', import.meta.url), 'utf8');
+  assert.ok(!/zeichneBeet|beetHier/.test(quelle));
+});

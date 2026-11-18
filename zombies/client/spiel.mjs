@@ -2,12 +2,13 @@
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, TAUSCH_ABSTAND, WAFFEN, aktiveWaffe, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText,
+  BODEN_DAUER, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten,
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
-import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder } from './aussehen.mjs';
+import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
+import { PUMA_TURM, zeichnePumaTurm } from './stuetzpunkt.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
@@ -539,18 +540,30 @@ class Ort extends Phaser.Scene {
       meldung(m.grund === 'fertig' ? '🤝 Getauscht!' : 'Tausch abgebrochen');
     });
     raum.onMessage('aufloesung', m => zeigeAufloesung(m));
-    raum.onMessage('neustart', () => {
+    raum.onMessage('neustart', m => {
       abgemeldet = true;
-      meldung('🔄 Die Welt wird neu gestartet – gleich geht es weiter …', true);
+      meldung(m?.level ? `🚌 Level ${m.level} – die Fahrt geht los, gleich geht es weiter …` : '🔄 Die Welt wird neu gestartet – gleich geht es weiter …', true);
       setTimeout(() => location.reload(), 2500);
     });
-    raum.onMessage('tor', () => meldung('🎉 Level 1 geschafft! Level 2 – der Wald an der Isar – kommt bald.', true));
+    raum.onMessage('tor', () => meldung(raum.state.aufgaben?.size
+      ? (raum.state.funk ? '🔓 Das Tor ist offen! Der Evakuierungsbus holt euch dort ab.' : '🔓 Das Tor ist offen! Setzt am Funktisch im Safe Room einen 📻 Funkspruch ab – dann kommt der Evakuierungsbus.')
+      : '🔓 Das Tor ist offen!', true));
 
     $('aktion').onclick = () => this.aktion();
     $('aktion2').onclick = () => raum.send('aktion2');
     $('ausruhen').onclick = () => raum.send('ausruhen');
     $('kistezu').onclick = () => kisteZu();
     $('raetselzu').onclick = () => raetselZu();
+    // Aufgabenliste ein- und ausklappen (Wahl bleibt im Browser)
+    {
+      const box = $('aufgaben');
+      try { if (localStorage.getItem('aufgabenZu') === '1') { box.classList.add('zu'); $('aufgabenknopf').setAttribute('aria-expanded', 'false'); } } catch { /* ohne Speicher: offen */ }
+      $('aufgabenknopf').onclick = () => {
+        const zu = box.classList.toggle('zu');
+        $('aufgabenknopf').setAttribute('aria-expanded', String(!zu));
+        try { localStorage.setItem('aufgabenZu', zu ? '1' : '0'); } catch { /* egal */ }
+      };
+    }
     $('tauschok').onclick = () => raum.send('tausch_ok');
     $('tauschab').onclick = () => raum.send('tausch_ende');
     this.hudZeit = 0;
@@ -600,7 +613,7 @@ class Ort extends Phaser.Scene {
     this.behaelterObj = new Map();
     for (const b of this.welt.behaelter) {
       const c = this.add.container(b.x, b.y).setDepth(1);
-      if (b.art === 'bus' || b.art === 'container') { /* Bus: obere Ebene, Container: Kartenstücke (aussehen.mjs) */ }
+      if (b.art === 'bus' || b.art === 'container' || b.art === 'sanikiste' || b.art.startsWith('bw_')) { /* Bus: obere Ebene, Container und Stützpunkt-Kisten: Kartenstücke (aussehen.mjs, stuetzpunkt.mjs) */ }
       else if (b.art === 'auto') { /* geparkte Autos sind in die Kartenstücke gezeichnet (aussehen.mjs) */
       } else {
         const f = { schrank: 0x8d6e63, kuehlschrank: 0xeceff1, spind: 0x78909c }[b.art];
@@ -612,6 +625,7 @@ class Ort extends Phaser.Scene {
       }
       this.behaelterObj.set(b.id, c);
     }
+    this.baueStuetzpunktFiguren();
 
     // Dächer der Safe Rooms als eigene Bilder (grau, mit Schild); die übrigen Dächer stecken in den Kartenstücken
     this.daecher = this.welt.safeRooms.map(s => {
@@ -659,8 +673,34 @@ class Ort extends Phaser.Scene {
     this.input.keyboard.on('keydown-M', () => { this.uebersicht.umschalten(); this.uebersichtZeichnen(); });
   }
 
+  // Aufgabenliste im HUD (einklappbar), Level, Evakuierungsbus mit Abfahrtszeit und „an Bord“
+  aufgabenZeigen(ich) {
+    const s = raum.state, box = $('aufgaben'), n = s.aufgaben?.size ?? 0;
+    box.style.display = n ? 'block' : 'none';
+    if (!n) return;
+    const liste = [...s.aufgaben.values()];
+    const fertig = liste.filter(a => a.erledigt).length;
+    textSetzen('aufgabenkopf', `Level ${s.level || 1} · ${fertig}/${n}`);
+    const zeilen = liste.map(a => {
+      const zahl = a.ziel > 1 && !a.erledigt ? ` <span class="ag-zahl">${Math.round(a.fortschritt)}/${Math.round(a.ziel)}</span>` : '';
+      return `<li class="${a.erledigt ? 'fertig' : ''}">${a.erledigt ? '✓' : a.pflicht ? '★' : '•'} ${a.symbol} <span class="ag-text">${escapeHtml(a.text)}</span>${zahl}</li>`;
+    }).join('');
+    if ($('aufgabenliste').innerHTML !== zeilen) $('aufgabenliste').innerHTML = zeilen;
+    let bus = '';
+    if (s.busDa) {
+      const f = [...(s.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung');
+      const px = ich && this.lokal ? this.lokal.x : ich?.x, py = ich && this.lokal ? this.lokal.y : ich?.y;
+      const an = f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND;
+      bus = `🚌 Bus wartet am Ortsausgang bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ' · 🚌 du bist an Bord' : ''}`;
+    } else if (s.funk && s.busAnkunft >= 0) bus = `🚌 Der Bus kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang`;
+    else bus = '📻 Funkspruch fehlt – ohne ihn kommt kein Bus';
+    textSetzen('busanzeige', bus);
+  }
+
   uebersichtZeichnen() {
     if (!this.uebersicht) return;
+    const bf = raum.state.busDa ? [...(raum.state.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung') : null;
+    this.uebersicht.bus = bf ? { x: bf.x / KACHEL, y: bf.y / KACHEL } : null;
     const spieler = [...raum.state.spieler.entries()].map(([id, p]) => ({
       x: id === meineId && this.lokal ? this.lokal.x : p.x, y: id === meineId && this.lokal ? this.lokal.y : p.y,
       ebene: p.ebene ?? '', name: p.name, ich: id === meineId, farbe: css(FARBEN[p.farbe % FARBEN.length]),
@@ -684,11 +724,13 @@ class Ort extends Phaser.Scene {
       budget--; const st = this.baueStueck(cx, cy);
       if (budget > 0) { budget--; this.baueStueckOben(st); }
     }
+    // Kronen-Ebene zuletzt und ebenfalls schrittweise (nur Stücke mit Bäumen bekommen eine Textur)
+    for (const st of this.stuecke.values()) if (st.oben && st.baum === undefined && budget > 0) { budget--; this.baueStueckBaeume(st); }
     for (const [key, st] of this.stuecke) {
       // freigeben erst ab 640 px außerhalb des Bildes (kein Hin und Her an der Grenze, aber nicht zu viel Speicher)
       if ((st.cx + 1) * K > v.x - 640 && st.cx * K < v.right + 640 && (st.cy + 1) * K > v.y - 640 && st.cy * K < v.bottom + 640) continue;
-      st.boden.destroy(); st.oben?.destroy();
-      this.textures.remove('boden-' + key); this.textures.remove('oben-' + key);
+      st.boden.destroy(); st.oben?.destroy(); st.baum?.destroy();
+      this.textures.remove('boden-' + key); this.textures.remove('oben-' + key); if (this.textures.exists('baum-' + key)) this.textures.remove('baum-' + key);
       this.stuecke.delete(key);
     }
   }
@@ -699,7 +741,7 @@ class Ort extends Phaser.Scene {
     const tb = this.textures.createCanvas('boden-' + key, B, H);
     zeichneBoden(tb.getContext(), this.welt, rect); tb.refresh(); this.kanteFesthalten(tb);
     const boden = this.add.image(rect.x0 * KACHEL, rect.y0 * KACHEL, 'boden-' + key).setOrigin(0).setDepth(0).setVisible(!this.aktEbene);
-    const st = { cx, cy, key, rect, B, H, boden, oben: null };
+    const st = { cx, cy, key, rect, B, H, boden, oben: null, baum: undefined };
     this.stuecke.set(key, st);
     return st;
   }
@@ -725,6 +767,15 @@ class Ort extends Phaser.Scene {
     zeichneDaecher(ctx, this.welt, st.rect);
     to.refresh(); this.kanteFesthalten(to);
     st.oben = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'oben-' + st.key).setOrigin(0).setDepth(5).setVisible(!this.aktEbene);
+  }
+
+  // Baumkronen eines Stücks: eigene Ebene über den Figuren, halbtransparent, damit man darunter alles sieht (auch sich selbst)
+  baueStueckBaeume(st) {
+    if (!hatBaeume(this.welt, st.rect)) { st.baum = null; return; }
+    const tk = this.textures.createCanvas('baum-' + st.key, st.B, st.H);
+    zeichneKronen(tk.getContext(), this.welt, this.bilder, st.rect);
+    tk.refresh(); this.kanteFesthalten(tk);
+    st.baum = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'baum-' + st.key).setOrigin(0).setDepth(6.5).setAlpha(0.55).setVisible(!this.aktEbene);
   }
 
   // Haustüren draußen: geschlossen = dunkler Balken, Barrikade = Bretter, zerbrochen = Splitter
@@ -788,12 +839,29 @@ class Ort extends Phaser.Scene {
   }
 
   // Fahrzeugbilder einmalig zeichnen (Front zeigt nach rechts)
-  fahrzeugTextur(art, farbe = 0) {
-    const key = art === 'auto' ? 'fz-auto-' + (farbe % 8) : art === 'laster' ? 'fz-laster-' + (farbe % 4) : 'fz-' + art;
+  // anim: Blaulicht-Bild 1..3 der Polizei (nur mit Bild-Sprite)
+  fahrzeugTextur(art, farbe = 0, anim = 0) {
+    // Bild-Sprites (autos.webp): Laster je nach Farbe truck/Mini_truck, Polizei mit wechselnden Blaulichtbildern
+    const sprite = art === 'laster' ? autoEintraege('laster') : art === 'polizei' ? autoEintraege('polizei') : [];
+    const sp = sprite.length ? sprite[farbe % sprite.length] : null;
+    const key = art === 'auto' ? 'fz-auto-' + (farbe % 8) : art === 'laster' ? (sp ? 'fz-laster-s' + (farbe % sprite.length) : 'fz-laster-' + (farbe % 4))
+      : art === 'polizei' && sp ? 'fz-polizei-s' + anim : 'fz-' + art;
     if (this.textures.exists(key)) return key;
-    const breit = art === 'bus' ? 136 : art === 'laster' ? 92 : art === 'feuerwehr' ? 84 : 60, hoch = art === 'bus' ? 40 : 34;
+    const breit = art === 'bus' || art === 'evakuierung' ? 136 : art === 'laster' ? 92 : art === 'feuerwehr' ? 84 : 60;
+    const hoch = art === 'bus' || art === 'evakuierung' ? 40 : sp && art === 'laster' ? 46 : 34;
     const t = this.textures.createCanvas(key, breit, hoch), c = t.getContext();
-    if (art === 'bus') busVonOben(c, breit / 2, hoch / 2, false, 0.6);
+    if (sp) {
+      // Fahrzeuglänge im Verkehr: Laster 90 px, Polizei 50 px (LAENGE in server/verkehr.mjs); Sprite auf diese Länge strecken
+      const e = art === 'polizei' ? autoAnimEintrag(sp, anim) : sp, soll = art === 'laster' ? 90 : 50, k = soll / e.laenge;
+      c.save(); c.translate(breit / 2, hoch / 2); c.scale(k, k); zeichneAutoBild(c, e, 0, 0); c.restore();
+    } else if (art === 'bus') busVonOben(c, breit / 2, hoch / 2, false, 0.6);
+    else if (art === 'evakuierung') {
+      // Evakuierungsbus: gelb mit Schild auf dem Dach
+      busVonOben(c, breit / 2, hoch / 2, false, 0.6);
+      c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(255,214,0,.78)'; c.fillRect(0, 0, breit, hoch); c.globalCompositeOperation = 'source-over';
+      c.fillStyle = '#212121'; c.fillRect(30, hoch / 2 - 6, 52, 12);
+      c.fillStyle = '#ffd600'; c.font = 'bold 9px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('EVAKUIERUNG', 56, hoch / 2 + 0.5);
+    }
     else if (art === 'feuerwehr') {
       c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(6, 7, 74, 24);
       c.fillStyle = '#c62828'; c.beginPath(); c.roundRect(2, 4, 76, 24, 5); c.fill();
@@ -819,7 +887,7 @@ class Ort extends Phaser.Scene {
       c.globalCompositeOperation = 'source-over';
     } else {
       const f = art === 'polizei' ? 2 : farbe;
-      autoVonOben(c, { x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f, vorwaerts: true, gezeichnet: art === 'polizei' });
+      autoVonOben(c, { id: 'fz' + art + f * 7919, x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f, vorwaerts: true, gezeichnet: art === 'polizei' });
       if (art === 'polizei') { c.fillStyle = '#1565c0'; c.fillRect(10, hoch / 2 - 11, 40, 3); c.fillRect(10, hoch / 2 + 8, 40, 3); c.fillStyle = '#263238'; c.fillRect(27, hoch / 2 - 6, 6, 12); }
     }
     t.refresh();
@@ -1014,7 +1082,7 @@ class Ort extends Phaser.Scene {
   wechsleAnsicht(ebene) {
     this.aktEbene = ebene;
     for (const o of this.aussenObjekte) o.setVisible(!ebene);
-    for (const st of this.stuecke.values()) { st.boden.setVisible(!ebene); st.oben?.setVisible(!ebene); }
+    for (const st of this.stuecke.values()) { st.boden.setVisible(!ebene); st.oben?.setVisible(!ebene); st.baum?.setVisible(!ebene); }
     const teile = a => [a.bild, a.tueren, a.dunkel, a.nebel, a.safe, a.bretter, a.schild].filter(Boolean);
     for (const [e, a] of this.innenAnsichten) for (const o of teile(a)) o.setVisible(e === ebene);
     const cam = this.cameras.main;
@@ -1307,7 +1375,7 @@ class Ort extends Phaser.Scene {
     const blink = Math.floor(this.time.now / 180) % 2;
     for (const [id, f] of s.fahrzeuge ?? []) {
       let o = this.busObj.get(id);
-      const key = this.fahrzeugTextur(f.art, f.farbe);
+      const key = this.fahrzeugTextur(f.art, f.farbe, f.art === 'polizei' ? 1 + Math.floor(this.time.now / 150) % 3 : 0);
       if (!o) {
         const bild = this.add.image(0, 0, key);
         const licht = this.add.graphics();
@@ -1331,15 +1399,21 @@ class Ort extends Phaser.Scene {
         o.vorher = d;
       }
       if (f.art === 'polizei' || f.art === 'feuerwehr') {
-        // Dauersirene: blendet mit der Entfernung ein und aus, Tonhöhe nach Annäherung (Doppler)
-        if (!o.sirene) o.sirene = ton.sireneStarten();
-        if (o.sirene && this.lokal) {
-          const d = Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y);
+        // Sirene nur, solange das Fahrzeug fährt und nah ist (bis ca. 45 m = 360 px, draußen; im Haus halb so weit);
+        // steht es (Feuerwehr am Brand), ist sie nach 4 s aus
+        const d = this.lokal ? Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y) : Infinity;
+        const weite = this.aktEbene ? 180 : 360;
+        o.haltT = f.haelt ? (o.haltT ?? 0) + dt : 0;
+        const stumm = o.haltT > 4;
+        if (!o.sirene && !stumm && d < weite * 1.2) o.sirene = ton.sireneStarten();
+        else if (o.sirene && (d > weite * 1.6 || (stumm && o.haltT > 7))) { ton.sireneStoppen(o.sirene); o.sirene = null; }
+        if (o.sirene) {
           const naeher = o.letzterAbstand === undefined ? 0 : (o.letzterAbstand - d) / Math.max(dt, 0.001);
-          o.letzterAbstand = d;
-          ton.sireneLage(o.sirene, o.x, o.y, this.aktEbene ? naeher * 0.5 : naeher);
+          ton.sireneLage(o.sirene, o.x, o.y, naeher, weite, stumm);
         }
+        o.letzterAbstand = d;
         const vx = f.art === 'feuerwehr' ? 16 : 2;
+        if (f.art === 'polizei' && autoEintraege('polizei').length) continue;   // Blaulicht steckt im Sprite
         o.licht.fillStyle(blink ? 0x2962ff : 0x82b1ff, 1).fillCircle(vx, -5, 3.5);
         o.licht.fillStyle(blink ? 0x82b1ff : 0x2962ff, 1).fillCircle(vx, 5, 3.5);
         o.licht.fillStyle(0x448aff, 0.18).fillCircle(vx, 0, blink ? 26 : 18);
@@ -1371,6 +1445,45 @@ class Ort extends Phaser.Scene {
     }
     this.zeichneBarrikaden();
     this.zeichneTor();
+  }
+
+  // Bundeswehr-Stützpunkt (client/stuetzpunkt.mjs): Soldaten, Ärzte, Verwundete und der Puma-Turm als eigene Objekte, einmal beim
+  // Aufbau der Welt angelegt (nur draußen sichtbar, über aussenObjekte). Verhalten kommt vom Server später; hier nur Darstellung.
+  baueStuetzpunktFiguren() {
+    const sp = this.welt.stuetzpunkt;
+    const o = this.stuetzpunktObj = { turm: null, soldaten: [], aerzte: [], verwundete: [] };
+    if (!sp) return;
+    const pumaT = sp.teile.find(t => t.art === 'puma');
+    if (pumaT) {
+      if (!this.textures.exists('puma-turm')) { const tex = this.textures.createCanvas('puma-turm', PUMA_TURM.b, PUMA_TURM.h); zeichnePumaTurm(tex.getContext()); tex.refresh(); }
+      o.turm = this.add.image(pumaT.turm.x, pumaT.turm.y, 'puma-turm').setOrigin(PUMA_TURM.mx / PUMA_TURM.b, PUMA_TURM.my / PUMA_TURM.h).setRotation(pumaT.turm.winkel).setDepth(5.1);
+    }
+    const soldat = (x, y, blick, phase) => {
+      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE);
+      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE);
+      const box = this.add.container(x, y, [fuesse, bild]).setDepth(3.5).setRotation(blick);
+      o.soldaten.push({ box, bild, phase });
+    };
+    sp.teile.forEach((t, i) => {
+      if (t.art === 'mgnest') soldat(t.x - Math.cos(t.blick) * 5, t.y - Math.sin(t.blick) * 5, t.blick, i);   // hinter dem MG
+      else if (t.art === 'posten' && t.rolle === 'soldat') soldat(t.x, t.y, t.blick, i);
+      else if (t.art === 'posten' && t.rolle === 'arzt') {
+        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(BOGEN2_GROESSE * 0.95);
+        o.aerzte.push({ box: this.add.container(t.x, t.y, [bild]).setDepth(3.5).setRotation(t.blick), bild });
+      } else if (t.art === 'posten' && t.rolle === 'verwundet') {
+        const bild = this.add.image(t.x, t.y, 'figuren2', this.figurBild2('verwundet', t.variante)).setScale(BOGEN2_GROESSE * 1.26).setRotation(t.blick).setDepth(0.6);
+        o.verwundete.push({ bild, s0: BOGEN2_GROESSE * 1.26, phase: i });
+      }
+    });
+  }
+
+  // leichte Idle-Animation: Soldaten wechseln langsam das Haltungsbild, Verwundete atmen
+  stuetzpunktAnimieren() {
+    const o = this.stuetzpunktObj;
+    if (!o || this.aktEbene) return;
+    const jetzt = this.time.now;
+    for (const s of o.soldaten) s.bild.setFrame(this.figurBild2('soldat_idle', Math.floor(jetzt / 220 + s.phase * 3)));
+    for (const v of o.verwundete) v.bild.setScale(v.s0 * (1 + Math.sin(jetzt / 900 + v.phase) * 0.012));
   }
 
   zeichneTor() {
@@ -1424,7 +1537,7 @@ class Ort extends Phaser.Scene {
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
-    const tun = zombie ? '🧟' : p.aktion === 'klettern' ? '🧗' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.ruht ? '💤' : p.infektion > 0 ? '🦠' : '';
+    const tun = zombie ? '🧟' : p.aktion === 'klettern' ? '🧗' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.aktion === 'funk' ? '📻' : p.ruht ? '💤' : p.infektion > 0 ? '🦠' : '';
     if (f.tun.text !== tun) f.tun.setText(tun);
   }
 
@@ -1575,6 +1688,11 @@ class Ort extends Phaser.Scene {
         if (imWeg) return { art: 'wegziehen', text: '🧟 Toten Zombie aus der Tür ziehen' };
         if (ich.rucksack.includes('bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Eingangstür verbarrikadieren' };
       }
+      const funkTisch = raum.state.aufgaben?.size && !raum.state.funk ? w.moebel?.find(q => q.art === 'funktisch') : null;
+      if (funkTisch) {
+        const nx = Math.max(funkTisch.x * KACHEL, Math.min((funkTisch.x + funkTisch.b) * KACHEL, x)), ny = Math.max(funkTisch.y * KACHEL, Math.min((funkTisch.y + funkTisch.h) * KACHEL, y));
+        if (Math.hypot(x - nx, y - ny) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
+      }
       if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < AKTION_ABSTAND + 20) {
         return { art: 'kiste', text: '📦 Vorräte', safe };
       }
@@ -1672,9 +1790,14 @@ class Ort extends Phaser.Scene {
   // ---------- Schleife ----------
   update(_t, ms) {
     const dt = Math.min(0.1, ms / 1000);
+    // Tag/Nacht-Zeiten vom Server (Einstellung) übernehmen
+    if (raum.state.tagAb && (raum.state.tagAb !== this.tagAb || raum.state.nachtAb !== this.nachtAb)) {
+      this.tagAb = raum.state.tagAb; this.nachtAb = raum.state.nachtAb; setzeTageszeiten(this.tagAb, this.nachtAb);
+    }
     this.leseEingabe();
     this.zeichneStick();
     this.abgleichen(dt);
+    this.stuetzpunktAnimieren();
     const meine = raum.state.spieler.get(meineId);
     if (meine && (meine.ebene ?? '') !== this.aktEbene) {
       this.wechsleAnsicht(meine.ebene ?? '');
@@ -1771,6 +1894,7 @@ class Ort extends Phaser.Scene {
       const g = $('gruen');
       if (g.style.opacity !== gruen.toFixed(2)) g.style.opacity = gruen.toFixed(2);
     }
+    this.aufgabenZeigen(ich);
     const uhr = s.uhr ?? 480, hellJetzt = helligkeit(uhr);
     textSetzen('zeit', `${istNacht(uhr) ? '🌙' : hellJetzt < 1 ? '🌅' : '☀️'} ${uhrText(uhr)}`);
     ton.tageszeit(istNacht(uhr));
@@ -1799,7 +1923,7 @@ class Ort extends Phaser.Scene {
     if (s.phase === 'erwischt') hinweis = 'Erwischt! 🧟<br>Ihr schleppt euch in die Safe Rooms …';
     else if (ich && ich.zombie > 0) hinweis = `🧟 Du bist ein Zombie! Beiß die anderen.<br>Noch ${zeitText(ich.zombie)}, dann wachst du im Safe Room auf.`;
     else if (ich && ich.unten) hinweis = `Du liegst am Boden.<br>Ein Mitspieler muss dir aufhelfen.${balken(ich.hilfe)}`;
-    else if (ich && ich.aktion) hinweis = `${{ barrikade: '🔨 Verbarrikadieren', wegziehen: '🧟 Wegziehen', aufheben: '✋ Aufheben', aufbrechen: '⚒️ Aufbrechen', aufschliessen: '🔑 Aufschließen', tuer_auf: '🚪 Öffnen', tuer_zu: '🚪 Schließen' }[ich.aktion] ?? '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
+    else if (ich && ich.aktion) hinweis = `${{ funk: '📻 Funkspruch läuft', barrikade: '🔨 Verbarrikadieren', wegziehen: '🧟 Wegziehen', aufheben: '✋ Aufheben', aufbrechen: '⚒️ Aufbrechen', aufschliessen: '🔑 Aufschließen', tuer_auf: '🚪 Öffnen', tuer_zu: '🚪 Schließen' }[ich.aktion] ?? '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
     else if (ich) {
       for (const p of s.spieler.values()) {
         if (p === ich || !p.unten) continue;

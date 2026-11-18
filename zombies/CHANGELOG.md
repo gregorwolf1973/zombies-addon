@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.29.0 – 18.11.2026
+
+- Aufgaben und Evakuierung: Jede Runde hat gemeinsame Aufgaben (Pflicht: Funkspruch am Funktisch eines Safe Rooms;
+  dazu z. B. Vorräte in die Kiste, Medizin holen, Zombies erledigen, Tor öffnen). Mit Funkspruch kommt um 18 Uhr ein
+  gelber Evakuierungsbus zum Ortsausgang und wartet; wer an Bord ist und genug Aufgaben geschafft hat, fährt ins
+  nächste Level (Geretsried ↔ Isarauen). Aufgabenliste links oben (📋), Bus auf der Eckkarte; Einstellungen
+  „Aufgaben & Evakuierung“
+- Bundeswehr-Stützpunkt (Aufbau): je Karte eine Feldstellung mit S-Draht und Durchfahrt, Schützenpanzer Puma,
+  Sandsackstellungen, MG-Nestern, Sanitätszelt mit Feldbetten, Verwundeten und Ärzten, Funkzelt und Lager mit
+  Munitionskisten, Container und LKW; Kisten durchsuchbar, ✚ auf der Eckkarte
+- Zombiewellen: alle 20 Spielminuten (einstellbar) zieht eine Gruppe von 20–50 Zombies von Westen oder Osten quer
+  durchs Bild; Zombies laufen unterschiedlich schnell (±10 %)
+- Sirene: Blaulicht-Fahrten viel seltener (Einstellung aus/selten/normal), Sirene nur in der Nähe und nur während der
+  Fahrt
+- Mehr und größere Bäume; Baumkronen sind durchscheinend und verdecken keine Figuren mehr; Blumenbeete entfernt
+- Viele neue Autos (OpenGameArt: Unlucky Studio, looneybits, TRBRY, Cliipso), Polizei mit Blaulicht-Bildern, echte
+  Laster
+- Tag- und Nachtbeginn einstellbar (Dämmerung je 2 Stunden davor)
+- Einstellungsseite in Reitern (Spiel, Zombies, Welt & Ausbruch, Funde & Waffen, Sprache & Töne, Aufgaben, Test &
+  Neustart) – Gliederung mit DeepSeek erarbeitet
+- Die Welt wird einmal neu erzeugt
+
 ## 0.28.0 – 18.11.2026
 
 - Safe Rooms als Notlager: Feldbetten, Vorratsregale und Erste-Hilfe-Kasten (durchsuchbar), Funktisch, Generator,

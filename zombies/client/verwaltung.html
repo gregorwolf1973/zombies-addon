@@ -398,6 +398,30 @@
   .leistung table { width: 100%; border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
   .leistung td, .leistung th { text-align: left; padding: 3px 6px; border-bottom: 1px solid rgba(127,127,127,.2); }
   .leistung .warnung { color: #e8833a; }
+
+/* ---------- Reiter (Gliederung und Code-Grundlage: DeepSeek) ---------- */
+.reiterleiste { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; padding: 10px 12px; background: var(--bg);
+  border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; scroll-behavior: smooth; margin: 0 0 4px; }
+.reiterleiste::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.reiterleiste [role="tab"] { flex: 0 0 auto; scroll-snap-align: start; margin: 0; padding: 8px 14px; font: inherit; font-size: .95rem; line-height: 1.25;
+  white-space: nowrap; color: var(--text); background: var(--chip); border: 1px solid var(--border); border-radius: 999px; box-shadow: none; cursor: pointer;
+  -webkit-appearance: none; appearance: none; width: auto; }
+.reiterleiste [role="tab"]:hover { border-color: var(--akzent); }
+.reiterleiste [role="tab"][aria-selected="true"] { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); font-weight: 600; }
+.reiterleiste [role="tab"]:focus { outline: none; }
+.reiterleiste [role="tab"]:focus-visible { outline: 3px solid var(--akzent); outline-offset: 3px; }
+.reiterleiste [role="tab"][aria-selected="true"]:focus-visible { outline-color: var(--text); }
+.reiterpanel { padding: 12px 0 32px; }
+.reiterpanel[hidden] { display: none; }
+.reiterpanel > section.karte { margin: 0 0 16px 0; }
+.reiterpanel > section.karte:last-child { margin-bottom: 0; }
+.hilfe { display: block; margin: 4px 0 0; font-size: .8rem; line-height: 1.4; color: var(--text-soft); }
+/* Speicher-Rückmeldung der Regler: unten rechts, damit sie in jedem Reiter sichtbar ist */
+#tnStatus { position: fixed; right: 16px; bottom: 16px; z-index: 30; margin: 0; padding: 6px 12px; border-radius: 999px; background: var(--card);
+  box-shadow: var(--shadow); font-weight: 600; pointer-events: none; }
+#tnStatus:empty { display: none; }
+@media (min-width: 600px) { .reiterleiste { flex-wrap: wrap; overflow-x: visible; } }
 </style>
 </head>
 <body>
@@ -427,6 +451,15 @@
       <table id="leistungTabelle"><thead><tr><th>Teil</th><th>Mittel</th><th>Spitze</th></tr></thead><tbody></tbody></table>
     </details>
   </section>
+<nav class="reiterleiste" role="tablist" aria-label="Einstellungen">
+  <button type="button" role="tab" id="reiter-spiel" aria-controls="panel-spiel" aria-selected="false" tabindex="-1">🎮 Spiel</button>
+  <button type="button" role="tab" id="reiter-zombies" aria-controls="panel-zombies" aria-selected="false" tabindex="-1">🧟 Zombies</button>
+  <button type="button" role="tab" id="reiter-welt" aria-controls="panel-welt" aria-selected="false" tabindex="-1">🌍 Welt &amp; Ausbruch</button>
+  <button type="button" role="tab" id="reiter-funde" aria-controls="panel-funde" aria-selected="false" tabindex="-1">🎒 Funde &amp; Waffen</button>
+  <button type="button" role="tab" id="reiter-ton" aria-controls="panel-ton" aria-selected="false" tabindex="-1">🗣️ Sprache &amp; Töne</button>
+  <button type="button" role="tab" id="reiter-aufgaben" aria-controls="panel-aufgaben" aria-selected="false" tabindex="-1">🎯 Aufgaben</button>
+  <button type="button" role="tab" id="reiter-admin" aria-controls="panel-admin" aria-selected="false" tabindex="-1">🧪 Test &amp; Neustart</button>
+</nav>
 
   <!-- Testwerkzeuge -->
   <section class="karte" aria-labelledby="titelTest">
@@ -481,6 +514,31 @@
       </div>
       <div class="aktion-zeile" style="margin-top:4px;">
         <button type="button" class="klein" data-normal="tempo">normal</button>
+      </div>
+    </div>
+
+    <div class="feld">
+      <label for="welle">Zombiewelle: alle</label>
+      <div class="wertzeile">
+        <input type="range" id="welle" min="0" max="120" step="5">
+        <span class="wert" id="welleWert">20 min</span>
+      </div>
+      <p class="hinweis">Eine große Gruppe zieht von links oder rechts durchs Bild (Meldung 10 s vorher). 0 = keine Wellen. Spielminuten.</p>
+    </div>
+
+    <div class="feld">
+      <label for="welleMin">Größe der Welle: mindestens</label>
+      <div class="wertzeile">
+        <input type="range" id="welleMin" min="5" max="50" step="1">
+        <span class="wert" id="welleMinWert">20</span>
+      </div>
+    </div>
+
+    <div class="feld">
+      <label for="welleMax">… höchstens</label>
+      <div class="wertzeile">
+        <input type="range" id="welleMax" min="5" max="50" step="1">
+        <span class="wert" id="welleMaxWert">50</span>
       </div>
     </div>
   </section>
@@ -543,6 +601,10 @@
   <p class="tn-leise">Uhrzeit setzen geht nur, solange jemand spielt. Dämmerung 5–7 Uhr und 19:30–21:30 Uhr.</p>
   <label for="tnTag">Ein Spieltag dauert</label>
   <div class="tn-zeile"><input type="range" id="tnTag" min="10" max="240" step="2"><span id="tnTagWert">48 min</span></div>
+  <label for="tnTagAb">Tag beginnt (ganz hell, 2 h Dämmerung davor)</label>
+  <div class="tn-zeile"><input type="range" id="tnTagAb" min="240" max="660" step="15"><span id="tnTagAbWert">07:00</span></div>
+  <label for="tnNachtAb">Nacht beginnt (ganz dunkel, 2 h Dämmerung davor)</label>
+  <div class="tn-zeile"><input type="range" id="tnNachtAb" min="1080" max="1425" step="15"><span id="tnNachtAbWert">21:30</span></div>
   <label for="tnNacht">Zombies nachts draußen</label>
   <div class="tn-zeile"><input type="range" id="tnNacht" min="10" max="30" step="1"><span id="tnNachtWert">×1,5</span></div>
   <label for="tnAutos">Geparkte Autos</label>
@@ -562,6 +624,8 @@
   <div class="tn-zeile"><input type="range" id="tnVerkehr" min="0" max="20" step="1"><span id="tnVerkehrWert">6</span></div>
   <label for="tnVerkehrPhase">… während der ersten</label>
   <div class="tn-zeile"><input type="range" id="tnVerkehrPhase" min="0" max="120" step="5"><span id="tnVerkehrPhaseWert">25 min</span></div>
+  <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
+  <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px">Automatische Schussreichweite</div>
   <label for="rwPistole">🔫 Pistole</label>
@@ -574,16 +638,16 @@
   <p class="tn-status" id="tnStatus" aria-live="polite"></p>
 </section>
 <style>
-  #tagNachtKarte .tn-uhr { font-size: 1.6rem; font-weight: 600; margin: 4px 0 8px; }
-  #tagNachtKarte .tn-leise { color: var(--text-soft); font-size: .85rem; font-weight: 400; }
-  #tagNachtKarte .tn-knoepfe { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-  #tagNachtKarte .tn-knoepfe button { flex: 1 1 90px; min-height: 40px; }
-  #tagNachtKarte .tn-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  #tagNachtKarte .tn-zeile input { flex: 1; }
-  #tagNachtKarte .tn-zeile span { min-width: 64px; text-align: right; }
-  #tagNachtKarte .tn-schalter { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; font-weight: 600; }
-  #tagNachtKarte .tn-schalter input { width: 22px; height: 22px; }
-  #tagNachtKarte .tn-status { min-height: 1.2em; font-size: .85rem; }
+  .tn-uhr { font-size: 1.6rem; font-weight: 600; margin: 4px 0 8px; }
+  .tn-leise { color: var(--text-soft); font-size: .85rem; font-weight: 400; }
+  .tn-knoepfe { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .tn-knoepfe button { flex: 1 1 90px; min-height: 40px; }
+  .tn-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .tn-zeile input { flex: 1; }
+  .tn-zeile span { min-width: 64px; text-align: right; }
+  .tn-schalter { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; font-weight: 600; }
+  .tn-schalter input { width: 22px; height: 22px; }
+  .tn-status { min-height: 1.2em; font-size: .85rem; }
 </style>
 <script>
   // Farben des Home-Assistant-Designs übernehmen (die Seite läuft im HA-Rahmen auf derselben Adresse)
@@ -609,7 +673,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var komma = function (v) { return '×' + (v / 10).toFixed(1).replace('.', ','); };
   var uhrText = function (u) { u = Math.floor(u); return String(Math.floor(u / 60)).padStart(2, '0') + ':' + String(u % 60).padStart(2, '0'); };
-  var phase = function (u) { return (u >= 1290 || u < 300) ? 'Nacht' : (u >= 1170 || u < 420) ? 'Dämmerung' : 'Tag'; };
+  var tagAb = 420, nachtAb = 1290;
+  var phase = function (u) { return (u >= nachtAb || u < tagAb - 120) ? 'Nacht' : (u >= nachtAb - 120 || u < tagAb) ? 'Dämmerung' : 'Tag'; };
   var aktiv = null;
   function status(text, fehler) {
     var s = $('tnStatus'); s.textContent = text; s.style.color = fehler ? 'var(--gefahr)' : 'var(--akzent)';
@@ -620,6 +685,9 @@
     if (d.uhr === null || d.uhr === undefined) { $('tnUhr').textContent = '–'; $('tnPhase').textContent = 'niemand spielt gerade'; }
     else { $('tnUhr').textContent = uhrText(d.uhr); $('tnPhase').textContent = phase(d.uhr); }
     if (aktiv !== 'tnTag') { $('tnTag').value = e.tagMinuten || 48; $('tnTagWert').textContent = $('tnTag').value + ' min'; }
+    tagAb = e.tagAb || 420; nachtAb = e.nachtAb || 1290;
+    if (aktiv !== 'tnTagAb') { $('tnTagAb').value = tagAb; $('tnTagAbWert').textContent = uhrText(tagAb); }
+    if (aktiv !== 'tnNachtAb') { $('tnNachtAb').value = nachtAb; $('tnNachtAbWert').textContent = uhrText(nachtAb); }
     if (aktiv !== 'tnNacht') { $('tnNacht').value = (e.zombies && e.zombies.nacht) || 15; $('tnNachtWert').textContent = komma($('tnNacht').value); }
     if (aktiv !== 'tnAutos') { $('tnAutos').value = e.autos === undefined ? 10 : e.autos; $('tnAutosWert').textContent = komma($('tnAutos').value); }
     if (aktiv !== 'tnMenschen') { $('tnMenschen').value = e.menschen === undefined ? 50 : e.menschen; $('tnMenschenWert').textContent = $('tnMenschen').value; }
@@ -630,6 +698,7 @@
     feld('tnFeuerPhase', e.feuerPhase === undefined ? 20 : e.feuerPhase, function (v) { return v + ' min'; });
     feld('tnVerkehr', e.verkehr === undefined ? 6 : e.verkehr, function (v) { return String(v); });
     feld('tnVerkehrPhase', e.verkehrPhase === undefined ? 25 : e.verkehrPhase, function (v) { return v + ' min'; });
+    if (document.activeElement !== $('tnBlaulicht')) $('tnBlaulicht').value = e.blaulicht || 'selten';
     if (document.activeElement !== $('tnKegel')) $('tnKegel').checked = !!e.sichtkegel;
     var rw = e.reichweite || {};
     feld('rwPistole', rw.pistole || 29, function (v) { return v + ' m'; });
@@ -655,6 +724,8 @@
     });
   }
   regler('tnTag', function (v) { return v + ' min'; }, function (v) { return { tagMinuten: v }; });
+  regler('tnTagAb', uhrText, function (v) { return { tagAb: v }; });
+  regler('tnNachtAb', uhrText, function (v) { return { nachtAb: v }; });
   regler('tnNacht', komma, function (v) { return { zombies: { nacht: v } }; });
   regler('tnAutos', komma, function (v) { return { autos: v }; });
   regler('tnMenschen', function (v) { return String(v); }, function (v) { return { menschen: v }; });
@@ -665,6 +736,9 @@
   regler('rwPistole', function (v) { return v + ' m'; }, function (v) { return { reichweite: { pistole: v } }; });
   regler('rwGewehr', function (v) { return v + ' m'; }, function (v) { return { reichweite: { gewehr: v } }; });
   regler('rwSchrot', function (v) { return v + ' m'; }, function (v) { return { reichweite: { schrotflinte: v } }; });
+  $('tnBlaulicht').addEventListener('change', function () {
+    anfrage('verwaltung/api', { blaulicht: $('tnBlaulicht').value }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
   $('tnKegel').addEventListener('change', function () {
     anfrage('verwaltung/api', { sichtkegel: $('tnKegel').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
@@ -743,6 +817,67 @@
   });
   $('spAn').addEventListener('change', function () { senden({ an: $('spAn').checked }); });
   $('spLockt').addEventListener('change', function () { senden({ redenLockt: $('spLockt').checked }); });
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  laden();
+  setInterval(laden, 5000);
+})();
+</script>
+
+<section class="karte" id="aufgabenKarte" aria-labelledby="titelAufgaben">
+  <h2 id="titelAufgaben">🚌 Aufgaben &amp; Evakuierung</h2>
+  <p class="ag-leise">Jede Welt (Level) stellt der Gruppe gemeinsame Aufgaben. Der 📻 Funkspruch am Funktisch eines Safe Rooms ist immer Pflicht und ruft den Evakuierungsbus. Sind bei der Abfahrt alle Pflichtaufgaben und alle bis auf eine erledigt, geht es im Bus in die nächste Karte. Änderungen gelten ab der nächsten Aufgabenrunde (Aufgabenzahl: neue Welt oder neues Level).</p>
+  <label class="ag-schalter"><input type="checkbox" id="agAn"> Aufgaben und Evakuierungsbus aktiv</label>
+  <label for="agStunde">Der Bus kommt um (Spieluhr)</label>
+  <div class="ag-zeile"><input type="range" id="agStunde" min="6" max="23" step="1"><span id="agStundeWert">18:00</span></div>
+  <label for="agWarte">Der Bus wartet</label>
+  <div class="ag-zeile"><input type="range" id="agWarte" min="10" max="180" step="5"><span id="agWarteWert">60 min</span></div>
+  <label for="agAnzahl">Aufgaben je Level</label>
+  <div class="ag-zeile"><input type="range" id="agAnzahl" min="3" max="6" step="1"><span id="agAnzahlWert">4</span></div>
+  <p class="ag-status" id="agStatus" aria-live="polite"></p>
+</section>
+<style>
+  #aufgabenKarte .ag-leise { color: var(--text-soft); font-size: .85rem; font-weight: 400; }
+  #aufgabenKarte .ag-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #aufgabenKarte .ag-zeile input { flex: 1; }
+  #aufgabenKarte .ag-zeile span { min-width: 64px; text-align: right; }
+  #aufgabenKarte .ag-schalter { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; font-weight: 600; }
+  #aufgabenKarte .ag-schalter input { width: 22px; height: 22px; }
+  #aufgabenKarte .ag-status { min-height: 1.2em; font-size: .85rem; }
+</style>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var aktiv = null;
+  var REGLER = [
+    ['agStunde', 'stunde', 18, function (v) { return (v < 10 ? '0' : '') + v + ':00'; }],
+    ['agWarte', 'wartezeit', 60, function (v) { return v + ' min'; }],
+    ['agAnzahl', 'anzahl', 4, function (v) { return String(v); }]
+  ];
+  function status(text, fehler) {
+    var s = $('agStatus'); s.textContent = text; s.style.color = fehler ? 'var(--gefahr)' : 'var(--akzent)';
+    clearTimeout(status.t); status.t = setTimeout(function () { s.textContent = ''; }, 2500);
+  }
+  function zeige(d) {
+    var ag = (d.einstellungen && d.einstellungen.aufgaben) || {};
+    REGLER.forEach(function (r) {
+      if (aktiv === r[0]) return;
+      $(r[0]).value = ag[r[1]] === undefined ? r[2] : ag[r[1]];
+      $(r[0] + 'Wert').textContent = r[3](Number($(r[0]).value));
+    });
+    if (document.activeElement !== $('agAn')) $('agAn').checked = ag.an !== false;
+  }
+  function senden(teil) {
+    return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aufgaben: teil }) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { aktiv = null; zeige(d); status('✓ Gespeichert'); })
+      .catch(function (e) { aktiv = null; status('Fehler: ' + e.message, true); });
+  }
+  REGLER.forEach(function (r) {
+    var el = $(r[0]);
+    el.addEventListener('input', function () { aktiv = r[0]; $(r[0] + 'Wert').textContent = r[3](Number(el.value)); });
+    el.addEventListener('change', function () { var t = {}; t[r[1]] = Number(el.value); senden(t); });
+  });
+  $('agAn').addEventListener('change', function () { senden({ an: $('agAn').checked }); });
   function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
   laden();
   setInterval(laden, 5000);
@@ -1750,7 +1885,14 @@
     $("dichteWert").textContent = faktor(Number(dichte.value));
     $("haeuserWert").textContent = faktor(Number(haeuser.value));
     $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
+    var wz = d.einstellungen && d.einstellungen.zombies || {};
+    [["welle", wz.welle === undefined ? 20 : wz.welle], ["welleMin", wz.welleMin || 20], ["welleMax", wz.welleMax || 50]].forEach(function (p) {
+      var el = $(p[0]);
+      if (!zeitGeber[p[0]] && !istFokussiert(el)) el.value = p[1];
+      $(p[0] + "Wert").textContent = welleText(p[0], Number(el.value));
+    });
   }
+  function welleText(id, v) { return id === "welle" ? (v ? v + " min" : "aus") : String(v); }
 
   function rendereSpiel(d) {
     var e = d.einstellungen || {};
@@ -1904,6 +2046,16 @@
       $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
       clearTimeout(zeitGeber["tempo"]);
       sendenTeil("zombies", "tempo", Number(tempo.value));
+    });
+
+    ["welle", "welleMin", "welleMax"].forEach(function (id) {
+      var el = $(id);
+      el.addEventListener("input", function () { $(id + "Wert").textContent = welleText(id, Number(el.value)); });
+      el.addEventListener("change", function () {
+        $(id + "Wert").textContent = welleText(id, Number(el.value));
+        clearTimeout(zeitGeber[id]);
+        sendenTeil("zombies", id, Number(el.value));
+      });
     });
 
     document.querySelectorAll("button[data-normal]").forEach(function (b) {
@@ -2073,6 +2225,113 @@
   } else {
     start();
   }
+})();
+</script>
+<script>
+// Einstellungen in Reiter gliedern: vorhandene Karten und Regler werden nur verschoben (ids bleiben, die übrigen Skripte
+// finden alles wie bisher). Die gemischte Karte „Tag, Nacht, Ausbruch und Waffen“ wird auf passende Karten verteilt.
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var karteVon = function (titelId) { var h = $(titelId); return h ? h.closest('section') : null; };
+  var nav = document.querySelector('.reiterleiste');
+  if (!nav) return;
+  var P = {}, nach = nav;
+  ['spiel', 'zombies', 'welt', 'funde', 'ton', 'aufgaben', 'admin'].forEach(function (id) {
+    var d = document.createElement('div');
+    d.className = 'reiterpanel'; d.id = 'panel-' + id; d.setAttribute('role', 'tabpanel');
+    d.setAttribute('data-reiter', id); d.setAttribute('aria-labelledby', 'reiter-' + id); d.hidden = true;
+    nach.parentNode.insertBefore(d, nach.nextSibling); nach = d; P[id] = d;
+  });
+  function rein(panel, el) { if (el) panel.appendChild(el); }
+  function neueKarte(panel, titel) {
+    var s = document.createElement('section'); s.className = 'karte';
+    var h = document.createElement('h2'); h.textContent = titel; s.appendChild(h);
+    panel.appendChild(s); return s;
+  }
+  function zeile(karte, id) {
+    var l = document.querySelector('label[for="' + id + '"]'), e = $(id), r = e && e.closest('.tn-zeile');
+    if (l) karte.appendChild(l);
+    if (r) karte.appendChild(r);
+  }
+  var tn = $('tagNachtKarte');
+  // 🎮 Spiel
+  rein(P.spiel, karteVon('titelSpielEinst'));
+  // 🧟 Zombies: Menge/Tempo, dazu nachts und Sichtkegel
+  var zk = karteVon('titelZombies');
+  rein(P.zombies, zk);
+  if (zk) { zeile(zk, 'tnNacht'); var kegel = $('tnKegel'); if (kegel) zk.appendChild(kegel.closest('label')); }
+  // 🌍 Welt & Ausbruch
+  if (tn) {
+    var zeit = neueKarte(P.welt, '🌗 Tag & Nacht');
+    [tn.querySelector('.tn-uhr'), tn.querySelector('.tn-knoepfe')].forEach(function (el) { if (el) zeit.appendChild(el); });
+    var knoepfeHinweis = zeit.querySelector('.tn-knoepfe');
+    var hinweis = tn.querySelector('.tn-knoepfe + p.tn-leise') || [].filter.call(tn.querySelectorAll('p.tn-leise'), function (p) { return /Uhrzeit setzen/.test(p.textContent); })[0];
+    if (hinweis) { hinweis.textContent = 'Uhrzeit setzen geht nur, solange jemand spielt. Dämmerung je 2 Stunden vor Tag- und Nachtbeginn.'; zeit.appendChild(hinweis); }
+    ['tnTag', 'tnTagAb', 'tnNachtAb'].forEach(function (id) { zeile(zeit, id); });
+    var ausbruch = neueKarte(P.welt, '🦠 Ausbruch');
+    ['tnMenschen', 'tnAnst', 'tnBiss'].forEach(function (id) { zeile(ausbruch, id); });
+    rein(ausbruch, $('tnBewohner'));
+    var stadt = neueKarte(P.welt, '🚗 Stadt & Verkehr');
+    zeile(stadt, 'tnAutos'); rein(stadt, $('tnAutosHinweis'));
+    ['tnVerkehr', 'tnVerkehrPhase', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt, id); });
+  }
+  // 🎒 Funde & Waffen
+  rein(P.funde, karteVon('titelFunde'));
+  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot'].forEach(function (id) { zeile(waffen, id); }); }
+  // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
+  rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
+  rein(P.aufgaben, $('aufgabenKarte'));
+  rein(P.admin, karteVon('titelTest')); rein(P.admin, karteVon('titelNeustart'));
+  // Rest der alten Sammelkarte: Statusanzeige behalten (schwebt unten rechts), Karte entfernen
+  if (tn) { var st = $('tnStatus'); if (st) document.body.appendChild(st); tn.parentNode.removeChild(tn); }
+})();
+</script>
+<script>
+// Reiter umschalten (Grundlage: DeepSeek), Wahl merken, Tastatur ←/→/Pos1/Ende, Start aus #reiter oder localStorage
+(function () {
+  'use strict';
+  var SCHLUESSEL = 'verwaltung-reiter';
+  var leiste = document.querySelector('.reiterleiste');
+  if (!leiste) return;
+  var reiter = [].slice.call(leiste.querySelectorAll('[role="tab"]'));
+  var ids = reiter.map(function (k) { return String(k.id).replace(/^reiter-/, ''); });
+  if (!reiter.length) return;
+  function istGueltig(id) { return ids.indexOf(id) >= 0; }
+  function zeige(id) {
+    var ziel = istGueltig(id) ? id : ids[0];
+    for (var k = 0; k < reiter.length; k++) {
+      var aktiv = ids[k] === ziel, panel = document.getElementById('panel-' + ids[k]);
+      reiter[k].setAttribute('aria-selected', aktiv ? 'true' : 'false');
+      reiter[k].setAttribute('tabindex', aktiv ? '0' : '-1');
+      if (panel) panel.hidden = !aktiv;
+      if (aktiv) { try { reiter[k].scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* alte Browser */ } }
+    }
+    try { window.localStorage.setItem(SCHLUESSEL, ziel); } catch (e) { /* kein Speicher */ }
+    try { if (window.history && window.history.replaceState) window.history.replaceState(null, '', '#' + ziel); } catch (e) { /* egal */ }
+  }
+  function fokussiere(index) {
+    var pos = ((index % reiter.length) + reiter.length) % reiter.length;
+    try { reiter[pos].focus(); } catch (e) { /* egal */ }
+    zeige(ids[pos]);
+  }
+  leiste.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[role="tab"]') : null;
+    if (t) zeige(String(t.id).replace(/^reiter-/, ''));
+  });
+  leiste.addEventListener('keydown', function (e) {
+    var aktuell = reiter.indexOf(document.activeElement);
+    if (aktuell < 0) aktuell = reiter.findIndex(function (r) { return r.getAttribute('aria-selected') === 'true'; });
+    if (aktuell < 0) aktuell = 0;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); fokussiere(aktuell - 1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); fokussiere(aktuell + 1); }
+    else if (e.key === 'Home') { e.preventDefault(); fokussiere(0); }
+    else if (e.key === 'End') { e.preventDefault(); fokussiere(reiter.length - 1); }
+  });
+  window.addEventListener('hashchange', function () { var id = String(location.hash || '').replace(/^#/, ''); if (istGueltig(id)) zeige(id); });
+  var start = String(location.hash || '').replace(/^#/, '');
+  if (!istGueltig(start)) { try { start = String(window.localStorage.getItem(SCHLUESSEL) || ''); } catch (e) { start = ''; } }
+  window.zeigeReiter = zeige;
+  zeige(start);
 })();
 </script>
 </body>

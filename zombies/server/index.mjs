@@ -70,6 +70,8 @@ export async function starte({
   app.get('/vendor/colyseus.js', nocache, (req, res) =>
     res.sendFile(path.join(path.dirname(require.resolve('@colyseus/sdk/package.json')), 'dist/colyseus.js')));
   const datei = new EinstellungsDatei(einstellungsDatei, optionen);
+  // Levelwechsel (Evakuierungsbus): die nächste Karte einstellen, die Welt startet der Raum selbst neu
+  SpielRaum.kartenWechsel = karte => { anwenden(datei.aendern({ karte })); };
   let geladeneKarte = null;
   const anwenden = w => {
     if (!geladeneKarte || geladeneKarte.wahl !== w.karte) geladeneKarte = { wahl: w.karte, karte: ladeKarte(w.karte) };
@@ -81,10 +83,11 @@ export async function starte({
       nachtFaktor: w.zombies.nacht / 10,
       autoFaktor: w.autos / 10,
       tagMinuten: w.tagMinuten,
+      tagAb: w.tagAb, nachtAb: w.nachtAb,
       menschen: w.menschen,
       ansteckungMin: w.ansteckung,
       bissChance: w.biss / 100,
-      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, sichtkegel: w.sichtkegel,
+      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, welleMinuten: w.zombies.welle, welleMin: w.zombies.welleMin, welleMax: w.zombies.welleMax, sichtkegel: w.sichtkegel,
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,
@@ -94,6 +97,7 @@ export async function starte({
         an: w.sprache.an, hoerweite: w.sprache.hoerweite, stockwerk: w.sprache.stockwerk / 100,
         drinnenDraussen: w.sprache.drinnenDraussen / 100, funk: w.sprache.funk / 100, redenLockt: w.sprache.redenLockt,
       },
+      aufgaben: w.aufgaben,                         // { an, stunde, wartezeit, anzahl }
       ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,
       unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),

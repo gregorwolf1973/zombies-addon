@@ -297,11 +297,12 @@ export function sireneStarten() {
   }
   return h;
 }
-export function sireneLage(h, x, y, naeher) {
+// weite: Hörweite in Pixeln (Vorgabe 1400; die Sirene nutzt weniger), stumm: sofort weich ausblenden
+export function sireneLage(h, x, y, naeher, weite = 1400, stumm = false) {
   if (!h || !ctx) return;
-  const d = Math.hypot(x - hx, y - hy), weite = 1400;
-  const v = an ? Math.max(0, 1 - d / weite) ** 1.5 * h.laut : 0;
-  h.g.gain.setTargetAtTime(v, ctx.currentTime, 0.15);                     // sanft ein- und ausblenden
+  const d = Math.hypot(x - hx, y - hy);
+  const v = an && !stumm ? Math.max(0, 1 - d / weite) ** 1.5 * h.laut : 0;
+  h.g.gain.setTargetAtTime(v, ctx.currentTime, stumm ? 0.2 : 0.12);       // sanft ein- und ausblenden (kurz)
   if (h.pan) h.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, (x - hx) / 500)), ctx.currentTime, 0.1);
   const doppler = Math.max(0.9, Math.min(1.1, 1 + naeher / 1600));          // kommt näher: höher, fährt weg: tiefer
   if (h.rate) h.rate.setTargetAtTime(doppler, ctx.currentTime, 0.2);
@@ -309,8 +310,8 @@ export function sireneLage(h, x, y, naeher) {
 }
 export function sireneStoppen(h) {
   if (!h || !ctx) return;
-  h.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3);
-  setTimeout(() => { for (const q of h.quellen) { try { q.stop(); } catch { /* schon aus */ } } }, 1500);
+  h.g.gain.setTargetAtTime(0, ctx.currentTime, 0.12);
+  setTimeout(() => { for (const q of h.quellen) { try { q.stop(); } catch { /* schon aus */ } } }, 700);
 }
 
 // ---------- Brandrauschen: dauerndes Fauchen, Stärke nach Nähe und Größe der Brände ----------

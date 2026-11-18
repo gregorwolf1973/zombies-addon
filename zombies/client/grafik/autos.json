@@ -1,56 +1,239 @@
 {
- "feldB": 100,
- "feldH": 50,
- "spalten": 8,
+ "feldB": 188,
+ "feldH": 96,
+ "spalten": 21,
+ "zeilen": 2,
  "mass": 2,
  "autos": [
   {
    "art": "pkw",
    "laenge": 46,
+   "breite": 21,
    "farbe": 0,
    "nr": 0
   },
   {
    "art": "pkw",
    "laenge": 46,
+   "breite": 21,
    "farbe": 1,
    "nr": 1
   },
   {
    "art": "pkw",
    "laenge": 46,
+   "breite": 21,
    "farbe": 2,
    "nr": 2
   },
   {
    "art": "pkw",
    "laenge": 46,
+   "breite": 21,
    "farbe": 3,
    "nr": 3
   },
   {
    "art": "pkw",
    "laenge": 46,
+   "breite": 21,
    "farbe": 4,
    "nr": 4
   },
   {
    "art": "pkw",
    "laenge": 46,
+   "breite": 21,
    "farbe": 5,
    "nr": 5
   },
   {
    "art": "pkw",
    "laenge": 46,
+   "breite": 21,
    "farbe": 6,
    "nr": 6
   },
   {
    "art": "pkw",
    "laenge": 46,
+   "breite": 21,
    "farbe": 7,
    "nr": 7
+  },
+  {
+   "art": "sport",
+   "laenge": 46,
+   "breite": 20,
+   "farbe": 0,
+   "nr": 8
+  },
+  {
+   "art": "sport",
+   "laenge": 46,
+   "breite": 21,
+   "farbe": 0,
+   "nr": 9
+  },
+  {
+   "art": "sport",
+   "laenge": 46,
+   "breite": 22,
+   "farbe": 0,
+   "nr": 10
+  },
+  {
+   "art": "taxi",
+   "laenge": 46,
+   "breite": 24,
+   "farbe": 5,
+   "nr": 11
+  },
+  {
+   "art": "kleinbus",
+   "laenge": 54,
+   "breite": 26,
+   "farbe": 7,
+   "nr": 12
+  },
+  {
+   "art": "laster",
+   "laenge": 90,
+   "breite": 37,
+   "farbe": 7,
+   "nr": 13
+  },
+  {
+   "art": "laster",
+   "laenge": 90,
+   "breite": 44,
+   "farbe": 1,
+   "nr": 14
+  },
+  {
+   "art": "polizei",
+   "laenge": 50,
+   "breite": 23,
+   "farbe": 2,
+   "nr": 15
+  },
+  {
+   "art": "polizei",
+   "laenge": 50,
+   "breite": 23,
+   "farbe": 2,
+   "nr": 16,
+   "anim": 1
+  },
+  {
+   "art": "polizei",
+   "laenge": 50,
+   "breite": 23,
+   "farbe": 2,
+   "nr": 17,
+   "anim": 2
+  },
+  {
+   "art": "polizei",
+   "laenge": 50,
+   "breite": 23,
+   "farbe": 2,
+   "nr": 18,
+   "anim": 3
+  },
+  {
+   "art": "krankenwagen",
+   "laenge": 56,
+   "breite": 28,
+   "farbe": 2,
+   "nr": 19
+  },
+  {
+   "art": "krankenwagen",
+   "laenge": 56,
+   "breite": 28,
+   "farbe": 2,
+   "nr": 20,
+   "anim": 1
+  },
+  {
+   "art": "krankenwagen",
+   "laenge": 56,
+   "breite": 28,
+   "farbe": 2,
+   "nr": 21,
+   "anim": 2
+  },
+  {
+   "art": "krankenwagen",
+   "laenge": 56,
+   "breite": 28,
+   "farbe": 2,
+   "nr": 22,
+   "anim": 3
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "breite": 22,
+   "farbe": 0,
+   "nr": 23
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "breite": 24,
+   "farbe": 1,
+   "nr": 24
+  },
+  {
+   "art": "transporter",
+   "laenge": 56,
+   "breite": 24,
+   "farbe": 0,
+   "nr": 25
+  },
+  {
+   "art": "transporter",
+   "laenge": 56,
+   "breite": 24,
+   "farbe": 4,
+   "nr": 26
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "breite": 22,
+   "farbe": 3,
+   "nr": 27
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "breite": 22,
+   "farbe": 7,
+   "nr": 28
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "breite": 22,
+   "farbe": 6,
+   "nr": 29
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "breite": 22,
+   "farbe": 7,
+   "nr": 30
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "breite": 22,
+   "farbe": 7,
+   "nr": 31
   }
  ]
 }

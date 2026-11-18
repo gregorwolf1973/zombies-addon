@@ -2,6 +2,7 @@
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite } from './vektor.mjs';
+import { baueStuetzpunkt } from './stuetzpunkt.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -464,6 +465,63 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
   const muell = { tonnen: [] }, sperren = [];
   strassenDeko();
 
+  // ---- Mehr Bäume: Alleen an Straßen, Gruppen auf Wiesen, in Gärten, Grünflächen und im Wald (ca. +50 % zu den OSM-Bäumen) ----
+  function mehrBaeume() {
+    const WEG = new Set(['footway', 'path', 'cycleway', 'track', 'steps', 'pedestrian']);
+    const nein = new Uint8Array(BREITE * HOEHE);   // 1 = hier darf kein Baum stehen
+    const sperre = (x, y, rad = 0) => { for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) if (x + dx >= 0 && y + dy >= 0 && x + dx < BREITE && y + dy < HOEHE) nein[(y + dy) * BREITE + x + dx] = 1; };
+    for (const s of karte.strassen ?? []) {   // Fuß-, Rad- und Feldwege bleiben frei
+      if (!WEG.has(s.t)) continue;
+      for (let i = 0; i + 3 < s.p.length; i += 2) {
+        const [ax, ay, bx, by] = [s.p[i], s.p[i + 1], s.p[i + 2], s.p[i + 3]], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 0.4));
+        for (let j = 0; j <= n; j++) sperre(Math.floor(ax + (bx - ax) * j / n), Math.floor(ay + (by - ay) * j / n));
+      }
+    }
+    for (const o of karte.objekte ?? []) for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) sperre(x, y);
+    for (const h of haeuser) if (h.tuer) sperre(h.tuer.x + h.raus.dx, h.tuer.y + h.raus.dy, 1);   // Haustür-Vorkachel samt Umgebung
+    for (const d of deko) sperre(Math.floor(d.x / KACHEL), Math.floor(d.y / KACHEL));
+    for (const g of muell.tonnen) sperre(Math.floor(g.x / KACHEL), Math.floor(g.y / KACHEL), 1);
+    for (const b of behaelter) sperre(Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL), b.art === 'auto' ? 0 : 1);
+    for (const sp of sperren) sperre(Math.floor(sp.x / KACHEL), Math.floor(sp.y / KACHEL), 2);
+    // Flächen: 1 = Wald/Park/Friedhof (bevorzugt), 2 = Sportplatz, Acker, Parkplatz, Spielplatz … (kein Baum)
+    const zone = new Uint8Array(BREITE * HOEHE);
+    const ZONE = { wald: 1, gruen: 1, friedhof: 1, sport: 2, laufbahn: 2, acker: 2, parkplatz: 2, spielplatz: 2, gewerbe: 2 };
+    for (const f of karte.flaechen ?? []) {
+      const z = ZONE[f.a]; if (!z) continue;
+      const xs = f.p.filter((_, i) => i % 2 === 0), ys = f.p.filter((_, i) => i % 2 === 1);
+      const x0 = Math.max(0, Math.floor(Math.min(...xs))), x1 = Math.min(BREITE - 1, Math.ceil(Math.max(...xs))), y0 = Math.max(0, Math.floor(Math.min(...ys))), y1 = Math.min(HOEHE - 1, Math.ceil(Math.max(...ys)));
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (imPolygon(x + 0.5, y + 0.5, f.p)) zone[y * BREITE + x] = Math.max(zone[y * BREITE + x], z);
+    }
+    const frei = (x, y) => {
+      if (x < 2 || y < 2 || x >= BREITE - 2 || y >= HOEHE - 2) return false;
+      const i = y * BREITE + x;
+      if (hole(x, y) !== T.WIESE || nein[i] || zone[i] === 2) return false;
+      if (RICHTUNGEN.some(([a, c]) => hole(x + a, y + c) === T.BAUM)) return false;
+      const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
+      if (Math.hypot(px - start.x, py - start.y) < KACHEL * 4) return false;
+      return !buchten.some(b => abstandRechteck(b, px, py) < KACHEL * 0.9);
+    };
+    let n0 = 0; for (let i = 0; i < k.length; i++) if (k[i] === T.BAUM) n0++;
+    const ziel = Math.round(n0 * 0.5);
+    let neu = 0;
+    // Alleen: jede dritte freie Wiesenkachel am Straßenrand
+    for (let y = 2; y < HOEHE - 2 && neu < ziel * 0.3; y++) for (let x = 2; x < BREITE - 2 && neu < ziel * 0.3; x++) {
+      if ((x + y) % 3 !== 0 || r() > 0.35 || !frei(x, y) || !RICHTUNGEN.some(([a, c]) => hole(x + a, y + c) === T.STRASSE)) continue;
+      setze(x, y, T.BAUM); neu++;
+    }
+    // Gruppen von 1–4 Bäumen, in Grünflächen und Wald bevorzugt
+    for (let v = 0; neu < ziel && v < ziel * 40; v++) {
+      const x = 2 + Math.floor(r() * (BREITE - 4)), y = 2 + Math.floor(r() * (HOEHE - 4));
+      if (!frei(x, y) || (zone[y * BREITE + x] !== 1 && r() > 0.6)) continue;
+      setze(x, y, T.BAUM); neu++;
+      for (let m = Math.floor(r() * 4); m > 0; m--) {
+        const gx = x + Math.floor(r() * 5) - 2, gy = y + Math.floor(r() * 5) - 2;
+        if (frei(gx, gy)) { setze(gx, gy, T.BAUM); neu++; }
+      }
+    }
+  }
+  mehrBaeume();
+
   // Vektordaten nur fürs Aussehen: echte Gebäudeumrisse, Straßenlinien, Flächen
   const safeBox = haeuser.filter(h => h.safe);
   const vektor = {
@@ -478,6 +536,7 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
   const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [], zaeune: karte.zaeune ?? null } : null;
   const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details, muell, sperren };
   if (karte.zaeune) welt.fein = baueFein(welt, karte);
+  baueStuetzpunkt(welt, seed, setze);   // Bundeswehr-Stützpunkt (eigener Zufall, nach allem anderen)
   return welt;
 }
 
