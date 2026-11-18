@@ -94,14 +94,17 @@ function grenztAnWand(kacheln, x, y, ox, oy, b, h) {
 }
 
 // Hilfsfunktion: Prüft, ob eine Kachel neben einer Tür, Ausgang oder Treppe liegt
+// (Claude) Freiraum um Türen, Ausgang und Treppen: Ring von einer Kachel (auch schräg)
+// und zwei Kacheln gerade davor bzw. dahinter
 function nebenTuerOderTreppe(kacheln, x, y, ox, oy, b, h) {
-  const nachbarn = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
-  for (const [nx, ny] of nachbarn) {
+  const frei = t => t === T.INNENTUER || t === T.TUER_OFFEN || t === T.AUSGANG || t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const ring = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
+    const gerade = (dx === 0 || dy === 0);
+    if (!ring && !gerade) continue;
+    const nx = x + dx, ny = y + dy;
     if (nx < ox || nx >= ox + b || ny < oy || ny >= oy + h) continue;
-    const t = kacheln[idx(nx, ny)];
-    if (t === T.INNENTUER || t === T.TUER_OFFEN || t === T.AUSGANG || t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH) {
-      return true;
-    }
+    if (frei(kacheln[idx(nx, ny)])) return true;
   }
   return false;
 }

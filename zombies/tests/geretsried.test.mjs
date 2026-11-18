@@ -64,3 +64,19 @@ test('Geretsried im Spiel: Zombies nur in der Nähe, Haus betreten', async () =>
     c.send('eingabe', { dx: 0, dy: 0 });
   } finally { await c.leave(); }
 });
+
+test('Geretsried: Vektordaten fürs Aussehen (Umrisse, Straßen, Flächen) passen zum Raster', async () => {
+  const { readFileSync } = await import('node:fs');
+  const karte = JSON.parse(readFileSync(new URL('../client/karten/geretsried.json', import.meta.url)));
+  assert.ok(karte.strassen.length > 100, 'zu wenige Straßen');
+  assert.ok(karte.flaechen.length > 10, 'zu wenige Flächen');
+  const mitUmriss = karte.gebaeude.filter(g => g.umriss?.length >= 6);
+  assert.equal(mitUmriss.length, karte.gebaeude.length, 'Gebäude ohne Umriss');
+  // Umriss liegt um das gerasterte Gebäude herum (höchstens eine Kachel daneben)
+  // (einzelne Gebäude ragen in OSM über eine Straße – dort ist das Raster abgeschnitten, der Client beschneidet das Dach)
+  const daneben = mitUmriss.filter(g => {
+    const xs = g.umriss.filter((_, i) => i % 2 === 0), ys = g.umriss.filter((_, i) => i % 2 === 1);
+    return !(Math.min(...xs) > g.x - 1.5 && Math.max(...xs) < g.x + g.b + 1.5 && Math.min(...ys) > g.y - 1.5 && Math.max(...ys) < g.y + g.h + 1.5);
+  });
+  assert.ok(daneben.length < mitUmriss.length * 0.05, `${daneben.length} Umrisse passen nicht zum Raster`);
+});

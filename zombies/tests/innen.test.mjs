@@ -37,8 +37,9 @@ function pruefe(r, info) {
   for (const t of r.tueren) assert.equal(hole(t.x, t.y), T.INNENTUER, info + ' Tür falsch');
   // keine Möbel neben Türen, Ausgang, Treppen
   const frei = [...r.tueren, ...r.treppen, ...(r.ausgang ? [r.ausgang] : [])];
-  for (const f of frei) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-    assert.notEqual(hole(f.x + dx, f.y + dy), T.MOEBEL, `${info}: Möbel neben ${f.x},${f.y}`);
+  for (const f of frei) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    if (!(Math.abs(dx) <= 1 && Math.abs(dy) <= 1) && dx !== 0 && dy !== 0) continue;
+    assert.notEqual(hole(f.x + dx, f.y + dy), T.MOEBEL, `${info}: Möbel zu nah an ${f.x},${f.y}`);
   }
   for (const m of r.moebel) {
     assert.ok(MOEBEL_NAMEN[m.art], `${info}: Möbel ohne Namen ${m.art}`);

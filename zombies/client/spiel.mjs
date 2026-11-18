@@ -10,6 +10,7 @@ import { baueWeltAusKarte } from './osmwelt.mjs';
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 32;   // Kartenstücke à 32×32 Kacheln
 import { baueInnenraum } from './innen.mjs';
+import * as ton from './ton.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
@@ -82,7 +83,7 @@ try {
   if (m) { $('fehler').textContent = m; $('fehler').classList.add('gut'); sessionStorage.removeItem('zob_meldung'); }
 } catch {}
 fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; }).catch(() => {});
-$('los').addEventListener('click', () => mitspielen());
+$('los').addEventListener('click', () => { ton.tonStarten(); mitspielen(); });
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 
@@ -194,6 +195,7 @@ class Ort extends Phaser.Scene {
     figurenVorzeichnen(this);
     this.zeichneKarte();
     this.aussenObjekte = this.children.list.slice();   // alles, was zur Außenwelt gehört
+    this.uebersichtVorbereiten();
     this.innenWelten = new Map();   // Ebene → Innenraum (wie auf dem Server erzeugt)
     this.innenAnsichten = new Map();
     this.aktEbene = '';
@@ -240,12 +242,13 @@ class Ort extends Phaser.Scene {
     this.input.on('pointerup', loslassen);
     this.input.on('pointerupoutside', loslassen);
 
-    raum.onMessage('schuss', m => this.schuss(m));
-    raum.onMessage('stoss', m => this.stoss(m));
-    raum.onMessage('weg', m => this.puff(m.x, m.y));
-    raum.onMessage('entdeckt', m => this.ausruf(m.x, m.y));
+    raum.onMessage('schuss', m => { this.schuss(m); ton.schuss(m.x1, m.y1); });
+    raum.onMessage('stoss', m => { this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
+    raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
+    raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
     raum.onMessage('meldung', m => meldung(m.text, m.lang));
     raum.onMessage('gefunden', m => {
+      if (m.dinge.length) ton.aufheben(); else ton.suchen();
       if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : dingText(d)).join(', '));
       else if (m.rest) meldung('Rucksack voll – der Rest bleibt hier');
       else meldung('Nichts Brauchbares gefunden');
@@ -349,6 +352,45 @@ class Ort extends Phaser.Scene {
         fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
       }).setOrigin(0.5).setDepth(6);
       this.barrikaden.set(s.id, { grafik: this.add.graphics().setDepth(5.5), wert: -1, haus: h });
+    }
+  }
+
+  // ---------- Übersichtskarte ----------
+  uebersichtVorbereiten() {
+    const F = { [T.WIESE]: '#4d8c3b', [T.STRASSE]: '#77787c', [T.WAND]: '#8d5a44', [T.LEER]: '#8d5a44', [T.BODEN]: '#a87a5e',
+      [T.TUER]: '#ffd54f', [T.WASSER]: '#2a7098', [T.BAUM]: '#2d5e27', [T.PLATZ]: '#c8bba0', [T.ZAUN]: '#3e2723', [T.TOR]: '#ffb300', [T.DEKO]: '#777' };
+    const S = 2, basis = document.createElement('canvas');
+    basis.width = BREITE * S; basis.height = HOEHE * S;
+    const c = basis.getContext('2d');
+    for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) { c.fillStyle = F[this.welt.hole(x, y)] ?? '#4d8c3b'; c.fillRect(x * S, y * S, S, S); }
+    for (const sr of this.welt.safeRooms) { c.fillStyle = '#90caf9'; c.fillRect(sr.innen.x / KACHEL * S - 4, sr.innen.y / KACHEL * S - 4, 8, 8); }
+    this.uebersicht = { basis, S };
+    const el = $('karte');
+    el.width = basis.width; el.height = basis.height; el.style.display = 'block';
+    el.onclick = () => el.classList.toggle('gross');
+    const knopf = $('ton');
+    knopf.style.display = 'block';
+    knopf.textContent = ton.tonAn() ? '🔊' : '🔇';
+    knopf.onclick = () => { ton.tonStarten(); knopf.textContent = ton.tonUmschalten() ? '🔊' : '🔇'; };
+    ton.umgebung(false);
+    this.input.keyboard.on('keydown-M', () => el.classList.toggle('gross'));
+  }
+
+  uebersichtZeichnen() {
+    const u = this.uebersicht; if (!u) return;
+    const el = $('karte'), c = el.getContext('2d'), S = u.S;
+    c.drawImage(u.basis, 0, 0);
+    const t = this.welt.tor; c.fillStyle = '#ffb300'; c.fillRect(t.x * S - 2, t.y * S - 2, 8, 8);
+    for (const [id, p] of raum.state.spieler) {
+      // drinnen: an der Haustür des Hauses
+      let x = p.x, y = p.y;
+      const m = EBENE_MUSTER.exec(p.ebene ?? '');
+      if (m) { const h = this.welt.haeuser[Number(m[1])]; if (h) { x = (h.tuer.x + 0.5) * KACHEL; y = (h.tuer.y + 0.5) * KACHEL; } }
+      const ich = id === meineId, r = ich ? 5 : 3.5;
+      c.fillStyle = css(FARBEN[p.farbe % FARBEN.length]);
+      c.beginPath(); c.arc(x / KACHEL * S, y / KACHEL * S, r, 0, Math.PI * 2); c.fill();
+      c.lineWidth = ich ? 2.5 : 1; c.strokeStyle = ich ? '#fff' : '#000'; c.stroke();
+      if (el.classList.contains('gross')) { c.font = 'bold 11px sans-serif'; c.fillStyle = '#fff'; c.fillText(p.name, x / KACHEL * S + 7, y / KACHEL * S + 4); }
     }
   }
 
@@ -470,7 +512,8 @@ class Ort extends Phaser.Scene {
     const bild = this.add.image(X, Y, 'innen-' + ebene).setOrigin(0).setDepth(0.2);
     const tueren = this.add.graphics().setDepth(0.4);
     const dunkel = this.add.renderTexture(X, Y, B, H).setOrigin(0).setDepth(9);
-    a = { w, bild, tueren, dunkel, X, Y, B, H, stand: '' };
+    const nebel = this.add.graphics().setDepth(9.5);   // Räume hinter nie geöffneten Türen: ganz schwarz
+    a = { w, bild, tueren, dunkel, nebel, X, Y, B, H, stand: '', bekannt: new Set(), nebelStand: -1 };
     this.innenAnsichten.set(ebene, a);
     return a;
   }
@@ -479,14 +522,15 @@ class Ort extends Phaser.Scene {
     this.aktEbene = ebene;
     for (const o of this.aussenObjekte) o.setVisible(!ebene);
     for (const st of this.stuecke.values()) { st.boden.setVisible(!ebene); st.oben.setVisible(!ebene); }
-    for (const [e, a] of this.innenAnsichten) for (const o of [a.bild, a.tueren, a.dunkel]) o.setVisible(e === ebene);
+    for (const [e, a] of this.innenAnsichten) for (const o of [a.bild, a.tueren, a.dunkel, a.nebel]) o.setVisible(e === ebene);
     const cam = this.cameras.main;
     if (ebene) {
       const a = this.innenAnsicht(ebene);
-      for (const o of [a.bild, a.tueren, a.dunkel]) o.setVisible(true);
+      for (const o of [a.bild, a.tueren, a.dunkel, a.nebel]) o.setVisible(true);
       cam.setBounds(a.X - 200, a.Y - 200, a.B + 400, a.H + 400);
     } else { cam.setBounds(0, 0, BREITE * KACHEL, HOEHE * KACHEL); this.setzeGrau(false); }
     cam.setBackgroundColor(ebene ? '#0b0b0d' : '#1b2a1b');
+    ton.umgebung(!!ebene);
     // weich hinein- bzw. herauszoomen
     cam.zoomTo(this.grundZoom * (ebene ? INNEN_ZOOM : 1), 450, 'Sine.easeInOut');
     kisteZu(); popupZu();
@@ -505,6 +549,7 @@ class Ort extends Phaser.Scene {
       stand += offen ? 'o' : zu ? 'v' : 'z';
     }
     if (stand !== a.stand) {
+      if (a.stand) for (let i = 0; i < stand.length; i++) if ((stand[i] === 'o') !== (a.stand[i] === 'o')) { ton.tuer(stand[i] === 'o'); break; }
       a.stand = stand;
       const g = a.tueren.clear();
       w.tueren.forEach((t, i) => {
@@ -521,6 +566,7 @@ class Ort extends Phaser.Scene {
         }
       });
     }
+    this.nebelAktualisieren(a);
     // Dunkelheit: mit Taschenlampe ein langer Kegel; ohne nur ein kleiner, schwacher Lichtkreis in Grau
     const d = a.dunkel;
     const lampe = ich.lampe > 0;
@@ -537,6 +583,32 @@ class Ort extends Phaser.Scene {
       d.erase(this.lampenPinsel, lx, ly);
     }
     this.setzeGrau(!lampe);
+  }
+
+  // Von der eigenen Position aus alles erkunden, was ohne geschlossene Tür erreichbar ist; einmal gesehen bleibt sichtbar
+  nebelAktualisieren(a) {
+    const w = a.w, tx = Math.floor(this.lokal.x / KACHEL), ty = Math.floor(this.lokal.y / KACHEL);
+    const start = ty * BREITE + tx;
+    if (a.bekannt.has(start) && a.nebelStand === a.stand) return;
+    a.nebelStand = a.stand;
+    const drin = (x, y) => x >= w.ox && x < w.ox + w.b && y >= w.oy && y < w.oy + w.h;
+    const sperre = t => t === T.WAND || t === T.INNENTUER || t === T.LEER;
+    const offen = [[tx, ty]], gesehen = new Set([start]);
+    while (offen.length) {
+      const [x, y] = offen.pop();
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy, k = ny * BREITE + nx;
+        if (!drin(nx, ny) || gesehen.has(k)) continue;
+        gesehen.add(k);
+        a.bekannt.add(k);                                       // Wände und Türen am Rand sind auch zu sehen
+        if (!sperre(w.hole(nx, ny)) && (dx === 0 || dy === 0)) offen.push([nx, ny]);
+        else gesehen.delete(k);                                 // schräg/gesperrt: sichtbar, aber nicht weiter suchen
+      }
+    }
+    a.bekannt.add(start);
+    const g = a.nebel.clear().fillStyle(0x000000, 1);
+    for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++)
+      if (!a.bekannt.has(y * BREITE + x)) g.fillRect(x * KACHEL - 0.5, y * KACHEL - 0.5, KACHEL + 1, KACHEL + 1);
   }
 
   // drinnen ohne Licht: alles schwarz-weiß (Farbmatrix der Kamera, nur mit WebGL)
@@ -881,6 +953,27 @@ class Ort extends Phaser.Scene {
     }
     this.hudZeit -= dt;
     if (this.hudZeit <= 0) { this.hudZeit = 0.15; this.hud(ich); }
+    this.geraeusche(ich, dt);
+    this.karteZeit = (this.karteZeit ?? 0) - dt;
+    if (this.karteZeit <= 0) { this.karteZeit = 0.4; this.uebersichtZeichnen(); }
+  }
+
+  // Schritte, Treffer am eigenen Leib, Stöhnen naher Zombies
+  geraeusche(ich, dt) {
+    if (!ich || !this.lokal) return;
+    ton.hoerer(this.lokal.x, this.lokal.y);
+    const l = this.letzterOrt ?? this.lokal;
+    this.schrittWeg = (this.schrittWeg ?? 0) + Math.hypot(this.lokal.x - l.x, this.lokal.y - l.y);
+    this.letzterOrt = { x: this.lokal.x, y: this.lokal.y };
+    if (this.schrittWeg > 46) { this.schrittWeg = 0; ton.schritt(!!this.aktEbene); }
+    if (this.altHp != null && ich.hp < this.altHp - 2) ton.biss();
+    this.altHp = ich.hp;
+    this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
+    if (this.stoehnZeit <= 0) {
+      this.stoehnZeit = 1.5 + Math.random() * 3;
+      const nahe = [...raum.state.zombies.values()].filter(z => (z.ebene ?? "") === this.aktEbene && Math.hypot(z.x - this.lokal.x, z.y - this.lokal.y) < 700);
+      if (nahe.length) { const z = nahe[Math.floor(Math.random() * nahe.length)]; ton.stoehnen(z.x, z.y, z.kriecht ? 0.35 : 0.55); }
+    }
   }
 
   hud(ich) {
@@ -1076,6 +1169,7 @@ function zeigeRaetsel(m) {
   $('raetsel').style.display = 'flex';
 }
 function zeigeAufloesung(m) {
+  if (m.richtig) ton.richtig(); else ton.falsch();
   const box = $('raetselantworten');
   for (const b of box.children) {
     if (b.textContent === m.loesung) b.classList.add('richtig');

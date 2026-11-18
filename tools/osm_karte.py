@@ -30,6 +30,7 @@ B = int(math.ceil(kx(ost))); H = int(math.ceil(ky(sued)))
 WIESE, STRASSE, WAND, BODEN, TUER, WASSER, BAUM, PLATZ, ZAUN = 0, 1, 2, 3, 4, 5, 6, 7, 8
 k = [[WIESE] * B for _ in range(H)]
 
+def flach(pts): return [round(v, 1) for p in pts for v in p]   # Umriss für die Darstellung: [x0, y0, x1, y1, …] in Kacheln
 def poly(w): return [(kx(knoten[n][1]), ky(knoten[n][0])) for n in w["nodes"] if n in knoten]
 def innen(px, py, pts):
     drin = False
@@ -108,7 +109,24 @@ for w in wege:
     if beste: k[beste[1]][beste[0]] = TUER
     xs, ys = [z[0] for z in zellen], [z[1] for z in zellen]
     gebaeude.append({"x": min(xs), "y": min(ys), "b": max(xs) - min(xs) + 1, "h": max(ys) - min(ys) + 1,
-                     "tuer": {"x": beste[0], "y": beste[1]} if beste else None, "flaeche": len(zellen), **info})
+                     "tuer": {"x": beste[0], "y": beste[1]} if beste else None, "flaeche": len(zellen), **info,
+                     "umriss": flach(pts[:-1] if pts and pts[0] == pts[-1] else pts)})
+# 3b. Vektordaten nur fürs Aussehen (Kollision bleibt beim Raster): Straßenlinien und Flächen
+strassen, flaechen = [], []
+for w in wege:
+    t, hw = w["tags"], w["tags"].get("highway")
+    if hw in BREITEN and not (w["nodes"][0] == w["nodes"][-1] and t.get("area") == "yes"):
+        if w["nodes"][0] == w["nodes"][-1] and hw == "pedestrian": continue
+        strassen.append({"t": hw, "b": BREITEN[hw] * 4 / mpk, "p": flach(poly(w))})
+    art = ("wald" if t.get("natural") in ("wood", "scrub") or t.get("landuse") == "forest" else
+           "parkplatz" if t.get("amenity") == "parking" else
+           "platz" if (hw == "pedestrian" and w["nodes"][0] == w["nodes"][-1]) or t.get("place") == "square" else
+           "gruen" if t.get("landuse") in ("grass", "meadow", "village_green", "recreation_ground") or t.get("leisure") in ("park", "garden") else
+           "acker" if t.get("landuse") in ("farmland", "orchard", "allotments") else
+           "sport" if t.get("leisure") in ("pitch", "playground", "sports_centre", "track") else
+           "friedhof" if t.get("landuse") == "cemetery" or t.get("amenity") == "grave_yard" else None)
+    if art and w["nodes"][0] == w["nodes"][-1] and len(w["nodes"]) > 3:
+        flaechen.append({"a": art, "p": flach(poly(w)[:-1])})
 # 4. Ränder: Zaun
 for x in range(B): k[0][x] = k[H - 1][x] = ZAUN
 for y in range(H): k[y][0] = k[y][B - 1] = ZAUN
@@ -117,8 +135,10 @@ zaehl = collections.Counter(v for zeile in k for v in zeile)
 benannt = [g for g in gebaeude if g.get("name") or g.get("amenity") or g.get("shop")]
 ausgabe.write_text(json.dumps({"quelle": "© OpenStreetMap-Mitwirkende (ODbL 1.0)", "bbox": [sued, west, nord, ost],
                                "meterProKachel": mpk, "breite": B, "hoehe": H,
-                               "kacheln": "".join("0123456789"[v] for zeile in k for v in zeile), "gebaeude": gebaeude},
+                               "kacheln": "".join("0123456789"[v] for zeile in k for v in zeile), "gebaeude": gebaeude,
+                               "strassen": strassen, "flaechen": flaechen},
                               ensure_ascii=False))
 print(f"{B}×{H} Kacheln ({mpk} m), Gebäude {len(gebaeude)} (mit Tür {sum(1 for g in gebaeude if g['tuer'])}), benannt {len(benannt)}")
 print("Kacheln:", {n: zaehl[v] for n, v in [("Wiese", WIESE), ("Straße", STRASSE), ("Wand", WAND), ("Boden", BODEN), ("Tür", TUER), ("Wasser", WASSER), ("Baum", BAUM), ("Platz", PLATZ)]})
+print(f"Vektor: {len(strassen)} Straßen, {len(flaechen)} Flächen")
 print("Benannte Gebäude:", sorted({(g.get('name') or g.get('shop') or g.get('amenity')) for g in benannt})[:40])

@@ -133,3 +133,15 @@ button:disabled { opacity: .6; }
 #tausch .knoepfe button { margin: 0; padding: 9px; font-size: 15px; pointer-events: auto; }
 #tausch .knoepfe .zweit { background: #ffffff22; color: #fff; }
 #tauschstatus { font-size: 13px; color: #a5d6a7; margin-top: 8px; min-height: 1em; }
+
+/* Übersichtskarte: klein oben rechts, angetippt groß */
+#karte {
+  position: fixed; right: 10px; top: max(36px, calc(env(safe-area-inset-top) + 28px)); width: 170px; display: none;
+  border: 2px solid #fff6; border-radius: 10px; background: #1b2a1b; box-shadow: 0 3px 12px #000a; z-index: 6; cursor: pointer;
+  image-rendering: pixelated;
+}
+#karte.gross { width: min(92vw, 900px); right: 50%; transform: translateX(50%); top: 60px; z-index: 24; }
+#ton {
+  position: fixed; right: 186px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
+  margin: 0 !important; padding: 0 !important; font-size: 16px; border-radius: 8px; background: #0007; color: #fff; display: none; z-index: 6;
+}

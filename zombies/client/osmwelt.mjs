@@ -159,5 +159,15 @@ export function baueWeltAusKarte(karte, seed) {
     n++;
   }
 
-  return { seed, karte: true, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko };
+  // Vektordaten nur fürs Aussehen: echte Gebäudeumrisse, Straßenlinien, Flächen
+  const safeBox = haeuser.filter(h => h.safe);
+  const vektor = {
+    strassen: karte.strassen ?? [], flaechen: karte.flaechen ?? [],
+    gebaeude: karte.gebaeude.filter(g => g.umriss?.length >= 6).map(g => ({
+      p: g.umriss, typ: g.building ?? 'yes', flaeche: g.flaeche, x: g.x, y: g.y, b: g.b, h: g.h,
+      safe: safeBox.some(h => h.x === g.x && h.y === g.y && h.b === g.b && h.h === g.h),
+    })),
+  };
+  for (const h of haeuser) h.umriss = karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss;
+  return { seed, karte: true, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null };
 }

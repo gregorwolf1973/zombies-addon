@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 – 18.11.2026
+
+- Übersichtskarte oben rechts: zeigt dich und alle Mitspieler in Geretsried (wer drinnen ist, steht an seiner Haustür),
+  Safe Rooms und den Ortsausgang; antippen oder Taste M vergrößert sie mit Namen
+- Geräusche, im Browser erzeugt (keine Tondateien): Schüsse, Schläge, Stöhnen naher Zombies (nach Richtung und
+  Entfernung), Fauchen beim Entdecken, Türen, Durchsuchen, Aufheben, Biss, Schritte, Rätsel richtig/falsch, Wind draußen
+  und Brummen drinnen; Lautsprecher-Knopf neben der Karte
+- Räume hinter noch nie geöffneten Türen sind ganz schwarz, bis jemand die Tür öffnet
+- Möbel stehen nicht mehr vor Türen und Treppen (eine Kachel rundum frei, zwei geradeaus)
+- Echtere Stadt: Dächer folgen den echten Gebäudeumrissen aus OpenStreetMap, als Walmdach mit Graten, Ziegelreihen und
+  Schatten (große Gebäude mit Flachdach); Straßen als glatte Bänder mit Gehweg, Bordstein und Mittellinie, dazu Fußwege,
+  Parkplätze, Wald- und Sportflächen; Spielfeld und Kollision bleiben unverändert
+
 ## 0.12.0 – 18.11.2026
 
 - Geschäfte: Verkaufsraum mit Regalreihen und Kasse, dahinter ein Lager

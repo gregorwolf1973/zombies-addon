@@ -3,6 +3,7 @@
 // (proto_grafik.mjs, erzeugt von tools/baue_aussehen.py); hier wird nur unsere Karte darauf abgebildet.
 import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
 import { erzeugeZeichner } from './proto_grafik.mjs';
+import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach } from './vektor.mjs';
 
 const TAU = Math.PI * 2;
 
@@ -23,6 +24,15 @@ function rauschen(x, y) {
 const begehbarWiese = t => t === T.WIESE || t === T.BAUM;
 
 // ---------- Bodenebene: alles Flache ----------
+function safeMaske(welt) {
+  if (welt._safeMaske) return welt._safeMaske;
+  const m = new Uint8Array(BREITE * HOEHE);
+  for (const h of welt.haeuser) if (h.safe) for (let y = h.y - 1; y <= h.y + h.h; y++) for (let x = h.x - 1; x <= h.x + h.b; x++) {
+    if (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) m[y * BREITE + x] = 1;
+  }
+  return (welt._safeMaske = m);
+}
+
 export function zeichneBoden(ctx, welt, rect = null) {
   const { x0, y0, x1, y1 } = rect ?? { x0: 0, y0: 0, x1: BREITE, y1: HOEHE };
   ctx.save();
@@ -35,9 +45,14 @@ export function zeichneBoden(ctx, welt, rect = null) {
     if (n > 0.55) { ctx.fillStyle = `rgba(110,170,80,${(n - 0.55) * 0.5})`; ctx.fillRect(x, y, 8, 8); }
     else if (n < 0.4) { ctx.fillStyle = `rgba(20,50,15,${(0.4 - n) * 0.45})`; ctx.fillRect(x, y, 8, 8); }
   }
+  const vek = !!welt.vektor;
+  if (vek) zeichneFlaechen(ctx, welt, { x0, y0, x1, y1 });
   for (let ky = y0; ky < y1; ky++) for (let kx = x0; kx < x1; kx++) {
     const t = welt.hole(kx, ky), px = kx * KACHEL, py = ky * KACHEL;
     const nb = (dx, dy) => welt.hole(kx + dx, ky + dy);
+    if (vek && (t === T.STRASSE || t === T.PLATZ)) continue;   // kommen als glatte Linien/Flächen
+    // Gebäude zeigt das Dach nach dem echten Umriss; Rasterwände nur in Safe Rooms (deren Dach wird durchsichtig)
+    if (vek && (t === T.LEER || t === T.WAND || t === T.BODEN || t === T.TUER) && !safeMaske(welt)[ky * BREITE + kx]) continue;
     if (t === T.LEER) { ctx.fillStyle = '#5d4a40'; ctx.fillRect(px, py, KACHEL, KACHEL); continue; }
     if (begehbarWiese(t) || t === T.ZAUN) {
       // Grasbüschel
@@ -111,6 +126,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
       ctx.fillStyle = '#8d6e63'; ctx.fillRect(px + m - 3, py + m - 3, 4, 4);
     }
   }
+  if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
   ctx.restore();
 }
 
@@ -233,7 +249,8 @@ export function zeichneDaecher(ctx, welt, rect) {
   const { x0, y0, x1, y1 } = rect;
   ctx.save();
   ctx.translate(-x0 * KACHEL, -y0 * KACHEL);
-  if (welt.karte) {
+  if (welt.vektor) zeichneVektorDaecher(ctx, welt, rect);
+  else if (welt.karte) {
     const nr = dachIndex(welt);
     const istDach = (x, y) => { const t = welt.hole(x, y); return (t === T.WAND || t === T.LEER || t === T.TUER) && nr[y * BREITE + x] !== -2; };
     for (let ky = Math.max(0, y0 - 1); ky < Math.min(HOEHE, y1 + 1); ky++) for (let kx = Math.max(0, x0 - 1); kx < Math.min(BREITE, x1 + 1); kx++) {
@@ -255,6 +272,7 @@ export function zeichneDaecher(ctx, welt, rect) {
 // ausblendbares Dach eines Safe Rooms (Ursprung = Hausecke minus DACH_RAND)
 export function zeichneSafeDach(ctx, welt, h) {
   if (!welt.karte) return zeichneDach(ctx, h, h.nr);
+  if (welt.vektor && zeichneVektorSafeDach(ctx, welt, h, DACH_RAND)) return;
   ctx.save();
   ctx.translate(DACH_RAND - h.x * KACHEL, DACH_RAND - h.y * KACHEL);
   const inBox = (x, y) => x >= h.x && y >= h.y && x < h.x + h.b && y < h.y + h.h;
@@ -303,7 +321,7 @@ function busVonOben(ctx, x, y, senkrecht, v) {
 }
 
 // ---------- Dächer: Häuser aus dem Prototyp, auf unsere Größe skaliert ----------
-export const DACH_RAND = 24;   // Platz für Dachüberstand und Schatten rundherum
+export const DACH_RAND = 48;   // Platz für Dachüberstand und Schatten rundherum
 
 // Dächer von oben (Gregor: Hausfassaden des Prototyps gefallen nicht) – Walmdach mit Ziegelreihen
 export function zeichneDach(ctx, haus, nr) {
