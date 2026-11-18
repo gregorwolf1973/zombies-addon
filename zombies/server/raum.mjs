@@ -41,10 +41,12 @@ export const Zombie = schema({
   richtung: t.number(),
   jagt: t.boolean(),
   hp: t.uint8(),
+  kriecht: t.boolean(),     // „nicht ganz tot“: robbt am Boden
+  variante: t.uint8(),      // Kleidung 0–3
 }, 'Zombie');
 
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
-export const Leiche = schema({ x: t.number(), y: t.number(), richtung: t.number(), rest: t.uint8(), alter: t.number() }, 'Leiche');
+export const Leiche = schema({ x: t.number(), y: t.number(), richtung: t.number(), rest: t.uint8(), alter: t.number(), variante: t.uint8() }, 'Leiche');
 export const Safe = schema({ barrikade: t.number(), kiste: t.array("string") }, 'Safe');
 
 export const Zustand = schema({
@@ -67,6 +69,7 @@ const SCHLAEGER_SCHADEN = 40, SCHLAEGER_PAUSE = 0.6, SCHLAEGER_REICHWEITE = 42;
 const MESSER_SCHADEN = 30, MESSER_PAUSE = 0.45, MESSER_REICHWEITE = 36;
 const STOSS_SCHADEN = 20, STOSS_PAUSE = 0.7, STOSS_WEG = 34;
 const BISS_PRO_SEK = 14;
+const KRIECHER_CHANCE = 0.25, KRIECHER_HP = 35, KRIECHER_TEMPO = 0.28, KRIECHER_SPUERT = 110;
 const BISS_CHANCE = 0.12;   // pro Sekunde Kontakt: Wahrscheinlichkeit für einen infizierenden Biss
 const SPRITZE_ABSTAND = 50;
 const START_MUNITION = 24;
@@ -485,7 +488,7 @@ export class SpielRaum extends Room {
     else if (w < 0.6) inhalt.push(LEICHE_OFT[Math.floor(this.rnd() * LEICHE_OFT.length)]);
     const id = 'l' + (this.naechsteLeichenId++);
     const l = new Leiche();
-    l.x = z.x; l.y = z.y; l.richtung = z.richtung; l.rest = inhalt.length; l.alter = 0;
+    l.x = z.x; l.y = z.y; l.richtung = z.richtung; l.rest = inhalt.length; l.alter = 0; l.variante = z.variante ?? 0;
     this.state.leichen.set(id, l);
     this.leichenInhalt.set(id, inhalt);
     // höchstens LEICHEN_MAX: die älteste verschwindet
@@ -788,6 +791,13 @@ export class SpielRaum extends Room {
     z.hp = Math.max(0, z.hp - menge);
     const info = this.zombieInfo.get(id);
     if (info && !info.ziel) info.punkt = { x: von.x, y: von.y };
+    if (z.hp === 0 && !z.kriecht && this.rnd() < (this.kriecherChance ?? KRIECHER_CHANCE)) {
+      // nicht ganz tot: bricht zusammen und kriecht weiter
+      z.kriecht = true; z.hp = KRIECHER_HP; z.jagt = false;
+      if (info) { info.ziel = null; info.punkt = null; }
+      this.broadcast('weg', { x: z.x, y: z.y, halb: true });
+      return;
+    }
     if (z.hp === 0) {
       this.state.zombies.delete(id);
       this.zombieInfo.delete(id);
@@ -824,7 +834,7 @@ export class SpielRaum extends Room {
         const j = ny * BREITE + nx;
         if (feld[j] !== -1) continue;
         const t = this.welt.hole(nx, ny);
-        if (t === T.WAND || t === T.WASSER || t === T.BAUM || t === T.ZAUN || t === T.TOR) continue;
+        if (t === T.WAND || t === T.WASSER || t === T.BAUM || t === T.ZAUN || t === T.TOR || t === T.DEKO) continue;
         feld[j] = feld[i] + 1;
         q.push(j);
       }
@@ -855,7 +865,8 @@ export class SpielRaum extends Room {
         const d = Math.hypot(p.x - z.x, p.y - z.y);
         const weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
         const imKegel = winkelDiff(Math.atan2(p.y - z.y, p.x - z.x), z.richtung) < W.sichtWinkel / 2;
-        if ((d < 28 || (d < weite && imKegel)) && sichtfrei(this.welt, z.x, z.y, p.x, p.y)) {
+        const bemerkt = z.kriecht ? d < KRIECHER_SPUERT : (d < 28 || (d < weite && imKegel));
+        if (bemerkt && sichtfrei(this.welt, z.x, z.y, p.x, p.y)) {
           info.ziel = sid; info.verloren = 0; info.punkt = null;
           this.broadcast('entdeckt', { x: z.x, y: z.y });
           break;
@@ -875,10 +886,11 @@ export class SpielRaum extends Room {
       } else {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y) ?? z.richtung);
         z.richtung = w;
-        if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * dt, dt);
+        const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
+        if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt);
         if (d < W.spielerRadius + W.zombieRadius + 6) {
           const schutz = ziel.kleidung > 0;
-          ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1));
+          ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1));
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);
           if (!(ziel.infektion > 0) && this.rnd() < BISS_CHANCE * dt * (schutz ? 0.5 : 1)) {
             ziel.infektion = INFEKTION_DAUER;
@@ -897,7 +909,7 @@ export class SpielRaum extends Room {
       else {
         const sieht = sichtfrei(this.welt, z.x, z.y, info.punkt.x, info.punkt.y);
         z.richtung = sieht ? Math.atan2(info.punkt.y - z.y, info.punkt.x - z.x) : (this.feldRichtung(z.x, z.y) ?? z.richtung);
-        if (!this.zombieGehen(z, z.richtung, W.zombieTempoJagen * 0.7 * dt, dt)) info.punkt = null;
+        if (!this.zombieGehen(z, z.richtung, W.zombieTempoJagen * 0.7 * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt)) info.punkt = null;
       }
       return;
     }
@@ -909,7 +921,7 @@ export class SpielRaum extends Room {
       info.steht = this.rnd() < 0.4;
       if (!info.steht) z.richtung = this.rnd() * Math.PI * 2;
     }
-    if (!info.steht && !this.zombieGehen(z, z.richtung, W.zombieTempoWandern * dt, dt)) {
+    if (!info.steht && !this.zombieGehen(z, z.richtung, W.zombieTempoWandern * (z.kriecht ? 0.5 : 1) * dt, dt)) {
       z.richtung += Math.PI * (0.5 + this.rnd());
     }
   }
@@ -996,6 +1008,7 @@ export class SpielRaum extends Room {
       if (drinnen(this.welt, x, y) && this.rnd() < 0.6) continue;
       const z = new Zombie();
       z.x = x; z.y = y; z.hp = ZOMBIE_HP; z.richtung = this.rnd() * Math.PI * 2; z.jagt = false;
+      z.kriecht = false; z.variante = Math.floor(this.rnd() * 4);
       const id = 'z' + (this.naechsteZombieId++);
       this.state.zombies.set(id, z);
       this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: false });

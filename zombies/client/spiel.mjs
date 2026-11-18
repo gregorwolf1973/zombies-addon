@@ -4,6 +4,40 @@ import {
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
 } from './welt.mjs';
 import { zeichneBoden, zeichneOben, zeichneDach, DACH_RAND } from './aussehen.mjs';
+import { zeichneMensch, zeichneZombie, zeichneKriecher, zeichneLeiche, zeichneMenschLiegend } from './figuren.mjs';
+
+const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
+const LAUFBILDER = 8;
+
+// Figuren einmal als Bildstreifen vorzeichnen: Bild 0 = stehen, 1–8 = Laufzyklus
+function streifen(szene, schluessel, w, h, bilder, zeichne) {
+  const tex = szene.textures.createCanvas(schluessel, w * bilder, h);
+  const ctx = tex.getContext();
+  for (let i = 0; i < bilder; i++) {
+    ctx.save(); ctx.translate(w * i + w / 2, h / 2); zeichne(ctx, i); ctx.restore();
+    tex.add(i, 0, w * i, 0, w, h);
+  }
+  tex.refresh();
+}
+function figurenVorzeichnen(szene) {
+  FARBEN.forEach((f, n) => {
+    const art = { haar: HAARE[n % HAARE.length], hut: n % 3 === 2 };
+    streifen(szene, 'mensch-' + n, 48, 48, LAUFBILDER + 1, (ctx, i) => zeichneMensch(ctx, css(f), i === 0 ? null : (i - 1) / LAUFBILDER, art));
+    streifen(szene, 'liegend-' + n, 56, 56, 1, ctx => zeichneMenschLiegend(ctx, css(f), art));
+  });
+  for (let v = 0; v < 4; v++) {
+    streifen(szene, 'zombie-' + v, 52, 52, LAUFBILDER, (ctx, i) => zeichneZombie(ctx, v, i / LAUFBILDER));
+    streifen(szene, 'kriecher-' + v, 72, 52, LAUFBILDER, (ctx, i) => zeichneKriecher(ctx, v, i / LAUFBILDER));
+    streifen(szene, 'leiche-' + v, 64, 64, 1, ctx => zeichneLeiche(ctx, v));
+  }
+}
+// Laufbild aus der zurückgelegten Strecke
+function laufBild(f, dx, dy, dt, schrittLaenge) {
+  const weg = Math.hypot(dx, dy);
+  f.lauf = (f.lauf ?? 0) + weg;
+  const geht = weg / Math.max(dt, 0.001) > 12;
+  return geht ? Math.floor((f.lauf / schrittLaenge) % 1 * LAUFBILDER) : -1;
+}
 
 const FARBEN = [0x42a5f5, 0xffca28, 0xab47bc, 0xff7043, 0x26c6da, 0xec407a, 0x9ccc65, 0xd7ccc8, 0xffffff, 0x5c6bc0];
 const AUTOFARBEN = [0xc62828, 0x1565c0, 0x2e7d32, 0xf9a825, 0x6d4c41, 0xeceff1];
@@ -134,6 +168,7 @@ class Ort extends Phaser.Scene {
   create() {
     const s = raum.state;
     this.welt = baueWelt(s.seed);
+    figurenVorzeichnen(this);
     this.zeichneKarte();
 
     this.figuren = new Map();   // sessionId → {box, ...}
@@ -298,25 +333,22 @@ class Ort extends Phaser.Scene {
     const farbe = FARBEN[p.farbe % FARBEN.length];
     const ich = id === meineId;
     const box = this.add.container(p.x, p.y).setDepth(ich ? 6 : 4);
-    const schatten = this.add.ellipse(2, 9, 22, 8, 0x000000, 0.3);
-    const koerper = this.add.circle(0, 0, W.spielerRadius, farbe).setStrokeStyle(2, ich ? 0xffffff : 0x000000, ich ? 1 : 0.5);
-    const nase = this.add.circle(9, 0, 4, 0xffe0b2);
-    const name = this.add.text(0, -26, p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
-    const hp = this.add.rectangle(-12, -16, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
-    const tun = this.add.text(14, -14, '', { fontSize: '13px' }).setOrigin(0.5);
-    box.add([schatten, koerper, nase, name, hp, tun]);
-    return { box, koerper, nase, name, hp, tun, farbe, x: p.x, y: p.y };
+    const n = p.farbe % FARBEN.length;
+    // eigener Spieler: heller Ring am Boden
+    const ring = this.add.ellipse(0, 0, 34, 34).setStrokeStyle(2, 0xffffff, ich ? 0.7 : 0).setFillStyle(0x000000, 0);
+    const bild = this.add.image(0, 0, 'mensch-' + n, 0);
+    const name = this.add.text(0, -28, p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+    const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
+    const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
+    box.add([ring, bild, name, hp, tun]);
+    return { box, bild, koerper: bild, name, hp, tun, farbe, n, x: p.x, y: p.y, altX: p.x, altY: p.y };
   }
 
   neuerZombie(z) {
     const box = this.add.container(z.x, z.y).setDepth(3);
-    const schatten = this.add.ellipse(2, 9, 22, 8, 0x000000, 0.3);
-    const koerper = this.add.circle(0, 0, W.zombieRadius, 0x7cb342).setStrokeStyle(2, 0x33691e);
-    const arm1 = this.add.rectangle(8, -6, 10, 4, 0x689f38);
-    const arm2 = this.add.rectangle(8, 6, 10, 4, 0x689f38);
-    const auge = this.add.circle(5, 0, 2.5, 0xd50000);
-    box.add([schatten, arm1, arm2, koerper, auge]);
-    return { box, koerper, x: z.x, y: z.y, r: z.richtung };
+    const bild = this.add.image(0, 0, (z.kriecht ? 'kriecher-' : 'zombie-') + ((z.variante ?? 0) % 4), 0);
+    box.add([bild]);
+    return { box, bild, x: z.x, y: z.y, r: z.richtung };
   }
 
   abgleichen(dt) {
@@ -330,8 +362,8 @@ class Ort extends Phaser.Scene {
       if (id === meineId) continue;
       f.x += (p.x - f.x) * glatt; f.y += (p.y - f.y) * glatt;
       f.box.setPosition(f.x, f.y);
-      f.koerper.setAlpha(p.verbunden ? 1 : 0.5);
-      this.figurDarstellen(f, p);
+      f.bild.setAlpha(p.verbunden ? 1 : 0.5);
+      this.figurDarstellen(f, p, dt);
     }
     for (const [id, f] of this.figuren) if (!s.spieler.has(id)) { f.box.destroy(); this.figuren.delete(id); }
     // Zombies
@@ -340,13 +372,23 @@ class Ort extends Phaser.Scene {
     for (const [id, z] of s.zombies) {
       let f = this.zombies.get(id);
       if (!f) { f = this.neuerZombie(z); this.zombies.set(id, f); }
+      const vx = f.x, vy = f.y;
       f.x += (z.x - f.x) * glatt; f.y += (z.y - f.y) * glatt;
       f.r = Phaser.Math.Angle.RotateTo(f.r, z.richtung, dt * 6);
       f.box.setPosition(f.x, f.y).setRotation(f.r);
-      f.koerper.setFillStyle(z.jagt ? 0xc0ca33 : 0x7cb342);
+      const textur = (z.kriecht ? 'kriecher-' : 'zombie-') + ((z.variante ?? 0) % 4);
+      const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
+      if (f.bild.texture.key !== textur) f.bild.setTexture(textur, 0);
+      f.bild.setFrame(bildNr < 0 ? 0 : bildNr);
+      if (z.jagt) f.bild.setTint(0xffd0c0); else f.bild.clearTint();
       if (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width) {
-        this.kegel.fillStyle(z.jagt ? 0xff5252 : 0xfff59d, z.jagt ? 0.18 : 0.13);
-        this.kegel.slice(f.x, f.y, W.sichtWeite, f.r - W.sichtWinkel / 2, f.r + W.sichtWinkel / 2, false).fillPath();
+        if (z.kriecht) {
+          // Kriecher sehen nicht, sie spüren ringsum
+          this.kegel.lineStyle(1, 0xff8a65, 0.35).strokeCircle(f.x, f.y, 110);
+        } else {
+          this.kegel.fillStyle(z.jagt ? 0xff5252 : 0xfff59d, z.jagt ? 0.18 : 0.13);
+          this.kegel.slice(f.x, f.y, W.sichtWeite, f.r - W.sichtWinkel / 2, f.r + W.sichtWinkel / 2, false).fillPath();
+        }
       }
     }
     for (const [id, f] of this.zombies) if (!s.zombies.has(id)) { f.box.destroy(); this.zombies.delete(id); }
@@ -354,13 +396,7 @@ class Ort extends Phaser.Scene {
     for (const [id, l] of s.leichen) {
       let o = this.leichen.get(id);
       if (!o) {
-        o = this.add.container(l.x, l.y).setDepth(1.6).setRotation(l.richtung);
-        o.add([
-          this.add.ellipse(0, 0, 30, 18, 0x5a1a1a, 0.55),
-          this.add.ellipse(-2, 0, 22, 14, 0x558b2f),
-          this.add.rectangle(10, -6, 10, 4, 0x4e7a29), this.add.rectangle(9, 6, 10, 4, 0x4e7a29),
-          this.add.circle(-9, 0, 5, 0x689f38),
-        ]);
+        o = this.add.image(l.x, l.y, 'leiche-' + ((l.variante ?? 0) % 4), 0).setDepth(1.6).setRotation(l.richtung);
         this.leichen.set(id, o);
       }
       const ausblenden = Math.min(1, (LEICHE_DAUER - l.alter) / 20);
@@ -389,17 +425,21 @@ class Ort extends Phaser.Scene {
     }
   }
 
-  figurDarstellen(f, p) {
+  figurDarstellen(f, p, dt = 0.016) {
     f.box.setRotation(0);
     const zombie = p.zombie > 0;
-    const fuellung = zombie ? 0x7cb342 : f.farbe;
-    if (f.koerper.fillColor !== fuellung) f.koerper.setFillStyle(fuellung);
-    f.nase.setFillStyle(zombie ? 0xd50000 : 0xffe0b2);
-    f.nase.setPosition(Math.cos(p.richtung) * 9, Math.sin(p.richtung) * 9);
+    const bildNr = laufBild(f, f.x - f.altX, f.y - f.altY, dt, 40);
+    f.altX = f.x; f.altY = f.y;
+    let textur, nr = 0;
+    if (p.unten) textur = 'liegend-' + f.n;
+    else if (zombie) { textur = 'zombie-' + (f.n % 4); nr = bildNr < 0 ? 0 : bildNr; }
+    else { textur = 'mensch-' + f.n; nr = bildNr < 0 ? 0 : bildNr + 1; }
+    if (f.bild.texture.key !== textur) f.bild.setTexture(textur, 0);
+    f.bild.setFrame(nr);
+    f.bild.setRotation(p.unten ? 0 : p.richtung);
+    f.bild.setScale(p.schleicht && !p.unten ? 0.9 : 1);
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
-    if (p.unten) { f.koerper.setScale(1.15, 0.6); f.nase.setVisible(false); }
-    else { f.koerper.setScale(p.schleicht ? 0.85 : 1); f.nase.setVisible(true); }
     const tun = zombie ? '🧟' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.infektion > 0 ? '🦠' : '';
     if (f.tun.text !== tun) f.tun.setText(tun);
   }
@@ -429,7 +469,7 @@ class Ort extends Phaser.Scene {
     }
     f.x = this.lokal.x; f.y = this.lokal.y;
     f.box.setPosition(f.x, f.y);
-    this.figurDarstellen(f, p);
+    this.figurDarstellen(f, p, dt);
     return p;
   }
 

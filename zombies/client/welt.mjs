@@ -8,10 +8,10 @@ export const HOEHE = 48;
 
 export const T = {
   WIESE: 0, STRASSE: 1, WAND: 2, BODEN: 3, TUER: 4,
-  WASSER: 5, BAUM: 6, PLATZ: 7, ZAUN: 8, TOR: 9,
+  WASSER: 5, BAUM: 6, PLATZ: 7, ZAUN: 8, TOR: 9, DEKO: 10,
 };
 
-const BLOCKIERT = new Set([T.WAND, T.WASSER, T.BAUM, T.ZAUN, T.TOR]);
+export const BLOCKIERT = new Set([T.WAND, T.WASSER, T.BAUM, T.ZAUN, T.TOR, T.DEKO]);
 
 export function zufall(seed) {
   // mulberry32: klein und auf allen Plattformen gleich
@@ -159,7 +159,112 @@ export function baueWelt(seed) {
     i++;
   }
 
-  return { seed, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter };
+  const deko = baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, safeRooms);
+  return { seed, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko };
+}
+
+// Hindernisse (Traktor, Heu, Kühe …) und Zäune. Jedes Stück wird verworfen, wenn es einen Teil
+// der begehbaren Fläche abschneiden würde.
+const BEGEHBAR = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ]);
+function baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, safeRooms) {
+  const r = zufall(seed ^ 0x2545f491);
+  const sx = Math.floor(start.x / KACHEL), sy = Math.floor(start.y / KACHEL);
+  const erreichbar = () => {
+    const ok = new Uint8Array(BREITE * HOEHE);
+    const q = [sy * BREITE + sx]; ok[q[0]] = 1;
+    for (let i = 0; i < q.length; i++) {
+      const x = q[i] % BREITE, y = (q[i] - x) / BREITE;
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        const j = ny * BREITE + nx;
+        if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE || ok[j] || !BEGEHBAR.has(hole(nx, ny))) continue;
+        ok[j] = 1; q.push(j);
+      }
+    }
+    return q.length;
+  };
+  let zahl = erreichbar();
+  // versucht Kacheln zu belegen; bleibt die Fläche (bis auf die belegten Kacheln) erreichbar, gilt es
+  const versuche = (kacheln, typ) => {
+    if (kacheln.some(([x, y]) => hole(x, y) !== T.WIESE)) return false;
+    for (const [x, y] of kacheln) setze(x, y, typ);
+    const neu = erreichbar();
+    if (neu < zahl - kacheln.length) { for (const [x, y] of kacheln) setze(x, y, T.WIESE); return false; }
+    zahl = neu; return true;
+  };
+  const frei3 = (x, y, b = 1, h = 1) => {
+    for (let dy = -1; dy <= h; dy++) for (let dx = -1; dx <= b; dx++) if (hole(x + dx, y + dy) !== T.WIESE) return false;
+    return true;
+  };
+  const deko = [];
+  const px = (x, b) => (x + b / 2) * KACHEL;
+
+  // Maibaum (zwei Kacheln über der Marktmitte, damit der Startplatz frei bleibt) und Biertische
+  const mx = Math.floor(markt.x + markt.b / 2), my = Math.floor(markt.y + markt.h / 2) - 2;
+  setze(mx, my, T.DEKO); deko.push({ art: 'maibaum', kx: mx, ky: my, b: 1, h: 1, x: px(mx, 1), y: (my + 1) * KACHEL - 4 });
+  for (const [bx, by] of [[markt.x + 1, markt.y + 1], [markt.x + markt.b - 3, markt.y + markt.h - 2]]) {
+    setze(bx, by, T.DEKO); setze(bx + 1, by, T.DEKO);
+    deko.push({ art: 'biertisch', kx: bx, ky: by, b: 2, h: 1, x: px(bx, 2), y: (by + 0.5) * KACHEL });
+  }
+  zahl = erreichbar();
+
+  // Gartenzäune um einige Häuser, mit Gartentor vor der Haustür
+  const kandidaten = haeuser.filter(h => !h.safe);
+  for (let n = 0, i = 0; n < 6 && i < 40; i++) {
+    const h = kandidaten[Math.floor(r() * kandidaten.length)];
+    if (!h || h.zaun) continue;
+    const ring = [];
+    for (let x = h.x - 1; x <= h.x + h.b; x++) { ring.push([x, h.y - 1]); ring.push([x, h.y + h.h]); }
+    for (let y = h.y; y < h.y + h.h; y++) { ring.push([h.x - 1, y]); ring.push([h.x + h.b, y]); }
+    const torY = h.tuer.y === h.y ? h.y - 1 : h.y + h.h;
+    const zaun = ring.filter(([x, y]) => hole(x, y) === T.WIESE && !(y === torY && Math.abs(x - h.tuer.x) <= 1));
+    if (zaun.length < 6) continue;
+    if (versuche(zaun, T.ZAUN)) { h.zaun = true; n++; }
+  }
+
+  // Weide mit Zaun und Gatter, darin Kühe
+  const plaetze = [];
+  for (let y = 2; y < HOEHE - 8; y++) for (let x = 2; x < BREITE - 16; x++) {
+    let ok = true;
+    for (let dy = 0; dy < 5 && ok; dy++) for (let dx = 0; dx < 6; dx++) if (hole(x + dx, y + dy) !== T.WIESE) { ok = false; break; }
+    if (ok) plaetze.push([x, y]);
+  }
+  let weide = null;
+  for (let v = 0; v < 20 && plaetze.length && !weide; v++) {
+    const [wx, wy] = plaetze[Math.floor(r() * plaetze.length)];
+    const ring = [];
+    for (let x = wx; x < wx + 6; x++) { ring.push([x, wy]); ring.push([x, wy + 4]); }
+    for (let y = wy + 1; y < wy + 4; y++) { ring.push([wx, y]); ring.push([wx + 5, y]); }
+    const gatter = ring.filter(([x, y]) => !(y === wy + 4 && (x === wx + 2 || x === wx + 3)));
+    if (versuche(gatter, T.ZAUN)) weide = { x: wx, y: wy };
+  }
+  if (weide) {
+    for (const [dx, dy] of [[1, 1], [2, 2]]) {
+      const x = weide.x + dx, y = weide.y + dy;
+      if (versuche([[x, y], [x + 1, y]], T.DEKO)) deko.push({ art: 'kuh', kx: x, ky: y, b: 2, h: 1, x: px(x, 2), y: (y + 0.5) * KACHEL, v: r() });
+    }
+  }
+
+  // einzelne Hindernisse auf freien Wiesen
+  const setzeEinzeln = (art, anzahl, b, h) => {
+    for (let n = 0, i = 0; n < anzahl && i < 300; i++) {
+      const x = 2 + Math.floor(r() * (BREITE - 12)), y = 2 + Math.floor(r() * (HOEHE - 4));
+      if (!frei3(x, y, b, h)) continue;
+      if (deko.some(d => Math.abs(d.kx - x) < 4 && Math.abs(d.ky - y) < 4)) continue;
+      const kacheln = [];
+      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < b; dx++) kacheln.push([x + dx, y + dy]);
+      if (art !== 'busch' && !versuche(kacheln, T.DEKO)) continue;
+      deko.push({ art, kx: x, ky: y, b, h, x: px(x, b), y: (y + h / 2) * KACHEL, v: r() });
+      n++;
+    }
+  };
+  setzeEinzeln('traktor', 1, 2, 2);
+  setzeEinzeln('heu', 4, 1, 1);
+  setzeEinzeln('kuh', 3, 2, 1);
+  setzeEinzeln('vogelscheuche', 1, 1, 1);
+  setzeEinzeln('hochsitz', 1, 1, 1);
+  setzeEinzeln('fels', 3, 1, 1);
+  setzeEinzeln('busch', 5, 1, 1);    // Büsche bleiben begehbar
+  return deko;
 }
 
 // Safe Room, in dem der Punkt liegt (Innenraum oder Tür), sonst null

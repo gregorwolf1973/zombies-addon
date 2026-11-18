@@ -289,6 +289,7 @@ test('Infektion: läuft draußen, ruht im Safe Room, Spritze heilt Mitspieler, V
 test('Leichen: bleiben liegen, Beute durchsuchbar, altern weg, höchstens 30', async () => {
   const { c, raum, p } = await beitreten('Leichensucher');
   try {
+    raum.kriecherChance = 0;
     raum.neuerZombie(0);
     const [zid, z] = [...raum.state.zombies.entries()].at(-1);
     z.x = raum.welt.start.x; z.y = raum.welt.start.y;
@@ -373,4 +374,31 @@ test('Bots: fünf Mitspieler, folgen, helfen auf, weichen echten Spielern', asyn
     await a.c.leave();
     SpielRaum.einstellungen = vorher;
   }
+});
+
+test('Kriecher: nicht ganz tot, langsam, beim zweiten Mal Leiche', async () => {
+  const { c, raum, p } = await beitreten('Jäger');
+  try {
+    raum.kriecherChance = 1;
+    raum.neuerZombie(0);
+    const [zid, z] = [...raum.state.zombies.entries()].at(-1);
+    p.waffe = ''; p.munition = 0;
+    z.x = raum.welt.start.x + 40; z.y = raum.welt.start.y + 60;
+    raum.schaden(zid, z, 999, p);
+    assert.ok(raum.state.zombies.has(zid), 'Kriecher verschwunden');
+    assert.equal(z.kriecht, true);
+    assert.equal(z.hp, 35);
+    assert.equal(raum.state.leichen.size, 0);
+    assert.ok(await bis(() => c.state.zombies?.get(zid)?.kriecht === true), 'Client sieht Kriecher nicht');
+    // kriecht langsam auf den Spieler zu
+    p.x = z.x - 80; p.y = z.y; p.hp = 100;
+    const x0 = z.x;
+    await warte(1000);
+    const weg = x0 - z.x;
+    assert.ok(weg > 5 && weg < 50, 'Kriecher-Tempo falsch: ' + weg);
+    raum.schaden(zid, z, 999, p);
+    assert.ok(!raum.state.zombies.has(zid));
+    assert.equal(raum.state.leichen.size, 1);
+    assert.equal([...raum.state.leichen.values()][0].variante, z.variante);
+  } finally { await c.leave(); }
 });

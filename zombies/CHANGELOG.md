@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 – 18.11.2026
+
+- Hindernisse: Traktor, Heuballen, Kühe, Hochsitz, Felsen, Vogelscheuche, Biertische und Maibaum muss man umgehen
+  (Lage kommt jetzt aus der Karte, Server und Browser sperren dieselben Stellen; Büsche bleiben begehbar)
+- Holzzäune um einige Gärten (mit Gartentor vor der Haustür) und eine Kuhweide mit Gatter;
+  jedes Stück wird verworfen, wenn es einen Weg abschneiden würde
+- Figuren von oben mit Laufanimation: Menschen (Haare oder Trachtenhut), schlurfende Zombies mit Krallen,
+  Leichen ausgestreckt, Verletzte liegend (Entwurf DeepSeek, zweite Runde nach Rückmeldung)
+- „Nicht ganz tot“: etwa jeder vierte erledigte Zombie kriecht am Boden weiter (langsam, spürt ringsum,
+  beißt schwächer) und muss ein zweites Mal erledigt werden; erst dann wird er zur durchsuchbaren Leiche
+
 ## 0.6.0 – 18.11.2026
 
 - Dächer wieder von oben (Walmdach mit Ziegelreihen, Kamin); Bäume, Kühe, Maibaum und Deko bleiben

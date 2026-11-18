@@ -110,6 +110,7 @@ test('Pistole trifft Zombie in Reichweite und verbraucht Munition', async () => 
     const raum = matchMaker.getLocalRoomById(a.roomId);
     raum.zombieFaktor = 0;
     raum.state.zombies.clear(); raum.zombieInfo.clear();
+    raum.kriecherChance = 0;
     const p = raum.state.spieler.get(a.sessionId);
     assert.equal(p.waffe, 'pistole');
     const m0 = p.munition;

@@ -94,10 +94,18 @@ export function zeichneBoden(ctx, welt) {
       ctx.fillStyle = '#efe4d8'; ctx.fillRect(px, py, KACHEL, KACHEL);
       ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(px, py + KACHEL - 4, KACHEL, 4);
     } else if (t === T.ZAUN) {
-      ctx.fillStyle = '#6d4c41';
-      const senkrecht = nb(0, -1) === T.ZAUN || nb(0, 1) === T.ZAUN;
-      if (senkrecht) { ctx.fillRect(px + 13, py, 4, KACHEL); ctx.fillStyle = '#4e342e'; ctx.fillRect(px + 11, py + 12, 8, 8); }
-      else { ctx.fillRect(px, py + 13, KACHEL, 4); ctx.fillStyle = '#4e342e'; ctx.fillRect(px + 12, py + 10, 8, 10); }
+      // Holzzaun: Latten zu den Nachbarzäunen, Pfosten in der Mitte
+      const m = KACHEL / 2;
+      ctx.fillStyle = 'rgba(0,0,0,.22)';
+      if (nb(1, 0) === T.ZAUN) ctx.fillRect(px + m, py + m + 3, m, 4);
+      if (nb(0, 1) === T.ZAUN) ctx.fillRect(px + m + 3, py + m, 4, m);
+      ctx.fillStyle = '#a1887f';
+      if (nb(-1, 0) === T.ZAUN) { ctx.fillRect(px, py + m - 5, m, 3); ctx.fillRect(px, py + m + 1, m, 3); }
+      if (nb(1, 0) === T.ZAUN) { ctx.fillRect(px + m, py + m - 5, m, 3); ctx.fillRect(px + m, py + m + 1, m, 3); }
+      if (nb(0, -1) === T.ZAUN) { ctx.fillRect(px + m - 5, py, 3, m); ctx.fillRect(px + m + 1, py, 3, m); }
+      if (nb(0, 1) === T.ZAUN) { ctx.fillRect(px + m - 5, py + m, 3, m); ctx.fillRect(px + m + 1, py + m, 3, m); }
+      ctx.fillStyle = '#5d4037'; ctx.fillRect(px + m - 4, py + m - 4, 8, 8);
+      ctx.fillStyle = '#8d6e63'; ctx.fillRect(px + m - 3, py + m - 3, 4, 4);
     }
   }
 }
@@ -131,37 +139,22 @@ export function zeichneOben(ctx, welt) {
     }
   }
 
-  // Maibaum mitten auf dem Marktplatz, Biertische am Rand
-  const m = welt.markt;
-  const mx = (m.x + m.b / 2) * KACHEL, my = (m.y + m.h / 2) * KACHEL;
-  dinge.push([my, () => z.maibaum(mx, my)]);
-  dinge.push([(m.y + 1.5) * KACHEL, () => z.biertisch((m.x + 1.5) * KACHEL, (m.y + 1.5) * KACHEL)]);
-  dinge.push([(m.y + m.h - 2) * KACHEL, () => z.biertisch((m.x + m.b - 3) * KACHEL, (m.y + m.h - 2) * KACHEL)]);
-
-  // Deko auf größeren Wiesenflächen: Kühe, Heu, Traktor, Vogelscheuche, Hochsitz, Felsen
-  const plaetze = [];
-  for (let ky = 2; ky < HOEHE - 2; ky++) for (let kx = 2; kx < BREITE - 8; kx++) {
-    if (wiese(kx, ky, 1) && hash(kx * 7, ky * 11) < 0.5) plaetze.push([kx, ky]);
+  // Hindernisse und Deko: Lage kommt aus der Karte (welt.deko), damit Server und Browser übereinstimmen
+  for (const d of welt.deko ?? []) {
+    const { x, y } = d, v = d.v ?? 0.5;
+    const f = {
+      maibaum: () => z.maibaum(x, y),
+      biertisch: () => z.biertisch(x, y),
+      kuh: () => z.kuh(x, y, v),
+      heu: () => z.heu(x, y, v),
+      traktor: () => z.traktor(x, y),
+      vogelscheuche: () => z.vogelscheuche(x, y),
+      hochsitz: () => z.hochsitz(x, y),
+      fels: () => z.fels(x, y, 0.7 + v * 0.3),
+      busch: () => z.busch(x, y, 0.7, v),
+    }[d.art];
+    if (f) dinge.push([y, f]);
   }
-  const genommen = [];
-  const nimm = () => {
-    for (let versuch = 0; versuch < 400 && plaetze.length; versuch++) {
-      const i = Math.floor(hash(versuch * 13 + genommen.length, welt.seed % 9973) * plaetze.length);
-      const [kx, ky] = plaetze[i];
-      if (genommen.some(([a, b]) => Math.abs(a - kx) < 4 && Math.abs(b - ky) < 4)) continue;
-      genommen.push([kx, ky]);
-      return [mitte(kx), mitte(ky)];
-    }
-    return null;
-  };
-  const setze = (n, f) => { for (let i = 0; i < n; i++) { const p = nimm(); if (p) dinge.push([p[1], () => f(p[0], p[1], i)]); } };
-  setze(5, (x, y, i) => z.kuh(x, y, hash(i, 3)));
-  setze(4, (x, y, i) => z.heu(x, y, hash(i, 5)));
-  setze(1, (x, y) => z.traktor(x, y));
-  setze(1, (x, y) => z.vogelscheuche(x, y));
-  setze(1, (x, y) => z.hochsitz(x, y));
-  setze(3, (x, y, i) => z.fels(x, y, 0.6 + hash(i, 7) * 0.4));
-  setze(4, (x, y, i) => z.busch(x, y, 0.7, hash(i, 9)));
 
   // Enten auf der Isar
   let enten = 0;
