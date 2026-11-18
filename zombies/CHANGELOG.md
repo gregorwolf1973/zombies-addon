@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.27.0 – 18.11.2026
+
+- Startseite fragt gleich nach dem Mikrofon und zeigt den Stand (erlaubt, gesperrt – mit Hinweis, wie man es
+  freigibt). In der Home-Assistant-Seitenleiste erlaubt der Browser kein Mikrofon: dann ein Link, um das Spiel im
+  eigenen Fenster zu öffnen
+- Danach wird „📲 Als App installieren“ angeboten (iPhone: Hinweis „Teilen → Zum Home-Bildschirm“); App-Symbole als
+  PNG, Service Worker mit Hinweisseite ohne Netz
+- Sprache: Ausweichweg über den Server, wenn keine direkte Verbindung zustande kommt (z. B. im Mobilfunk) – Opus über
+  WebCodecs, sonst 8-kHz-μ-law; weitergeleitet wird nur in Hörweite oder per Funkgerät; Meldung „📡 Verbindung läuft
+  über den Server“
+- Chat: Am PC kamen W, A, S, D, E, Leertaste und Umschalt nicht im Eingabefeld an – behoben
+- Große Karte: passt jetzt ganz ins Fenster (Zoom-Knöpfe waren unten abgeschnitten), +/− zoomen um die Mitte des
+  Ausschnitts, Verschieben bleibt in der Karte, Zwei-Finger-Zoom springt nicht mehr
+
 ## 0.26.0 – 18.11.2026
 
 - Sprechen mit den Mitspielern, dauerhaft an (direkt von Gerät zu Gerät, WebRTC). Beim Start fragt der Browser nach

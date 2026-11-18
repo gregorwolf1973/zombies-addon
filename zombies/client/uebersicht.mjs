@@ -70,6 +70,7 @@ export class Uebersicht {
     this.mitte = null;      // null = folgt mir; sonst {x, y} in Kacheln (verschoben)
     this.gross = false;
     box.style.display = 'block';
+    box.style.setProperty('--seiten', String(BREITE / HOEHE));   // für die Größe der aufgeklappten Karte (stil.css)
     this.bedienung();
   }
 
@@ -83,11 +84,15 @@ export class Uebersicht {
   zoomen(f, um = null) {
     const alt = this.zoom;
     this.zoom = Math.max(1, Math.min(8, this.zoom * f));
+    // ohne Angabe (Knöpfe): um die Mitte des sichtbaren Ausschnitts zoomen, nicht zum eigenen Punkt springen
+    if (!um && this.gross && this.letzteAnsicht) um = { x: this.el.width / 2, y: this.el.height / 2 };
     if (um && this.letzteAnsicht && this.zoom !== alt) {
       // Punkt unter Finger/Maus bleibt stehen
       const a = this.letzteAnsicht, px = a.x0 + um.x / a.m, py = a.y0 + um.y / a.m;
       const m2 = a.m * this.zoom / alt, b = this.el.width / m2, h = this.el.height / m2;
-      this.mitte = { x: px - um.x / m2 + b / 2, y: py - um.y / m2 + h / 2 };
+      this.mitte = this.begrenzt({ x: px - um.x / m2 + b / 2, y: py - um.y / m2 + h / 2 }, m2);
+      // Ansicht gleich mitführen: beim Zwei-Finger-Zoom kommen mehrere Ereignisse vor dem nächsten Zeichnen
+      this.letzteAnsicht = { x0: this.mitte.x - b / 2, y0: this.mitte.y - h / 2, m: m2 };
     }
     if (this.zoom === 1) this.mitte = null;
     this.zeichneNeu = true;
@@ -98,9 +103,11 @@ export class Uebersicht {
     let zug = null, abstand0 = 0, zoom0 = 1;
     const lokal = e => { const r = el.getBoundingClientRect(); return { x: (e.clientX - r.left) * el.width / r.width, y: (e.clientY - r.top) * el.height / r.height }; };
     el.addEventListener('pointerdown', e => {
-      el.setPointerCapture(e.pointerId);
+      try { el.setPointerCapture(e.pointerId); } catch { /* künstliches oder schon beendetes Zeigerereignis */ }
       zeiger.set(e.pointerId, lokal(e));
-      if (zeiger.size === 1) zug = { start: lokal(e), mitte: this.aktuelleMitte(), bewegt: false };
+      // Ziehen startet an der tatsächlich gezeigten Mitte (nicht am eigenen Punkt – sonst springt die Karte)
+      const la = this.letzteAnsicht, gezeigt = la ? { x: la.x0 + el.width / la.m / 2, y: la.y0 + el.height / la.m / 2 } : this.aktuelleMitte();
+      if (zeiger.size === 1) zug = { start: lokal(e), mitte: gezeigt, bewegt: false };
       if (zeiger.size === 2) { const [a, b] = [...zeiger.values()]; abstand0 = Math.hypot(a.x - b.x, a.y - b.y); zoom0 = this.zoom; zug = null; }
       e.stopPropagation(); e.preventDefault();
     });
@@ -117,7 +124,7 @@ export class Uebersicht {
       if (Math.hypot(dx, dy) > 8) zug.bewegt = true;
       if (zug.bewegt && this.gross && this.letzteAnsicht) {
         const m = this.letzteAnsicht.m;
-        this.mitte = { x: zug.mitte.x - dx / m, y: zug.mitte.y - dy / m };
+        this.mitte = this.begrenzt({ x: zug.mitte.x - dx / m, y: zug.mitte.y - dy / m }, m);
         this.zeichneNeu = true;
       }
     });
@@ -137,6 +144,12 @@ export class Uebersicht {
 
   aktuelleMitte() { return this.mitte ?? this.ich ?? { x: BREITE / 2, y: HOEHE / 2 }; }
 
+  // Mitte so begrenzen, dass der Ausschnitt in der Karte bleibt (m = Bildpunkte je Kachel)
+  begrenzt(p, m) {
+    const bw = this.el.width / m, bh = this.el.height / m;
+    return { x: Math.max(bw / 2, Math.min(BREITE - bw / 2, p.x)), y: Math.max(bh / 2, Math.min(HOEHE - bh / 2, p.y)) };
+  }
+
   // spieler: [{x, y (Pixel), ebene, farbe (CSS), name, ich}]
   zeichne(spieler, hausVon) {
     const el = this.el, dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -154,6 +167,7 @@ export class Uebersicht {
     const bw = W / m, bh = H / m;
     let { x: cx, y: cy } = this.zoom === 1 ? { x: BREITE / 2, y: HOEHE / 2 } : this.aktuelleMitte();
     cx = Math.max(bw / 2, Math.min(BREITE - bw / 2, cx)); cy = Math.max(bh / 2, Math.min(HOEHE - bh / 2, cy));
+    if (this.mitte) this.mitte = { x: cx, y: cy };   // verschobene Mitte nicht über den Rand hinaus wachsen lassen
     const x0 = cx - bw / 2, y0 = cy - bh / 2;
     this.letzteAnsicht = { x0, y0, m };
     const c = el.getContext('2d');

@@ -147,7 +147,8 @@ button:disabled { opacity: .6; }
   display: block; width: 100%; border: 2px solid #fff6; border-radius: 10px; background: #1b2a1b; box-shadow: 0 3px 12px #000a;
   cursor: pointer; touch-action: none;
 }
-#kartenbox.gross { width: min(94vw, 1000px); right: 50%; transform: translateX(50%); top: 56px; z-index: 24; }
+/* groß: so breit wie möglich, aber ganz im Bild (Höhe ergibt sich aus dem Seitenverhältnis der Karte, --seiten) */
+#kartenbox.gross { width: min(94vw, 1000px, calc((100vh - 76px) * var(--seiten, 1.35))); right: 50%; transform: translateX(50%); top: 56px; z-index: 24; }
 #kartenbox.gross canvas { cursor: grab; }
 .kartenknoepfe { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
 .kartenknoepfe button {
@@ -226,3 +227,11 @@ button:disabled { opacity: .6; }
 @media (max-width: 600px) {
   #chat { left: 16px; right: 16px; width: auto; }
 }
+
+/* Startseite: Freigaben und App-Installation */
+.freigaben { margin-top: 10px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.fg-zeile { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fg-knopf { width: auto !important; margin: 0 !important; padding: 4px 10px !important; font-size: 13px; }
+.fg-hinweis { opacity: .85; line-height: 1.4; }
+.fg-hinweis a { color: #ffd54f; }
+.fg-installieren { background: #2e7d32 !important; color: #fff !important; }

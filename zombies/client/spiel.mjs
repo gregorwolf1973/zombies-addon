@@ -82,6 +82,47 @@ try {
 } catch {}
 fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; ton.toeneZuordnen(i.toene); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
+
+// ---------- Startseite: Freigaben (Mikrofon) abfragen, danach Installation als App anbieten ----------
+let installEreignis = null, freigabenFertig = false;
+const alsApp = () => matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true;
+function installAnbieten() {
+  if (!freigabenFertig || alsApp()) return;
+  if (installEreignis) $('installieren').hidden = false;
+  else if (/iPhone|iPad|iPod/.test(navigator.userAgent)) $('fgIos').hidden = false;
+}
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEreignis = e; installAnbieten(); });
+window.addEventListener('appinstalled', () => { installEreignis = null; $('installieren').hidden = true; });
+$('installieren').onclick = async () => {
+  if (!installEreignis) return;
+  installEreignis.prompt();
+  try { await installEreignis.userChoice; } catch { /* abgebrochen */ }
+  installEreignis = null; $('installieren').hidden = true;
+};
+async function freigabenAbfragen() {
+  const text = t => { $('fgMikro').textContent = t; };
+  const imRahmen = (() => { try { return window.self !== window.top; } catch { return true; } })();
+  if (imRahmen) { $('fgRahmen').hidden = false; $('fgEigen').href = location.href; }
+  try {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { text('nur über https:// möglich'); return; }
+    let stand = 'prompt';
+    try { stand = (await navigator.permissions.query({ name: 'microphone' })).state; } catch { /* Safari kennt das nicht überall */ }
+    if (stand === 'granted') { text('erlaubt ✓'); return; }
+    if (stand === 'denied') { text('gesperrt – oben links am Schloss-Symbol erlauben und neu laden'); return; }
+    text('bitte im Browser erlauben …');
+    const strom = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    strom.getTracks().forEach(t => t.stop());   // nur die Erlaubnis holen; das Spiel öffnet das Mikrofon später selbst
+    text('erlaubt ✓');
+    $('fgMikroKnopf').hidden = true;
+  } catch (e) {
+    text(imRahmen ? 'nicht möglich (Seitenleiste)' : 'nicht erlaubt – du hörst die anderen trotzdem');
+    if (!imRahmen) $('fgMikroKnopf').hidden = false;
+    console.warn('Mikrofon-Freigabe:', e?.message ?? e);
+  } finally { freigabenFertig = true; installAnbieten(); }
+}
+$('fgMikroKnopf').onclick = () => freigabenAbfragen();
+freigabenAbfragen();
+if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service Worker:', e?.message ?? e));
 // Startmusik: der Browser erlaubt Ton erst nach einer Berührung – also beim ersten Antippen der Startseite
 const musikAn = () => { if ($('start').style.display !== 'none') ton.musikStarten(); };
 document.addEventListener('pointerdown', musikAn, { once: true });
@@ -239,7 +280,13 @@ function meldung(text, lang = false) {
 // ---------- Chat (Nachrichten 'chat' / 'chatVerlauf' vom Server) ----------
 let chatSzene = null, chatUngelesen = 0;
 const chatOffen = () => $('chat').classList.contains('offen');
-function chatTasten(an) { if (chatSzene) chatSzene.input.keyboard.enabled = an; }
+// beim Tippen im Chat: Spieltasten aus UND Phasers Tastenfang lösen (sonst schluckt er W, A, S, D, E, Leertaste, Umschalt)
+function chatTasten(an) {
+  const k = chatSzene?.input?.keyboard;
+  if (!k) return;
+  k.enabled = an;
+  if (an) k.enableGlobalCapture(); else { k.disableGlobalCapture(); k.resetKeys?.(); }
+}
 
 function chatZaehler() {
   const z = $('chatzaehler');

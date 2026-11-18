@@ -33,6 +33,13 @@
       <input id="code" maxlength="40" autocomplete="off" placeholder="vom Gastgeber">
     </div>
     <button id="los">Mitspielen</button>
+    <div id="freigaben" class="freigaben">
+      <div class="fg-zeile">🎤 Mikrofon: <span id="fgMikro">wird geprüft …</span> <button type="button" id="fgMikroKnopf" class="fg-knopf" hidden>Erlauben</button></div>
+      <div id="fgRahmen" class="fg-hinweis" hidden>In der Home-Assistant-Seitenleiste erlaubt der Browser kein Mikrofon.
+        <a id="fgEigen" href="./" target="_blank" rel="noopener">Spiel im eigenen Fenster öffnen</a></div>
+      <button type="button" id="installieren" class="fg-installieren" hidden>📲 Als App installieren</button>
+      <div id="fgIos" class="fg-hinweis" hidden>📲 Als App: unten auf „Teilen“ <b>⬆</b> tippen, dann „Zum Home-Bildschirm“.</div>
+    </div>
     <p class="klein">
       <b>Steuerung:</b> Am Handy links auf den Bildschirm tippen und ziehen – wenig ziehen heißt schleichen.
       Am PC WASD oder Pfeiltasten, Umschalt zum Schleichen. Angegriffen wird automatisch.<br>

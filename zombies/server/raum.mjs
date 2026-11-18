@@ -8,6 +8,7 @@ import { Fahrzeug, Verkehr } from './verkehr.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
+import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
@@ -116,10 +117,15 @@ export function sauberName(n) {
 }
 
 const RTC_MAX = 20000;          // größte Signalisierungsnachricht (JSON-Zeichen)
+const SPRACH_PAKET_MAX = 2048;  // größtes Sprachpaket über den Server (Bytes)
+const SPRACH_RATE = 60, SPRACH_BURST = 30;   // Sprachpakete je Sekunde und Absender (Eimer: Nachfüllrate, Größe)
 const SPRICHT_PAUSE = 250;      // ms: höchstens 4 Wechsel je Sekunde und Spieler
 const REDEN_LAERM = 200;        // px (25 m): so weit lockt Reden Zombies, wenn die Einstellung „Reden lockt“ an ist
 
 const CHAT_MAX = 300, CHAT_VERLAUF = 100, CHAT_ANZAHL = 5, CHAT_FENSTER = 10000;
+
+// Spielerdaten in der Form, die lautstaerke() erwartet
+const sprachDaten_ = p => ({ x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: [...(p.rucksack ?? [])] });
 
 export class SpielRaum extends Room {
   maxClients = 10;
@@ -239,7 +245,10 @@ export class SpielRaum extends Room {
     this.onMessage('chat', (client, m) => this.chat(client, m));
     this.onMessage('rtc', (client, m) => this.rtcWeiter(client, m));
     this.onMessage('spricht', (client, m) => this.sprichtSetzen(client.sessionId, !!m?.an));
-    this.onMessage('sprachBereit', client => { this.sprachStart(client); this.sprachPartner(); });
+    this.onMessage('sprachBereit', client => { this.sprachNeu(client.sessionId); this.sprachStart(client); this.sprachPartner(); });
+    this.onMessage('sprachWeg', (client, m) => this.sprachWeg(client, m));
+    this.onMessage('sprachKann', (client, m) => this.sprachKann(client, m));
+    this.onMessage('_$bsprachDaten', (client, m) => this.sprachDaten(client, m));   // Binärnachrichten (sendBytes) kommen mit Vorsatz _$b
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
     this.setSimulationInterval(dt => {
@@ -357,6 +366,89 @@ export class SpielRaum extends Room {
     try { groesse = JSON.stringify(m.daten ?? null).length; } catch { /* zirkulär o. ä. */ }
     if (groesse > RTC_MAX) return;
     this.clients.find(c => c.sessionId === an)?.send('rtc', { von, daten: m.daten });
+  }
+
+  // ---------- Sprache über den Server (Ausweichweg, wenn die direkte WebRTC-Verbindung eines Paars nicht zustande kommt) ----------
+  // Paar auf Server-Weg: x.serverPartner (Set von sessionIds, symmetrisch). Binärpaket: siehe client/sprache_kodierung.mjs.
+  sprachNr(sid) {
+    const x = this.extra.get(sid);
+    if (!x) return 0;
+    if (x.sprachNr) return x.sprachNr;
+    const belegt = new Set([...this.extra.values()].map(e => e.sprachNr));
+    let n = (this.sprachZaehler = ((this.sprachZaehler ?? 0) % 255) + 1);
+    for (let i = 0; i < 255 && belegt.has(n); i++) n = n % 255 + 1;
+    return x.sprachNr = n;
+  }
+
+  // Beitritt (neue Seite) oder Verlassen: alle Server-Paare des Spielers lösen, die anderen erfahren es (dann wieder WebRTC)
+  sprachNeu(sid) {
+    for (const [anderer, y] of this.extra) {
+      if (anderer === sid || !y.serverPartner?.delete(sid)) continue;
+      this.clients.find(c => c.sessionId === anderer)?.send('sprachWeg', { mit: sid, server: false });
+      this.sprachFormatMelden(anderer);
+    }
+    const x = this.extra.get(sid);
+    if (x?.serverPartner?.size) { x.serverPartner.clear(); this.sprachFormatMelden(sid); }
+  }
+
+  sprachWeg(client, m) {
+    const von = client.sessionId, mit = String(m?.mit ?? '');
+    const x = this.extra.get(von), y = this.extra.get(mit);
+    if (!x || !y || x.bot || y.bot || von === mit || !m?.server || !this.sprachEinst().an) return;
+    if (!this.state.spieler.get(mit)?.verbunden) return;
+    (x.serverPartner ??= new Set()).add(mit);
+    (y.serverPartner ??= new Set()).add(von);
+    client.send('sprachWeg', { mit, server: true, nr: this.sprachNr(mit) });
+    this.clients.find(c => c.sessionId === mit)?.send('sprachWeg', { mit: von, server: true, nr: this.sprachNr(von) });
+    this.sprachFormatMelden(von); this.sprachFormatMelden(mit);
+  }
+
+  sprachKann(client, m) {
+    const x = this.extra.get(client.sessionId);
+    if (!x || x.bot) return;
+    x.kannOpus = m?.opus === true;
+    // auch die Formate derer neu prüfen, die diesen Client als Server-Partner haben
+    this.sprachFormatMelden(client.sessionId);
+    for (const anderer of x.serverPartner ?? []) this.sprachFormatMelden(anderer);
+  }
+
+  // Format je Absender: Opus nur, wenn er selbst und alle seine Server-Partner Opus können; sonst μ-law
+  sprachFormatMelden(sid) {
+    const x = this.extra.get(sid);
+    if (!x || x.bot) return;
+    let format = x.kannOpus ? 0 : 1;
+    for (const q of x.serverPartner ?? []) if (!this.extra.get(q)?.kannOpus) format = 1;
+    if (x.sprachFormat === format) return;
+    x.sprachFormat = format;
+    this.clients.find(c => c.sessionId === sid)?.send('sprachFormat', { format });
+  }
+
+  // Binärpaket eines Spielers an seine Server-Partner in Hörweite (oder per Funk)
+  sprachDaten(client, bytes) {
+    const t0 = performance.now();
+    const von = client.sessionId, x = this.extra.get(von);
+    if (!x || x.bot || !x.serverPartner?.size || !bytes?.length || bytes.length > SPRACH_PAKET_MAX) return;
+    const einst = this.sprachEinst();
+    if (!einst.an) return;
+    const e = x.sprachEimer ??= { n: SPRACH_BURST, t: t0 };   // Eimer: SPRACH_RATE Pakete/s, kurze Spitzen bis SPRACH_BURST
+    e.n = Math.min(SPRACH_BURST, e.n + (t0 - e.t) * SPRACH_RATE / 1000); e.t = t0;
+    if (e.n < 1) return;
+    e.n -= 1;
+    if (bytes[0] !== 0 && bytes[0] !== 1) return;   // unbekanntes Format
+    const ich = this.state.spieler.get(von);
+    if (!ich?.verbunden) return;
+    let paket = null;
+    for (const ziel of x.serverPartner) {
+      const y = this.extra.get(ziel), er = this.state.spieler.get(ziel);
+      if (!y || y.bot || !er?.verbunden) continue;
+      const l = lautstaerke(sprachDaten_(er), sprachDaten_(ich), this.welt, einst);   // wie laut hört der Empfänger den Sprecher
+      if (!(l.nah > 0.01 || l.funk > 0.01)) continue;
+      const c = this.clients.find(k => k.sessionId === ziel);
+      if (!c) continue;
+      if (!paket) { paket = new Uint8Array(bytes.length + 1); paket[0] = this.sprachNr(von); paket.set(bytes, 1); }
+      c.sendBytes('sprachDaten', paket);
+    }
+    this.messen('sprache', t0);
   }
 
   sprichtSetzen(sid, an) {
@@ -522,6 +614,7 @@ export class SpielRaum extends Room {
     const text = p.sicher ? `${p.name} ruht sich aus` : `${p.name} hat sich versteckt`;
     this.broadcast('meldung', { text });
     this.state.spieler.delete(client.sessionId);
+    this.sprachNeu(client.sessionId);
     this.extra.delete(client.sessionId);
     this.botsAnpassen();
     this.sprachPartner();
@@ -1238,7 +1331,7 @@ export class SpielRaum extends Room {
       // einmal pro Minute ins Add-on-Log (so lässt sich die Last auf dem Pi nachlesen)
       if ((this.leistungZaehler = (this.leistungZaehler ?? 0) + 1) % 6 === 0) {
         const t = this.leistung.teile, f = k => t[k] ? `${k} ${t[k].mittel}/${t[k].max}` : '';
-        console.log(`Leistung (ms Mittel/Spitze): ${['takt', 'spieler', 'zombies', 'menschen', 'verkehr', 'wegefeld', 'versand'].map(f).filter(Boolean).join(', ')} · ${this.leistung.zombies} Zombies, ${this.leistung.spieler} Spieler, ${this.leistung.speicherMB} MB`);
+        console.log(`Leistung (ms Mittel/Spitze): ${['takt', 'spieler', 'zombies', 'menschen', 'verkehr', 'wegefeld', 'versand', 'sprache'].map(f).filter(Boolean).join(', ')} · ${this.leistung.zombies} Zombies, ${this.leistung.spieler} Spieler, ${this.leistung.speicherMB} MB`);
       }
     }
   }
