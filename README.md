@@ -20,7 +20,7 @@
 
 ---
 
-> **Early stage (0.x):** multiplayer, safe rooms, inventory, saving, infection and the level-1 gate puzzles work; further levels are still to come.
+> **Early stage (0.x):** multiplayer, safe rooms, inventory, saving, infection, enterable houses and the level-1 gate puzzles work; further levels are still to come.
 > The game itself is in German.
 
 ## What works today
@@ -40,6 +40,8 @@
 - Dead zombies stay down for a while and can be searched: rarely a pistol, ammo or knife, often clothing, rope, a torch or a chocolate bar
 - Optional simulated teammates (`bots` option) that follow you through doors, fight when armed, revive you and look after themselves – handy for testing alone
 - Drop items for others, trade with a friend by touching them, and find bigger bags (12 or 16 slots)
+- Enter houses: the camera zooms in, rooms with furniture to search, cellars and attics, locked doors (key, crowbar or a quiz question) and zombies lurking in the dark – bring a torch
+- Configurable zombie count and item frequencies (10 = default)
 - Virtual joystick on phones, WASD on desktop; installable as a web app
 
 ## Installation
@@ -57,7 +59,7 @@ If you expose the game to the internet (reverse proxy or Cloudflare Tunnel, WebS
 The map is generated from a seed on both sides, so only the game state travels over the network (20 updates per second).
 
 ```sh
-cd zombies && npm install && npm test   # 43 tests
+cd zombies && npm install && npm test   # 51 tests
 npm start                               # http://localhost:2567
 ```
 

@@ -4,7 +4,11 @@ import {
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, TAUSCH_ABSTAND,
 } from './welt.mjs';
-import { zeichneBoden, zeichneOben, zeichneDach, DACH_RAND } from './aussehen.mjs';
+import { zeichneBoden, zeichneOben, zeichneDach, DACH_RAND, zeichneInnen } from './aussehen.mjs';
+import { baueInnenraum } from './innen.mjs';
+
+const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
+const INNEN_ZOOM = 1.6;
 import { zeichneMensch, zeichneZombie, zeichneKriecher, zeichneLeiche, zeichneMenschLiegend } from './figuren.mjs';
 
 const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
@@ -171,6 +175,11 @@ class Ort extends Phaser.Scene {
     this.welt = baueWelt(s.seed);
     figurenVorzeichnen(this);
     this.zeichneKarte();
+    this.aussenObjekte = this.children.list.slice();   // alles, was zur Außenwelt gehört
+    this.innenWelten = new Map();   // Ebene → Innenraum (wie auf dem Server erzeugt)
+    this.innenAnsichten = new Map();
+    this.aktEbene = '';
+    this.lichtTexturen();
 
     this.figuren = new Map();   // sessionId → {box, ...}
     this.zombies = new Map();
@@ -247,7 +256,8 @@ class Ort extends Phaser.Scene {
 
   passeZoomAn() {
     const kurz = Math.min(this.scale.width, this.scale.height);
-    this.cameras.main.setZoom(Phaser.Math.Clamp(kurz / 520, 0.55, 1.6));
+    this.grundZoom = Phaser.Math.Clamp(kurz / 520, 0.55, 1.6);
+    this.cameras.main.setZoom(this.grundZoom * (this.aktEbene ? INNEN_ZOOM : 1));
   }
 
   zeichneKarte() {
@@ -360,6 +370,112 @@ class Ort extends Phaser.Scene {
     return { box, bild, x: z.x, y: z.y, r: z.richtung };
   }
 
+  // ---------- Ebenen: Innenräume ----------
+  wv(ebene) {
+    if (!ebene) return this.welt;
+    let w = this.innenWelten.get(ebene);
+    if (!w) {
+      const m = EBENE_MUSTER.exec(ebene);
+      w = baueInnenraum(raum.state.seed, Number(m[1]), m[2]);
+      w.ebene = ebene; w.nr = Number(m[1]); w.stock = m[2];
+      w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
+      this.innenWelten.set(ebene, w);
+    }
+    return w;
+  }
+
+  lichtTexturen() {
+    const licht = this.textures.createCanvas('licht', 256, 256), c = licht.getContext();
+    const g = c.createRadialGradient(128, 128, 10, 128, 128, 128);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.6, 'rgba(255,255,255,.85)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, 256, 256); licht.refresh();
+    const lampe = this.textures.createCanvas('lampe', 512, 512), d = lampe.getContext();
+    const h = d.createRadialGradient(0, 256, 20, 0, 256, 512);
+    h.addColorStop(0, 'rgba(255,255,255,1)'); h.addColorStop(0.75, 'rgba(255,255,255,.8)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+    d.fillStyle = h; d.beginPath(); d.moveTo(0, 256); d.arc(0, 256, 512, -0.42, 0.42); d.closePath(); d.fill(); lampe.refresh();
+    this.lichtPinsel = this.make.image({ key: 'licht', add: false });
+    this.lampenPinsel = this.make.image({ key: 'lampe', add: false }).setOrigin(0, 0.5);
+  }
+
+  innenAnsicht(ebene) {
+    let a = this.innenAnsichten.get(ebene);
+    if (a) return a;
+    const w = this.wv(ebene);
+    const B = w.b * KACHEL, H = w.h * KACHEL, X = w.ox * KACHEL, Y = w.oy * KACHEL;
+    const tex = this.textures.createCanvas('innen-' + ebene, B, H);
+    zeichneInnen(tex.getContext(), w); tex.refresh();
+    const bild = this.add.image(X, Y, 'innen-' + ebene).setOrigin(0).setDepth(0.2);
+    const tueren = this.add.graphics().setDepth(0.4);
+    const dunkel = this.add.renderTexture(X, Y, B, H).setOrigin(0).setDepth(9);
+    a = { w, bild, tueren, dunkel, X, Y, B, H, stand: '' };
+    this.innenAnsichten.set(ebene, a);
+    return a;
+  }
+
+  wechsleAnsicht(ebene) {
+    this.aktEbene = ebene;
+    for (const o of this.aussenObjekte) o.setVisible(!ebene);
+    for (const [e, a] of this.innenAnsichten) for (const o of [a.bild, a.tueren, a.dunkel]) o.setVisible(e === ebene);
+    const cam = this.cameras.main;
+    if (ebene) {
+      const a = this.innenAnsicht(ebene);
+      for (const o of [a.bild, a.tueren, a.dunkel]) o.setVisible(true);
+      cam.setBounds(a.X - 200, a.Y - 200, a.B + 400, a.H + 400);
+    } else cam.setBounds(0, 0, BREITE * KACHEL, HOEHE * KACHEL);
+    cam.setBackgroundColor(ebene ? '#0b0b0d' : '#1b2a1b');
+    // weich hinein- bzw. herauszoomen
+    cam.zoomTo(this.grundZoom * (ebene ? INNEN_ZOOM : 1), 450, 'Sine.easeInOut');
+    kisteZu(); popupZu();
+  }
+
+  // Türzustände vom Server übernehmen und Türen zeichnen; Dunkelheit mit Lichtkegel
+  innenAktualisieren(ich) {
+    const ebene = this.aktEbene;
+    if (!ebene || !ich) return;
+    const a = this.innenAnsicht(ebene), w = a.w;
+    let stand = '';
+    for (const t of w.tueren) {
+      const st = raum.state.tueren.get(`${ebene}:${t.x},${t.y}`);
+      const offen = !!st?.offen, zu = st ? st.verschlossen : t.verschlossen;
+      w.kacheln[t.y * BREITE + t.x] = offen ? T.TUER_OFFEN : T.INNENTUER;
+      stand += offen ? 'o' : zu ? 'v' : 'z';
+    }
+    if (stand !== a.stand) {
+      a.stand = stand;
+      const g = a.tueren.clear();
+      w.tueren.forEach((t, i) => {
+        const x = t.x * KACHEL, y = t.y * KACHEL, z = stand[i];
+        const senkrecht = w.hole(t.x, t.y - 1) === T.WAND;   // Wand oben/unten → Tür in senkrechter Wand
+        if (z === 'o') {
+          g.fillStyle(0x6d4c41, 1);
+          if (senkrecht) g.fillRect(x + 2, y + 1, 26, 5); else g.fillRect(x + 1, y + 2, 5, 26);
+        } else {
+          g.fillStyle(z === 'v' ? 0x5d4037 : 0x8d6e63, 1).fillRect(x + 2, y + 2, KACHEL - 4, KACHEL - 4);
+          g.lineStyle(2, 0x3e2723, 1).strokeRect(x + 2, y + 2, KACHEL - 4, KACHEL - 4);
+          g.fillStyle(0xffd54f, 1).fillCircle(x + KACHEL - 9, y + KACHEL / 2, 2.5);
+          if (z === 'v') { g.fillStyle(0xb0bec5, 1).fillRect(x + KACHEL / 2 - 4, y + KACHEL / 2 - 2, 8, 7); g.lineStyle(2, 0xb0bec5, 1).strokeCircle(x + KACHEL / 2, y + KACHEL / 2 - 3, 3); }
+        }
+      });
+    }
+    // Dunkelheit: Licht um die eigene Figur, mit Taschenlampe ein langer Kegel in Blickrichtung
+    const d = a.dunkel;
+    d.clear();
+    d.fill(0x05070a, w.stock === 'keller' ? 0.93 : w.stock === 'dach' ? 0.85 : 0.78);
+    const lx = this.lokal.x - a.X, ly = this.lokal.y - a.Y;
+    const lampe = ich.rucksack.includes('taschenlampe');
+    this.lichtPinsel.setScale(lampe ? 0.9 : 0.85);
+    d.erase(this.lichtPinsel, lx, ly);
+    if (lampe) { this.lampenPinsel.setRotation(ich.richtung).setScale(0.75); d.erase(this.lampenPinsel, lx, ly); }
+  }
+
+  // sichtbar = gleiche Ebene; drinnen zusätzlich nur bei freier Sicht (Türen verdecken)
+  sichtbar(o) {
+    const e = o.ebene ?? '';
+    if (e !== this.aktEbene) return false;
+    if (!e || !this.lokal) return true;
+    return sichtfrei(this.wv(e), this.lokal.x, this.lokal.y, o.x, o.y);
+  }
+
   abgleichen(dt) {
     const s = raum.state;
     const glatt = Math.min(1, dt * 14);
@@ -369,6 +485,8 @@ class Ort extends Phaser.Scene {
       if (!f) { f = this.neueFigur(p, id); this.figuren.set(id, f); }
       if (f.name.text !== p.name) f.name.setText(p.name);
       if (id === meineId) continue;
+      f.box.setVisible((p.ebene ?? '') === this.aktEbene);
+      if ((f.ebene ?? '') !== (p.ebene ?? '')) { f.x = p.x; f.y = p.y; f.ebene = p.ebene; }
       f.x += (p.x - f.x) * glatt; f.y += (p.y - f.y) * glatt;
       f.box.setPosition(f.x, f.y);
       f.bild.setAlpha(p.verbunden ? 1 : 0.5);
@@ -385,12 +503,14 @@ class Ort extends Phaser.Scene {
       f.x += (z.x - f.x) * glatt; f.y += (z.y - f.y) * glatt;
       f.r = Phaser.Math.Angle.RotateTo(f.r, z.richtung, dt * 6);
       f.box.setPosition(f.x, f.y).setRotation(f.r);
+      const zeigen = this.sichtbar(z);
+      f.box.setVisible(zeigen);
       const textur = (z.kriecht ? 'kriecher-' : 'zombie-') + ((z.variante ?? 0) % 4);
       const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
       if (f.bild.texture.key !== textur) f.bild.setTexture(textur, 0);
       f.bild.setFrame(bildNr < 0 ? 0 : bildNr);
       if (z.jagt) f.bild.setTint(0xffd0c0); else f.bild.clearTint();
-      if (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width) {
+      if (zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
         if (z.kriecht) {
           // Kriecher sehen nicht, sie spüren ringsum
           this.kegel.lineStyle(1, 0xff8a65, 0.35).strokeCircle(f.x, f.y, 110);
@@ -408,6 +528,7 @@ class Ort extends Phaser.Scene {
         o = this.add.image(l.x, l.y, 'leiche-' + ((l.variante ?? 0) % 4), 0).setDepth(1.6).setRotation(l.richtung);
         this.leichen.set(id, o);
       }
+      o.setVisible((l.ebene ?? '') === this.aktEbene);
       const ausblenden = Math.min(1, (LEICHE_DAUER - l.alter) / 20);
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
     }
@@ -421,6 +542,7 @@ class Ort extends Phaser.Scene {
         this.tweens.add({ targets: o, y: b.y - 3, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         this.bodenObj.set(id, o);
       }
+      o.setVisible((b.ebene ?? '') === this.aktEbene);
       o.setAlpha(Math.max(0.2, Math.min(1, (BODEN_DAUER - b.alter) / 20)));
     }
     for (const [id, o] of this.bodenObj) if (!s.boden.has(id)) { o.destroy(); this.bodenObj.delete(id); }
@@ -479,7 +601,7 @@ class Ort extends Phaser.Scene {
       const tempo = p.zombie > 0 ? W.zombieTempoJagen * 1.15
         : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1);
       const weg = (p.zombie > 0 ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * dt;
-      bewege(this.welt, this.lokal, e.dx / l * weg, e.dy / l * weg, W.spielerRadius);
+      bewege(this.wv(p.ebene), this.lokal, e.dx / l * weg, e.dy / l * weg, W.spielerRadius);
     }
     // sanft zum Server hinziehen, bei großem Abstand springen
     const d = Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y);
@@ -528,10 +650,32 @@ class Ort extends Phaser.Scene {
 
   // ---------- Aktionen ----------
   // was kann man hier gerade tun? (gleiche Regeln wie auf dem Server)
+  tuerKontext(ich, nurSchliessen) {
+    if (!ich.ebene || !this.lokal) return null;
+    const w = this.wv(ich.ebene);
+    let best = null, bd = 42;
+    for (const t of w.tueren) {
+      const d = Math.hypot((t.x + 0.5) * KACHEL - this.lokal.x, (t.y + 0.5) * KACHEL - this.lokal.y);
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (!best) return null;
+    const st = raum.state.tueren.get(`${ich.ebene}:${best.x},${best.y}`);
+    if (!st) return null;
+    if (st.offen) return nurSchliessen ? { art: 'tuer_zu', text: '🚪 Tür schließen' } : null;
+    if (nurSchliessen) return null;
+    if (!st.verschlossen) return { art: 'tuer_auf', text: '🚪 Tür öffnen' };
+    if (ich.rucksack.includes('schluessel')) return { art: 'aufschliessen', text: '🔑 Aufschließen' };
+    if (ich.rucksack.includes('brechstange')) return { art: 'aufbrechen', text: '⚒️ Aufbrechen (laut!)' };
+    return { art: 'schlossraetsel', text: '🔐 Schloss knacken (Rätsel)' };
+  }
+
   bestimmeKontext(ich) {
     if (!ich || ich.unten || ich.aktion || raum.state.phase !== 'spiel' || !this.lokal) return null;
     const { x, y } = this.lokal;
-    const safe = safeRoomAn(this.welt, x, y);
+    const w = this.wv(ich.ebene);
+    const safe = ich.ebene ? null : safeRoomAn(this.welt, x, y);
+    const tuer = this.tuerKontext(ich, false);
+    if (tuer) return tuer;
     if (safe) {
       const tx = (safe.haus.tuer.x + 0.5) * KACHEL, ty = (safe.haus.tuer.y + 0.5) * KACHEL;
       const bar = raum.state.safes.get(safe.id)?.barrikade ?? 0;
@@ -546,30 +690,34 @@ class Ort extends Phaser.Scene {
     }
     if (ich.rucksack.length < ich.plaetze) {
       for (const b of raum.state.boden.values()) {
+        if ((b.ebene ?? '') !== (ich.ebene ?? '')) continue;
         if (Math.hypot(b.x - x, b.y - y) < AKTION_ABSTAND) return { art: 'aufheben', text: `✋ ${DINGE[b.ding]?.zeichen ?? ''} aufheben` };
       }
     }
     const tor = this.welt.tor;
-    if ((raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
+    if (!ich.ebene && (raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
       return { art: 'raetsel', text: `🔐 Schloss knacken (${raum.state.torGeloest ?? 0}/3)` };
     }
     let best = null, bd = AKTION_ABSTAND;
-    for (const b of this.welt.behaelter) {
+    for (const b of w.behaelter) {
       const d = Math.hypot(b.x - x, b.y - y);
       if (d >= bd) continue;
       if (raum.state.behaelter.get(b.id)?.rest === 0) continue;
-      if (!sichtfrei(this.welt, x, y, b.x, b.y)) continue;
+      if (!ich.ebene && !sichtfrei(w, x, y, b.x, b.y)) continue;
       bd = d; best = b;
     }
     for (const l of raum.state.leichen.values()) {
+      if ((l.ebene ?? '') !== (ich.ebene ?? '')) continue;
       const d = Math.hypot(l.x - x, l.y - y);
       if (d < bd && l.rest !== 0) { bd = d; best = { art: 'leiche' }; }
     }
     if (best) return { art: 'durchsuchen', text: `🔍 ${BEHAELTER_NAME[best.art]} durchsuchen` };
+    const zu = this.tuerKontext(ich, true);
+    if (zu) return zu;
     // jemanden berühren → tauschen
     if (!tauschOffen) {
       for (const [sid, o] of raum.state.spieler) {
-        if (sid === meineId || o.unten || o.zombie > 0) continue;
+        if (sid === meineId || o.unten || o.zombie > 0 || o.ebene !== ich.ebene) continue;
         if (Math.hypot(o.x - x, o.y - y) < TAUSCH_ABSTAND + 6) return { art: 'tausch', mit: sid, text: `🤝 Tauschen mit ${o.name}` };
       }
     }
@@ -619,7 +767,14 @@ class Ort extends Phaser.Scene {
     this.leseEingabe();
     this.zeichneStick();
     this.abgleichen(dt);
+    const meine = raum.state.spieler.get(meineId);
+    if (meine && (meine.ebene ?? '') !== this.aktEbene) {
+      this.wechsleAnsicht(meine.ebene ?? '');
+      this.lokal = { x: meine.x, y: meine.y };
+      const f = this.figuren.get(meineId); if (f) { f.x = f.altX = meine.x; f.y = f.altY = meine.y; }
+    }
     const ich = this.eigeneFigur(dt);
+    this.innenAktualisieren(ich);
     if (ich && this.lokal) {
       // Dach des Hauses, in dem man steht, wird durchsichtig
       for (const d of this.daecher) {
@@ -679,7 +834,7 @@ class Ort extends Phaser.Scene {
     if (s.phase === 'erwischt') hinweis = 'Erwischt! 🧟<br>Ihr schleppt euch in die Safe Rooms …';
     else if (ich && ich.zombie > 0) hinweis = `🧟 Du bist ein Zombie! Beiß die anderen.<br>Noch ${zeitText(ich.zombie)}, dann wachst du im Safe Room auf.`;
     else if (ich && ich.unten) hinweis = `Du liegst am Boden.<br>Ein Mitspieler muss dir aufhelfen.${balken(ich.hilfe)}`;
-    else if (ich && ich.aktion) hinweis = `${{ barrikade: '🔨 Verbarrikadieren', wegziehen: '🧟 Wegziehen', aufheben: '✋ Aufheben' }[ich.aktion] ?? '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
+    else if (ich && ich.aktion) hinweis = `${{ barrikade: '🔨 Verbarrikadieren', wegziehen: '🧟 Wegziehen', aufheben: '✋ Aufheben', aufbrechen: '⚒️ Aufbrechen', aufschliessen: '🔑 Aufschließen', tuer_auf: '🚪 Öffnen', tuer_zu: '🚪 Schließen' }[ich.aktion] ?? '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
     else if (ich) {
       for (const p of s.spieler.values()) {
         if (p === ich || !p.unten) continue;
@@ -808,7 +963,7 @@ function tauschZu() { tauschOffen = null; $('tausch').style.display = 'none'; $(
 let raetselId = null;
 function zeigeRaetsel(m) {
   raetselId = m.id;
-  $('raetseltitel').textContent = `🔐 Schloss ${m.geloest + 1} von ${m.noetig}` + (m.thema ? ` · ${m.thema}` : '');
+  $('raetseltitel').textContent = (m.tuer ? '🔐 Verschlossene Tür' : `🔐 Schloss ${m.geloest + 1} von ${m.noetig}`) + (m.thema ? ` · ${m.thema}` : '');
   $('raetselfrage').textContent = m.frage;
   const box = $('raetselantworten');
   box.innerHTML = '';

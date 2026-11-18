@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.0 – 18.11.2026
+
+- Phase B: Häuser sind betretbar – beim Betreten zoomt die Kamera hinein, innen ein eigener Grundriss
+  mit 4–7 Zimmern (Flur, Küche, Wohn-, Schlaf-, Kinderzimmer, Bad, Abstellraum), Möbeln von oben,
+  Keller und Dachgeschoss über Treppen; Safe Rooms bleiben vorerst außen
+- Türen: öffnen/schließen; verschlossene mit Schlüsselbund, laut mit der Brechstange oder per Wiki-Rätsel
+- Zombies lauern hinter geschlossenen Türen und sind erst zu sehen, wenn man sie sieht; innen ist es dunkel –
+  Lichtkreis um die Figur, mit Taschenlampe ein langer Lichtkegel
+- Bots folgen über Haustür und Treppen (nur gezielt, nicht beim Vorbeilaufen)
+- Neue Gegenstände: Schlüsselbund, Brechstange
+- Einstellbar: `zombies` (ganzzahlig, 10 = bisherige Menge) und `funde` (je Gegenstand, 10 = normal, 0 = nie, 20 = doppelt)
+- Innenraum-Generator: Entwurf DeepSeek, 6 Fehler von Claude behoben, Abnahmetests für 10 Häuser × 3 Stockwerke
+
 ## 0.8.0 – 18.11.2026
 
 - Größere Rucksäcke: Sporttasche (12 Plätze) und Trekkingrucksack (16) – selten in Spinden und Kofferräumen

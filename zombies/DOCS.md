@@ -16,7 +16,8 @@ Alle landen im selben Spiel.
 
 | Option | Bedeutung |
 |---|---|
-| `zombie_faktor` | Mehr oder weniger Zombies (0,2–3, Standard 1) |
+| `zombies` | Wie viele Zombies draußen unterwegs sind: 10 = normal, 5 = halb so viele, 20 = doppelt so viele |
+| `funde` | Fundhäufigkeit je Gegenstand (Schränke, Autos, Kisten, tote Zombies): 10 = normal, 0 = nie, 20 = doppelt |
 | `zugangscode` | Wenn gesetzt, braucht jeder Mitspieler außerhalb der Seitenleiste diesen Code |
 | `bots` | Simulierte Mitspieler (0–9), solange nur ein Mensch spielt – zum Testen allein |
 | `wiki_adresse` | Adresse eines DokuWiki (z. B. `https://wiki.example.org`) für die Links nach jedem Rätsel |
@@ -39,6 +40,13 @@ Wer das Spiel aus dem Internet erreichbar macht, sollte einen Zugangscode setzen
   (mit Verbandskasten 3 Sekunden, ohne 8 Sekunden).
 - Aktionsknopf unten rechts oder Taste E: durchsuchen, verbarrikadieren, Vorratskiste öffnen.
 - Rucksack unten: antippen zum Benutzen oder Wegwerfen, am PC Tasten 1–8.
+
+## Häuser
+
+Alle Häuser außer den Safe Rooms sind betretbar. Innen gibt es mehrere Zimmer, Möbel zum Durchsuchen,
+manchmal Keller und Dachboden. Verschlossene Türen öffnen sich mit dem Schlüsselbund, laut mit der
+Brechstange oder mit einer richtig beantworteten Frage. Hinter geschlossenen Türen lauern Zombies.
+Drinnen ist es dunkel – eine Taschenlampe im Rucksack leuchtet weit voraus.
 
 ## Spielstand
 

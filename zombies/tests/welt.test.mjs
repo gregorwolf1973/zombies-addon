@@ -84,7 +84,7 @@ test('Safe Rooms und Behälter: vier verschiedene, erreichbar, nicht in Wänden'
       assert.ok(frei(w, s.innen.x, s.innen.y, WERTE.spielerRadius), `${s.name}: Mitte blockiert`);
     }
     assert.equal(safeRoomAn(w, w.start.x, w.start.y), null);
-    assert.ok(w.behaelter.length > 30, `zu wenige Behälter: ${w.behaelter.length}`);
+    assert.ok(w.behaelter.length >= 10, `zu wenige Behälter: ${w.behaelter.length}`);   // draußen nur Autos + Safe Rooms
     assert.ok(w.behaelter.filter(b => b.art === 'auto').length >= 8, 'zu wenige Autos');
     for (const b of w.behaelter) {
       assert.ok(!blockiert(w, b.x, b.y), `${b.id} steht in einer Wand`);
@@ -92,4 +92,15 @@ test('Safe Rooms und Behälter: vier verschiedene, erreichbar, nicht in Wänden'
     }
     assert.equal(new Set(w.behaelter.map(b => b.id)).size, w.behaelter.length);
   }
+});
+
+test('Fundhäufigkeit: 0 = nie, 20 = etwa doppelt so oft, 10 = wie bisher', async () => {
+  const { ziehe, zufall } = await import('../client/welt.mjs');
+  const tab = ['a', 'b', null, null];
+  const zaehle = (f) => { const r = zufall(7), z = { a: 0, b: 0, null: 0 }; for (let i = 0; i < 20000; i++) z[ziehe(tab, f, r)]++; return z; };
+  const normal = zaehle({});
+  assert.ok(Math.abs(normal.a / 20000 - 0.25) < 0.02);
+  assert.equal(zaehle({ a: 0 }).a, 0);
+  const doppelt = zaehle({ a: 20 });
+  assert.ok(Math.abs(doppelt.a / 20000 - 0.4) < 0.02, 'a bei 20: ' + doppelt.a);   // 2/(2+1+1+1)
 });

@@ -9,9 +9,17 @@ export const HOEHE = 48;
 export const T = {
   WIESE: 0, STRASSE: 1, WAND: 2, BODEN: 3, TUER: 4,
   WASSER: 5, BAUM: 6, PLATZ: 7, ZAUN: 8, TOR: 9, DEKO: 10,
+  // Innenräume
+  INNENTUER: 11,      // geschlossene Zimmertür (blockiert, verdeckt die Sicht)
+  AUSGANG: 12,        // Haustür von innen: führt nach draußen
+  TREPPE_RUNTER: 13,  // in den Keller
+  TREPPE_HOCH: 14,    // ins Dachgeschoss bzw. aus dem Keller hinauf
+  MOEBEL: 15,         // Möbel (blockiert, Sicht frei)
+  LEER: 16,           // außerhalb des Hauses
+  TUER_OFFEN: 17,     // geöffnete Zimmertür
 };
 
-export const BLOCKIERT = new Set([T.WAND, T.WASSER, T.BAUM, T.ZAUN, T.TOR, T.DEKO]);
+export const BLOCKIERT = new Set([T.WAND, T.WASSER, T.BAUM, T.ZAUN, T.TOR, T.DEKO, T.INNENTUER, T.MOEBEL, T.LEER]);
 
 export function zufall(seed) {
   // mulberry32: klein und auf allen Plattformen gleich
@@ -160,7 +168,10 @@ export function baueWelt(seed) {
   }
 
   const deko = baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, safeRooms);
-  return { seed, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko };
+  const imHaus = (b, h) => b.x >= h.x * KACHEL && b.x < (h.x + h.b) * KACHEL && b.y >= h.y * KACHEL && b.y < (h.y + h.h) * KACHEL;
+  const draussenBehaelter = behaelter.filter(b => b.art === 'auto' || haeuser.some(h => h.safe && imHaus(b, h)));
+  haeuser.forEach((h, i) => { h.nr = i; h.betretbar = !h.safe; });
+  return { seed, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter: draussenBehaelter, deko };
 }
 
 // Hindernisse (Traktor, Heu, Kühe …) und Zäune. Jedes Stück wird verworfen, wenn es einen Teil
@@ -293,6 +304,8 @@ export const DINGE = {
   schlaeger: { name: 'Baseballschläger', zeichen: '🏏', waffe: true },
   munition: { name: 'Munition', zeichen: '🧰' },
   spritze: { name: 'Rettungsspritze', zeichen: '💉' },
+  schluessel: { name: 'Schlüsselbund', zeichen: '🔑' },
+  brechstange: { name: 'Brechstange', zeichen: '⚒️' },
   messer: { name: 'Messer', zeichen: '🔪', waffe: true },
   kleidung: { name: 'Feste Kleidung', zeichen: '🧥' },
   seil: { name: 'Seil', zeichen: '🪢' },
@@ -313,11 +326,22 @@ export const KISTE_PLAETZE = 24;
 export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
-  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', null, null],
-  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', null, null],
-  auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', 'spritze', 'tasche', null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', null, null],
+  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', null, null],
+  auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'brechstange', null],
 };
 export const MUNITION_PRO_FUND = 12;
+
+// Fundhäufigkeit je Gegenstand einstellbar: 10 = normal, 0 = nie, 20 = doppelt so oft.
+// Zieht aus einer Beutetabelle (Einträge mit Wiederholungen, null = nichts) mit Gewichten.
+export function ziehe(tabelle, faktoren, rnd) {
+  let summe = 0;
+  const gewichte = tabelle.map(d => { const g = d ? (faktoren?.[d] ?? 10) / 10 : 1; summe += g; return g; });
+  if (summe <= 0) return null;
+  let r = rnd() * summe;
+  for (let i = 0; i < tabelle.length; i++) { r -= gewichte[i]; if (r < 0) return tabelle[i]; }
+  return null;
+}
 export const AKTION_ABSTAND = 40;
 export const INFEKTION_DAUER = 5400;   // 90 Minuten bis zur Verwandlung
 export const ZOMBIE_ZEIT = 180;        // so lange spielt man als Zombie gegen die anderen
@@ -369,7 +393,7 @@ export function sichtfrei(welt, x1, y1, x2, y2) {
   for (let i = 1; i < n; i++) {
     const x = x1 + (x2 - x1) * i / n, y = y1 + (y2 - y1) * i / n;
     const t = welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL));
-    if (t === T.WAND || t === T.BAUM) return false;
+    if (t === T.WAND || t === T.BAUM || t === T.INNENTUER || t === T.LEER) return false;
   }
   return true;
 }
@@ -407,7 +431,7 @@ export function zombieSoll(n) {
 }
 
 // ---------- Wegsuche (für Bots) ----------
-const BEGEHBAR_WEG = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ]);
+export const BEGEHBAR_WEG = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ, T.AUSGANG, T.TREPPE_RUNTER, T.TREPPE_HOCH, T.TUER_OFFEN]);
 
 // gerade Strecke mit Radius rad frei?
 export function linieFrei(welt, x1, y1, x2, y2, rad) {

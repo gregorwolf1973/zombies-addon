@@ -226,3 +226,69 @@ export function zeichneDach(ctx, haus, nr) {
   ctx.fillStyle = '#ffd54f'; ctx.fillRect(tx + 13, oben ? ty : ty + 11, 6, 3);
   ctx.restore();
 }
+
+// ---------- Innenräume (Phase B) ----------
+const BODEN_FARBEN = {
+  flur: ['#cdb38f', 'fliese'], kueche: ['#e0d6c2', 'schach'], bad: ['#9fc3d6', 'fliese'],
+  wohnzimmer: ['#a9794d', 'diele'], schlafzimmer: ['#b38559', 'diele'], kinderzimmer: ['#b99062', 'diele'],
+  abstellraum: ['#8f8577', 'beton'], kellerraum: ['#7b7b78', 'beton'], heizungsraum: ['#6f6f6c', 'beton'],
+  vorratskeller: ['#80786c', 'beton'], dachboden: ['#8a6a48', 'diele'],
+};
+
+function zeichneMoebel(ctx, m) {
+  const x = m.x * KACHEL, y = m.y * KACHEL, b = m.b * KACHEL, h = m.h * KACHEL;
+  const k = (f, rx, ry, rb, rh, r = 3) => { ctx.fillStyle = f; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(rx, ry, rb, rh, r) : ctx.rect(rx, ry, rb, rh); ctx.fill(); };
+  const rand = () => { ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.5; ctx.strokeRect(x + 2.5, y + 2.5, b - 5, h - 5); };
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + 5, y + 6, b - 6, h - 6);
+  switch (m.art) {
+    case 'bett': k('#6d4c41', x + 2, y + 2, b - 4, h - 4); k('#eceff1', x + 5, y + 5, b - 10, 14); k('#5c8fd6', x + 5, y + 22, b - 10, h - 27); break;
+    case 'sofa': k('#6a4f9c', x + 2, y + 2, b - 4, h - 4, 6); k('#8064b8', x + 7, y + 9, b - 14, h - 14, 4); break;
+    case 'couchtisch': case 'esstisch': k('#8d6e63', x + 4, y + 4, b - 8, h - 8, 4); k('#a1887f', x + 7, y + 7, b - 14, h - 14, 3); break;
+    case 'schrank': case 'alter_schrank': case 'kommode': case 'garderobe':
+      k(m.art === 'alter_schrank' ? '#5d4037' : '#795548', x + 2, y + 2, b - 4, h - 4); rand();
+      ctx.fillStyle = '#ffd54f'; ctx.fillRect(x + b / 2 - 4, y + h / 2 - 1, 3, 3); ctx.fillRect(x + b / 2 + 1, y + h / 2 - 1, 3, 3); break;
+    case 'regal': k('#6d4c41', x + 2, y + 2, b - 4, h - 4); for (let i = 1; i < 4; i++) { ctx.fillStyle = ['#c62828', '#1565c0', '#2e7d32'][i % 3]; ctx.fillRect(x + 6, y + i * h / 4 - 3, b - 12, 5); } break;
+    case 'kiste': k('#a1887f', x + 4, y + 4, b - 8, h - 8, 2); ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 2; ctx.strokeRect(x + 5, y + 5, b - 10, h - 10); ctx.beginPath(); ctx.moveTo(x + 5, y + 5); ctx.lineTo(x + b - 5, y + h - 5); ctx.stroke(); break;
+    case 'kuehlschrank': k('#eceff1', x + 3, y + 3, b - 6, h - 6); rand(); ctx.fillStyle = '#90a4ae'; ctx.fillRect(x + b - 9, y + 8, 3, h - 16); break;
+    case 'herd': k('#cfd8dc', x + 3, y + 3, b - 6, h - 6); ctx.fillStyle = '#37474f'; for (const [a, c] of [[9, 9], [21, 9], [9, 21], [21, 21]]) { ctx.beginPath(); ctx.arc(x + a, y + c, 4, 0, Math.PI * 2); ctx.fill(); } break;
+    case 'spuele': case 'waschbecken': k('#eceff1', x + 4, y + 4, b - 8, h - 8, 5); k('#b0bec5', x + 9, y + 9, b - 18, h - 18, 6); break;
+    case 'badewanne': k('#fafafa', x + 2, y + 2, b - 4, h - 4, 10); k('#b3e5fc', x + 7, y + 7, b - 14, h - 14, 8); break;
+    case 'klo': k('#fafafa', x + 8, y + 4, b - 16, 8, 2); ctx.fillStyle = '#fafafa'; ctx.beginPath(); ctx.ellipse(x + b / 2, y + 20, 8, 9, 0, 0, Math.PI * 2); ctx.fill(); break;
+    case 'heizung': k('#b0bec5', x + 2, y + 4, b - 4, h - 8); ctx.fillStyle = '#78909c'; for (let i = 6; i < b - 4; i += 6) ctx.fillRect(x + i, y + 6, 2, h - 12); break;
+    default: k('#8d6e63', x + 3, y + 3, b - 6, h - 6); rand();
+  }
+}
+
+// zeichnet das Innere eines Hauses; Ursprung = obere linke Ecke des Hauses (ox, oy)
+export function zeichneInnen(ctx, w) {
+  ctx.save();
+  ctx.translate(-w.ox * KACHEL, -w.oy * KACHEL);
+  const raumAn = (x, y) => w.raeume.find(r => x >= r.x && x < r.x + r.b && y >= r.y && y < r.y + r.h);
+  for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++) {
+    const t = w.hole(x, y), px = x * KACHEL, py = y * KACHEL;
+    if (t === T.WAND) {
+      ctx.fillStyle = '#4e4038'; ctx.fillRect(px, py, KACHEL, KACHEL);
+      ctx.fillStyle = '#6a5a50'; ctx.fillRect(px, py, KACHEL, 5);
+      continue;
+    }
+    const r = raumAn(x, y) ?? raumAn(x, y - 1) ?? raumAn(x - 1, y) ?? { typ: 'flur' };
+    const [farbe, muster] = BODEN_FARBEN[r.typ] ?? ['#b08a62', 'diele'];
+    ctx.fillStyle = farbe; ctx.fillRect(px, py, KACHEL, KACHEL);
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+    if (muster === 'diele') { for (let i = 8; i < KACHEL; i += 8) { ctx.beginPath(); ctx.moveTo(px, py + i + 0.5); ctx.lineTo(px + KACHEL, py + i + 0.5); ctx.stroke(); } }
+    else if (muster === 'fliese') ctx.strokeRect(px + 0.5, py + 0.5, KACHEL / 2, KACHEL / 2), ctx.strokeRect(px + KACHEL / 2 + 0.5, py + KACHEL / 2 + 0.5, KACHEL / 2 - 1, KACHEL / 2 - 1);
+    else if (muster === 'schach') { ctx.fillStyle = 'rgba(0,0,0,.12)'; if ((x + y) % 2) ctx.fillRect(px, py, KACHEL, KACHEL); }
+    else { ctx.fillStyle = 'rgba(0,0,0,.06)'; ctx.fillRect(px + ((x * 7) % 20), py + ((y * 11) % 20), 4, 3); }
+    if (t === T.AUSGANG) {
+      ctx.fillStyle = '#5d4037'; ctx.fillRect(px + 3, py, KACHEL - 6, KACHEL);
+      ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⬇', px + 16, py + 22);
+    } else if (t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH) {
+      ctx.fillStyle = '#9e9e9e'; ctx.fillRect(px + 2, py + 2, KACHEL - 4, KACHEL - 4);
+      ctx.fillStyle = '#616161'; for (let i = 0; i < 5; i++) ctx.fillRect(px + 2, py + 4 + i * 6, KACHEL - 4, 2);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(t === T.TREPPE_RUNTER ? '▼' : '▲', px + 16, py + 21);
+    }
+  }
+  for (const m of w.moebel) zeichneMoebel(ctx, m);
+  ctx.restore();
+}

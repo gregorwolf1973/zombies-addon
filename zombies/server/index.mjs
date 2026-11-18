@@ -39,7 +39,11 @@ export async function starte({
     res.sendFile(path.join(path.dirname(require.resolve('@colyseus/sdk/package.json')), 'dist/colyseus.js')));
   SpielRaum.einstellungen = {
     zugangscode: String(optionen.zugangscode ?? '').trim(),
-    zombieFaktor: Number(optionen.zombie_faktor) || 1,
+    // Zombies: ganzzahlig, 10 = Standardmenge (ältere Option zombie_faktor gilt nur, wenn zombies fehlt)
+    zombieFaktor: Number.isFinite(Number(optionen.zombies)) && optionen.zombies !== undefined && optionen.zombies !== null
+      ? Math.max(0, Math.min(50, Number(optionen.zombies))) / 10 : (Number(optionen.zombie_faktor) || 1),
+    // Fundhäufigkeit je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
+    funde: Object.fromEntries(Object.entries(optionen.funde ?? {}).map(([k, v]) => [k, Math.max(0, Math.min(50, Number(v) || 0))])),
     bots: Math.max(0, Math.min(9, Number(optionen.bots) || 0)),
   };
   app.get('/gesund', (req, res) => res.json({ ok: true }));
