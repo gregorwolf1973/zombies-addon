@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { holeFragen } from './fragenquelle.mjs';
 import { mischeAntworten, waehleFrage } from './raetsel.mjs';
 import { botSchritt, BOT_NAMEN } from './bots.mjs';
+import { Mensch, Bus, Stadtleben } from './menschen.mjs';
 import { baueInnenraum } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { Room, ServerError } from '@colyseus/core';
@@ -74,6 +75,8 @@ export const Zustand = schema({
   boden: t.map(BodenDing),      // weggeworfene Gegenstände
   tueren: t.map(Tuer),          // Zimmertüren der betretenen Häuser: Schlüssel 'ebene:x,y'
   safes: t.map(Safe),
+  menschen: t.map(Mensch),      // Bewohner der Stadt (Abschnitt 4)
+  busse: t.map(Bus),
 }, 'Zustand');
 
 const TICK = 50; // ms → 20 Updates pro Sekunde
@@ -189,6 +192,10 @@ export class SpielRaum extends Room {
     this.ersteWelle = true;
     this.erwischtSeit = 0;
     this.speicherUhr = SPEICHER_TAKT;
+
+    // Stadtleben: Menschen, Bus, erste Zombies
+    this.stadt = new Stadtleben(this);
+    this.stadt.start(this.welt.karte ? (SpielRaum.einstellungen.menschen ?? 50) : 0);
 
     this.onMessage('eingabe', (client, m) => {
       if (!m || typeof m !== 'object') return;
@@ -400,7 +407,9 @@ export class SpielRaum extends Room {
   zombieSollJetzt() {
     const e = SpielRaum.einstellungen;
     // this.zombieFaktor: Vorgabe nur für diesen Raum (Tests), sonst die Einstellung
-    return Math.round(zombieSoll(this.state.spieler.size) * (this.zombieFaktor ?? e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1));
+    // solange viele Menschen gesund sind, kommen weniger Zombies aus dem Umland – die Gefahr wächst mit dem Ausbruch
+    const ausbruch = this.stadt?.anfangs ? 0.3 + 0.7 * (1 - this.stadt.ruheAnteil()) : 1;
+    return Math.round(zombieSoll(this.state.spieler.size) * (this.zombieFaktor ?? e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1) * ausbruch);
   }
 
   // Taschenlampe nötig: drinnen in dunklen Häusern (Keller immer), draußen nachts
@@ -420,6 +429,9 @@ export class SpielRaum extends Room {
     draussen.sort((a, b) => abstand(b[1]) - abstand(a[1]));
     for (const [id] of draussen.slice(0, Math.max(0, draussen.length - soll))) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
   }
+
+  zeitraffer() { return SpielRaum.einstellungen.zeitraffer || 1; }
+  einstellungen() { return SpielRaum.einstellungen; }
 
   unsterblich(p) { return SpielRaum.einstellungen.unsterblich?.has?.(String(p.name).toLowerCase()); }
 
@@ -1094,6 +1106,7 @@ export class SpielRaum extends Room {
       this.aktionSchritt(id, p, x, dt);
     }
     for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
+    this.stadt?.schritt(dt);
     this.aufhelfen(dt);
     this.leichenAltern(dt);
     this.bodenAltern(dt);
@@ -1482,11 +1495,12 @@ export class SpielRaum extends Room {
     // weit von allen Spielern entfernte, nicht jagende Zombies draußen verschwinden (große Karten)
     const draussenSpieler = [...this.state.spieler.values()].filter(p => !p.ebene);
     if (draussenSpieler.length) for (const [id, z] of this.state.zombies) {
-      if (z.ebene || z.jagt) continue;
+      if (z.ebene || z.jagt || this.zombieInfo.get(id)?.bleibt) continue;   // Stadt-Zombies (Ausbruch, Verwandelte) bleiben
       if (draussenSpieler.every(p => Math.hypot(p.x - z.x, p.y - z.y) > 1500)) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
     }
     const soll = this.zombieSollJetzt();
-    const draussen = [...this.state.zombies.values()].filter(z => !z.ebene).length;
+    // gezählt werden nur Zombies aus dem Umland – die Stadt-Zombies kommen obendrauf
+    const draussen = [...this.state.zombies.entries()].filter(([id, z]) => !z.ebene && !this.zombieInfo.get(id)?.bleibt).length;
     if (draussen >= soll || this.nachspawn > 0) return;
     // beim Start viele auf einmal, danach langsam nachrücken
     const anzahl = this.ersteWelle ? soll - draussen : 1;

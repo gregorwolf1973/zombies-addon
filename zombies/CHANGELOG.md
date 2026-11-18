@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.20.0 – 18.11.2026
+
+- Ausbruch: In Geretsried leben 50 Menschen (einstellbar). Sie gehen von zu Hause zum Einkaufen in echte Läden, zum
+  Platz und zur Bushaltestelle und verschwinden in Häusern; ein Linienbus fährt die Haltestellen ab und nimmt Wartende mit
+- Zu Beginn sind nur wenige Zombies in der Stadt. Zombies jagen Menschen; Gebissene werden grünlich und verwandeln sich
+  nach 5 Minuten (einstellbar) selbst in Zombies – Menschen fliehen, wenn sie Zombies sehen
+- Solange viele Menschen gesund sind, kommen weniger Zombies aus dem Umland – die Gefahr wächst mit dem Ausbruch;
+  Zombies aus der Stadt verschwinden nicht mehr, wenn man weit weg ist
+- Einstellungsseite: Menschenzahl, Ansteckungszeit und eine Anzeige, wie viele gerade gesund, gebissen oder Zombie sind
+
 ## 0.19.0 – 18.11.2026
 
 - Viel mehr Details in Geretsried: jedes Wohnhaus hat einen Garten mit Hecke, Holz- oder Metallzaun oder Mauer und

@@ -6,7 +6,7 @@ import {
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
-import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen } from './aussehen.mjs';
+import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben } from './aussehen.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
@@ -242,6 +242,8 @@ class Ort extends Phaser.Scene {
 
     this.figuren = new Map();   // sessionId → {box, ...}
     this.zombies = new Map();
+    this.menschenObj = new Map();   // Bewohner (Abschnitt 4)
+    this.busObj = new Map();
     this.leichen = new Map();
     this.bodenObj = new Map();
     this.kegel = this.add.graphics().setDepth(2);
@@ -812,6 +814,38 @@ class Ort extends Phaser.Scene {
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
     }
     for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.destroy(); this.leichen.delete(id); }
+    // Bewohner: gehen umher, fliehen, verschwinden in Häusern und im Bus; Gebissene werden grünlich
+    for (const [id, m] of s.menschen ?? []) {
+      let o = this.menschenObj.get(id);
+      if (!o) {
+        const bild = this.add.image(0, 0, this.menschTextur(m.aussehen), 0).setScale(MENSCH_GROESSE * 0.92);
+        o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, x: m.x, y: m.y, r: m.richtung };
+        this.menschenObj.set(id, o);
+      }
+      const vx = o.x, vy = o.y;
+      o.x += (m.x - o.x) * glatt; o.y += (m.y - o.y) * glatt;
+      if (Math.hypot(m.x - o.x, m.y - o.y) > 200) { o.x = m.x; o.y = m.y; }   // aus Haus oder Bus aufgetaucht
+      o.r = Phaser.Math.Angle.RotateTo(o.r, m.richtung, dt * 8);
+      const weg = Math.hypot(o.x - vx, o.y - vy);
+      o.lauf = (o.lauf ?? 0) + weg;
+      o.box.setPosition(o.x, o.y).setRotation(o.r + (weg > 0.2 ? Math.sin(o.lauf / 6) * 0.08 : 0));
+      o.box.setVisible(m.sichtbar && this.aktEbene === '');
+      o.bild.setTint(m.infiziert ? 0xb5d99c : 0xffffff);
+    }
+    for (const [id, o] of this.menschenObj) if (!s.menschen?.has(id)) { o.box.destroy(); this.menschenObj.delete(id); }
+    // Linienbus
+    for (const [id, b] of s.busse ?? []) {
+      let o = this.busObj.get(id);
+      if (!o) {
+        if (!this.textures.exists('linienbus')) { const t = this.textures.createCanvas('linienbus', 136, 40); busVonOben(t.getContext(), 68, 20, false, 0.6); t.refresh(); }
+        o = { bild: this.add.image(b.x, b.y, 'linienbus').setDepth(4.6), x: b.x, y: b.y, r: b.richtung };
+        this.busObj.set(id, o);
+      }
+      o.x += (b.x - o.x) * glatt; o.y += (b.y - o.y) * glatt;
+      o.r = Phaser.Math.Angle.RotateTo(o.r, b.richtung, dt * 5);
+      o.bild.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
+    }
+    for (const [id, o] of this.busObj) if (!s.busse?.has(id)) { o.bild.destroy(); this.busObj.delete(id); }
     // liegende Gegenstände
     for (const [id, b] of s.boden) {
       let o = this.bodenObj.get(id);

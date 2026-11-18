@@ -66,6 +66,8 @@ export async function starte({
       nachtFaktor: w.zombies.nacht / 10,
       autoFaktor: w.autos / 10,
       tagMinuten: w.tagMinuten,
+      menschen: w.menschen,
+      ansteckungMin: w.ansteckung,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,
       karte: geladeneKarte.karte,                   // gilt für die nächste Welt
@@ -126,6 +128,7 @@ export async function starte({
       spielzeit: raum ? Math.round(raum.state.zeit) : 0,
       toene: toeneListe(), ereignisse: EREIGNISSE,
       uhr: raum ? Math.floor(raum.state.uhr) : null, autosWelt: raum ? raum.state.autos : null,
+      bewohner: raum ? { gesund: [...raum.state.menschen.values()].filter(m => !m.infiziert).length, gebissen: [...raum.state.menschen.values()].filter(m => m.infiziert).length, zombies: raum.state.zombies.size } : null,
       version: paketVersion,
     };
   };

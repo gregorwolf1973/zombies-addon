@@ -48,7 +48,7 @@ test('Geretsried im Spiel: Zombies nur in der Nähe, Haus betreten', async () =>
     assert.equal(raum.state.karte, 'geretsried');
     assert.ok(await bis(() => c.state.karte === 'geretsried'));
     assert.ok(await bis(() => raum.state.zombies.size > 5, 4000), 'keine Zombies');
-    const weit = [...raum.state.zombies.values()].filter(z => !z.ebene && Math.hypot(z.x - p.x, z.y - p.y) > 1600).length;
+    const weit = [...raum.state.zombies.entries()].filter(([id, z]) => !z.ebene && !raum.zombieInfo.get(id)?.bleibt && Math.hypot(z.x - p.x, z.y - p.y) > 1600).length;
     assert.equal(weit, 0, 'Zombies weit weg erzeugt');
     // Geschäfte: PENNY mit Lebensmittelregalen, Apotheke mit Apothekenregalen
     const penny = raum.welt.haeuser.find(h => /penny/i.test(h.name));
@@ -79,4 +79,29 @@ test('Geretsried: Vektordaten fürs Aussehen (Umrisse, Straßen, Flächen) passe
     return !(Math.min(...xs) > g.x - 1.5 && Math.max(...xs) < g.x + g.b + 1.5 && Math.min(...ys) > g.y - 1.5 && Math.max(...ys) < g.y + g.h + 1.5);
   });
   assert.ok(daneben.length < mitUmriss.length * 0.05, `${daneben.length} Umrisse passen nicht zum Raster`);
+});
+
+test('Stadtleben: Menschen gehen umher, Gebissene werden zu Zombies, der Bus fährt', async () => {
+  const c = await new Client(`ws://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Bürgermeister', spielerId: crypto.randomBytes(16).toString('hex') });
+  try {
+    const raum = matchMaker.getLocalRoomById(c.roomId);
+    const s = raum.state;
+    assert.ok(s.menschen.size >= 40, 'zu wenige Menschen: ' + s.menschen.size);
+    assert.ok(s.busse.size === 1, 'kein Bus');
+    // jemand bewegt sich
+    const vorher = new Map([...s.menschen.entries()].map(([id, m]) => [id, [m.x, m.y, m.sichtbar]]));
+    const bus0 = { x: s.busse.get('linie1').x, y: s.busse.get('linie1').y };
+    await new Promise(r => setTimeout(r, 12000));
+    const bewegt = [...s.menschen.entries()].filter(([id, m]) => { const v = vorher.get(id); return v && (Math.hypot(m.x - v[0], m.y - v[1]) > 20 || m.sichtbar !== v[2]); }).length;
+    assert.ok(bewegt >= 5, 'Menschen bewegen sich nicht: ' + bewegt);
+    const bus = s.busse.get('linie1');
+    assert.ok(Math.hypot(bus.x - bus0.x, bus.y - bus0.y) > 50, 'Bus fährt nicht');
+    // Biss → nach der Ansteckungszeit ein Zombie
+    const [mid, m] = [...s.menschen.entries()].find(([, q]) => q.sichtbar && !q.infiziert);
+    m.infiziert = true; raum.stadt.info.get(mid).inf = 0.5;
+    assert.ok(await bis(() => !s.menschen.has(mid), 3000), 'Gebissener verwandelt sich nicht');
+    const zid = raum.stadt.zuletztVerwandelt;
+    assert.ok(zid && s.zombies.has(zid), 'kein neuer Zombie');
+    assert.ok(raum.zombieInfo.get(zid).bleibt, 'verwandelter Zombie würde wieder verschwinden');
+  } finally { await c.leave(); }
 });

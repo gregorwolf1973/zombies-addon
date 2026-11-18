@@ -429,7 +429,7 @@ function traktorVonOben(ctx, x, y) {
 }
 
 // Bus von oben: lang, mit Fensterreihen und Dachaufbauten
-function busVonOben(ctx, x, y, senkrecht, v) {
+export function busVonOben(ctx, x, y, senkrecht, v) {
   ctx.translate(x, y);
   if (senkrecht) ctx.rotate(Math.PI / 2);
   const L = 122, B = 28;

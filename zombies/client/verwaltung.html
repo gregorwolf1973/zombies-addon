@@ -524,7 +524,7 @@
 
   <!-- Welt neu starten -->
 <section class="karte" id="tagNachtKarte" aria-labelledby="titelTagNacht">
-  <h2 id="titelTagNacht">🌗 Tag und Nacht</h2>
+  <h2 id="titelTagNacht">🌗 Tag, Nacht und Ausbruch</h2>
   <p class="tn-uhr"><span id="tnUhr">–</span> <span class="tn-leise" id="tnPhase"></span></p>
   <div class="tn-knoepfe" role="group" aria-label="Uhrzeit setzen">
     <button type="button" data-uhr="360">🌅 6:00</button><button type="button" data-uhr="720">☀️ 12:00</button>
@@ -538,6 +538,11 @@
   <label for="tnAutos">Geparkte Autos</label>
   <div class="tn-zeile"><input type="range" id="tnAutos" min="0" max="50" step="1"><span id="tnAutosWert">×1,0</span></div>
   <p class="tn-leise" id="tnAutosHinweis"></p>
+  <label for="tnMenschen">Menschen in der Stadt (Ausbruch)</label>
+  <div class="tn-zeile"><input type="range" id="tnMenschen" min="0" max="200" step="5"><span id="tnMenschenWert">50</span></div>
+  <label for="tnAnst">Vom Biss bis zur Verwandlung</label>
+  <div class="tn-zeile"><input type="range" id="tnAnst" min="1" max="30" step="1"><span id="tnAnstWert">5 min</span></div>
+  <p class="tn-leise" id="tnBewohner">Menschen gelten für neue Welten (nach „Welt neu starten“).</p>
   <p class="tn-status" id="tnStatus" aria-live="polite"></p>
 </section>
 <style>
@@ -587,6 +592,10 @@
     if (aktiv !== 'tnTag') { $('tnTag').value = e.tagMinuten || 48; $('tnTagWert').textContent = $('tnTag').value + ' min'; }
     if (aktiv !== 'tnNacht') { $('tnNacht').value = (e.zombies && e.zombies.nacht) || 15; $('tnNachtWert').textContent = komma($('tnNacht').value); }
     if (aktiv !== 'tnAutos') { $('tnAutos').value = e.autos === undefined ? 10 : e.autos; $('tnAutosWert').textContent = komma($('tnAutos').value); }
+    if (aktiv !== 'tnMenschen') { $('tnMenschen').value = e.menschen === undefined ? 50 : e.menschen; $('tnMenschenWert').textContent = $('tnMenschen').value; }
+    if (aktiv !== 'tnAnst') { $('tnAnst').value = e.ansteckung || 5; $('tnAnstWert').textContent = $('tnAnst').value + ' min'; }
+    var bw = d.bewohner;
+    $('tnBewohner').textContent = (bw ? 'Gerade: ' + bw.gesund + ' gesund · ' + bw.gebissen + ' gebissen · ' + bw.zombies + ' Zombies. ' : '') + 'Die Menschenzahl gilt für neue Welten (nach „Welt neu starten“).';
     var welt = d.autosWelt;
     $('tnAutosHinweis').textContent = (welt !== null && welt !== undefined && welt !== Number($('tnAutos').value))
       ? 'Die laufende Welt hat ' + komma(welt) + ' – die neue Menge gilt nach „Welt neu starten“.' : 'Gilt für neue Welten (nach „Welt neu starten“).';
@@ -607,6 +616,8 @@
   regler('tnTag', function (v) { return v + ' min'; }, function (v) { return { tagMinuten: v }; });
   regler('tnNacht', komma, function (v) { return { zombies: { nacht: v } }; });
   regler('tnAutos', komma, function (v) { return { autos: v }; });
+  regler('tnMenschen', function (v) { return String(v); }, function (v) { return { menschen: v }; });
+  regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { ansteckung: v }; });
   Array.prototype.forEach.call(document.querySelectorAll('#tagNachtKarte [data-uhr]'), function (b) {
     b.addEventListener('click', function () {
       anfrage('verwaltung/uhr', { uhr: Number(b.getAttribute('data-uhr')) }).then(function (d) { zeige(d); status(d.uhr === null ? 'Niemand spielt – Uhrzeit nicht gesetzt' : '✓ Uhrzeit gesetzt', d.uhr === null); })

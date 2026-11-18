@@ -48,6 +48,8 @@ export function bereinige(e = {}, alt = {}) {
     frischerStart: typeof e.frischerStart === 'boolean' ? e.frischerStart : !!a.frischerStart,
     autos: Math.round(zahl(e.autos ?? a.autos, 0, 50, 10)),            // geparkte Autos, 10 = normal (gilt für neue Welten)
     tagMinuten: Math.round(zahl(e.tagMinuten ?? a.tagMinuten, 10, 240, 48)),   // so viele echte Minuten dauert ein Spieltag
+    menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50)),         // Bewohner zu Beginn einer Welt
+    ansteckung: Math.round(zahl(e.ansteckung ?? a.ansteckung, 1, 30, 5)),     // Minuten vom Biss bis zur Verwandlung
     zombies: {
       dichte: Math.round(zahl(z.dichte, 0, 50, 10)),     // draußen, 10 = normal
       haeuser: Math.round(zahl(z.haeuser, 0, 50, 10)),   // schlafende Zombies in Häusern, 10 = normal
@@ -65,7 +67,7 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48,
+    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, menschen: 50, ansteckung: 5,
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15 },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     test: { zeitraffer: 1, unsterblich: [] },
