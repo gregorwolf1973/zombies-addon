@@ -98,6 +98,7 @@ export async function starte({
         drinnenDraussen: w.sprache.drinnenDraussen / 100, funk: w.sprache.funk / 100, redenLockt: w.sprache.redenLockt,
       },
       aufgaben: w.aufgaben,                         // { an, stunde, wartezeit, anzahl }
+      bundeswehr: w.bundeswehr,                     // { aktiv, falltage }
       ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,
       unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),
@@ -166,6 +167,7 @@ export async function starte({
       uhr: raum ? Math.floor(raum.state.uhr) : null, autosWelt: raum ? raum.state.autos : null,
       bewohner: raum ? { gesund: [...raum.state.menschen.values()].filter(m => !m.infiziert).length, gebissen: [...raum.state.menschen.values()].filter(m => m.infiziert).length, zombies: raum.state.zombies.size } : null,
       version: paketVersion,
+      stuetzpunkt: raum ? { zustand: raum.state.stuetzpunkt, tage: Math.round(raum.stuetzpunkt?.spieltage() * 10) / 10 } : null,
     };
   };
   app.get('/verwaltung/api', nurIngress, (req, res) => res.json(lage()));

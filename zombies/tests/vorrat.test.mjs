@@ -11,6 +11,8 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, RUCKSACK_PLAETZE, safeRoomVon } from '../client/welt.mjs';
+import { BOTPLAN } from '../server/botplan.mjs';
+BOTPLAN.an = false;   // diese Tests prüfen das reine Folgen/Gelegenheiten der Bots; der Team-Planer hat eigene Tests (botplan.test.mjs)
 
 // Figur in den Innenraum eines Safe Rooms setzen (neben die Eingangstür oder an einen Punkt darin)
 function inDenSafeRoom(raum, p, s, wo = 'tuer') {
@@ -631,16 +633,21 @@ test('Bots nutzen die Vorratskiste im Safe Room', async () => {
     const { raum, p } = a;
     const [bid] = [...raum.extra.entries()].find(([, e]) => e.bot);
     const bot = raum.state.spieler.get(bid);
+    raum.state.aufgaben.clear();   // keine Aufgaben: die Kiste ist frei
     const s = raum.welt.safeRooms[0], kiste = raum.state.safes.get(s.id).kiste;
-    kiste.clear(); kiste.push('spritze');
+    kiste.clear(); kiste.push('verband'); kiste.push('bretter'); kiste.push('taschenlampe');
     inDenSafeRoom(raum, p, s, 'mitte');
     inDenSafeRoom(raum, bot, s, 'tuer');
     bot.rucksack.clear(); for (let i = 0; i < 5; i++) bot.rucksack.push('wasser');
-    bot.durst = 100;
-    assert.ok(await bis(() => bot.rucksack.includes('spritze') && bot.rucksack.filter(d => d === 'wasser').length === 3, 12000),
+    bot.durst = 100; bot.hp = 45;   // verletzt: braucht einen Verband, sonst nichts
+    assert.ok(await bis(() => !kiste.includes('verband') && bot.rucksack.filter(d => d === 'wasser').length === 3, 12000),   // Verband genommen (evtl. gleich benutzt)
       'Bot nutzt die Kiste nicht: ' + JSON.stringify([...bot.rucksack]) + ' Kiste ' + JSON.stringify([...kiste]));
     assert.equal([...kiste].filter(d => d === 'wasser').length, 2, 'Überzähliges liegt nicht in der Kiste');
     assert.equal(raum.state.boden.size, 0, 'Bot wirft im Safe Room auf den Boden statt in die Kiste');
+    // was er nicht dringend braucht, lässt er für die Gruppe liegen (auch sein eigenes Wasser, er ist nicht durstig)
+    await warte(3000);
+    assert.ok(kiste.includes('bretter') && kiste.includes('taschenlampe'), 'Bot räumt die Kiste aus: ' + JSON.stringify([...kiste]));
+    assert.equal([...kiste].filter(d => d === 'wasser').length, 2, 'Bot nimmt Wasser, obwohl er nicht durstig ist');
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });
 
@@ -768,7 +775,7 @@ test('Tauschen mit Bot: er bietet Überzähliges an, der Tausch kommt zustande; 
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });
 
-test('Schenken: Bot nimmt an, was er brauchen kann – und lehnt ab, was er nicht will', async () => {
+test('Schenken: Bot nimmt Geschenke an (auch eine Ersatz-Taschenlampe), nur bei vollem Rucksack nicht', async () => {
   const vorher = SpielRaum.einstellungen;
   SpielRaum.einstellungen = { ...vorher, bots: 1, zombieFaktor: 0 };
   const a = await beitreten('Schenker');
@@ -786,16 +793,26 @@ test('Schenken: Bot nimmt an, was er brauchen kann – und lehnt ab, was er nich
     assert.ok(await bis(() => fenster?.meins?.length === 1 && fenster.seinOk === true), 'Bot nimmt Wasser nicht an');
     a.c.send('tausch_ok');
     assert.ok(await bis(() => bot.rucksack.includes('wasser')), 'Geschenk kommt nicht an');
-    // Seil will der Bot nicht (hat schon keins? doch: Grenze 1) → nimmt er das erste, ein zweites nicht
+    // eine zweite Taschenlampe (er hat schon eine) nimmt er als Geschenk trotzdem
     fenster = null;
+    bot.rucksack.push('taschenlampe'); p.rucksack.clear(); p.rucksack.push('taschenlampe');
     a.c.send('tausch_start', { mit: bsid });
     assert.ok(await bis(() => fenster));
-    bot.rucksack.push('seil');
-    p.rucksack.push('seil');
-    a.c.send('tausch_anbieten', { platz: p.rucksack.length - 1 });
+    a.c.send('tausch_anbieten', { platz: 0 });
+    assert.ok(await bis(() => fenster?.meins?.length === 1 && fenster.seinOk === true), 'Bot nimmt die Taschenlampe nicht');
+    a.c.send('tausch_ok');
+    assert.ok(await bis(() => bot.rucksack.filter(d => d === 'taschenlampe').length === 2), 'Taschenlampe kommt nicht an');
+    // voller Rucksack: kein Platz für ein Geschenk
+    fenster = null;
+    while (bot.rucksack.length < bot.plaetze) bot.rucksack.push('bretter');
+    p.rucksack.clear(); p.rucksack.push('seil');
+    a.c.send('tausch_start', { mit: bsid });
+    assert.ok(await bis(() => fenster));
+    a.c.send('tausch_anbieten', { platz: 0 });
     assert.ok(await bis(() => fenster?.meins?.length === 1));
     await warte(100);
-    assert.equal(fenster.seinOk, false, 'Bot nimmt ein überflüssiges Seil an');
+    // voll: entweder lehnt er ab oder er gibt im Tausch etwas Überzähliges her (dann passt es wieder)
+    assert.ok(fenster.seinOk === false || fenster.seins.length >= 1, 'Bot nimmt trotz vollem Rucksack an, ohne etwas abzugeben');
     a.c.send('tausch_ende');
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });

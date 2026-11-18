@@ -353,6 +353,10 @@ export const DINGE = {
   messer: { name: 'Messer', zeichen: '🔪', waffe: true },
   schrotflinte: { name: 'Schrotflinte', zeichen: '💥', waffe: true },
   gewehr: { name: 'Jagdgewehr', zeichen: '🎯', waffe: true },
+  // nur bei der Bundeswehr (bw_kiste, bw_container): Handgranate (Wurfgegenstand, keine Waffe in der Hand), Maschinenpistole, Maschinengewehr
+  granate: { name: 'Handgranate', zeichen: '💣', wurf: true },
+  mp: { name: 'Maschinenpistole', zeichen: '🪖', waffe: true },
+  mg: { name: 'Maschinengewehr', zeichen: '🔥', waffe: true },
   sense: { name: 'Sense', zeichen: '🌾', waffe: true },
   kleidung: { name: 'Feste Kleidung', zeichen: '🧥' },
   seil: { name: 'Seil', zeichen: '🪢' },
@@ -387,13 +391,52 @@ export const BEUTE = {
   vorratsregal: ['wasser', 'wasser', 'wasser', 'essen', 'essen', 'essen', 'verband', 'bretter', 'schokoriegel', 'schokoriegel', 'spritze', 'funkgeraet', null],
   erstehilfe: ['verband', 'verband', 'verband', 'spritze', null],
   // Bundeswehr-Stützpunkt (Teil 2 ergänzt hier die neuen Waffen)
-  bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', null],
-  bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', null],
+  // Handgranaten häufiger, Maschinenpistole und Maschinengewehr selten (nur hier zu finden)
+  bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', null],
+  bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', null],
   sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
   container: ['essen', 'essen', 'schokoriegel', 'schokoriegel', 'bretter', 'bretter', 'kleidung', 'kleidung', 'tasche', null, null, null],   // Müll: meist Krempel, selten eine Tasche
 };
 export const MUNITION_PRO_FUND = 12;
+export const MUNITION_MAX = 150;   // so viel Munition trägt man höchstens (Maschinengewehr und Soldaten-Handel brauchen mehr Platz als die alten 99)
+
+// ---------- Handel mit den Ärzten und Soldaten des Bundeswehr-Stützpunkts ----------
+// kostet: anzahl Dinge aus der Liste 'aus' (beliebig gemischt); gibt: Ding (menge Stück) oder 'munition' (menge Schuss)
+export const HANDEL = {
+  arzt: {
+    name: 'Arzt', zeichen: '🩺',
+    angebote: [
+      { id: 'verband', gibt: 'verband', menge: 1, kostet: { anzahl: 2, aus: ['essen', 'wasser', 'schokoriegel', 'bretter'] } },
+      { id: 'spritze', gibt: 'spritze', menge: 1, kostet: { anzahl: 2, aus: ['essen', 'wasser', 'schokoriegel', 'bretter'] } },
+    ],
+  },
+  soldat: {
+    name: 'Soldat', zeichen: '🎖',
+    angebote: [
+      { id: 'granate', gibt: 'granate', menge: 1, kostet: { anzahl: 2, aus: ['essen'] } },
+      { id: 'munition', gibt: 'munition', menge: 100, kostet: { anzahl: 3, aus: ['essen', 'wasser', 'schokoriegel', 'bretter', 'verband'] } },
+    ],
+  },
+};
+export const HANDEL_ABSTAND = 56;   // so nah muss man an Arzt bzw. Soldat stehen (Pixel; 2,5 m wären nur 20 px – kleiner als die Figuren selbst)
+// Womit bezahlt wird: Liste der abzugebenden Dinge (zuerst das, wovon man am meisten hat) oder null, wenn der Rucksack nicht reicht
+export function bezahlung(rucksack, kostet) {
+  const n = new Map(kostet.aus.map(d => [d, rucksack.filter(q => q === d).length]));
+  const zahl = [];
+  for (let i = 0; i < kostet.anzahl; i++) {
+    let best = null;
+    for (const [d, m] of n) if (m > 0 && (best === null || m > n.get(best))) best = d;
+    if (best === null) return null;
+    n.set(best, n.get(best) - 1); zahl.push(best);
+  }
+  return zahl;
+}
+// Bundeswehr-Handgranate: Zünder 2 s ab dem Wurf, fliegt 0,6 s, Radius 5 m (8 px je m), Lärm 600 px
+export const GRANATE = { flug: 0.6, zuender: 2.0, radius: 40, schadenZombie: 150, schadenSpieler: 50, wurfWeite: 120, blickWeite: 80, laerm: 600 };
+// Wer ein Maschinengewehr trägt (in der Hand oder im Rucksack), läuft 15 % langsamer
+export const TEMPO_MG = 0.85;
+export const traegtMg = p => p.waffe === 'mg' || (p.rucksack ?? []).includes('mg');
 
 // Fundhäufigkeit je Gegenstand einstellbar: 10 = normal, 0 = nie, 20 = doppelt so oft.
 // Zieht aus einer Beutetabelle (Einträge mit Wiederholungen, null = nichts) mit Gewichten.
@@ -675,6 +718,9 @@ export function uhrText(uhr) {
 export const WAFFEN = {
   pistole: { fern: true, reichweite: WERTE.pistoleReichweite, schaden: 34, pause: 0.45, laut: 1, ueberraschung: 1.5, bild: 1 },
   gewehr: { fern: true, reichweite: WERTE.pistoleReichweite * 1.8, schaden: 100, pause: 1.2, laut: 1.4, ueberraschung: 1.5, bild: 1 },
+  // Bundeswehr: Maschinenpistole (30 m, hohe Feuerrate, etwas weniger Schaden als die Pistole) und Maschinengewehr (45 m, sehr hohe Feuerrate)
+  mp: { fern: true, reichweite: 30 * 8, schaden: 28, pause: 0.14, laut: 1.1, ueberraschung: 1.5, bild: 1 },
+  mg: { fern: true, reichweite: 45 * 8, schaden: 30, pause: 0.09, laut: 1.3, ueberraschung: 1.5, bild: 1 },
   schrotflinte: { fern: true, reichweite: 160, schaden: 70, nebenSchaden: 45, kegel: 0.45, pause: 0.95, laut: 1.3, ueberraschung: 1.5, bild: 1 },
   schlaeger: { reichweite: 42, schaden: 40, pause: 0.6, stoss: true, ueberraschung: 3, bild: 2 },
   sense: { reichweite: 58, schaden: 55, bogen: 1.4, pause: 0.85, ueberraschung: 3, bild: 2 },

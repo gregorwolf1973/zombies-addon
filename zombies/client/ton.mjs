@@ -99,7 +99,9 @@ export function tonUmschalten() {
   return an;
 }
 
-export function hoerer(x, y) { hx = x; hy = y; }
+// Hörerposition; ungültige Werte (Figur noch nicht da) ignorieren – sonst rechnet jedes Geräusch mit NaN
+export function hoerer(x, y) { if (Number.isFinite(x) && Number.isFinite(y)) { hx = x; hy = y; } }
+const endlich = (v, ersatz = 0) => Number.isFinite(v) ? v : ersatz;
 
 // Ausgang für ein Geräusch an Position (x, y); null = zu weit weg
 function ort(x, y, laut = 1) {
@@ -111,6 +113,7 @@ function ort(x, y, laut = 1) {
     v *= Math.max(0, 1 - d / HOERWEITE) ** 1.6;
     pan = Math.max(-1, Math.min(1, (x - hx) / 400));
   }
+  v = endlich(v); pan = endlich(pan);
   if (v < 0.01) return null;
   const g = ctx.createGain(); g.gain.value = v;
   if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pan; g.connect(p); p.connect(haupt); }
@@ -140,12 +143,28 @@ function ton(ziel, dauer, { typ = 'sine', freq = 440, freqEnde, start = 0, a = 0
 }
 
 // ---------- einzelne Geräusche ----------
-const SCHUSS_EREIGNIS = { pistole: 'schussPistole', gewehr: 'schussGewehr', schrotflinte: 'schussSchrot' };
+const SCHUSS_EREIGNIS = { pistole: 'schussPistole', mp: 'schussPistole', gewehr: 'schussGewehr', mg: 'schussGewehr', schrotflinte: 'schussSchrot' };
 export function schuss(x, y, laut = 1, art = 'pistole') {
   if (probe(SCHUSS_EREIGNIS[art] ?? 'schussPistole', x, y, art === 'schrotflinte' ? 1.1 : 1)) return;
   const z = ort(x, y, laut); if (!z) return;
   rauschen(z, 0.35, { freq: 2500, freqEnde: 300, a: 0.002, laut: 1 });
   ton(z, 0.18, { typ: 'triangle', freq: 140, freqEnde: 45, a: 0.002, laut: 0.8 });
+}
+
+// Kanone (Puma) und Handgranate: das lauteste vorhandene Schussgeräusch (Schrotflinte), sonst ein tiefer Knall mit langem Nachhall
+export function kanone(x, y) {
+  if (probe('schussSchrot', x, y, 1.9)) return;
+  boom(x, y, 1.6);
+}
+export function explosion(x, y) {
+  if (probe('schussSchrot', x, y, 2.2)) return;
+  boom(x, y, 2.2);
+}
+function boom(x, y, laut) {
+  const z = ort(x, y, laut); if (!z) return;
+  rauschen(z, 0.9, { freq: 1800, freqEnde: 120, a: 0.002, laut: 1 });
+  ton(z, 0.55, { typ: 'sine', freq: 90, freqEnde: 28, a: 0.002, laut: 1 });
+  rauschen(z, 0.5, { typ: 'bandpass', freq: 400, freqEnde: 90, q: 0.7, start: 0.12, laut: 0.5 });
 }
 
 export function stoss(x, y, messer) {
@@ -301,10 +320,10 @@ export function sireneStarten() {
 export function sireneLage(h, x, y, naeher, weite = 1400, stumm = false) {
   if (!h || !ctx) return;
   const d = Math.hypot(x - hx, y - hy);
-  const v = an && !stumm ? Math.max(0, 1 - d / weite) ** 1.5 * h.laut : 0;
+  const v = endlich(an && !stumm ? Math.max(0, 1 - d / weite) ** 1.5 * h.laut : 0);
   h.g.gain.setTargetAtTime(v, ctx.currentTime, stumm ? 0.2 : 0.12);       // sanft ein- und ausblenden (kurz)
-  if (h.pan) h.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, (x - hx) / 500)), ctx.currentTime, 0.1);
-  const doppler = Math.max(0.9, Math.min(1.1, 1 + naeher / 1600));          // kommt näher: höher, fährt weg: tiefer
+  if (h.pan) h.pan.pan.setTargetAtTime(endlich(Math.max(-1, Math.min(1, (x - hx) / 500))), ctx.currentTime, 0.1);
+  const doppler = endlich(Math.max(0.9, Math.min(1.1, 1 + naeher / 1600)), 1);          // kommt näher: höher, fährt weg: tiefer
   if (h.rate) h.rate.setTargetAtTime(doppler, ctx.currentTime, 0.2);
   else if (h.osz) h.osz.detune.setTargetAtTime((doppler - 1) * 1200, ctx.currentTime, 0.2);
 }

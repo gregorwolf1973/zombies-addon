@@ -634,6 +634,14 @@
   <div class="tn-zeile"><input type="range" id="rwGewehr" min="5" max="80" step="1"><span id="rwGewehrWert">52 m</span></div>
   <label for="rwSchrot">💥 Schrotflinte</label>
   <div class="tn-zeile"><input type="range" id="rwSchrot" min="5" max="80" step="1"><span id="rwSchrotWert">20 m</span></div>
+  <label for="rwMp">🪖 Maschinenpistole (Bundeswehr)</label>
+  <div class="tn-zeile"><input type="range" id="rwMp" min="5" max="80" step="1"><span id="rwMpWert">30 m</span></div>
+  <label for="rwMg">🔥 Maschinengewehr (Bundeswehr)</label>
+  <div class="tn-zeile"><input type="range" id="rwMg" min="5" max="80" step="1"><span id="rwMgWert">45 m</span></div>
+  <label class="tn-schalter"><input type="checkbox" id="tnBwAktiv"> Stützpunkt aktiv (schießt, handelt, kann fallen)</label>
+  <label for="tnBwTage">Stützpunkt fällt nach … Spieltagen</label>
+  <div class="tn-zeile"><input type="range" id="tnBwTage" min="0" max="14" step="1"><span id="tnBwTageWert">3 Tage</span></div>
+  <p class="tn-leise" id="tnBwStatus"></p>
   <p class="tn-leise" id="tnBewohner">Menschen gelten für neue Welten (nach „Welt neu starten“).</p>
   <p class="tn-status" id="tnStatus" aria-live="polite"></p>
 </section>
@@ -704,6 +712,14 @@
     feld('rwPistole', rw.pistole || 29, function (v) { return v + ' m'; });
     feld('rwGewehr', rw.gewehr || 52, function (v) { return v + ' m'; });
     feld('rwSchrot', rw.schrotflinte || 20, function (v) { return v + ' m'; });
+    feld('rwMp', rw.mp || 30, function (v) { return v + ' m'; });
+    feld('rwMg', rw.mg || 45, function (v) { return v + ' m'; });
+    var bwe = e.bundeswehr || {};
+    feld('tnBwTage', bwe.falltage === undefined ? 3 : bwe.falltage, function (v) { return v ? v + (v === 1 ? ' Tag' : ' Tage') : 'nie'; });
+    if (document.activeElement !== $('tnBwAktiv')) $('tnBwAktiv').checked = bwe.aktiv !== false;
+    var spz = d.stuetzpunkt;
+    $('tnBwStatus').textContent = !spz || !spz.zustand ? 'Auf der laufenden Karte gibt es keinen Stützpunkt (nur Geretsried und Isarauen).'
+      : 'Gerade: ' + ({ steht: 'steht', gefallen: 'gefallen', aus: 'abgeschaltet' }[spz.zustand] || spz.zustand) + ' · ' + String(spz.tage).replace('.', ',') + ' Spieltage seit Weltbeginn.';
     var bw = d.bewohner;
     $('tnBewohner').textContent = (bw ? 'Gerade: ' + bw.gesund + ' gesund · ' + bw.gebissen + ' gebissen · ' + bw.zombies + ' Zombies. ' : '') + 'Die Menschenzahl gilt für neue Welten (nach „Welt neu starten“).';
     var welt = d.autosWelt;
@@ -736,6 +752,12 @@
   regler('rwPistole', function (v) { return v + ' m'; }, function (v) { return { reichweite: { pistole: v } }; });
   regler('rwGewehr', function (v) { return v + ' m'; }, function (v) { return { reichweite: { gewehr: v } }; });
   regler('rwSchrot', function (v) { return v + ' m'; }, function (v) { return { reichweite: { schrotflinte: v } }; });
+  regler('rwMp', function (v) { return v + ' m'; }, function (v) { return { reichweite: { mp: v } }; });
+  regler('rwMg', function (v) { return v + ' m'; }, function (v) { return { reichweite: { mg: v } }; });
+  regler('tnBwTage', function (v) { return Number(v) ? v + (Number(v) === 1 ? ' Tag' : ' Tage') : 'nie'; }, function (v) { return { bundeswehr: { falltage: v } }; });
+  $('tnBwAktiv').addEventListener('change', function () {
+    anfrage('verwaltung/api', { bundeswehr: { aktiv: $('tnBwAktiv').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
   $('tnBlaulicht').addEventListener('change', function () {
     anfrage('verwaltung/api', { blaulicht: $('tnBlaulicht').value }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
@@ -2271,13 +2293,16 @@
     var ausbruch = neueKarte(P.welt, '🦠 Ausbruch');
     ['tnMenschen', 'tnAnst', 'tnBiss'].forEach(function (id) { zeile(ausbruch, id); });
     rein(ausbruch, $('tnBewohner'));
+    var bundeswehr = neueKarte(P.welt, '🎖 Bundeswehr');
+    var bwAktiv = $('tnBwAktiv'); if (bwAktiv) bundeswehr.appendChild(bwAktiv.closest('label'));
+    zeile(bundeswehr, 'tnBwTage'); rein(bundeswehr, $('tnBwStatus'));
     var stadt = neueKarte(P.welt, '🚗 Stadt & Verkehr');
     zeile(stadt, 'tnAutos'); rein(stadt, $('tnAutosHinweis'));
     ['tnVerkehr', 'tnVerkehrPhase', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt, id); });
   }
   // 🎒 Funde & Waffen
   rein(P.funde, karteVon('titelFunde'));
-  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot'].forEach(function (id) { zeile(waffen, id); }); }
+  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg'].forEach(function (id) { zeile(waffen, id); }); }
   // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
   rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
   rein(P.aufgaben, $('aufgabenKarte'));

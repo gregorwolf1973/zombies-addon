@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.30.0 – 18.11.2026
+
+- Bundeswehr verteidigt den Stützpunkt: MG-Nester feuern Salven, der Puma dreht den Turm und schießt, jeder Soldat
+  schießt von seinem Posten mit dem Gewehr – auf alle Zombies in der Nähe, auch auf die, die ins Lager gelangen. Die
+  Soldaten bleiben im Lager. Die Abschüsse zählen nicht für die Aufgabe „Zombies erledigen“
+- Der Stützpunkt fällt nach einigen Spieltagen (Einstellung „Bundeswehr“, Vorgabe 3, 0 = nie): dann stehen Zombies an
+  den Posten, die Kisten bleiben plünderbar
+- Neue Waffen nur bei der Bundeswehr: Handgranate (Taste Q oder zweiter Knopf, Explosion nach 2 s), Maschinenpistole,
+  Maschinengewehr (MG-Träger laufen langsamer); Munition bis 150
+- Tauschen mit Ärzten (Verband, Spritze) und Soldaten im Lager (Handgranate, 100 Schuss) zu festen Preisen; Ärzte
+  heilen in ihrer Nähe; Feldbetten im Sanitätszelt zum Ausruhen; Funkspruch auch im Funkzelt
+- Bots arbeiten selbständig an den Aufgaben: je Mensch bleibt ein Begleiter, die anderen sammeln Wasser, Essen,
+  Medizin und Bretter und bringen sie in die Safe-Room-Kiste, setzen den Funkspruch ab, jagen Zombies und gehen zum Bus.
+  Sie sagen im Chat, was sie tun, und folgen Befehlen: „Resi, hol wasser“, „alle folgt mir“, „Sepp, bleib hier“,
+  „Vroni, funk“, „Resi, frei“
+- Bots räumen die Vorratskiste nicht mehr aus: Sie nehmen nur, was sie gerade dringend brauchen, und nie die
+  Vorräte für die Aufgabe
+- Bots nehmen Geschenke an (z. B. eine Ersatz-Taschenlampe); bei vollem Rucksack sagen sie es
+- Ton: ungültige Positionen können die Tonausgabe und das Bild nicht mehr anhalten
+
 ## 0.29.0 – 18.11.2026
 
 - Aufgaben und Evakuierung: Jede Runde hat gemeinsame Aufgaben (Pflicht: Funkspruch am Funktisch eines Safe Rooms;

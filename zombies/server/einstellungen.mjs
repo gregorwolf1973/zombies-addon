@@ -6,7 +6,7 @@ import { DINGE } from '../client/welt.mjs';
 
 export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
 export const ZEITRAFFER = [1, 5, 10, 60];
-export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20 };   // Meter
+export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20, mp: 30, mg: 45 };   // Meter
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 
 // Spielereignisse, denen auf der Einstellungsseite Tondateien zugeordnet werden
@@ -46,6 +46,7 @@ export function bereinige(e = {}, alt = {}) {
   const t = { ...a.test, ...(e.test ?? {}) };
   const sp = { ...a.sprache, ...(e.sprache ?? {}) };
   const ag = { ...a.aufgaben, ...(e.aufgaben ?? {}) };
+  const bw = { ...a.bundeswehr, ...(e.bundeswehr ?? {}) };
   const funde = { ...a.funde };
   for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10));
   const toene = {};
@@ -103,6 +104,10 @@ export function bereinige(e = {}, alt = {}) {
       wartezeit: Math.round(zahl(ag.wartezeit, 10, 180, 60)),                 // Spielminuten, die der Bus wartet
       anzahl: Math.round(zahl(ag.anzahl, 3, 6, 4)),                           // Aufgaben je Level
     },
+    bundeswehr: {
+      aktiv: typeof bw.aktiv === 'boolean' ? bw.aktiv : true,                 // Stützpunkt schießt, handelt und kann fallen
+      falltage: Math.round(zahl(bw.falltage, 0, 30, 3)),                      // fällt nach so vielen Spieltagen seit Weltbeginn (0 = nie)
+    },
     funde,
     toene,
     test: {
@@ -118,6 +123,7 @@ export function vorgaben() {
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50 },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, anzahl: 4 },
+    bundeswehr: { aktiv: true, falltage: 3 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     toene: {},

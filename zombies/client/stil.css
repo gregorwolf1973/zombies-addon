@@ -44,7 +44,7 @@ button:disabled { opacity: .6; }
   display: none; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px;
   background: #263238cc; border: 1px solid #90a4ae66; border-radius: 10px; padding: 5px 8px; width: fit-content;
 }
-#sicher button, #unten button, #popup button, #kiste button { width: auto; margin: 0; pointer-events: auto; }
+#sicher button, #unten button, #popup button, #kiste button, #handel button { width: auto; margin: 0; pointer-events: auto; }
 #ausruhen { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: #b0bec5; color: #102027; }
 .fehler.gut { color: #a5d6a7; }
 
@@ -72,17 +72,17 @@ button:disabled { opacity: .6; }
 }
 #popup .titel { font-weight: 700; margin: 2px 4px 8px; }
 #popup button { display: block; width: 100% !important; font-size: 15px; padding: 9px; margin-top: 6px !important; border-radius: 9px; }
-#popup button.zweit, #kiste .zweit { background: #ffffff22; color: #fff; }
-#raetsel, #kiste {
+#popup button.zweit, #kiste .zweit, #handel .zweit { background: #ffffff22; color: #fff; }
+#raetsel, #kiste, #handel {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #0008; z-index: 25;
   padding: 16px;
 }
-#raetsel .fenster, #kiste .fenster {
+#raetsel .fenster, #kiste .fenster, #handel .fenster {
   background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 12px 14px; width: min(520px, 100%);
   max-height: 85vh; overflow: auto;
 }
-#raetsel .kopfzeile, #kiste .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-#raetselzu, #kistezu { background: #ffffff22; color: #fff; padding: 4px 10px; font-size: 16px; }
+#raetsel .kopfzeile, #kiste .kopfzeile, #handel .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#raetselzu, #kistezu, #handelzu { background: #ffffff22; color: #fff; padding: 4px 10px; font-size: 16px; }
 #kiste .kopf { font-size: 13px; opacity: .85; margin: 10px 0 6px; }
 #kiste .raster { display: flex; flex-wrap: wrap; gap: 6px; }
 #kiste .ding { font-size: 14px; padding: 7px 10px; border-radius: 9px; background: #ffffff1f; color: #fff; }
@@ -255,3 +255,13 @@ button:disabled { opacity: .6; }
 .fg-hinweis { opacity: .85; line-height: 1.4; }
 .fg-hinweis a { color: #ffd54f; }
 .fg-installieren { background: #2e7d32 !important; color: #fff !important; }
+
+/* Handel mit Ärzten und Soldaten im Bundeswehr-Lager */
+#handelhabe { font-size: 13px; opacity: .85; margin: 4px 0 10px; }
+#handel .angebot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 10px; margin-bottom: 8px; border-radius: 10px; background: #ffffff14; }
+#handel .angebot .text { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+#handel .angebot .text b { font-size: 15px; }
+#handel .angebot .zahlt { color: #a5d6a7; }
+#handel .angebot .fehlt { color: #ef9a9a; }
+#handel .angebot button { padding: 9px 14px; font-size: 15px; white-space: nowrap; }
+#handel .angebot button:disabled { opacity: .4; }

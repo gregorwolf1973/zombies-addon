@@ -19,7 +19,7 @@ const hash = (a, b) => { let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0,
 // ======================================================================================================================
 
 // Bauplan-Rahmen: u (quer, nach rechts von der Stadtseite aus gesehen), v (Tiefe von der Front nach hinten), Kacheln → Pixel
-function rahmen(x0, y0, b, h, richtung) {
+export function rahmen(x0, y0, b, h, richtung) {
   const th = WINKEL[richtung], c = Math.round(Math.cos(th)), s = Math.round(Math.sin(th));
   const ox = (richtung === 'n' || richtung === 'w' ? x0 : x0 + b) * K, oy = (richtung === 'n' || richtung === 'o' ? y0 : y0 + h) * K;
   const ort = (u, v) => [ox + (u * c - v * s) * K, oy + (u * s + v * c) * K];
@@ -265,6 +265,74 @@ function zeltBaender(w, d, eingang) {
   };
   return [...seite('v0', -hw - W, -hd - W, hw + W, -hd, 'x'), ...seite('v1', -hw - W, hd, hw + W, hd + W, 'x'),
     ...seite('u0', -hw - W, -hd, -hw, hd, 'y'), ...seite('u1', hw, -hd, hw + W, hd, 'y')];
+}
+
+
+// ======================================================================================================================
+// Verhalten (Teil 2): gemeinsame Hilfen für Server und Client (Handelspartner, Sicht, Lage im Bauplan)
+// ======================================================================================================================
+
+// Weltpunkt → Bauplan-Koordinaten (Kacheln): u quer nach rechts, v von der Front nach hinten
+export function planKoord(sp, x, y) {
+  const r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung), [ox, oy] = r.ort(0, 0);
+  const dx = (x - ox) / K, dy = (y - oy) / K;
+  return { u: dx * r.c + dy * r.s, v: -dx * r.s + dy * r.c };
+}
+// Hinter der Sperrlinie (im Lager)? Die Front (Draht) liegt bei v ≈ 1,5.
+export function imLager(sp, x, y) {
+  const { u, v } = planKoord(sp, x, y);
+  return u >= 0 && u <= SP_BREITE && v >= 2 && v <= SP_TIEFE;
+}
+
+// Händler: die beiden Ärzte und die Soldaten im Lager (v ≥ 8: nicht die Wachen an Draht und Sandsäcken, nicht die MG-Nester)
+const handelsCache = new WeakMap();
+export function handelsleute(sp) {
+  let l = handelsCache.get(sp);
+  if (!l) {
+    l = [];
+    for (const t of sp.teile) {
+      if (t.art !== 'posten') continue;
+      if (t.rolle === 'arzt') l.push({ wer: 'arzt', x: t.x, y: t.y });
+      else if (t.rolle === 'soldat' && planKoord(sp, t.x, t.y).v >= 8) l.push({ wer: 'soldat', x: t.x, y: t.y });
+    }
+    handelsCache.set(sp, l);
+  }
+  return l;
+}
+// nächster Handelspartner der gesuchten Art (oder irgendeiner) innerhalb des Abstands, sonst null
+export function handelPartner(sp, x, y, abstand, wer = null) {
+  if (!sp) return null;
+  let best = null, bd = abstand;
+  for (const h of handelsleute(sp)) {
+    if (wer && h.wer !== wer) continue;
+    const d = Math.hypot(h.x - x, h.y - y);
+    if (d < bd) { bd = d; best = h; }
+  }
+  return best;
+}
+
+// Trifft die Strecke eine Zeltwand? (Zelte sind die einzigen Wände im Lager; Draht, Sandsäcke und Fahrzeuge lassen Schüsse durch)
+export function zeltWandImWeg(sp, x1, y1, x2, y2) {
+  for (const t of sp.teile) {
+    if (t.art !== 'sanizelt' && t.art !== 'zelt' && t.art !== 'funkzelt') continue;
+    const co = Math.round(Math.cos(t.winkel)), si = Math.round(Math.sin(t.winkel));
+    const lok = (x, y) => [(x - t.x) * co + (y - t.y) * si, -(x - t.x) * si + (y - t.y) * co];
+    const [ax, ay] = lok(x1, y1), [bx, by] = lok(x2, y2);
+    for (const [r0, s0, r1, s1] of zeltBaender(t.w, t.d, t.eingang)) {
+      let a = 0, b = 1;
+      const dx = bx - ax, dy = by - ay;
+      let treffer = true;
+      for (const [p0, d, lo, hi] of [[ax, dx, r0, r1], [ay, dy, s0, s1]]) {
+        if (Math.abs(d) < 1e-9) { if (p0 < lo || p0 > hi) { treffer = false; break; } continue; }
+        let ta = (lo - p0) / d, tb = (hi - p0) / d;
+        if (ta > tb) [ta, tb] = [tb, ta];
+        a = Math.max(a, ta); b = Math.min(b, tb);
+        if (a > b) { treffer = false; break; }
+      }
+      if (treffer) return true;
+    }
+  }
+  return false;
 }
 
 // ======================================================================================================================

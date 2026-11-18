@@ -19,6 +19,7 @@ export const Aufgabe = schema({
 export const LEVEL_KARTEN = ['geretsried', 'isarauen'];
 export const KARTEN_NAMEN = { geretsried: 'Geretsried', isarauen: 'die Isarauen', dorf: 'das Dorf' };
 
+export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
 const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
 const WARNUNG_MIN = 30;     // so viele Spielminuten vor der Ankunft kommt die Funkmeldung
 
@@ -60,7 +61,8 @@ const ARTEN = {
   bretter: {
     symbol: '🪵',
     text: () => 'Den Funk-Safe-Room zu 100 % verbarrikadieren', ziel: () => 100,
-    stand: a => a.funkSafe ? Math.round(a.raum.state.safes.get(a.funkSafe)?.barrikade ?? 0) : 0,
+    // kam der Funkspruch vom Bundeswehr-Stützpunkt, gilt er als gesichert (die Soldaten halten das Lager): Aufgabe erfüllt
+    stand: a => a.funkSafe === STUETZPUNKT ? 100 : a.funkSafe ? Math.round(a.raum.state.safes.get(a.funkSafe)?.barrikade ?? 0) : 0,
   },
 };
 
@@ -165,7 +167,7 @@ export class Aufgaben {
   funkAbsetzen(p, safe) {
     const s = this.raum.state;
     if (!this.an() || s.funk) return;
-    s.funk = true; this.funkSafe = safe?.id ?? '';
+    s.funk = true; this.funkSafe = safe?.id ?? STUETZPUNKT;
     s.busAnkunft = this.einst().stunde * 60;
     this.aktualisieren(false);
     const a = s.aufgaben.get('funk'); if (a) { a.erledigt = true; a.fortschritt = a.ziel; }
@@ -176,7 +178,11 @@ export class Aufgaben {
   // Safe Room mit Funktisch und Abstand zu ihm (für Kontext und Aktion)
   funkKontext(p) {
     const s = this.raum.state;
-    if (!this.an() || s.funk || !p.ebene) return null;
+    if (!this.an() || s.funk) return null;
+    if (!p.ebene) {   // draußen: Funkzelt des Bundeswehr-Stützpunkts
+      const f = this.raum.welt.stuetzpunkt?.teile.find(q => q.art === 'funkzelt')?.funkpunkt;
+      return f && Math.hypot(p.x - f[0], p.y - f[1]) < 44 ? { art: 'funk', safe: null, dauer: 4 } : null;
+    }
     const safe = this.raum.welt.safeRooms.find(r => r.ebene === p.ebene);
     if (!safe) return null;
     const m = this.raum.wv(p.ebene).moebel?.find(q => q.art === 'funktisch');

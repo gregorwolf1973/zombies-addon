@@ -2,13 +2,13 @@
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten,
+  BODEN_DAUER, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten,
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
-import { PUMA_TURM, zeichnePumaTurm } from './stuetzpunkt.mjs';
+import { PUMA_TURM, zeichnePumaTurm, handelPartner } from './stuetzpunkt.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
@@ -401,7 +401,7 @@ const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
 const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   // figuren2: 160er Felder
 const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7'];   // z6/z7 aus figuren2 (Riley Gombart)
-const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer' };   // sonst Taschenlampe
+const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer', mp: 'pistole', mg: 'gewehr' };   // sonst Taschenlampe
 
 class Ort extends Phaser.Scene {
   constructor() { super('ort'); }
@@ -451,11 +451,12 @@ class Ort extends Phaser.Scene {
     this.passeZoomAn();
     this.scale.on('resize', () => this.passeZoomAn());
 
-    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,SPACE,ESC');
+    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,SPACE,ESC');
     this.tasten.E.on('down', () => this.aktion());
+    this.tasten.Q.on('down', () => this.aktion2());
     this.tasten.SPACE.on('down', () => this.aktion());
     chatSzene = this;
-    this.tasten.ESC.on('down', () => { kisteZu(); popupZu(); });
+    this.tasten.ESC.on('down', () => { kisteZu(); popupZu(); handelZu(); });
     for (let i = 1; i <= 8; i++) {
       this.input.keyboard.on('keydown-' + ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT'][i - 1],
         () => raum.send('benutze', { platz: i - 1 }));
@@ -507,8 +508,12 @@ class Ort extends Phaser.Scene {
       this.schuss(m);
       // Schrot kommt als mehrere Linien – nur ein Knall
       const jetzt = performance.now();
-      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; }
+      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; }
     });
+    raum.onMessage('bwschuss', m => this.bwSchuss(m));
+    raum.onMessage('granate', m => this.granateFliegt(m));
+    raum.onMessage('explosion', m => this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''));
+    raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
     raum.onMessage('stoss', m => { const fs = naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
@@ -550,7 +555,8 @@ class Ort extends Phaser.Scene {
       : '🔓 Das Tor ist offen!', true));
 
     $('aktion').onclick = () => this.aktion();
-    $('aktion2').onclick = () => raum.send('aktion2');
+    $('aktion2').onclick = () => this.aktion2();
+    $('handelzu').onclick = () => handelZu();
     $('ausruhen').onclick = () => raum.send('ausruhen');
     $('kistezu').onclick = () => kisteZu();
     $('raetselzu').onclick = () => raetselZu();
@@ -1458,15 +1464,16 @@ class Ort extends Phaser.Scene {
       if (!this.textures.exists('puma-turm')) { const tex = this.textures.createCanvas('puma-turm', PUMA_TURM.b, PUMA_TURM.h); zeichnePumaTurm(tex.getContext()); tex.refresh(); }
       o.turm = this.add.image(pumaT.turm.x, pumaT.turm.y, 'puma-turm').setOrigin(PUMA_TURM.mx / PUMA_TURM.b, PUMA_TURM.my / PUMA_TURM.h).setRotation(pumaT.turm.winkel).setDepth(5.1);
     }
-    const soldat = (x, y, blick, phase) => {
+    const soldat = (x, y, blick, phase, n = -1) => {
       const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE);
       const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE);
       const box = this.add.container(x, y, [fuesse, bild]).setDepth(3.5).setRotation(blick);
-      o.soldaten.push({ box, bild, phase });
+      const e = { box, bild, phase, blick, schussBis: 0, n };
+      o.soldaten.push(e);
     };
     sp.teile.forEach((t, i) => {
-      if (t.art === 'mgnest') soldat(t.x - Math.cos(t.blick) * 5, t.y - Math.sin(t.blick) * 5, t.blick, i);   // hinter dem MG
-      else if (t.art === 'posten' && t.rolle === 'soldat') soldat(t.x, t.y, t.blick, i);
+      if (t.art === 'mgnest') soldat(t.x - Math.cos(t.blick) * 5, t.y - Math.sin(t.blick) * 5, t.blick, i, i);   // hinter dem MG
+      else if (t.art === 'posten' && t.rolle === 'soldat') soldat(t.x, t.y, t.blick, i, i);   // n = Teil-Nummer: Schüsse vom Server zeigen den Soldaten feuernd
       else if (t.art === 'posten' && t.rolle === 'arzt') {
         const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(BOGEN2_GROESSE * 0.95);
         o.aerzte.push({ box: this.add.container(t.x, t.y, [bild]).setDepth(3.5).setRotation(t.blick), bild });
@@ -1477,13 +1484,100 @@ class Ort extends Phaser.Scene {
     });
   }
 
-  // leichte Idle-Animation: Soldaten wechseln langsam das Haltungsbild, Verwundete atmen
+  // Soldaten wechseln langsam das Haltung, Verwundete atmen; MG-Schützen zeigen beim Schießen soldat_schuss und drehen sich zum Ziel;
+  // der Puma-Turm dreht weich zum Winkel vom Server; ist der Stützpunkt gefallen (oder aus), sind alle Figuren weg
   stuetzpunktAnimieren() {
     const o = this.stuetzpunktObj;
     if (!o || this.aktEbene) return;
-    const jetzt = this.time.now;
-    for (const s of o.soldaten) s.bild.setFrame(this.figurBild2('soldat_idle', Math.floor(jetzt / 220 + s.phase * 3)));
-    for (const v of o.verwundete) v.bild.setScale(v.s0 * (1 + Math.sin(jetzt / 900 + v.phase) * 0.012));
+    const jetzt = this.time.now, steht = raum.state.stuetzpunkt === 'steht';
+    for (const s of o.soldaten) {
+      s.box.setVisible(steht);
+      if (!steht) continue;
+      const schiesst = s.schussBis > jetzt;
+      s.bild.setFrame(schiesst ? this.figurBild2('soldat_schuss', Math.floor(jetzt / 70)) : this.figurBild2('soldat_idle', Math.floor(jetzt / 220 + s.phase * 3)));
+      if (s.n >= 0) s.box.setRotation(schiesst && s.w !== undefined ? s.w : s.blick);
+    }
+    for (const a of o.aerzte) a.box.setVisible(steht);
+    for (const v of o.verwundete) { v.bild.setVisible(steht); if (steht) v.bild.setScale(v.s0 * (1 + Math.sin(jetzt / 900 + v.phase) * 0.012)); }
+    if (o.turm && Number.isFinite(raum.state.bwTurm)) {
+      let d = raum.state.bwTurm - o.turm.rotation;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      o.turm.setRotation(o.turm.rotation + d * Math.min(1, this.game.loop.delta / 1000 * 8));
+    }
+  }
+
+  // Schuss der Bundeswehr: 'mg' aus einem Nest (Leuchtspur, Mündungsblitz, Schütze zeigt soldat_schuss) oder 'kanone' vom Puma (Turm, Einschlag)
+  bwSchuss(m) {
+    const o = this.stuetzpunktObj, w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), c = Math.cos(w), sn = Math.sin(w);
+    const kanone = m.art === 'kanone', vorn = kanone ? 58 : 30;
+    const mx = m.x1 + c * vorn, my = m.y1 + sn * vorn;
+    if (!kanone) {
+      const sold = o?.soldaten.find(q => q.n === m.n);
+      if (sold) { sold.schussBis = this.time.now + 260; sold.w = w; }
+    }
+    // Leuchtspur: kurzer heller Streifen, der zum Ziel läuft
+    const g = this.add.graphics().setDepth(7);
+    const l0 = 0.0, l1 = Math.min(1, 70 / Math.max(1, Math.hypot(m.x2 - mx, m.y2 - my)));
+    g.lineStyle(kanone ? 3 : 2, kanone ? 0xffcc80 : 0xffee58, 1).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
+    g.lineStyle(1, 0xffffff, 0.9).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
+    this.tweens.add({ targets: g, x: (m.x2 - mx) * (1 - l1), y: (m.y2 - my) * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => g.destroy() });
+    // Mündungsblitz (additiv) und Pulverrauch
+    const blitz = this.add.image(mx, my, 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(w)
+      .setScale(kanone ? 1.0 : 0.5).setDepth(7);
+    this.tweens.add({ targets: blitz, alpha: 0, scale: blitz.scale * 1.25, duration: kanone ? 160 : 90, onComplete: () => blitz.destroy() });
+    if (kanone) {
+      for (let i = 0; i < 6; i++) {
+        const r = this.add.circle(mx + (Math.random() - 0.5) * 10, my + (Math.random() - 0.5) * 10, 5 + Math.random() * 5, 0xbdbdbd, 0.55).setDepth(6.5);
+        this.tweens.add({ targets: r, x: r.x + c * (10 + Math.random() * 24) + (Math.random() - 0.5) * 16, y: r.y + sn * (10 + Math.random() * 24) + (Math.random() - 0.5) * 16, alpha: 0, scale: 2.2, duration: 700, onComplete: () => r.destroy() });
+      }
+      this.explosion(m.x2, m.y2, 24, 0.45);
+    }
+    const jetzt = performance.now();
+    if (jetzt - (this.letzterBwKnall ?? 0) > (kanone ? 0 : 70)) { this.letzterBwKnall = jetzt; if (kanone) ton.kanone(m.x1, m.y1); else ton.schuss(m.x1, m.y1, 1.4, 'gewehr'); }
+  }
+
+  // Handgranate: fliegt in einem Bogen (0,6 s), liegt dann blinkend bis zur Explosion
+  granateFliegt(m) {
+    if ((m.ebene ?? '') !== this.aktEbene) return;
+    const schatten = this.add.circle(m.x1, m.y1, 4, 0x000000, 0.3).setDepth(3.9);
+    const bild = this.add.circle(m.x1, m.y1, 4.5, 0x4b5320).setStrokeStyle(1, 0x1d2112).setDepth(7.5);
+    const t0 = this.time.now, flug = m.flug * 1000;
+    const tick = () => {
+      const k = Math.min(1, (this.time.now - t0) / flug);
+      const x = m.x1 + (m.x2 - m.x1) * k, y = m.y1 + (m.y2 - m.y1) * k;
+      schatten.setPosition(x, y);
+      bild.setPosition(x, y - Math.sin(k * Math.PI) * 26).setScale(1 + Math.sin(k * Math.PI) * 0.5);
+      if (k >= 1) { this.events.off('update', tick); bild.setFillStyle(0x6a6f3a); this.tweens.add({ targets: bild, alpha: 0.35, yoyo: true, repeat: 5, duration: 140 }); }
+    };
+    this.events.on('update', tick);
+    this.time.delayedCall(m.zeit * 1000 - 40, () => { this.events.off('update', tick); bild.destroy(); schatten.destroy(); });
+  }
+
+  // Explosion: Blitz, Druckwelle, Feuer- und Rauchteilchen, Kamerawackeln (stärker, je näher man ist)
+  explosion(x, y, r = 40, staerke = 1, ebene = '') {
+    if (ebene !== this.aktEbene) return;
+    const blitz = this.add.circle(x, y, r * 0.5, 0xfff3c0, 0.95).setBlendMode('ADD').setDepth(8);
+    this.tweens.add({ targets: blitz, scale: 2.2, alpha: 0, duration: 220, onComplete: () => blitz.destroy() });
+    const ring = this.add.circle(x, y, r * 0.4).setStrokeStyle(3, 0xffe0b2, 0.9).setFillStyle().setDepth(7.9);
+    this.tweens.add({ targets: ring, scale: 2.6, alpha: 0, duration: 340, onComplete: () => ring.destroy() });
+    const n = Math.round(14 * staerke) + 4;
+    for (let i = 0; i < n; i++) {
+      const w = Math.random() * Math.PI * 2, d = r * (0.5 + Math.random() * 0.9);
+      const f = this.add.circle(x, y, 3 + Math.random() * 5, [0xffd54f, 0xff9800, 0xf4511e, 0xd84315][i % 4], 0.95).setBlendMode('ADD').setDepth(7.8);
+      this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, scale: 0.4, duration: 350 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
+    }
+    for (let i = 0; i < Math.round(9 * staerke) + 2; i++) {
+      const w = Math.random() * Math.PI * 2, d = r * (0.2 + Math.random() * 0.8);
+      const rauch = this.add.circle(x, y, 6 + Math.random() * 7, 0x4a4a4a, 0.6).setDepth(7.7);
+      this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 14 - Math.random() * 16, alpha: 0, scale: 2.4 + Math.random() * 1.2, duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
+    }
+    const brand = this.add.circle(x, y, r * 0.35, 0x1b1b1b, 0.5).setDepth(0.95);   // Brandfleck am Boden
+    this.tweens.add({ targets: brand, alpha: 0, duration: 6000, onComplete: () => brand.destroy() });
+    if (this.lokal) {
+      const d = Math.hypot(this.lokal.x - x, this.lokal.y - y), nah = Math.max(0, 1 - d / 520);
+      if (nah > 0) this.cameras.main.shake(120 + 220 * staerke * nah, 0.004 + 0.012 * staerke * nah);
+    }
+    if (staerke >= 0.9) ton.explosion(x, y);
   }
 
   zeichneTor() {
@@ -1567,7 +1661,7 @@ class Ort extends Phaser.Scene {
     if (!p.unten && raum.state.phase === 'spiel' && l > 0.05) {
       const schleicht = !(p.zombie > 0) && (e.s || l < 0.55);
       const tempo = p.zombie > 0 ? W.zombieTempoJagen * 1.15
-        : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1);
+        : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
       const weg = (p.zombie > 0 ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * dt;
       bewege(this.wv(p.ebene), this.lokal, e.dx / l * weg, e.dy / l * weg, W.spielerRadius);
     }
@@ -1674,8 +1768,12 @@ class Ort extends Phaser.Scene {
   }
 
   bestimmeKontext(ich) {
-    if (!ich || ich.unten || ich.aktion || raum.state.phase !== 'spiel' || !this.lokal) return null;
+    this.handelKontext = null;
+    if (!ich || ich.unten || ich.aktion || ich.zombie > 0 || raum.state.phase !== 'spiel' || !this.lokal) return null;
     const { x, y } = this.lokal;
+    // Arzt oder Soldat im Lager in Reichweite (nur solange der Stützpunkt steht)
+    const hp = !ich.ebene && raum.state.stuetzpunkt === 'steht' ? handelPartner(this.welt.stuetzpunkt, x, y, HANDEL_ABSTAND) : null;
+    if (hp) this.handelKontext = { art: 'handel', wer: hp.wer, text: hp.wer === 'arzt' ? '🩺 Mit dem Arzt tauschen' : '🎖 Mit dem Soldaten tauschen' };
     const w = this.wv(ich.ebene);
     const safe = safeRoomVon(this.welt, ich);
     const tuer = this.tuerKontext(ich, 'auf');
@@ -1697,6 +1795,9 @@ class Ort extends Phaser.Scene {
         return { art: 'kiste', text: '📦 Vorräte', safe };
       }
     }
+    // Funkzelt des Bundeswehr-Stützpunkts: Funkspruch wie am Funktisch
+    const funkPunkt = !ich.ebene && raum.state.aufgaben?.size && !raum.state.funk ? this.welt.stuetzpunkt?.teile.find(q => q.art === 'funkzelt')?.funkpunkt : null;
+    if (funkPunkt && Math.hypot(x - funkPunkt[0], y - funkPunkt[1]) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
     if (ich.rucksack.length < ich.plaetze) {
       for (const b of raum.state.boden.values()) {
         if ((b.ebene ?? '') !== (ich.ebene ?? '')) continue;
@@ -1728,6 +1829,7 @@ class Ort extends Phaser.Scene {
       const z = zaunUeberstieg(this.welt, x, y, ich.richtung, W.spielerRadius);
       if (z) return { art: 'klettern', text: `🧗 Über ${ZAUN_NAME[z.art] ?? 'den Zaun'} steigen` };
     }
+    if (this.handelKontext && !handelOffen) return this.handelKontext;
     // jemanden berühren → tauschen
     if (!tauschOffen) {
       for (const [sid, o] of raum.state.spieler) {
@@ -1743,15 +1845,25 @@ class Ort extends Phaser.Scene {
     if (!k) return;
     if (k.art === 'kiste') kisteAuf(k.safe);
     else if (k.art === 'tausch') raum.send('tausch_start', { mit: k.mit });
+    else if (k.art === 'handel') handelAuf(k.wer);
     else raum.send('aktion');
     if (k.art === 'raetsel') $('aktion').style.display = 'none';
+  }
+
+  // zweiter Knopf: andere Türmöglichkeit, Handel (wenn der Hauptknopf etwas anderes tut) oder Granate werfen
+  aktion2() {
+    const z = this.zweit;
+    if (!z) return;
+    if (z.art === 'wurf') raum.send('wurf');
+    else if (z.art === 'handel') handelAuf(z.wer);
+    else raum.send('aktion2');
   }
 
   // ---------- Effekte ----------
   // Schuss: Mündungsblitz und ein kurzer, angedeuteter Feuerstrahl Richtung Ziel (kein durchgehender Strich)
   schuss(m) {
     const w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), c = Math.cos(w), sn = Math.sin(w);
-    const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr';
+    const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr' || m.art === 'mg';
     const vorn = 16, lang = gewehr ? 38 : schrot ? 22 : 26;
     const g = this.add.graphics().setDepth(7);
     // Feuerzunge: breit und gelb an der Mündung, schmal und rot nach vorn auslaufend
@@ -1911,13 +2023,18 @@ class Ort extends Phaser.Scene {
     knopf.style.display = this.kontext ? 'block' : 'none';
     if (this.kontext && knopf.textContent !== this.kontext.text) knopf.textContent = this.kontext.text;
     // zweiter Knopf: andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
-    const zweit = !ich || ich.unten || ich.aktion || ich.zombie > 0 || s.phase !== 'spiel' || !this.lokal ? null : this.tuerKontext(ich, 'zweit');
+    const frei2 = ich && !ich.unten && !ich.aktion && !(ich.zombie > 0) && s.phase === 'spiel' && this.lokal;
+    let zweit = frei2 ? this.tuerKontext(ich, 'zweit') : null;
+    if (frei2 && !zweit && this.handelKontext && this.kontext !== this.handelKontext && !handelOffen) zweit = this.handelKontext;
+    if (frei2 && !zweit && ich.rucksack.includes('granate')) zweit = { art: 'wurf', text: '💣 Granate werfen (Q)' };
+    this.zweit = zweit;
     const knopf2 = $('aktion2');
     knopf2.style.display = zweit ? 'block' : 'none';
     if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
     tauschRucksack();
+    if (handelOffen) handelZeigen(ich, this.welt.stuetzpunkt);
 
     let hinweis = '';
     if (s.phase === 'erwischt') hinweis = 'Erwischt! 🧟<br>Ihr schleppt euch in die Safe Rooms …';
@@ -1971,7 +2088,7 @@ function popupAuf(knopf, platz, ding) {
   const titel = document.createElement('div');
   titel.className = 'titel'; titel.textContent = dingText(ding);
   const nutzen = document.createElement('button');
-  nutzen.textContent = DINGE[ding]?.waffe ? 'In die Hand' : ding === 'bretter' ? 'Wofür?' : 'Benutzen';
+  nutzen.textContent = DINGE[ding]?.waffe ? 'In die Hand' : ding === 'granate' ? 'Werfen' : ding === 'bretter' ? 'Wofür?' : 'Benutzen';
   nutzen.onclick = () => { raum.send('benutze', { platz }); popupZu(); };
   const weg = document.createElement('button');
   weg.textContent = 'Wegwerfen'; weg.className = 'zweit';
@@ -2011,6 +2128,39 @@ function kisteZeigen(ich, safe) {
   };
   fuellen($('kisteinhalt'), kiste, KISTE_PLAETZE, 'raus', 'Kiste');
   fuellen($('kisterucksack'), ich.rucksack, ich.plaetze || RUCKSACK_PLAETZE, 'rein', 'Rucksack');
+}
+
+// ---------- Handel mit Ärzten und Soldaten im Bundeswehr-Lager ----------
+let handelOffen = null, handelSchluessel = '';
+function handelAuf(wer) { handelOffen = wer; handelSchluessel = ''; $('handel').style.display = 'flex'; }
+function handelZu() { handelOffen = null; $('handel').style.display = 'none'; }
+function handelZeigen(ich, sp) {
+  const h = HANDEL[handelOffen];
+  const nah = ich && !ich.ebene && raum.state.stuetzpunkt === 'steht' && handelPartner(sp, ich.x, ich.y, HANDEL_ABSTAND + 14, handelOffen);
+  if (!h || !nah) return handelZu();
+  const schluessel = handelOffen + '|' + [...ich.rucksack].join(',') + '|' + ich.munition + '|' + ich.plaetze;
+  if (schluessel === handelSchluessel) return;
+  handelSchluessel = schluessel;
+  $('handeltitel').textContent = `${h.zeichen} Mit dem ${h.name} tauschen`;
+  const anz = d => ich.rucksack.filter(q => q === d).length;
+  const habe = [...new Set(ich.rucksack)].map(d => `${DINGE[d]?.zeichen ?? '?'} ${anz(d)}`).join('  ') || 'nichts';
+  $('handelhabe').textContent = `Du hast: ${habe}${ich.munition ? `  🧰 ${ich.munition} Schuss` : ''}`;
+  const box = $('handelangebote');
+  box.innerHTML = '';
+  for (const a of h.angebote) {
+    const zeile = document.createElement('div'); zeile.className = 'angebot';
+    const gibt = a.gibt === 'munition' ? `🧰 ${a.menge} Schuss Munition` : `${DINGE[a.gibt].zeichen} ${a.menge > 1 ? a.menge + '× ' : ''}${DINGE[a.gibt].name}`;
+    const kostet = `${a.kostet.anzahl} beliebige aus ${a.kostet.aus.map(d => DINGE[d].zeichen).join(' ')}`;
+    const zahl = bezahlung(ich.rucksack, a.kostet);
+    const platzOk = a.gibt === 'munition' ? ich.munition < MUNITION_MAX : ich.rucksack.length - (zahl?.length ?? 0) + a.menge <= ich.plaetze;
+    const text = document.createElement('div'); text.className = 'text';
+    text.innerHTML = `<b>${gibt}</b><span>kostet ${kostet}</span>${zahl ? `<span class="zahlt">zahlt: ${zahl.map(d => DINGE[d].zeichen).join(' ')}</span>` : '<span class="fehlt">dafür fehlt dir etwas</span>'}`;
+    const knopf = document.createElement('button'); knopf.textContent = 'Tauschen';
+    knopf.disabled = !zahl || !platzOk;
+    if (zahl && !platzOk) knopf.title = a.gibt === 'munition' ? 'Munition voll' : 'Rucksack voll';
+    knopf.onclick = () => raum.send('handel', { wer: handelOffen, angebot: a.id });
+    zeile.append(text, knopf); box.appendChild(zeile);
+  }
 }
 
 // ---------- Tauschen ----------

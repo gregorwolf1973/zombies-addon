@@ -1,6 +1,7 @@
 // Steuerung der simulierten Mitspieler (zweite Fassung, Claude): Wegsuche über Kacheln, feste Plätze hinter
 // dem Anführer, Abstand zu allen Figuren, bewaffnete Bots kämpfen. Ein Bot steuert sich nur über x.eingabe.
-import { frei, sichtfrei, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE, durchsuchDauer } from '../client/welt.mjs';
+import { planSchritt, entnahmeFrei } from './botplan.mjs';   // Team-Planer (Aufträge, Rollen, Chat-Befehle)
+import { frei, sichtfrei, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE, durchsuchDauer, MUNITION_MAX } from '../client/welt.mjs';
 
 export const BOT_NAMEN = ['Resi', 'Vroni', 'Sepp', 'Wastl', 'Kathi', 'Hias', 'Burgi', 'Girgl', 'Loisl', 'Zenzi'];
 
@@ -27,17 +28,19 @@ function versorgen(p, b, jetzt) {
   const besser = WAFFEN_RANG.filter(w => p.rucksack.includes(w) && rang(w) > rang(p.waffe)).at(-1);
   if (besser && nimm(besser, () => { if (p.waffe) p.rucksack.push(p.waffe); p.waffe = besser; })) return;
   // aufgehobene Munitionsschachtel einlegen
-  if (p.munition < 30 && nimm('munition', () => { p.munition = Math.min(99, p.munition + 12); })) return;
+  if (p.munition < 30 && nimm('munition', () => { p.munition = Math.min(MUNITION_MAX, p.munition + 12); })) return;
   // größere Tasche umpacken
   for (const t of ['trekking', 'tasche']) {
     if (p.rucksack.includes(t) && (DINGE[t]?.plaetze ?? 0) > p.plaetze && nimm(t, () => { p.plaetze = DINGE[t].plaetze; })) return;
   }
 }
-const WAFFEN_RANG = ['messer', 'schlaeger', 'pistole', 'sense', 'schrotflinte', 'gewehr'];
+// (Maschinenpistole und Maschinengewehr von der Bundeswehr stehen über dem Gewehr)
+export const WAFFEN_RANG = ['messer', 'schlaeger', 'pistole', 'sense', 'schrotflinte', 'gewehr', 'mp', 'mg'];
 
 // so viele Stück eines Dings will ein Bot höchstens tragen (Waffen: die getragene zählt mit); der Rest fliegt raus
-const GRENZE = { wasser: 3, essen: 3, schokoriegel: 3, verband: 3, spritze: 2, bretter: 3, munition: 4, schluessel: 1, brechstange: 1, seil: 1,
-  taschenlampe: 1, kleidung: 1, tasche: 0, trekking: 0 };
+export const GRENZE = { wasser: 3, essen: 3, schokoriegel: 3, verband: 3, spritze: 2, bretter: 3, munition: 4, schluessel: 1, brechstange: 1, seil: 1,
+  taschenlampe: 2, kleidung: 1, tasche: 0, trekking: 0,
+  granate: 2 };   // Bots werfen keine Granaten – nur zwei behalten, damit sie nicht horten
 const grenze = d => GRENZE[d] ?? (WAFFEN[d] ? 1 : 2);
 const anzahl = (p, d) => p.rucksack.filter(q => q === d).length + (p.waffe === d ? 1 : 0);
 function willHaben(p, d) {
@@ -105,16 +108,30 @@ export function botGegenangebot(bot, mensch, H) {
 // Stimmt der Bot dem Tausch zu? (H = Angebot des Menschen, B = sein eigenes, schon aus dem Rucksack genommen)
 export function botEinverstanden(bot, H, B) {
   if (!H.length) return true;
-  if (bot.rucksack.length + H.length > bot.plaetze) return false;
+  if (bot.rucksack.length - B.length + H.length > bot.plaetze) return false;
+  if (!B.length) return true;   // Geschenk eines Mitspielers: immer annehmen, solange Platz ist (Überzähliges legt er später ab)
   return B.length >= H.length || H.some(d => willHaben(bot, d));
 }
 
-// Im Safe Room: Überzähliges in die Vorratskiste legen, Fehlendes herausnehmen (ein Stück je 0,8 s)
+// Aus der gemeinsamen Kiste nimmt ein Bot nur, was er gerade dringend selbst braucht – wie ein Mensch.
+// Sonst räumen Bots die Vorräte weg, die die Gruppe für ihre Aufgaben sammelt.
+function brauchtDringend(p, d) {
+  if (d === 'wasser') return p.durst < 40;
+  if (d === 'essen' || d === 'schokoriegel') return p.hunger < 40;
+  if (d === 'verband') return p.hp < 50 && !p.rucksack.includes('verband');
+  if (d === 'spritze') return p.infektion > 0;
+  if (d === 'munition') return WAFFEN[p.waffe]?.fern && p.munition < 10;
+  if (WAFFEN[d]) return !p.waffe || (WAFFEN_RANG.indexOf(d) > WAFFEN_RANG.indexOf(p.waffe) && !(WAFFEN[d]?.fern && !p.munition));
+  if (d === 'tasche' || d === 'trekking') return (DINGE[d]?.plaetze ?? 0) > p.plaetze;
+  return false;   // Bretter, Lampen, Seile, Schlüssel … bleiben für die Gruppe in der Kiste
+}
+
+// Im Safe Room: Überzähliges in die Vorratskiste legen, dringend Gebrauchtes herausnehmen (ein Stück je 0,8 s)
 function vorratskiste(raum, sid, p, x, welt) {
   const safe = safeRoomVon(raum.welt, p), kiste = safe && raum.state.safes.get(safe.id)?.kiste;
   if (!kiste || !welt.kiste) return false;
   const b = x.bot, ueber = kiste.length < KISTE_PLAETZE ? ueberzaehlig(p) : null;
-  const fehlt = p.rucksack.length < p.plaetze ? [...kiste].findIndex(d => willHaben(p, d)) : -1;
+  const fehlt = p.rucksack.length < p.plaetze ? [...kiste].findIndex(d => brauchtDringend(p, d) && willHaben(p, d) && entnahmeFrei(raum, d, p)) : -1;
   if (!ueber && fehlt < 0) return false;
   if (abstand(p, welt.kiste) > AKTION_ABSTAND - 4) { geheZu(raum, sid, p, x, welt.kiste, 0.8, AKTION_ABSTAND - 10); return true; }
   if (raum.uhr - (b.kisteZeit ?? 0) < 0.8) return true;
@@ -322,6 +339,9 @@ export function botSchritt(raum, sid, p, x, dt) {
       }
     }
   }
+
+  // 2a. Team-Planer (botplan.mjs): Auftrag ausführen (holen, funken, barrikadieren, jagen, Bus …), sonst weiter unten wie bisher
+  if ((!gefahr || (!gefahr.jagt && abstand(p, gefahr) > 90)) && planSchritt(raum, sid, p, x, { geheZu })) return;
 
   // 2b. Gelegenheit: Überzähliges ablegen, Brauchbares aufheben, in der Nähe durchsuchen – solange der Mensch nicht weit weg ist
   // sind alle Menschen auf einer anderen Ebene (z. B. schon draußen), hat Folgen Vorrang vor Kiste und Ablegen

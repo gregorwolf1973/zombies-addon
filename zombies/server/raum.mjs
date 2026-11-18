@@ -3,11 +3,14 @@ import crypto from 'node:crypto';
 import { holeFragen } from './fragenquelle.mjs';
 import { mischeAntworten, waehleFrage } from './raetsel.mjs';
 import { botSchritt, BOT_NAMEN, botGegenangebot, botEinverstanden } from './bots.mjs';
+import { botBefehl } from './botplan.mjs';
 import { Mensch, Stadtleben } from './menschen.mjs';
 import { Fahrzeug, Verkehr } from './verkehr.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
 import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben } from './aufgaben.mjs';
+import { Stuetzpunkt } from './stuetzpunkt.mjs';
+import { Granaten } from './granaten.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
@@ -17,7 +20,7 @@ import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zombieSoll, zufall, safeRoomVon, WELT_VERSION, setzeTageszeiten,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
-  BLOCKIERT, ziehe, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
+  BLOCKIERT, ziehe, MUNITION_MAX, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
 } from '../client/welt.mjs';
 
 export const Spieler = schema({
@@ -103,6 +106,8 @@ export const Zustand = schema({
   feuer: t.map(Feuer),
   verbrannt: t.map('boolean'),  // 'haus:nr', 'auto:bID', 'bus:ID', 'fz:ID'
   kegel: t.boolean(),           // Sichtkegel der Zombies anzeigen (Einstellung)
+  stuetzpunkt: t.string(),      // Bundeswehr-Stützpunkt: '' = keiner, 'steht', 'gefallen' oder 'aus' (server/stuetzpunkt.mjs)
+  bwTurm: t.number(),           // Drehwinkel des Puma-Turms (Bogenmaß), der Turm dreht sich zum Ziel
 }, 'Zustand');
 
 const TUER_HP = 100;          // Haltbarkeit einer Tür (nach der Barrikade)
@@ -257,6 +262,9 @@ export class SpielRaum extends Room {
     this.welle = new Zombiewelle(this);
     this.aufgaben = new Aufgaben(this);
     this.aufgaben.start(stand, !!passt);
+    this.stuetzpunkt = new Stuetzpunkt(this);
+    this.stuetzpunkt.start(stand, !!passt);
+    this.granaten = new Granaten(this);
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === WELT_VERSION) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
 
@@ -270,6 +278,8 @@ export class SpielRaum extends Room {
     });
     this.onMessage('aktion', client => this.starteAktion(client));
     this.onMessage('aktion2', client => this.starteAktion(client, true));
+    this.onMessage('wurf', client => this.granaten.werfen(client));
+    this.onMessage('handel', (client, m) => this.stuetzpunkt.handel(client, m));
     this.onMessage('benutze', (client, m) => this.benutze(client, m));
     this.onMessage('wegwerfen', (client, m) => this.wegwerfen(client, m));
     this.onMessage('kiste', (client, m) => this.kiste(client, m));
@@ -345,7 +355,7 @@ export class SpielRaum extends Room {
       p.durst = Math.max(20, Math.min(100, Number(gespeichert.durst) || 100));
       p.hunger = Math.max(20, Math.min(100, Number(gespeichert.hunger) || 100));
       p.waffe = DINGE[gespeichert.waffe]?.waffe ? gespeichert.waffe : '';
-      p.munition = Math.max(0, Math.min(99, Number(gespeichert.munition) || 0));
+      p.munition = Math.max(0, Math.min(MUNITION_MAX, Number(gespeichert.munition) || 0));
       p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
       if (!gewaehlt && AUSSEHEN.test(String(gespeichert.aussehen ?? ''))) p.aussehen = gespeichert.aussehen;
       p.infektion = Math.max(0, Math.min(INFEKTION_DAUER, Number(gespeichert.infektion) || 0));
@@ -543,6 +553,7 @@ export class SpielRaum extends Room {
     this.chatVerlauf.push(nachricht);
     if (this.chatVerlauf.length > CHAT_VERLAUF) this.chatVerlauf.splice(0, this.chatVerlauf.length - CHAT_VERLAUF);
     this.broadcast('chat', nachricht);
+    botBefehl(this, client.sessionId, text);   // Befehle an die Bots („Resi, hol wasser“), siehe botplan.mjs
   }
 
   // Simulierte Mitspieler: bei einem Menschen so viele wie eingestellt, jeder weitere Mensch ersetzt einen
@@ -749,7 +760,7 @@ export class SpielRaum extends Room {
       torGeloest: this.state.torGeloest, level: this.state.level, aufgaben: this.aufgaben?.speichern() ?? null, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen, Math.round(t.barrikade), Math.round(t.hp), t.kaputt]])),
       verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
-      chat: this.chatVerlauf,
+      chat: this.chatVerlauf, stuetzpunkt: this.stuetzpunkt?.speichern() ?? '',
     });
   }
 
@@ -784,6 +795,9 @@ export class SpielRaum extends Room {
       const funk = this.aufgaben?.funkKontext(p);
       if (funk) return funk;
     }
+    // Funkzelt des Bundeswehr-Stützpunkts: Funkspruch wie am Funktisch im Safe Room
+    const funkZelt = !p.ebene ? this.aufgaben?.funkKontext(p) : null;
+    if (funkZelt) return funkZelt;
     // Gegenstand am Boden aufheben
     let nahDing = null, nd = AKTION_ABSTAND;
     for (const [id, b] of this.state.boden) {
@@ -1193,7 +1207,12 @@ export class SpielRaum extends Room {
     const [a, b] = t.seiten;
     if (!(t.ok[a] && t.ok[b])) {
       const bs = t.seiten.find(q => this.istBot(q) && !t.ok[q]);
-      if (bs) this.clients.find(k => k.sessionId === client.sessionId)?.send('meldung', { text: `${this.state.spieler.get(bs)?.name ?? 'Der Bot'} will das so nicht tauschen` });
+      if (bs) {
+        const bot = this.state.spieler.get(bs), name = bot?.name ?? 'Der Bot';
+        const H = t.angebot[t.seiten.find(q => q !== bs)] ?? [], B = t.angebot[bs] ?? [];
+        const voll = bot && bot.rucksack.length - B.length + H.length > bot.plaetze;
+        this.clients.find(k => k.sessionId === client.sessionId)?.send('meldung', { text: voll ? `${name}: Mein Rucksack ist voll` : `${name} will das so nicht tauschen` });
+      }
       return this.tauschSenden(t);
     }
     const pa = this.state.spieler.get(a), pb = this.state.spieler.get(b);
@@ -1343,7 +1362,7 @@ export class SpielRaum extends Room {
     const genommen = [];
     for (let i = 0; i < inhalt.length;) {
       const d = inhalt[i];
-      if (d === 'munition') { p.munition = Math.min(99, p.munition + MUNITION_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (d === 'munition') { p.munition = Math.min(MUNITION_MAX, p.munition + MUNITION_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
       // in die Hand bzw. anziehen, wenn frei – das braucht keinen Rucksackplatz
       if (DINGE[d]?.waffe && !p.waffe) { p.waffe = d; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'taschenlampe' && !(p.lampe > 0)) { p.lampe = LAMPE_DAUER; genommen.push(d); inhalt.splice(i, 1); continue; }
@@ -1399,6 +1418,7 @@ export class SpielRaum extends Room {
     if (!p || p.unten || p.zombie > 0 || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
     const d = p.rucksack[i];
     if (d === 'spritze') return this.spritze(client, p, i);
+    if (d === 'granate') { if (!this.granaten.werfen(client)) client.send('meldung', { text: '💣 Jetzt geht kein Wurf' }); return; }
     if (d === 'wasser') { p.durst = Math.min(100, p.durst + 45); p.rucksack.splice(i, 1); }
     else if (d === 'essen') { p.hunger = Math.min(100, p.hunger + 45); p.rucksack.splice(i, 1); }
     else if (d === 'schokoriegel') { p.hunger = Math.min(100, p.hunger + 20); p.rucksack.splice(i, 1); }
@@ -1608,7 +1628,10 @@ export class SpielRaum extends Room {
     this.messen('verkehr', t0); t0 = performance.now();
     this.brand?.schritt(dt);
     this.aufgaben?.schritt(dt);
-    this.messen('feuer', t0);
+    this.messen('feuer', t0); t0 = performance.now();
+    this.stuetzpunkt?.schritt(dt);
+    this.granaten?.schritt(dt);
+    this.messen('stuetzpunkt', t0);
     this.sprachSchritt(dt);
     this.aufhelfen(dt);
     this.leichenAltern(dt);
@@ -1635,7 +1658,7 @@ export class SpielRaum extends Room {
     if (p.zombie > 0) return this.zombieSpielerSchritt(p, x, e, laenge, dt);
     p.schleicht = e.s || (laenge > 0 && laenge < 0.55);
     // infiziert: langsamer
-    const tempo = (p.schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1);
+    const tempo = (p.schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
     if (laenge > 0.05) {
       let f = Math.min(1, laenge / (p.schleicht ? 0.55 : 1)) * tempo * dt;
       const x0 = p.x, y0 = p.y;
@@ -1728,9 +1751,12 @@ export class SpielRaum extends Room {
   // Safe Room: auf oder direkt neben einem Feldbett (≤ 1 Kachel) und 2 s ohne Bewegung = ruhen
   ruhtAmBett(p, x, dt) {
     const e = x.eingabe;
-    if (!p.sicher || !p.ebene || p.unten || p.aktion || (e && Math.hypot(e.dx, e.dy) > 0.05)) { x.stillSeit = 0; return false; }
+    // Safe Room (Innenraum) oder Sanitätszelt des Bundeswehr-Stützpunkts (draußen)
+    const zelt = !p.ebene && this.stuetzpunkt?.amFeldbett(p);
+    if (!(p.sicher && p.ebene) && !zelt || p.unten || p.aktion || (e && Math.hypot(e.dx, e.dy) > 0.05)) { x.stillSeit = 0; return false; }
     x.stillSeit = (x.stillSeit ?? 0) + dt;
     if (x.stillSeit < 2) return false;
+    if (zelt) return true;
     const kx = Math.floor(p.x / KACHEL), ky = Math.floor(p.y / KACHEL);
     return !!this.wv(p.ebene).moebel?.some(m => m.art === 'feldbett' && kx >= m.x - 1 && kx <= m.x + m.b && ky >= m.y - 1 && ky <= m.y + m.h);
   }
