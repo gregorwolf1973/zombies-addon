@@ -524,7 +524,7 @@
 
   <!-- Welt neu starten -->
 <section class="karte" id="tagNachtKarte" aria-labelledby="titelTagNacht">
-  <h2 id="titelTagNacht">🌗 Tag, Nacht und Ausbruch</h2>
+  <h2 id="titelTagNacht">🌗 Tag, Nacht, Ausbruch und Waffen</h2>
   <p class="tn-uhr"><span id="tnUhr">–</span> <span class="tn-leise" id="tnPhase"></span></p>
   <div class="tn-knoepfe" role="group" aria-label="Uhrzeit setzen">
     <button type="button" data-uhr="360">🌅 6:00</button><button type="button" data-uhr="720">☀️ 12:00</button>
@@ -542,6 +542,22 @@
   <div class="tn-zeile"><input type="range" id="tnMenschen" min="0" max="200" step="5"><span id="tnMenschenWert">50</span></div>
   <label for="tnAnst">Vom Biss bis zur Verwandlung</label>
   <div class="tn-zeile"><input type="range" id="tnAnst" min="1" max="30" step="1"><span id="tnAnstWert">5 min</span></div>
+  <label for="tnFeuer">Brände am Anfang: alle</label>
+  <div class="tn-zeile"><input type="range" id="tnFeuer" min="0" max="10" step="0.5"><span id="tnFeuerWert">1 min</span></div>
+  <label for="tnFeuerPhase">… während der ersten</label>
+  <div class="tn-zeile"><input type="range" id="tnFeuerPhase" min="0" max="120" step="5"><span id="tnFeuerPhaseWert">20 min</span></div>
+  <label for="tnVerkehr">Fahrende Autos am Anfang</label>
+  <div class="tn-zeile"><input type="range" id="tnVerkehr" min="0" max="20" step="1"><span id="tnVerkehrWert">6</span></div>
+  <label for="tnVerkehrPhase">… während der ersten</label>
+  <div class="tn-zeile"><input type="range" id="tnVerkehrPhase" min="0" max="120" step="5"><span id="tnVerkehrPhaseWert">25 min</span></div>
+  <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
+  <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px">Automatische Schussreichweite</div>
+  <label for="rwPistole">🔫 Pistole</label>
+  <div class="tn-zeile"><input type="range" id="rwPistole" min="5" max="80" step="1"><span id="rwPistoleWert">29 m</span></div>
+  <label for="rwGewehr">🎯 Jagdgewehr</label>
+  <div class="tn-zeile"><input type="range" id="rwGewehr" min="5" max="80" step="1"><span id="rwGewehrWert">52 m</span></div>
+  <label for="rwSchrot">💥 Schrotflinte</label>
+  <div class="tn-zeile"><input type="range" id="rwSchrot" min="5" max="80" step="1"><span id="rwSchrotWert">20 m</span></div>
   <p class="tn-leise" id="tnBewohner">Menschen gelten für neue Welten (nach „Welt neu starten“).</p>
   <p class="tn-status" id="tnStatus" aria-live="polite"></p>
 </section>
@@ -553,6 +569,8 @@
   #tagNachtKarte .tn-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   #tagNachtKarte .tn-zeile input { flex: 1; }
   #tagNachtKarte .tn-zeile span { min-width: 64px; text-align: right; }
+  #tagNachtKarte .tn-schalter { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; font-weight: 600; }
+  #tagNachtKarte .tn-schalter input { width: 22px; height: 22px; }
   #tagNachtKarte .tn-status { min-height: 1.2em; font-size: .85rem; }
 </style>
 <script>
@@ -594,6 +612,16 @@
     if (aktiv !== 'tnAutos') { $('tnAutos').value = e.autos === undefined ? 10 : e.autos; $('tnAutosWert').textContent = komma($('tnAutos').value); }
     if (aktiv !== 'tnMenschen') { $('tnMenschen').value = e.menschen === undefined ? 50 : e.menschen; $('tnMenschenWert').textContent = $('tnMenschen').value; }
     if (aktiv !== 'tnAnst') { $('tnAnst').value = e.ansteckung || 5; $('tnAnstWert').textContent = $('tnAnst').value + ' min'; }
+    var feld = function (id, wert, text) { if (aktiv !== id) { $(id).value = wert; $(id + 'Wert').textContent = text(Number($(id).value)); } };
+    feld('tnFeuer', e.feuer === undefined ? 1 : e.feuer, function (v) { return v ? String(v).replace('.', ',') + ' min' : 'aus'; });
+    feld('tnFeuerPhase', e.feuerPhase === undefined ? 20 : e.feuerPhase, function (v) { return v + ' min'; });
+    feld('tnVerkehr', e.verkehr === undefined ? 6 : e.verkehr, function (v) { return String(v); });
+    feld('tnVerkehrPhase', e.verkehrPhase === undefined ? 25 : e.verkehrPhase, function (v) { return v + ' min'; });
+    if (document.activeElement !== $('tnKegel')) $('tnKegel').checked = !!e.sichtkegel;
+    var rw = e.reichweite || {};
+    feld('rwPistole', rw.pistole || 29, function (v) { return v + ' m'; });
+    feld('rwGewehr', rw.gewehr || 52, function (v) { return v + ' m'; });
+    feld('rwSchrot', rw.schrotflinte || 20, function (v) { return v + ' m'; });
     var bw = d.bewohner;
     $('tnBewohner').textContent = (bw ? 'Gerade: ' + bw.gesund + ' gesund · ' + bw.gebissen + ' gebissen · ' + bw.zombies + ' Zombies. ' : '') + 'Die Menschenzahl gilt für neue Welten (nach „Welt neu starten“).';
     var welt = d.autosWelt;
@@ -617,6 +645,16 @@
   regler('tnNacht', komma, function (v) { return { zombies: { nacht: v } }; });
   regler('tnAutos', komma, function (v) { return { autos: v }; });
   regler('tnMenschen', function (v) { return String(v); }, function (v) { return { menschen: v }; });
+  regler('tnFeuer', function (v) { return Number(v) ? String(v).replace('.', ',') + ' min' : 'aus'; }, function (v) { return { feuer: v }; });
+  regler('tnFeuerPhase', function (v) { return v + ' min'; }, function (v) { return { feuerPhase: v }; });
+  regler('tnVerkehr', function (v) { return String(v); }, function (v) { return { verkehr: v }; });
+  regler('tnVerkehrPhase', function (v) { return v + ' min'; }, function (v) { return { verkehrPhase: v }; });
+  regler('rwPistole', function (v) { return v + ' m'; }, function (v) { return { reichweite: { pistole: v } }; });
+  regler('rwGewehr', function (v) { return v + ' m'; }, function (v) { return { reichweite: { gewehr: v } }; });
+  regler('rwSchrot', function (v) { return v + ' m'; }, function (v) { return { reichweite: { schrotflinte: v } }; });
+  $('tnKegel').addEventListener('change', function () {
+    anfrage('verwaltung/api', { sichtkegel: $('tnKegel').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { ansteckung: v }; });
   Array.prototype.forEach.call(document.querySelectorAll('#tagNachtKarte [data-uhr]'), function (b) {
     b.addEventListener('click', function () {

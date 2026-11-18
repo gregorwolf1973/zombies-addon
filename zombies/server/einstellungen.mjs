@@ -6,6 +6,7 @@ import { DINGE } from '../client/welt.mjs';
 
 export const KARTEN = ['geretsried', 'dorf'];
 export const ZEITRAFFER = [1, 5, 10, 60];
+export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20 };   // Meter
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 
 // Spielereignisse, denen auf der Einstellungsseite Tondateien zugeordnet werden
@@ -18,6 +19,9 @@ export const EREIGNISSE = [
   { id: 'zombielandTag', name: 'Zombieland (Tag)', beschreibung: 'Ferne Zombies tagsüber – kurze Töne kommen ab und zu aus wechselnder Richtung', art: 'schleife' },
   { id: 'zombielandNacht', name: 'Zombieland (Nacht)', beschreibung: 'Ferne Zombies und Schreie in der Nacht', art: 'schleife' },
   { id: 'nachteinbruch', name: 'Nachteinbruch', beschreibung: 'Einmal, wenn es dunkel wird', art: 'einmal' },
+  { id: 'menschGebissen', name: 'Mensch wird gebissen', beschreibung: 'Schrei, wenn ein Bewohner gebissen wird', art: 'einmal' },
+  { id: 'sirene', name: 'Sirene', beschreibung: 'Polizei und Feuerwehr auf der Durchfahrt (aus ihrer Richtung)', art: 'einmal' },
+  { id: 'feuer', name: 'Feuer bricht aus', beschreibung: 'Wenn ein Haus, Auto oder Bus zu brennen beginnt', art: 'einmal' },
 ];
 
 const zahl = (v, min, max, vorgabe) => {
@@ -50,6 +54,13 @@ export function bereinige(e = {}, alt = {}) {
     tagMinuten: Math.round(zahl(e.tagMinuten ?? a.tagMinuten, 10, 240, 48)),   // so viele echte Minuten dauert ein Spieltag
     menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50)),         // Bewohner zu Beginn einer Welt
     ansteckung: Math.round(zahl(e.ansteckung ?? a.ansteckung, 1, 30, 5)),     // Minuten vom Biss bis zur Verwandlung
+    feuer: zahl(e.feuer ?? a.feuer, 0, 30, 1),                                 // Minuten zwischen zwei Bränden (0 = keine)
+    feuerPhase: Math.round(zahl(e.feuerPhase ?? a.feuerPhase, 0, 240, 20)),  // so lange (Spielminuten ab Weltbeginn) brennt es immer wieder
+    verkehr: Math.round(zahl(e.verkehr ?? a.verkehr, 0, 30, 6)),             // fahrende Autos am Anfang
+    verkehrPhase: Math.round(zahl(e.verkehrPhase ?? a.verkehrPhase, 0, 240, 25)),
+    sichtkegel: typeof e.sichtkegel === 'boolean' ? e.sichtkegel : !!a.sichtkegel,   // Sichtkegel der Zombies anzeigen
+    reichweite: Object.fromEntries(Object.entries(REICHWEITE_VORGABE).map(([w, v]) => [w, Math.round(zahl(e.reichweite?.[w] ?? a.reichweite?.[w], 5, 80, v))])),   // automatische Schussreichweite in Metern
+    toeneVorbelegt: Array.isArray(e.toeneVorbelegt) ? e.toeneVorbelegt.filter(x => typeof x === 'string').slice(0, 50) : (a.toeneVorbelegt ?? []),
     zombies: {
       dichte: Math.round(zahl(z.dichte, 0, 50, 10)),     // draußen, 10 = normal
       haeuser: Math.round(zahl(z.haeuser, 0, 50, 10)),   // schlafende Zombies in Häusern, 10 = normal
@@ -67,7 +78,7 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, menschen: 50, ansteckung: 5,
+    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, menschen: 50, ansteckung: 5, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE },
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15 },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     test: { zeitraffer: 1, unsterblich: [] },

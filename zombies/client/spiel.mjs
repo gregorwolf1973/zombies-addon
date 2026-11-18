@@ -6,7 +6,7 @@ import {
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
-import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben } from './aussehen.mjs';
+import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben } from './aussehen.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
@@ -267,19 +267,42 @@ class Ort extends Phaser.Scene {
     }
     this.joystick = { id: null, bx: 0, by: 0, vx: 0, vy: 0 };
     this.stick = this.add.graphics().setScrollFactor(0).setDepth(100);
+    // zwei Finger: zoomen (der Laufstick pausiert, solange zwei Finger liegen)
+    this.input.addPointer(2);
+    this.finger = new Map();
+    const fingerAbstand = () => { const [a, b] = [...this.finger.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
     this.input.on('pointerdown', p => {
       popupZu();
-      if (this.joystick.id !== null) return;
+      if (p.wasTouch) this.finger.set(p.id, { x: p.x, y: p.y });
+      if (this.finger.size >= 2) {
+        this.joystick = { id: null, bx: 0, by: 0, vx: 0, vy: 0 };
+        this.kneifen = { abstand: Math.max(20, fingerAbstand()), zoom: this.zoomWahl ?? 1 };
+        return;
+      }
+      if (this.joystick.id !== null || this.kneifen) return;
       this.joystick = { id: p.id, bx: p.x, by: p.y, vx: 0, vy: 0 };
     });
     this.input.on('pointermove', p => {
+      if (this.finger.has(p.id)) this.finger.set(p.id, { x: p.x, y: p.y });
+      if (this.kneifen && this.finger.size >= 2) {
+        this.zoomWahl = Phaser.Math.Clamp(this.kneifen.zoom * fingerAbstand() / this.kneifen.abstand, 0.4, 1.8);
+        this.cameras.main.setZoom(this.zielZoom());
+        return;
+      }
       if (p.id !== this.joystick.id) return;
       let vx = (p.x - this.joystick.bx) / 60, vy = (p.y - this.joystick.by) / 60;
       const l = Math.hypot(vx, vy);
       if (l > 1) { vx /= l; vy /= l; }
       this.joystick.vx = vx; this.joystick.vy = vy;
     });
-    const loslassen = p => { if (p.id === this.joystick.id) this.joystick = { id: null, bx: 0, by: 0, vx: 0, vy: 0 }; };
+    const loslassen = p => {
+      this.finger.delete(p.id);
+      if (this.kneifen && this.finger.size < 2) {
+        if (this.finger.size === 0) { this.kneifen = null; try { localStorage.setItem('zob_zoom', this.zoomWahl.toFixed(2)); } catch {} }
+        return;
+      }
+      if (p.id === this.joystick.id) this.joystick = { id: null, bx: 0, by: 0, vx: 0, vy: 0 };
+    };
     this.input.on('pointerup', loslassen);
     this.input.on('pointerupoutside', loslassen);
 
@@ -290,6 +313,16 @@ class Ort extends Phaser.Scene {
       if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'schrotflinte' ? 1.2 : 1); this.letzterKnall = jetzt; }
     });
     raum.onMessage('stoss', m => { this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
+    raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
+    raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
+    raum.onMessage('klettern', m => {
+      ton.schritt(false); ton.schritt(false);
+      for (let i = 0; i < 5; i++) {
+        const c = this.add.circle(m.x + (Math.random() - 0.5) * 16, m.y + 8, 3 + Math.random() * 3, 0xa1887f, 0.7).setDepth(3.9);
+        this.tweens.add({ targets: c, y: c.y - 10, alpha: 0, scale: 1.8, duration: 450, onComplete: () => c.destroy() });
+      }
+    });
+    raum.onMessage('sirene', m => { const f = raum.state.fahrzeuge.get(m.id); if (f) ton.ereignis('sirene', f.x, f.y); });
     raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
     raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
     raum.onMessage('meldung', m => meldung(m.text, m.lang));
@@ -511,6 +544,117 @@ class Ort extends Phaser.Scene {
     return { box, bild, x: z.x, y: z.y, r: z.richtung };
   }
 
+  // Fahrzeugbilder einmalig zeichnen (Front zeigt nach rechts)
+  fahrzeugTextur(art, farbe = 0) {
+    const key = art === 'auto' ? 'fz-auto-' + (farbe % 8) : 'fz-' + art;
+    if (this.textures.exists(key)) return key;
+    const breit = art === 'bus' ? 136 : art === 'feuerwehr' ? 84 : 60, hoch = art === 'bus' ? 40 : 34;
+    const t = this.textures.createCanvas(key, breit, hoch), c = t.getContext();
+    if (art === 'bus') busVonOben(c, breit / 2, hoch / 2, false, 0.6);
+    else if (art === 'feuerwehr') {
+      c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(6, 7, 74, 24);
+      c.fillStyle = '#c62828'; c.beginPath(); c.roundRect(2, 4, 76, 24, 5); c.fill();
+      c.fillStyle = '#eceff1'; c.fillRect(8, 8, 44, 16);                     // Drehleiter
+      c.strokeStyle = '#90a4ae'; c.lineWidth = 1.5; for (let x = 10; x < 52; x += 6) { c.beginPath(); c.moveTo(x, 8); c.lineTo(x, 24); c.stroke(); }
+      c.fillStyle = '#263238'; c.fillRect(64, 7, 8, 18);                     // Frontscheibe
+      c.fillStyle = '#fff59d'; c.fillRect(76, 6, 2, 4); c.fillRect(76, 22, 2, 4);
+    } else if (art === 'wrack') {
+      autoVonOben(c, { x: breit / 2, y: hoch / 2, senkrecht: false, farbe: 4 });
+      c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(30,20,15,.8)'; c.fillRect(0, 0, breit, hoch);
+      c.fillStyle = 'rgba(120,60,20,.5)'; for (let i = 0; i < 12; i++) c.fillRect(8 + Math.random() * 44, 8 + Math.random() * 18, 3, 3);
+      c.globalCompositeOperation = 'source-over';
+    } else {
+      const f = art === 'polizei' ? 2 : farbe;
+      autoVonOben(c, { x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f });
+      if (art === 'polizei') { c.fillStyle = '#1565c0'; c.fillRect(10, hoch / 2 - 11, 40, 3); c.fillRect(10, hoch / 2 + 8, 40, 3); c.fillStyle = '#263238'; c.fillRect(27, hoch / 2 - 6, 6, 12); }
+    }
+    t.refresh();
+    return key;
+  }
+
+  // Brände: Flammen und Rauch als Partikel; ausgebrannte Häuser und Autos dunkel
+  feuerDarstellen(s) {
+    this.feuerObj ??= new Map();
+    if (!this.textures.exists('flamme')) {
+      const t = this.textures.createCanvas('flamme', 32, 32), c = t.getContext(), g = c.createRadialGradient(16, 16, 0, 16, 16, 16);
+      g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,.7)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g; c.fillRect(0, 0, 32, 32); t.refresh();
+    }
+    for (const [id, f] of s.feuer ?? []) {
+      let o = this.feuerObj.get(id);
+      if (!o) {
+        const zone = { type: 'random', source: new Phaser.Geom.Circle(0, 0, f.r * 0.55) };
+        const flammen = this.add.particles(f.x, f.y, 'flamme', {
+          speed: { min: 15, max: 60 }, angle: { min: 240, max: 300 }, scale: { start: 1.5, end: 0.1 }, alpha: { start: 0.95, end: 0 },
+          lifespan: { min: 350, max: 900 }, frequency: 22, tint: [0xffe082, 0xffa726, 0xff7043, 0xff3d00], blendMode: 'ADD', emitZone: zone,
+        }).setDepth(5.6);
+        const rauch = this.add.particles(f.x, f.y, 'flamme', {
+          speedY: { min: -55, max: -20 }, speedX: { min: -12, max: 18 }, scale: { start: 0.9, end: 2.8 }, alpha: { start: 0.35, end: 0 },
+          lifespan: 2600, frequency: 85, tint: 0x3a3a3a, emitZone: zone,
+        }).setDepth(5.7);
+        o = { flammen, rauch };
+        this.feuerObj.set(id, o);
+      }
+      const st = Math.max(0.05, f.staerke);
+      o.flammen.frequency = 22 / st; o.rauch.frequency = 85 / st;
+      o.flammen.setVisible(this.aktEbene === ''); o.rauch.setVisible(this.aktEbene === '');
+    }
+    for (const [id, o] of this.feuerObj) if (!s.feuer?.has(id)) { o.flammen.destroy(); o.rauch.destroy(); this.feuerObj.delete(id); }
+    // Ruinen und ausgebrannte Autos/Busse (nur neu zeichnen, wenn sich etwas ändert)
+    const stand = s.verbrannt?.size ?? 0;
+    if (stand === this.ruinenStand) return;
+    this.ruinenStand = stand;
+    this.ruinenGfx ??= this.add.graphics().setDepth(5.15);
+    this.wrackGfx ??= this.add.graphics().setDepth(1.05);
+    const g = this.ruinenGfx.clear(), w = this.wrackGfx.clear();
+    for (const k of s.verbrannt?.keys() ?? []) {
+      const [art, rest] = k.split(':');
+      if (art === 'haus') {
+        const h = this.welt.haeuser[Number(rest)];
+        const gb = h && this.welt.vektor?.gebaeude.find(q => q.x === h.x && q.y === h.y);
+        if (!gb) continue;
+        g.fillStyle(0x1e1610, 0.78).beginPath();
+        g.moveTo(gb.p[0] * KACHEL, gb.p[1] * KACHEL);
+        for (let i = 2; i < gb.p.length; i += 2) g.lineTo(gb.p[i] * KACHEL, gb.p[i + 1] * KACHEL);
+        g.closePath().fillPath();
+        g.fillStyle(0x5d4037, 0.6);
+        for (let i = 0; i < 6; i++) g.fillRect((h.x + Math.random() * h.b) * KACHEL, (h.y + Math.random() * h.h) * KACHEL, 6, 4);
+      } else {
+        const b = this.welt.behaelter.find(q => q.id === rest);
+        if (!b) continue;
+        if (art === 'auto') { const sk = b.senkrecht; w.fillStyle(0x15100c, 0.92).fillRoundedRect(b.x - (sk ? 11 : 23), b.y - (sk ? 23 : 11), sk ? 22 : 46, sk ? 46 : 22, 5); w.fillStyle(0x6d3a1a, 0.6).fillRect(b.x - 4, b.y - 4, 8, 8); }
+        else { const d = this.welt.deko.find(q => q.art === 'bus' && Math.hypot(q.x - b.x, q.y - b.y) < 4); const sk = d?.senkrecht; g.fillStyle(0x15100c, 0.9).fillRect(b.x - (sk ? 15 : 62), b.y - (sk ? 62 : 15), sk ? 30 : 124, sk ? 124 : 30); }
+      }
+    }
+  }
+
+  // durchsuchte Behälter erkennbar machen: draußen offener Kofferraum, drinnen offene Türen; leer = ausgegraut
+  spurenDarstellen(s) {
+    let stand = '';
+    for (const [id, b] of s.behaelter) stand += id + b.rest;
+    if (stand === this.spurenStand && this.spurenEbene === this.aktEbene) return;
+    this.spurenStand = stand; this.spurenEbene = this.aktEbene;
+    this.spurenGfx ??= this.add.graphics().setDepth(1.08);
+    const g = this.spurenGfx.clear();
+    const w = this.wv(this.aktEbene);
+    for (const b of w.behaelter ?? []) {
+      const z = s.behaelter.get(b.id);
+      if (!z) continue;
+      const leer = z.rest === 0;
+      if (b.art === 'auto') {
+        if (s.verbrannt?.has('auto:' + b.id)) continue;
+        const sk = b.senkrecht;
+        g.fillStyle(0x111111, 0.85).fillRect(b.x - (sk ? 9 : 25), b.y - (sk ? 25 : 9), sk ? 18 : 9, sk ? 9 : 18);   // offener Kofferraum
+        if (leer) g.fillStyle(0x9e9e9e, 0.45).fillRoundedRect(b.x - (sk ? 11 : 23), b.y - (sk ? 23 : 11), sk ? 22 : 46, sk ? 46 : 22, 5);
+      } else if (b.art !== 'bus') {
+        g.lineStyle(2, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokeRect(b.x - 12, b.y - 12, 24, 24);
+        g.fillStyle(0x111111, 0.55).fillRect(b.x - 9, b.y - 9, 18, 18);                    // geöffnete Türen
+        if (leer) { g.lineStyle(2, 0xbdbdbd, 0.9).lineBetween(b.x - 6, b.y - 6, b.x + 6, b.y + 6).lineBetween(b.x + 6, b.y - 6, b.x - 6, b.y + 6); }
+      }
+    }
+    g.setDepth(this.aktEbene ? 0.45 : 1.08);
+  }
+
   // Bildnummer im Figurenbogen (Name aus figuren.json, i-tes Bild der Folge)
   figurBild(name, i = 0) {
     const l = this.figurListe[name];
@@ -686,6 +830,7 @@ class Ort extends Phaser.Scene {
     if (dunkel < 0.3) return;
     const sicht = (x, y, r) => x > v.x - r && x < v.right + r && y > v.y - r && y < v.bottom + r;
     const P = this.weichPinsel;
+    for (const f of raum.state.feuer?.values() ?? []) if (sicht(f.x, f.y, 300)) { P.setScale(f.r / 60 + 0.6).setAlpha(Math.min(1, 0.6 + f.staerke * 0.4) * (0.85 + Math.random() * 0.15)); rt.erase(P, f.x - ox, f.y - oy); }
     for (const l of this.laternenListe ?? []) if (sicht(l.x, l.y, 140)) { P.setScale(0.85).setAlpha(0.75 * dunkel); rt.erase(P, l.x + l.nx * 13 - ox, l.y + l.ny * 13 - oy); }
     for (const h of this.welt.haeuser) {
       if (!fensterLicht(h.nr)) continue;
@@ -789,7 +934,7 @@ class Ort extends Phaser.Scene {
         f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * (angriff ? 1.06 : 1));
       }
       f.bild.setTint(z.jagt ? 0xffd2c8 : 0xffffff);
-      if (zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
+      if (s.kegel && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
         if (z.kriecht) {
           // Kriecher sehen nicht, sie spüren ringsum
           this.kegel.lineStyle(1, 0xff8a65, 0.35).strokeCircle(f.x, f.y, 110);
@@ -833,19 +978,32 @@ class Ort extends Phaser.Scene {
       o.bild.setTint(m.infiziert ? 0xb5d99c : 0xffffff);
     }
     for (const [id, o] of this.menschenObj) if (!s.menschen?.has(id)) { o.box.destroy(); this.menschenObj.delete(id); }
-    // Linienbus
-    for (const [id, b] of s.busse ?? []) {
+    // Fahrzeuge: Linienbus, Verkehr, Polizei und Feuerwehr (mit Blaulicht), Wracks
+    const blink = Math.floor(this.time.now / 180) % 2;
+    for (const [id, f] of s.fahrzeuge ?? []) {
       let o = this.busObj.get(id);
+      const key = this.fahrzeugTextur(f.art, f.farbe);
       if (!o) {
-        if (!this.textures.exists('linienbus')) { const t = this.textures.createCanvas('linienbus', 136, 40); busVonOben(t.getContext(), 68, 20, false, 0.6); t.refresh(); }
-        o = { bild: this.add.image(b.x, b.y, 'linienbus').setDepth(4.6), x: b.x, y: b.y, r: b.richtung };
+        const bild = this.add.image(0, 0, key);
+        const licht = this.add.graphics();
+        o = { box: this.add.container(f.x, f.y, [bild, licht]).setDepth(4.6), bild, licht, x: f.x, y: f.y, r: f.richtung };
         this.busObj.set(id, o);
       }
-      o.x += (b.x - o.x) * glatt; o.y += (b.y - o.y) * glatt;
-      o.r = Phaser.Math.Angle.RotateTo(o.r, b.richtung, dt * 5);
-      o.bild.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
+      if (o.bild.texture.key !== key) o.bild.setTexture(key);
+      o.x += (f.x - o.x) * glatt; o.y += (f.y - o.y) * glatt;
+      o.r = Phaser.Math.Angle.RotateTo(o.r, f.richtung, dt * 6);
+      o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
+      o.licht.clear();
+      if (f.art === 'polizei' || f.art === 'feuerwehr') {
+        const vx = f.art === 'feuerwehr' ? 16 : 2;
+        o.licht.fillStyle(blink ? 0x2962ff : 0x82b1ff, 1).fillCircle(vx, -5, 3.5);
+        o.licht.fillStyle(blink ? 0x82b1ff : 0x2962ff, 1).fillCircle(vx, 5, 3.5);
+        o.licht.fillStyle(0x448aff, 0.18).fillCircle(vx, 0, blink ? 26 : 18);
+      }
     }
-    for (const [id, o] of this.busObj) if (!s.busse?.has(id)) { o.bild.destroy(); this.busObj.delete(id); }
+    for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id)) { o.box.destroy(); this.busObj.delete(id); }
+    this.feuerDarstellen(s);
+    this.spurenDarstellen(s);
     // liegende Gegenstände
     for (const [id, b] of s.boden) {
       let o = this.bodenObj.get(id);
@@ -1137,6 +1295,12 @@ class Ort extends Phaser.Scene {
     if (this.schrittWeg > 46) { this.schrittWeg = 0; ton.schritt(!!this.aktEbene); }
     if (this.altHp != null && ich.hp < this.altHp - 2) ton.biss();
     this.altHp = ich.hp;
+    // Brände in der Nähe knistern
+    this.knisterZeit = (this.knisterZeit ?? 0) - dt;
+    if (this.knisterZeit <= 0) {
+      this.knisterZeit = 0.3;
+      for (const f of raum.state.feuer?.values() ?? []) if (!this.aktEbene && Math.hypot(f.x - this.lokal.x, f.y - this.lokal.y) < 700) ton.knistern(f.x, f.y, f.staerke);
+    }
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {
       this.stoehnZeit = 1.5 + Math.random() * 3;

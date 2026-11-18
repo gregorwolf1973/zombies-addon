@@ -117,7 +117,8 @@ export function zeichneBoden(ctx, welt, rect = null) {
       ctx.fillStyle = '#efe4d8'; ctx.fillRect(px, py, KACHEL, KACHEL);
       ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(px, py + KACHEL - 4, KACHEL, 4);
     } else if (t === T.ZAUN && welt.details && kx > 0 && ky > 0 && kx < BREITE - 1 && ky < HOEHE - 1) {
-      zaunTeil(ctx, welt.details.zaunart[ky * BREITE + kx], px, py, nb, kx, ky);
+      // Gartenzäune kommen als geglättete Linien (zaunLinien); sonst Feld für Feld
+      if (!welt.details.zaeune) zaunTeil(ctx, welt.details.zaunart[ky * BREITE + kx], px, py, nb, kx, ky);
     } else if (t === T.ZAUN) {
       // Holzzaun: Latten zu den Nachbarzäunen, Pfosten in der Mitte
       const m = KACHEL / 2;
@@ -134,6 +135,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
     }
   }
   if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
+  if (welt.details?.zaeune) zaunLinien(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
@@ -298,7 +300,7 @@ export function zeichneSafeDach(ctx, welt, h) {
 
 // Auto von oben: Karosserie mit Glanz, Front- und Heckscheibe, Dach, Scheinwerfer und Rückleuchten
 const AUTO_FARBEN = ['#c62828', '#1565c0', '#eeeeee', '#2e7d32', '#424242', '#f9a825', '#6d4c41', '#90a4ae'];
-function autoVonOben(ctx, b) {
+export function autoVonOben(ctx, b) {
   const lang = 46, breit = 21, f = AUTO_FARBEN[b.farbe % AUTO_FARBEN.length];
   ctx.save();
   ctx.translate(b.x, b.y);
@@ -354,6 +356,45 @@ function zaunTeil(ctx, art, px, py, nb, kx, ky) {
     linien('#8d6e63', 2);
     ctx.fillStyle = '#5d4037'; ctx.fillRect(cx - 3.5, cy - 3.5, 7, 7);
   }
+}
+
+// Gartenzäune als glatte Linien (tools/osm_karte.py begradigt die Rastertreppen); Kollision bleibt beim Raster
+function zaunLinien(ctx, welt, rect) {
+  const K = KACHEL, r = { x0: rect.x0 * K - 40, y0: rect.y0 * K - 40, x1: rect.x1 * K + 40, y1: rect.y1 * K + 40 };
+  welt._zaunBox ??= welt.details.zaeune.map(z => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < z.p.length; i += 2) { x0 = Math.min(x0, z.p[i]); x1 = Math.max(x1, z.p[i]); y0 = Math.min(y0, z.p[i + 1]); y1 = Math.max(y1, z.p[i + 1]); }
+    return { x0: x0 * K, y0: y0 * K, x1: x1 * K, y1: y1 * K };
+  });
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  welt.details.zaeune.forEach((z, n) => {
+    const b = welt._zaunBox[n];
+    if (b.x1 < r.x0 || b.x0 > r.x1 || b.y1 < r.y0 || b.y0 > r.y1) return;
+    const pfad = (dx = 0, dy = 0) => { ctx.beginPath(); ctx.moveTo(z.p[0] * K + dx, z.p[1] * K + dy); for (let i = 2; i < z.p.length; i += 2) ctx.lineTo(z.p[i] * K + dx, z.p[i + 1] * K + dy); };
+    const strich = (farbe, breite, dx = 0, dy = 0) => { pfad(dx, dy); ctx.strokeStyle = farbe; ctx.lineWidth = breite; ctx.stroke(); };
+    // Punkte entlang der Linie (für Pfosten und Blattwerk)
+    const entlang = (abstand, f) => {
+      for (let i = 0; i + 3 < z.p.length; i += 2) {
+        const ax = z.p[i] * K, ay = z.p[i + 1] * K, bx = z.p[i + 2] * K, by = z.p[i + 3] * K, L = Math.hypot(bx - ax, by - ay);
+        for (let d = 0; d < L; d += abstand) f(ax + (bx - ax) * d / L, ay + (by - ay) * d / L, n * 31 + i * 7 + d);
+      }
+      f(z.p.at(-2) * K, z.p.at(-1) * K, n);
+    };
+    if (z.a === 'h') {
+      strich('rgba(0,0,0,.22)', 19, 3, 4); strich('#2f6b2a', 19);
+      ctx.fillStyle = '#3f8a37';
+      entlang(9, (x, y, s) => { ctx.beginPath(); ctx.arc(x + (hash(s, 1) - 0.5) * 8, y + (hash(1, s) - 0.5) * 8, 4.5, 0, TAU); ctx.fill(); });
+    } else if (z.a === 'm') {
+      strich('rgba(0,0,0,.18)', 3, 2, 2); strich('#90a4ae', 2);
+      ctx.fillStyle = '#455a64'; entlang(22, (x, y) => ctx.fillRect(x - 2.5, y - 2.5, 5, 5));
+    } else if (z.a === 'w') {
+      strich('rgba(0,0,0,.25)', 10, 3, 3); strich('#8a8580', 10); strich('#b5b0a8', 5);
+    } else {
+      strich('rgba(0,0,0,.22)', 7, 3, 3); strich('#a1887f', 6); strich('#8d6e63', 2);
+      ctx.fillStyle = '#5d4037'; entlang(18, (x, y) => ctx.fillRect(x - 3.5, y - 3.5, 7, 7));
+    }
+  });
+  ctx.restore();
 }
 
 // Gartenausstattung, Bänke, Haltestellen. oben = false: flache Dinge (Boden), true: Dächer (Gartenhaus, Haltestelle)

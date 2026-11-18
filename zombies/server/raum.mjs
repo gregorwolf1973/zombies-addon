@@ -3,7 +3,9 @@ import crypto from 'node:crypto';
 import { holeFragen } from './fragenquelle.mjs';
 import { mischeAntworten, waehleFrage } from './raetsel.mjs';
 import { botSchritt, BOT_NAMEN } from './bots.mjs';
-import { Mensch, Bus, Stadtleben } from './menschen.mjs';
+import { Mensch, Stadtleben } from './menschen.mjs';
+import { Fahrzeug, Verkehr } from './verkehr.mjs';
+import { Feuer, Brandstifter } from './feuer.mjs';
 import { baueInnenraum } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { Room, ServerError } from '@colyseus/core';
@@ -76,7 +78,10 @@ export const Zustand = schema({
   tueren: t.map(Tuer),          // Zimmertüren der betretenen Häuser: Schlüssel 'ebene:x,y'
   safes: t.map(Safe),
   menschen: t.map(Mensch),      // Bewohner der Stadt (Abschnitt 4)
-  busse: t.map(Bus),
+  fahrzeuge: t.map(Fahrzeug),   // Linienbus, Verkehr, Polizei, Feuerwehr, Wracks
+  feuer: t.map(Feuer),
+  verbrannt: t.map('boolean'),  // 'haus:nr', 'auto:bID', 'bus:ID', 'fz:ID'
+  kegel: t.boolean(),           // Sichtkegel der Zombies anzeigen (Einstellung)
 }, 'Zustand');
 
 const TICK = 50; // ms → 20 Updates pro Sekunde
@@ -196,6 +201,11 @@ export class SpielRaum extends Room {
     // Stadtleben: Menschen, Bus, erste Zombies
     this.stadt = new Stadtleben(this);
     this.stadt.start(this.welt.karte ? (SpielRaum.einstellungen.menschen ?? 50) : 0);
+    this.verkehr = new Verkehr(this);
+    if (this.welt.karte) this.verkehr.start(this.stadt.haltestellen, SpielRaum.einstellungen.verkehr ?? 6);
+    this.brand = new Brandstifter(this);
+    this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
+    if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === WELT_VERSION) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
 
     this.onMessage('eingabe', (client, m) => {
       if (!m || typeof m !== 'object') return;
@@ -421,6 +431,7 @@ export class SpielRaum extends Room {
 
   einstellungenGeaendert() {
     this.botsAnpassen();
+    this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     const soll = this.zombieSollJetzt();
     // zu viele Zombies draußen: die am weitesten entfernten, nicht jagenden verschwinden
     const draussen = [...this.state.zombies.entries()].filter(([, z]) => !z.ebene && !z.jagt);
@@ -471,6 +482,7 @@ export class SpielRaum extends Room {
       version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, behaelter, safes,
       torGeloest: this.state.torGeloest, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen]])),
+      verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
     });
   }
 
@@ -606,6 +618,11 @@ export class SpielRaum extends Room {
     if (!p.ebene && t === T.TUER) {
       const h = this.welt.haeuser.find(h => h.tuer.x === kx && h.tuer.y === ky);
       if (!h || !h.betretbar) return;
+      // brennende Häuser kann man nicht betreten
+      if ([...this.brand?.info.values() ?? []].some(i => i.ziel === 'haus:' + h.nr)) {
+        if (!x.bot) this.clients.find(c => c.sessionId === id)?.send('meldung', { text: '🔥 Das Haus brennt – da kommst du nicht rein' });
+        bewege(welt, p, h.raus.dx * 20, h.raus.dy * 20, W.spielerRadius); return;
+      }
       ziel = `h${h.nr}eg`; pos = this.wv(ziel).start;
     } else if (p.ebene && t === T.AUSGANG) {
       const h = this.welt.haeuser[welt.nr];
@@ -858,6 +875,8 @@ export class SpielRaum extends Room {
 
   durchsucht(client, p, b) {
     if (b.art === 'leiche') return this.leicheDurchsucht(client, p, b.id);
+    // ausgebrannt: nichts mehr zu holen
+    if ((b.art === 'auto' || b.art === 'bus') && this.state.verbrannt.has((b.art === 'auto' ? 'auto:' : 'bus:') + b.id)) this.setzeInhalt(b.id, []);
     if (!this.inhalte.has(b.id)) {
       const tabelle = BEUTE[b.art] ?? [];
       const funde = [];
@@ -1107,6 +1126,8 @@ export class SpielRaum extends Room {
     }
     for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
     this.stadt?.schritt(dt);
+    this.verkehr?.schritt(dt);
+    this.brand?.schritt(dt);
     this.aufhelfen(dt);
     this.leichenAltern(dt);
     this.bodenAltern(dt);
@@ -1135,15 +1156,19 @@ export class SpielRaum extends Room {
     const tempo = (p.schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1);
     if (laenge > 0.05) {
       const f = Math.min(1, laenge / (p.schleicht ? 0.55 : 1)) * tempo * dt;
+      const x0 = p.x, y0 = p.y;
       bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
       p.richtung = Math.atan2(e.dy, e.dx);
       if (!p.schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen, false, p.ebene);
-    }
+      this.klettern(id, p, x, e, laenge, Math.hypot(p.x - x0, p.y - y0) < f * 0.25, dt);
+    } else x.kletter = 0;
     this.uebergang(id, p, x, dt);
     // automatischer Angriff (nicht während man durchsucht)
     let pause = x.pause - dt;
     if (pause <= 0 && !p.aktion) {
-      const [name, wf] = aktiveWaffe(p);
+      const [name, wf0] = aktiveWaffe(p);
+      const meter = SpielRaum.einstellungen.reichweite?.[name];
+      const wf = meter ? { ...wf0, reichweite: meter * KACHEL / 4 } : wf0;   // eingestellte Reichweite (Meter, 4 m je Kachel)
       const ziel = this.naechsterZombie(p.x, p.y, wf.reichweite, p);
       if (ziel) {
         const [zid, z] = ziel;
@@ -1182,6 +1207,30 @@ export class SpielRaum extends Room {
       } else pause = 0;
     }
     x.pause = Math.max(0, pause);
+  }
+
+  // Über Hecken, Gartenzäune und -mauern steigen: etwa 0,9 s an derselben Stelle dagegenlaufen
+  klettern(id, p, x, e, laenge, steckt, dt) {
+    const zaunart = this.welt.details?.zaunart;
+    if (p.ebene || !zaunart || !steckt) { x.kletter = 0; return; }
+    const dx = e.dx / laenge, dy = e.dy / laenge;
+    const vor = { x: p.x + dx * (W.spielerRadius + 8), y: p.y + dy * (W.spielerRadius + 8) };
+    const kx = Math.floor(vor.x / KACHEL), ky = Math.floor(vor.y / KACHEL);
+    // nur Gartenzäune (Kartenrand und Hauswände nicht)
+    if (this.welt.hole(kx, ky) !== T.ZAUN || !'hzmw'.includes(zaunart[ky * BREITE + kx])) { x.kletter = 0; return; }
+    if (x.kletterStelle !== kx + ',' + ky) { x.kletterStelle = kx + ',' + ky; x.kletter = 0; }
+    x.kletter = (x.kletter ?? 0) + dt;
+    if (x.kletter < 0.9) return;
+    x.kletter = 0;
+    // Landeplatz hinter dem Zaun suchen
+    for (const weite of [1.2, 1.6, 2.0]) {
+      const zx = p.x + dx * KACHEL * weite, zy = p.y + dy * KACHEL * weite;
+      if (frei(this.welt, zx, zy, W.spielerRadius)) {
+        p.x = zx; p.y = zy;
+        this.broadcast('klettern', { x: zx, y: zy });
+        return;
+      }
+    }
   }
 
   // als Zombie: schnell, beißt Menschen bei Berührung, sonst nichts

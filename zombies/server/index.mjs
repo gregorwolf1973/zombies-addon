@@ -68,6 +68,8 @@ export async function starte({
       tagMinuten: w.tagMinuten,
       menschen: w.menschen,
       ansteckungMin: w.ansteckung,
+      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, sichtkegel: w.sichtkegel,
+      reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,
       karte: geladeneKarte.karte,                   // gilt für die nächste Welt
@@ -77,11 +79,19 @@ export async function starte({
     };
     SpielRaum.aktiv?.einstellungenGeaendert?.();
   };
-  // erste Zuordnung der Töne aus zuordnung.json im Tonordner, solange noch nichts zugeordnet ist
-  if (Object.values(datei.werte.toene).every(t => !t.dateien.length)) {
-    for (const o of tonOrdner) {
-      try { datei.aendern({ toene: JSON.parse(fs.readFileSync(path.join(o.pfad, 'zuordnung.json'), 'utf8')) }); break; } catch { /* keine */ }
+  // Startzuordnung der Töne aus zuordnung.json: jedes Ereignis wird höchstens einmal vorbelegt (spätere Änderungen bleiben)
+  for (const o of tonOrdner) {
+    let vorgabe = null;
+    try { vorgabe = JSON.parse(fs.readFileSync(path.join(o.pfad, 'zuordnung.json'), 'utf8')); } catch { continue; }
+    const erledigt = new Set(datei.werte.toeneVorbelegt ?? []);
+    const neu = {};
+    for (const [id, t] of Object.entries(vorgabe)) {
+      if (erledigt.has(id)) continue;
+      erledigt.add(id);
+      if (!datei.werte.toene[id]?.dateien?.length) neu[id] = t;
     }
+    if (erledigt.size !== (datei.werte.toeneVorbelegt ?? []).length) datei.aendern({ toene: neu, toeneVorbelegt: [...erledigt] });
+    break;
   }
   anwenden(datei.werte);
 

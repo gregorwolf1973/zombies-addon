@@ -245,3 +245,10 @@ export function umgebung(drinnen) {
   brumm.gain.setTargetAtTime(drinnen ? 0.035 : 0, ctx.currentTime, 0.8);
   hintergrundPruefen();
 }
+
+// Knistern eines Brandes (erzeugt): kurze, raue Knackser
+export function knistern(x, y, staerke = 1) {
+  const z = ort(x, y, 0.35 * staerke); if (!z) return;
+  for (let i = 0; i < 3; i++) rauschen(z, 0.04 + Math.random() * 0.05, { typ: 'bandpass', freq: 1500 + Math.random() * 3000, q: 2, start: Math.random() * 0.25, a: 0.002, laut: 0.5 + Math.random() * 0.5 });
+  rauschen(z, 0.4, { freq: 300, start: 0, laut: 0.25 });
+}

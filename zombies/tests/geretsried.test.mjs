@@ -87,15 +87,19 @@ test('Stadtleben: Menschen gehen umher, Gebissene werden zu Zombies, der Bus fä
     const raum = matchMaker.getLocalRoomById(c.roomId);
     const s = raum.state;
     assert.ok(s.menschen.size >= 40, 'zu wenige Menschen: ' + s.menschen.size);
-    assert.ok(s.busse.size === 1, 'kein Bus');
+    const busOf = () => [...s.fahrzeuge.values()].find(f => f.art === 'bus');
+    assert.ok(busOf(), 'kein Bus');
+    assert.ok([...s.fahrzeuge.values()].filter(f => f.art === 'auto').length >= 3, 'kein Verkehr');
     // jemand bewegt sich
     const vorher = new Map([...s.menschen.entries()].map(([id, m]) => [id, [m.x, m.y, m.sichtbar]]));
-    const bus0 = { x: s.busse.get('linie1').x, y: s.busse.get('linie1').y };
+    const bus0 = { x: busOf().x, y: busOf().y };
     await new Promise(r => setTimeout(r, 12000));
     const bewegt = [...s.menschen.entries()].filter(([id, m]) => { const v = vorher.get(id); return v && (Math.hypot(m.x - v[0], m.y - v[1]) > 20 || m.sichtbar !== v[2]); }).length;
     assert.ok(bewegt >= 5, 'Menschen bewegen sich nicht: ' + bewegt);
-    const bus = s.busse.get('linie1');
+    const bus = busOf();
     assert.ok(Math.hypot(bus.x - bus0.x, bus.y - bus0.y) > 50, 'Bus fährt nicht');
+    // Fahrzeuge bleiben auf den Straßenlinien (nicht quer über Wiesen und Häuser)
+    for (const f of s.fahrzeuge.values()) assert.ok([0, 1, -1].some(dx => [0, 1, -1].some(dy => [T.STRASSE, T.PLATZ, T.DEKO].includes(raum.welt.hole(Math.floor(f.x / KACHEL) + dx, Math.floor(f.y / KACHEL) + dy)))), 'Fahrzeug neben der Straße');
     // Biss → nach der Ansteckungszeit ein Zombie
     const [mid, m] = [...s.menschen.entries()].find(([, q]) => q.sichtbar && !q.infiziert);
     m.infiziert = true; raum.stadt.info.get(mid).inf = 0.5;
@@ -103,5 +107,42 @@ test('Stadtleben: Menschen gehen umher, Gebissene werden zu Zombies, der Bus fä
     const zid = raum.stadt.zuletztVerwandelt;
     assert.ok(zid && s.zombies.has(zid), 'kein neuer Zombie');
     assert.ok(raum.zombieInfo.get(zid).bleibt, 'verwandelter Zombie würde wieder verschwinden');
+  } finally { await c.leave(); }
+});
+
+test('Feuer: Auto brennt, verletzt Zombies, erlischt und bleibt als Wrack', async () => {
+  const c = await new Client(`ws://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Feuerwehrmann', spielerId: crypto.randomBytes(16).toString('hex') });
+  try {
+    const raum = matchMaker.getLocalRoomById(c.roomId);
+    const s = raum.state;
+    const auto = raum.welt.behaelter.find(b => b.art === 'auto' && !s.verbrannt.has('auto:' + b.id));
+    const fid = raum.brand.anzuenden({ k: 'auto:' + auto.id, x: auto.x, y: auto.y, art: 'auto', r: 42 });
+    assert.ok(s.feuer.has(fid));
+    const zid = raum.setzeZombie(auto.x + 10, auto.y, '');
+    const z = s.zombies.get(zid); raum.zombieInfo.get(zid).steht = true;
+    const halten = setInterval(() => { if (s.zombies.has(zid)) { z.x = auto.x + 10; z.y = auto.y; } }, 20);
+    try { assert.ok(await bis(() => !s.zombies.has(zid) || z.hp < 80, 6000), 'Feuer verletzt den Zombie nicht'); } finally { clearInterval(halten); }
+    raum.brand.info.get(fid).alter = 1e6;   // abgebrannt
+    assert.ok(await bis(() => !s.feuer.has(fid), 2000), 'Feuer erlischt nicht');
+    assert.ok(s.verbrannt.has('auto:' + auto.id), 'kein Wrack');
+  } finally { await c.leave(); }
+});
+
+test('Über Gartenzäune steigen: länger dagegenlaufen, dann drüber; Kartenrand bleibt zu', async () => {
+  const c = await new Client(`ws://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Kletterer', spielerId: crypto.randomBytes(16).toString('hex') });
+  try {
+    const raum = matchMaker.getLocalRoomById(c.roomId), w = raum.welt, p = raum.state.spieler.get(c.sessionId);
+    raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+    // ein waagrechter Gartenzaun mit freier Wiese oben und unten
+    let ort = null;
+    for (let y = 3; y < 200 && !ort; y++) for (let x = 3; x < 275 && !ort; x++) {
+      if (w.hole(x, y) !== T.ZAUN || !'hzmw'.includes(w.details.zaunart[y * 281 + x])) continue;
+      if (w.hole(x - 1, y) === T.ZAUN && w.hole(x + 1, y) === T.ZAUN && w.hole(x, y - 1) === T.WIESE && w.hole(x, y - 2) === T.WIESE && w.hole(x, y + 1) === T.WIESE && w.hole(x, y + 2) === T.WIESE) ort = { x, y };
+    }
+    assert.ok(ort, 'kein passender Zaun');
+    p.ebene = ''; p.x = (ort.x + 0.5) * KACHEL; p.y = (ort.y - 0.5) * KACHEL;
+    c.send('eingabe', { dx: 0, dy: 1 });
+    assert.ok(await bis(() => p.y > (ort.y + 1) * KACHEL, 4000), 'nicht hinübergestiegen');
+    c.send('eingabe', { dx: 0, dy: 0 });
   } finally { await c.leave(); }
 });

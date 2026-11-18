@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.21.0 – 18.11.2026
+
+- Brände: In der Anfangsphase (einstellbar, Vorgabe die ersten 20 Minuten) fängt etwa jede Minute ein Haus, ein
+  geparktes oder fahrendes Auto oder ein Bus Feuer – mit Flammen, Rauch, Knistern und Lichtschein in der Nacht. Feuer
+  verletzt Spieler und verbrennt Zombies; Autos und Busse bleiben als Wrack, Häuser als Ruine. Brennende Häuser kann man
+  nicht betreten
+- Verkehr: Am Anfang fahren Autos vor allem auf den Hauptstraßen (Anzahl und Dauer einstellbar), ab und zu rasen
+  Polizei und Feuerwehr mit Blaulicht und Sirene durch – die Feuerwehr fährt zum Brand
+- Alle Fahrzeuge fahren auf den echten Straßenlinien auf der rechten Spur, ohne Zick-Zack, und halten vor Menschen
+- Gartenzäune und Hecken als glatte Linien statt Treppen; über Hecken, Zäune und Gartenmauern steigen, indem man etwa
+  eine Sekunde dagegenläuft
+- Durchsuchte Schränke und Spinde zeigen offene Türen (leer: ausgegraut), durchsuchte Autos einen offenen Kofferraum
+- Sichtkegel der Zombies ausblendbar (Vorgabe: aus); automatische Schussreichweite je Schusswaffe einstellbar
+- Zoomen mit zwei Fingern am Handy
+- Neue Töne: Schrei, wenn ein Bewohner gebissen wird; Sirene; eigenes Ereignis „Feuer bricht aus“
+- Menschen zittern nicht mehr an Zäunen und Hindernissen und laufen nicht mehr ineinander
+
 ## 0.20.2 – 18.11.2026
 
 - Bots durchsuchen gezielt den Schrank, zu dem sie gehen – vorher blieben sie hängen, wenn ein verschlossenes Auto oder

@@ -310,3 +310,28 @@ test('Neue Waffen: Schrot trifft mehrere und braucht Munition, Sense mäht im Bo
     assert.ok(await bis(() => zs[0].hp < 100 || !raum.state.zombies.size, 3000), 'Gewehr reicht nicht');
   } finally { clearInterval(halten); await c.leave(); }
 });
+
+test('Schussreichweite je Waffe einstellbar', async () => {
+  const { c, raum, p } = await beitreten('Scharfschütze');
+  const vorher = SpielRaum.einstellungen;
+  try {
+    raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+    const welt = raum.welt;
+    let ort = null;
+    for (let y = 5; y < 40 && !ort; y++) for (let x = 5; x < 55 && !ort; x++) {
+      const px = x * KACHEL + 16, py = y * KACHEL + 16;
+      if ([0, 80, 160].every(dx => frei(welt, px + dx, py, 16)) && sichtfrei(welt, px, py, px + 160, py)) ort = { x: px, y: py };
+    }
+    p.ebene = ''; p.waffe = 'pistole'; p.munition = 5; p.x = ort.x; p.y = ort.y;
+    const zid = raum.setzeZombie(ort.x + 160, ort.y, ''), z = raum.state.zombies.get(zid);
+    raum.zombieInfo.get(zid).ziel = c.sessionId; z.jagt = true;
+    const halten = setInterval(() => { z.x = ort.x + 160; z.y = ort.y; p.x = ort.x; p.y = ort.y; p.hp = 100; }, 10);
+    try {
+      SpielRaum.einstellungen = { ...vorher, reichweite: { pistole: 10 } };    // 10 m = 80 px: zu kurz
+      await warte(800);
+      assert.equal(z.hp, 100, 'schießt über die eingestellte Reichweite hinaus');
+      SpielRaum.einstellungen = { ...vorher, reichweite: { pistole: 40 } };    // 40 m = 320 px
+      assert.ok(await bis(() => z.hp < 100 || !raum.state.zombies.has(zid), 2000), 'schießt nicht trotz Reichweite');
+    } finally { clearInterval(halten); }
+  } finally { SpielRaum.einstellungen = vorher; await c.leave(); }
+});

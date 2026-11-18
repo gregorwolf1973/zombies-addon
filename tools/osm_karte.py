@@ -296,6 +296,40 @@ for i in haeuser_g:
         x, y = ziel
         if k[y][x] == ZAUN: k[y][x] = WIESE; zaunart[y][x] = '.'; geoeffnet += 1
         ziel = vor.get(ziel)
+# Zaunlinien fürs Aussehen: Zaunfelder je Garten zu Ketten verbinden und mit Douglas-Peucker begradigen
+def dp(punkte, eps):
+    if len(punkte) < 3: return punkte
+    (x1, y1), (x2, y2) = punkte[0], punkte[-1]
+    L = math.hypot(x2 - x1, y2 - y1) or 1e-9
+    beste, bi = -1, 0
+    for i in range(1, len(punkte) - 1):
+        px, py = punkte[i]
+        d = abs((x2 - x1) * (y1 - py) - (x1 - px) * (y2 - y1)) / L
+        if d > beste: beste, bi = d, i
+    if beste <= eps: return [punkte[0], punkte[-1]]
+    return dp(punkte[:bi + 1], eps)[:-1] + dp(punkte[bi:], eps)
+zaeune = []
+NACHBARN = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+for i in haeuser_g:
+    g = gebaeude[i]
+    felder = {(x, y) for y in range(g["y"] - 6, g["y"] + g["h"] + 6) for x in range(g["x"] - 6, g["x"] + g["b"] + 6)
+              if drin(x, y) and k[y][x] == ZAUN and zaunart[y][x] != '.' and garten[y][x] == i}
+    offen = set(felder)
+    def nachbarn(f): return [(f[0] + dx, f[1] + dy) for dx, dy in NACHBARN if (f[0] + dx, f[1] + dy) in felder]
+    while offen:
+        ende = [f for f in offen if len([n for n in nachbarn(f) if n in offen]) <= 1]
+        start = min(ende) if ende else min(offen)
+        kette = [start]; offen.discard(start); f = start
+        while True:
+            kand = [n for n in nachbarn(f) if n in offen]
+            if not kand: break
+            kand.sort(key=lambda n: (abs(n[0] - f[0]) + abs(n[1] - f[1]), n))   # gerade Nachbarn zuerst
+            f = kand[0]; kette.append(f); offen.discard(f)
+        punkte = [(x + 0.5, y + 0.5) for x, y in kette]
+        if len(kette) > 2 and max(abs(kette[0][0] - kette[-1][0]), abs(kette[0][1] - kette[-1][1])) <= 1: punkte.append(punkte[0])   # geschlossen
+        punkte = dp(punkte, 0.75)
+        if len(punkte) >= 2: zaeune.append({"a": art_von[i], "p": flach(punkte)})
+print(f"Zaunlinien: {len(zaeune)}")
 gartenzeichen = [['.' if garten[y][x] < 0 else "01234"[garten[y][x] % 5] for x in range(B)] for y in range(H)]
 print(f"Details: {len(haeuser_g)} Gärten, {sum(r.count('h') + r.count('z') + r.count('m') + r.count('w') for r in zaunart)} Zaunkacheln, "
       f"{len(objekte)} Objekte, {geoeffnet} Zaunlücken für erreichbare Türen")
@@ -311,7 +345,7 @@ ausgabe.write_text(json.dumps({"quelle": "© OpenStreetMap-Mitwirkende (ODbL 1.0
                                "kacheln": "".join("0123456789"[v] for zeile in k for v in zeile), "gebaeude": gebaeude,
                                "strassen": strassen, "flaechen": flaechen,
                                "zaunart": "".join("".join(r) for r in zaunart), "garten": "".join("".join(r) for r in gartenzeichen),
-                               "objekte": objekte},
+                               "objekte": objekte, "zaeune": zaeune},
                               ensure_ascii=False))
 print(f"{B}×{H} Kacheln ({mpk} m), Gebäude {len(gebaeude)} (mit Tür {sum(1 for g in gebaeude if g['tuer'])}), benannt {len(benannt)}")
 print("Kacheln:", {n: zaehl[v] for n, v in [("Wiese", WIESE), ("Straße", STRASSE), ("Wand", WAND), ("Boden", BODEN), ("Tür", TUER), ("Wasser", WASSER), ("Baum", BAUM), ("Platz", PLATZ)]})

@@ -2,7 +2,7 @@
 // Menschen gehen von zu Hause zum Einkaufen, zum Platz und zur Bushaltestelle, ein Bus fährt die Haltestellen ab.
 // Zombies wittern Menschen und beißen sie; Gebissene werden nach einer einstellbaren Zeit selbst zu Zombies.
 import { schema, t } from '@colyseus/schema';
-import { KACHEL, BREITE, HOEHE, T, findeWeg, sichtfrei, bewege, ladenArt, WERTE as W } from '../client/welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, findeWeg, sichtfrei, bewege, frei, ladenArt, WERTE as W } from '../client/welt.mjs';
 
 export const Mensch = schema({
   x: t.number(), y: t.number(), richtung: t.number(),
@@ -12,10 +12,9 @@ export const Mensch = schema({
   sichtbar: t.boolean(),       // false = im Haus oder im Bus
 }, 'Mensch');
 
-export const Bus = schema({ x: t.number(), y: t.number(), richtung: t.number(), haelt: t.boolean() }, 'Bus');
 
 const RAD = 10;
-const TEMPO = W.tempoGehen * 0.55, FLUCHT = W.tempoGehen * 0.95, BUS_TEMPO = 150;
+const TEMPO = W.tempoGehen * 0.55, FLUCHT = W.tempoGehen * 0.95;
 const BISS_ABSTAND = 26;
 const FERN = 1400;   // weiter von allen Spielern weg: seltener rechnen
 
@@ -28,7 +27,6 @@ export class Stadtleben {
     this.naechsteId = 1;
     this.takt = 0;
     this.anfangs = 0;
-    this.busInfo = null;
     const w = raum.welt;
     this.wohnungen = w.haeuser.filter(h => h.betretbar && !ladenArt(h));
     this.laeden = w.haeuser.filter(h => h.betretbar && ladenArt(h));
@@ -62,7 +60,6 @@ export class Stadtleben {
         const zid = this.raum.setzeZombie(x, y, ''); this.raum.zombieInfo.get(zid).bleibt = true; n++;
       }
     }
-    if (this.haltestellen.length >= 2) this.busStarten();
   }
 
   lebende() { return this.raum.state.menschen.size; }
@@ -105,23 +102,39 @@ export class Stadtleben {
         if (inf.warte <= 0) { const p = this.vorDerTuer(inf.heim.nr === inf.drinIn?.nr ? inf.heim : (inf.drinIn ?? inf.heim)); m.x = p.x; m.y = p.y; m.sichtbar = true; this.neuesZiel(id, m, inf); }
         continue;
       }
-      // Zombie in der Nähe? Weglaufen (gebissene laufen auch, aber langsamer)
+      // Zombie oder Feuer in der Nähe? Weglaufen (gebissene laufen auch, aber langsamer)
       let gefahr = null, gd = 170;
       for (const [, z] of zombies) {
         const dd = Math.hypot(z.x - m.x, z.y - m.y);
         if (dd < gd && sichtfrei(welt, m.x, m.y, z.x, z.y)) { gd = dd; gefahr = z; }
       }
-      if (gefahr) {
+      for (const f of s.feuer?.values() ?? []) { const dd = Math.hypot(f.x - m.x, f.y - m.y) - f.r; if (dd < Math.min(gd, 90)) { gd = dd; gefahr = f; } }
+      if (gefahr || inf.fluchtZeit > 0) {
         m.flieht = true;
-        const w = Math.atan2(m.y - gefahr.y, m.x - gefahr.x);
-        const v = (m.infiziert ? TEMPO : FLUCHT) * d;
-        const x0 = m.x, y0 = m.y;
+        inf.fluchtZeit = gefahr ? 0.8 : inf.fluchtZeit - d;
+        // Richtung nur alle 0,4 s neu wählen (sonst zittert die Figur an Hindernissen): von 12 Richtungen die freie, die am weitesten weg führt
+        inf.fluchtWahl = (inf.fluchtWahl ?? 0) - d;
+        if (gefahr && (inf.fluchtWahl <= 0 || inf.fluchtW === undefined)) {
+          inf.fluchtWahl = 0.4;
+          const weg = Math.atan2(m.y - gefahr.y, m.x - gefahr.x);
+          let best = weg, bw = -Infinity;
+          for (let k = 0; k < 12; k++) {
+            const w = weg + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6);
+            const tx = m.x + Math.cos(w) * 40, ty = m.y + Math.sin(w) * 40;
+            if (!frei(welt, tx, ty, RAD)) continue;
+            const alt = inf.fluchtW ?? w;
+            const wert = Math.hypot(tx - gefahr.x, ty - gefahr.y) - Math.abs(Math.atan2(Math.sin(w - alt), Math.cos(w - alt))) * 6;
+            if (wert > bw) { bw = wert; best = w; }
+          }
+          inf.fluchtW = best;
+        }
+        const v = (m.infiziert ? TEMPO : FLUCHT) * d, w = inf.fluchtW ?? 0;
         bewege(welt, m, Math.cos(w) * v, Math.sin(w) * v, RAD);
-        if (Math.hypot(m.x - x0, m.y - y0) < v * 0.3) bewege(welt, m, Math.cos(w + 1.3) * v, Math.sin(w + 1.3) * v, RAD);   // an Hindernis vorbei
         m.richtung = w;
         inf.weg = null;
         continue;
       }
+      inf.fluchtW = undefined;
       m.flieht = false;
       if (!inf.ziel) this.neuesZiel(id, m, inf);
       const z = inf.ziel;
@@ -139,11 +152,16 @@ export class Stadtleben {
       const x0 = m.x, y0 = m.y;
       bewege(welt, m, Math.cos(w) * v, Math.sin(w) * v, RAD);
       m.richtung = w;
+      // nicht ineinanderlaufen: von zu nahen Nachbarn wegschieben
+      for (const [oid, o] of s.menschen) {
+        if (oid === id || !o.sichtbar) continue;
+        const dd = Math.hypot(o.x - m.x, o.y - m.y);
+        if (dd > 0.01 && dd < 20) bewege(welt, m, (m.x - o.x) / dd * (20 - dd) * 0.3, (m.y - o.y) / dd * (20 - dd) * 0.3, RAD);
+      }
       inf.steckt = Math.hypot(m.x - x0, m.y - y0) < v * 0.2 ? inf.steckt + d : 0;
       if (inf.steckt > 2.5) { inf.weg = null; if (inf.steckt > 6) this.neuesZiel(id, m, inf); }
     }
     this.zombiesWittern(zombies);
-    this.busSchritt(dt);
   }
 
   angekommen(id, m, inf) {
@@ -189,112 +207,30 @@ export class Stadtleben {
       if (bd < BISS_ABSTAND && !m.infiziert) {
         m.infiziert = true;
         this.info.get(mid).inf = minuten * 60;
-        this.raum.broadcast('biss', { x: m.x, y: m.y });
+        this.raum.broadcast('menschGebissen', { x: m.x, y: m.y });
       }
     }
   }
 
-  // ---------- Bus: fährt auf Straßen von Haltestelle zu Haltestelle ----------
-  busStarten() {
-    const welt = this.raum.welt;
-    // Haltestellen auf die nächste Straßenkachel legen, Reihenfolge: jeweils die nächste noch nicht besuchte
-    const aufStrasse = hs => {
-      const kx = Math.floor(hs.x / KACHEL), ky = Math.floor(hs.y / KACHEL);
-      for (let r = 0; r < 6; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-        if (welt.hole(kx + dx, ky + dy) === T.STRASSE) return { kx: kx + dx, ky: ky + dy };
-      }
-      return null;
-    };
-    const stopps = this.haltestellen.map(hs => ({ hs, k: aufStrasse(hs) })).filter(s => s.k);
-    if (stopps.length < 2) return;
-    const reihe = [stopps.shift()];
-    while (stopps.length) {
-      const l = reihe.at(-1);
-      stopps.sort((a, b) => Math.hypot(a.k.kx - l.k.kx, a.k.ky - l.k.ky) - Math.hypot(b.k.kx - l.k.kx, b.k.ky - l.k.ky));
-      reihe.push(stopps.shift());
-    }
-    // Wege zwischen den Haltestellen nur über Straßenkacheln
-    const strecken = [];
-    for (let i = 0; i < reihe.length; i++) {
-      const a = reihe[i].k, b = reihe[(i + 1) % reihe.length].k;
-      const weg = strassenWeg(welt, a, b);
-      if (!weg) continue;
-      strecken.push({ von: reihe[i], nach: reihe[(i + 1) % reihe.length], weg });
-    }
-    if (!strecken.length) return;
-    const bus = new Bus();
-    const p0 = strecken[0].weg[0];
-    bus.x = p0.x; bus.y = p0.y; bus.richtung = 0; bus.haelt = true;
-    this.raum.state.busse.set('linie1', bus);
-    this.busInfo = { strecken, nr: 0, pos: 0, halt: 6, mitfahrer: new Map() };
-  }
-
-  busSchritt(dt) {
-    const b = this.busInfo, bus = this.raum.state.busse.get('linie1');
-    if (!b || !bus) return;
-    const st = b.strecken[b.nr];
-    if (b.halt > 0) {
-      bus.haelt = true;
-      b.halt -= dt;
-      if (b.halt <= 0) this.einAussteigen(st.von.hs);
-      return;
-    }
-    bus.haelt = false;
-    let rest = BUS_TEMPO * dt;
-    while (rest > 0) {
-      const ziel = st.weg[b.pos + 1];
-      if (!ziel) { b.nr = (b.nr + 1) % b.strecken.length; b.pos = 0; b.halt = 8; this.einAussteigen(b.strecken[b.nr].von.hs, true); return; }
-      const d = Math.hypot(ziel.x - bus.x, ziel.y - bus.y);
-      const w = Math.atan2(ziel.y - bus.y, ziel.x - bus.x);
-      bus.richtung += Math.atan2(Math.sin(w - bus.richtung), Math.cos(w - bus.richtung)) * Math.min(1, dt * 6);
-      if (d <= rest) { bus.x = ziel.x; bus.y = ziel.y; b.pos++; rest -= d; }
-      else { bus.x += Math.cos(w) * rest; bus.y += Math.sin(w) * rest; rest = 0; }
-    }
-  }
-
-  // an einer Haltestelle: Mitfahrer mit diesem Ziel steigen aus, Wartende steigen ein
-  einAussteigen(hs, nurAus = false) {
-    const s = this.raum.state, b = this.busInfo, r = this.raum.rnd;
-    for (const [id, zielHs] of b.mitfahrer) {
-      if (zielHs !== hs) continue;
+  // Bus (verkehr.mjs) hält an einer Haltestelle: Mitfahrer mit diesem Ziel steigen aus, Wartende steigen ein
+  busHalt(businfo, stopp) {
+    const s = this.raum.state, r = this.raum.rnd;
+    const gleich = (a, b) => a && b && Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1;
+    businfo.mitfahrer ??= new Map();
+    for (const [id, zielHs] of businfo.mitfahrer) {
+      if (!gleich(zielHs, stopp)) continue;
+      businfo.mitfahrer.delete(id);
       const m = s.menschen.get(id), inf = this.info.get(id);
-      b.mitfahrer.delete(id);
       if (!m || !inf) continue;
-      m.x = hs.x + (r() - 0.5) * 30; m.y = hs.y + (r() - 0.5) * 30; m.sichtbar = true; inf.imBus = false; this.neuesZiel(id, m, inf);
+      m.x = stopp.x + (r() - 0.5) * 30; m.y = stopp.y + (r() - 0.5) * 30; m.sichtbar = true; inf.imBus = false; this.neuesZiel(id, m, inf);
     }
-    if (nurAus) return;
     for (const [id, m] of s.menschen) {
       const inf = this.info.get(id);
-      if (!m.sichtbar || !inf?.wartet || inf.ziel?.hs !== hs) continue;
-      const andere = this.haltestellen.filter(h => h !== hs);
+      if (!m.sichtbar || !inf?.wartet || !gleich(inf.ziel?.hs, stopp)) continue;
+      const andere = this.haltestellen.filter(h => !gleich(h, stopp));
       if (!andere.length) continue;
       m.sichtbar = false; inf.imBus = true; inf.wartet = 0; inf.ziel = null;
-      b.mitfahrer.set(id, andere[Math.floor(r() * andere.length)]);
+      businfo.mitfahrer.set(id, andere[Math.floor(r() * andere.length)]);
     }
   }
-}
-
-// Breitensuche nur über Straßenkacheln, Rückgabe: Punkte in Pixeln
-function strassenWeg(welt, a, b) {
-  const start = a.ky * BREITE + a.kx, ziel = b.ky * BREITE + b.kx;
-  const vor = new Int32Array(BREITE * HOEHE).fill(-1);
-  vor[start] = start;
-  const q = [start];
-  for (let k = 0; k < q.length; k++) {
-    const i = q[k];
-    if (i === ziel) break;
-    const x = i % BREITE, y = (i - x) / BREITE;
-    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-      if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
-      const j = ny * BREITE + nx;
-      if (vor[j] !== -1 || welt.hole(nx, ny) !== T.STRASSE) continue;
-      vor[j] = i; q.push(j);
-    }
-  }
-  if (vor[ziel] === -1) return null;
-  const weg = [];
-  for (let i = ziel; i !== start; i = vor[i]) weg.push(i);
-  weg.push(start); weg.reverse();
-  // jede zweite Kachel reicht, der Bus fährt die Punkte weich an
-  return weg.filter((_, n) => n % 2 === 0 || n === weg.length - 1).map(i => ({ x: (i % BREITE + 0.5) * KACHEL, y: (Math.floor(i / BREITE) + 0.5) * KACHEL }));
 }
