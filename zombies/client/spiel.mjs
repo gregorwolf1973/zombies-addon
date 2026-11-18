@@ -10,7 +10,7 @@ import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, 
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
-const STUECK = 32;   // Kartenstücke à 32×32 Kacheln
+const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { baueInnenraum } from './innen.mjs';
 import * as ton from './ton.mjs';
 import { Uebersicht } from './uebersicht.mjs';
@@ -93,7 +93,7 @@ const figurVorlage = { bild: new Image(), liste: null, bild2: new Image(), liste
 figurVorlage.bild.src = 'grafik/figuren.png';
 fetch('grafik/figuren.json').then(r => r.json()).then(j => { figurVorlage.liste = j; vorschauZeichnen(); }).catch(() => {});
 figurVorlage.bild.onload = () => vorschauZeichnen();
-figurVorlage.bild2.src = 'grafik/figuren2.png';
+figurVorlage.bild2.src = 'grafik/figuren2.webp';
 fetch('grafik/figuren2.json').then(r => r.json()).then(j => { figurVorlage.liste2 = j; vorschauZeichnen(); }).catch(() => {});
 figurVorlage.bild2.onload = () => vorschauZeichnen();
 function vorschauZeichnen() {
@@ -103,12 +103,12 @@ function vorschauZeichnen() {
   ctx.clearRect(0, 0, c.width, c.height);
   document.querySelector('.figurknoepfe')?.classList.toggle('fest', meinAussehen.g === 's');
   if (meinAussehen.g === 's') {
-    // Survivor: feste Figur aus dem zweiten Bogen (224er Felder)
+    // Survivor: feste Figur aus dem zweiten Bogen (160er Felder)
     const l2 = figurVorlage.liste2;
     if (!l2 || !figurVorlage.bild2.complete) return;
     const nr = l2.bilder.sv_pistole_idle[0], F = l2.feld, sx = (nr % l2.spalten) * F, sy = Math.floor(nr / l2.spalten) * F;
     const fn = l2.bilder.sv_fuesse_idle[0], fx = (fn % l2.spalten) * F, fy = Math.floor(fn / l2.spalten) * F;
-    ctx.save(); ctx.translate(80, 112); ctx.rotate(-Math.PI / 2); ctx.scale(0.8, 0.8);
+    ctx.save(); ctx.translate(80, 112); ctx.rotate(-Math.PI / 2); ctx.scale(1.12, 1.12);
     ctx.drawImage(figurVorlage.bild2, fx, fy, F, F, -F / 2, -F / 2, F, F);
     ctx.drawImage(figurVorlage.bild2, sx, sy, F, F, -F / 2, -F / 2, F, F);
     ctx.restore();
@@ -234,7 +234,7 @@ const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 // ---------- Szene ----------
 const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
-const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.34;   // figuren2: 224er Felder
+const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   // figuren2: 160er Felder
 const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7'];   // z6/z7 aus figuren2 (Riley Gombart)
 const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer' };   // sonst Taschenlampe
 
@@ -247,7 +247,7 @@ class Ort extends Phaser.Scene {
     this.load.spritesheet('figuren', 'grafik/figuren.png', { frameWidth: 160, frameHeight: 160 });
     this.load.json('figurenliste', 'grafik/figuren.json');
     // zweiter Bogen: Survivor, Zombies und Bürger von OpenGameArt (siehe grafik/LIZENZ.txt)
-    this.load.spritesheet('figuren2', 'grafik/figuren2.png', { frameWidth: 224, frameHeight: 224 });
+    this.load.spritesheet('figuren2', 'grafik/figuren2.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('figurenliste2', 'grafik/figuren2.json');
   }
 
@@ -506,16 +506,21 @@ class Ort extends Phaser.Scene {
     if (this.aktEbene) return;
     const v = this.cameras.main.worldView, K = KACHEL * STUECK;
     const nx = Math.ceil(BREITE / STUECK) - 1, ny = Math.ceil(HOEHE / STUECK) - 1;
-    const cx0 = Math.max(0, Math.floor((v.x - 160) / K)), cx1 = Math.min(nx, Math.floor((v.right + 160) / K));
-    const cy0 = Math.max(0, Math.floor((v.y - 160) / K)), cy1 = Math.min(ny, Math.floor((v.bottom + 160) / K));
+    // Vorlauf 320 px: Stücke entstehen, bevor sie ins Bild kommen
+    const cx0 = Math.max(0, Math.floor((v.x - 320) / K)), cx1 = Math.min(nx, Math.floor((v.right + 320) / K));
+    const cy0 = Math.max(0, Math.floor((v.y - 320) / K)), cy1 = Math.min(ny, Math.floor((v.bottom + 320) / K));
+    // je Bild nur ein halbes Stück (Boden oder obere Ebene), sonst ruckelt es auf schwachen Handys
     let budget = alle || !this.stuecke.size ? 99 : 1;
+    for (const st of this.stuecke.values()) if (!st.oben && budget > 0) { budget--; this.baueStueckOben(st); }
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       if (this.stuecke.has(cx + ',' + cy) || budget <= 0) continue;
-      budget--; this.baueStueck(cx, cy);
+      budget--; const st = this.baueStueck(cx, cy);
+      if (budget > 0) { budget--; this.baueStueckOben(st); }
     }
     for (const [key, st] of this.stuecke) {
-      if (st.cx >= cx0 - 1 && st.cx <= cx1 + 1 && st.cy >= cy0 - 1 && st.cy <= cy1 + 1) continue;
-      st.boden.destroy(); st.oben.destroy();
+      // freigeben erst ab 640 px außerhalb des Bildes (kein Hin und Her an der Grenze, aber nicht zu viel Speicher)
+      if ((st.cx + 1) * K > v.x - 640 && st.cx * K < v.right + 640 && (st.cy + 1) * K > v.y - 640 && st.cy * K < v.bottom + 640) continue;
+      st.boden.destroy(); st.oben?.destroy();
       this.textures.remove('boden-' + key); this.textures.remove('oben-' + key);
       this.stuecke.delete(key);
     }
@@ -525,15 +530,34 @@ class Ort extends Phaser.Scene {
     const rect = { x0: cx * STUECK, y0: cy * STUECK, x1: Math.min(BREITE, (cx + 1) * STUECK), y1: Math.min(HOEHE, (cy + 1) * STUECK) };
     const B = (rect.x1 - rect.x0) * KACHEL, H = (rect.y1 - rect.y0) * KACHEL, key = cx + ',' + cy;
     const tb = this.textures.createCanvas('boden-' + key, B, H);
-    zeichneBoden(tb.getContext(), this.welt, rect); tb.refresh();
-    const to = this.textures.createCanvas('oben-' + key, B, H);
-    const ctx = to.getContext();
-    zeichneOben(ctx, this.welt, this.bilder, rect);
-    zeichneDaecher(ctx, this.welt, rect);
-    to.refresh();
+    zeichneBoden(tb.getContext(), this.welt, rect); tb.refresh(); this.kanteFesthalten(tb);
     const boden = this.add.image(rect.x0 * KACHEL, rect.y0 * KACHEL, 'boden-' + key).setOrigin(0).setDepth(0).setVisible(!this.aktEbene);
-    const oben = this.add.image(rect.x0 * KACHEL, rect.y0 * KACHEL, 'oben-' + key).setOrigin(0).setDepth(5).setVisible(!this.aktEbene);
-    this.stuecke.set(key, { cx, cy, boden, oben });
+    const st = { cx, cy, key, rect, B, H, boden, oben: null };
+    this.stuecke.set(key, st);
+    return st;
+  }
+
+  // Phaser lässt Texturen mit Zweierpotenz-Größe (512er Stücke) „wiederholen“; dann mischt der Kantenfilter die
+  // gegenüberliegende Kante hinein und an jeder Stücknaht erscheint eine feine Linie. Kante festhalten (wie setTextureFilter).
+  kanteFesthalten(tex) {
+    const r = this.game.renderer, gl = r.gl, w = tex.source?.[0]?.glTexture;
+    if (!gl || !w?.webGLTexture) return;
+    gl.activeTexture(gl.TEXTURE0);
+    const vorher = gl.getParameter(gl.TEXTURE_BINDING_2D);
+    gl.bindTexture(gl.TEXTURE_2D, w.webGLTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    w.wrapS = w.wrapT = gl.CLAMP_TO_EDGE;   // auch nach verlorenem Grafikkontext
+    if (vorher) gl.bindTexture(gl.TEXTURE_2D, vorher);
+  }
+
+  baueStueckOben(st) {
+    const to = this.textures.createCanvas('oben-' + st.key, st.B, st.H);
+    const ctx = to.getContext();
+    zeichneOben(ctx, this.welt, this.bilder, st.rect);
+    zeichneDaecher(ctx, this.welt, st.rect);
+    to.refresh(); this.kanteFesthalten(to);
+    st.oben = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'oben-' + st.key).setOrigin(0).setDepth(5).setVisible(!this.aktEbene);
   }
 
   zeichneBarrikaden() {
@@ -792,7 +816,7 @@ class Ort extends Phaser.Scene {
   wechsleAnsicht(ebene) {
     this.aktEbene = ebene;
     for (const o of this.aussenObjekte) o.setVisible(!ebene);
-    for (const st of this.stuecke.values()) { st.boden.setVisible(!ebene); st.oben.setVisible(!ebene); }
+    for (const st of this.stuecke.values()) { st.boden.setVisible(!ebene); st.oben?.setVisible(!ebene); }
     for (const [e, a] of this.innenAnsichten) for (const o of [a.bild, a.tueren, a.dunkel, a.nebel]) o.setVisible(e === ebene);
     const cam = this.cameras.main;
     if (ebene) {
@@ -1350,7 +1374,7 @@ class Ort extends Phaser.Scene {
     this.tweens.add({ targets: g, alpha: 0, duration: schrot ? 90 : 110, onComplete: () => g.destroy() });
     // Mündungsblitz (Survivor-Paket), additiv: das Schwarz im Bild verschwindet
     const blitz = this.add.image(m.x1 + c * (vorn - 4), m.y1 + sn * (vorn - 4), 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5)
-      .setBlendMode('ADD').setRotation(w).setScale(gewehr ? 0.42 : schrot ? 0.38 : 0.3).setDepth(7);
+      .setBlendMode('ADD').setRotation(w).setScale(gewehr ? 0.59 : schrot ? 0.53 : 0.42).setDepth(7);
     this.tweens.add({ targets: blitz, alpha: 0, duration: 90, onComplete: () => blitz.destroy() });
   }
 

@@ -228,7 +228,14 @@ export class SpielRaum extends Room {
     this.onMessage('tausch_ende', client => { const t = this.tausche.get(client.sessionId); if (t) this.tauschEnde(t, 'abgebrochen'); });
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
-    this.setSimulationInterval(dt => this.schritt(dt / 1000), TICK);
+    this.setSimulationInterval(dt => {
+      const t0 = performance.now();
+      this.schritt(dt / 1000);
+      this.messen('takt', t0);
+    }, TICK);
+    // Versand der Änderungen an die Spieler mitmessen
+    const patch = this.broadcastPatch.bind(this);
+    this.broadcastPatch = () => { const t0 = performance.now(); const r = patch(); this.messen('versand', t0); return r; };
   }
 
   setzeInhalt(id, inhalt) {
@@ -1097,6 +1104,28 @@ export class SpielRaum extends Room {
 
   // ---------- Simulation ----------
 
+  // Rechenzeit je Teil sammeln; alle 10 s als Zusammenfassung für die Einstellungsseite ablegen
+  messen(teil, t0) {
+    const ms = performance.now() - t0;
+    const l = this.leistungLauf ??= { seit: Date.now(), teile: {} };
+    const e = l.teile[teil] ??= { n: 0, summe: 0, max: 0 };
+    e.n++; e.summe += ms; if (ms > e.max) e.max = ms;
+    if (teil === 'takt' && Date.now() - l.seit >= 10_000) {
+      this.leistung = {
+        zeit: Date.now(),
+        teile: Object.fromEntries(Object.entries(l.teile).map(([k, v]) => [k, { mittel: +(v.summe / v.n).toFixed(2), max: +v.max.toFixed(1), n: v.n }])),
+        zombies: this.state.zombies.size, menschen: this.state.menschen?.size ?? 0, fahrzeuge: this.state.fahrzeuge?.size ?? 0,
+        spieler: this.state.spieler.size, speicherMB: Math.round(process.memoryUsage().rss / 1048576),
+      };
+      this.leistungLauf = { seit: Date.now(), teile: {} };
+      // einmal pro Minute ins Add-on-Log (so lässt sich die Last auf dem Pi nachlesen)
+      if ((this.leistungZaehler = (this.leistungZaehler ?? 0) + 1) % 6 === 0) {
+        const t = this.leistung.teile, f = k => t[k] ? `${k} ${t[k].mittel}/${t[k].max}` : '';
+        console.log(`Leistung (ms Mittel/Spitze): ${['takt', 'spieler', 'zombies', 'menschen', 'verkehr', 'wegefeld', 'versand'].map(f).filter(Boolean).join(', ')} · ${this.leistung.zombies} Zombies, ${this.leistung.spieler} Spieler, ${this.leistung.speicherMB} MB`);
+      }
+    }
+  }
+
   schritt(dt) {
     const s = this.state;
     if (s.spieler.size === 0) return;
@@ -1115,10 +1144,13 @@ export class SpielRaum extends Room {
     if (istNacht(s.uhr) !== vorher) this.broadcast('meldung', { text: istNacht(s.uhr) ? '🌙 Die Nacht bricht herein – Zombies werden mehr. Taschenlampe bereit?' : '🌅 Es wird Tag', lang: true });
     this.feldZeit -= dt;
     if (this.feldZeit <= 0) {
+      const tf = performance.now();
       for (const e of new Set([...s.spieler.values()].map(p => p.ebene ?? ''))) this.baueFeld(e);
+      this.messen('wegefeld', tf);
       this.feldZeit = 0.4;
     }
 
+    let t0 = performance.now();
     for (const [id, p] of s.spieler) {
       const x = this.extra.get(id);
       if (!x) continue;
@@ -1130,10 +1162,15 @@ export class SpielRaum extends Room {
       if (this.unsterblich(p)) { p.hp = 100; p.unten = false; p.infektion = 0; p.durst = Math.max(p.durst, 30); p.hunger = Math.max(p.hunger, 30); }
       this.aktionSchritt(id, p, x, dt);
     }
+    this.messen('spieler', t0); t0 = performance.now();
     for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
+    this.messen('zombies', t0); t0 = performance.now();
     this.stadt?.schritt(dt);
+    this.messen('menschen', t0); t0 = performance.now();
     this.verkehr?.schritt(dt);
+    this.messen('verkehr', t0); t0 = performance.now();
     this.brand?.schritt(dt);
+    this.messen('feuer', t0);
     this.aufhelfen(dt);
     this.leichenAltern(dt);
     this.bodenAltern(dt);

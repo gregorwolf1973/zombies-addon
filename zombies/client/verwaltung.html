@@ -393,6 +393,11 @@
     .karte, .kopf { padding: 12px; }
     button { padding: 6px 10px; }
   }
+  .leistung { margin-top: 12px; }
+  .leistung summary { cursor: pointer; font-weight: 600; }
+  .leistung table { width: 100%; border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .leistung td, .leistung th { text-align: left; padding: 3px 6px; border-bottom: 1px solid rgba(127,127,127,.2); }
+  .leistung .warnung { color: #e8833a; }
 </style>
 </head>
 <body>
@@ -416,6 +421,11 @@
       <span>Spielzeit: <strong id="spielzeitAnzeige">–</strong></span>
     </div>
     <div id="spielerBereich"></div>
+    <details id="leistungBereich" class="leistung">
+      <summary>Leistung des Servers <span id="leistungKurz"></span></summary>
+      <p class="hinweis">Rechenzeit je Spieltakt (20 Takte pro Sekunde, also höchstens 50 ms). Gemessen über die letzten 10 Sekunden.</p>
+      <table id="leistungTabelle"><thead><tr><th>Teil</th><th>Mittel</th><th>Spitze</th></tr></thead><tbody></tbody></table>
+    </details>
   </section>
 
   <!-- Testwerkzeuge -->
@@ -1493,9 +1503,30 @@
     rendereFunde(d);
   }
 
+  var LEISTUNG_NAMEN = { takt: "Spieltakt gesamt", spieler: "Spieler und Bots", zombies: "Zombies", menschen: "Stadtbewohner",
+    verkehr: "Verkehr", feuer: "Brände", wegefeld: "Wegefeld (alle 0,4 s)", versand: "Versand an die Spieler" };
+  function rendereLeistung(d) {
+    var l = d.leistung, kurz = $("leistungKurz"), body = $("leistungTabelle").querySelector("tbody");
+    body.textContent = "";
+    if (!l || !l.teile || !l.teile.takt) { kurz.textContent = "– noch keine Messung"; return; }
+    var takt = l.teile.takt, anteil = Math.round(takt.mittel / (d.takt || 50) * 100);
+    kurz.textContent = "– " + takt.mittel.toFixed(1) + " ms je Takt (" + anteil + " % ausgelastet), Spitze " + takt.max + " ms";
+    kurz.className = takt.max > 50 || anteil > 60 ? "warnung" : "";
+    Object.keys(LEISTUNG_NAMEN).forEach(function (k) {
+      var t = l.teile[k]; if (!t) return;
+      var tr = document.createElement("tr");
+      [LEISTUNG_NAMEN[k], t.mittel.toFixed(2) + " ms", t.max + " ms"].forEach(function (x) { var td = document.createElement("td"); td.textContent = x; tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    var tr = document.createElement("tr"), td = document.createElement("td"); td.colSpan = 3; td.className = "hinweis";
+    td.textContent = l.zombies + " Zombies, " + l.menschen + " Bewohner, " + l.fahrzeuge + " Fahrzeuge, " + l.spieler + " Spieler · Speicher " + l.speicherMB + " MB";
+    tr.appendChild(td); body.appendChild(tr);
+  }
+
   function rendereSpielBereich(d) {
     $("laufendeKarteAnzeige").textContent = d.laufendeKarte ? karteName(d.laufendeKarte) : "niemand spielt gerade";
     $("spielzeitAnzeige").textContent = spielzeitFormat(d.spielzeit);
+    rendereLeistung(d);
 
     var bereich = $("spielerBereich");
     bereich.textContent = "";
@@ -1743,6 +1774,7 @@
 
     $("laufendeKarteAnzeige").textContent = d.laufendeKarte ? karteName(d.laufendeKarte) : "niemand spielt gerade";
     $("spielzeitAnzeige").textContent = spielzeitFormat(d.spielzeit);
+    rendereLeistung(d);
 
     var bereich = $("spielerBereich");
     var altSpieler = alt.spieler || [];

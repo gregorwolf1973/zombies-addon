@@ -69,9 +69,14 @@ export class Stadtleben {
 
   neuesZiel(id, m, inf) {
     const r = this.raum.rnd, wahl = r();
+    // eines der nächstgelegenen Ziele (kurze Wege: glaubwürdiger und spart Rechenzeit auf dem Pi)
+    const nahe = (liste, n, pos) => {
+      const sortiert = liste.map(e => { const p = pos(e); return { e, d: Math.hypot(p.x - m.x, p.y - m.y) }; }).sort((a, b) => a.d - b.d);
+      return sortiert[Math.floor(r() * Math.min(n, sortiert.length))].e;
+    };
     let ziel;
-    if (wahl < 0.35 && this.laeden.length) { const h = this.laeden[Math.floor(r() * this.laeden.length)]; ziel = { ...this.vorDerTuer(h), art: 'haus' }; }
-    else if (wahl < 0.6 && this.haltestellen.length) { const hs = this.haltestellen[Math.floor(r() * this.haltestellen.length)]; ziel = { x: hs.x, y: hs.y, art: 'haltestelle', hs }; }
+    if (wahl < 0.35 && this.laeden.length) { const h = nahe(this.laeden, 5, h => this.vorDerTuer(h)); ziel = { ...this.vorDerTuer(h), art: 'haus' }; }
+    else if (wahl < 0.6 && this.haltestellen.length) { const hs = nahe(this.haltestellen, 3, hs => hs); ziel = { x: hs.x, y: hs.y, art: 'haltestelle', hs }; }
     else if (wahl < 0.75 && this.plaetze.length) { const p = this.plaetze[0]; ziel = { x: p.x + (r() - 0.5) * 120, y: p.y + (r() - 0.5) * 120, art: 'platz' }; }
     else ziel = { ...this.vorDerTuer(inf.heim), art: 'haus' };
     inf.ziel = ziel; inf.weg = null; inf.steckt = 0;
@@ -85,6 +90,7 @@ export class Stadtleben {
     const zombies = [...s.zombies.entries()].filter(([, z]) => !z.ebene);
     const fern = m => spieler.every(p => Math.hypot(p.x - m.x, p.y - m.y) > FERN);
     const tick = Math.round(this.takt * 20);
+    let suchen = 1;
     for (const [id, m] of s.menschen) {
       const inf = this.info.get(id);
       if (!inf) continue;
@@ -143,7 +149,9 @@ export class Stadtleben {
       const dz = Math.hypot(z.x - m.x, z.y - m.y);
       if (dz < 18) { this.angekommen(id, m, inf); continue; }
       if (!inf.weg) {
-        inf.weg = findeWeg(welt, m.x, m.y, z.x, z.y, RAD, 60000);
+        if (suchen <= 0) continue;   // höchstens eine Wegsuche je Takt, die anderen warten einen Augenblick
+        suchen--;
+        inf.weg = findeWeg(welt, m.x, m.y, z.x, z.y, RAD, 30000);
         if (!inf.weg) { this.neuesZiel(id, m, inf); continue; }
       }
       while (inf.weg.length > 1 && Math.hypot(inf.weg[0].x - m.x, inf.weg[0].y - m.y) < 10) inf.weg.shift();

@@ -21,6 +21,26 @@ function rauschen(x, y) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
+// Grundfarbe #4d8c3b mit hellen und dunklen Wolken, je 8×8 Pixel ein Wert; 1 px Rand für weiche Übergänge an Stücknähten
+function wiesenWolken(ctx, x0, y0, x1, y1) {
+  const F = 8, nx = (x1 - x0) * KACHEL / F, ny = (y1 - y0) * KACHEL / F;
+  const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(nx + 2, ny + 2) : Object.assign(document.createElement('canvas'), { width: nx + 2, height: ny + 2 });
+  const g = c.getContext('2d'), bild = g.createImageData(nx + 2, ny + 2), d = bild.data;
+  let i = 0;
+  for (let j = -1; j <= ny; j++) for (let k = -1; k <= nx; k++, i += 4) {
+    const x = x0 * KACHEL + k * F, y = y0 * KACHEL + j * F;
+    const n = rauschen(x / 90, y / 90) * 0.7 + rauschen(x / 23, y / 23) * 0.3;
+    let r = 77, gr = 140, b = 59;
+    if (n > 0.55) { const a = (n - 0.55) * 0.5; r += (110 - r) * a; gr += (170 - gr) * a; b += (80 - b) * a; }
+    else if (n < 0.4) { const a = (0.4 - n) * 0.45; r += (20 - r) * a; gr += (50 - gr) * a; b += (15 - b) * a; }
+    d[i] = r; d[i + 1] = gr; d[i + 2] = b; d[i + 3] = 255;
+  }
+  g.putImageData(bild, 0, 0);
+  ctx.save(); ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(c, 0.5, 0.5, nx + 1, ny + 1, x0 * KACHEL - F / 2, y0 * KACHEL - F / 2, (nx + 1) * F, (ny + 1) * F);
+  ctx.restore();
+}
+
 const begehbarWiese = t => t === T.WIESE || t === T.BAUM;
 
 // ---------- Bodenebene: alles Flache ----------
@@ -37,14 +57,10 @@ export function zeichneBoden(ctx, welt, rect = null) {
   const { x0, y0, x1, y1 } = rect ?? { x0: 0, y0: 0, x1: BREITE, y1: HOEHE };
   ctx.save();
   ctx.translate(-x0 * KACHEL, -y0 * KACHEL);
-  // Wiese als Grundfläche mit Farbwolken
-  ctx.fillStyle = '#4d8c3b';
-  ctx.fillRect(x0 * KACHEL, y0 * KACHEL, (x1 - x0) * KACHEL, (y1 - y0) * KACHEL);
-  for (let y = y0 * KACHEL; y < y1 * KACHEL; y += 8) for (let x = x0 * KACHEL; x < x1 * KACHEL; x += 8) {
-    const n = rauschen(x / 90, y / 90) * 0.7 + rauschen(x / 23, y / 23) * 0.3;
-    if (n > 0.55) { ctx.fillStyle = `rgba(110,170,80,${(n - 0.55) * 0.5})`; ctx.fillRect(x, y, 8, 8); }
-    else if (n < 0.4) { ctx.fillStyle = `rgba(20,50,15,${(0.4 - n) * 0.45})`; ctx.fillRect(x, y, 8, 8); }
-  }
+  // Wiese als Grundfläche mit Farbwolken: ein Pixel je 8×8-Feld rechnen und weich vergrößert zeichnen
+  // (früher ein fillRect je Feld – das waren 16.000 Aufrufe je Kartenstück)
+  wiesenWolken(ctx, x0, y0, x1, y1);
+  const gras = new Path2D(), blumen = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
   const vek = !!welt.vektor;
   if (vek) zeichneFlaechen(ctx, welt, { x0, y0, x1, y1 });
   for (let ky = y0; ky < y1; ky++) for (let kx = x0; kx < x1; kx++) {
@@ -60,16 +76,14 @@ export function zeichneBoden(ctx, welt, rect = null) {
       ctx.fillStyle = 'rgba(150,210,95,.13)'; ctx.fillRect(px, py, KACHEL, KACHEL);
     }
     if (begehbarWiese(t) || t === T.ZAUN) {
-      // Grasbüschel
-      ctx.strokeStyle = 'rgba(30,70,25,.55)'; ctx.lineWidth = 1; ctx.beginPath();
+      // Grasbüschel (gesammelt, am Ende ein einziger Strich)
       for (let k = 0; k < 3; k++) {
         const x = px + hash(kx * 13 + k, ky * 7) * KACHEL, y = py + hash(kx * 7, ky * 13 + k) * KACHEL;
-        ctx.moveTo(x - 3, y); ctx.lineTo(x - 1.5, y - 5); ctx.moveTo(x, y); ctx.lineTo(x + 0.5, y - 6.5); ctx.moveTo(x + 3, y); ctx.lineTo(x + 4, y - 4);
+        gras.moveTo(x - 3, y); gras.lineTo(x - 1.5, y - 5); gras.moveTo(x, y); gras.lineTo(x + 0.5, y - 6.5); gras.moveTo(x + 3, y); gras.lineTo(x + 4, y - 4);
       }
-      ctx.stroke();
       if (hash(kx * 3, ky * 5) < 0.06) {   // Wiesenblumen
-        ctx.fillStyle = ['#fff59d', '#f8bbd0', '#ffffff', '#ce93d8'][Math.floor(hash(kx, ky * 9) * 4)];
-        ctx.beginPath(); ctx.arc(px + hash(kx, ky) * 28 + 2, py + hash(ky, kx) * 28 + 2, 1.8, 0, TAU); ctx.fill();
+        const b = blumen[Math.floor(hash(kx, ky * 9) * 4)], bx = px + hash(kx, ky) * 28 + 2, by = py + hash(ky, kx) * 28 + 2;
+        b.moveTo(bx + 1.8, by); b.arc(bx, by, 1.8, 0, TAU);
       }
     }
     if (t === T.STRASSE) {
@@ -134,6 +148,8 @@ export function zeichneBoden(ctx, welt, rect = null) {
       ctx.fillStyle = '#8d6e63'; ctx.fillRect(px + m - 3, py + m - 3, 4, 4);
     }
   }
+  ctx.strokeStyle = 'rgba(30,70,25,.55)'; ctx.lineWidth = 1; ctx.stroke(gras);
+  ['#fff59d', '#f8bbd0', '#ffffff', '#ce93d8'].forEach((f, i) => { ctx.fillStyle = f; ctx.fill(blumen[i]); });
   if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details?.zaeune) zaunLinien(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.23.1 – 18.11.2026
+
+- Handy: Der Figurenbogen ist kleiner (4000×1760 statt 2688×5152 Pixel, WebP 0,5 MB statt 2,8 MB). Viele Handys laden
+  Texturen nur bis 4096 Pixel, die neuen Figuren hätten dort gefehlt; außerdem braucht er viel weniger Grafikspeicher
+- Flüssiger beim Laufen durch die Stadt: Kartenstücke sind kleiner (512 statt 1024 Pixel) und werden verteilt auf zwei
+  Bilder gebaut, die Wiese wird viel schneller gezeichnet und Dachbilder werden gemerkt. Längstes Bild beim Durchfahren
+  am PC 19 ms statt 65 ms
+- Feine Linien an den Nähten der Kartenstücke beseitigt
+- Server: Stadtbewohner gehen zu nahen Läden und Haltestellen und suchen höchstens einen Weg je Takt (Spitzen 22 → 5 ms
+  am PC); Wegsuche der Bots begrenzt
+- Einstellungsseite: „Leistung des Servers“ unter „Gerade im Spiel“ zeigt die Rechenzeit je Spieltakt und Teil; dazu
+  einmal pro Minute eine Zeile im Add-on-Log
+
 ## 0.23.0 – 18.11.2026
 
 - Neue Spielfigur „Survivor“ zur Auswahl auf der Startseite: eigene Animationen für Stehen, Laufen (mit Füßen),

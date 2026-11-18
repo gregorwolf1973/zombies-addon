@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Zweiter Figurenbogen aus OpenGameArt-Paketen: Survivor (Riley Gombart, CC-BY 3.0), Zombies (Riley Gombart: tds_zombie CC0,
 zombie_01 OGA-BY 3.0), Bürger (KonitaTutorials, CC-BY 3.0), Waffen und Mündungsblitz (Survivor Spine, CC-BY 3.0).
-Ergebnis: zombies/client/grafik/figuren2.png (Felder FELD×FELD, Drehpunkt = Feldmitte, Blick nach rechts) + figuren2.json.
+Ergebnis: zombies/client/grafik/figuren2.webp (Felder FELD×FELD, Drehpunkt = Feldmitte, Blick nach rechts) + figuren2.json.
 Aufruf: PYTHONPATH=~/code/ahnen-werkzeuge/pil python3 tools/figuren2_schneiden.py <Ordner mit entpackten Paketen>"""
 import glob, json, pathlib, re, sys
 from PIL import Image
 
 QUELLE = pathlib.Path(sys.argv[1]).expanduser()
 ZIEL = pathlib.Path(__file__).resolve().parent.parent / "zombies" / "client" / "grafik"
-FELD, SPALTEN = 224, 12
+FELD, SPALTEN = 160, 25   # Bogen höchstens 4096 px breit/hoch (Handy-GPUs), Maßstäbe unten beziehen sich auf 224er Felder
 
 def zahl(f): m = re.findall(r'(\d+)\.png$', str(f)); return int(m[-1]) if m else 0
 def dateien(muster): return sorted(glob.glob(str(QUELLE / muster)), key=zahl)
@@ -26,6 +26,7 @@ def ins_feld(im, massstab, mitte, drehen=0):
     """im um mitte (in Originalpixeln) in ein Feld setzen; drehen in Grad (Blick nach rechts angleichen)"""
     if drehen:
         im = im.rotate(drehen, resample=Image.BICUBIC, expand=True, center=None)
+    massstab *= FELD / 224
     st = im.resize((max(1, round(im.width * massstab)), max(1, round(im.height * massstab))), Image.LANCZOS)
     feld = Image.new("RGBA", (FELD, FELD), (0, 0, 0, 0))
     feld.alpha_composite(st, (round(FELD / 2 - mitte[0] * massstab), round(FELD / 2 - mitte[1] * massstab)))
@@ -92,7 +93,7 @@ if blitz: gruppe("muendungsblitz", blitz, 0.5, lambda im, f: (im.width * 0.2, im
 zeilen = (len(bilder) + SPALTEN - 1) // SPALTEN
 bogen = Image.new("RGBA", (SPALTEN * FELD, zeilen * FELD), (0, 0, 0, 0))
 for i, b in enumerate(bilder): bogen.paste(b, ((i % SPALTEN) * FELD, (i // SPALTEN) * FELD))
-bogen.save(ZIEL / "figuren2.png", optimize=True)
+bogen.save(ZIEL / "figuren2.webp", quality=88, method=6)   # WebP: ein Drittel der PNG-Größe, Alpha verlustfrei
 (ZIEL / "figuren2.json").write_text(json.dumps({"feld": FELD, "spalten": SPALTEN, "bilder": liste}, ensure_ascii=False, indent=1))
-print(f"{len(bilder)} Bilder, Bogen {bogen.size}, {(ZIEL / 'figuren2.png').stat().st_size // 1024} KB")
+print(f"{len(bilder)} Bilder, Bogen {bogen.size}, {(ZIEL / 'figuren2.webp').stat().st_size // 1024} KB")
 for n, l in liste.items(): print(f"  {n}: {len(l)}")

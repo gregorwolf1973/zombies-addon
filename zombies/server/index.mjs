@@ -136,6 +136,7 @@ export async function starte({
         drinnen: !!p.ebene, hp: Math.round(p.hp), verbunden: !!p.verbunden,
       })) : [],
       spielzeit: raum ? Math.round(raum.state.zeit) : 0,
+      leistung: raum?.leistung ?? null, takt: 50,
       toene: toeneListe(), ereignisse: EREIGNISSE,
       uhr: raum ? Math.floor(raum.state.uhr) : null, autosWelt: raum ? raum.state.autos : null,
       bewohner: raum ? { gesund: [...raum.state.menschen.values()].filter(m => !m.infiziert).length, gebissen: [...raum.state.menschen.values()].filter(m => m.infiziert).length, zombies: raum.state.zombies.size } : null,

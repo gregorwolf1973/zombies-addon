@@ -277,7 +277,20 @@ const AUFL = 2;         // Rechenauflösung: 1 Rechenpunkt je 2×2 Pixel, danach
 
 // Bild eines Dachs: Walmdach (jede Stelle gehört zur nächstgelegenen Traufe – das ergibt Grate und Kehlen)
 // oder Flachdach mit Attika. Rückgabe: { bild, x, y } in Weltpixeln.
+// Dachbilder merken (ein Haus liegt oft in mehreren Kartenstücken, Stücke werden beim Zurücklaufen neu gebaut);
+// höchstens DACH_SPEICHER Stück, das am längsten unbenutzte fliegt raus
+const dachSpeicher = new Map(), DACH_SPEICHER = 400;
 export function dachBild(g, farbeOverride) {
+  if (farbeOverride) return dachBildRechnen(g, farbeOverride);
+  let b = dachSpeicher.get(g);
+  if (b !== undefined) { dachSpeicher.delete(g); dachSpeicher.set(g, b); return b; }
+  b = dachBildRechnen(g);
+  dachSpeicher.set(g, b);
+  if (dachSpeicher.size > DACH_SPEICHER) dachSpeicher.delete(dachSpeicher.keys().next().value);
+  return b;
+}
+
+function dachBildRechnen(g, farbeOverride) {
   const pts = g.pts, n = pts.length;
   const box = bbox(pts, UEBERSTAND + 2);
   const W = Math.ceil((box.x1 - box.x0) / AUFL), H = Math.ceil((box.y1 - box.y0) / AUFL);

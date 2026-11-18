@@ -4,7 +4,7 @@ figuren.png / figuren.json (Zombies, Kriecher, tote Zombies, Spielerfiguren):
 mit KI-Bildgeneratoren (ChatGPT, Microsoft Designer) für dieses Spiel erzeugt und mit
 tools/figuren_schneiden.py zugeschnitten.
 
-figuren2.png / figuren2.json (mit tools/figuren2_schneiden.py aus OpenGameArt-Paketen zusammengestellt):
+figuren2.webp / figuren2.json (mit tools/figuren2_schneiden.py aus OpenGameArt-Paketen zusammengestellt):
 - Survivor (Spielerfigur „Survivor“, Bots): Riley Gombart, „Animated Top Down Survivor Player“,
   https://opengameart.org/content/animated-top-down-survivor-player – CC-BY 3.0
 - Zombie „z6“: Riley Gombart, „tds_zombie“ (OpenGameArt) – CC0 1.0

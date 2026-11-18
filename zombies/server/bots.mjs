@@ -63,7 +63,7 @@ function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
   const neu = !b.weg || jetzt - b.wegZeit > 0.8 || !b.wegZiel || abstand(b.wegZiel, ziel) > 40;
   const welt = raum.wv(p.ebene);
   if (neu) {
-    b.weg = findeWeg(welt, p.x, p.y, ziel.x, ziel.y, RAD) ?? [{ x: ziel.x, y: ziel.y }];
+    b.weg = findeWeg(welt, p.x, p.y, ziel.x, ziel.y, RAD, 40000) ?? [{ x: ziel.x, y: ziel.y }];
     b.wegZeit = jetzt; b.wegZiel = { x: ziel.x, y: ziel.y };
   }
   while (b.weg.length > 1 && abstand(p, b.weg[0]) < 10) b.weg.shift();

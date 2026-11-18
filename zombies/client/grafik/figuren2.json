@@ -1,6 +1,6 @@
 {
- "feld": 224,
- "spalten": 12,
+ "feld": 160,
+ "spalten": 25,
  "bilder": {
   "sv_pistole_idle": [
    0,
