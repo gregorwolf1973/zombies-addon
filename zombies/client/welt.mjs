@@ -150,11 +150,8 @@ export function baueWelt(seed) {
     best.safe = ort.name;
     const id = 's' + safeRooms.length;
     best.safeId = id;
-    // Vorratskiste in die Ecke gegenüber der Tür
-    const kx = best.tuer.x - best.x < best.b / 2 ? best.x + best.b - 2 : best.x + 1;
-    const ky = best.tuer.y === best.y ? best.y + best.h - 2 : best.y + 1;
-    const innen = { x: (best.x + best.b / 2) * KACHEL, y: (best.y + best.h / 2) * KACHEL };
-    safeRooms.push({ id, name: ort.name, haus: best, kiste: { x: (kx + 0.5) * KACHEL, y: (ky + 0.5) * KACHEL }, innen });
+    // Innenraum (Ebene) und Platz vor der Tür kommen unten dazu, wenn Hausnummer und Austrittsrichtung feststehen
+    safeRooms.push({ id, name: ort.name, haus: best });
   }
 
   // Behälter zum Durchsuchen: in Häusern an den Wänden, Autos am Straßenrand
@@ -165,10 +162,9 @@ export function baueWelt(seed) {
     for (let y = h.y + 1; y <= h.y + h.h - 2; y++) for (let x = h.x + 1; x <= h.x + h.b - 2; x++) {
       const anWand = x === h.x + 1 || x === h.x + h.b - 2 || y === h.y + 1 || y === h.y + h.h - 2;
       const vorTuer = Math.abs(x - h.tuer.x) <= 1 && Math.abs(y - h.tuer.y) <= 1;
-      const kiste = h.safe && safeRooms.find(s => s.haus === h && Math.floor(s.kiste.x / KACHEL) === x && Math.floor(s.kiste.y / KACHEL) === y);
-      if (anWand && !vorTuer && !kiste) plaetze.push([x, y]);
+      if (anWand && !vorTuer) plaetze.push([x, y]);
     }
-    const anzahl = Math.min(plaetze.length, h.safe ? 1 : 1 + Math.floor(r2() * 2));
+    const anzahl = Math.min(plaetze.length, 1 + Math.floor(r2() * 2));
     for (let i = 0; i < anzahl; i++) {
       const [x, y] = plaetze.splice(Math.floor(r2() * plaetze.length), 1)[0];
       behaelter.push({ id: 'b' + behaelter.length, art: arten[Math.floor(r2() * arten.length)], x: (x + 0.5) * KACHEL, y: (y + 0.5) * KACHEL });
@@ -190,15 +186,24 @@ export function baueWelt(seed) {
 
   const deko = baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, safeRooms);
   deko.filter(d => d.art === 'bus').forEach((d, i) => behaelter.push({ id: 'bus' + i, art: 'bus', x: d.x, y: d.y }));
-  const imHaus = (b, h) => b.x >= h.x * KACHEL && b.x < (h.x + h.b) * KACHEL && b.y >= h.y * KACHEL && b.y < (h.y + h.h) * KACHEL;
-  const draussenBehaelter = behaelter.filter(b => b.art === 'auto' || haeuser.some(h => h.safe && imHaus(b, h)));
+  const draussenBehaelter = behaelter.filter(b => b.art === 'auto');
   haeuser.forEach((h, i) => {
-    h.nr = i; h.betretbar = !h.safe;
+    h.nr = i; h.betretbar = true;   // auch Safe Rooms: eigener Innenraum
     h.raus = { dx: 0, dy: h.tuer.y === h.y ? -1 : 1 };
     // das Innere betretbarer Häuser ist ein eigener Innenraum – die Außenhülle ist nicht begehbar
     if (h.betretbar) for (let y = h.y + 1; y < h.y + h.h - 1; y++) for (let x = h.x + 1; x < h.x + h.b - 1; x++) setze(x, y, T.LEER);
   });
+  safeRoomsVervollstaendigen(safeRooms);
   return { seed, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter: draussenBehaelter, deko };
+}
+
+// Safe Rooms sind Innenräume: Ebene 'h{nr}eg', dazu der Platz vor der Haustür (für Abstände draußen)
+export function safeRoomsVervollstaendigen(safeRooms) {
+  for (const s of safeRooms) {
+    const h = s.haus, r = h.raus ?? { dx: 0, dy: 1 };
+    s.ebene = `h${h.nr}eg`;
+    s.vorTuer = { x: (h.tuer.x + 0.5 + r.dx * 1.3) * KACHEL, y: (h.tuer.y + 0.5 + r.dy * 1.3) * KACHEL };
+  }
 }
 
 // Hindernisse (Traktor, Heu, Kühe …) und Zäune. Jedes Stück wird verworfen, wenn es einen Teil
@@ -324,20 +329,14 @@ function baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, s
 }
 
 // Safe Room, in dem der Punkt liegt (Innenraum oder Tür), sonst null
-export function safeRoomAn(welt, x, y) {
-  const kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
-  for (const s of welt.safeRooms) {
-    const h = s.haus;
-    if (kx >= h.x && kx < h.x + h.b && ky >= h.y && ky < h.y + h.h) {
-      const t = welt.hole(kx, ky);
-      if (t === T.BODEN || t === T.TUER) return s;
-    }
-  }
-  return null;
+// Safe Room, in dessen Innenraum diese Figur steht (oder null)
+export function safeRoomVon(welt, p) {
+  const e = p?.ebene ?? '';
+  return e ? welt.safeRooms.find(s => s.ebene === e) ?? null : null;
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 6;   // 6: Autos längs am Straßenrand
+export const WELT_VERSION = 7;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume
 
 // ---------- Gegenstände ----------
 export const DINGE = {

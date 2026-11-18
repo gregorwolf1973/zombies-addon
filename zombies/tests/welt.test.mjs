@@ -54,16 +54,19 @@ test('Ecken-Hilfe: knapp neben der Tür gegen die Wand laufen führt hinein', as
     const w = baueWelt(seed);
     let geschafft = 0;
     for (const h of w.haeuser) {
-      if (h.betretbar) continue;                 // betretbare Häuser haben einen eigenen Innenraum
+      // alle Häuser haben einen eigenen Innenraum: man muss auf die Türkachel kommen (dort wechselt man hinein)
       const oben = h.tuer.y === h.y;
-      const richtung = oben ? 1 : -1;            // von der Straße aus ins Haus
+      const richtung = oben ? 1 : -1;            // von der Straße aus zum Haus
       for (const versatz of [-12, 12]) {
         const p = { x: (h.tuer.x + 0.5) * KACHEL + versatz, y: (h.tuer.y + 0.5 - richtung * 1.2) * KACHEL };
         if (!frei(w, p.x, p.y, WERTE.spielerRadius)) continue;
-        for (let i = 0; i < 60; i++) bewege(w, p, 0, richtung * 150 / 20, WERTE.spielerRadius);
-        const ky = Math.floor(p.y / KACHEL);
-        if (ky > h.y && ky < h.y + h.h - 1) geschafft++;
-        else assert.fail(`Seed ${seed}, Haus ${h.x},${h.y}: bei Versatz ${versatz} nicht hineingekommen`);
+        let drauf = false;
+        for (let i = 0; i < 60 && !drauf; i++) {
+          bewege(w, p, 0, richtung * 150 / 20, WERTE.spielerRadius);
+          drauf = Math.floor(p.x / KACHEL) === h.tuer.x && Math.floor(p.y / KACHEL) === h.tuer.y;
+        }
+        if (drauf) geschafft++;
+        else assert.fail(`Seed ${seed}, Haus ${h.x},${h.y}: bei Versatz ${versatz} nicht auf die Tür gekommen`);
       }
     }
     assert.ok(geschafft >= 3, "nur " + geschafft);
@@ -71,7 +74,8 @@ test('Ecken-Hilfe: knapp neben der Tür gegen die Wand laufen führt hinein', as
 });
 
 test('Safe Rooms und Behälter: vier verschiedene, erreichbar, nicht in Wänden', async () => {
-  const { safeRoomAn, blockiert } = await import('../client/welt.mjs');
+  const { safeRoomVon, blockiert } = await import('../client/welt.mjs');
+  const { innenraumFuer } = await import('../client/innen.mjs');
   for (const seed of [1, 42, 1234, 77777]) {
     const w = baueWelt(seed);
     assert.equal(w.safeRooms.length, 4, `Seed ${seed}`);
@@ -80,12 +84,20 @@ test('Safe Rooms und Behälter: vier verschiedene, erreichbar, nicht in Wänden'
     const sx = Math.floor(w.start.x / KACHEL), sy = Math.floor(w.start.y / KACHEL);
     const ok = erreichbar(w, sx, sy);
     for (const s of w.safeRooms) {
-      assert.equal(safeRoomAn(w, s.innen.x, s.innen.y), s, `${s.name}: Mitte nicht im Safe Room`);
-      assert.equal(safeRoomAn(w, s.kiste.x, s.kiste.y), s, `${s.name}: Kiste nicht drin`);
-      assert.ok(frei(w, s.innen.x, s.innen.y, WERTE.spielerRadius), `${s.name}: Mitte blockiert`);
+      // Safe Rooms sind Innenräume: betretbar, Tür von draußen erreichbar, drinnen Kiste, keine Zombies, keine Treppen
+      assert.ok(s.haus.betretbar, `${s.name}: nicht betretbar`);
+      assert.equal(s.ebene, `h${s.haus.nr}eg`);
+      assert.ok(ok[s.haus.tuer.y * BREITE + s.haus.tuer.x], `${s.name}: Tür nicht erreichbar`);
+      const innen = innenraumFuer(seed, w, s.ebene);
+      assert.equal(innen.safe, s.id);
+      assert.equal(innen.zombiePlaetze.length, 0, `${s.name}: Zombies drin`);
+      assert.equal(innen.treppen.length, 0, `${s.name}: Treppen`);
+      assert.ok(innen.tueren.every(t => !t.verschlossen && t.offen), `${s.name}: Türen zu`);
+      assert.equal(innen.hole(Math.floor(innen.kiste.x / KACHEL), Math.floor(innen.kiste.y / KACHEL)), T.BODEN, `${s.name}: Kiste nicht auf dem Boden`);
+      assert.equal(safeRoomVon(w, { ebene: s.ebene }), s);
     }
-    assert.equal(safeRoomAn(w, w.start.x, w.start.y), null);
-    assert.ok(w.behaelter.length >= 10, `zu wenige Behälter: ${w.behaelter.length}`);   // draußen nur Autos + Safe Rooms
+    assert.equal(safeRoomVon(w, { ebene: '' }), null);
+    assert.ok(w.behaelter.length >= 8, `zu wenige Behälter: ${w.behaelter.length}`);   // draußen nur Autos
     assert.ok(w.behaelter.filter(b => b.art === 'auto').length >= 8, 'zu wenige Autos');
     for (const b of w.behaelter) {
       const bx = Math.floor(b.x / KACHEL), by = Math.floor(b.y / KACHEL);

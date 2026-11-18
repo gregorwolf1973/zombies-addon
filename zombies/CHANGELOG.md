@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.24.0 – 18.11.2026
+
+- Safe Rooms sind jetzt echte Innenräume: Man betritt sie durch die Haustür wie andere Häuser. Drinnen ist es immer
+  hell, alle Türen sind offen, es gibt keine schlafenden Zombies und keine Treppen. Die Vorratskiste steht drinnen
+  (als Holzkiste), oben steht der Name des Safe Rooms
+- Barrikade: Die Eingangstür wird von innen verbarrikadiert (Bretter sind drinnen an der Tür zu sehen, draußen wie
+  bisher). Zombies hämmern draußen dagegen; ist die Barrikade weg und jemand drin, dringen sie ein
+- Aufwachen, Weiterspielen nach dem Abmelden und „alle erwischt“ führen in den Innenraum des Safe Rooms
+- Bots nutzen die Vorratskiste: Im Safe Room legen sie Überzähliges hinein und nehmen heraus, was ihnen fehlt;
+  ohne Mitspieler warten sie im Safe Room
+- Die Welt wird einmal neu erzeugt (neue Weltversion)
+
 ## 0.23.2 – 18.11.2026
 
 - Neue Einstellung „Biss-Chance bei Stadtbewohnern“ (Tag, Nacht, Ausbruch): Bei Berührung versucht ein Zombie einmal

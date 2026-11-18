@@ -1,6 +1,6 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn, setzeKartengroesse, seiteVon, ladenArt,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, TAUSCH_ABSTAND, WAFFEN, aktiveWaffe, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText,
 } from './welt.mjs';
@@ -11,7 +11,7 @@ import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
-import { baueInnenraum } from './innen.mjs';
+import { innenraumFuer } from './innen.mjs';
 import * as ton from './ton.mjs';
 import { Uebersicht } from './uebersicht.mjs';
 
@@ -428,16 +428,6 @@ class Ort extends Phaser.Scene {
     this.figurListe = this.cache.json.get('figurenliste')?.bilder ?? {};
     this.figurListe2 = this.cache.json.get('figurenliste2')?.bilder ?? {};
     this.stuecke = new Map();
-    const g = this.add.graphics().setDepth(0.5);
-    // Böden der Safe Rooms etwas wärmer
-    for (const s of this.welt.safeRooms) {
-      const h = s.haus;
-      if (!this.welt.karte) g.fillStyle(0xd7c4a3, 1).fillRect((h.x + 1) * KACHEL, (h.y + 1) * KACHEL, (h.b - 2) * KACHEL, (h.h - 2) * KACHEL);
-      // Vorratskiste
-      g.fillStyle(0x6d4c41, 1).fillRect(s.kiste.x - 12, s.kiste.y - 9, 24, 18);
-      g.lineStyle(2, 0x3e2723, 1).strokeRect(s.kiste.x - 12, s.kiste.y - 9, 24, 18);
-      g.fillStyle(0xffca28, 1).fillRect(s.kiste.x - 2, s.kiste.y - 3, 4, 5);
-    }
     this.torGrafik = this.add.graphics().setDepth(1.5);
     this.torStand = -1;
     this.add.text((this.welt.tor.x + (this.welt.tor.x === 0 ? 1 : 0)) * KACHEL + 4, (this.welt.tor.y + (this.welt.tor.y === 0 ? 1 : 0)) * KACHEL + 18, 'Ortsausgang', {
@@ -461,7 +451,7 @@ class Ort extends Phaser.Scene {
       this.behaelterObj.set(b.id, c);
     }
 
-    // Dächer der Safe Rooms als eigene Bilder (werden beim Hineingehen durchsichtig); die übrigen Dächer stecken in den Kartenstücken
+    // Dächer der Safe Rooms als eigene Bilder (grau, mit Schild); die übrigen Dächer stecken in den Kartenstücken
     this.daecher = this.welt.safeRooms.map(s => {
       const h = s.haus, schluessel = 'dach-' + s.id;
       const tex = this.textures.createCanvas(schluessel, h.b * KACHEL + DACH_RAND * 2, h.h * KACHEL + DACH_RAND * 2);
@@ -768,13 +758,7 @@ class Ort extends Phaser.Scene {
     if (!ebene) return this.welt;
     let w = this.innenWelten.get(ebene);
     if (!w) {
-      const m = EBENE_MUSTER.exec(ebene);
-      const haus = this.welt.haeuser[Number(m[1])];
-      const kat = ladenArt(haus);
-      w = baueInnenraum(raum.state.seed, Number(m[1]), m[2], seiteVon(haus), !!kat);
-      if (kat) w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; });
-      w.ebene = ebene; w.nr = Number(m[1]); w.stock = m[2];
-      w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
+      w = innenraumFuer(raum.state.seed, this.welt, ebene);
       this.innenWelten.set(ebene, w);
     }
     return w;
@@ -815,7 +799,13 @@ class Ort extends Phaser.Scene {
     const tueren = this.add.graphics().setDepth(0.4);
     const dunkel = this.add.renderTexture(X, Y, B, H).setOrigin(0).setDepth(9);
     const nebel = this.add.graphics().setDepth(9.5);   // Räume hinter nie geöffneten Türen: ganz schwarz
-    a = { w, bild, tueren, dunkel, nebel, X, Y, B, H, stand: '', bekannt: new Set(), nebelStand: -1 };
+    // Safe Room: Vorratskiste (Kistenbild) und Bretter an der Eingangstür
+    const safe = w.kiste ? this.add.image(w.kiste.x, w.kiste.y, 'kiste').setScale(0.62).setDepth(0.45) : null;
+    const bretter = this.add.graphics().setDepth(0.46);
+    const schild = w.safe ? this.add.text(X + B / 2, Y - 14, '🛡 ' + (w.safeName ?? 'Safe Room'), {
+      fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(9.6) : null;
+    a = { w, bild, tueren, dunkel, nebel, safe, bretter, schild, X, Y, B, H, stand: '', bekannt: new Set(), nebelStand: -1, bretterWert: -1 };
     this.innenAnsichten.set(ebene, a);
     return a;
   }
@@ -824,11 +814,12 @@ class Ort extends Phaser.Scene {
     this.aktEbene = ebene;
     for (const o of this.aussenObjekte) o.setVisible(!ebene);
     for (const st of this.stuecke.values()) { st.boden.setVisible(!ebene); st.oben?.setVisible(!ebene); }
-    for (const [e, a] of this.innenAnsichten) for (const o of [a.bild, a.tueren, a.dunkel, a.nebel]) o.setVisible(e === ebene);
+    const teile = a => [a.bild, a.tueren, a.dunkel, a.nebel, a.safe, a.bretter, a.schild].filter(Boolean);
+    for (const [e, a] of this.innenAnsichten) for (const o of teile(a)) o.setVisible(e === ebene);
     const cam = this.cameras.main;
     if (ebene) {
       const a = this.innenAnsicht(ebene);
-      for (const o of [a.bild, a.tueren, a.dunkel, a.nebel]) o.setVisible(true);
+      for (const o of teile(a)) o.setVisible(true);
       cam.setBounds(a.X - 200, a.Y - 200, a.B + 400, a.H + 400);
     } else { cam.setBounds(0, 0, BREITE * KACHEL, HOEHE * KACHEL); this.setzeGrau(false); }
     cam.setBackgroundColor(ebene ? '#0b0b0d' : '#1b2a1b');
@@ -843,6 +834,20 @@ class Ort extends Phaser.Scene {
     const ebene = this.aktEbene;
     if (!ebene || !ich) return;
     const a = this.innenAnsicht(ebene), w = a.w;
+    // Safe Room: Bretter an der Eingangstür je nach Barrikade (34 % je Brett)
+    if (w.safe && w.ausgang) {
+      const wert = Math.ceil((raum.state.safes.get(w.safe)?.barrikade ?? 0) / 34);
+      if (wert !== a.bretterWert) {
+        a.bretterWert = wert;
+        const g = a.bretter.clear(), tx = w.ausgang.x * KACHEL, ty = w.ausgang.y * KACHEL;
+        const quer = w.hole(w.ausgang.x - 1, w.ausgang.y) === T.WAND;   // Tür in waagrechter Wand
+        for (let i = 0; i < wert; i++) {
+          const o = 4 + i * 9;
+          if (quer) { g.fillStyle(0xa1887f, 1).fillRect(tx - 4, ty + o, KACHEL + 8, 6); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx - 4, ty + o, KACHEL + 8, 6); }
+          else { g.fillStyle(0xa1887f, 1).fillRect(tx + o, ty - 4, 6, KACHEL + 8); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx + o, ty - 4, 6, KACHEL + 8); }
+        }
+      }
+    }
     let stand = '';
     for (const t of w.tueren) {
       const st = raum.state.tueren.get(`${ebene}:${t.x},${t.y}`);
@@ -872,7 +877,7 @@ class Ort extends Phaser.Scene {
     const d = a.dunkel;
     // tagsüber fällt in etwa 70 % der Häuser Licht durch die Fenster: keine Lampe nötig
     const m = EBENE_MUSTER.exec(ebene), uhr = raum.state.uhr ?? 480;
-    if (m && hausHell(Number(m[1]), m[2], uhr)) {
+    if (m && (a.w.safe || hausHell(Number(m[1]), m[2], uhr))) {   // Safe Rooms haben Notlicht
       d.clear();
       const daemmer = 1 - helligkeit(uhr);
       if (daemmer > 0.02) d.fill(0x030405, daemmer * 0.6);
@@ -1301,18 +1306,18 @@ class Ort extends Phaser.Scene {
     if (!ich || ich.unten || ich.aktion || raum.state.phase !== 'spiel' || !this.lokal) return null;
     const { x, y } = this.lokal;
     const w = this.wv(ich.ebene);
-    const safe = ich.ebene ? null : safeRoomAn(this.welt, x, y);
+    const safe = safeRoomVon(this.welt, ich);
     const tuer = this.tuerKontext(ich, false);
     if (tuer) return tuer;
-    if (safe) {
-      const tx = (safe.haus.tuer.x + 0.5) * KACHEL, ty = (safe.haus.tuer.y + 0.5) * KACHEL;
+    if (safe && w.ausgang) {
+      const tx = (w.ausgang.x + 0.5) * KACHEL, ty = (w.ausgang.y + 0.5) * KACHEL;
       const bar = raum.state.safes.get(safe.id)?.barrikade ?? 0;
       if (Math.hypot(x - tx, y - ty) < 56) {
-        const imWeg = [...raum.state.leichen.values()].some(l => Math.hypot(l.x - tx, l.y - ty) < 30);
+        const imWeg = [...raum.state.leichen.values()].some(l => (l.ebene ?? '') === safe.ebene && Math.hypot(l.x - tx, l.y - ty) < 44);
         if (imWeg) return { art: 'wegziehen', text: '🧟 Toten Zombie aus der Tür ziehen' };
-        if (ich.rucksack.includes('bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Verbarrikadieren' };
+        if (ich.rucksack.includes('bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Eingangstür verbarrikadieren' };
       }
-      if (Math.hypot(x - safe.kiste.x, y - safe.kiste.y) < AKTION_ABSTAND + 20) {
+      if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < AKTION_ABSTAND + 20) {
         return { art: 'kiste', text: '📦 Vorräte', safe };
       }
     }
@@ -1423,16 +1428,6 @@ class Ort extends Phaser.Scene {
     this.innenAktualisieren(ich);
     if (ich) this.aussenLicht(ich);
     this.chunksAktualisieren();
-    if (ich && this.lokal) {
-      // Dach des Hauses, in dem man steht, wird durchsichtig
-      for (const d of this.daecher) {
-        const h = d.haus;
-        const innen = this.lokal.x >= h.x * KACHEL && this.lokal.x <= (h.x + h.b) * KACHEL
-                   && this.lokal.y >= h.y * KACHEL && this.lokal.y <= (h.y + h.h) * KACHEL;
-        const ziel = innen ? 0 : 1;
-        d.grafik.alpha += (ziel - d.grafik.alpha) * Math.min(1, dt * 8);
-      }
-    }
     this.hudZeit -= dt;
     if (this.hudZeit <= 0) { this.hudZeit = 0.15; this.hud(ich); }
     this.geraeusche(ich, dt);

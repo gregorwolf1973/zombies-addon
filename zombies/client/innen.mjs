@@ -1,6 +1,6 @@
 // Innenraum-Generator – Entwurf von DeepSeek (v4-pro), nach Testrückmeldung korrigiert
 // Innenraum-Generator – Entwurf von DeepSeek (v4-pro), von Claude geprüft
-import { KACHEL, BREITE, HOEHE, T, zufall } from './welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, zufall, ladenArt, seiteVon } from './welt.mjs';
 
 export const MOEBEL_NAMEN = {
   regal_lang: 'Ladenregal',
@@ -835,4 +835,43 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten', laden = false) {
     behaelter,
     zombiePlaetze,
   };
+}
+
+// ---------- gemeinsamer Einstieg für Server und Client ----------
+export const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
+
+// Innenraum zur Ebene 'h{nr}eg|keller|dach' – Geschäfte mit Verkaufsraum, Safe Rooms hergerichtet
+export function innenraumFuer(seed, welt, ebene) {
+  const m = EBENE_MUSTER.exec(ebene ?? '');
+  if (!m) return null;
+  const nr = Number(m[1]), haus = welt.haeuser[nr];
+  const kat = haus?.safe ? '' : ladenArt(haus);
+  const w = baueInnenraum(seed, nr, m[2], seiteVon(haus), !!kat);
+  if (kat) w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; });
+  w.ebene = ebene; w.nr = nr; w.stock = m[2];
+  w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
+  if (haus?.safe) safeEinrichten(w, haus);
+  return w;
+}
+
+// Safe Room: keine schlafenden Zombies, keine Treppen, alle Türen offen und unverschlossen, immer Licht;
+// Vorratskiste an einer Wand möglichst weit vom Ausgang
+function safeEinrichten(w, haus) {
+  w.safe = haus.safeId; w.safeName = haus.safe;
+  w.zombiePlaetze = [];
+  for (const tr of w.treppen) w.kacheln[tr.y * BREITE + tr.x] = T.BODEN;
+  w.treppen = []; w.hatKeller = false; w.hatDach = false;
+  for (const t of w.tueren) { t.verschlossen = false; t.offen = true; }
+  const a = w.ausgang ?? { x: w.ox + 1, y: w.oy + 1 };
+  const belegt = new Set(w.behaelter.map(b => Math.floor(b.x / KACHEL) + ',' + Math.floor(b.y / KACHEL)));
+  const anWand = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => w.hole(x + dx, y + dy) === T.WAND);
+  const neben = (x, y, typ) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => w.hole(x + dx, y + dy) === typ);
+  let best = null, bd = -1;
+  for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++) {
+    if (w.hole(x, y) !== T.BODEN || !anWand(x, y) || belegt.has(x + ',' + y) || neben(x, y, T.INNENTUER) || neben(x, y, T.TUER_OFFEN)) continue;
+    const d = Math.hypot(x - a.x, y - a.y);
+    if (d > bd) { bd = d; best = { x, y }; }
+  }
+  best ??= { x: Math.floor(w.start.x / KACHEL), y: Math.floor(w.start.y / KACHEL) };
+  w.kiste = { x: (best.x + 0.5) * KACHEL, y: (best.y + 0.5) * KACHEL };
 }

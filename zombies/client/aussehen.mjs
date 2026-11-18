@@ -44,14 +44,6 @@ function wiesenWolken(ctx, x0, y0, x1, y1) {
 const begehbarWiese = t => t === T.WIESE || t === T.BAUM;
 
 // ---------- Bodenebene: alles Flache ----------
-function safeMaske(welt) {
-  if (welt._safeMaske) return welt._safeMaske;
-  const m = new Uint8Array(BREITE * HOEHE);
-  for (const h of welt.haeuser) if (h.safe) for (let y = h.y - 1; y <= h.y + h.h; y++) for (let x = h.x - 1; x <= h.x + h.b; x++) {
-    if (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) m[y * BREITE + x] = 1;
-  }
-  return (welt._safeMaske = m);
-}
 
 export function zeichneBoden(ctx, welt, rect = null) {
   const { x0, y0, x1, y1 } = rect ?? { x0: 0, y0: 0, x1: BREITE, y1: HOEHE };
@@ -67,8 +59,8 @@ export function zeichneBoden(ctx, welt, rect = null) {
     const t = welt.hole(kx, ky), px = kx * KACHEL, py = ky * KACHEL;
     const nb = (dx, dy) => welt.hole(kx + dx, ky + dy);
     if (vek && (t === T.STRASSE || t === T.PLATZ)) continue;   // kommen als glatte Linien/Flächen
-    // Gebäude zeigt das Dach nach dem echten Umriss; Rasterwände nur in Safe Rooms (deren Dach wird durchsichtig)
-    if (vek && (t === T.LEER || t === T.WAND || t === T.BODEN || t === T.TUER) && !safeMaske(welt)[ky * BREITE + kx]) continue;
+    // Gebäude zeigt das Dach nach dem echten Umriss (auch Safe Rooms: ihr Inneres ist ein eigener Innenraum)
+    if (vek && (t === T.LEER || t === T.WAND || t === T.BODEN || t === T.TUER)) continue;
     if (t === T.LEER) { ctx.fillStyle = '#5d4a40'; ctx.fillRect(px, py, KACHEL, KACHEL); continue; }
     const gart = welt.details?.garten[ky * BREITE + kx];
     if (gart && gart !== '.' && (t === T.WIESE || t === T.BAUM || t === T.ZAUN)) {

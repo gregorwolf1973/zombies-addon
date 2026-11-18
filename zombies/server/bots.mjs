@@ -1,6 +1,6 @@
 // Steuerung der simulierten Mitspieler (zweite Fassung, Claude): Wegsuche über Kacheln, feste Plätze hinter
 // dem Anführer, Abstand zu allen Figuren, bewaffnete Bots kämpfen. Ein Bot steuert sich nur über x.eingabe.
-import { frei, sichtfrei, safeRoomAn, findeWeg, KACHEL, WAFFEN, DINGE, AKTION_ABSTAND } from '../client/welt.mjs';
+import { frei, sichtfrei, safeRoomVon, findeWeg, KACHEL, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE } from '../client/welt.mjs';
 
 export const BOT_NAMEN = ['Resi', 'Vroni', 'Sepp', 'Wastl', 'Kathi', 'Hias', 'Burgi', 'Girgl', 'Loisl', 'Zenzi'];
 
@@ -47,15 +47,31 @@ function willHaben(p, d) {
 }
 
 // Überzähliges ablegen (höchstens eins je Sekunde); der Bot merkt sich das Ding, damit er es nicht wieder aufhebt
+const ueberzaehlig = p => p.rucksack.find((q, i) => p.rucksack.slice(0, i + 1).filter(r => r === q).length + (p.waffe === q ? 1 : 0) > grenze(q)
+  && !((q === 'tasche' || q === 'trekking') && (DINGE[q]?.plaetze ?? 0) > p.plaetze));
 function ueberzaehligesAblegen(raum, p, b) {
   if (raum.uhr - (b.abgelegt ?? 0) < 1) return false;
-  const d = p.rucksack.find((q, i) => p.rucksack.slice(0, i + 1).filter(r => r === q).length + (p.waffe === q ? 1 : 0) > grenze(q)
-    && !((q === 'tasche' || q === 'trekking') && (DINGE[q]?.plaetze ?? 0) > p.plaetze));
+  const d = ueberzaehlig(p);
   if (!d) return false;
   p.rucksack.splice(p.rucksack.lastIndexOf(d), 1);
   const id = raum.legeHin(d, p.x, p.y, p.ebene ?? '');
   (b.verschmaeht ??= new Set()).add(id);
   b.abgelegt = raum.uhr;
+  return true;
+}
+
+// Im Safe Room: Überzähliges in die Vorratskiste legen, Fehlendes herausnehmen (ein Stück je 0,8 s)
+function vorratskiste(raum, sid, p, x, welt) {
+  const safe = safeRoomVon(raum.welt, p), kiste = safe && raum.state.safes.get(safe.id)?.kiste;
+  if (!kiste || !welt.kiste) return false;
+  const b = x.bot, ueber = kiste.length < KISTE_PLAETZE ? ueberzaehlig(p) : null;
+  const fehlt = p.rucksack.length < p.plaetze ? [...kiste].findIndex(d => willHaben(p, d)) : -1;
+  if (!ueber && fehlt < 0) return false;
+  if (abstand(p, welt.kiste) > AKTION_ABSTAND - 4) { geheZu(raum, sid, p, x, welt.kiste, 0.8, AKTION_ABSTAND - 10); return true; }
+  if (raum.uhr - (b.kisteZeit ?? 0) < 0.8) return true;
+  b.kisteZeit = raum.uhr;
+  if (ueber) { p.rucksack.splice(p.rucksack.lastIndexOf(ueber), 1); kiste.push(ueber); }
+  else { const d = kiste[fehlt]; kiste.splice(fehlt, 1); p.rucksack.push(d); }
   return true;
 }
 
@@ -134,9 +150,9 @@ function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
   return false;
 }
 
-function naechster(liste, p, max, bedingung = () => true) {
+function naechster(liste, p, max, bedingung = () => true, ort = e => e) {
   let best = null, bd = max;
-  for (const e of liste) { const d = abstand(p, e); if (d < bd && bedingung(e)) { bd = d; best = e; } }
+  for (const e of liste) { const d = abstand(p, ort(e)); if (d < bd && bedingung(e)) { bd = d; best = e; } }
   return best;
 }
 
@@ -187,7 +203,7 @@ export function botSchritt(raum, sid, p, x, dt) {
   }
 
   // 2b. Gelegenheit: Überzähliges ablegen, Brauchbares aufheben, in der Nähe durchsuchen – solange der Mensch nicht weit weg ist
-  if (!gefahr && ueberzaehligesAblegen(raum, p, b)) return;
+  if (!gefahr && (vorratskiste(raum, sid, p, x, welt) || ueberzaehligesAblegen(raum, p, b))) return;
   const mensch = naechster(spieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten).map(([, o]) => o), p, Infinity);
   if (!gefahr && mensch && abstand(p, mensch) < 260 && (aufheben(raum, sid, p, x, welt) || durchsuchen(raum, sid, p, x, welt))) return;
 
@@ -203,7 +219,7 @@ export function botSchritt(raum, sid, p, x, dt) {
     const bots = alleSpieler.filter(([s]) => raum.extra.get(s)?.bot).map(([s]) => s).sort();
     const nr = Math.max(0, bots.indexOf(sid));
     const d = abstand(p, anfuehrer);
-    const drinnen = !!p.ebene || !!safeRoomAn(raum.welt, anfuehrer.x, anfuehrer.y);
+    const drinnen = !!p.ebene;
     // Erkunder (alle außer den ersten beiden): streifen draußen in der Nähe umher, kommen bei Abstand näher
     if (nr >= 2 && !drinnen && d < 320) {
       if (!b.streifZiel || raum.uhr > b.streifBis || abstand(b.streifZiel, anfuehrer) > 300) {
@@ -222,17 +238,18 @@ export function botSchritt(raum, sid, p, x, dt) {
     const entf = drinnen ? 55 : 75 + (nr % 2) * 30;
     let platz = { x: anfuehrer.x + Math.cos(winkel) * entf, y: anfuehrer.y + Math.sin(winkel) * entf };
     if (!frei(welt, platz.x, platz.y, RAD) || !sichtfrei(welt, anfuehrer.x, anfuehrer.y, platz.x, platz.y)) platz = anfuehrer;
-    // nah genug: stehen bleiben (auch wenn der Mensch auf den Bot zugeht) – aber nicht in der Tür seines Safe Rooms
-    const seinSafe = safeRoomAn(raum.welt, anfuehrer.x, anfuehrer.y);
-    const imSelbenRaum = !seinSafe || p.ebene || safeRoomAn(raum.welt, p.x, p.y) === seinSafe;
-    if (d < 70 && imSelbenRaum) return;
+    // nah genug: stehen bleiben (auch wenn der Mensch auf den Bot zugeht) – im Safe Room aber nicht vor der Eingangstür
+    const seinSafe = safeRoomVon(raum.welt, anfuehrer), a = seinSafe && welt.ausgang;
+    const inDerTuer = a && Math.hypot(p.x - (a.x + 0.5) * KACHEL, p.y - (a.y + 0.5) * KACHEL) < 50;
+    if (d < 70 && !inDerTuer) return;
     const tempo = anfuehrer.schleicht ? 0.45 : d > 180 ? 1 : 0.8;
     geheZu(raum, sid, p, x, platz, tempo, platz === anfuehrer ? 60 : 18);
     return;
   }
 
   // 4. Niemand da: nach draußen und in den nächsten Safe Room
+  if (safeRoomVon(raum.welt, p)) return;   // schon im Safe Room: dort warten
   if (p.ebene) { const raus = raum.uebergangsPunkt(p.ebene, ''); if (raus) { b.uebergangZiel = raus; geheZu(raum, sid, p, x, raus, 1, 2); } return; }
-  const safe = naechster(raum.welt.safeRooms.map(r => r.innen), p, Infinity);
-  if (safe) geheZu(raum, sid, p, x, safe, 1, 20);
+  const safe = naechster(raum.welt.safeRooms, p, Infinity, () => true, r => r.vorTuer);
+  if (safe) { const tuer = raum.uebergangsPunkt('', safe.ebene); b.uebergangZiel = tuer; geheZu(raum, sid, p, x, tuer, 1, 2); }
 }

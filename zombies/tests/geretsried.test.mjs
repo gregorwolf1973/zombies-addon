@@ -21,7 +21,7 @@ test('Geretsried: Karte, Safe Rooms, Häuser, Start und Ortsausgang', () => {
   assert.ok(frei(w, w.start.x, w.start.y, 11), 'Start blockiert');
   assert.ok(w.behaelter.filter(b => b.art === 'auto').length >= 20, 'zu wenige Autos');
   // Wege: vom Start zu den Safe Rooms und zu Haustüren
-  for (const s of w.safeRooms) assert.ok(findeWeg(w, w.start.x, w.start.y, s.innen.x, s.innen.y), `${s.name} nicht erreichbar`);
+  for (const s of w.safeRooms) assert.ok(findeWeg(w, w.start.x, w.start.y, (s.haus.tuer.x + 0.5) * KACHEL, (s.haus.tuer.y + 0.5) * KACHEL, 11, 60000), `${s.name} nicht erreichbar`);
   const tueren = w.haeuser.filter(h => h.betretbar).slice(0, 40);
   const erreicht = tueren.filter(h => findeWeg(w, w.start.x, w.start.y, (h.tuer.x + 0.5) * KACHEL, (h.tuer.y + 0.5) * KACHEL, 11, 60000)).length;
   assert.ok(erreicht >= 30, `nur ${erreicht}/40 Haustüren erreichbar`);
@@ -186,7 +186,7 @@ test('Biss-Chance: 0 % beißt nie, 100 % sofort', async () => {
     const s = raum.state, e = raum.einstellungen(), vorher = e.bissChance;
     const versuch = (chance, sekunden) => {
       e.bissChance = chance;
-      const [, m] = [...s.menschen.entries()].find(([, q]) => q.sichtbar && !q.infiziert);
+      const [, m] = [...s.menschen.entries()].find(([, q]) => q.sichtbar && !q.infiziert && frei(raum.welt, q.x, q.y, 12));
       const zid = raum.setzeZombie(m.x, m.y, ''), z = s.zombies.get(zid);
       for (let i = 0; i < sekunden * 20 && !m.infiziert; i++) {
         z.x = m.x; z.y = m.y; raum.zombieInfo.get(zid).ziel = null; raum.zombieInfo.get(zid).bissVersuch = undefined;

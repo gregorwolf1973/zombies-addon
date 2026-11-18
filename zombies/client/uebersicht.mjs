@@ -163,7 +163,7 @@ export class Uebersicht {
     const t = this.welt.tor;
     if (t) { const [x, y] = pos(t.x + 0.5, t.y + 1); c.font = `${Math.round(14 * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🚧', x + 8 * dpr, y); }
     for (const sr of this.welt.safeRooms) {
-      const [x, y] = pos(sr.innen.x / KACHEL, sr.innen.y / KACHEL);
+      const [x, y] = pos(sr.haus.x + sr.haus.b / 2, sr.haus.y + sr.haus.h / 2);
       c.font = `${Math.round((this.gross ? 16 : 11) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🛡', x, y);
     }
     for (const p of [...punkte].sort((a, b) => a.ich - b.ich)) {

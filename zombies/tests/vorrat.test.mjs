@@ -10,7 +10,15 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { KACHEL, RUCKSACK_PLAETZE, safeRoomAn } from '../client/welt.mjs';
+import { KACHEL, RUCKSACK_PLAETZE, safeRoomVon } from '../client/welt.mjs';
+
+// Figur in den Innenraum eines Safe Rooms setzen (neben die Eingangstür oder an einen Punkt darin)
+function inDenSafeRoom(raum, p, s, wo = 'tuer') {
+  const w = raum.wv(s.ebene);
+  const ort = wo === 'kiste' ? w.kiste : wo === 'mitte' ? w.start : raum.nebenKachel(w, w.ausgang);
+  p.ebene = s.ebene; p.x = ort.x; p.y = ort.y;
+  return w;
+}
 
 const PORT = 26900 + Math.floor(Math.random() * 200);
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -38,8 +46,10 @@ async function beitreten(name, spielerId = neueId()) {
 test('Durchsuchen füllt den Rucksack, leerer Behälter bleibt leer', async () => {
   const { c, raum, p } = await beitreten('Sucher');
   try {
-    const b = raum.welt.behaelter.find(b => b.art !== 'auto');
-    p.x = b.x; p.y = b.y + 1;
+    // Schränke stehen in Innenräumen – hier im ersten Safe Room (dort schlafen keine Zombies)
+    const iw = raum.wv(raum.welt.safeRooms[0].ebene);
+    const b = iw.behaelter[0];
+    p.ebene = iw.ebene; p.x = b.x; p.y = b.y + 1;
     raum.setzeInhalt(b.id, ['wasser', 'munition', 'verband']);
     const m0 = p.munition, r0 = p.rucksack.length;
     c.send('aktion');
@@ -49,7 +59,7 @@ test('Durchsuchen füllt den Rucksack, leerer Behälter bleibt leer', async () =
     assert.equal(p.rucksack.length, r0 + 2);
     assert.ok(await bis(() => c.state.behaelter.get(b.id)?.rest === 0), 'Client sieht leeren Behälter nicht');
     // Bewegen bricht ab
-    const b2 = raum.welt.behaelter.find(x => x.art !== 'auto' && x.id !== b.id);
+    const b2 = iw.behaelter.find(x => x.id !== b.id);
     p.x = b2.x; p.y = b2.y + 1;
     c.send('aktion');
     assert.ok(await bis(() => p.aktion === 'durchsuchen'));
@@ -100,39 +110,43 @@ test('Benutzen: Wasser, Konserve, Verband, Waffe wechseln', async () => {
   } finally { await c.leave(); }
 });
 
-test('Safe Room: Barrikade mit Brettern, Kiste, Zombie kommt nicht durch', async () => {
+test('Safe Room: Barrikade mit Brettern, Kiste, Zombie kommt nicht durch – ohne Barrikade schon', async () => {
   const { c, raum, p } = await beitreten('Bauer');
   try {
     const s = raum.welt.safeRooms[0];
-    const tuer = s.haus.tuer, innenRichtung = tuer.y === s.haus.y ? 1 : -1;
-    p.x = (tuer.x + 0.5) * KACHEL; p.y = (tuer.y + 0.5 + innenRichtung) * KACHEL;
-    assert.ok(safeRoomAn(raum.welt, p.x, p.y), 'Startpunkt nicht im Safe Room');
+    const tuer = s.haus.tuer, r = s.haus.raus;
+    inDenSafeRoom(raum, p, s);
+    assert.equal(safeRoomVon(raum.welt, p), s, 'nicht im Safe Room');
     p.rucksack.clear(); p.rucksack.push('bretter'); p.rucksack.push('bretter');
     assert.ok(await bis(() => p.sicher === s.id), 'sicher nicht gesetzt');
     c.send('aktion');
-    assert.ok(await bis(() => p.aktion === 'barrikade'));
+    assert.ok(await bis(() => p.aktion === 'barrikade'), 'keine Barrikaden-Aktion an der Eingangstür');
     assert.ok(await bis(() => raum.state.safes.get(s.id).barrikade >= 35, 5000), 'keine Barrikade');
     assert.equal(p.rucksack.length, 1);
 
     // Kiste: rein und wieder raus
-    p.x = s.kiste.x; p.y = s.kiste.y;
+    inDenSafeRoom(raum, p, s, 'kiste');
     c.send('kiste', { richtung: 'rein', platz: 0 });
     assert.ok(await bis(() => raum.state.safes.get(s.id).kiste.length === 1 && p.rucksack.length === 0));
     c.send('kiste', { richtung: 'raus', platz: 0 });
     assert.ok(await bis(() => p.rucksack.length === 1));
 
-    // Zombie vor der Tür kommt nicht hinein, hämmert aber
+    // Zombie draußen vor der Tür kommt nicht hinein, hämmert aber
     raum.neuerZombie(0);
     const [id, z] = [...raum.state.zombies.entries()].at(-1);
-    z.x = (tuer.x + 0.5) * KACHEL; z.y = (tuer.y + 0.5 - innenRichtung * 1.2) * KACHEL;
+    const davor = () => { z.ebene = ''; z.x = (tuer.x + 0.5 + r.dx * 1.2) * KACHEL; z.y = (tuer.y + 0.5 + r.dy * 1.2) * KACHEL; };
+    davor();
     const vorher = raum.state.safes.get(s.id).barrikade;
-    const info = raum.zombieInfo.get(id);
-    for (let i = 0; i < 60; i++) {
-      info.ziel = c.sessionId;
-      raum.zombieGehen(z, innenRichtung > 0 ? Math.PI / 2 : -Math.PI / 2, 5, 0.05);
-    }
-    assert.ok(!safeRoomAn(raum.welt, z.x, z.y), 'Zombie ist durchgekommen');
+    const info = raum.zombieInfo.get(id), rein = Math.atan2(-r.dy, -r.dx);
+    for (let i = 0; i < 60; i++) { info.ziel = c.sessionId; raum.zombieGehen(z, rein, 5, 0.05); }
+    assert.equal(z.ebene, '', 'Zombie ist durch die Barrikade gekommen');
     assert.ok(raum.state.safes.get(s.id).barrikade < vorher, 'Barrikade nutzt sich nicht ab');
+
+    // ohne Barrikade dringt er ein, wenn jemand drin ist
+    raum.state.safes.get(s.id).barrikade = 0;
+    davor();
+    for (let i = 0; i < 80 && z.ebene === ''; i++) { info.ziel = null; raum.zombieGehen(z, rein, 5, 0.05); }
+    assert.equal(z.ebene, s.ebene, 'Zombie kommt ohne Barrikade nicht hinein');
   } finally { await c.leave(); }
 });
 
@@ -141,7 +155,7 @@ test('Speichern: Rucksack und Platz im Safe Room bleiben, draußen → zurück i
   let { c, raum, p } = await beitreten('Vroni', id);
   const s = raum.welt.safeRooms[1];
   p.rucksack.clear(); p.rucksack.push('verband'); p.rucksack.push('bretter');
-  p.x = s.innen.x; p.y = s.innen.y; p.munition = 33;
+  inDenSafeRoom(raum, p, s, 'mitte'); p.munition = 33;
   assert.ok(await bis(() => p.sicher === s.id));
   let ausgeruht = false;
   c.onMessage('ausgeruht', () => { ausgeruht = true; });
@@ -155,9 +169,9 @@ test('Speichern: Rucksack und Platz im Safe Room bleiben, draußen → zurück i
     assert.deepEqual([...p.rucksack], ['verband', 'bretter']);
     assert.equal(p.munition, 33);
     assert.equal(p.name, 'Vroni2');
-    assert.ok(Math.hypot(p.x - s.innen.x, p.y - s.innen.y) < 40, 'nicht am gespeicherten Platz');
+    assert.equal(p.ebene, s.ebene, 'nicht im Safe Room aufgetaucht');
     // jetzt draußen verlassen
-    p.x = raum.welt.start.x; p.y = raum.welt.start.y;
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;
     assert.ok(await bis(() => p.sicher === ''));
   } finally { await c.leave(); }
   await warte(200);
@@ -269,16 +283,18 @@ test('Infektion: läuft draußen, ruht im Safe Room, Spritze heilt Mitspieler, V
     await warte(400);
     assert.ok(pa.infektion < 100, 'Timer läuft draußen nicht');
     const s = raum.welt.safeRooms[0];
-    pa.x = s.innen.x; pa.y = s.innen.y;
+    inDenSafeRoom(raum, pa, s, 'mitte');
     assert.ok(await bis(() => pa.sicher === s.id));
     const stand = pa.infektion; await warte(400);
     assert.ok(Math.abs(pa.infektion - stand) < 0.01, 'Timer läuft im Safe Room weiter');
     // Spritze vom Mitspieler
-    pb.x = pa.x + 20; pb.y = pa.y; pb.rucksack.clear(); pb.rucksack.push('spritze');
+    const neben = raum.freierPlatz({ x: pa.x + 20, y: pa.y }, 1, s.ebene);
+    pb.ebene = s.ebene; pb.x = neben.x; pb.y = neben.y; pb.rucksack.clear(); pb.rucksack.push('spritze');
     b.c.send('benutze', { platz: 0 });
     assert.ok(await bis(() => pa.infektion === 0), 'Spritze wirkt nicht');
     assert.equal(pb.rucksack.length, 0);
     // Verwandlung
+    pa.ebene = pb.ebene = ''; pb.x = raum.welt.start.x + 40; pb.y = raum.welt.start.y;
     pa.x = raum.welt.start.x; pa.y = raum.welt.start.y; pa.infektion = 0.1;
     assert.ok(await bis(() => pa.zombie > 0), 'keine Verwandlung');
     // der andere schießt/stößt den Zombie-Spieler um → zurück im Safe Room
@@ -361,7 +377,6 @@ test('Bots: fünf Mitspieler, folgen, helfen auf, weichen echten Spielern', asyn
     assert.ok(bots().every(b => b.name.endsWith('🤖')));
     // Anführer läuft weg → Bots folgen
     p.x = raum.welt.start.x; p.y = raum.welt.start.y;
-    const ziel = raum.welt.safeRooms[0].innen;
     a.c.send('eingabe', { dx: 0, dy: 0 });
     for (const b of bots()) { b.x = p.x + 150; b.y = p.y; }
     await warte(4000);
@@ -385,7 +400,6 @@ test('Bots: fünf Mitspieler, folgen, helfen auf, weichen echten Spielern', asyn
     assert.equal(bots().length, 4);
     await b2.c.leave();
     assert.ok(await bis(() => bots().length === 5));
-    void ziel;
   } finally {
     await a.c.leave();
     SpielRaum.einstellungen = vorher;
@@ -429,13 +443,13 @@ test('Bots folgen ins Haus und bewaffnete Bots kämpfen', async () => {
     raum.state.zombies.clear(); raum.zombieInfo.clear();
     const bots = () => [...raum.extra.entries()].filter(([, x]) => x.bot).map(([sid]) => raum.state.spieler.get(sid));
     const s = raum.welt.safeRooms[0];
-    p.x = s.innen.x; p.y = s.innen.y;
-    for (const b of bots()) { b.x = raum.welt.start.x; b.y = raum.welt.start.y + 40; b.waffe = ''; b.munition = 0; }
-    assert.ok(await bis(() => bots().filter(b => safeRoomAn(raum.welt, b.x, b.y) === s).length >= 2, 15000),
+    inDenSafeRoom(raum, p, s, 'mitte');
+    for (const b of bots()) { b.ebene = ''; b.x = raum.welt.start.x; b.y = raum.welt.start.y + 40; b.waffe = ''; b.munition = 0; }
+    assert.ok(await bis(() => bots().filter(b => safeRoomVon(raum.welt, b) === s).length >= 2, 15000),
       'Bots kommen nicht ins Haus: ' + bots().map(b => Math.round(b.x) + ',' + Math.round(b.y)).join(' '));
     // bewaffneter Bot erledigt einen Zombie
-    p.x = raum.welt.start.x; p.y = raum.welt.start.y;
-    const b0 = bots()[0]; b0.waffe = 'messer'; b0.x = p.x + 40; b0.y = p.y;
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;
+    const b0 = bots()[0]; b0.waffe = 'messer'; b0.ebene = ''; b0.x = p.x + 40; b0.y = p.y;
     raum.kriecherChance = 0;
     raum.neuerZombie(0);
     const [zid, z] = [...raum.state.zombies.entries()].at(-1);
@@ -503,9 +517,9 @@ test('Tauschen: anbieten, beide bestätigen, Entfernen bricht ab', async () => {
 test('Toter Zombie in der Tür: erst wegziehen, dann verbarrikadieren', async () => {
   const { c, raum, p } = await beitreten('Türsteher');
   try {
-    const s = raum.welt.safeRooms[0], t = s.haus.tuer, rein = t.y === s.haus.y ? 1 : -1;
-    raum.neueLeiche({ x: (t.x + 0.5) * KACHEL, y: (t.y + 0.5) * KACHEL, richtung: 0 });
-    p.x = (t.x + 0.5) * KACHEL; p.y = (t.y + 0.5 + rein) * KACHEL;
+    const s = raum.welt.safeRooms[0];
+    const w = inDenSafeRoom(raum, p, s), a = w.ausgang;
+    raum.neueLeiche({ x: (a.x + 0.5) * KACHEL, y: (a.y + 0.5) * KACHEL, richtung: 0, ebene: s.ebene });
     p.rucksack.clear(); p.rucksack.push('bretter');
     c.send('aktion');
     assert.ok(await bis(() => p.aktion === 'wegziehen'), 'Wegziehen nicht angeboten: ' + p.aktion);
@@ -553,19 +567,24 @@ test('Bots durchsuchen Schränke in der Nähe und nehmen bessere Waffen', async 
     raum.state.zombies.clear(); raum.zombieInfo.clear();
     const [bid, x] = [...raum.extra.entries()].find(([, e]) => e.bot);
     const bot = raum.state.spieler.get(bid);
-    // ein Schrank mit freiem Platz und freier Sicht daneben (Bot und Mensch stehen dort)
-    let schrank = null, rx = 0, ry = 0;
-    for (const c of raum.welt.behaelter) {
-      if (c.art === 'auto' || c.art === 'bus' || schrank) continue;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (W.frei(raum.welt, c.x + dx * 30, c.y + dy * 30, 13) && W.frei(raum.welt, c.x + dx * 60, c.y + dy * 60, 13) && W.sichtfrei(raum.welt, c.x + dx * 30, c.y + dy * 30, c.x, c.y)) { schrank = c; rx = dx; ry = dy; break; }
+    // ein Schrank in einem Haus mit freiem Platz und freier Sicht daneben (Bot und Mensch stehen dort)
+    let schrank = null, rx = 0, ry = 0, ebene = '';
+    for (const h of raum.welt.haeuser) {
+      if (schrank || !h.betretbar || h.safe) continue;
+      const iw = raum.wv(`h${h.nr}eg`);
+      for (const c of iw.behaelter) {
+        if (schrank) break;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (W.frei(iw, c.x + dx * 30, c.y + dy * 30, 13) && W.frei(iw, c.x + dx * 60, c.y + dy * 60, 13) && W.sichtfrei(iw, c.x + dx * 30, c.y + dy * 30, c.x, c.y)) { schrank = c; rx = dx; ry = dy; ebene = iw.ebene; break; }
+        }
       }
     }
+    for (const [zid, z] of [...raum.state.zombies]) if (z.ebene === ebene) { raum.state.zombies.delete(zid); raum.zombieInfo.delete(zid); }
     assert.ok(schrank, 'kein Schrank');
     raum.setzeInhalt(schrank.id, ['wasser', 'gewehr']);
     bot.rucksack.clear(); bot.waffe = 'messer'; bot.munition = 5;
     p.x = schrank.x + rx * 60; p.y = schrank.y + ry * 60;
-    bot.x = schrank.x + rx * 30; bot.y = schrank.y + ry * 30; bot.ebene = p.ebene = '';
+    bot.x = schrank.x + rx * 30; bot.y = schrank.y + ry * 30; bot.ebene = p.ebene = ebene;
     assert.ok(await bis(() => bot.waffe === 'gewehr' || bot.rucksack.includes('gewehr'), 9000),
       'Bot hat nicht durchsucht: ' + JSON.stringify([...bot.rucksack]) + ' Aktion ' + bot.aktion);
     assert.ok(await bis(() => bot.waffe === 'gewehr', 3000), 'Bot nimmt das Gewehr nicht in die Hand');
@@ -597,5 +616,26 @@ test('Bots legen Überzähliges ab und heben auf, was ein Mitspieler fallen läs
     // der Mensch lässt einen Verband fallen
     raum.legeHin('verband', p.x, p.y, '');
     assert.ok(await bis(() => bot.rucksack.includes('verband'), 8000), 'Bot hebt den Verband nicht auf');
+  } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
+});
+
+test('Bots nutzen die Vorratskiste im Safe Room', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 1, zombieFaktor: 0 };
+  const a = await beitreten('Lagerchef');
+  try {
+    const { raum, p } = a;
+    const [bid] = [...raum.extra.entries()].find(([, e]) => e.bot);
+    const bot = raum.state.spieler.get(bid);
+    const s = raum.welt.safeRooms[0], kiste = raum.state.safes.get(s.id).kiste;
+    kiste.clear(); kiste.push('spritze');
+    inDenSafeRoom(raum, p, s, 'mitte');
+    inDenSafeRoom(raum, bot, s, 'tuer');
+    bot.rucksack.clear(); for (let i = 0; i < 5; i++) bot.rucksack.push('wasser');
+    bot.durst = 100;
+    assert.ok(await bis(() => bot.rucksack.includes('spritze') && bot.rucksack.filter(d => d === 'wasser').length === 3, 12000),
+      'Bot nutzt die Kiste nicht: ' + JSON.stringify([...bot.rucksack]) + ' Kiste ' + JSON.stringify([...kiste]));
+    assert.equal([...kiste].filter(d => d === 'wasser').length, 2, 'Überzähliges liegt nicht in der Kiste');
+    assert.equal(raum.state.boden.size, 0, 'Bot wirft im Safe Room auf den Boden statt in die Kiste');
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });

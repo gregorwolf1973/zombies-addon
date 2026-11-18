@@ -1,6 +1,6 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
-import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX } from './welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
 import { randParkplaetze } from './vektor.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
@@ -65,20 +65,12 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     const zellen = flaecheVon(h).filter(([x, y]) => hole(x, y) === T.BODEN);
     if (zellen.length < 6) continue;
     h.safe = anzeige; h.safeId = 's' + safeRooms.length;
-    const cx = h.x + h.b / 2, cy = h.y + h.h / 2;
-    const mitte = zellen.reduce((a, z) => Math.hypot(z[0] - cx, z[1] - cy) < Math.hypot(a[0] - cx, a[1] - cy) ? z : a);
-    const weit = zellen.reduce((a, z) => Math.hypot(z[0] - h.tuer.x, z[1] - h.tuer.y) > Math.hypot(a[0] - h.tuer.x, a[1] - h.tuer.y) ? z : a);
-    const kiste = { x: (weit[0] + 0.5) * KACHEL, y: (weit[1] + 0.5) * KACHEL };
-    safeRooms.push({ id: h.safeId, name: anzeige, haus: h, kiste, innen: { x: (mitte[0] + 0.5) * KACHEL, y: (mitte[1] + 0.5) * KACHEL } });
-    // ein Schrank an der Wand
-    const schrank = zellen.find(([x, y]) => (x !== weit[0] || y !== weit[1]) && RICHTUNGEN.some(([dx, dy]) => hole(x + dx, y + dy) === T.WAND)
-      && Math.hypot(x - h.tuer.x, y - h.tuer.y) > 2);
-    if (schrank) behaelter.push({ id: 'b' + behaelter.length, art: 'schrank', x: (schrank[0] + 0.5) * KACHEL, y: (schrank[1] + 0.5) * KACHEL });
+    safeRooms.push({ id: h.safeId, name: anzeige, haus: h });   // Kiste und Schrank stehen im Innenraum
   }
-  // betretbare Häuser: Außenhülle nicht begehbar (das Innere ist ein eigener Innenraum)
+  safeRoomsVervollstaendigen(safeRooms);
+  // betretbare Häuser (auch Safe Rooms): Außenhülle nicht begehbar (das Innere ist ein eigener Innenraum)
   for (const h of haeuser) {
-    h.betretbar = !h.safe;
-    if (!h.betretbar) continue;
+    h.betretbar = true;
     for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.b; x++) if (hole(x, y) === T.BODEN) setze(x, y, T.LEER);
   }
 
@@ -223,13 +215,11 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
 }
 
 // Feines Kollisionsraster (1 m) aus den echten Umrissen: Häuser nach ihrem OSM-Polygon, Gartenzäune und Hecken nach den
-// geglätteten Zaunlinien; alles andere (Safe Rooms, Wasser, Gartenhäuser, Kartenrand, Busse …) wie im groben Raster.
+// geglätteten Zaunlinien; alles andere (Wasser, Gartenhäuser, Kartenrand, Busse …) wie im groben Raster.
 // Wo das grobe Raster begehbar ist und der Kachelmittelpunkt frei liegt, bleibt der Weg offen (Wegsuche bleibt grob).
 function baueFein(welt, karte) {
   const fb = BREITE * FEIN, fh = HOEHE * FEIN, f = new Uint8Array(fb * fh);
   const hole = welt.hole, zaunart = welt.details?.zaunart ?? '';
-  const safe = new Uint8Array(BREITE * HOEHE);
-  for (const h of welt.haeuser) if (h.safe) for (let y = h.y - 1; y <= h.y + h.h; y++) for (let x = h.x - 1; x <= h.x + h.b; x++) if (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) safe[y * BREITE + x] = 1;
   const grob = new Uint8Array(BREITE * HOEHE);   // 1 = Kachel wird grob übernommen
   for (const o of welt.details?.objekte ?? []) if (o.a === 'gartenhaus' || o.a === 'pool') for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) grob[y * BREITE + x] = 1;
   const kachelFuellen = (kx, ky, wert) => { for (let dy = 0; dy < FEIN; dy++) for (let dx = 0; dx < FEIN; dx++) f[(ky * FEIN + dy) * fb + kx * FEIN + dx] = wert; };
@@ -237,7 +227,7 @@ function baueFein(welt, karte) {
   for (let ky = 0; ky < HOEHE; ky++) for (let kx = 0; kx < BREITE; kx++) {
     const t = hole(kx, ky), i = ky * BREITE + kx;
     if (!BLOCKIERT.has(t)) continue;
-    const haus = (t === T.WAND || t === T.LEER) && !safe[i] && !grob[i];
+    const haus = (t === T.WAND || t === T.LEER) && !grob[i];
     const zaun = t === T.ZAUN && 'hzmw'.includes(zaunart[i]);
     if (!haus && !zaun) kachelFuellen(kx, ky, 1);
   }
@@ -250,11 +240,10 @@ function baueFein(welt, karte) {
   for (const g of karte.gebaeude) {
     const p = g.umriss;
     if (!p || p.length < 6) continue;
-    if (welt.haeuser.some(h => h.safe && h.x === g.x && h.y === g.y)) continue;
     const kx0 = Math.max(0, g.x - 2), ky0 = Math.max(0, g.y - 2), kx1 = Math.min(BREITE - 1, g.x + g.b + 1), ky1 = Math.min(HOEHE - 1, g.y + g.h + 1);
     for (let ky = ky0; ky <= ky1; ky++) for (let kx = kx0; kx <= kx1; kx++) {
       const t = hole(kx, ky), i = ky * BREITE + kx;
-      if (safe[i] || grob[i] || t === T.STRASSE || t === T.PLATZ || t === T.TUER || t === T.ZAUN) continue;
+      if (grob[i] || t === T.STRASSE || t === T.PLATZ || t === T.TUER || t === T.ZAUN) continue;
       // begehbare Kachel, deren Mitte im Haus liegt: offen lassen (sonst bricht die grobe Wegsuche)
       if (!BLOCKIERT.has(t) && imPolygon(kx + 0.5, ky + 0.5, p)) continue;
       for (let dy = 0; dy < FEIN; dy++) for (let dx = 0; dx < FEIN; dx++) {
@@ -309,7 +298,7 @@ function zugaengeOeffnen(f, fb, fh, welt) {
   const nach = c => { const x = c % fb, y = (c - x) / fb, r = []; if (x > 0) r.push(c - 1); if (x < fb - 1) r.push(c + 1); if (y > 0) r.push(c - fb); if (y < fh - 1) r.push(c + fb); return r; };
   for (let i = 0; i < q.length; i++) for (const n of nach(q[i])) if (!erreicht[n] && !belegt[n]) { erreicht[n] = 1; q.push(n); }
   for (const h of welt.haeuser) {
-    if (!h.tuer || !(h.betretbar || h.safe)) continue;
+    if (!h.tuer || !h.betretbar) continue;
     // Vorplatz (gut eine Kachel vor der Tür, freigehalten) muss erreichbar sein
     const vx = Math.floor((h.tuer.x + 0.5 + h.raus.dx * 1.3) * FEIN), vy = Math.floor((h.tuer.y + 0.5 + h.raus.dy * 1.3) * FEIN);
     const ziel = vy * fb + vx;
