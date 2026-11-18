@@ -43,6 +43,7 @@ export const Spieler = schema({
   kleidung: t.number(),     // Haltbarkeit der festen Kleidung 0..100 (Schutz vor Bissen)
   infektion: t.number(),    // Sekunden bis zur Verwandlung, 0 = gesund
   zombie: t.number(),       // Sekunden, die man noch Zombie ist, 0 = Mensch
+  spricht: t.boolean(),     // spricht gerade ins Mikrofon (Sprachübertragung, zeigt 🔊 über der Figur)
 }, 'Spieler');
 
 export const Zombie = schema({
@@ -113,6 +114,10 @@ export function sauberName(n) {
   const s = String(n ?? '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 16);
   return s || 'Unbekannt';
 }
+
+const RTC_MAX = 20000;          // größte Signalisierungsnachricht (JSON-Zeichen)
+const SPRICHT_PAUSE = 250;      // ms: höchstens 4 Wechsel je Sekunde und Spieler
+const REDEN_LAERM = 200;        // px (25 m): so weit lockt Reden Zombies, wenn die Einstellung „Reden lockt“ an ist
 
 const CHAT_MAX = 300, CHAT_VERLAUF = 100, CHAT_ANZAHL = 5, CHAT_FENSTER = 10000;
 
@@ -232,6 +237,9 @@ export class SpielRaum extends Room {
     this.onMessage('tausch_ok', client => this.tauschOk(client));
     this.onMessage('tausch_ende', client => { const t = this.tausche.get(client.sessionId); if (t) this.tauschEnde(t, 'abgebrochen'); });
     this.onMessage('chat', (client, m) => this.chat(client, m));
+    this.onMessage('rtc', (client, m) => this.rtcWeiter(client, m));
+    this.onMessage('spricht', (client, m) => this.sprichtSetzen(client.sessionId, !!m?.an));
+    this.onMessage('sprachBereit', client => { this.sprachStart(client); this.sprachPartner(); });
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
     this.setSimulationInterval(dt => {
@@ -272,6 +280,7 @@ export class SpielRaum extends Room {
       this.state.spieler.set(client.sessionId, alt);
       this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false } });
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
+      this.sprachStart(client); this.sprachPartner();
       return;
     }
 
@@ -281,7 +290,7 @@ export class SpielRaum extends Room {
     const gewaehlt = AUSSEHEN.test(String(optionen.aussehen ?? ''));
     p.aussehen = gewaehlt ? optionen.aussehen : this.zufallsAussehen();
     p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0;
-    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0;
+    p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0; p.spricht = false;
     const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null };
     const gespeichert = this.speicher?.ladeSpieler(spielerId);
     if (gespeichert) {
@@ -317,6 +326,64 @@ export class SpielRaum extends Room {
     client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
     this.botsAnpassen();
+    this.sprachStart(client); this.sprachPartner();
+  }
+
+  // ---------- Sprachübertragung (WebRTC-Signalisierung; die Sprache selbst läuft direkt zwischen den Browsern) ----------
+  sprachEinst() {
+    const sp = SpielRaum.einstellungen.sprache ?? {};
+    return { an: sp.an !== false, hoerweite: sp.hoerweite ?? 40, stockwerk: sp.stockwerk ?? 0.35, drinnenDraussen: sp.drinnenDraussen ?? 0.10, funk: sp.funk ?? 0.7, redenLockt: !!sp.redenLockt };
+  }
+
+  // nur an den neuen Client: ICE-Server und Sprach-Einstellungen
+  sprachStart(client) {
+    client.send('sprachStart', { ice: SpielRaum.einstellungen.ice ?? [], einst: this.sprachEinst() });
+  }
+
+  // alle verbundenen Menschen (keine Bots, keine abgerissenen Verbindungen)
+  sprachPartner() {
+    const ids = [];
+    for (const [sid, p] of this.state.spieler) if (!this.extra.get(sid)?.bot && p.verbunden) ids.push(sid);
+    this.broadcast('sprachPartner', { ids });
+  }
+
+  // Signalisierung: nur an genau einen verbundenen Menschen weiterreichen
+  rtcWeiter(client, m) {
+    const an = String(m?.an ?? '');
+    const von = client.sessionId;
+    if (!an || an === von || !this.sprachEinst().an) return;
+    if (this.extra.get(von)?.bot || this.extra.get(an)?.bot || !this.state.spieler.get(an)?.verbunden) return;
+    let groesse = Infinity;
+    try { groesse = JSON.stringify(m.daten ?? null).length; } catch { /* zirkulär o. ä. */ }
+    if (groesse > RTC_MAX) return;
+    this.clients.find(c => c.sessionId === an)?.send('rtc', { von, daten: m.daten });
+  }
+
+  sprichtSetzen(sid, an) {
+    const p = this.state.spieler.get(sid), x = this.extra.get(sid);
+    if (!p || !x || x.bot) return;
+    if (an && !this.sprachEinst().an) an = false;
+    const jetzt = Date.now();
+    if (jetzt - (x.sprichtZeit ?? 0) < SPRICHT_PAUSE) { x.sprichtOffen = an; return; }   // zu schnell: später (im Takt) nachholen
+    x.sprichtOffen = undefined; x.sprichtZeit = jetzt;
+    p.spricht = an;
+  }
+
+  // im Takt: aufgeschobene Wechsel nachholen, Reden lockt Zombies
+  sprachSchritt(dt) {
+    const jetzt = Date.now();
+    for (const [sid, x] of this.extra) {
+      if (x.sprichtOffen !== undefined && jetzt - (x.sprichtZeit ?? 0) >= SPRICHT_PAUSE) this.sprichtSetzen(sid, x.sprichtOffen);
+    }
+    this.redenUhr = (this.redenUhr ?? 0) - dt;
+    if (this.redenUhr > 0) return;
+    this.redenUhr = 0.5;
+    const sp = this.sprachEinst();
+    if (!sp.an || !sp.redenLockt) return;
+    for (const [sid, p] of this.state.spieler) {
+      if (!p.spricht || !p.verbunden || this.extra.get(sid)?.bot) continue;
+      this.laerm(p.x, p.y, REDEN_LAERM, false, p.ebene);
+    }
   }
 
   // Text-Chat für alle im Raum, unabhängig von der Entfernung
@@ -426,7 +493,8 @@ export class SpielRaum extends Room {
     // Verbindung weg: Figur bleibt 2 Minuten stehen und wartet
     const p = this.state.spieler.get(client.sessionId);
     if (!p) return;   // Beitritt wurde abgelehnt – nichts zu halten
-    p.verbunden = false; p.aktion = '';
+    p.verbunden = false; p.aktion = ''; p.spricht = false;
+    this.sprachPartner();
     const x = this.extra.get(client.sessionId);
     if (x) x.eingabe = { dx: 0, dy: 0, s: false };
     const zusage = this.allowReconnection(client, 120);
@@ -440,6 +508,7 @@ export class SpielRaum extends Room {
     this.wiederkehr.delete(client.sessionId);
     const p = this.state.spieler.get(client.sessionId);
     if (p) p.verbunden = true;
+    this.sprachStart(client); this.sprachPartner();
   }
 
   onLeave(client) {
@@ -455,6 +524,7 @@ export class SpielRaum extends Room {
     this.state.spieler.delete(client.sessionId);
     this.extra.delete(client.sessionId);
     this.botsAnpassen();
+    this.sprachPartner();
   }
 
   onDispose() {
@@ -482,6 +552,9 @@ export class SpielRaum extends Room {
 
   einstellungenGeaendert() {
     this.botsAnpassen();
+    const sprache = this.sprachEinst();
+    if (!sprache.an) for (const p of this.state.spieler.values()) p.spricht = false;
+    this.broadcast('spracheEinst', { einst: sprache });
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     const soll = this.zombieSollJetzt();
     // zu viele Zombies draußen: die am weitesten entfernten, nicht jagenden verschwinden
@@ -1023,6 +1096,7 @@ export class SpielRaum extends Room {
     }
     else if (d === 'seil') { client.send('meldung', { text: '🪢 Ein Seil – brauchst du später am Fluss' }); }
     else if (d === 'taschenlampe') { client.send('meldung', { text: '🔦 Schaltet sich in Häusern von selbst ein (hält etwa eine Stunde)' }); }
+    else if (d === 'funkgeraet') { client.send('meldung', { text: '📻 Mit einem zweiten Funkgerät im Rucksack hörst du die Mitspieler überall' }); }
     else if (d === 'verband') {
       if (p.hp >= 100) return client.send('meldung', { text: 'Du bist nicht verletzt' });
       p.hp = Math.min(100, p.hp + 45); p.rucksack.splice(i, 1);
@@ -1214,6 +1288,7 @@ export class SpielRaum extends Room {
     this.messen('verkehr', t0); t0 = performance.now();
     this.brand?.schritt(dt);
     this.messen('feuer', t0);
+    this.sprachSchritt(dt);
     this.aufhelfen(dt);
     this.leichenAltern(dt);
     this.bodenAltern(dt);

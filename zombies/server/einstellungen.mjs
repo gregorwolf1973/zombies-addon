@@ -44,6 +44,7 @@ export function bereinige(e = {}, alt = {}) {
   const a = { ...vorgaben(), ...alt };
   const z = { ...a.zombies, ...(e.zombies ?? {}) };
   const t = { ...a.test, ...(e.test ?? {}) };
+  const sp = { ...a.sprache, ...(e.sprache ?? {}) };
   const funde = { ...a.funde };
   for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10));
   const toene = {};
@@ -78,6 +79,14 @@ export function bereinige(e = {}, alt = {}) {
       tempo: Math.round(zahl(z.tempo, 50, 150, 100)),    // Laufgeschwindigkeit in Prozent
       nacht: Math.round(zahl(z.nacht, 10, 30, 15)),      // nachts so viel mehr draußen (15 = ×1,5)
     },
+    sprache: {
+      an: typeof sp.an === 'boolean' ? sp.an : true,                          // Sprachübertragung zwischen Mitspielern
+      hoerweite: Math.round(zahl(sp.hoerweite, 10, 100, 40)),                 // Meter, ab hier ist man draußen nicht mehr zu hören
+      stockwerk: Math.round(zahl(sp.stockwerk, 0, 100, 35)),                  // % Lautstärke in einem anderen Stockwerk desselben Hauses
+      drinnenDraussen: Math.round(zahl(sp.drinnenDraussen, 0, 50, 10)),       // % Lautstärke zwischen drinnen und draußen (an der Tür)
+      funk: Math.round(zahl(sp.funk, 0, 100, 70)),                            // % Lautstärke über Funkgeräte
+      redenLockt: typeof sp.redenLockt === 'boolean' ? sp.redenLockt : false, // Reden lockt Zombies an
+    },
     funde,
     toene,
     test: {
@@ -92,6 +101,7 @@ export function vorgaben() {
     zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, menschen: 50, ansteckung: 5, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE },
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15 },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
+    sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     toene: {},
   };

@@ -13,6 +13,7 @@ let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
 import * as ton from './ton.mjs';
+import * as sprache from './sprache.mjs';
 import { Uebersicht } from './uebersicht.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
@@ -80,7 +81,7 @@ try {
   if (m) { $('fehler').textContent = m; $('fehler').classList.add('gut'); sessionStorage.removeItem('zob_meldung'); }
 } catch {}
 fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; ton.toeneZuordnen(i.toene); }).catch(() => {});
-$('los').addEventListener('click', () => { ton.tonStarten(); mitspielen(); });
+$('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 // Startmusik: der Browser erlaubt Ton erst nach einer Berührung – also beim ersten Antippen der Startseite
 const musikAn = () => { if ($('start').style.display !== 'none') ton.musikStarten(); };
 document.addEventListener('pointerdown', musikAn, { once: true });
@@ -143,6 +144,7 @@ $('code').addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen()
 nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 
 async function mitspielen() {
+  sprache.vorbereiten();   // AudioContext in der Nutzergeste (iOS), auch beim Start mit Enter
   const name = nameFeld.value.trim();
   if (!name) { $('fehler').textContent = 'Bitte gib einen Namen ein.'; nameFeld.focus(); return; }
   const code = $('code').value.trim();
@@ -214,6 +216,7 @@ async function starteSpiel() {
     input: { activePointers: 3 },
     scene: [Ort],
   });
+  sprache.starte({ raum, meineId, welt: () => chatSzene?.welt ?? null, meldung });
 }
 
 // Rechteck im Koordinatensystem eines geparkten Autos (wie autoVonOben gedreht): längs von a bis b, quer ±halb
@@ -683,8 +686,9 @@ class Ort extends Phaser.Scene {
     const name = this.add.text(0, -28, p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
-    box.add([ring, fuesse, bild, name, hp, tun]);
-    return { box, bild, fuesse, koerper: bild, name, hp, tun, farbe, n, x: p.x, y: p.y, altX: p.x, altY: p.y };
+    const sprechen = this.add.text(-18, -16, '🔊', { fontSize: '11px' }).setOrigin(0.5).setVisible(false);   // spricht gerade (Sprachübertragung)
+    box.add([ring, fuesse, bild, name, hp, tun, sprechen]);
+    return { box, bild, fuesse, koerper: bild, name, hp, tun, sprechen, farbe, n, x: p.x, y: p.y, altX: p.x, altY: p.y };
   }
 
   neuerZombie(z) {
@@ -1267,6 +1271,7 @@ class Ort extends Phaser.Scene {
 
   figurDarstellen(f, p, dt = 0.016) {
     f.box.setRotation(0);
+    if (f.sprechen.visible !== !!p.spricht) f.sprechen.setVisible(!!p.spricht);
     const zombie = p.zombie > 0;
     const weg = Math.hypot(f.x - f.altX, f.y - f.altY);
     f.altX = f.x; f.altY = f.y;

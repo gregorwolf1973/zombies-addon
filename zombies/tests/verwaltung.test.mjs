@@ -57,3 +57,36 @@ test('Töne: Ereignisse und Zuordnung werden bereinigt', () => {
   assert.ok(!('unbekannt' in e.toene));
   assert.deepEqual(e.toene.stadt.dateien, []);
 });
+
+test('Sprache: Einstellungen werden bereinigt, gespeichert und an den Raum übergeben', async () => {
+  const v = bereinige({});
+  assert.deepEqual(v.sprache, { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false });
+  const e = bereinige({ sprache: { an: 'ja', hoerweite: 500, stockwerk: -5, drinnenDraussen: 99, funk: 'laut', redenLockt: true } });
+  assert.equal(e.sprache.an, true, 'kein Wahrheitswert → Vorgabe');
+  assert.equal(e.sprache.hoerweite, 100); assert.equal(e.sprache.stockwerk, 0);
+  assert.equal(e.sprache.drinnenDraussen, 50); assert.equal(e.sprache.funk, 70); assert.equal(e.sprache.redenLockt, true);
+  assert.equal(bereinige({ sprache: { hoerweite: 3 } }).sprache.hoerweite, 10);
+  // Teiländerung lässt die übrigen Werte stehen
+  assert.equal(bereinige({ sprache: { funk: 20 } }, e).sprache.hoerweite, 100);
+
+  process.env.ZOMBIES_VERWALTUNG_LOKAL = '1';
+  const r = await fetch(`http://127.0.0.1:${PORT}/verwaltung/api`, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sprache: { an: false, hoerweite: 60, stockwerk: 50, redenLockt: true } }) });
+  const d = await r.json();
+  assert.equal(d.einstellungen.sprache.hoerweite, 60);
+  assert.equal(SpielRaum.einstellungen.sprache.an, false);
+  assert.equal(SpielRaum.einstellungen.sprache.hoerweite, 60);
+  assert.equal(SpielRaum.einstellungen.sprache.stockwerk, 0.5);
+  assert.equal(SpielRaum.einstellungen.sprache.redenLockt, true);
+  const datei = JSON.parse(fs.readFileSync(path.join(ordner, 'einstellungen.json'), 'utf8'));
+  assert.equal(datei.sprache.hoerweite, 60);
+  await fetch(`http://127.0.0.1:${PORT}/verwaltung/api`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sprache: { an: true, redenLockt: false } }) });
+});
+
+test('ICE-Server aus den Add-on-Optionen', async () => {
+  const { iceServer } = await import('../server/index.mjs');
+  assert.deepEqual(iceServer({}), [{ urls: 'stun:stun.l.google.com:19302' }]);
+  assert.deepEqual(iceServer({ stun_server: 'aus' }), []);
+  assert.deepEqual(iceServer({ stun_server: 'aus', turn_server: 'turn:t.example:3478', turn_username: 'u', turn_password: 'p' }),
+    [{ urls: 'turn:t.example:3478', username: 'u', credential: 'p' }]);
+});

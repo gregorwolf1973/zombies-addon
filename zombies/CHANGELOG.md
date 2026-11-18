@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.0 – 18.11.2026
+
+- Sprechen mit den Mitspielern, dauerhaft an (direkt von Gerät zu Gerät, WebRTC). Beim Start fragt der Browser nach
+  dem Mikrofon (nur über HTTPS); ohne Mikrofon hört man die anderen trotzdem. Knopf 🎤 oben rechts schaltet stumm,
+  über sprechenden Figuren erscheint 🔊. Kopfhörer vermeiden Echo
+- Lautstärke nach Lage: draußen voll bis 5 m, dann leiser bis zur Hörweite (40 m), links/rechts nach Richtung; im
+  selben Haus und Stockwerk fast voll, anderes Stockwerk 35 %, drinnen ↔ draußen 10 % (nach Abstand zur Haustür),
+  verschiedene Häuser stumm
+- Neues Fundstück 📻 Funkgerät: Wer eins trägt, hört andere Funkgerät-Träger überall, mit Funkklang
+- Einstellungen: neue Karte „🎙 Sprache“ (an/aus, Hörweite, Stockwerk, drinnen/draußen, Funk, „Reden lockt Zombies
+  an“ – aus). Add-on-Optionen stun_server, turn_server, turn_username, turn_password für Verbindungen von unterwegs
+
 ## 0.25.0 – 18.11.2026
 
 - Text-Chat für alle Mitspieler, egal wie weit weg: Knopf 💬 oben rechts mit Zähler für Ungelesenes, Fenster wie

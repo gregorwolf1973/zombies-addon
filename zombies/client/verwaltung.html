@@ -681,6 +681,74 @@
 })();
 </script>
 
+<section class="karte" id="spracheKarte" aria-labelledby="titelSprache">
+  <h2 id="titelSprache">🎙 Sprache</h2>
+  <p class="sp-leise">Die Mitspieler hören einander live über das Mikrofon (WebRTC, direkt zwischen den Geräten). Die Lautstärke hängt von der Lage ab: draußen nach Entfernung, im selben Haus laut, in anderen Stockwerken und zwischen drinnen und draußen gedämpft. Mit je einem Funkgerät im Rucksack hört man sich überall. Das Mikrofon braucht eine HTTPS-Adresse.</p>
+  <label class="sp-schalter"><input type="checkbox" id="spAn"> Sprachübertragung aktiv</label>
+  <label for="spWeite">Hörweite draußen</label>
+  <div class="sp-zeile"><input type="range" id="spWeite" min="10" max="100" step="1"><span id="spWeiteWert">40 m</span></div>
+  <label for="spStock">Anderes Stockwerk im selben Haus</label>
+  <div class="sp-zeile"><input type="range" id="spStock" min="0" max="100" step="5"><span id="spStockWert">35 %</span></div>
+  <label for="spDrin">Zwischen drinnen und draußen (an der Haustür)</label>
+  <div class="sp-zeile"><input type="range" id="spDrin" min="0" max="50" step="5"><span id="spDrinWert">10 %</span></div>
+  <label for="spFunk">Über Funkgeräte (📻)</label>
+  <div class="sp-zeile"><input type="range" id="spFunk" min="0" max="100" step="5"><span id="spFunkWert">70 %</span></div>
+  <label class="sp-schalter"><input type="checkbox" id="spLockt"> Reden lockt Zombies an (etwa 25 m weit, wie Rennen)</label>
+  <p class="sp-leise">STUN-/TURN-Server stellst du in den Add-on-Optionen ein (stun_server, turn_server, turn_username, turn_password). Hinter strengen Routern oder Mobilfunk ist ein TURN-Server nötig.</p>
+  <p class="sp-status" id="spStatus" aria-live="polite"></p>
+</section>
+<style>
+  #spracheKarte .sp-leise { color: var(--text-soft); font-size: .85rem; font-weight: 400; }
+  #spracheKarte .sp-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #spracheKarte .sp-zeile input { flex: 1; }
+  #spracheKarte .sp-zeile span { min-width: 64px; text-align: right; }
+  #spracheKarte .sp-schalter { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; font-weight: 600; }
+  #spracheKarte .sp-schalter input { width: 22px; height: 22px; }
+  #spracheKarte .sp-status { min-height: 1.2em; font-size: .85rem; }
+</style>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var aktiv = null;
+  var REGLER = [
+    ['spWeite', 'hoerweite', 40, function (v) { return v + ' m'; }],
+    ['spStock', 'stockwerk', 35, function (v) { return v + ' %'; }],
+    ['spDrin', 'drinnenDraussen', 10, function (v) { return v + ' %'; }],
+    ['spFunk', 'funk', 70, function (v) { return v + ' %'; }]
+  ];
+  function status(text, fehler) {
+    var s = $('spStatus'); s.textContent = text; s.style.color = fehler ? 'var(--gefahr)' : 'var(--akzent)';
+    clearTimeout(status.t); status.t = setTimeout(function () { s.textContent = ''; }, 2500);
+  }
+  function zeige(d) {
+    var sp = (d.einstellungen && d.einstellungen.sprache) || {};
+    REGLER.forEach(function (r) {
+      if (aktiv === r[0]) return;
+      $(r[0]).value = sp[r[1]] === undefined ? r[2] : sp[r[1]];
+      $(r[0] + 'Wert').textContent = r[3](Number($(r[0]).value));
+    });
+    if (document.activeElement !== $('spAn')) $('spAn').checked = sp.an !== false;
+    if (document.activeElement !== $('spLockt')) $('spLockt').checked = !!sp.redenLockt;
+  }
+  function senden(teil) {
+    return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sprache: teil }) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { aktiv = null; zeige(d); status('✓ Gespeichert'); })
+      .catch(function (e) { aktiv = null; status('Fehler: ' + e.message, true); });
+  }
+  REGLER.forEach(function (r) {
+    var el = $(r[0]);
+    el.addEventListener('input', function () { aktiv = r[0]; $(r[0] + 'Wert').textContent = r[3](Number(el.value)); });
+    el.addEventListener('change', function () { var t = {}; t[r[1]] = Number(el.value); senden(t); });
+  });
+  $('spAn').addEventListener('change', function () { senden({ an: $('spAn').checked }); });
+  $('spLockt').addEventListener('change', function () { senden({ redenLockt: $('spLockt').checked }); });
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  laden();
+  setInterval(laden, 5000);
+})();
+</script>
+
 <section class="karte" id="toeneKarte" aria-labelledby="titelToene">
   <h2 id="titelToene">🔊 Geräusche</h2>
   <p class="tk-hinweis">Ordne jedem Ereignis eine oder mehrere Tondateien zu – bei mehreren wird zufällig gewählt. Ohne Zuordnung erzeugt das Spiel einen eigenen Ton.</p>

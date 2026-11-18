@@ -19,6 +19,21 @@ export function leseOptionen(datei = process.env.ZOMBIES_OPTIONS || '/data/optio
   try { return JSON.parse(fs.readFileSync(datei, 'utf8')); } catch { return {}; }
 }
 
+// ICE-Server für die Sprachübertragung aus den Add-on-Optionen („aus“ = kein STUN)
+export function iceServer(o = {}) {
+  const ice = [];
+  const stun = String(o.stun_server ?? 'stun:stun.l.google.com:19302').trim();
+  if (stun && stun.toLowerCase() !== 'aus') ice.push({ urls: stun });
+  const turn = String(o.turn_server ?? '').trim();
+  if (turn) {
+    const eintrag = { urls: turn };
+    if (o.turn_username) eintrag.username = String(o.turn_username);
+    if (o.turn_password) eintrag.credential = String(o.turn_password);
+    ice.push(eintrag);
+  }
+  return ice;
+}
+
 const SUPERVISOR = new Set(['172.30.32.2', '::ffff:172.30.32.2']);
 export function entferneFremdenIngress(req, res, next) {
   if (!SUPERVISOR.has(req.socket?.remoteAddress)) delete req.headers['x-ingress-path'];
@@ -75,6 +90,11 @@ export async function starte({
       bots: w.bots,
       karte: geladeneKarte.karte,                   // gilt für die nächste Welt
       frischerStart: w.frischerStart,
+      sprache: {                                    // Sprachübertragung (Werte für den Client: Meter bzw. 0..1)
+        an: w.sprache.an, hoerweite: w.sprache.hoerweite, stockwerk: w.sprache.stockwerk / 100,
+        drinnenDraussen: w.sprache.drinnenDraussen / 100, funk: w.sprache.funk / 100, redenLockt: w.sprache.redenLockt,
+      },
+      ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,
       unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),
     };
@@ -200,7 +220,7 @@ export async function starte({
 
   const httpServer = http.createServer(app);
   const spielServer = new Server({
-    transport: new WebSocketTransport({ server: httpServer }),
+    transport: new WebSocketTransport({ server: httpServer, maxPayload: 32 * 1024 }),   // Standard 4 KB: zu knapp für WebRTC-Signalisierung (SDP)
     greet: false,
     logger: leise ? { info() {}, warn() {}, error: console.error, debug() {}, trace() {} } : undefined,
   });

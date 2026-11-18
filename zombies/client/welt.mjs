@@ -357,6 +357,7 @@ export const DINGE = {
   kleidung: { name: 'Feste Kleidung', zeichen: '🧥' },
   seil: { name: 'Seil', zeichen: '🪢' },
   taschenlampe: { name: 'Taschenlampe', zeichen: '🔦' },
+  funkgeraet: { name: 'Funkgerät', zeichen: '📻' },   // Sprachfunk: mit zwei Funkgeräten hört man sich überall (client/sprache_regeln.mjs)
   schokoriegel: { name: 'Schokoriegel', zeichen: '🍫' },
   tasche: { name: 'Sporttasche (12 Plätze)', zeichen: '👜', plaetze: 12 },
   trekking: { name: 'Trekkingrucksack (16 Plätze)', zeichen: '🎒', plaetze: 16 },
@@ -374,13 +375,13 @@ export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank'
   laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
-  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', null, null],
-  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', 'gewehr', 'schrotflinte', null, null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', null, null],
+  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', 'gewehr', 'schrotflinte', 'funkgeraet', null, null],
   // Kofferraum geht nur mit Brechstange auf – darum liegt drin keine, dafür etwas mehr Gutes
-  auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', null],
+  auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', 'funkgeraet', null],
   laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
   laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
-  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'wasser', 'wasser', null],
+  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', null],
   laden_gaststaette: ['essen', 'essen', 'wasser', 'wasser', 'messer', 'schokoriegel', null],
   laden: ['essen', 'wasser', 'schokoriegel', null, null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
