@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.0 – 18.11.2026
+
+- Neue Figuren: Zombies mit Laufanimation von oben – Tarnjacke, Dirndl, Feuerwehr, Hemd und Lederhose –, beim
+  Zubeißen mit offenem Mund
+- Neue Kriecher (vier Arten, im Wechsel ziehend) und neue tote Zombies mit Blutlache, passend zum Zombietyp
+- Eigene Spielfigur: Auf der Startseite Mann oder Frau, Haarfarbe und Kleidungsfarbe wählen (mit Vorschau); die Wahl
+  wird gespeichert und alle Mitspieler sehen dich so, je nach Waffe mit Pistole, Schläger oder Messer in der Hand
+- Bots bekommen ein zufälliges Aussehen
+
 ## 0.16.0 – 18.11.2026
 
 - Tag und Nacht: Spieluhr (ein Spieltag dauert einstellbar 48 Minuten), Dämmerung mit warmem Licht, nachts dunkel

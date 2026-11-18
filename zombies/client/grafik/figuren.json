@@ -1,0 +1,115 @@
+{
+ "feld": 160,
+ "bilder": {
+  "zombie_tarn": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5
+  ],
+  "zombie_dirndl": [
+   6,
+   7,
+   8,
+   9,
+   10,
+   11
+  ],
+  "zombie_feuerwehr": [
+   12,
+   13,
+   14,
+   15,
+   16,
+   17
+  ],
+  "zombie_hemd": [
+   18,
+   19,
+   20,
+   21,
+   22,
+   23
+  ],
+  "zombie_dirndl_angriff": [
+   24
+  ],
+  "zombie_feuerwehr_angriff": [
+   25
+  ],
+  "zombie_lederhose_angriff": [
+   26
+  ],
+  "zombie_lederhose": [
+   27,
+   28,
+   29
+  ],
+  "kriecher_a": [
+   30,
+   31
+  ],
+  "kriecher_b": [
+   32,
+   33
+  ],
+  "kriecher_c": [
+   34,
+   35
+  ],
+  "kriecher_d": [
+   36,
+   37
+  ],
+  "leiche_lederhose": [
+   38
+  ],
+  "leiche_dirndl": [
+   39
+  ],
+  "leiche_feuerwehr": [
+   40
+  ],
+  "leiche_hemd": [
+   41
+  ],
+  "leiche_lederhose2": [
+   42
+  ],
+  "leiche_dirndl2": [
+   43
+  ],
+  "leiche_feuerwehr2": [
+   44
+  ],
+  "leiche_tarn": [
+   45
+  ],
+  "mann_hand": [
+   46
+  ],
+  "mann_pistole": [
+   47
+  ],
+  "mann_schlaeger": [
+   48
+  ],
+  "mann_messer": [
+   49
+  ],
+  "frau_hand": [
+   50
+  ],
+  "frau_pistole": [
+   51
+  ],
+  "frau_schlaeger": [
+   52
+  ],
+  "frau_messer": [
+   53
+  ]
+ }
+}

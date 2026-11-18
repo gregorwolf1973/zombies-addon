@@ -512,3 +512,32 @@ test('Toter Zombie in der Tür: erst wegziehen, dann verbarrikadieren', async ()
     assert.ok(await bis(() => raum.state.safes.get(s.id).barrikade > 0, 5000), 'keine Barrikade');
   } finally { await c.leave(); }
 });
+
+test('Figur: gewähltes Aussehen kommt an, wird gespeichert, Unsinn wird ersetzt', async () => {
+  const id = neueId();
+  let c = await new Client(URL_).joinOrCreate('zombies', { name: 'Modell', spielerId: id, aussehen: 'w,2,5' });
+  let raum = matchMaker.getLocalRoomById(c.roomId);
+  assert.equal(raum.state.spieler.get(c.sessionId).aussehen, 'w,2,5');
+  raum.speichereSpieler(c.sessionId);
+  await c.leave(); await warte(200);
+  // ohne Angabe: gespeichertes Aussehen
+  c = await new Client(URL_).joinOrCreate('zombies', { name: 'Modell', spielerId: id });
+  raum = matchMaker.getLocalRoomById(c.roomId);
+  assert.equal(raum.state.spieler.get(c.sessionId).aussehen, 'w,2,5');
+  await c.leave(); await warte(200);
+  c = await new Client(URL_).joinOrCreate('zombies', { name: 'Böse', spielerId: neueId(), aussehen: '<script>' });
+  raum = matchMaker.getLocalRoomById(c.roomId);
+  assert.match(raum.state.spieler.get(c.sessionId).aussehen, /^[mw],[0-5],[0-7]$/);
+  await c.leave();
+});
+
+test('Figurenbogen enthält alle Bilder, die das Spiel braucht', async () => {
+  const fs = await import('node:fs');
+  const j = JSON.parse(fs.readFileSync(new URL('../client/grafik/figuren.json', import.meta.url)));
+  for (const typ of ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose']) {
+    assert.ok(j.bilder['zombie_' + typ]?.length >= 3, 'Laufbilder fehlen: ' + typ);
+    assert.ok(j.bilder['leiche_' + typ]?.length, 'Leiche fehlt: ' + typ);
+  }
+  for (const k of 'abcd') assert.equal(j.bilder['kriecher_' + k]?.length, 2, 'Kriecher ' + k);
+  for (const wer of ['mann', 'frau']) for (const w of ['hand', 'pistole', 'schlaeger', 'messer']) assert.ok(j.bilder[`${wer}_${w}`], `${wer}_${w}`);
+});

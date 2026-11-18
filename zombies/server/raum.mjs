@@ -16,6 +16,7 @@ import {
 
 export const Spieler = schema({
   name: t.string(),
+  aussehen: t.string(),     // Figur: 'm|w,Haarfarbe,Kleidfarbe', z. B. 'w,2,5' (siehe client/figurbild.mjs)
   x: t.number(), y: t.number(),
   richtung: t.number(),
   hp: t.number(),
@@ -48,7 +49,7 @@ export const Zombie = schema({
   hp: t.uint8(),
   kriecht: t.boolean(),     // „nicht ganz tot“: robbt am Boden
   ebene: t.string(),
-  variante: t.uint8(),      // Kleidung 0–3
+  variante: t.uint8(),      // Zombietyp 0–4 (Tarnjacke, Dirndl, Feuerwehr, Hemd, Lederhose)
 }, 'Zombie');
 
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
@@ -92,6 +93,7 @@ const SPEICHER_TAKT = 30;
 const ID_MUSTER = /^[a-f0-9]{32}$/;
 const BLOCKIERT_FELD = new Set([...BLOCKIERT].filter(t => t !== T.INNENTUER).concat([T.INNENTUER]));
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
+const AUSSEHEN = /^[mw],[0-5],[0-7]$/;
 export const TOR_RAETSEL = 3;
 const TOR_ABSTAND = 70;
 
@@ -239,6 +241,7 @@ export class SpielRaum extends Room {
       this.state.spieler.delete(sid);
       this.extra.delete(sid);
       alt.name = name; alt.verbunden = true;
+      if (AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
       this.state.spieler.set(client.sessionId, alt);
       this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false } });
       return;
@@ -247,6 +250,8 @@ export class SpielRaum extends Room {
     const p = new Spieler();
     p.name = name;
     p.farbe = this.freieFarbe();
+    const gewaehlt = AUSSEHEN.test(String(optionen.aussehen ?? ''));
+    p.aussehen = gewaehlt ? optionen.aussehen : this.zufallsAussehen();
     p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0;
     p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0;
     const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null };
@@ -258,6 +263,7 @@ export class SpielRaum extends Room {
       p.waffe = DINGE[gespeichert.waffe]?.waffe ? gespeichert.waffe : '';
       p.munition = Math.max(0, Math.min(99, Number(gespeichert.munition) || 0));
       p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
+      if (!gewaehlt && AUSSEHEN.test(String(gespeichert.aussehen ?? ''))) p.aussehen = gespeichert.aussehen;
       p.infektion = Math.max(0, Math.min(INFEKTION_DAUER, Number(gespeichert.infektion) || 0));
       p.kleidung = Math.max(0, Math.min(100, Number(gespeichert.kleidung) || 0));
       p.lampe = Math.max(0, Math.min(LAMPE_DAUER, Number(gespeichert.lampe) || 0));
@@ -300,7 +306,7 @@ export class SpielRaum extends Room {
       const name = BOT_NAMEN.find(b => !belegt.has(b + ' 🤖')) ?? 'Bot';
       const sid = 'bot-' + (this.naechsteBotId = (this.naechsteBotId ?? 0) + 1);
       const p = new Spieler();
-      p.name = name + ' 🤖'; p.farbe = this.freieFarbe();
+      p.name = name + ' 🤖'; p.farbe = this.freieFarbe(); p.aussehen = this.zufallsAussehen();
       p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0; p.schleicht = false;
       p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0;
       p.hp = 100; p.durst = 100; p.hunger = 100; p.besiegt = 0;
@@ -316,6 +322,10 @@ export class SpielRaum extends Room {
       this.extra.set(sid, { spielerId: null, bot: { nr: botIds.length }, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null });
       botIds.push(sid);
     }
+  }
+
+  zufallsAussehen() {
+    return `${this.rnd() < 0.5 ? 'm' : 'w'},${Math.floor(this.rnd() * 6)},${Math.floor(this.rnd() * 8)}`;
   }
 
   freieFarbe() {
@@ -438,7 +448,7 @@ export class SpielRaum extends Room {
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
       waffe: p.waffe, munition: p.munition, rucksack: [...p.rucksack], plaetze: p.plaetze, besiegt: p.besiegt,
-      letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
+      aussehen: p.aussehen, letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
     });
   }
 
@@ -559,7 +569,7 @@ export class SpielRaum extends Room {
   setzeZombie(x, y, ebene = '', schlaeft = false) {
     const z = new Zombie();
     z.x = x; z.y = y; z.hp = ZOMBIE_HP; z.richtung = this.rnd() * Math.PI * 2; z.jagt = false;
-    z.kriecht = false; z.variante = Math.floor(this.rnd() * 4); z.ebene = ebene;
+    z.kriecht = false; z.variante = Math.floor(this.rnd() * 5); z.ebene = ebene;
     const id = 'z' + (this.naechsteZombieId++);
     this.state.zombies.set(id, z);
     this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft });

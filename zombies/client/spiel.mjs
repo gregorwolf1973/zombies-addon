@@ -5,6 +5,7 @@ import {
   BODEN_DAUER, TAUSCH_ABSTAND, helligkeit, istNacht, hausHell, fensterLicht, uhrText,
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
+import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen } from './aussehen.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
@@ -16,7 +17,7 @@ import { Uebersicht } from './uebersicht.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
-import { zeichneMensch, zeichneZombie, zeichneKriecher, zeichneLeiche, zeichneMenschLiegend } from './figuren.mjs';
+import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
 
 const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
 const LAUFBILDER = 8;
@@ -37,11 +38,6 @@ function figurenVorzeichnen(szene) {
     streifen(szene, 'mensch-' + n, 48, 48, LAUFBILDER + 1, (ctx, i) => zeichneMensch(ctx, css(f), i === 0 ? null : (i - 1) / LAUFBILDER, art));
     streifen(szene, 'liegend-' + n, 56, 56, 1, ctx => zeichneMenschLiegend(ctx, css(f), art));
   });
-  for (let v = 0; v < 4; v++) {
-    streifen(szene, 'zombie-' + v, 52, 52, LAUFBILDER, (ctx, i) => zeichneZombie(ctx, v, i / LAUFBILDER));
-    streifen(szene, 'kriecher-' + v, 72, 52, LAUFBILDER, (ctx, i) => zeichneKriecher(ctx, v, i / LAUFBILDER));
-    streifen(szene, 'leiche-' + v, 64, 64, 1, ctx => zeichneLeiche(ctx, v));
-  }
 }
 // Laufbild aus der zurückgelegten Strecke
 function laufBild(f, dx, dy, dt, schrittLaenge) {
@@ -85,6 +81,44 @@ try {
 } catch {}
 fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; ton.toeneZuordnen(i.toene); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); mitspielen(); });
+
+// ---------- Figurenwahl ----------
+let meinAussehen = aussehenLesen(null);
+try { meinAussehen = aussehenLesen(localStorage.getItem('zob_aussehen')); } catch {}
+const figurVorlage = { bild: new Image(), liste: null };
+figurVorlage.bild.src = 'grafik/figuren.png';
+fetch('grafik/figuren.json').then(r => r.json()).then(j => { figurVorlage.liste = j; vorschauZeichnen(); }).catch(() => {});
+figurVorlage.bild.onload = () => vorschauZeichnen();
+function vorschauZeichnen() {
+  const l = figurVorlage.liste;
+  if (!l || !figurVorlage.bild.complete) return;
+  const c = $('figurvorschau'), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.save(); ctx.translate(80, 80); ctx.rotate(-Math.PI / 2); ctx.scale(1.45, 1.45); ctx.translate(-80, -80);   // nach oben schauend, vergrößert
+  umgefaerbt(ctx, figurVorlage.bild, l.feld, l.bilder[(meinAussehen.g === 'w' ? 'frau' : 'mann') + '_hand'][0], 8, 0, 0, meinAussehen);
+  ctx.restore();
+}
+function figurWahlAufbauen() {
+  const markieren = () => {
+    document.querySelectorAll('.geschlecht button').forEach(b => b.classList.toggle('an', b.dataset.g === meinAussehen.g));
+    [...$('haarwahl').children].forEach((b, i) => b.classList.toggle('an', i === meinAussehen.haar));
+    [...$('kleidwahl').children].forEach((b, i) => b.classList.toggle('an', i === meinAussehen.kleid));
+    try { localStorage.setItem('zob_aussehen', aussehenText(meinAussehen)); } catch {}
+    vorschauZeichnen();
+  };
+  document.querySelectorAll('.geschlecht button').forEach(b => { b.onclick = () => { meinAussehen.g = b.dataset.g; markieren(); }; });
+  for (const [box, farben, feld] of [[$('haarwahl'), HAARFARBEN, 'haar'], [$('kleidwahl'), KLEIDFARBEN, 'kleid']]) {
+    farben.forEach((f, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.title = f.name; b.setAttribute('aria-label', f.name);
+      b.style.background = `rgb(${f.rgb.join(',')})`;
+      b.onclick = () => { meinAussehen[feld] = i; markieren(); };
+      box.appendChild(b);
+    });
+  }
+  markieren();
+}
+figurWahlAufbauen();
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 
@@ -102,7 +136,7 @@ async function mitspielen() {
     let token = null;
     try { token = sessionStorage.getItem('zob_token'); } catch {}
     if (token) { try { r = await client.reconnect(token); } catch { r = null; } }
-    if (!r) r = await client.joinOrCreate('zombies', { name, code, spielerId: spielerId() });
+    if (!r) r = await client.joinOrCreate('zombies', { name, code, spielerId: spielerId(), aussehen: aussehenText(meinAussehen) });
     raum = r;
     meineId = r.sessionId;
     try { sessionStorage.setItem('zob_token', r.reconnectionToken); } catch {}
@@ -179,14 +213,17 @@ const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 // ---------- Szene ----------
 const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
-const PERSONEN = ['manBlue', 'womanGreen', 'manBrown', 'survivor1', 'manOld', 'hitman1', 'soldier1', 'manBlue', 'womanGreen', 'manBrown'];
+const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42;
+const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose'];
 
 class Ort extends Phaser.Scene {
   constructor() { super('ort'); }
 
   preload() {
     for (const g of GRAFIK) this.load.image(g, 'grafik/' + g + '.png');
-    for (const p of new Set([...PERSONEN, 'zombie'])) for (const pose of ['stand', 'gun', 'hold']) this.load.image(`${p}_${pose}`, `grafik/${p}_${pose}.png`);
+    // Figuren aus den KI-Bögen (tools/figuren_schneiden.py): 160er-Felder, Drehpunkt in der Feldmitte
+    this.load.spritesheet('figuren', 'grafik/figuren.png', { frameWidth: 160, frameHeight: 160 });
+    this.load.json('figurenliste', 'grafik/figuren.json');
   }
 
   create() {
@@ -291,6 +328,7 @@ class Ort extends Phaser.Scene {
   zeichneKarte() {
     // Boden, Bäume, Deko und Dächer entstehen stückweise beim Hinsehen (chunksAktualisieren)
     this.bilder = Object.fromEntries(GRAFIK.map(g => [g, this.textures.get(g).getSourceImage()]));
+    this.figurListe = this.cache.json.get('figurenliste')?.bilder ?? {};
     this.stuecke = new Map();
     const g = this.add.graphics().setDepth(0.5);
     // Böden der Safe Rooms etwas wärmer
@@ -431,7 +469,7 @@ class Ort extends Phaser.Scene {
     const n = p.farbe % FARBEN.length;
     // eigener Spieler: heller Ring am Boden
     const ring = this.add.ellipse(0, 0, 34, 34).setStrokeStyle(2, 0xffffff, ich ? 0.7 : 0).setFillStyle(0x000000, 0);
-    const bild = this.add.image(0, 0, PERSONEN[n] + '_stand').setScale(0.62);
+    const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE);
     const name = this.add.text(0, -28, p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
@@ -441,9 +479,29 @@ class Ort extends Phaser.Scene {
 
   neuerZombie(z) {
     const box = this.add.container(z.x, z.y).setDepth(3);
-    const bild = z.kriecht ? this.add.image(0, 0, 'kriecher-' + ((z.variante ?? 0) % 4), 0) : this.add.image(0, 0, 'zombie_hold').setScale(0.62);
+    const bild = this.add.image(0, 0, 'figuren', this.figurBild('zombie_hemd', 0)).setScale(ZOMBIE_GROESSE);
     box.add([bild]);
     return { box, bild, x: z.x, y: z.y, r: z.richtung };
+  }
+
+  // Bildnummer im Figurenbogen (Name aus figuren.json, i-tes Bild der Folge)
+  figurBild(name, i = 0) {
+    const l = this.figurListe[name];
+    return l?.length ? l[((i % l.length) + l.length) % l.length] : 0;
+  }
+
+  // umgefärbte Spielerfigur (vier Haltungen: ohne Waffe, Pistole, Schläger, Messer) als eigene Textur
+  menschTextur(aussehenTextWert) {
+    const a = aussehenLesen(aussehenTextWert), key = 'mensch_' + aussehenText(a);
+    if (this.textures.exists(key)) return key;
+    const quelle = this.textures.get('figuren').getSourceImage(), FELD = 160;
+    const tex = this.textures.createCanvas(key, FELD * 4, FELD), ctx = tex.getContext();
+    WAFFEN_BILD.forEach((w, k) => {
+      umgefaerbt(ctx, quelle, FELD, this.figurBild((a.g === 'w' ? 'frau_' : 'mann_') + w), 8, k * FELD, 0, a);
+      tex.add(k, 0, k * FELD, 0, FELD, FELD);
+    });
+    tex.refresh();
+    return key;
   }
 
   // ---------- Ebenen: Innenräume ----------
@@ -690,17 +748,20 @@ class Ort extends Phaser.Scene {
       const zeigen = this.sichtbar(z);
       f.box.setVisible(zeigen);
       const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
+      const typ = ZOMBIE_TYPEN[(z.variante ?? 0) % ZOMBIE_TYPEN.length];
       if (z.kriecht) {
-        const textur = 'kriecher-' + ((z.variante ?? 0) % 4);
-        if (f.bild.texture.key !== textur) f.bild.setTexture(textur, 0).setScale(1);
-        f.bild.setFrame(bildNr < 0 ? 0 : bildNr).setRotation(0);
+        f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
+        f.bild.setRotation(0).setScale(ZOMBIE_GROESSE);
       } else {
-        if (f.bild.texture.key !== 'zombie_hold') f.bild.setTexture('zombie_hold').setScale(0.62);
-        // schlurfen: wanken statt laufen
-        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.12);
+        // Angriff: beim Zubeißen das Bild mit offenem Mund (wo vorhanden)
+        let nah = false;
+        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < W.spielerRadius + W.zombieRadius + 16) { nah = true; break; }
+        const angriff = nah && this.figurListe['zombie_' + typ + '_angriff'];
+        f.bild.setFrame(angriff ? angriff[0] : this.figurBild('zombie_' + typ, bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 11)));
+        // schlurfen: leicht wanken
+        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * (angriff ? 1.06 : 1));
       }
-      const farbe = [0xffffff, 0xd8e6b8, 0xc8d4e0, 0xe6ccb0][(z.variante ?? 0) % 4];
-      f.bild.setTint(z.jagt ? 0xffb8a8 : farbe);
+      f.bild.setTint(z.jagt ? 0xffd2c8 : 0xffffff);
       if (zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
         if (z.kriecht) {
           // Kriecher sehen nicht, sie spüren ringsum
@@ -716,7 +777,9 @@ class Ort extends Phaser.Scene {
     for (const [id, l] of s.leichen) {
       let o = this.leichen.get(id);
       if (!o) {
-        o = this.add.image(l.x, l.y, 'leiche-' + ((l.variante ?? 0) % 4), 0).setDepth(1.6).setRotation(l.richtung);
+        // passend zum Zombietyp; Dirndl, Feuerwehr und Lederhose gibt es in zwei Fassungen
+        const typ = ZOMBIE_TYPEN[(l.variante ?? 0) % ZOMBIE_TYPEN.length], zweite = this.figurListe['leiche_' + typ + '2'] && (Math.round(l.x) + Math.round(l.y)) % 2;
+        o = this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + typ + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
         this.leichen.set(id, o);
       }
       o.setVisible((l.ebene ?? '') === this.aktEbene);
@@ -767,15 +830,18 @@ class Ort extends Phaser.Scene {
     f.lauf = (f.lauf ?? 0) + weg;
     const geht = weg / Math.max(dt, 0.001) > 12;
     // Haltung nach Ausrüstung: Pistole, Nahkampf/Lampe in der Hand, sonst ohne
-    let textur;
+    let textur, bild = 0;
     if (p.unten) textur = 'liegend-' + f.n;
-    else if (zombie) textur = 'zombie_hold';
-    else textur = PERSONEN[f.n] + (p.waffe === 'pistole' && p.munition > 0 ? '_gun' : p.waffe ? '_hold' : '_stand');
-    if (f.bild.texture.key !== textur) f.bild.setTexture(textur);
+    else if (zombie) { textur = 'figuren'; bild = this.figurBild('zombie_hemd', geht ? Math.floor(f.lauf / 11) : 0); }
+    else {
+      textur = this.menschTextur(p.aussehen);
+      bild = p.waffe === 'pistole' && p.munition > 0 ? 1 : p.waffe === 'schlaeger' ? 2 : p.waffe === 'messer' ? 3 : 0;
+    }
+    if (f.bild.texture.key !== textur || f.bild.frame.name != bild) f.bild.setTexture(textur, bild);   // eslint-disable-line eqeqeq
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
-    const s0 = p.unten ? 1 : 0.62;
+    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE : MENSCH_GROESSE;
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
