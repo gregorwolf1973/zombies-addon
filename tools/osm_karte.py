@@ -117,7 +117,7 @@ for w in wege:
     t, hw = w["tags"], w["tags"].get("highway")
     if hw in BREITEN and not (w["nodes"][0] == w["nodes"][-1] and t.get("area") == "yes"):
         if w["nodes"][0] == w["nodes"][-1] and hw == "pedestrian": continue
-        strassen.append({"t": hw, "b": BREITEN[hw] * 4 / mpk, "p": flach(poly(w))})
+        strassen.append({"t": hw, "b": BREITEN[hw] * 4 / mpk, "p": flach(poly(w)), **({"n": t["name"]} if t.get("name") else {})})
     art = ("wald" if t.get("natural") in ("wood", "scrub") or t.get("landuse") == "forest" else
            "parkplatz" if t.get("amenity") == "parking" else
            "platz" if (hw == "pedestrian" and w["nodes"][0] == w["nodes"][-1]) or t.get("place") == "square" else

@@ -135,13 +135,22 @@ button:disabled { opacity: .6; }
 #tauschstatus { font-size: 13px; color: #a5d6a7; margin-top: 8px; min-height: 1em; }
 
 /* Übersichtskarte: klein oben rechts, angetippt groß */
-#karte {
-  position: fixed; right: 10px; top: max(36px, calc(env(safe-area-inset-top) + 28px)); width: 170px; display: none;
-  border: 2px solid #fff6; border-radius: 10px; background: #1b2a1b; box-shadow: 0 3px 12px #000a; z-index: 6; cursor: pointer;
-  image-rendering: pixelated;
+#kartenbox {
+  position: fixed; right: 10px; top: max(36px, calc(env(safe-area-inset-top) + 28px)); width: 180px; display: none; z-index: 6;
 }
-#karte.gross { width: min(92vw, 900px); right: 50%; transform: translateX(50%); top: 60px; z-index: 24; }
+#kartenbox canvas {
+  display: block; width: 100%; border: 2px solid #fff6; border-radius: 10px; background: #1b2a1b; box-shadow: 0 3px 12px #000a;
+  cursor: pointer; touch-action: none;
+}
+#kartenbox.gross { width: min(94vw, 1000px); right: 50%; transform: translateX(50%); top: 56px; z-index: 24; }
+#kartenbox.gross canvas { cursor: grab; }
+.kartenknoepfe { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
+.kartenknoepfe button {
+  width: 26px !important; height: 26px; margin: 0 !important; padding: 0 !important; font-size: 16px; line-height: 1;
+  border-radius: 7px; background: #000a; color: #fff; border: 1px solid #fff4;
+}
+#kartenbox.gross .kartenknoepfe button { width: 40px !important; height: 40px; font-size: 22px; }
 #ton {
-  position: fixed; right: 186px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
+  position: fixed; right: 196px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
   margin: 0 !important; padding: 0 !important; font-size: 16px; border-radius: 8px; background: #0007; color: #fff; display: none; z-index: 6;
 }

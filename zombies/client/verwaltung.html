@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zombies in Oberbayern – Einstellungen</title>
+<style>
+  :root {
+    --bg: #f5f5f5;
+    --card: #ffffff;
+    --text: #212121;
+    --text-soft: #5f6368;
+    --border: #dcdcdc;
+    --akzent: #03a9f4;
+    --akzent-text: #ffffff;
+    --gefahr: #db4437;
+    --gefahr-soft: #fdecea;
+    --orange: #ef8c00;
+    --chip: #e1f5fe;
+    --track: #d6d6d6;
+    --shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121212;
+      --card: #1e1e1e;
+      --text: #e8e8e8;
+      --text-soft: #a0a0a0;
+      --border: #333333;
+      --akzent: #29b6f6;
+      --akzent-text: #06263a;
+      --gefahr: #ef5350;
+      --gefahr-soft: #3a1c1a;
+      --orange: #ffb74d;
+      --chip: #123544;
+      --track: #444444;
+      --shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    padding: 12px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .karte {
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .karte.gefahr {
+    border: 1px solid var(--gefahr);
+  }
+  .karte.gefahr h2 { color: var(--gefahr); }
+  h1 {
+    font-size: 1.25rem;
+    margin: 0 0 4px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  h1 .version {
+    font-size: 0.75rem;
+    color: var(--text-soft);
+    font-weight: normal;
+  }
+  h2 {
+    font-size: 1.05rem;
+    margin: 0 0 12px 0;
+  }
+  h3 {
+    font-size: 0.95rem;
+    margin: 16px 0 8px 0;
+  }
+  .kopf {
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  a.spielen {
+    display: inline-block;
+    margin-top: 10px;
+    background: var(--akzent);
+    color: var(--akzent-text);
+    text-decoration: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+  a.spielen:hover { filter: brightness(1.08); }
+  button {
+    font: inherit;
+    min-height: 40px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(0.95); }
+  button.prim {
+    background: var(--akzent);
+    color: var(--akzent-text);
+    border: none;
+    font-weight: 600;
+  }
+  button.gefahr {
+    background: var(--gefahr);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+  }
+  button.klein {
+    min-height: 40px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  input[type="text"], input[type="password"], input[type="number"], select {
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    min-height: 40px;
+    width: 100%;
+    max-width: 100%;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--akzent);
+    min-height: 32px;
+    margin: 4px 0;
+  }
+  .zeile {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .feld {
+    margin-bottom: 14px;
+  }
+  .feld > label, .feld > .label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .wertzeile {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .wert {
+    font-variant-numeric: tabular-nums;
+    color: var(--akzent);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .hinweis {
+    font-size: 0.8rem;
+    color: var(--text-soft);
+    margin-top: 4px;
+  }
+  .hinweis.orange {
+    color: var(--orange);
+    font-weight: 600;
+  }
+  .segment {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .segment button {
+    flex: 1 1 60px;
+    min-width: 56px;
+  }
+  .segment button.aktiv {
+    background: var(--akzent);
+    color: var(--akzent-text);
+    border-color: var(--akzent);
+    font-weight: 700;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .chip {
+    background: var(--chip);
+    border-radius: 999px;
+    padding: 6px 6px 6px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+  }
+  .chip button {
+    min-height: 28px;
+    height: 28px;
+    width: 28px;
+    padding: 0;
+    border-radius: 999px;
+    border: none;
+    background: var(--gefahr);
+    color: #fff;
+    font-size: 0.8rem;
+    line-height: 1;
+  }
+  .leer {
+    color: var(--text-soft);
+    font-style: italic;
+    font-size: 0.9rem;
+  }
+  .spieler-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .spieler {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .spieler .name {
+    font-weight: 600;
+    flex: 1 1 120px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .spieler .orts-zeichen { font-size: 0.85rem; color: var(--text-soft); }
+  .hp-wrap {
+    flex: 1 1 100px;
+    min-width: 80px;
+  }
+  .hp-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--track);
+    overflow: hidden;
+  }
+  .hp-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--akzent);
+    transition: width 0.3s;
+  }
+  .hp-num {
+    font-size: 0.75rem;
+    color: var(--text-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .schalter {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    min-height: 40px;
+    font-size: 0.9rem;
+    user-select: none;
+  }
+  .schalter input {
+    position: absolute;
+    opacity: 0;
+    width: 1px; height: 1px;
+  }
+  .schalter .anzeige {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: var(--track);
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .schalter .anzeige::after {
+    content: "";
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s;
+  }
+  .schalter input:checked + .anzeige { background: var(--akzent); }
+  .schalter input:checked + .anzeige::after { transform: translateX(20px); }
+  .schalter input:focus-visible + .anzeige {
+    outline: 2px solid var(--akzent);
+    outline-offset: 2px;
+  }
+  .bots-feld {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .bots-feld input {
+    width: 80px;
+    text-align: center;
+    flex: 0 1 auto;
+  }
+  .pass-feld {
+    position: relative;
+    display: flex;
+    gap: 8px;
+  }
+  .pass-feld input { flex: 1 1 auto; }
+  .raster {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  @media (min-width: 640px) {
+    .raster { grid-template-columns: 1fr 1fr; }
+  }
+  .datenzeile {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+    color: var(--text-soft);
+    margin-bottom: 10px;
+  }
+  .datenzeile strong { color: var(--text); }
+  .meldung {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%) translateY(20px);
+    background: #2e7d32;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    max-width: calc(100vw - 32px);
+    text-align: center;
+    z-index: 100;
+  }
+  .meldung.fehler { background: var(--gefahr); }
+  .meldung.zeigen {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .grosser-fehler {
+    display: none;
+    background: var(--gefahr);
+    color: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    font-size: 1.3rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 14px;
+  }
+  .grosser-fehler.zeigen { display: block; }
+  .versteckt { display: none !important; }
+  .volle-breite { flex: 1 1 100%; }
+  .aktion-zeile {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .aktion-zeile input { flex: 1 1 160px; }
+  @media (max-width: 400px) {
+    body { padding: 8px; }
+    .karte, .kopf { padding: 12px; }
+    button { padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="grosserFehler" class="grosser-fehler"></div>
+
+  <div class="kopf">
+    <h1>
+      <span>🧟 Zombies in Oberbayern – Einstellungen</span>
+      <span class="version" id="versionAnzeige"></span>
+    </h1>
+    <a class="spielen" href="?spielen">▶ Hier spielen</a>
+  </div>
+
+  <!-- Gerade im Spiel -->
+  <section class="karte" aria-labelledby="titelSpiel">
+    <h2 id="titelSpiel">Gerade im Spiel</h2>
+    <div class="datenzeile">
+      <span>Karte: <strong id="laufendeKarteAnzeige">–</strong></span>
+      <span>Spielzeit: <strong id="spielzeitAnzeige">–</strong></span>
+    </div>
+    <div id="spielerBereich"></div>
+  </section>
+
+  <!-- Testwerkzeuge -->
+  <section class="karte" aria-labelledby="titelTest">
+    <h2 id="titelTest">Testwerkzeuge</h2>
+    <div class="feld">
+      <span class="label" id="zeitrafferLabel">Zeitraffer</span>
+      <div class="segment" id="zeitrafferSegment" role="group" aria-labelledby="zeitrafferLabel"></div>
+      <p class="hinweis">Zeitraffer gilt nur bis zum nächsten Add-on-Neustart.</p>
+    </div>
+    <div class="feld">
+      <span class="label">Unsterbliche Spieler</span>
+      <div class="chips" id="unsterblichChips"></div>
+      <div class="aktion-zeile">
+        <label for="unsterblichEingabe" class="versteckt">Name hinzufügen</label>
+        <input type="text" id="unsterblichEingabe" placeholder="Name hinzufügen" autocomplete="off">
+        <button type="button" id="unsterblichHinzufuegen">Hinzufügen</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Zombies -->
+  <section class="karte" aria-labelledby="titelZombies">
+    <h2 id="titelZombies">Zombies</h2>
+
+    <div class="feld">
+      <label for="dichte">Menge draußen</label>
+      <div class="wertzeile">
+        <input type="range" id="dichte" min="0" max="50" step="1">
+        <span class="wert" id="dichteWert">×1,0</span>
+      </div>
+      <div class="aktion-zeile" style="margin-top:4px;">
+        <button type="button" class="klein" data-normal="dichte">normal</button>
+      </div>
+    </div>
+
+    <div class="feld">
+      <label for="haeuser">In Häusern</label>
+      <div class="wertzeile">
+        <input type="range" id="haeuser" min="0" max="50" step="1">
+        <span class="wert" id="haeuserWert">×1,0</span>
+      </div>
+      <div class="aktion-zeile" style="margin-top:4px;">
+        <button type="button" class="klein" data-normal="haeuser">normal</button>
+      </div>
+    </div>
+
+    <div class="feld">
+      <label for="tempo">Tempo</label>
+      <div class="wertzeile">
+        <input type="range" id="tempo" min="50" max="150" step="1">
+        <span class="wert" id="tempoWert">100 %</span>
+      </div>
+      <div class="aktion-zeile" style="margin-top:4px;">
+        <button type="button" class="klein" data-normal="tempo">normal</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Spiel -->
+  <section class="karte" aria-labelledby="titelSpielEinst">
+    <h2 id="titelSpielEinst">Spiel</h2>
+
+    <div class="feld">
+      <label for="karteAuswahl">Karte</label>
+      <select id="karteAuswahl"></select>
+      <p class="hinweis orange versteckt" id="karteHinweis">Neue Karte gilt nach „Welt neu starten“</p>
+    </div>
+
+    <div class="feld">
+      <span class="label" id="botsLabel">Bots</span>
+      <div class="bots-feld">
+        <button type="button" class="klein" id="botsMinus" aria-label="Ein Bot weniger">−</button>
+        <input type="number" id="botsAnzahl" min="0" max="9" step="1" aria-labelledby="botsLabel">
+        <button type="button" class="klein" id="botsPlus" aria-label="Ein Bot mehr">+</button>
+      </div>
+    </div>
+
+    <div class="feld">
+      <label class="schalter" for="frischerStart">
+        <input type="checkbox" id="frischerStart">
+        <span class="anzeige" aria-hidden="true"></span>
+        <span>Jede Spielrunde mit frischer Welt beginnen</span>
+      </label>
+      <p class="hinweis">Wenn alle das Spiel verlassen haben, beginnt die nächste Runde neu. Rucksäcke bleiben.</p>
+    </div>
+
+    <div class="feld">
+      <label for="zugangscode">Zugangscode</label>
+      <div class="pass-feld">
+        <input type="password" id="zugangscode" autocomplete="off" placeholder="leer = kein Code nötig">
+        <button type="button" id="augeKnopf" aria-label="Code anzeigen">👁</button>
+      </div>
+      <p class="hinweis">Leer = kein Code nötig.</p>
+    </div>
+  </section>
+
+  <!-- Fundhäufigkeit -->
+  <section class="karte" aria-labelledby="titelFunde">
+    <h2 id="titelFunde">Fundhäufigkeit</h2>
+    <div class="raster" id="fundeRaster"></div>
+    <div class="aktion-zeile" style="margin-top:14px;">
+      <button type="button" id="fundeNormal">Alle auf normal</button>
+    </div>
+  </section>
+
+  <!-- Welt neu starten -->
+  <section class="karte gefahr" aria-labelledby="titelNeustart">
+    <h2 id="titelNeustart">Welt neu starten</h2>
+    <p>Alle Spieler werden kurz getrennt, die Stadt beginnt neu (Kisten, Türen, Zombies). Rucksäcke bleiben, außer du hakst unten an.</p>
+    <label class="schalter" for="spielerLoeschen">
+      <input type="checkbox" id="spielerLoeschen">
+      <span class="anzeige" aria-hidden="true"></span>
+      <span>Auch alle Spielerstände löschen</span>
+    </label>
+    <div class="aktion-zeile" style="margin-top:12px;">
+      <button type="button" class="gefahr" id="neustartKnopf">Welt neu starten</button>
+    </div>
+  </section>
+
+</div>
+
+<div class="meldung" id="meldung" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var zustand = {
+    daten: null,
+    zeitBearbeitung: {},
+    gespeichertUnsterblich: [],
+    ausstehend: {},
+    initialisiert: false
+  };
+
+  var zeitGeber = {};
+  var meldungTimer = null;
+
+  function $(id) { return document.getElementById(id); }
+
+  function kurzMeldung(text, fehler) {
+    var el = $("meldung");
+    el.textContent = text;
+    el.className = "meldung zeigen" + (fehler ? " fehler" : "");
+    if (meldungTimer) clearTimeout(meldungTimer);
+    meldungTimer = setTimeout(function () {
+      el.className = "meldung" + (fehler ? " fehler" : "");
+    }, 2000);
+  }
+
+  function zeigeGrossenFehler(text) {
+    var el = $("grosserFehler");
+    el.textContent = text;
+    el.classList.add("zeigen");
+    document.querySelectorAll(".wrap > section, .wrap > .kopf").forEach(function (s) {
+      s.style.display = "none";
+    });
+  }
+
+  function karteName(s) {
+    if (!s) return "";
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  function faktor(v) {
+    return "×" + (v / 10).toFixed(1).replace(".", ",");
+  }
+
+  function spielzeitFormat(sek) {
+    sek = Math.max(0, Math.floor(sek || 0));
+    var h = Math.floor(sek / 3600);
+    var m = Math.floor((sek % 3600) / 60);
+    var s = sek % 60;
+    function z(n) { return n < 10 ? "0" + n : "" + n; }
+    return h + ":" + z(m) + ":" + z(s);
+  }
+
+  function namenGleich(a, b) {
+    return String(a).toLowerCase() === String(b).toLowerCase();
+  }
+
+  function istUnsterblich(liste, name) {
+    if (!Array.isArray(liste)) return false;
+    for (var i = 0; i < liste.length; i++) {
+      if (namenGleich(liste[i], name)) return true;
+    }
+    return false;
+  }
+
+  // ---------- API ----------
+
+  function apiGet() {
+    return fetch("verwaltung/api", { headers: { "Accept": "application/json" } })
+      .then(function (r) {
+        if (r.status === 403) {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            zeigeGrossenFehler(j.fehler || "Nur über die Home-Assistant-Seitenleiste");
+            throw new Error("403");
+          });
+        }
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      });
+  }
+
+  function apiPost(teil) {
+    var körper = {};
+    Object.keys(teil).forEach(function (k) { körper[k] = teil[k]; });
+    return fetch("verwaltung/api", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(körper)
+    }).then(function (r) {
+      if (r.status === 403) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          zeigeGrossenFehler(j.fehler || "Nur über die Home-Assistant-Seitenleiste");
+          throw new Error("403");
+        });
+      }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  function senden(teil) {
+    return apiPost(teil).then(function (neu) {
+      if (neu && neu.einstellungen) {
+        mergeDaten(neu);
+      }
+      kurzMeldung("✓ Gespeichert", false);
+      return neu;
+    }).catch(function (err) {
+      if (err && err.message === "403") return;
+      kurzMeldung("Fehler: " + (err && err.message ? err.message : "unbekannt"), true);
+    });
+  }
+
+  function sendenTeil(bereich, unterSchluessel, wert) {
+    var teil = {};
+    if (unterSchluessel === null || unterSchluessel === undefined) {
+      teil[bereich] = wert;
+    } else {
+      teil[bereich] = {};
+      teil[bereich][unterSchluessel] = wert;
+    }
+    return senden(teil);
+  }
+
+  function mergeDaten(neu) {
+    zustand.daten = neu;
+    if (neu.einstellungen && Array.isArray(neu.einstellungen.test.unsterblich)) {
+      zustand.gespeichertUnsterblich = neu.einstellungen.test.unsterblich.slice();
+    }
+  }
+
+  // ---------- Fokusprüfung ----------
+
+  function istFokussiert(el) {
+    return el && document.activeElement === el;
+  }
+
+  // ---------- Rendering ----------
+
+  function rendereAlles(d) {
+    $("versionAnzeige").textContent = d.version ? "v" + d.version : "";
+
+    rendereSpielBereich(d);
+    rendereZeitraffer(d);
+    rendereUnsterblichChips(d);
+    rendereZombies(d);
+    rendereSpiel(d);
+    rendereFunde(d);
+  }
+
+  function rendereSpielBereich(d) {
+    $("laufendeKarteAnzeige").textContent = d.laufendeKarte ? karteName(d.laufendeKarte) : "niemand spielt gerade";
+    $("spielzeitAnzeige").textContent = spielzeitFormat(d.spielzeit);
+
+    var bereich = $("spielerBereich");
+    bereich.textContent = "";
+    var spieler = Array.isArray(d.spieler) ? d.spieler : [];
+    if (!spieler.length) {
+      var leer = document.createElement("p");
+      leer.className = "leer";
+      leer.textContent = "Niemand spielt gerade.";
+      bereich.appendChild(leer);
+      return;
+    }
+
+    var liste = document.createElement("div");
+    liste.className = "spieler-liste";
+
+    spieler.forEach(function (sp) {
+      var zeile = document.createElement("div");
+      zeile.className = "spieler";
+
+      var nameEl = document.createElement("span");
+      nameEl.className = "name";
+      nameEl.textContent = sp.name + (sp.bot && !sp.name.includes("🤖") ? " 🤖" : "");
+      zeile.appendChild(nameEl);
+
+      var ortEl = document.createElement("span");
+      ortEl.className = "orts-zeichen";
+      ortEl.textContent = sp.drinnen ? "🏠 drinnen" : "🌲 draußen";
+      zeile.appendChild(ortEl);
+
+      var hpWrap = document.createElement("div");
+      hpWrap.className = "hp-wrap";
+      var hpBar = document.createElement("div");
+      hpBar.className = "hp-bar";
+      var hpFill = document.createElement("div");
+      hpFill.className = "hp-fill";
+      var hp = Math.max(0, Math.min(100, Number(sp.hp) || 0));
+      hpFill.style.width = hp + "%";
+      if (hp < 30) hpFill.style.background = "var(--gefahr)";
+      else if (hp < 60) hpFill.style.background = "var(--orange)";
+      hpBar.appendChild(hpFill);
+      var hpNum = document.createElement("div");
+      hpNum.className = "hp-num";
+      hpNum.textContent = hp + " %";
+      hpWrap.appendChild(hpBar);
+      hpWrap.appendChild(hpNum);
+      zeile.appendChild(hpWrap);
+
+      if (!sp.bot) {
+        var label = document.createElement("label");
+        label.className = "schalter";
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.setAttribute("aria-label", "Unsterblich für " + sp.name);
+        var listeUnst = (zustand.daten && zustand.daten.einstellungen && zustand.daten.einstellungen.test && zustand.daten.einstellungen.test.unsterblich) || [];
+        cb.checked = istUnsterblich(listeUnst, sp.name);
+        cb.addEventListener("change", function () {
+          var aktuelle = (zustand.daten && zustand.daten.einstellungen && zustand.daten.einstellungen.test && zustand.daten.einstellungen.test.unsterblich) || [];
+          var neu = aktuelle.slice();
+          if (cb.checked) {
+            if (!istUnsterblich(neu, sp.name)) neu.push(sp.name);
+          } else {
+            neu = neu.filter(function (n) { return !namenGleich(n, sp.name); });
+          }
+          senden({ test: { unsterblich: neu } }).then(function () {
+            rendereUnsterblichChips(zustand.daten);
+            var cbNow = cb;
+            cbNow.checked = istUnsterblich(neu, sp.name);
+          });
+        });
+        var spSpan = document.createElement("span");
+        spSpan.className = "anzeige";
+        spSpan.setAttribute("aria-hidden", "true");
+        var txt = document.createElement("span");
+        txt.textContent = "unsterblich";
+        label.appendChild(cb);
+        label.appendChild(spSpan);
+        label.appendChild(txt);
+        zeile.appendChild(label);
+      }
+
+      liste.appendChild(zeile);
+    });
+
+    bereich.appendChild(liste);
+  }
+
+  function rendereZeitraffer(d) {
+    var seg = $("zeitrafferSegment");
+    seg.textContent = "";
+    var arr = Array.isArray(d.zeitraffer) ? d.zeitraffer : [1, 5, 10, 60];
+    var aktiv = d.einstellungen && d.einstellungen.test ? d.einstellungen.test.zeitraffer : 1;
+    arr.forEach(function (z) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = "×" + z;
+      if (Number(z) === Number(aktiv)) b.classList.add("aktiv");
+      b.setAttribute("aria-pressed", Number(z) === Number(aktiv) ? "true" : "false");
+      b.addEventListener("click", function () {
+        sendenTeil("test", "zeitraffer", z);
+      });
+      seg.appendChild(b);
+    });
+  }
+
+  function rendereUnsterblichChips(d) {
+    var chips = $("unsterblichChips");
+    chips.textContent = "";
+    var liste = (d && d.einstellungen && d.einstellungen.test && Array.isArray(d.einstellungen.test.unsterblich)) ? d.einstellungen.test.unsterblich : [];
+    zustand.gespeichertUnsterblich = liste.slice();
+    if (!liste.length) {
+      var leer = document.createElement("span");
+      leer.className = "leer";
+      leer.textContent = "Keine unsterblichen Spieler.";
+      chips.appendChild(leer);
+      return;
+    }
+    liste.forEach(function (name) {
+      var chip = document.createElement("span");
+      chip.className = "chip";
+      var txt = document.createElement("span");
+      txt.textContent = name;
+      var x = document.createElement("button");
+      x.type = "button";
+      x.textContent = "✕";
+      x.setAttribute("aria-label", "Unsterblich entfernen für " + name);
+      x.addEventListener("click", function () {
+        var aktuelle = zustand.gespeichertUnsterblich.slice();
+        var neu = aktuelle.filter(function (n) { return !namenGleich(n, name); });
+        senden({ test: { unsterblich: neu } }).then(function () {
+          if (zustand.daten) rendereUnsterblichChips(zustand.daten);
+          rendereSpielBereich(zustand.daten);
+        });
+      });
+      chip.appendChild(txt);
+      chip.appendChild(x);
+      chips.appendChild(chip);
+    });
+  }
+
+  function rendereZombies(d) {
+    var z = (d.einstellungen && d.einstellungen.zombies) || { dichte: 10, haeuser: 10, tempo: 100 };
+    var dichte = $("dichte");
+    var haeuser = $("haeuser");
+    var tempo = $("tempo");
+    if (!zeitGeber["dichte"] && !istFokussiert(dichte)) { dichte.value = z.dichte; }
+    if (!zeitGeber["haeuser"] && !istFokussiert(haeuser)) { haeuser.value = z.haeuser; }
+    if (!zeitGeber["tempo"] && !istFokussiert(tempo)) { tempo.value = z.tempo; }
+    $("dichteWert").textContent = faktor(Number(dichte.value));
+    $("haeuserWert").textContent = faktor(Number(haeuser.value));
+    $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
+  }
+
+  function rendereSpiel(d) {
+    var e = d.einstellungen || {};
+    var sel = $("karteAuswahl");
+    var karten = Array.isArray(d.karten) ? d.karten : [];
+    var aktuelleAuswahl = sel.value;
+    sel.textContent = "";
+    karten.forEach(function (k) {
+      var opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = karteName(k);
+      sel.appendChild(opt);
+    });
+    var ziel = e.karte || (karten[0] || "");
+    if (istFokussiert(sel) && aktuelleAuswahl) ziel = aktuelleAuswahl;
+    sel.value = ziel;
+    aktualisiereKarteHinweis(d, sel.value);
+
+    var botsFeld = $("botsAnzahl");
+    if (!zeitGeber["bots"] && !istFokussiert(botsFeld)) {
+      botsFeld.value = (e.bots === 0 || e.bots) ? e.bots : 0;
+    }
+
+    var frisch = $("frischerStart");
+    if (!istFokussiert(frisch)) frisch.checked = !!e.frischerStart;
+
+    var code = $("zugangscode");
+    if (!zeitGeber["zugangscode"] && !istFokussiert(code)) {
+      code.value = e.zugangscode || "";
+    }
+  }
+
+  function aktualisiereKarteHinweis(d, gewaehlt) {
+    var hinweis = $("karteHinweis");
+    if (d && d.laufendeKarte && gewaehlt && gewaehlt !== d.laufendeKarte) {
+      hinweis.classList.remove("versteckt");
+    } else {
+      hinweis.classList.add("versteckt");
+    }
+  }
+
+  function rendereFunde(d) {
+    var raster = $("fundeRaster");
+    var dinge = Array.isArray(d.dinge) ? d.dinge : [];
+    var funde = (d.einstellungen && d.einstellungen.funde) || {};
+    var bestehende = {};
+    Array.prototype.forEach.call(raster.children, function (k) {
+      if (k.dataset && k.dataset.id) bestehende[k.dataset.id] = k;
+    });
+    raster.textContent = "";
+    dinge.forEach(function (ding) {
+      var feld = document.createElement("div");
+      feld.className = "feld";
+      feld.dataset.id = ding.id;
+      var label = document.createElement("label");
+      label.setAttribute("for", "fund_" + ding.id);
+      label.textContent = (ding.zeichen ? ding.zeichen + " " : "") + (ding.name || ding.id);
+      feld.appendChild(label);
+      var wertzeile = document.createElement("div");
+      wertzeile.className = "wertzeile";
+      var range = document.createElement("input");
+      range.type = "range";
+      range.min = "0";
+      range.max = "50";
+      range.step = "1";
+      range.id = "fund_" + ding.id;
+      var wert = (funde[ding.id] === 0 || funde[ding.id]) ? Number(funde[ding.id]) : 10;
+      range.value = wert;
+      var anzeige = document.createElement("span");
+      anzeige.className = "wert";
+      anzeige.id = "fundwert_" + ding.id;
+      anzeige.textContent = wert === 0 ? "nie" : faktor(wert);
+      range.addEventListener("input", function () {
+        anzeige.textContent = Number(range.value) === 0 ? "nie" : faktor(Number(range.value));
+      });
+      range.addEventListener("change", function () {
+        var teil = { funde: {} };
+        teil.funde[ding.id] = Number(range.value);
+        senden(teil);
+      });
+      wertzeile.appendChild(range);
+      wertzeile.appendChild(anzeige);
+      feld.appendChild(wertzeile);
+      raster.appendChild(feld);
+    });
+  }
+
+  // ---------- Polling Teilupdate ----------
+
+  function pollUpdate(d) {
+    if (!zustand.daten) return;
+    var alt = zustand.daten;
+    zustand.daten = d;
+
+    $("laufendeKarteAnzeige").textContent = d.laufendeKarte ? karteName(d.laufendeKarte) : "niemand spielt gerade";
+    $("spielzeitAnzeige").textContent = spielzeitFormat(d.spielzeit);
+
+    var bereich = $("spielerBereich");
+    var altSpieler = alt.spieler || [];
+    var neuSpieler = d.spieler || [];
+    var gleich = altSpieler.length === neuSpieler.length;
+    if (gleich) {
+      for (var i = 0; i < neuSpieler.length; i++) {
+        var a = altSpieler[i], b = neuSpieler[i];
+        if (!a || !b || a.name !== b.name || a.hp !== b.hp || a.drinnen !== b.drinnen || a.bot !== b.bot || a.verbunden !== b.verbunden) {
+          gleich = false; break;
+        }
+      }
+    }
+    var fokusImSpielerbereich = bereich.contains(document.activeElement);
+    if (!gleich || !fokusImSpielerbereich) {
+      rendereSpielBereich(d);
+    }
+
+    var seg = $("zeitrafferSegment");
+    var fokusImSegment = seg.contains(document.activeElement);
+    if (!fokusImSegment) {
+      rendereZeitraffer(d);
+    }
+
+    var chips = $("unsterblichChips");
+    var fokusImChips = chips.contains(document.activeElement);
+    var eingabeFokus = istFokussiert($("unsterblichEingabe"));
+    if (!fokusImChips && !eingabeFokus) {
+      rendereUnsterblichChips(d);
+    }
+
+    if (typeof aktualisiereKarteHinweis === "function") {
+      aktualisiereKarteHinweis(d, $("karteAuswahl").value);
+    }
+  }
+
+  // ---------- Events ----------
+
+  function bindeEvents() {
+    var dichte = $("dichte");
+    var haeuser = $("haeuser");
+    var tempo = $("tempo");
+
+    function sliderLabel() {
+      $("dichteWert").textContent = faktor(Number(dichte.value));
+    }
+    dichte.addEventListener("input", sliderLabel);
+    dichte.addEventListener("change", function () {
+      $("dichteWert").textContent = faktor(Number(dichte.value));
+      clearTimeout(zeitGeber["dichte"]);
+      sendenTeil("zombies", "dichte", Number(dichte.value));
+    });
+
+    haeuser.addEventListener("input", function () {
+      $("haeuserWert").textContent = faktor(Number(haeuser.value));
+    });
+    haeuser.addEventListener("change", function () {
+      $("haeuserWert").textContent = faktor(Number(haeuser.value));
+      clearTimeout(zeitGeber["haeuser"]);
+      sendenTeil("zombies", "haeuser", Number(haeuser.value));
+    });
+
+    tempo.addEventListener("input", function () {
+      $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
+    });
+    tempo.addEventListener("change", function () {
+      $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
+      clearTimeout(zeitGeber["tempo"]);
+      sendenTeil("zombies", "tempo", Number(tempo.value));
+    });
+
+    document.querySelectorAll("button[data-normal]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var feld = b.getAttribute("data-normal");
+        var ziel = feld === "tempo" ? 100 : 10;
+        var teil = { zombies: {} };
+        teil.zombies[feld] = ziel;
+        var el = $(feld);
+        if (feld === "dichte") $("dichteWert").textContent = faktor(ziel);
+        if (feld === "haeuser") $("haeuserWert").textContent = faktor(ziel);
+        if (feld === "tempo") $("tempoWert").textContent = ziel + " %";
+        if (el) el.value = ziel;
+        senden(teil);
+      });
+    });
+
+    var karteSel = $("karteAuswahl");
+    karteSel.addEventListener("change", function () {
+      aktualisiereKarteHinweis(zustand.daten, karteSel.value);
+      sendenTeil("karte", null, karteSel.value);
+    });
+
+    var botsFeld = $("botsAnzahl");
+    function setzeBots() {
+      var v = parseInt(botsFeld.value, 10);
+      if (isNaN(v)) v = 0;
+      v = Math.max(0, Math.min(9, v));
+      botsFeld.value = v;
+      sendenTeil("bots", null, v);
+    }
+    $( "botsMinus" ).addEventListener("click", function () {
+      clearTimeout(zeitGeber["bots"]);
+      var v = parseInt(botsFeld.value, 10); if (isNaN(v)) v = 0;
+      botsFeld.value = Math.max(0, v - 1);
+      setzeBots();
+    });
+    $("botsPlus").addEventListener("click", function () {
+      clearTimeout(zeitGeber["bots"]);
+      var v = parseInt(botsFeld.value, 10); if (isNaN(v)) v = 0;
+      botsFeld.value = Math.min(9, v + 1);
+      setzeBots();
+    });
+    botsFeld.addEventListener("input", function () {
+      clearTimeout(zeitGeber["bots"]);
+      zeitGeber["bots"] = setTimeout(function () { zeitGeber["bots"] = null; setzeBots(); }, 600);
+    });
+    botsFeld.addEventListener("change", function () {
+      clearTimeout(zeitGeber["bots"]);
+      zeitGeber["bots"] = null;
+      setzeBots();
+    });
+
+    var frisch = $("frischerStart");
+    frisch.addEventListener("change", function () {
+      sendenTeil("frischerStart", null, !!frisch.checked);
+    });
+
+    var code = $("zugangscode");
+    code.addEventListener("input", function () {
+      clearTimeout(zeitGeber["zugangscode"]);
+      zeitGeber["zugangscode"] = setTimeout(function () {
+        zeitGeber["zugangscode"] = null;
+        sendenTeil("zugangscode", null, code.value);
+      }, 600);
+    });
+    $("augeKnopf").addEventListener("click", function () {
+      var anzeigen = code.type === "password";
+      code.type = anzeigen ? "text" : "password";
+      this.setAttribute("aria-label", anzeigen ? "Code verbergen" : "Code anzeigen");
+      this.textContent = anzeigen ? "🙈" : "👁";
+    });
+
+    $("fundeNormal").addEventListener("click", function () {
+      var d = zustand.daten;
+      var dinge = (d && Array.isArray(d.dinge)) ? d.dinge : [];
+      var funde = {};
+      dinge.forEach(function (x) { funde[x.id] = 10; });
+      senden({ funde: funde }).then(function () {
+        if (zustand.daten) rendereFunde(zustand.daten);
+      });
+    });
+
+    var uEingabe = $("unsterblichEingabe");
+    function hinzufuegen() {
+      var name = uEingabe.value.trim();
+      if (!name) return;
+      var aktuelle = (zustand.daten && zustand.daten.einstellungen && zustand.daten.einstellungen.test && zustand.daten.einstellungen.test.unsterblich) || [];
+      if (!istUnsterblich(aktuelle, name)) {
+        var neu = aktuelle.slice();
+        neu.push(name);
+        senden({ test: { unsterblich: neu } }).then(function () {
+          uEingabe.value = "";
+          if (zustand.daten) {
+            rendereUnsterblichChips(zustand.daten);
+            rendereSpielBereich(zustand.daten);
+          }
+        });
+      } else {
+        uEingabe.value = "";
+      }
+    }
+    $("unsterblichHinzufuegen").addEventListener("click", hinzufuegen);
+    uEingabe.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); hinzufuegen(); }
+    });
+
+    $("neustartKnopf").addEventListener("click", function () {
+      var loeschen = $("spielerLoeschen").checked;
+      var text = loeschen
+        ? "Wirklich die Welt neu starten und ALLE Spielerstände löschen?"
+        : "Wirklich die Welt neu starten? Alle Spieler werden kurz getrennt.";
+      if (!window.confirm(text)) return;
+      var btn = this;
+      btn.disabled = true;
+      fetch("verwaltung/neustart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spielerLoeschen: !!loeschen })
+      }).then(function (r) {
+        if (r.status === 403) {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            zeigeGrossenFehler(j.fehler || "Nur über die Home-Assistant-Seitenleiste");
+            throw new Error("403");
+          });
+        }
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      }).then(function () {
+        kurzMeldung("✓ Welt neu gestartet", false);
+        return apiGet().then(mergeDaten).then(function () {
+          if (zustand.daten) rendereAlles(zustand.daten);
+        });
+      }).catch(function (err) {
+        if (err && err.message === "403") return;
+        kurzMeldung("Fehler: " + (err && err.message ? err.message : "unbekannt"), true);
+      }).finally(function () {
+        btn.disabled = false;
+      });
+    });
+  }
+
+  // ---------- Start ----------
+
+  function start() {
+    bindeEvents();
+    apiGet().then(function (d) {
+      mergeDaten(d);
+      if (!zustand.initialisiert) {
+        rendereAlles(d);
+        zustand.initialisiert = true;
+      }
+      setInterval(function () {
+        apiGet().then(function (neu) {
+          mergeDaten(neu);
+          if (zustand.initialisiert) pollUpdate(neu);
+        }).catch(function () { /* still */ });
+      }, 5000);
+    }).catch(function (err) {
+      if (err && err.message === "403") return;
+      zeigeGrossenFehler("Fehler beim Laden: " + (err && err.message ? err.message : "unbekannt"));
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+</script>
+</body>
+</html>

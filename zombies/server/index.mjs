@@ -9,6 +9,8 @@ import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { SpielRaum } from './raum.mjs';
 import { Speicher } from './speicher.mjs';
+import { EinstellungsDatei, KARTEN, ZEITRAFFER } from './einstellungen.mjs';
+import { DINGE } from '../client/welt.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -37,6 +39,7 @@ export async function starte({
   optionen = leseOptionen(),
   leise = false,
   datenbank = process.env.ZOMBIES_DB || '/data/zombies.db',
+  einstellungsDatei = process.env.ZOMBIES_EINSTELLUNGEN ?? (datenbank === ':memory:' ? null : path.join(path.dirname(datenbank), 'einstellungen.json')),
 } = {}) {
   SpielRaum.speicher = new Speicher(datenbank);
   const app = express();
@@ -46,16 +49,62 @@ export async function starte({
     res.sendFile(require.resolve('phaser/dist/phaser.min.js')));
   app.get('/vendor/colyseus.js', nocache, (req, res) =>
     res.sendFile(path.join(path.dirname(require.resolve('@colyseus/sdk/package.json')), 'dist/colyseus.js')));
-  SpielRaum.einstellungen = {
-    zugangscode: String(optionen.zugangscode ?? '').trim(),
-    // Zombies: ganzzahlig, 10 = Standardmenge (ältere Option zombie_faktor gilt nur, wenn zombies fehlt)
-    zombieFaktor: Number.isFinite(Number(optionen.zombies)) && optionen.zombies !== undefined && optionen.zombies !== null
-      ? Math.max(0, Math.min(50, Number(optionen.zombies))) / 10 : (Number(optionen.zombie_faktor) || 1),
-    // Fundhäufigkeit je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
-    funde: Object.fromEntries(Object.entries(optionen.funde ?? {}).map(([k, v]) => [k, Math.max(0, Math.min(50, Number(v) || 0))])),
-    bots: Math.max(0, Math.min(9, Number(optionen.bots) || 0)),
-    karte: ladeKarte(optionen.karte ?? 'geretsried'),
+  const datei = new EinstellungsDatei(einstellungsDatei, optionen);
+  let geladeneKarte = null;
+  const anwenden = w => {
+    if (!geladeneKarte || geladeneKarte.wahl !== w.karte) geladeneKarte = { wahl: w.karte, karte: ladeKarte(w.karte) };
+    SpielRaum.einstellungen = {
+      zugangscode: w.zugangscode,
+      zombieFaktor: w.zombies.dichte / 10,         // 10 = Standardmenge
+      haeuserFaktor: w.zombies.haeuser / 10,
+      tempoFaktor: w.zombies.tempo / 100,
+      funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
+      bots: w.bots,
+      karte: geladeneKarte.karte,                   // gilt für die nächste Welt
+      frischerStart: w.frischerStart,
+      zeitraffer: w.test.zeitraffer,
+      unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),
+    };
+    SpielRaum.aktiv?.einstellungenGeaendert?.();
   };
+  anwenden(datei.werte);
+
+  // ---------- Verwaltung: nur über die HA-Seitenleiste (Ingress, schon bei HA angemeldet) ----------
+  // (ZOMBIES_VERWALTUNG_LOKAL=1 erlaubt sie zum Testen auch von diesem Rechner aus)
+  const lokal = req => process.env.ZOMBIES_VERWALTUNG_LOKAL === '1' && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress);
+  const nurIngress = (req, res, next) => req.get('x-ingress-path') || lokal(req) ? next() : res.status(403).json({ fehler: 'Nur über die Home-Assistant-Seitenleiste' });
+  let paketVersion = '';
+  try { paketVersion = JSON.parse(fs.readFileSync(path.join(hier, '..', 'package.json'), 'utf8')).version; } catch { /* egal */ }
+  const lage = () => {
+    const raum = SpielRaum.aktiv;
+    return {
+      einstellungen: datei.werte,
+      karten: KARTEN, zeitraffer: ZEITRAFFER,
+      dinge: Object.entries(DINGE).map(([id, d]) => ({ id, name: d.name, zeichen: d.zeichen })),
+      laufendeKarte: raum ? (raum.state.karte || 'dorf') : null,
+      spieler: raum ? [...raum.state.spieler.entries()].map(([sid, p]) => ({
+        name: p.name, bot: !!raum.extra.get(sid)?.bot,
+        drinnen: !!p.ebene, hp: Math.round(p.hp), verbunden: !!p.verbunden,
+      })) : [],
+      spielzeit: raum ? Math.round(raum.state.zeit) : 0,
+      version: paketVersion,
+    };
+  };
+  app.get('/verwaltung/api', nurIngress, (req, res) => res.json(lage()));
+  app.post('/verwaltung/api', nurIngress, express.json({ limit: '20kb' }), (req, res) => {
+    anwenden(datei.aendern(req.body ?? {}));
+    res.json(lage());
+  });
+  app.post('/verwaltung/neustart', nurIngress, express.json({ limit: '2kb' }), (req, res) => {
+    const raum = SpielRaum.aktiv;
+    if (raum) raum.weltNeuStarten(!!req.body?.spielerLoeschen);
+    else { SpielRaum.speicher?.loescheWelt(); if (req.body?.spielerLoeschen) SpielRaum.speicher?.loescheSpieler(); }
+    res.json({ ok: true });
+  });
+  // In der Seitenleiste erscheint die Verwaltung; gespielt wird über die normale Adresse (oder ?spielen)
+  app.get('/', (req, res, next) => req.get('x-ingress-path') && !('spielen' in req.query)
+    ? res.set('Cache-Control', 'no-cache').sendFile(path.join(hier, '..', 'client', 'verwaltung.html')) : next());
+
   app.get('/gesund', (req, res) => res.json({ ok: true }));
   // sagt dem Client, ob er nach dem Zugangscode fragen muss
   app.get('/info', (req, res) => res.json({

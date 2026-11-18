@@ -53,5 +53,8 @@ export class Speicher {
     try { f(); this.db.exec('COMMIT'); } catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }
 
+  loescheWelt() { this.db.exec("DELETE FROM welt"); }
+  loescheSpieler() { this.db.exec("DELETE FROM spieler"); }
+
   schliessen() { try { this.db.close(); } catch {} }
 }

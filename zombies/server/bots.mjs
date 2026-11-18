@@ -137,7 +137,10 @@ export function botSchritt(raum, sid, p, x, dt) {
     const entf = drinnen ? 55 : 75 + (nr % 2) * 30;
     let platz = { x: anfuehrer.x + Math.cos(winkel) * entf, y: anfuehrer.y + Math.sin(winkel) * entf };
     if (!frei(welt, platz.x, platz.y, RAD) || !sichtfrei(welt, anfuehrer.x, anfuehrer.y, platz.x, platz.y)) platz = anfuehrer;
-    if (d < 70) return;   // nah genug: stehen bleiben (auch wenn der Mensch auf den Bot zugeht)
+    // nah genug: stehen bleiben (auch wenn der Mensch auf den Bot zugeht) – aber nicht in der Tür seines Safe Rooms
+    const seinSafe = safeRoomAn(raum.welt, anfuehrer.x, anfuehrer.y);
+    const imSelbenRaum = !seinSafe || p.ebene || safeRoomAn(raum.welt, p.x, p.y) === seinSafe;
+    if (d < 70 && imSelbenRaum) return;
     const tempo = anfuehrer.schleicht ? 0.45 : d > 180 ? 1 : 0.8;
     geheZu(raum, sid, p, x, platz, tempo, platz === anfuehrer ? 60 : 18);
     return;

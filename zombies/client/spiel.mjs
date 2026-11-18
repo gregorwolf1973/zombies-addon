@@ -11,6 +11,7 @@ let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 32;   // Kartenstücke à 32×32 Kacheln
 import { baueInnenraum } from './innen.mjs';
 import * as ton from './ton.mjs';
+import { Uebersicht } from './uebersicht.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
@@ -262,6 +263,11 @@ class Ort extends Phaser.Scene {
       meldung(m.grund === 'fertig' ? '🤝 Getauscht!' : 'Tausch abgebrochen');
     });
     raum.onMessage('aufloesung', m => zeigeAufloesung(m));
+    raum.onMessage('neustart', () => {
+      abgemeldet = true;
+      meldung('🔄 Die Welt wird neu gestartet – gleich geht es weiter …', true);
+      setTimeout(() => location.reload(), 2500);
+    });
     raum.onMessage('tor', () => meldung('🎉 Level 1 geschafft! Level 2 – der Wald an der Isar – kommt bald.', true));
 
     $('aktion').onclick = () => this.aktion();
@@ -355,43 +361,24 @@ class Ort extends Phaser.Scene {
     }
   }
 
-  // ---------- Übersichtskarte ----------
+  // ---------- Übersichtskarte (client/uebersicht.mjs) ----------
   uebersichtVorbereiten() {
-    const F = { [T.WIESE]: '#4d8c3b', [T.STRASSE]: '#77787c', [T.WAND]: '#8d5a44', [T.LEER]: '#8d5a44', [T.BODEN]: '#a87a5e',
-      [T.TUER]: '#ffd54f', [T.WASSER]: '#2a7098', [T.BAUM]: '#2d5e27', [T.PLATZ]: '#c8bba0', [T.ZAUN]: '#3e2723', [T.TOR]: '#ffb300', [T.DEKO]: '#777' };
-    const S = 2, basis = document.createElement('canvas');
-    basis.width = BREITE * S; basis.height = HOEHE * S;
-    const c = basis.getContext('2d');
-    for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) { c.fillStyle = F[this.welt.hole(x, y)] ?? '#4d8c3b'; c.fillRect(x * S, y * S, S, S); }
-    for (const sr of this.welt.safeRooms) { c.fillStyle = '#90caf9'; c.fillRect(sr.innen.x / KACHEL * S - 4, sr.innen.y / KACHEL * S - 4, 8, 8); }
-    this.uebersicht = { basis, S };
-    const el = $('karte');
-    el.width = basis.width; el.height = basis.height; el.style.display = 'block';
-    el.onclick = () => el.classList.toggle('gross');
+    this.uebersicht = new Uebersicht(this.welt, $('kartenbox'));
     const knopf = $('ton');
     knopf.style.display = 'block';
     knopf.textContent = ton.tonAn() ? '🔊' : '🔇';
     knopf.onclick = () => { ton.tonStarten(); knopf.textContent = ton.tonUmschalten() ? '🔊' : '🔇'; };
     ton.umgebung(false);
-    this.input.keyboard.on('keydown-M', () => el.classList.toggle('gross'));
+    this.input.keyboard.on('keydown-M', () => { this.uebersicht.umschalten(); this.uebersichtZeichnen(); });
   }
 
   uebersichtZeichnen() {
-    const u = this.uebersicht; if (!u) return;
-    const el = $('karte'), c = el.getContext('2d'), S = u.S;
-    c.drawImage(u.basis, 0, 0);
-    const t = this.welt.tor; c.fillStyle = '#ffb300'; c.fillRect(t.x * S - 2, t.y * S - 2, 8, 8);
-    for (const [id, p] of raum.state.spieler) {
-      // drinnen: an der Haustür des Hauses
-      let x = p.x, y = p.y;
-      const m = EBENE_MUSTER.exec(p.ebene ?? '');
-      if (m) { const h = this.welt.haeuser[Number(m[1])]; if (h) { x = (h.tuer.x + 0.5) * KACHEL; y = (h.tuer.y + 0.5) * KACHEL; } }
-      const ich = id === meineId, r = ich ? 5 : 3.5;
-      c.fillStyle = css(FARBEN[p.farbe % FARBEN.length]);
-      c.beginPath(); c.arc(x / KACHEL * S, y / KACHEL * S, r, 0, Math.PI * 2); c.fill();
-      c.lineWidth = ich ? 2.5 : 1; c.strokeStyle = ich ? '#fff' : '#000'; c.stroke();
-      if (el.classList.contains('gross')) { c.font = 'bold 11px sans-serif'; c.fillStyle = '#fff'; c.fillText(p.name, x / KACHEL * S + 7, y / KACHEL * S + 4); }
-    }
+    if (!this.uebersicht) return;
+    const spieler = [...raum.state.spieler.entries()].map(([id, p]) => ({
+      x: id === meineId && this.lokal ? this.lokal.x : p.x, y: id === meineId && this.lokal ? this.lokal.y : p.y,
+      ebene: p.ebene ?? '', name: p.name, ich: id === meineId, farbe: css(FARBEN[p.farbe % FARBEN.length]),
+    }));
+    this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });
   }
 
   // Kartenstücke um die Kamera herum erzeugen, entfernte freigeben (große Karten passen nicht in ein Bild)
@@ -936,7 +923,8 @@ class Ort extends Phaser.Scene {
     if (meine && (meine.ebene ?? '') !== this.aktEbene) {
       this.wechsleAnsicht(meine.ebene ?? '');
       this.lokal = { x: meine.x, y: meine.y };
-      const f = this.figuren.get(meineId); if (f) { f.x = f.altX = meine.x; f.y = f.altY = meine.y; }
+      const f = this.figuren.get(meineId); if (f) { f.x = f.altX = meine.x; f.y = f.altY = meine.y; f.box.setPosition(meine.x, meine.y); }
+      this.cameras.main.centerOn(meine.x, meine.y);   // sofort dort, nicht von der alten Stelle herüberziehen
     }
     const ich = this.eigeneFigur(dt);
     this.innenAktualisieren(ich);
@@ -955,7 +943,7 @@ class Ort extends Phaser.Scene {
     if (this.hudZeit <= 0) { this.hudZeit = 0.15; this.hud(ich); }
     this.geraeusche(ich, dt);
     this.karteZeit = (this.karteZeit ?? 0) - dt;
-    if (this.karteZeit <= 0) { this.karteZeit = 0.4; this.uebersichtZeichnen(); }
+    if (this.karteZeit <= 0 || this.uebersicht?.zeichneNeu) { this.karteZeit = this.uebersicht?.gross ? 0.15 : 0.4; this.uebersichtZeichnen(); }
   }
 
   // Schritte, Treffer am eigenen Leib, Stöhnen naher Zombies

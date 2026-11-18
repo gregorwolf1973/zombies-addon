@@ -110,8 +110,9 @@ export class SpielRaum extends Room {
   patchRate = TICK;
 
   // vom Server beim Start gesetzt (nicht über Client-Optionen änderbar)
-  static einstellungen = { zugangscode: '', zombieFaktor: 1, bots: 0, funde: {} };
+  static einstellungen = { zugangscode: '', zombieFaktor: 1, haeuserFaktor: 1, tempoFaktor: 1, bots: 0, funde: {}, zeitraffer: 1, unsterblich: new Set() };
   static speicher = null;
+  static aktiv = null;   // laufender Raum (für die Verwaltungsseite)
 
   // läuft bei der Anfrage zum Beitreten: Zugangscode prüfen.
   // Wer über die HA-Seitenleiste (Ingress) kommt, ist schon bei HA angemeldet.
@@ -126,7 +127,9 @@ export class SpielRaum extends Room {
 
   onCreate(optionen = {}) {
     this.speicher = SpielRaum.speicher;
-    const stand = this.speicher?.ladeWelt() ?? null;
+    SpielRaum.aktiv = this;
+    // „frischer Start“: jede neue Spielrunde beginnt mit einer neuen Welt (Spielerstände bleiben)
+    const stand = SpielRaum.einstellungen.frischerStart ? null : (this.speicher?.ladeWelt() ?? null);
     this.state = new Zustand();
     this.state.seed = Number.isInteger(optionen.seed) ? optionen.seed
       : stand?.seed ?? Math.floor(Math.random() * 2 ** 31);
@@ -182,7 +185,6 @@ export class SpielRaum extends Room {
     this.ersteWelle = true;
     this.erwischtSeit = 0;
     this.speicherUhr = SPEICHER_TAKT;
-    this.zombieFaktor = SpielRaum.einstellungen.zombieFaktor;
 
     this.onMessage('eingabe', (client, m) => {
       if (!m || typeof m !== 'object') return;
@@ -376,7 +378,41 @@ export class SpielRaum extends Room {
     this.botsAnpassen();
   }
 
-  onDispose() { this.speichereAlles(); }
+  onDispose() {
+    if (!this.nichtSpeichern) this.speichereAlles();
+    if (SpielRaum.aktiv === this) SpielRaum.aktiv = null;
+  }
+
+  // von der Verwaltungsseite: neue Werte gelten sofort
+  einstellungenGeaendert() {
+    this.botsAnpassen();
+    const soll = Math.round(zombieSoll(this.state.spieler.size) * (SpielRaum.einstellungen.zombieFaktor ?? 1));
+    // zu viele Zombies draußen: die am weitesten entfernten, nicht jagenden verschwinden
+    const draussen = [...this.state.zombies.entries()].filter(([, z]) => !z.ebene && !z.jagt);
+    const spieler = [...this.state.spieler.values()].filter(p => !p.ebene);
+    const abstand = z => Math.min(...spieler.map(p => Math.hypot(p.x - z.x, p.y - z.y)), Infinity);
+    draussen.sort((a, b) => abstand(b[1]) - abstand(a[1]));
+    for (const [id] of draussen.slice(0, Math.max(0, draussen.length - soll))) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
+  }
+
+  unsterblich(p) { return SpielRaum.einstellungen.unsterblich?.has?.(String(p.name).toLowerCase()); }
+
+  // von der Verwaltungsseite: alle bekommen Bescheid, die Welt wird verworfen und beim nächsten Beitritt neu gebaut
+  weltNeuStarten(spielerLoeschen = false) {
+    this.nichtSpeichern = true;
+    this.speicher?.loescheWelt();
+    if (spielerLoeschen) this.speicher?.loescheSpieler();
+    else for (const [sid, p] of this.state.spieler) {
+      const x = this.extra.get(sid);
+      if (!x || x.bot || !this.speicher) continue;
+      // Rucksack und Werte bleiben, der Platz wird in der neuen Welt neu bestimmt
+      this.speichereSpieler(sid);
+      const { name, ...daten } = this.speicher.ladeSpieler(x.spielerId) ?? {};
+      this.speicher.speichereSpieler(x.spielerId, p.name, { ...daten, x: null, y: null, letzterSafe: '', draussen: true });
+    }
+    this.broadcast('neustart', {});
+    this.clock.setTimeout(() => this.disconnect(), 400);
+  }
 
   speichereSpieler(sid) {
     const p = this.state.spieler.get(sid), x = this.extra.get(sid);
@@ -491,7 +527,14 @@ export class SpielRaum extends Room {
     }
     this.ebenen.set(ebene, w);
     // schlafende Zombies hinter den Türen
-    for (const zp of w.zombiePlaetze ?? []) this.setzeZombie(zp.x, zp.y, ebene, true);
+    // Menge über die Einstellung „Zombies in Häusern“ (10 = normal): Plätze ausdünnen oder verdoppeln
+    const hf = SpielRaum.einstellungen.haeuserFaktor ?? 1;
+    for (const zp of w.zombiePlaetze ?? []) {
+      for (let n = Math.floor(hf) + (this.rnd() < hf % 1 ? 1 : 0), i = 0; i < n; i++) {
+        const dx = i ? (this.rnd() - 0.5) * KACHEL : 0, dy = i ? (this.rnd() - 0.5) * KACHEL : 0;
+        if (!i || frei(w, zp.x + dx, zp.y + dy, W.zombieRadius)) this.setzeZombie(zp.x + dx, zp.y + dy, ebene, true);
+      }
+    }
     return w;
   }
 
@@ -997,7 +1040,8 @@ export class SpielRaum extends Room {
       if (this.erwischtSeit > 6) this.zurueckInDieSafeRooms();
       return;
     }
-    s.zeit += dt;
+    const zr = SpielRaum.einstellungen.zeitraffer || 1;   // Testschalter: Spielzeit läuft schneller
+    s.zeit += dt * zr;
     this.feldZeit -= dt;
     if (this.feldZeit <= 0) {
       for (const e of new Set([...s.spieler.values()].map(p => p.ebene ?? ''))) this.baueFeld(e);
@@ -1011,7 +1055,8 @@ export class SpielRaum extends Room {
         try { botSchritt(this, id, p, x, dt); } catch (e) { x.eingabe = { dx: 0, dy: 0, s: false }; if (!x.fehlerGemeldet) { console.error('Bot-Fehler:', e.message); x.fehlerGemeldet = true; } }
       }
       this.spielerSchritt(id, p, x, dt);
-      this.beduerfnisse(p, x, dt);
+      this.beduerfnisse(p, x, dt * zr);
+      if (this.unsterblich(p)) { p.hp = 100; p.unten = false; p.infektion = 0; p.durst = Math.max(p.durst, 30); p.hunger = Math.max(p.hunger, 30); }
       this.aktionSchritt(id, p, x, dt);
     }
     for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
@@ -1330,6 +1375,7 @@ export class SpielRaum extends Room {
   }
 
   zombieGehen(z, w, weg, dt) {
+    weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
     bewege(welt, z, Math.cos(w) * weg, Math.sin(w) * weg, W.zombieRadius);
@@ -1386,7 +1432,7 @@ export class SpielRaum extends Room {
       if (z.ebene || z.jagt) continue;
       if (draussenSpieler.every(p => Math.hypot(p.x - z.x, p.y - z.y) > 1500)) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
     }
-    const soll = Math.round(zombieSoll(this.state.spieler.size) * this.zombieFaktor);
+    const soll = Math.round(zombieSoll(this.state.spieler.size) * (SpielRaum.einstellungen.zombieFaktor ?? 1));
     const draussen = [...this.state.zombies.values()].filter(z => !z.ebene).length;
     if (draussen >= soll || this.nachspawn > 0) return;
     // beim Start viele auf einmal, danach langsam nachrücken

@@ -5,23 +5,28 @@ Er liefert das Spiel aus und entscheidet über Bewegung, Zombies und Treffer.
 
 ## Mitspielen
 
-- **Über die Seitenleiste** („Zombies“) – für alle mit Home-Assistant-Konto.
+- **Über die Seitenleiste** („Zombies“) – dort öffnen sich die Einstellungen; „▶ Hier spielen“ startet das Spiel
+  (ohne Zugangscode, weil schon bei Home Assistant angemeldet).
 - **Über Port 8775** im Heimnetz, z. B. `http://homeassistant.local:8775`.
 - **Von unterwegs** über einen Reverse Proxy oder Cloudflare-Tunnel auf Port 8775
   (WebSockets müssen durchgereicht werden).
 
 Alle landen im selben Spiel.
 
-## Optionen
+## Einstellungen
 
-| Option | Bedeutung |
-|---|---|
-| `karte` | `geretsried` (Stadtmitte aus OpenStreetMap, Standard) oder `dorf` (kleines erzeugtes Dorf) |
-| `zombies` | Wie viele Zombies draußen unterwegs sind: 10 = normal, 5 = halb so viele, 20 = doppelt so viele |
-| `funde` | Fundhäufigkeit je Gegenstand (Schränke, Autos, Kisten, tote Zombies): 10 = normal, 0 = nie, 20 = doppelt |
-| `zugangscode` | Wenn gesetzt, braucht jeder Mitspieler außerhalb der Seitenleiste diesen Code |
-| `bots` | Simulierte Mitspieler (0–9), solange nur ein Mensch spielt – zum Testen allein |
-| `wiki_adresse` | Adresse eines DokuWiki (z. B. `https://wiki.example.org`) für die Links nach jedem Rätsel |
+Alles Wichtige stellst du bequem in der Seitenleiste „Zombies“ ein. Änderungen gelten sofort, ohne Neustart:
+
+- **Zombies:** Menge draußen, Menge in Häusern (10 = normal), Tempo in Prozent
+- **Spiel:** Karte (`geretsried` = Stadtmitte aus OpenStreetMap oder `dorf`), Bots (simulierte Mitspieler, solange nur
+  ein Mensch spielt), „Jede Spielrunde mit frischer Welt beginnen“, Zugangscode für Mitspieler von außen
+- **Fundhäufigkeit** je Gegenstand (10 = normal, 0 = nie, 20 = doppelt)
+- **Testwerkzeuge:** Unsterblichkeit je Spieler, Zeitraffer (gilt bis zum nächsten Add-on-Neustart)
+- **Welt neu starten:** Stadt beginnt neu (Kisten, Türen, Zombies); Rucksäcke bleiben, wenn gewünscht
+
+Gespeichert wird in `/data/einstellungen.json`. Die Add-on-Optionen (`karte`, `zombies`, `funde`, `zugangscode`, `bots`)
+dienen nur noch beim allerersten Start als Startwerte. `wiki_adresse` (Adresse eines DokuWiki für die Links nach jedem
+Rätsel) bleibt eine Add-on-Option.
 
 ## Rätsel
 

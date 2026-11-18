@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.0 – 18.11.2026
+
+- Einstellungsseite in der Seitenleiste „Zombies“: Zombies (Menge draußen, in Häusern, Tempo), Bots, Karte,
+  Fundhäufigkeit, Zugangscode und frische Welt je Spielrunde – gilt sofort, ohne Neustart; „▶ Hier spielen“ öffnet das Spiel
+- Testwerkzeuge auf der Einstellungsseite: Unsterblichkeit je Spieler und Zeitraffer (×5, ×10, ×60)
+- „Welt neu starten“: Die Stadt beginnt neu, alle Mitspieler werden kurz getrennt; Rucksäcke bleiben auf Wunsch erhalten
+- Übersichtskarte mit echten Umrissen von Häusern und Straßen, Zoom (+/−, Mausrad, zwei Finger), in der großen Ansicht
+  verschiebbar, mit Maßstab und Straßennamen (beim Hineinzoomen und in der großen Ansicht)
+- Bots bleiben nicht mehr in der Tür eines Safe Rooms stehen und sperren damit die anderen aus
+- Beim Verlassen eines Hauses springt das Bild sofort zur Haustür, statt quer über die Karte zu ziehen
+
 ## 0.13.0 – 18.11.2026
 
 - Übersichtskarte oben rechts: zeigt dich und alle Mitspieler in Geretsried (wer drinnen ist, steht an seiner Haustür),

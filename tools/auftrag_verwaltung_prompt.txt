@@ -1,0 +1,48 @@
+Schreibe die Datei `verwaltung.html`: eine Einstellungsseite für ein Browser-Zombiespiel („Zombies in Oberbayern“). Sie läuft als Home-Assistant-Add-on und wird in der HA-Seitenleiste (Ingress, iframe) angezeigt. Alles auf Deutsch.
+
+TECHNIK
+- Eine Datei, CSS und JS inline, keine externen Ressourcen (keine CDNs, keine Schriften).
+- Alle URLs RELATIV ohne führenden Schrägstrich (Ingress hängt einen Pfad davor): `fetch('verwaltung/api')`, `fetch('verwaltung/neustart', ...)`.
+- Hell/Dunkel nach `prefers-color-scheme`, Farben als CSS-Variablen; HA-ähnlich (Karten mit abgerundeten Ecken, Akzent #03a9f4, Gefahr #db4437). Funktioniert am Handy (ab 360 px Breite, kein waagrechtes Scrollen) und am PC (max. Breite ca. 900 px, zentriert).
+- Vanilla JS, kein Framework. Text immer mit textContent setzen (Spielernamen sind Benutzereingaben → kein innerHTML mit Daten).
+
+API
+GET `verwaltung/api` liefert z. B.:
+{
+ "einstellungen": {
+   "zugangscode": "abc", "karte": "geretsried", "bots": 2, "frischerStart": false,
+   "zombies": { "dichte": 10, "haeuser": 10, "tempo": 100 },
+   "funde": { "wasser": 10, "konserve": 10, "verband": 10, "pistole": 10, "munition": 10 },
+   "test": { "zeitraffer": 1, "unsterblich": ["Gregor"] }
+ },
+ "karten": ["geretsried", "dorf"],
+ "zeitraffer": [1, 5, 10, 60],
+ "dinge": [ { "id": "wasser", "name": "Wasser", "zeichen": "💧" }, { "id": "pistole", "name": "Pistole", "zeichen": "🔫" } ],
+ "laufendeKarte": "geretsried",      // oder null, wenn gerade niemand spielt
+ "spieler": [ { "name": "Gregor", "bot": false, "drinnen": true, "hp": 80, "verbunden": true }, { "name": "Resi", "bot": true, "drinnen": false, "hp": 100, "verbunden": true } ],
+ "spielzeit": 1234,                  // Sekunden
+ "version": "0.14.0"
+}
+POST `verwaltung/api` mit JSON-Body (Content-Type application/json) = TEILMENGE der einstellungen, z. B. {"zombies":{"dichte":15}} oder {"test":{"unsterblich":["Gregor","Sepp"]}} oder {"funde":{"wasser":20}}. Antwort: dasselbe Format wie GET (neuer Stand).
+POST `verwaltung/neustart` mit Body {"spielerLoeschen": true|false} → {"ok":true}.
+Bei HTTP 403 kommt {"fehler":"Nur über die Home-Assistant-Seitenleiste"} → diesen Text groß anzeigen.
+
+AUFBAU (Karten von oben nach unten)
+1. Kopf: Titel „🧟 Zombies in Oberbayern – Einstellungen“, rechts kleine Versionsangabe; darunter Knopf-Link „▶ Hier spielen“ mit href="?spielen".
+2. „Gerade im Spiel“: laufende Karte (oder „niemand spielt gerade“), Spielzeit als h:mm:ss, Tabelle/Liste der Spieler: Name (Bots mit 🤖), drinnen/draußen, Gesundheit als kleiner Balken, und je Spieler ein Schalter „unsterblich“ (nicht für Bots). Der Schalter schreibt die Namensliste test.unsterblich (Groß/Klein egal beim Vergleich, gespeichert wird der angezeigte Name).
+3. „Testwerkzeuge“: Zeitraffer als Segment-Knöpfe aus dem Array `zeitraffer` (Beschriftung „×1“, „×5“ …), aktiver hervorgehoben. Darunter die Liste test.unsterblich als Chips mit ✕ zum Entfernen und ein Eingabefeld + Knopf „Hinzufügen“ für Namen, die gerade nicht online sind. Hinweis klein: „Zeitraffer gilt nur bis zum nächsten Add-on-Neustart.“
+4. „Zombies“: drei Schieberegler mit Wertanzeige:
+   - „Menge draußen“ dichte 0–50, Anzeige als Faktor „×1,0“ (Wert/10, deutsches Komma), 10 = normal
+   - „In Häusern“ haeuser 0–50, Anzeige ebenso
+   - „Tempo“ tempo 50–150, Anzeige „100 %“
+   Je Regler kleiner Knopf „normal“, der auf 10 bzw. 100 zurücksetzt.
+5. „Spiel“: Auswahl Karte (aus `karten`, Anzeige „Geretsried“ / „Dorf“), Hinweis in Orange, wenn gewählte Karte ≠ laufendeKarte und laufendeKarte nicht null: „Neue Karte gilt nach ‚Welt neu starten‘“. Bots 0–9 (Zahlenfeld mit −/+). Schalter „Jede Spielrunde mit frischer Welt beginnen“ (frischerStart) mit Erklärung „Wenn alle das Spiel verlassen haben, beginnt die nächste Runde neu. Rucksäcke bleiben.“ Zugangscode als Textfeld (type=password mit Auge-Knopf zum Anzeigen) – leer = kein Code nötig.
+6. „Fundhäufigkeit“: Raster (2 Spalten am PC, 1 am Handy) mit einem Schieberegler je Eintrag aus `dinge` (zeichen + name, Wert 0–50, Anzeige „×1,0“; 0 als „nie“). Knopf „Alle auf normal“ (alle 10, ein POST).
+7. „Welt neu starten“ (rote Karte): Erklärung „Alle Spieler werden kurz getrennt, die Stadt beginnt neu (Kisten, Türen, Zombies). Rucksäcke bleiben, außer du hakst unten an.“ Checkbox „Auch alle Spielerstände löschen“. Roter Knopf → confirm()-Abfrage → POST neustart → Meldung.
+
+VERHALTEN
+- Beim Laden GET, Formular füllen.
+- Änderungen sofort speichern: Schieberegler beim Loslassen (change), Textfelder entprellt 600 ms, Schalter/Knöpfe sofort. Immer nur den geänderten Teil posten. Danach kleine Meldung unten „✓ Gespeichert“ (2 s), bei Fehler rot mit Text.
+- Alle 5 s GET und NUR den Bereich „Gerade im Spiel“ und die Zeitraffer-/Unsterblich-Anzeige aktualisieren; Felder, die der Nutzer gerade bearbeitet (Fokus) oder die noch nicht gespeichert sind, nicht überschreiben.
+- Während ein Schieberegler gezogen wird, Wertanzeige live (input-Ereignis).
+- Barrierearm: label für jedes Feld, Knöpfe mindestens 40 px hoch.
