@@ -2,8 +2,9 @@
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn, setzeKartengroesse, seiteVon, ladenArt,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, TAUSCH_ABSTAND,
+  BODEN_DAUER, TAUSCH_ABSTAND, helligkeit, istNacht, hausHell, fensterLicht, uhrText,
 } from './welt.mjs';
+import { laternen } from './vektor.mjs';
 import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen } from './aussehen.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
@@ -51,7 +52,6 @@ function laufBild(f, dx, dy, dt, schrittLaenge) {
 }
 
 const FARBEN = [0x42a5f5, 0xffca28, 0xab47bc, 0xff7043, 0x26c6da, 0xec407a, 0x9ccc65, 0xd7ccc8, 0xffffff, 0x5c6bc0];
-const AUTOFARBEN = [0xc62828, 0x1565c0, 0x2e7d32, 0xf9a825, 0x6d4c41, 0xeceff1];
 const css = f => '#' + f.toString(16).padStart(6, '0');
 const $ = id => document.getElementById(id);
 
@@ -191,12 +191,13 @@ class Ort extends Phaser.Scene {
 
   create() {
     const s = raum.state;
-    if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed); }
+    if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
     figurenVorzeichnen(this);
     this.zeichneKarte();
     this.aussenObjekte = this.children.list.slice();   // alles, was zur Außenwelt gehört
     this.uebersichtVorbereiten();
+    this.laternenListe = this.welt.vektor ? laternen(this.welt) : [];
     this.innenWelten = new Map();   // Ebene → Innenraum (wie auf dem Server erzeugt)
     this.innenAnsichten = new Map();
     this.aktEbene = '';
@@ -312,16 +313,7 @@ class Ort extends Phaser.Scene {
     for (const b of this.welt.behaelter) {
       const c = this.add.container(b.x, b.y).setDepth(1);
       if (b.art === 'bus') { /* der Bus selbst ist in der oberen Ebene gezeichnet */ }
-      else if (b.art === 'auto') {
-        const lang = 46, breit = 22;
-        const [w, h] = b.senkrecht ? [breit, lang] : [lang, breit];
-        const k = this.add.graphics();
-        k.fillStyle(0x000000, 0.3).fillRoundedRect(-w / 2 + 3, -h / 2 + 4, w, h, 6);
-        k.fillStyle(AUTOFARBEN[b.farbe % AUTOFARBEN.length], 1).fillRoundedRect(-w / 2, -h / 2, w, h, 6);
-        k.fillStyle(0x263238, 0.85);
-        if (b.senkrecht) { k.fillRect(-w / 2 + 3, -h / 2 + 9, w - 6, 8); k.fillRect(-w / 2 + 3, h / 2 - 15, w - 6, 6); }
-        else { k.fillRect(-w / 2 + 9, -h / 2 + 3, 8, h - 6); k.fillRect(w / 2 - 15, -h / 2 + 3, 6, h - 6); }
-        c.add(k);
+      else if (b.art === 'auto') { /* geparkte Autos sind in die Kartenstücke gezeichnet (aussehen.mjs) */
       } else {
         const f = { schrank: 0x8d6e63, kuehlschrank: 0xeceff1, spind: 0x78909c }[b.art];
         const k = this.add.graphics();
@@ -486,6 +478,12 @@ class Ort extends Phaser.Scene {
     }
     lampe.refresh();
     this.lichtPinsel = this.make.image({ key: 'licht', add: false });
+    // weicher Schein für draußen (Laternen, Fenster): fällt gleichmäßig ab, ohne helle Scheibe
+    const weich = this.textures.createCanvas('lichtweich', 256, 256), w = weich.getContext();
+    const gw = w.createRadialGradient(128, 128, 0, 128, 128, 128);
+    gw.addColorStop(0, 'rgba(255,255,255,1)'); gw.addColorStop(0.25, 'rgba(255,255,255,.75)'); gw.addColorStop(0.6, 'rgba(255,255,255,.28)'); gw.addColorStop(1, 'rgba(255,255,255,0)');
+    w.fillStyle = gw; w.fillRect(0, 0, 256, 256); weich.refresh();
+    this.weichPinsel = this.make.image({ key: 'lichtweich', add: false });
     this.lampenPinsel = this.make.image({ key: 'lampe', add: false }).setOrigin(0, 0.5);
   }
 
@@ -554,8 +552,17 @@ class Ort extends Phaser.Scene {
       });
     }
     this.nebelAktualisieren(a);
-    // Dunkelheit: mit Taschenlampe ein langer Kegel; ohne nur ein kleiner, schwacher Lichtkreis in Grau
     const d = a.dunkel;
+    // tagsüber fällt in etwa 70 % der Häuser Licht durch die Fenster: keine Lampe nötig
+    const m = EBENE_MUSTER.exec(ebene), uhr = raum.state.uhr ?? 480;
+    if (m && hausHell(Number(m[1]), m[2], uhr)) {
+      d.clear();
+      const daemmer = 1 - helligkeit(uhr);
+      if (daemmer > 0.02) d.fill(0x030405, daemmer * 0.6);
+      this.setzeGrau(false);
+      return;
+    }
+    // Dunkelheit: mit Taschenlampe ein langer Kegel; ohne nur ein kleiner, schwacher Lichtkreis in Grau
     const lampe = ich.lampe > 0;
     d.clear();
     d.fill(0x030405, lampe ? (w.stock === 'keller' ? 0.94 : 0.88) : 0.965);
@@ -563,13 +570,50 @@ class Ort extends Phaser.Scene {
     this.lichtPinsel.setScale(lampe ? 0.42 : 0.36).setAlpha(lampe ? 1 : 0.8);
     d.erase(this.lichtPinsel, lx, ly);
     if (lampe) {
-      // Kegel folgt der Laufrichtung weich (nicht jedem Ruck, z. B. beim automatischen Zielen)
-      const e = this.eingabe, ziel = Math.hypot(e.dx, e.dy) > 0.1 ? Math.atan2(e.dy, e.dx) : (this.lampenWinkel ?? ich.richtung);
-      this.lampenWinkel = Phaser.Math.Angle.RotateTo(this.lampenWinkel ?? ziel, ziel, this.game.loop.delta / 1000 * 3.5);
-      this.lampenPinsel.setRotation(this.lampenWinkel).setScale(0.8);
+      this.lampenPinsel.setRotation(this.lampenRichtung(ich)).setScale(0.8).setAlpha(1);
       d.erase(this.lampenPinsel, lx, ly);
     }
     this.setzeGrau(!lampe);
+  }
+
+  // Kegel folgt der Laufrichtung weich (nicht jedem Ruck, z. B. beim automatischen Zielen)
+  lampenRichtung(ich) {
+    const e = this.eingabe, ziel = Math.hypot(e.dx, e.dy) > 0.1 ? Math.atan2(e.dy, e.dx) : (this.lampenWinkel ?? ich.richtung);
+    this.lampenWinkel = Phaser.Math.Angle.RotateTo(this.lampenWinkel ?? ziel, ziel, this.game.loop.delta / 1000 * 3.5);
+    return this.lampenWinkel;
+  }
+
+  // Draußen: Dämmerung färbt warm, nachts dunkelblau; Laternen, Fenster, Taschenlampe und ein kleiner Schein um jeden Spieler
+  aussenLicht(ich) {
+    let rt = this.nachtRT;
+    const uhr = raum.state.uhr ?? 480, dunkel = 1 - helligkeit(uhr);
+    if (this.aktEbene || dunkel < 0.01 || !this.lokal) { rt?.setVisible(false); return; }
+    const v = this.cameras.main.worldView, R = 40;
+    const B = Math.ceil(v.width / 256) * 256 + 2 * R, H = Math.ceil(v.height / 256) * 256 + 2 * R;
+    // neu anlegen statt resize() – nach resize() wirkt erase() in Phaser 3.90 nicht mehr
+    if (!rt || rt.width !== B || rt.height !== H) { rt?.destroy(); rt = this.nachtRT = this.add.renderTexture(0, 0, B, H).setOrigin(0).setDepth(8); }
+    rt.setVisible(true);
+    const ox = v.x - R, oy = v.y - R;
+    rt.setPosition(ox, oy);
+    const mische = (a, b, t) => { const k = (s) => [(a >> s) & 255, (b >> s) & 255]; return [16, 8, 0].reduce((f, s) => { const [x, y] = k(s); return f | (Math.round(x + (y - x) * t) << s); }, 0); };
+    rt.clear();
+    rt.fill(mische(0xff8a3d, 0x0b1430, Math.min(1, dunkel * 1.5)), 0.18 + dunkel * 0.66);
+    if (dunkel < 0.3) return;
+    const sicht = (x, y, r) => x > v.x - r && x < v.right + r && y > v.y - r && y < v.bottom + r;
+    const P = this.weichPinsel;
+    for (const l of this.laternenListe ?? []) if (sicht(l.x, l.y, 140)) { P.setScale(0.85).setAlpha(0.75 * dunkel); rt.erase(P, l.x + l.nx * 13 - ox, l.y + l.ny * 13 - oy); }
+    for (const h of this.welt.haeuser) {
+      if (!fensterLicht(h.nr)) continue;
+      const x = (h.x + h.b / 2) * KACHEL, y = (h.y + h.h / 2) * KACHEL;
+      if (sicht(x, y, 120)) { P.setScale(0.6).setAlpha(0.5 * dunkel); rt.erase(P, x - ox, y - oy); }
+    }
+    for (const [id, p] of raum.state.spieler) {
+      if ((p.ebene ?? '') !== '' || id === meineId) continue;
+      if (sicht(p.x, p.y, 100)) { P.setScale(p.lampe > 0 ? 0.7 : 0.45).setAlpha(0.7); rt.erase(P, p.x - ox, p.y - oy); }
+    }
+    const lx = this.lokal.x - ox, ly = this.lokal.y - oy;
+    P.setScale(0.6).setAlpha(0.8); rt.erase(P, lx, ly);
+    if (ich.lampe > 0) { this.lampenPinsel.setRotation(this.lampenRichtung(ich)).setScale(1.0).setAlpha(1); rt.erase(this.lampenPinsel, lx, ly); }
   }
 
   // Von der eigenen Position aus alles erkunden, was ohne geschlossene Tür erreichbar ist; einmal gesehen bleibt sichtbar
@@ -863,7 +907,8 @@ class Ort extends Phaser.Scene {
       const d = Math.hypot(l.x - x, l.y - y);
       if (d < bd && l.rest !== 0) { bd = d; best = { art: 'leiche' }; }
     }
-    if (best) return { art: 'durchsuchen', text: `🔍 ${BEHAELTER_NAME[best.art]} durchsuchen` };
+    if (best?.art === 'auto' && !ich.rucksack.includes('brechstange')) return { art: 'durchsuchen', text: '🔒 Kofferraum (⚒️ Brechstange nötig)' };
+    if (best) return { art: 'durchsuchen', text: `${best.art === 'auto' ? '⚒️' : '🔍'} ${BEHAELTER_NAME[best.art]} ${best.art === 'auto' ? 'aufbrechen' : 'durchsuchen'}` };
     const zu = this.tuerKontext(ich, true);
     if (zu) return zu;
     // jemanden berühren → tauschen
@@ -928,6 +973,7 @@ class Ort extends Phaser.Scene {
     }
     const ich = this.eigeneFigur(dt);
     this.innenAktualisieren(ich);
+    if (ich) this.aussenLicht(ich);
     this.chunksAktualisieren();
     if (ich && this.lokal) {
       // Dach des Hauses, in dem man steht, wird durchsichtig
@@ -989,7 +1035,9 @@ class Ort extends Phaser.Scene {
       const g = $('gruen');
       if (g.style.opacity !== gruen.toFixed(2)) g.style.opacity = gruen.toFixed(2);
     }
-    textSetzen('zeit', zeitText(s.zeit));
+    const uhr = s.uhr ?? 480, hellJetzt = helligkeit(uhr);
+    textSetzen('zeit', `${istNacht(uhr) ? '🌙' : hellJetzt < 1 ? '🌅' : '☀️'} ${uhrText(uhr)}`);
+    ton.tageszeit(istNacht(uhr));
     const liste = [...s.spieler.entries()].map(([id, p]) => {
       const zusatz = p.unten ? ' – am Boden' : !p.verbunden ? ' – Verbindung weg' : p.sicher ? ' 🛡' : '';
       const klasse = p.unten ? 'unten' : !p.verbunden ? 'weg' : '';

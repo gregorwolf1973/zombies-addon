@@ -13,7 +13,7 @@ export function tonAn() { return an; }
 // ---------- Tondateien (auf der Einstellungsseite Ereignissen zugeordnet) ----------
 let zuordnung = {};                 // Ereignis → { dateien, laut }
 const puffer = new Map();           // Datei → AudioBuffer | Promise | null (fehlt)
-let drinnenJetzt = false, nachtJetzt = false;
+let drinnenJetzt = false, nachtJetzt = null;   // null = Tageszeit noch unbekannt
 const hintergrund = { stadt: null, streuTimer: 0 };
 
 export function toeneZuordnen(z) { zuordnung = z && typeof z === 'object' ? z : {}; if (ctx) vorladen(); }
@@ -71,8 +71,9 @@ function streuen() {
 
 export function tageszeit(nacht) {
   if (nacht === nachtJetzt) return;
+  const erstes = nachtJetzt === null;
   nachtJetzt = nacht;
-  if (nacht) probe('nachteinbruch');
+  if (nacht && !erstes) probe('nachteinbruch');
 }
 
 // erst nach einer Berührung/einem Klick erlaubt der Browser Ton

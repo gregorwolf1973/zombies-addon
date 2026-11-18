@@ -240,6 +240,7 @@ export function zeichneVektorDaecher(ctx, welt, rect) {
     const b = dachBild(g);
     if (b) begrenzt(g, () => ctx.drawImage(b.bild, b.x, b.y, b.b, b.h));
   }
+  for (const l of laternen(welt)) if (l.x > r.x0 - 30 && l.x < r.x1 + 30 && l.y > r.y0 - 30 && l.y < r.y1 + 30) laterneZeichnen(ctx, l);
   // Haustüren der betretbaren Häuser (unter dem Dachrand hervor)
   for (const h of welt.haeuser) {
     if (!h.betretbar || !h.tuer) continue;
@@ -266,4 +267,34 @@ export function zeichneVektorSafeDach(ctx, welt, h, rand) {
   ctx.drawImage(b.bild, b.x, b.y, b.b, b.h);
   ctx.restore();
   return true;
+}
+
+// Straßenlaternen: an Fahrstraßen etwa alle 36 m auf dem Gehweg, abwechselnd links und rechts
+export function laternen(welt) {
+  if (welt._laternen) return welt._laternen;
+  const v = vorbereiten(welt), liste = [], ABSTAND = 9 * K;
+  for (const l of v.linien) {
+    if (!AUTO.has(l.t)) continue;
+    let rest = ABSTAND / 2, seite = 1;
+    for (let i = 0; i + 1 < l.pts.length; i++) {
+      const [ax, ay] = l.pts[i], [bx, by] = l.pts[i + 1], len = Math.hypot(bx - ax, by - ay);
+      if (len < 1) continue;
+      const nx = -(by - ay) / len, ny = (bx - ax) / len, off = l.b / 2 + 0.5 * K;
+      for (let d = rest; d < len; d += ABSTAND) {
+        const x = ax + (bx - ax) * d / len + nx * off * seite, y = ay + (by - ay) * d / len + ny * off * seite;
+        if (!liste.some(q => Math.abs(q.x - x) < 4 * K && Math.abs(q.y - y) < 4 * K)) liste.push({ x, y, nx: -nx * seite, ny: -ny * seite });
+        seite = -seite;
+      }
+      rest = (rest - len) % ABSTAND; if (rest < 0) rest += ABSTAND;
+    }
+  }
+  return (welt._laternen = liste);
+}
+
+function laterneZeichnen(ctx, l) {
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(l.x + 6, l.y + 5, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#37474f'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(l.x + l.nx * 12, l.y + l.ny * 12); ctx.stroke();
+  ctx.fillStyle = '#263238'; ctx.beginPath(); ctx.arc(l.x, l.y, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff3c4'; ctx.beginPath(); ctx.ellipse(l.x + l.nx * 13, l.y + l.ny * 13, 4, 3, Math.atan2(l.ny, l.nx), 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#455a64'; ctx.lineWidth = 1; ctx.stroke();
 }

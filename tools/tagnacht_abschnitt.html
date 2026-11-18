@@ -1,0 +1,75 @@
+<section class="karte" id="tagNachtKarte" aria-labelledby="titelTagNacht">
+  <h2 id="titelTagNacht">🌗 Tag und Nacht</h2>
+  <p class="tn-uhr"><span id="tnUhr">–</span> <span class="tn-leise" id="tnPhase"></span></p>
+  <div class="tn-knoepfe" role="group" aria-label="Uhrzeit setzen">
+    <button type="button" data-uhr="360">🌅 6:00</button><button type="button" data-uhr="720">☀️ 12:00</button>
+    <button type="button" data-uhr="1170">🌇 19:30</button><button type="button" data-uhr="1380">🌙 23:00</button>
+  </div>
+  <p class="tn-leise">Uhrzeit setzen geht nur, solange jemand spielt. Dämmerung 5–7 Uhr und 19:30–21:30 Uhr.</p>
+  <label for="tnTag">Ein Spieltag dauert</label>
+  <div class="tn-zeile"><input type="range" id="tnTag" min="10" max="240" step="2"><span id="tnTagWert">48 min</span></div>
+  <label for="tnNacht">Zombies nachts draußen</label>
+  <div class="tn-zeile"><input type="range" id="tnNacht" min="10" max="30" step="1"><span id="tnNachtWert">×1,5</span></div>
+  <label for="tnAutos">Geparkte Autos</label>
+  <div class="tn-zeile"><input type="range" id="tnAutos" min="0" max="50" step="1"><span id="tnAutosWert">×1,0</span></div>
+  <p class="tn-leise" id="tnAutosHinweis"></p>
+  <p class="tn-status" id="tnStatus" aria-live="polite"></p>
+</section>
+<style>
+  #tagNachtKarte .tn-uhr { font-size: 1.6rem; font-weight: 600; margin: 4px 0 8px; }
+  #tagNachtKarte .tn-leise { color: var(--text-soft); font-size: .85rem; font-weight: 400; }
+  #tagNachtKarte .tn-knoepfe { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  #tagNachtKarte .tn-knoepfe button { flex: 1 1 90px; min-height: 40px; }
+  #tagNachtKarte .tn-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #tagNachtKarte .tn-zeile input { flex: 1; }
+  #tagNachtKarte .tn-zeile span { min-width: 64px; text-align: right; }
+  #tagNachtKarte .tn-status { min-height: 1.2em; font-size: .85rem; }
+</style>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var komma = function (v) { return '×' + (v / 10).toFixed(1).replace('.', ','); };
+  var uhrText = function (u) { u = Math.floor(u); return String(Math.floor(u / 60)).padStart(2, '0') + ':' + String(u % 60).padStart(2, '0'); };
+  var phase = function (u) { return (u >= 1290 || u < 300) ? 'Nacht' : (u >= 1170 || u < 420) ? 'Dämmerung' : 'Tag'; };
+  var aktiv = null;
+  function status(text, fehler) {
+    var s = $('tnStatus'); s.textContent = text; s.style.color = fehler ? 'var(--gefahr)' : 'var(--akzent)';
+    clearTimeout(status.t); status.t = setTimeout(function () { s.textContent = ''; }, 2500);
+  }
+  function zeige(d) {
+    var e = d.einstellungen || {};
+    if (d.uhr === null || d.uhr === undefined) { $('tnUhr').textContent = '–'; $('tnPhase').textContent = 'niemand spielt gerade'; }
+    else { $('tnUhr').textContent = uhrText(d.uhr); $('tnPhase').textContent = phase(d.uhr); }
+    if (aktiv !== 'tnTag') { $('tnTag').value = e.tagMinuten || 48; $('tnTagWert').textContent = $('tnTag').value + ' min'; }
+    if (aktiv !== 'tnNacht') { $('tnNacht').value = (e.zombies && e.zombies.nacht) || 15; $('tnNachtWert').textContent = komma($('tnNacht').value); }
+    if (aktiv !== 'tnAutos') { $('tnAutos').value = e.autos === undefined ? 10 : e.autos; $('tnAutosWert').textContent = komma($('tnAutos').value); }
+    var welt = d.autosWelt;
+    $('tnAutosHinweis').textContent = (welt !== null && welt !== undefined && welt !== Number($('tnAutos').value))
+      ? 'Die laufende Welt hat ' + komma(welt) + ' – die neue Menge gilt nach „Welt neu starten“.' : 'Gilt für neue Welten (nach „Welt neu starten“).';
+  }
+  function anfrage(url, koerper) {
+    return fetch(url, koerper ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(koerper) } : {})
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  function laden() { anfrage('verwaltung/api').then(zeige).catch(function () {}); }
+  function regler(id, wert, teil) {
+    var el = $(id);
+    el.addEventListener('input', function () { aktiv = id; $(id + 'Wert').textContent = wert(el.value); });
+    el.addEventListener('change', function () {
+      anfrage('verwaltung/api', teil(Number(el.value))).then(function (d) { aktiv = null; zeige(d); status('✓ Gespeichert'); })
+        .catch(function (e) { aktiv = null; status('Fehler: ' + e.message, true); });
+    });
+  }
+  regler('tnTag', function (v) { return v + ' min'; }, function (v) { return { tagMinuten: v }; });
+  regler('tnNacht', komma, function (v) { return { zombies: { nacht: v } }; });
+  regler('tnAutos', komma, function (v) { return { autos: v }; });
+  Array.prototype.forEach.call(document.querySelectorAll('#tagNachtKarte [data-uhr]'), function (b) {
+    b.addEventListener('click', function () {
+      anfrage('verwaltung/uhr', { uhr: Number(b.getAttribute('data-uhr')) }).then(function (d) { zeige(d); status(d.uhr === null ? 'Niemand spielt – Uhrzeit nicht gesetzt' : '✓ Uhrzeit gesetzt', d.uhr === null); })
+        .catch(function (e) { status('Fehler: ' + e.message, true); });
+    });
+  });
+  laden();
+  setInterval(laden, 5000);
+})();
+</script>

@@ -127,6 +127,11 @@ export function zeichneBoden(ctx, welt, rect = null) {
     }
   }
   if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
+  // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
+  for (const b of welt.behaelter ?? []) {
+    if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
+    autoVonOben(ctx, b);
+  }
   ctx.restore();
 }
 
@@ -278,6 +283,31 @@ export function zeichneSafeDach(ctx, welt, h) {
   const inBox = (x, y) => x >= h.x && y >= h.y && x < h.x + h.b && y < h.y + h.h;
   const istDach = (x, y) => inBox(x, y) && [T.WAND, T.BODEN, T.TUER].includes(welt.hole(x, y));
   for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.b; x++) if (istDach(x, y)) dachKachel(ctx, welt, x, y, ['#78909c', '#607d8b', '#37474f'], istDach);
+  ctx.restore();
+}
+
+// Auto von oben: Karosserie mit Glanz, Front- und Heckscheibe, Dach, Scheinwerfer und Rückleuchten
+const AUTO_FARBEN = ['#c62828', '#1565c0', '#eeeeee', '#2e7d32', '#424242', '#f9a825', '#6d4c41', '#90a4ae'];
+function autoVonOben(ctx, b) {
+  const lang = 46, breit = 21, f = AUTO_FARBEN[b.farbe % AUTO_FARBEN.length];
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  if (b.senkrecht) ctx.rotate(Math.PI / 2);
+  if ((b.farbe + Math.round(b.x)) % 2) ctx.rotate(Math.PI);   // mal vorwärts, mal rückwärts geparkt
+  const rund = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
+  ctx.fillStyle = 'rgba(0,0,0,.32)'; rund(-lang / 2 + 3, -breit / 2 + 4, lang, breit, 7); ctx.fill();
+  const g = ctx.createLinearGradient(0, -breit / 2, 0, breit / 2);
+  g.addColorStop(0, f); g.addColorStop(0.5, f); g.addColorStop(1, 'rgba(0,0,0,.35)');
+  ctx.fillStyle = f; rund(-lang / 2, -breit / 2, lang, breit, 7); ctx.fill();
+  ctx.fillStyle = g; ctx.globalAlpha = 0.5; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; rund(-lang / 2 + 4, -breit / 2 + 2, lang - 8, 4, 2); ctx.fill();
+  ctx.fillStyle = '#1f2a33';
+  rund(lang / 2 - 17, -breit / 2 + 2.5, 7, breit - 5, 2); ctx.fill();    // Frontscheibe
+  rund(-lang / 2 + 6, -breit / 2 + 3, 5, breit - 6, 2); ctx.fill();      // Heckscheibe
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; rund(-lang / 2 + 12, -breit / 2 + 3, 16, breit - 6, 3); ctx.fill();   // Dach
+  ctx.fillStyle = '#fff59d'; ctx.fillRect(lang / 2 - 3, -breit / 2 + 2, 2.5, 4); ctx.fillRect(lang / 2 - 3, breit / 2 - 6, 2.5, 4);
+  ctx.fillStyle = '#e53935'; ctx.fillRect(-lang / 2 + 0.5, -breit / 2 + 2, 2, 4); ctx.fillRect(-lang / 2 + 0.5, breit / 2 - 6, 2, 4);
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(lang / 2 - 20, -breit / 2 - 1, 3, 2); ctx.fillRect(lang / 2 - 20, breit / 2 - 1, 3, 2);   // Spiegel
   ctx.restore();
 }
 

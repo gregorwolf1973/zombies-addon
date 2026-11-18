@@ -67,6 +67,11 @@ test('Rucksack hat 8 Plätze, Rest bleibt im Behälter', async () => {
     const b = raum.welt.behaelter.find(b => b.art === 'auto');
     p.x = b.x; p.y = b.y;
     raum.setzeInhalt(b.id, ['wasser', 'bretter']);
+    // ohne Brechstange bleibt der Kofferraum zu
+    c.send('aktion');
+    await warte(300);
+    assert.equal(p.aktion, '', 'Kofferraum ohne Brechstange geöffnet');
+    p.rucksack.splice(0, 1, 'brechstange');
     c.send('aktion');
     assert.ok(await bis(() => raum.state.behaelter.get(b.id).rest === 1, 5000));
     assert.equal(p.rucksack.length, RUCKSACK_PLAETZE);

@@ -63,6 +63,9 @@ export async function starte({
       zombieFaktor: w.zombies.dichte / 10,         // 10 = Standardmenge
       haeuserFaktor: w.zombies.haeuser / 10,
       tempoFaktor: w.zombies.tempo / 100,
+      nachtFaktor: w.zombies.nacht / 10,
+      autoFaktor: w.autos / 10,
+      tagMinuten: w.tagMinuten,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,
       karte: geladeneKarte.karte,                   // gilt für die nächste Welt
@@ -122,12 +125,20 @@ export async function starte({
       })) : [],
       spielzeit: raum ? Math.round(raum.state.zeit) : 0,
       toene: toeneListe(), ereignisse: EREIGNISSE,
+      uhr: raum ? Math.floor(raum.state.uhr) : null, autosWelt: raum ? raum.state.autos : null,
       version: paketVersion,
     };
   };
   app.get('/verwaltung/api', nurIngress, (req, res) => res.json(lage()));
   app.post('/verwaltung/api', nurIngress, express.json({ limit: '20kb' }), (req, res) => {
     anwenden(datei.aendern(req.body ?? {}));
+    res.json(lage());
+  });
+  // Testwerkzeug: Uhrzeit setzen (Spielminuten 0–1439)
+  app.post('/verwaltung/uhr', nurIngress, express.json({ limit: '1kb' }), (req, res) => {
+    const u = Number(req.body?.uhr);
+    if (!Number.isFinite(u)) return res.status(400).json({ fehler: 'Uhrzeit fehlt' });
+    if (SpielRaum.aktiv) SpielRaum.aktiv.state.uhr = ((Math.round(u) % 1440) + 1440) % 1440;
     res.json(lage());
   });
   const hochladeOrdner = tonOrdner.find(o => o.schreiben);

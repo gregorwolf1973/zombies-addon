@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.16.0 – 18.11.2026
+
+- Tag und Nacht: Spieluhr (ein Spieltag dauert einstellbar 48 Minuten), Dämmerung mit warmem Licht, nachts dunkel
+  mit Straßenlaternen, erleuchteten Fenstern und einem kleinen Schein um jeden Spieler
+- Taschenlampe leuchtet nachts auch draußen; tagsüber sind etwa 70 % der Häuser durch die Fenster hell (Keller nie)
+- Nachts sind mehr Zombies unterwegs (einstellbar), Geräusche für Nachteinbruch und Zombieland bei Nacht
+- Viel mehr geparkte Autos am Straßenrand und in Reihen auf den Parkplätzen, schöner gezeichnet; Menge einstellbar
+- Kofferräume lassen sich nur noch mit Brechstange aufbrechen (dafür ist mehr drin); Brechstangen gibt es jetzt auch
+  in Schränken und Kaufhäusern
+- Einstellungsseite: neuer Abschnitt „Tag und Nacht“ mit Uhrzeit, Tageslänge, Zombies nachts und Autos
+
 ## 0.15.0 – 18.11.2026
 
 - Geräusche aus Tondateien: Auf der Einstellungsseite lassen sich Dateien hochladen, probehören und Ereignissen zuordnen

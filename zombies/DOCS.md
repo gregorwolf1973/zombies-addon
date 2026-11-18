@@ -22,6 +22,10 @@ Alles Wichtige stellst du bequem in der Seitenleiste „Zombies“ ein. Änderun
   ein Mensch spielt), „Jede Spielrunde mit frischer Welt beginnen“, Zugangscode für Mitspieler von außen
 - **Fundhäufigkeit** je Gegenstand (10 = normal, 0 = nie, 20 = doppelt)
 - **Testwerkzeuge:** Unsterblichkeit je Spieler, Zeitraffer (gilt bis zum nächsten Add-on-Neustart)
+- **Tag und Nacht:** Länge eines Spieltags (Vorgabe 48 Minuten), wie viele Zombies nachts zusätzlich draußen sind,
+  Uhrzeit setzen zum Testen. Dämmerung 5–7 Uhr und 19:30–21:30 Uhr. Tagsüber sind etwa 70 % der Häuser hell,
+  nachts alles dunkel – dann hilft draußen wie drinnen nur die Taschenlampe.
+- **Geparkte Autos:** Menge (10 = normal), gilt für neue Welten. Kofferräume gehen nur mit Brechstange auf.
 - **Geräusche:** Tondateien (MP3, OGG, WAV, M4A bis 8 MB) hochladen und Ereignissen zuordnen – Zombie stirbt, Kriecher,
   Zombie stöhnt, Zombie entdeckt dich, Stadtgeräusche, Zombieland (Tag/Nacht), Nachteinbruch. Bei mehreren Dateien wird
   zufällig gewählt, ohne Zuordnung erzeugt das Spiel selbst einen Ton. Mitgelieferte Töne liegen in `/share/zombies/toene`

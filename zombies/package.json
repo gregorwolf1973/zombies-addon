@@ -1,6 +1,6 @@
 {
   "name": "zombies-in-oberbayern",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "private": true,
   "type": "module",
   "description": "Kooperatives Zombie-Survival für 2–10 Spieler – Spielserver als Home-Assistant-Add-on",

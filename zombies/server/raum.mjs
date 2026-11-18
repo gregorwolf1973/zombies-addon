@@ -8,7 +8,7 @@ import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell,
   bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, setzeKartengroesse, seiteVon, ladenArt, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
@@ -64,6 +64,8 @@ export const Zustand = schema({
   zeit: t.number(),         // Spielzeit in Sekunden (wird gespeichert)
   besiegt: t.uint16(),
   torGeloest: t.uint8(),    // richtig beantwortete Rätsel am Tor (3 = offen)
+  uhr: t.number(),          // Tageszeit in Spielminuten (0–1439)
+  autos: t.uint8(),         // Autodichte der Welt (10 = normal), gilt bis zum Neustart der Welt
   spieler: t.map(Spieler),
   zombies: t.map(Zombie),
   behaelter: t.map(Behaelter),   // nur schon durchsuchte
@@ -136,7 +138,9 @@ export class SpielRaum extends Room {
     const karte = SpielRaum.einstellungen.karte;
     if (karte?.kacheln) {
       setzeKartengroesse(karte.breite, karte.hoehe);
-      this.welt = baueWeltAusKarte(karte, this.state.seed);
+      const passtStand = stand && (stand.karte ?? '') === karte.name && stand.seed === this.state.seed;
+      this.state.autos = Math.max(0, Math.min(50, Math.round(passtStand && Number.isFinite(stand.autos) ? stand.autos : (SpielRaum.einstellungen.autoFaktor ?? 1) * 10)));
+      this.welt = baueWeltAusKarte(karte, this.state.seed, { autos: this.state.autos / 10 });
       this.state.karte = karte.name;
     } else {
       setzeKartengroesse(64, 48);
@@ -146,6 +150,7 @@ export class SpielRaum extends Room {
     this.rnd = zufall((this.state.seed ^ 0x5bd1e995) + Date.now() % 100000);
     this.state.phase = 'spiel';
     this.state.zeit = stand?.zeit ?? 0;
+    this.state.uhr = Number.isFinite(stand?.uhr) ? stand.uhr : 8 * 60;   // neue Welt beginnt morgens um acht
     this.state.besiegt = stand?.besiegt ?? 0;
     this.state.torGeloest = Math.min(TOR_RAETSEL, Number(stand?.torGeloest) || 0);
     this.gestellt = new Set(stand?.gestellt ?? []);
@@ -384,9 +389,22 @@ export class SpielRaum extends Room {
   }
 
   // von der Verwaltungsseite: neue Werte gelten sofort
+  // Zombies draußen: Grundmenge × Einstellung, nachts × Nachtfaktor
+  zombieSollJetzt() {
+    const e = SpielRaum.einstellungen;
+    return Math.round(zombieSoll(this.state.spieler.size) * (e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1));
+  }
+
+  // Taschenlampe nötig: drinnen in dunklen Häusern (Keller immer), draußen nachts
+  brauchtLicht(p) {
+    if (!p.ebene) return istNacht(this.state.uhr);
+    const m = EBENE_MUSTER.exec(p.ebene);
+    return !m || !hausHell(Number(m[1]), m[2], this.state.uhr);
+  }
+
   einstellungenGeaendert() {
     this.botsAnpassen();
-    const soll = Math.round(zombieSoll(this.state.spieler.size) * (SpielRaum.einstellungen.zombieFaktor ?? 1));
+    const soll = this.zombieSollJetzt();
     // zu viele Zombies draußen: die am weitesten entfernten, nicht jagenden verschwinden
     const draussen = [...this.state.zombies.entries()].filter(([, z]) => !z.ebene && !z.jagt);
     const spieler = [...this.state.spieler.values()].filter(p => !p.ebene);
@@ -430,7 +448,7 @@ export class SpielRaum extends Room {
     for (const [id, inhalt] of this.inhalte) behaelter[id] = inhalt;
     for (const [id, s] of this.state.safes) safes[id] = { barrikade: Math.round(s.barrikade), kiste: [...s.kiste] };
     this.speicher.speichereWelt({
-      version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, besiegt: this.state.besiegt, behaelter, safes,
+      version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, behaelter, safes,
       torGeloest: this.state.torGeloest, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen]])),
     });
@@ -751,6 +769,10 @@ export class SpielRaum extends Room {
     if (!k) return;
     if (k.art === 'raetsel') return this.stelleRaetsel(client);
     if (k.art === 'schlossraetsel') return this.stelleRaetsel(client, { art: 'tuer', key: k.key, tuer: k.tuer, ebene: k.ebene });
+    // Kofferräume gehen nur mit Brechstange auf
+    if (k.art === 'durchsuchen' && k.behaelter?.art === 'auto' && !p.rucksack.includes('brechstange')) {
+      return client.send('meldung', { text: '🔒 Der Kofferraum ist zu – dafür brauchst du eine ⚒️ Brechstange' });
+    }
     p.aktion = k.art; p.fortschritt = 0;
     x.aktionZiel = k;
     x.laermUhr = 0;
@@ -1042,6 +1064,10 @@ export class SpielRaum extends Room {
     }
     const zr = SpielRaum.einstellungen.zeitraffer || 1;   // Testschalter: Spielzeit läuft schneller
     s.zeit += dt * zr;
+    // Tageszeit: ein Spieltag dauert tagMinuten echte Minuten
+    const vorher = istNacht(s.uhr);
+    s.uhr = (s.uhr + dt * zr * 1440 / ((SpielRaum.einstellungen.tagMinuten || 48) * 60)) % 1440;
+    if (istNacht(s.uhr) !== vorher) this.broadcast('meldung', { text: istNacht(s.uhr) ? '🌙 Die Nacht bricht herein – Zombies werden mehr. Taschenlampe bereit?' : '🌅 Es wird Tag', lang: true });
     this.feldZeit -= dt;
     if (this.feldZeit <= 0) {
       for (const e of new Set([...s.spieler.values()].map(p => p.ebene ?? ''))) this.baueFeld(e);
@@ -1146,7 +1172,7 @@ export class SpielRaum extends Room {
 
   beduerfnisse(p, x, dt) {
     if (!p.verbunden) return;
-    if (p.ebene) {
+    if (this.brauchtLicht(p)) {
       if (p.lampe <= 0) {
         const i = p.rucksack.indexOf('taschenlampe');
         if (i >= 0) { p.rucksack.splice(i, 1); p.lampe = LAMPE_DAUER; }
@@ -1432,7 +1458,7 @@ export class SpielRaum extends Room {
       if (z.ebene || z.jagt) continue;
       if (draussenSpieler.every(p => Math.hypot(p.x - z.x, p.y - z.y) > 1500)) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
     }
-    const soll = Math.round(zombieSoll(this.state.spieler.size) * (SpielRaum.einstellungen.zombieFaktor ?? 1));
+    const soll = this.zombieSollJetzt();
     const draussen = [...this.state.zombies.values()].filter(z => !z.ebene).length;
     if (draussen >= soll || this.nachspawn > 0) return;
     // beim Start viele auf einmal, danach langsam nachrücken

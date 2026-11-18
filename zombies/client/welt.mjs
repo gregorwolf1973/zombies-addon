@@ -372,12 +372,13 @@ export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank'
   laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
-  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', null, null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', null, null],
   spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', null, null],
-  auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'brechstange', null],
+  // Kofferraum geht nur mit Brechstange auf – darum liegt drin keine, dafür etwas mehr Gutes
+  auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', null],
   laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
   laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
-  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', null],
+  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', null],
   laden_gaststaette: ['essen', 'essen', 'wasser', 'wasser', 'messer', 'schokoriegel', null],
   laden: ['essen', 'wasser', 'schokoriegel', null, null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
@@ -530,4 +531,24 @@ export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = I
     ax = punkte[j].x; ay = punkte[j].y; i = j + 1;
   }
   return glatt;
+}
+
+// ---------- Tag und Nacht (Server und Browser rechnen gleich) ----------
+// uhr = Spielminute 0–1439. Abenddämmerung 19:30–21:30, Morgendämmerung 5:00–7:00.
+export function helligkeit(uhr) {
+  const u = ((uhr % 1440) + 1440) % 1440;
+  if (u >= 1290 || u < 300) return 0;
+  if (u >= 1170) return 1 - (u - 1170) / 120;
+  if (u < 420) return (u - 300) / 120;
+  return 1;
+}
+export const istNacht = uhr => helligkeit(uhr) < 0.35;
+const hausHash = n => { let h = Math.imul(n + 17, 2654435761) ^ 0x5bd1e995; h = Math.imul(h ^ (h >>> 15), 2246822519); return ((h ^ (h >>> 13)) >>> 0) / 4294967296; };
+// tagsüber sind etwa 70 % der Häuser durch die Fenster hell, Keller nie; nachts ist alles dunkel
+export function hausHell(nr, stock, uhr) { return stock !== 'keller' && helligkeit(uhr) > 0.6 && hausHash(nr) < 0.7; }
+// nachts brennt in etwa jedem fünften Haus noch Licht (nur draußen als Fensterschein zu sehen)
+export const fensterLicht = nr => hausHash(nr * 7 + 3) < 0.2;
+export function uhrText(uhr) {
+  const u = Math.floor(((uhr % 1440) + 1440) % 1440);
+  return `${String(Math.floor(u / 60)).padStart(2, '0')}:${String(u % 60).padStart(2, '0')}`;
 }

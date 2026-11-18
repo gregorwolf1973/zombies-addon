@@ -7,6 +7,7 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, T, sichtfrei } from '../client/welt.mjs';
+import { hausHell, helligkeit, istNacht } from '../client/welt.mjs';
 
 const PORT = 27300 + Math.floor(Math.random() * 200);
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -205,9 +206,11 @@ test('Taschenlampe: schaltet drinnen ein, verbraucht sich, nächste aus dem Ruck
   const { c, raum, p } = await beitreten('Lampenträger');
   try {
     p.rucksack.clear(); p.rucksack.push('taschenlampe'); p.rucksack.push('taschenlampe');
+    raum.state.uhr = 12 * 60;   // mittags: draußen hell
     await warte(300);
     assert.equal(p.lampe, 0, 'leuchtet draußen');
-    const h = raum.welt.haeuser.find(h => h.betretbar);
+    // ein Haus, das tagsüber dunkel ist (etwa 30 %)
+    const h = raum.welt.haeuser.find(h => h.betretbar && !hausHell(h.nr, 'eg', 12 * 60));
     p.ebene = `h${h.nr}eg`; const w = raum.wv(p.ebene); p.x = w.start.x; p.y = w.start.y;
     assert.ok(await bis(() => p.lampe > 3590), 'schaltet nicht ein');
     assert.equal(p.rucksack.length, 1);
@@ -215,5 +218,22 @@ test('Taschenlampe: schaltet drinnen ein, verbraucht sich, nächste aus dem Ruck
     assert.ok(p.lampe < l0, 'verbraucht sich nicht');
     p.lampe = 0.01;
     assert.ok(await bis(() => p.rucksack.length === 0 && p.lampe > 3590), 'nächste Lampe nicht genommen');
+  } finally { await c.leave(); }
+});
+
+test('Tag und Nacht: Dämmerung, helle Häuser, Lampe draußen nur nachts', async () => {
+  assert.equal(helligkeit(12 * 60), 1); assert.equal(helligkeit(0), 0);
+  assert.ok(helligkeit(20 * 60) > 0 && helligkeit(20 * 60) < 1, 'Abenddämmerung');
+  assert.ok(istNacht(23 * 60) && !istNacht(10 * 60));
+  const hell = Array.from({ length: 400 }, (_, i) => hausHell(i, 'eg', 720)).filter(Boolean).length;
+  assert.ok(hell > 240 && hell < 320, `tagsüber hell: ${hell} von 400`);
+  assert.ok(!hausHell(3, 'keller', 720) && !hausHell(3, 'eg', 0), 'Keller und Nacht dunkel');
+  const { c, raum, p } = await beitreten('Nachtwanderer');
+  try {
+    p.rucksack.clear(); p.rucksack.push('taschenlampe'); p.ebene = '';
+    raum.state.uhr = 23 * 60;
+    assert.ok(await bis(() => p.lampe > 0), 'Lampe geht nachts draußen nicht an');
+    const nachts = raum.zombieSollJetzt(); raum.state.uhr = 12 * 60;
+    assert.ok(nachts > raum.zombieSollJetzt(), 'nachts nicht mehr Zombies');
   } finally { await c.leave(); }
 });

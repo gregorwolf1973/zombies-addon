@@ -16,8 +16,8 @@ export const EREIGNISSE = [
   { id: 'entdeckt', name: 'Zombie entdeckt dich', beschreibung: 'Schrei, wenn ein Zombie zu jagen beginnt', art: 'einmal' },
   { id: 'stadt', name: 'Stadtgeräusche', beschreibung: 'Hintergrund draußen (Verkehr in der Ferne)', art: 'schleife' },
   { id: 'zombielandTag', name: 'Zombieland (Tag)', beschreibung: 'Ferne Zombies tagsüber – kurze Töne kommen ab und zu aus wechselnder Richtung', art: 'schleife' },
-  { id: 'zombielandNacht', name: 'Zombieland (Nacht)', beschreibung: 'Ferne Zombies und Schreie in der Nacht', art: 'schleife', bald: true },
-  { id: 'nachteinbruch', name: 'Nachteinbruch', beschreibung: 'Einmal, wenn es dunkel wird', art: 'einmal', bald: true },
+  { id: 'zombielandNacht', name: 'Zombieland (Nacht)', beschreibung: 'Ferne Zombies und Schreie in der Nacht', art: 'schleife' },
+  { id: 'nachteinbruch', name: 'Nachteinbruch', beschreibung: 'Einmal, wenn es dunkel wird', art: 'einmal' },
 ];
 
 const zahl = (v, min, max, vorgabe) => {
@@ -46,10 +46,13 @@ export function bereinige(e = {}, alt = {}) {
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
     bots: Math.round(zahl(e.bots ?? a.bots, 0, 9, 2)),
     frischerStart: typeof e.frischerStart === 'boolean' ? e.frischerStart : !!a.frischerStart,
+    autos: Math.round(zahl(e.autos ?? a.autos, 0, 50, 10)),            // geparkte Autos, 10 = normal (gilt für neue Welten)
+    tagMinuten: Math.round(zahl(e.tagMinuten ?? a.tagMinuten, 10, 240, 48)),   // so viele echte Minuten dauert ein Spieltag
     zombies: {
       dichte: Math.round(zahl(z.dichte, 0, 50, 10)),     // draußen, 10 = normal
       haeuser: Math.round(zahl(z.haeuser, 0, 50, 10)),   // schlafende Zombies in Häusern, 10 = normal
       tempo: Math.round(zahl(z.tempo, 50, 150, 100)),    // Laufgeschwindigkeit in Prozent
+      nacht: Math.round(zahl(z.nacht, 10, 30, 15)),      // nachts so viel mehr draußen (15 = ×1,5)
     },
     funde,
     toene,
@@ -62,8 +65,8 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false,
-    zombies: { dichte: 10, haeuser: 10, tempo: 100 },
+    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48,
+    zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15 },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     test: { zeitraffer: 1, unsterblich: [] },
     toene: {},

@@ -11,7 +11,9 @@ const SAFE_WUNSCH = [
 ];
 const RICHTUNGEN = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-export function baueWeltAusKarte(karte, seed) {
+// optionen.autos: Faktor für geparkte Autos (1 = normal)
+export function baueWeltAusKarte(karte, seed, optionen = {}) {
+  const autoFaktor = Number.isFinite(optionen.autos) ? Math.max(0, optionen.autos) : 1;
   const r = zufall(seed ^ 0x6a09e667);
   const k = new Uint8Array(BREITE * HOEHE);
   for (let i = 0; i < k.length; i++) k[i] = karte.kacheln.charCodeAt(i) - 48;
@@ -124,14 +126,39 @@ export function baueWeltAusKarte(karte, seed) {
       randStrasse.push([x, y, senkrecht]);
     }
   }
-  const autos = Math.min(70, Math.floor(randStrasse.length / 25));
+  const autos = Math.round(Math.min(260, randStrasse.length / 16) * autoFaktor);
   for (let n = 0, v = 0; n < autos && v < autos * 20; v++) {
     const [x, y, senkrecht] = randStrasse[Math.floor(r() * randStrasse.length)];
     const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
-    if (behaelter.some(b => Math.hypot(b.x - px, b.y - py) < KACHEL * 5)) continue;
+    if (behaelter.some(b => Math.hypot(b.x - px, b.y - py) < KACHEL * 2.6)) continue;
     if (Math.hypot(px - start.x, py - start.y) < KACHEL * 4) continue;
     behaelter.push({ id: 'b' + behaelter.length, art: 'auto', x: px, y: py, senkrecht, farbe: Math.floor(r() * 6) });
     n++;
+  }
+
+  // Parkplätze (OSM-Flächen): Autos in Reihen, Lücken dazwischen
+  const imPolygon = (px, py, p) => {
+    let drin = false;
+    for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
+      if ((p[i + 1] > py) !== (p[j + 1] > py) && px < (p[j] - p[i]) * (py - p[i + 1]) / (p[j + 1] - p[i + 1]) + p[i]) drin = !drin;
+    }
+    return drin;
+  };
+  for (const f of karte.flaechen ?? []) {
+    if (f.a !== 'parkplatz' || autoFaktor <= 0) continue;
+    const xs = f.p.filter((_, i) => i % 2 === 0), ys = f.p.filter((_, i) => i % 2 === 1);
+    const x0 = Math.floor(Math.min(...xs)), x1 = Math.ceil(Math.max(...xs)), y0 = Math.floor(Math.min(...ys)), y1 = Math.ceil(Math.max(...ys));
+    const quer = x1 - x0 >= y1 - y0;   // breiter Platz: Autos stehen nebeneinander (senkrecht)
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if ((quer ? y % 3 : x % 3) === 2) continue;                 // Fahrgasse
+      if ((quer ? x : y) % 1 !== 0 || r() > 0.42 * autoFaktor) continue;
+      if (hole(x, y) !== T.PLATZ && hole(x, y) !== T.STRASSE) continue;
+      if (!imPolygon(x + 0.5, y + 0.5, f.p)) continue;
+      const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
+      if (Math.hypot(px - start.x, py - start.y) < KACHEL * 3) continue;
+      if (behaelter.some(b => Math.abs(b.x - px) < KACHEL * (quer ? 0.9 : 1.6) && Math.abs(b.y - py) < KACHEL * (quer ? 1.6 : 0.9))) continue;
+      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', x: px, y: py, senkrecht: quer, farbe: Math.floor(r() * 6) });
+    }
   }
 
   // Deko: Maibaum auf dem Platz, Busse auf Straßen, Büsche auf Wiesen
