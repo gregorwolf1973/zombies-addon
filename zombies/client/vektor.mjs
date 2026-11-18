@@ -392,18 +392,43 @@ export function zeichneVektorDaecher(ctx, welt, rect) {
     if (b) begrenzt(g, () => { ctx.drawImage(b.bild, b.x, b.y, b.b, b.h); dachDetails(ctx, g); });
   });
   for (const l of laternen(welt)) if (l.x > r.x0 - 30 && l.x < r.x1 + 30 && l.y > r.y0 - 30 && l.y < r.y1 + 30) laterneZeichnen(ctx, l);
-  // Haustüren der betretbaren Häuser (unter dem Dachrand hervor)
+  // Haustüren: auf der echten Hauswand, an der Stelle, die der Rastertür am nächsten liegt, entlang der Wand gedreht
   for (const h of welt.haeuser) {
     if (!h.betretbar || !h.tuer) continue;
-    const cx = (h.tuer.x + 0.5) * K + h.raus.dx * K * 0.5, cy = (h.tuer.y + 0.5) * K + h.raus.dy * K * 0.5;
-    if (cx < r.x0 - K || cx > r.x1 + K || cy < r.y0 - K || cy > r.y1 + K) continue;
-    const quer = h.raus.dx !== 0;
-    const bw = quer ? 9 : 22, bh = quer ? 22 : 9;
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(cx - bw / 2 + 2, cy - bh / 2 + 2, bw, bh);
-    ctx.fillStyle = '#9e9e9e'; ctx.fillRect(cx - bw / 2 + h.raus.dx * 5, cy - bh / 2 + h.raus.dy * 5, bw, bh);   // Stufe
-    ctx.fillStyle = '#5d4037'; ctx.fillRect(cx - bw / 2, cy - bh / 2, bw, bh);
-    ctx.fillStyle = '#ffd54f'; ctx.fillRect(cx + (quer ? 0 : 6) - 1.5, cy + (quer ? 6 : 0) - 1.5, 3, 3);
+    const t = tuerAufWand(v, h);
+    if (t.x < r.x0 - K || t.x > r.x1 + K || t.y < r.y0 - K || t.y > r.y1 + K) continue;
+    ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.w);   // x entlang der Wand, y nach außen
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(-10, 2, 22, 9);
+    ctx.fillStyle = '#bdbdbd'; ctx.fillRect(-12, 4, 24, 7);                 // Stufe vor der Tür
+    ctx.fillStyle = '#5d4037'; ctx.fillRect(-10, -3, 20, 7);               // Türblatt
+    ctx.fillStyle = '#3e2723'; ctx.fillRect(-10, -3, 20, 1.5);
+    ctx.fillStyle = '#ffd54f'; ctx.fillRect(5, 0, 2.5, 2.5);               // Klinke
+    ctx.restore();
   }
+}
+
+// nächster Punkt auf dem Gebäudeumriss zur Rastertür; w = Winkel, bei dem +y nach draußen zeigt
+function tuerAufWand(v, h) {
+  if (h._tuerWand) return h._tuerWand;
+  const px = (h.tuer.x + 0.5 + h.raus.dx * 0.5) * K, py = (h.tuer.y + 0.5 + h.raus.dy * 0.5) * K;
+  const g = v.gebaeude.find(q => q.kx === h.x && q.ky === h.y);
+  let erg = { x: px, y: py, w: Math.atan2(h.raus.dy, h.raus.dx) - Math.PI / 2 };
+  if (g) {
+    let bd = Infinity;
+    for (let i = 0; i < g.pts.length; i++) {
+      const [ax, ay] = g.pts[i], [bx, by] = g.pts[(i + 1) % g.pts.length];
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1;
+      const tt = Math.max(0.15, Math.min(0.85, ((px - ax) * dx + (py - ay) * dy) / l2));   // nicht in die Hausecke
+      const qx = ax + dx * tt, qy = ay + dy * tt, d = Math.hypot(qx - px, qy - py);
+      if (d < bd && d < K * 1.6) {
+        bd = d;
+        let nx = -dy, ny = dx; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+        if (nx * h.raus.dx + ny * h.raus.dy < 0) { nx = -nx; ny = -ny; }   // Normale nach draußen
+        erg = { x: qx + nx * (UEBERSTAND + 3), y: qy + ny * (UEBERSTAND + 3), w: Math.atan2(ny, nx) - Math.PI / 2 };   // unter dem Dachüberstand hervor
+      }
+    }
+  }
+  return (h._tuerWand = erg);
 }
 
 // Dach eines Safe Rooms (eigene Grafik, wird beim Betreten durchsichtig)

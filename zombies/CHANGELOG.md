@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.20.1 – 18.11.2026
+
+- Wasser gibt es dort, wo man es erwartet, um die Hälfte häufiger: Lebensmittelläden, Kaufhäuser, Gaststätten und
+  Eisdielen (Kaufhäuser haben jetzt überhaupt Wasser)
+- Haustüren sitzen genau auf der echten Hauswand, entlang der Wand gedreht und unter dem Dachüberstand sichtbar
+
 ## 0.20.0 – 18.11.2026
 
 - Ausbruch: In Geretsried leben 50 Menschen (einstellbar). Sie gehen von zu Hause zum Einkaufen in echte Läden, zum

@@ -381,7 +381,7 @@ export const BEUTE = {
   auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', null],
   laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
   laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
-  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', null],
+  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'wasser', 'wasser', null],
   laden_gaststaette: ['essen', 'essen', 'wasser', 'wasser', 'messer', 'schokoriegel', null],
   laden: ['essen', 'wasser', 'schokoriegel', null, null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
@@ -390,9 +390,14 @@ export const MUNITION_PRO_FUND = 12;
 
 // Fundhäufigkeit je Gegenstand einstellbar: 10 = normal, 0 = nie, 20 = doppelt so oft.
 // Zieht aus einer Beutetabelle (Einträge mit Wiederholungen, null = nichts) mit Gewichten.
-export function ziehe(tabelle, faktoren, rnd) {
+// wo man es erwartet, gibt es manches häufiger: Wasser in Lebensmittelläden, Kaufhäusern, Gaststätten und Eisdielen +50 %
+export const BEUTE_BONUS = {
+  // Gewichte so gewählt, dass die Fundwahrscheinlichkeit um die Hälfte steigt (z. B. Lebensmittel 33 % → 50 %)
+  laden_lebensmittel: { wasser: 2.0 }, laden_kaufhaus: { wasser: 1.65 }, laden_gaststaette: { wasser: 1.9 },
+};
+export function ziehe(tabelle, faktoren, rnd, bonus = null) {
   let summe = 0;
-  const gewichte = tabelle.map(d => { const g = d ? (faktoren?.[d] ?? 10) / 10 : 1; summe += g; return g; });
+  const gewichte = tabelle.map(d => { const g = d ? (faktoren?.[d] ?? 10) / 10 * (bonus?.[d] ?? 1) : 1; summe += g; return g; });
   if (summe <= 0) return null;
   let r = rnd() * summe;
   for (let i = 0; i < tabelle.length; i++) { r -= gewichte[i]; if (r < 0) return tabelle[i]; }

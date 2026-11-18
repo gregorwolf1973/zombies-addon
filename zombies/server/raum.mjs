@@ -12,7 +12,7 @@ import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe,
   bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
-  BLOCKIERT, ziehe, setzeKartengroesse, seiteVon, ladenArt, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
+  BLOCKIERT, ziehe, BEUTE_BONUS, setzeKartengroesse, seiteVon, ladenArt, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
 } from '../client/welt.mjs';
 
 export const Spieler = schema({
@@ -863,7 +863,7 @@ export class SpielRaum extends Room {
       const funde = [];
       const n = 1 + (this.rnd() < 0.45 ? 1 : 0);
       for (let i = 0; i < n; i++) {
-        const d = ziehe(tabelle, SpielRaum.einstellungen.funde, this.rnd);
+        const d = ziehe(tabelle, SpielRaum.einstellungen.funde, this.rnd, BEUTE_BONUS[b.art]);
         if (d) funde.push(d);
       }
       this.setzeInhalt(b.id, funde);
