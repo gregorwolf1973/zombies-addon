@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.1 – 18.11.2026
+
+- Drübersteigen per Knopf: An Hecke, Zaun oder Gartenmauer zeigt der Aktionsknopf (Taste E) „Über die Hecke steigen“;
+  automatisches Klettern klappt jetzt auch, wenn man schräg dagegenläuft
+- Polizei und Feuerwehr fahren mit Dauersirene – sie blendet mit der Entfernung ein und aus, kommt aus der richtigen
+  Richtung und ändert beim Vorbeifahren die Tonhöhe; ohne zugeordnete Datei ein echtes Martinshorn
+- Feuer echter: Flammenzungen an mehreren Brandherden, heller Kern, Funkenflug, Rauchsäule, flackernder Schein;
+  dazu Brandrauschen und lauteres Knistern in der Nähe
+
 ## 0.21.0 – 18.11.2026
 
 - Brände: In der Anfangsphase (einstellbar, Vorgabe die ersten 20 Minuten) fängt etwa jede Minute ein Haus, ein

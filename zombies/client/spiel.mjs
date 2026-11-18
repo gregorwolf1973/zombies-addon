@@ -2,7 +2,7 @@
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn, setzeKartengroesse, seiteVon, ladenArt,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, TAUSCH_ABSTAND, WAFFEN, aktiveWaffe, helligkeit, istNacht, hausHell, fensterLicht, uhrText,
+  BODEN_DAUER, TAUSCH_ABSTAND, WAFFEN, aktiveWaffe, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText,
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
@@ -322,7 +322,7 @@ class Ort extends Phaser.Scene {
         this.tweens.add({ targets: c, y: c.y - 10, alpha: 0, scale: 1.8, duration: 450, onComplete: () => c.destroy() });
       }
     });
-    raum.onMessage('sirene', m => { const f = raum.state.fahrzeuge.get(m.id); if (f) ton.ereignis('sirene', f.x, f.y); });
+    raum.onMessage('sirene', () => {});   // die Sirene läuft dauernd am Fahrzeug (fahrzeuge in abgleichen)
     raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
     raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
     raum.onMessage('meldung', m => meldung(m.text, m.lang));
@@ -579,27 +579,48 @@ class Ort extends Phaser.Scene {
       const t = this.textures.createCanvas('flamme', 32, 32), c = t.getContext(), g = c.createRadialGradient(16, 16, 0, 16, 16, 16);
       g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,.7)'); g.addColorStop(1, 'rgba(255,255,255,0)');
       c.fillStyle = g; c.fillRect(0, 0, 32, 32); t.refresh();
+      // Flammenzunge: tropfenförmig, unten kräftig, oben spitz auslaufend
+      const z = this.textures.createCanvas('zunge', 24, 48), d = z.getContext();
+      const v = d.createLinearGradient(0, 0, 0, 48);
+      v.addColorStop(0, 'rgba(255,255,255,0)'); v.addColorStop(0.35, 'rgba(255,255,255,.55)'); v.addColorStop(0.8, 'rgba(255,255,255,1)'); v.addColorStop(1, 'rgba(255,255,255,.7)');
+      d.fillStyle = v; d.beginPath(); d.moveTo(12, 0); d.bezierCurveTo(23, 18, 23, 36, 12, 47); d.bezierCurveTo(1, 36, 1, 18, 12, 0); d.fill(); z.refresh();
     }
     for (const [id, f] of s.feuer ?? []) {
       let o = this.feuerObj.get(id);
       if (!o) {
-        const zone = { type: 'random', source: new Phaser.Geom.Circle(0, 0, f.r * 0.55) };
-        const flammen = this.add.particles(f.x, f.y, 'flamme', {
-          speed: { min: 15, max: 60 }, angle: { min: 240, max: 300 }, scale: { start: 1.5, end: 0.1 }, alpha: { start: 0.95, end: 0 },
-          lifespan: { min: 350, max: 900 }, frequency: 22, tint: [0xffe082, 0xffa726, 0xff7043, 0xff3d00], blendMode: 'ADD', emitZone: zone,
+        // Häuser brennen auf der ganzen Dachfläche, Fahrzeuge kompakt
+        const haus = f.art === 'haus', menge = Math.max(1, f.r / 45);
+        // Brandherde: Häuser an 3–5 Stellen, Fahrzeuge an einer; jede Flamme startet an einem Herd
+        const herde = [];
+        const anzahl = haus ? 3 + Math.floor(Math.random() * 3) : 1;
+        for (let i = 0; i < anzahl; i++) { const w = Math.random() * Math.PI * 2, rr = haus ? f.r * (0.15 + Math.random() * 0.45) : 0; herde.push({ x: Math.cos(w) * rr, y: Math.sin(w) * rr }); }
+        const anHerd = streu => ({ type: 'random', source: { getRandomPoint: p => { const h = herde[Math.floor(Math.random() * herde.length)]; p.x = h.x + (Math.random() - 0.5) * streu; p.y = h.y + (Math.random() - 0.5) * streu * 0.6; return p; } } });
+        const zone = anHerd(haus ? 26 : 22), kernZone = anHerd(haus ? 14 : 12);
+        const schein = this.add.image(f.x, f.y, 'flamme').setTint(0xff6d00).setBlendMode('ADD').setDepth(1.2).setScale(f.r / 9).setAlpha(0.35);
+        const flammen = this.add.particles(f.x, f.y, 'zunge', {
+          speed: { min: 35, max: 90 }, angle: { min: 258, max: 282 }, scale: { start: 1.0, end: 0.25 }, alpha: { start: 0.85, end: 0 },
+          lifespan: { min: 380, max: 800 }, frequency: 12 / menge, tint: [0xffa726, 0xff7043, 0xf4511e, 0xc62828], blendMode: 'ADD', emitZone: zone,
         }).setDepth(5.6);
+        const kern = this.add.particles(f.x, f.y, 'zunge', {
+          speed: { min: 15, max: 45 }, angle: { min: 255, max: 285 }, scale: { start: 0.65, end: 0 }, alpha: { start: 0.9, end: 0 },
+          lifespan: { min: 250, max: 500 }, frequency: 25 / menge, tint: [0xffffff, 0xfff59d, 0xffe082], blendMode: 'ADD', emitZone: kernZone,
+        }).setDepth(5.65);
+        const funken = this.add.particles(f.x, f.y, 'flamme', {
+          speed: { min: 50, max: 140 }, angle: { min: 225, max: 315 }, gravityY: 25, scale: { start: 0.18, end: 0.05 }, alpha: { start: 1, end: 0 },
+          lifespan: { min: 700, max: 1500 }, frequency: 110 / menge, tint: [0xffd180, 0xffab40], blendMode: 'ADD', emitZone: kernZone,
+        }).setDepth(5.66);
         const rauch = this.add.particles(f.x, f.y, 'flamme', {
-          speedY: { min: -55, max: -20 }, speedX: { min: -12, max: 18 }, scale: { start: 0.9, end: 2.8 }, alpha: { start: 0.35, end: 0 },
-          lifespan: 2600, frequency: 85, tint: 0x3a3a3a, emitZone: zone,
+          speedY: { min: -60, max: -25 }, speedX: { min: 5, max: 30 }, scale: { start: 1.1, end: 3.8 }, alpha: { start: 0.3, end: 0 },
+          lifespan: { min: 2400, max: 3600 }, frequency: 70 / menge, tint: [0x2b2b2b, 0x3d3d3d, 0x4a4542], emitZone: zone, rotate: { min: 0, max: 360 },
         }).setDepth(5.7);
-        o = { flammen, rauch };
+        o = { schein, teile: [flammen, kern, funken, rauch], basis: [18 / menge, 25 / menge, 110 / menge, 70 / menge] };
         this.feuerObj.set(id, o);
       }
-      const st = Math.max(0.05, f.staerke);
-      o.flammen.frequency = 22 / st; o.rauch.frequency = 85 / st;
-      o.flammen.setVisible(this.aktEbene === ''); o.rauch.setVisible(this.aktEbene === '');
+      const st = Math.max(0.05, f.staerke), sichtbar = this.aktEbene === '';
+      o.teile.forEach((t, i) => { t.frequency = o.basis[i] / st; t.setVisible(sichtbar); });
+      o.schein.setVisible(sichtbar).setAlpha((0.22 + Math.random() * 0.12) * st).setScale(f.r / 9 * (0.95 + Math.random() * 0.1));
     }
-    for (const [id, o] of this.feuerObj) if (!s.feuer?.has(id)) { o.flammen.destroy(); o.rauch.destroy(); this.feuerObj.delete(id); }
+    for (const [id, o] of this.feuerObj) if (!s.feuer?.has(id)) { o.teile.forEach(t => t.destroy()); o.schein.destroy(); this.feuerObj.delete(id); }
     // Ruinen und ausgebrannte Autos/Busse (nur neu zeichnen, wenn sich etwas ändert)
     const stand = s.verbrannt?.size ?? 0;
     if (stand === this.ruinenStand) return;
@@ -995,13 +1016,21 @@ class Ort extends Phaser.Scene {
       o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
       o.licht.clear();
       if (f.art === 'polizei' || f.art === 'feuerwehr') {
+        // Dauersirene: blendet mit der Entfernung ein und aus, Tonhöhe nach Annäherung (Doppler)
+        if (!o.sirene) o.sirene = ton.sireneStarten();
+        if (o.sirene && this.lokal) {
+          const d = Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y);
+          const naeher = o.letzterAbstand === undefined ? 0 : (o.letzterAbstand - d) / Math.max(dt, 0.001);
+          o.letzterAbstand = d;
+          ton.sireneLage(o.sirene, o.x, o.y, this.aktEbene ? naeher * 0.5 : naeher);
+        }
         const vx = f.art === 'feuerwehr' ? 16 : 2;
         o.licht.fillStyle(blink ? 0x2962ff : 0x82b1ff, 1).fillCircle(vx, -5, 3.5);
         o.licht.fillStyle(blink ? 0x82b1ff : 0x2962ff, 1).fillCircle(vx, 5, 3.5);
         o.licht.fillStyle(0x448aff, 0.18).fillCircle(vx, 0, blink ? 26 : 18);
       }
     }
-    for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id)) { o.box.destroy(); this.busObj.delete(id); }
+    for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id)) { ton.sireneStoppen(o.sirene); o.box.destroy(); this.busObj.delete(id); }
     this.feuerDarstellen(s);
     this.spurenDarstellen(s);
     // liegende Gegenstände
@@ -1062,7 +1091,7 @@ class Ort extends Phaser.Scene {
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
-    const tun = zombie ? '🧟' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.infektion > 0 ? '🦠' : '';
+    const tun = zombie ? '🧟' : p.aktion === 'klettern' ? '🧗' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.infektion > 0 ? '🦠' : '';
     if (f.tun.text !== tun) f.tun.setText(tun);
   }
 
@@ -1194,6 +1223,10 @@ class Ort extends Phaser.Scene {
     if (best) return { art: 'durchsuchen', text: `${best.art === 'auto' ? '⚒️' : '🔍'} ${BEHAELTER_NAME[best.art]} ${best.art === 'auto' ? 'aufbrechen' : 'durchsuchen'}` };
     const zu = this.tuerKontext(ich, true);
     if (zu) return zu;
+    if (!ich.ebene) {
+      const z = zaunUeberstieg(this.welt, x, y, ich.richtung, W.spielerRadius);
+      if (z) return { art: 'klettern', text: `🧗 Über ${ZAUN_NAME[z.art] ?? 'den Zaun'} steigen` };
+    }
     // jemanden berühren → tauschen
     if (!tauschOffen) {
       for (const [sid, o] of raum.state.spieler) {
@@ -1299,7 +1332,14 @@ class Ort extends Phaser.Scene {
     this.knisterZeit = (this.knisterZeit ?? 0) - dt;
     if (this.knisterZeit <= 0) {
       this.knisterZeit = 0.3;
-      for (const f of raum.state.feuer?.values() ?? []) if (!this.aktEbene && Math.hypot(f.x - this.lokal.x, f.y - this.lokal.y) < 700) ton.knistern(f.x, f.y, f.staerke);
+      let rauschen = 0;
+      for (const f of raum.state.feuer?.values() ?? []) {
+        const d = Math.hypot(f.x - this.lokal.x, f.y - this.lokal.y) - f.r;
+        if (this.aktEbene || d > 800) continue;
+        rauschen += f.staerke * (f.r / 50) * Math.max(0, 1 - d / 800) ** 2;
+        if (Math.random() < 0.8) ton.knistern(f.x, f.y, f.staerke);
+      }
+      ton.brandRauschen(rauschen * (this.aktEbene ? 0.3 : 1));
     }
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {

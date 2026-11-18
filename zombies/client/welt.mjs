@@ -578,3 +578,28 @@ export function aktiveWaffe(p) {
   const w = WAFFEN[p.waffe];
   return w && (!w.fern || p.munition > 0) ? [p.waffe, w] : ['faust', WAFFEN.faust];
 }
+
+// Über einen Gartenzaun, eine Hecke oder Gartenmauer steigen: Zaunfeld direkt vor der Figur (Blickrichtung zuerst,
+// dann die vier Hauptrichtungen) und ein freier Landeplatz dahinter. Rückgabe { x, y, art } oder null.
+export function zaunUeberstieg(welt, x, y, richtung, rad) {
+  const zaunart = welt.details?.zaunart;
+  if (!zaunart) return null;
+  const richtungen = [richtung, 0, Math.PI / 2, Math.PI, -Math.PI / 2]
+    .sort((a, b) => Math.abs(Math.atan2(Math.sin(a - richtung), Math.cos(a - richtung))) - Math.abs(Math.atan2(Math.sin(b - richtung), Math.cos(b - richtung))));
+  for (const w of richtungen) {
+    const dx = Math.cos(w), dy = Math.sin(w);
+    for (const abstand of [rad + 6, rad + 14]) {
+      const kx = Math.floor((x + dx * abstand) / KACHEL), ky = Math.floor((y + dy * abstand) / KACHEL);
+      if (welt.hole(kx, ky) !== T.ZAUN) continue;
+      const art = zaunart[ky * BREITE + kx];
+      if (!'hzmw'.includes(art)) continue;
+      const mx = (kx + 0.5) * KACHEL, my = (ky + 0.5) * KACHEL;
+      for (const weiter of [KACHEL * 0.5 + rad + 4, KACHEL * 0.8 + rad, KACHEL * 1.3 + rad]) {
+        const zx = mx + dx * weiter, zy = my + dy * weiter;
+        if (frei(welt, zx, zy, rad)) return { x: zx, y: zy, art };
+      }
+    }
+  }
+  return null;
+}
+export const ZAUN_NAME = { h: 'die Hecke', z: 'den Zaun', m: 'den Zaun', w: 'die Mauer' };

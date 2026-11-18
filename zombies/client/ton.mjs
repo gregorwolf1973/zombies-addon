@@ -248,7 +248,60 @@ export function umgebung(drinnen) {
 
 // Knistern eines Brandes (erzeugt): kurze, raue Knackser
 export function knistern(x, y, staerke = 1) {
-  const z = ort(x, y, 0.35 * staerke); if (!z) return;
+  const z = ort(x, y, 0.7 * staerke); if (!z) return;
   for (let i = 0; i < 3; i++) rauschen(z, 0.04 + Math.random() * 0.05, { typ: 'bandpass', freq: 1500 + Math.random() * 3000, q: 2, start: Math.random() * 0.25, a: 0.002, laut: 0.5 + Math.random() * 0.5 });
   rauschen(z, 0.4, { freq: 300, start: 0, laut: 0.25 });
+}
+
+// ---------- Sirene: läuft dauernd, solange das Fahrzeug da ist; Lautstärke, Richtung und Tonhöhe folgen der Entfernung ----------
+// Mit zugeordneter Datei (Ereignis „Sirene“) als Schleife, sonst ein erzeugtes Martinshorn (a' 440 Hz / d'' 587 Hz).
+export function sireneStarten() {
+  if (!ctx) return null;
+  const g = ctx.createGain(); g.gain.value = 0;
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  if (pan) { g.connect(pan); pan.connect(haupt); } else g.connect(haupt);
+  const t = zuordnung.sirene, buf = t?.dateien?.map(geladen).find(Boolean);
+  const h = { g, pan, laut: (t?.laut ?? 60) / 100, quellen: [] };
+  if (buf) {
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    src.connect(g); src.start(0, Math.random() * buf.duration); h.quellen.push(src); h.rate = src.playbackRate;
+  } else {
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 0.7;
+    const jetzt = ctx.currentTime;
+    for (let i = 0; i < 400; i++) o.frequency.setValueAtTime(i % 2 ? 587 : 440, jetzt + i * 0.65);   // gut 4 Minuten Tatütata
+    o.connect(f); f.connect(g); o.start(); h.quellen.push(o); h.rate = null; h.osz = o;
+    h.laut *= 0.35;
+  }
+  return h;
+}
+export function sireneLage(h, x, y, naeher) {
+  if (!h || !ctx) return;
+  const d = Math.hypot(x - hx, y - hy), weite = 1400;
+  const v = an ? Math.max(0, 1 - d / weite) ** 1.5 * h.laut : 0;
+  h.g.gain.setTargetAtTime(v, ctx.currentTime, 0.15);                     // sanft ein- und ausblenden
+  if (h.pan) h.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, (x - hx) / 500)), ctx.currentTime, 0.1);
+  const doppler = Math.max(0.9, Math.min(1.1, 1 + naeher / 1600));          // kommt näher: höher, fährt weg: tiefer
+  if (h.rate) h.rate.setTargetAtTime(doppler, ctx.currentTime, 0.2);
+  else if (h.osz) h.osz.detune.setTargetAtTime((doppler - 1) * 1200, ctx.currentTime, 0.2);
+}
+export function sireneStoppen(h) {
+  if (!h || !ctx) return;
+  h.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3);
+  setTimeout(() => { for (const q of h.quellen) { try { q.stop(); } catch { /* schon aus */ } } }, 1500);
+}
+
+// ---------- Brandrauschen: dauerndes Fauchen, Stärke nach Nähe und Größe der Brände ----------
+let brand = null;
+export function brandRauschen(staerke) {
+  if (!ctx) return;
+  if (!brand) {
+    const src = ctx.createBufferSource(); src.buffer = rauschPuffer; src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 650;
+    const g = ctx.createGain(); g.gain.value = 0;
+    src.connect(f); f.connect(g); g.connect(haupt); src.start();
+    brand = { g, f };
+  }
+  brand.g.gain.setTargetAtTime(an ? Math.min(0.35, staerke * 0.3) : 0, ctx.currentTime, 0.4);
+  brand.f.frequency.setTargetAtTime(500 + Math.random() * 300, ctx.currentTime, 0.1);   // flackernd
 }

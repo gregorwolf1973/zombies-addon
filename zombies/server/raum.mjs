@@ -11,7 +11,7 @@ import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg,
   bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, BEUTE_BONUS, setzeKartengroesse, seiteVon, ladenArt, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
@@ -539,7 +539,11 @@ export class SpielRaum extends Room {
       bd = d; best = { id, art: 'leiche', x: l.x, y: l.y };
     }
     if (best) return { art: 'durchsuchen', behaelter: best, dauer: best.art === 'auto' || best.art === 'bus' ? 3.5 : best.art === 'leiche' ? 1.5 : 2.5 };
-    return this.tuerKontext(p, true);
+    const tuerK = this.tuerKontext(p, true);
+    if (tuerK) return tuerK;
+    // an einer Hecke, einem Gartenzaun oder einer Gartenmauer: drübersteigen
+    if (!p.ebene) { const z = zaunUeberstieg(this.welt, p.x, p.y, p.richtung, W.spielerRadius); if (z) return { art: 'klettern', ziel: z, dauer: 0.7 }; }
+    return null;
   }
 
   amTor(p) {
@@ -840,6 +844,7 @@ export class SpielRaum extends Room {
       if (k.art === 'aufbrechen') client?.send('meldung', { text: '⚒️ Tür aufgebrochen – das war laut!' });
     }
     else if (k.art === 'tuer_zu') this.setzeTuer(k.key, false);
+    else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; this.broadcast('klettern', { x: p.x, y: p.y }); }
     else if (k.art === 'aufheben') {
       const b = this.state.boden.get(k.id);
       if (!b || p.rucksack.length >= p.plaetze) return;
@@ -1160,7 +1165,7 @@ export class SpielRaum extends Room {
       bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
       p.richtung = Math.atan2(e.dy, e.dx);
       if (!p.schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen, false, p.ebene);
-      this.klettern(id, p, x, e, laenge, Math.hypot(p.x - x0, p.y - y0) < f * 0.25, dt);
+      this.klettern(id, p, x, e, laenge, ((p.x - x0) * e.dx + (p.y - y0) * e.dy) / laenge < f * 0.35, dt);
     } else x.kletter = 0;
     this.uebergang(id, p, x, dt);
     // automatischer Angriff (nicht während man durchsucht)
@@ -1211,26 +1216,14 @@ export class SpielRaum extends Room {
 
   // Über Hecken, Gartenzäune und -mauern steigen: etwa 0,9 s an derselben Stelle dagegenlaufen
   klettern(id, p, x, e, laenge, steckt, dt) {
-    const zaunart = this.welt.details?.zaunart;
-    if (p.ebene || !zaunart || !steckt) { x.kletter = 0; return; }
-    const dx = e.dx / laenge, dy = e.dy / laenge;
-    const vor = { x: p.x + dx * (W.spielerRadius + 8), y: p.y + dy * (W.spielerRadius + 8) };
-    const kx = Math.floor(vor.x / KACHEL), ky = Math.floor(vor.y / KACHEL);
-    // nur Gartenzäune (Kartenrand und Hauswände nicht)
-    if (this.welt.hole(kx, ky) !== T.ZAUN || !'hzmw'.includes(zaunart[ky * BREITE + kx])) { x.kletter = 0; return; }
-    if (x.kletterStelle !== kx + ',' + ky) { x.kletterStelle = kx + ',' + ky; x.kletter = 0; }
+    if (p.ebene || !steckt) { x.kletter = 0; return; }
+    const z = zaunUeberstieg(this.welt, p.x, p.y, Math.atan2(e.dy, e.dx), W.spielerRadius);
+    if (!z) { x.kletter = 0; return; }
     x.kletter = (x.kletter ?? 0) + dt;
-    if (x.kletter < 0.9) return;
+    if (x.kletter < 0.8) return;
     x.kletter = 0;
-    // Landeplatz hinter dem Zaun suchen
-    for (const weite of [1.2, 1.6, 2.0]) {
-      const zx = p.x + dx * KACHEL * weite, zy = p.y + dy * KACHEL * weite;
-      if (frei(this.welt, zx, zy, W.spielerRadius)) {
-        p.x = zx; p.y = zy;
-        this.broadcast('klettern', { x: zx, y: zy });
-        return;
-      }
-    }
+    p.x = z.x; p.y = z.y;
+    this.broadcast('klettern', { x: z.x, y: z.y });
   }
 
   // als Zombie: schnell, beißt Menschen bei Berührung, sonst nichts

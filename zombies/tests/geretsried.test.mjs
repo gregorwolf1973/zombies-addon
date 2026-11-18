@@ -140,9 +140,17 @@ test('Über Gartenzäune steigen: länger dagegenlaufen, dann drüber; Kartenran
       if (w.hole(x - 1, y) === T.ZAUN && w.hole(x + 1, y) === T.ZAUN && w.hole(x, y - 1) === T.WIESE && w.hole(x, y - 2) === T.WIESE && w.hole(x, y + 1) === T.WIESE && w.hole(x, y + 2) === T.WIESE) ort = { x, y };
     }
     assert.ok(ort, 'kein passender Zaun');
+    // 1. schräg dagegenlaufen (am Handy selten genau senkrecht)
     p.ebene = ''; p.x = (ort.x + 0.5) * KACHEL; p.y = (ort.y - 0.5) * KACHEL;
-    c.send('eingabe', { dx: 0, dy: 1 });
-    assert.ok(await bis(() => p.y > (ort.y + 1) * KACHEL, 4000), 'nicht hinübergestiegen');
+    c.send('eingabe', { dx: 0.35, dy: 0.94 });
+    assert.ok(await bis(() => p.y > (ort.y + 1) * KACHEL, 5000), 'nicht automatisch hinübergestiegen');
     c.send('eingabe', { dx: 0, dy: 0 });
+    // 2. mit dem Aktionsknopf zurück
+    await new Promise(r => setTimeout(r, 300));
+    p.x = (ort.x + 0.5) * KACHEL; p.y = (ort.y + 1.5) * KACHEL; p.richtung = -Math.PI / 2;
+    const k = raum.kontext(p);
+    assert.equal(k?.art, 'klettern', 'kein Drübersteigen angeboten: ' + k?.art);
+    c.send('aktion');
+    assert.ok(await bis(() => p.y < ort.y * KACHEL, 3000), 'Aktionsknopf steigt nicht hinüber');
   } finally { await c.leave(); }
 });
