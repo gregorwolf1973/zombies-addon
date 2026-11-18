@@ -2,6 +2,7 @@
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
+  BODEN_DAUER, TAUSCH_ABSTAND,
 } from './welt.mjs';
 import { zeichneBoden, zeichneOben, zeichneDach, DACH_RAND } from './aussehen.mjs';
 import { zeichneMensch, zeichneZombie, zeichneKriecher, zeichneLeiche, zeichneMenschLiegend } from './figuren.mjs';
@@ -174,6 +175,7 @@ class Ort extends Phaser.Scene {
     this.figuren = new Map();   // sessionId → {box, ...}
     this.zombies = new Map();
     this.leichen = new Map();
+    this.bodenObj = new Map();
     this.kegel = this.add.graphics().setDepth(2);
     this.lokal = null;          // vorhergesagte eigene Position
     this.eingabe = { dx: 0, dy: 0, s: false };
@@ -224,6 +226,11 @@ class Ort extends Phaser.Scene {
     });
     raum.onMessage('pong', () => {});
     raum.onMessage('raetsel', m => zeigeRaetsel(m));
+    raum.onMessage('tausch', m => zeigeTausch(m));
+    raum.onMessage('tausch_ende', m => {
+      tauschZu();
+      meldung(m.grund === 'fertig' ? '🤝 Getauscht!' : 'Tausch abgebrochen');
+    });
     raum.onMessage('aufloesung', m => zeigeAufloesung(m));
     raum.onMessage('tor', () => meldung('🎉 Level 1 geschafft! Level 2 – der Wald an der Isar – kommt bald.', true));
 
@@ -231,6 +238,8 @@ class Ort extends Phaser.Scene {
     $('ausruhen').onclick = () => raum.send('ausruhen');
     $('kistezu').onclick = () => kisteZu();
     $('raetselzu').onclick = () => raetselZu();
+    $('tauschok').onclick = () => raum.send('tausch_ok');
+    $('tauschab').onclick = () => raum.send('tausch_ende');
     this.hudZeit = 0;
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
     if (new URLSearchParams(location.search).has('debug')) { window.szene = this; window.raum = raum; window.meineId = meineId; }
@@ -403,6 +412,18 @@ class Ort extends Phaser.Scene {
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
     }
     for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.destroy(); this.leichen.delete(id); }
+    // liegende Gegenstände
+    for (const [id, b] of s.boden) {
+      let o = this.bodenObj.get(id);
+      if (!o) {
+        o = this.add.container(b.x, b.y).setDepth(1.7);
+        o.add([this.add.ellipse(0, 6, 18, 6, 0x000000, 0.3), this.add.text(0, 0, DINGE[b.ding]?.zeichen ?? '?', { fontSize: '16px' }).setOrigin(0.5)]);
+        this.tweens.add({ targets: o, y: b.y - 3, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.bodenObj.set(id, o);
+      }
+      o.setAlpha(Math.max(0.2, Math.min(1, (BODEN_DAUER - b.alter) / 20)));
+    }
+    for (const [id, o] of this.bodenObj) if (!s.boden.has(id)) { o.destroy(); this.bodenObj.delete(id); }
     // leere Behälter blasser
     for (const [id, b] of s.behaelter) {
       const o = this.behaelterObj.get(id);
@@ -514,11 +535,18 @@ class Ort extends Phaser.Scene {
     if (safe) {
       const tx = (safe.haus.tuer.x + 0.5) * KACHEL, ty = (safe.haus.tuer.y + 0.5) * KACHEL;
       const bar = raum.state.safes.get(safe.id)?.barrikade ?? 0;
-      if (Math.hypot(x - tx, y - ty) < 56 && ich.rucksack.includes('bretter') && bar < 100) {
-        return { art: 'barrikade', text: '🔨 Verbarrikadieren' };
+      if (Math.hypot(x - tx, y - ty) < 56) {
+        const imWeg = [...raum.state.leichen.values()].some(l => Math.hypot(l.x - tx, l.y - ty) < 30);
+        if (imWeg) return { art: 'wegziehen', text: '🧟 Toten Zombie aus der Tür ziehen' };
+        if (ich.rucksack.includes('bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Verbarrikadieren' };
       }
       if (Math.hypot(x - safe.kiste.x, y - safe.kiste.y) < AKTION_ABSTAND + 20) {
         return { art: 'kiste', text: '📦 Vorräte', safe };
+      }
+    }
+    if (ich.rucksack.length < ich.plaetze) {
+      for (const b of raum.state.boden.values()) {
+        if (Math.hypot(b.x - x, b.y - y) < AKTION_ABSTAND) return { art: 'aufheben', text: `✋ ${DINGE[b.ding]?.zeichen ?? ''} aufheben` };
       }
     }
     const tor = this.welt.tor;
@@ -538,6 +566,13 @@ class Ort extends Phaser.Scene {
       if (d < bd && l.rest !== 0) { bd = d; best = { art: 'leiche' }; }
     }
     if (best) return { art: 'durchsuchen', text: `🔍 ${BEHAELTER_NAME[best.art]} durchsuchen` };
+    // jemanden berühren → tauschen
+    if (!tauschOffen) {
+      for (const [sid, o] of raum.state.spieler) {
+        if (sid === meineId || o.unten || o.zombie > 0) continue;
+        if (Math.hypot(o.x - x, o.y - y) < TAUSCH_ABSTAND + 6) return { art: 'tausch', mit: sid, text: `🤝 Tauschen mit ${o.name}` };
+      }
+    }
     return null;
   }
 
@@ -545,6 +580,7 @@ class Ort extends Phaser.Scene {
     const k = this.kontext;
     if (!k) return;
     if (k.art === 'kiste') kisteAuf(k.safe);
+    else if (k.art === 'tausch') raum.send('tausch_start', { mit: k.mit });
     else raum.send('aktion');
     if (k.art === 'raetsel') $('aktion').style.display = 'none';
   }
@@ -637,12 +673,13 @@ class Ort extends Phaser.Scene {
     if (this.kontext && knopf.textContent !== this.kontext.text) knopf.textContent = this.kontext.text;
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
+    tauschRucksack();
 
     let hinweis = '';
     if (s.phase === 'erwischt') hinweis = 'Erwischt! 🧟<br>Ihr schleppt euch in die Safe Rooms …';
     else if (ich && ich.zombie > 0) hinweis = `🧟 Du bist ein Zombie! Beiß die anderen.<br>Noch ${zeitText(ich.zombie)}, dann wachst du im Safe Room auf.`;
     else if (ich && ich.unten) hinweis = `Du liegst am Boden.<br>Ein Mitspieler muss dir aufhelfen.${balken(ich.hilfe)}`;
-    else if (ich && ich.aktion) hinweis = `${ich.aktion === 'barrikade' ? '🔨 Verbarrikadieren' : '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
+    else if (ich && ich.aktion) hinweis = `${{ barrikade: '🔨 Verbarrikadieren', wegziehen: '🧟 Wegziehen', aufheben: '✋ Aufheben' }[ich.aktion] ?? '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
     else if (ich) {
       for (const p of s.spieler.values()) {
         if (p === ich || !p.unten) continue;
@@ -665,12 +702,12 @@ class Ort extends Phaser.Scene {
   }
 
   rucksackZeigen(ich) {
-    const schluessel = [...ich.rucksack].join(',');
+    const schluessel = ich.plaetze + ':' + [...ich.rucksack].join(',');
     if (schluessel === this.rucksackSchluessel) return;
     this.rucksackSchluessel = schluessel;
     const leiste = $('rucksack');
     leiste.innerHTML = '';
-    for (let i = 0; i < RUCKSACK_PLAETZE; i++) {
+    for (let i = 0; i < (ich.plaetze || RUCKSACK_PLAETZE); i++) {
       const d = ich.rucksack[i];
       const b = document.createElement('button');
       b.className = 'platz' + (d ? '' : ' leer');
@@ -728,8 +765,44 @@ function kisteZeigen(ich, safe) {
     el.appendChild(raster);
   };
   fuellen($('kisteinhalt'), kiste, KISTE_PLAETZE, 'raus', 'Kiste');
-  fuellen($('kisterucksack'), ich.rucksack, RUCKSACK_PLAETZE, 'rein', 'Rucksack');
+  fuellen($('kisterucksack'), ich.rucksack, ich.plaetze || RUCKSACK_PLAETZE, 'rein', 'Rucksack');
 }
+
+// ---------- Tauschen ----------
+let tauschOffen = null;
+function zeigeTausch(m) {
+  tauschOffen = m;
+  $('tausch').style.display = 'block';
+  $('tauschtitel').textContent = `🤝 Tausch mit ${m.partner}`;
+  const liste = (el, dinge, wenn) => {
+    el.innerHTML = '';
+    if (!dinge.length) { el.innerHTML = '<span class="leer">nichts</span>'; return; }
+    dinge.forEach((d, i) => {
+      const b = document.createElement('button'); b.className = 'ding'; b.textContent = dingText(d);
+      if (wenn) b.onclick = () => wenn(i); else b.disabled = true;
+      el.appendChild(b);
+    });
+  };
+  liste($('tauschgeben'), m.meins, i => raum.send('tausch_zurueck', { index: i }));
+  liste($('tauschbekommen'), m.seins, null);
+  $('tauschstatus').textContent = (m.meinOk ? '✔ Du bist einverstanden' : '') + (m.seinOk ? (m.meinOk ? ' · ' : '') + `✔ ${m.partner} ist einverstanden` : '');
+  $('tauschok').disabled = m.meinOk;
+  tauschRucksack();
+}
+function tauschRucksack() {
+  if (!tauschOffen) return;
+  const ich = raum.state.spieler.get(meineId);
+  const el = $('tauschrucksack');
+  const schluessel = [...(ich?.rucksack ?? [])].join(',');
+  if (el.dataset.k === schluessel) return;
+  el.dataset.k = schluessel; el.innerHTML = '';
+  [...(ich?.rucksack ?? [])].forEach((d, i) => {
+    const b = document.createElement('button'); b.className = 'ding'; b.textContent = dingText(d);
+    b.onclick = () => raum.send('tausch_anbieten', { platz: i });
+    el.appendChild(b);
+  });
+}
+function tauschZu() { tauschOffen = null; $('tausch').style.display = 'none'; $('tauschrucksack').dataset.k = ''; }
 
 // ---------- Rätsel am Tor ----------
 let raetselId = null;

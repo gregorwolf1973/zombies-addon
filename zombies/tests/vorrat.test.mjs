@@ -402,3 +402,97 @@ test('Kriecher: nicht ganz tot, langsam, beim zweiten Mal Leiche', async () => {
     assert.equal([...raum.state.leichen.values()][0].variante, z.variante);
   } finally { await c.leave(); }
 });
+
+test('Bots folgen ins Haus und bewaffnete Bots kämpfen', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 4 };
+  const a = await beitreten('Hausherr');
+  try {
+    const { raum, p } = a;
+    const bots = () => [...raum.extra.entries()].filter(([, x]) => x.bot).map(([sid]) => raum.state.spieler.get(sid));
+    const s = raum.welt.safeRooms[0];
+    p.x = s.innen.x; p.y = s.innen.y;
+    for (const b of bots()) { b.x = raum.welt.start.x; b.y = raum.welt.start.y + 40; b.waffe = ''; b.munition = 0; }
+    assert.ok(await bis(() => bots().filter(b => safeRoomAn(raum.welt, b.x, b.y) === s).length >= 3, 15000),
+      'Bots kommen nicht ins Haus: ' + bots().map(b => Math.round(b.x) + ',' + Math.round(b.y)).join(' '));
+    // bewaffneter Bot erledigt einen Zombie
+    p.x = raum.welt.start.x; p.y = raum.welt.start.y;
+    const b0 = bots()[0]; b0.waffe = 'messer'; b0.x = p.x + 40; b0.y = p.y;
+    raum.kriecherChance = 0;
+    raum.neuerZombie(0);
+    const [zid, z] = [...raum.state.zombies.entries()].at(-1);
+    z.x = b0.x + 90; z.y = b0.y; raum.zombieInfo.get(zid).ziel = a.c.sessionId;
+    assert.ok(await bis(() => !raum.state.zombies.has(zid), 10000), 'Bot kämpft nicht');
+  } finally {
+    await a.c.leave();
+    SpielRaum.einstellungen = vorher;
+  }
+});
+
+test('Weggeworfenes bleibt liegen, andere heben es auf; großer Rucksack', async () => {
+  const a = await beitreten('Werfer'), b = await beitreten('Finder');
+  try {
+    const { raum } = a;
+    a.p.x = raum.welt.start.x; a.p.y = raum.welt.start.y;
+    a.p.rucksack.clear(); a.p.rucksack.push('seil');
+    a.c.send('wegwerfen', { platz: 0 });
+    assert.ok(await bis(() => raum.state.boden.size === 1));
+    const [, ding] = [...raum.state.boden.entries()][0];
+    b.p.x = ding.x + 5; b.p.y = ding.y; b.p.rucksack.clear();
+    b.c.send('aktion');
+    assert.ok(await bis(() => b.p.rucksack.includes('seil')), 'nicht aufgehoben');
+    assert.equal(raum.state.boden.size, 0);
+    // großer Rucksack
+    b.p.rucksack.push('trekking');
+    b.c.send('benutze', { platz: 1 });
+    assert.ok(await bis(() => b.p.plaetze === 16));
+    // Liegenbleiben läuft ab
+    raum.legeHin('seil', 0, 0);
+    [...raum.state.boden.values()][0].alter = 999;
+    assert.ok(await bis(() => raum.state.boden.size === 0));
+  } finally { await a.c.leave(); await b.c.leave(); }
+});
+
+test('Tauschen: anbieten, beide bestätigen, Entfernen bricht ab', async () => {
+  const a = await beitreten('Anna'), b = await beitreten('Bert');
+  try {
+    const { raum } = a;
+    a.p.x = raum.welt.start.x; a.p.y = raum.welt.start.y; b.p.x = a.p.x + 20; b.p.y = a.p.y;
+    a.p.rucksack.clear(); a.p.rucksack.push('wasser'); b.p.rucksack.clear(); b.p.rucksack.push('messer');
+    const stand = { a: null, b: null };
+    a.c.onMessage('tausch', m => { stand.a = m; }); b.c.onMessage('tausch', m => { stand.b = m; });
+    a.c.send('tausch_start', { mit: b.c.sessionId });
+    assert.ok(await bis(() => stand.a && stand.b), 'kein Tauschfenster');
+    a.c.send('tausch_anbieten', { platz: 0 });
+    b.c.send('tausch_anbieten', { platz: 0 });
+    assert.ok(await bis(() => stand.a?.seins?.[0] === 'messer' && stand.b?.seins?.[0] === 'wasser'));
+    a.c.send('tausch_ok'); await warte(100);
+    assert.equal(a.p.rucksack.length, 0, 'zu früh getauscht');
+    b.c.send('tausch_ok');
+    assert.ok(await bis(() => a.p.rucksack.includes('messer') && b.p.rucksack.includes('wasser')), 'Tausch nicht ausgeführt');
+    // neuer Tausch, dann auseinander → abgebrochen, Angebot zurück
+    let ende = null; a.c.onMessage('tausch_ende', m => { ende = m; });
+    a.c.send('tausch_start', { mit: b.c.sessionId });
+    await bis(() => raum.tausche.size === 2);
+    a.c.send('tausch_anbieten', { platz: 0 });
+    await bis(() => a.p.rucksack.length === 0);
+    b.p.x += 200;
+    assert.ok(await bis(() => ende?.grund === 'abgebrochen'));
+    assert.deepEqual([...a.p.rucksack], ['messer']);
+  } finally { await a.c.leave(); await b.c.leave(); }
+});
+
+test('Toter Zombie in der Tür: erst wegziehen, dann verbarrikadieren', async () => {
+  const { c, raum, p } = await beitreten('Türsteher');
+  try {
+    const s = raum.welt.safeRooms[0], t = s.haus.tuer, rein = t.y === s.haus.y ? 1 : -1;
+    raum.neueLeiche({ x: (t.x + 0.5) * KACHEL, y: (t.y + 0.5) * KACHEL, richtung: 0 });
+    p.x = (t.x + 0.5) * KACHEL; p.y = (t.y + 0.5 + rein) * KACHEL;
+    p.rucksack.clear(); p.rucksack.push('bretter');
+    c.send('aktion');
+    assert.ok(await bis(() => p.aktion === 'wegziehen'), 'Wegziehen nicht angeboten: ' + p.aktion);
+    assert.ok(await bis(() => p.aktion === '' && !raum.leicheInTuer(s), 3000), 'Leiche liegt noch');
+    c.send('aktion');
+    assert.ok(await bis(() => raum.state.safes.get(s.id).barrikade > 0, 5000), 'keine Barrikade');
+  } finally { await c.leave(); }
+});

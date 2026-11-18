@@ -118,3 +118,18 @@ button:disabled { opacity: .6; }
   position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1s;
   background: radial-gradient(circle, transparent 35%, #3f8f1f 100%); mix-blend-mode: multiply; z-index: 1;
 }
+/* Tausch: Feld unten, das Spiel läuft weiter */
+#tausch {
+  position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); display: none; z-index: 22;
+  width: min(560px, calc(100vw - 20px)); max-height: 55vh; overflow: auto;
+  background: #1e2a1ef0; border: 1px solid #fff3; border-radius: 14px; padding: 10px 12px; box-shadow: 0 6px 20px #000a;
+}
+#tausch .spalten { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#tausch .kopf { font-size: 12px; opacity: .85; margin: 8px 0 5px; }
+#tausch .raster { display: flex; flex-wrap: wrap; gap: 5px; min-height: 30px; }
+#tausch .ding { width: auto; margin: 0; font-size: 13px; padding: 6px 9px; border-radius: 8px; background: #ffffff1f; color: #fff; pointer-events: auto; }
+#tausch .leer { opacity: .55; font-size: 12px; }
+#tausch .knoepfe { display: flex; gap: 8px; margin-top: 10px; }
+#tausch .knoepfe button { margin: 0; padding: 9px; font-size: 15px; pointer-events: auto; }
+#tausch .knoepfe .zweit { background: #ffffff22; color: #fff; }
+#tauschstatus { font-size: 13px; color: #a5d6a7; margin-top: 8px; min-height: 1em; }

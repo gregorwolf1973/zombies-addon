@@ -1,4 +1,5 @@
 // Spielfiguren von oben – Entwurf von DeepSeek (v4-pro, 2. Runde nach Claude-Rückmeldung)
+// Spielfiguren von oben – Entwurf von DeepSeek (v4-pro, 2. Runde nach Claude-Rückmeldung)
 // Spielfiguren von oben – Entwurf von DeepSeek (v4-pro), von Claude geprüft
 // figuren.mjs
 // Zeichenfunktionen für Spielfiguren eines Top-down-Zombiespiels
@@ -23,7 +24,7 @@ export function zeichneMensch(ctx, farbe, phase, art) {
     // Weicher Schatten unter der Figur
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath();
-    ctx.ellipse(0, 0, 18, 14, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 16, 12, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Füße / Schuhe (erscheinen abwechselnd vor +x und hinter -x den Schultern)
@@ -34,12 +35,12 @@ export function zeichneMensch(ctx, farbe, phase, art) {
 
     // Linker Fuß (oben, y negativ)
     ctx.beginPath();
-    ctx.ellipse(fussSchwung * 0.8, -9, 5, 3.5, 0.1, 0, Math.PI * 2);
+    ctx.ellipse(fussSchwung * 0.8, -9, 4, 3, 0.1, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     // Rechter Fuß (unten, y positiv)
     ctx.beginPath();
-    ctx.ellipse(-fussSchwung * 0.8, 9, 5, 3.5, -0.1, 0, Math.PI * 2);
+    ctx.ellipse(-fussSchwung * 0.8, 9, 4, 3, -0.1, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
@@ -48,46 +49,48 @@ export function zeichneMensch(ctx, farbe, phase, art) {
     ctx.strokeStyle = '#1a1a1a';
     ctx.lineWidth = 1.5;
 
-    // Linker Arm (oben, y negativ)
+    // Linker Arm (oben, y negativ) – schmaler Schlauch
     ctx.beginPath();
-    ctx.ellipse(armSchwung * 0.7, -13, 6, 4, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(armSchwung * 0.7, -12, 5, 2.5, 0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    // Rechter Arm (unten, y positiv)
+    // Rechter Arm (unten, y positiv) – schmaler Schlauch
     ctx.beginPath();
-    ctx.ellipse(-armSchwung * 0.7, 13, 6, 4, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(-armSchwung * 0.7, 12, 5, 2.5, -0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     // Hände (Hautfarbe)
     ctx.fillStyle = '#ffcc80';
     ctx.beginPath();
-    ctx.arc(armSchwung * 0.7 + 6, -13, 2.5, 0, Math.PI * 2);
+    ctx.arc(armSchwung * 0.7 + 5, -12, 2.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(-armSchwung * 0.7 - 6, 13, 2.5, 0, Math.PI * 2);
+    ctx.arc(-armSchwung * 0.7 - 5, 12, 2.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Oberkörper / Schultern (breites Oval quer zur Blickrichtung, in y lang)
+    // Oberkörper / Schultern – schmale, abgerundete Form quer zur Blickrichtung
+    // Etwa 22 px lang in y, nur 9–10 px breit in x
     ctx.fillStyle = farbe;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 14, 13, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 9, 11, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     // Schattierung Oberkörper (hellere Fläche oben links)
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.beginPath();
-    ctx.ellipse(-3, -4, 8, 7, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(-2, -3, 5, 6, -0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Kopf (Kreis, von oben gesehen – Oberkopf)
+    // Kopf (kleiner, Durchmesser 11 px, leicht nach vorn +x versetzt)
+    const kopfX = 3;
     const kopfY = 0;
     ctx.fillStyle = '#ffcc80';
     ctx.beginPath();
-    ctx.arc(0, kopfY, 7, 0, Math.PI * 2);
+    ctx.arc(kopfX, kopfY, 5.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
@@ -96,30 +99,30 @@ export function zeichneMensch(ctx, farbe, phase, art) {
         // Trachtenhut mit Krempe (von oben)
         ctx.fillStyle = '#4e342e';
         ctx.beginPath();
-        ctx.ellipse(0, kopfY, 9, 8, 0, 0, Math.PI * 2);
+        ctx.ellipse(kopfX, kopfY, 7, 6, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#5d4037';
         ctx.beginPath();
-        ctx.ellipse(0, kopfY, 6, 5.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(kopfX, kopfY, 4.5, 4, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         // Hutband
         ctx.fillStyle = '#8d6e63';
         ctx.beginPath();
-        ctx.ellipse(0, kopfY, 6, 3, 0, 0, Math.PI * 2);
+        ctx.ellipse(kopfX, kopfY, 4.5, 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
     } else {
         // Haare (oben auf dem Kopf, von oben gesehen)
         ctx.fillStyle = art.haar || '#5d4037';
         ctx.beginPath();
-        ctx.arc(0, kopfY, 6.5, 0, Math.PI * 2);
+        ctx.arc(kopfX, kopfY, 5, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         // Kleine Nasenspitze am rechten Rand des Kopfes
         ctx.fillStyle = '#ffcc80';
         ctx.beginPath();
-        ctx.arc(6.5, kopfY, 1.5, 0, Math.PI * 2);
+        ctx.arc(kopfX + 5, kopfY, 1.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
     }
@@ -613,7 +616,7 @@ export function zeichneMenschLiegend(ctx, farbe, art) {
     // Weicher Schatten
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath();
-    ctx.ellipse(0, 4, 18, 12, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 4, 16, 10, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Beine (angewinkelt, seitlich)
@@ -624,49 +627,49 @@ export function zeichneMenschLiegend(ctx, farbe, art) {
 
     // Oberschenkel
     ctx.beginPath();
-    ctx.ellipse(-8, 6, 5, 7, 0.4, 0, Math.PI * 2);
+    ctx.ellipse(-8, 6, 4, 6, 0.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.beginPath();
-    ctx.ellipse(-12, 2, 5, 7, -0.3, 0, Math.PI * 2);
+    ctx.ellipse(-12, 2, 4, 6, -0.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     // Füße
     ctx.fillStyle = '#3e2723';
     ctx.beginPath();
-    ctx.ellipse(-10, 12, 4, 3, 0.3, 0, Math.PI * 2);
+    ctx.ellipse(-10, 12, 3.5, 2.5, 0.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.beginPath();
-    ctx.ellipse(-16, 7, 4, 3, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(-16, 7, 3.5, 2.5, -0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Körper (eingerollt, seitlich)
+    // Körper (eingerollt, seitlich) – schlanker
     ctx.fillStyle = farbe;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 13, 9, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 11, 7, 0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     // Schattierung Körper
     ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.beginPath();
-    ctx.ellipse(-3, -4, 8, 5, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(-3, -3, 6, 4, 0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Arme (vor dem Körper verschränkt)
+    // Arme (vor dem Körper verschränkt) – schmaler
     ctx.fillStyle = farbe;
     ctx.strokeStyle = '#1a1a1a';
     ctx.lineWidth = 1.5;
 
     ctx.beginPath();
-    ctx.ellipse(5, -4, 4, 6, -0.5, 0, Math.PI * 2);
+    ctx.ellipse(5, -4, 3.5, 5, -0.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.beginPath();
-    ctx.ellipse(8, 2, 4, 6, 0.4, 0, Math.PI * 2);
+    ctx.ellipse(8, 2, 3.5, 5, 0.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
@@ -681,10 +684,10 @@ export function zeichneMenschLiegend(ctx, farbe, art) {
     ctx.fill();
     ctx.stroke();
 
-    // Kopf (seitlich, auf dem Boden)
+    // Kopf (seitlich, auf dem Boden) – kleiner
     ctx.fillStyle = '#ffcc80';
     ctx.beginPath();
-    ctx.arc(8, -2, 7, 0, Math.PI * 2);
+    ctx.arc(8, -2, 5.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
@@ -693,21 +696,21 @@ export function zeichneMenschLiegend(ctx, farbe, art) {
         // Hut seitlich
         ctx.fillStyle = '#4e342e';
         ctx.beginPath();
-        ctx.ellipse(8, -6, 8, 4, -0.2, 0, Math.PI * 2);
+        ctx.ellipse(8, -6, 7, 3.5, -0.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#5d4037';
         ctx.beginPath();
-        ctx.ellipse(8, -8, 5, 4, -0.2, 0, Math.PI * 2);
+        ctx.ellipse(8, -8, 4.5, 3.5, -0.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
     } else {
         // Haare
         ctx.fillStyle = art.haar || '#5d4037';
         ctx.beginPath();
-        ctx.arc(8, -2, 6.5, Math.PI * 0.8, Math.PI * 1.8);
-        ctx.quadraticCurveTo(4, -9, 8, -10);
-        ctx.quadraticCurveTo(12, -9, 13, -5);
+        ctx.arc(8, -2, 5, Math.PI * 0.8, Math.PI * 1.8);
+        ctx.quadraticCurveTo(4, -8, 8, -9);
+        ctx.quadraticCurveTo(12, -8, 13, -4);
         ctx.fill();
         ctx.stroke();
     }
@@ -715,7 +718,7 @@ export function zeichneMenschLiegend(ctx, farbe, art) {
     // Blutlache unter dem Körper
     ctx.fillStyle = 'rgba(139,0,0,0.3)';
     ctx.beginPath();
-    ctx.ellipse(2, 6, 10, 6, 0.1, 0, Math.PI * 2);
+    ctx.ellipse(2, 6, 9, 5, 0.1, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();

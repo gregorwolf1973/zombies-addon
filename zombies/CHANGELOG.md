@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0 – 18.11.2026
+
+- Größere Rucksäcke: Sporttasche (12 Plätze) und Trekkingrucksack (16) – selten in Spinden und Kofferräumen
+- Weggeworfene Gegenstände bleiben 3 Minuten liegen und können von allen aufgehoben werden
+- Tauschen: wer einen Mitspieler berührt, kann tauschen – beide legen etwas ins Angebot und bestätigen;
+  das Spiel läuft weiter, wer sich entfernt, bricht ab (Bots nehmen Geschenke an)
+- Bots neu: Wegsuche über Kacheln (folgen durch Türen ins Haus), feste Plätze hinter dem Anführer,
+  Abstand zu allen Figuren, bewaffnete Bots kämpfen (Pistole: Schussabstand halten, Messer/Schläger: angreifen)
+- Ein toter Zombie in der Tür eines Safe Rooms muss erst weggezogen werden, bevor man verbarrikadieren kann
+- Schlankere Figuren ohne runden Ring (DeepSeek, 3. Runde)
+
 ## 0.7.0 – 18.11.2026
 
 - Hindernisse: Traktor, Heuballen, Kühe, Hochsitz, Felsen, Vogelscheuche, Biertische und Maibaum muss man umgehen

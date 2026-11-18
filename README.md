@@ -38,7 +38,8 @@
 - Zombie bites can infect you: 90 minutes until you turn (paused in safe rooms) unless someone gives you a rescue syringe – turned players hunt the others for 3 minutes
 - Level 1 goal: the village gate has three locks, each opened by a first-aid or preparedness question read from a DokuWiki page; wrong answers make noise
 - Dead zombies stay down for a while and can be searched: rarely a pistol, ammo or knife, often clothing, rope, a torch or a chocolate bar
-- Optional simulated teammates (`bots` option) that follow you, revive you and look after themselves – handy for testing alone
+- Optional simulated teammates (`bots` option) that follow you through doors, fight when armed, revive you and look after themselves – handy for testing alone
+- Drop items for others, trade with a friend by touching them, and find bigger bags (12 or 16 slots)
 - Virtual joystick on phones, WASD on desktop; installable as a web app
 
 ## Installation
@@ -56,7 +57,7 @@ If you expose the game to the internet (reverse proxy or Cloudflare Tunnel, WebS
 The map is generated from a seed on both sides, so only the game state travels over the network (20 updates per second).
 
 ```sh
-cd zombies && npm install && npm test   # 39 tests
+cd zombies && npm install && npm test   # 43 tests
 npm start                               # http://localhost:2567
 ```
 

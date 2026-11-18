@@ -298,20 +298,24 @@ export const DINGE = {
   seil: { name: 'Seil', zeichen: '🪢' },
   taschenlampe: { name: 'Taschenlampe', zeichen: '🔦' },
   schokoriegel: { name: 'Schokoriegel', zeichen: '🍫' },
+  tasche: { name: 'Sporttasche (12 Plätze)', zeichen: '👜', plaetze: 12 },
+  trekking: { name: 'Trekkingrucksack (16 Plätze)', zeichen: '🎒', plaetze: 16 },
 };
+export const BODEN_DAUER = 180;      // weggeworfene Gegenstände bleiben 3 Minuten liegen
+export const TAUSCH_ABSTAND = 34;    // so nah muss man sich sein (berühren), um zu tauschen
 // Beute bei toten Zombies: selten (etwa jeder 20.) eine Waffe, sonst oft Alltagszeug
 export const LEICHE_SELTEN = ['pistole', 'munition', 'messer'];
 export const LEICHE_OFT = ['kleidung', 'seil', 'taschenlampe', 'schokoriegel'];
 export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
 export const LEICHEN_MAX = 30;
-export const RUCKSACK_PLAETZE = 8;
+export const RUCKSACK_PLAETZE = 8;   // Grundausstattung; größere Taschen erhöhen p.plaetze
 export const KISTE_PLAETZE = 24;
 export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
   schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', null, null],
-  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', null, null],
-  auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', 'spritze', null],
+  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', null, null],
+  auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', 'spritze', 'tasche', null],
 };
 export const MUNITION_PRO_FUND = 12;
 export const AKTION_ABSTAND = 40;
@@ -400,4 +404,54 @@ export function bewaffnetSoll(n) { return Math.ceil(n * 0.4); }
 export function zombieSoll(n) {
   const anteil = n <= 2 ? 0.3 : n <= 5 ? 0.3 + (n - 2) * 0.083 : n <= 7 ? 0.55 + (n - 5) * 0.1 : 0.75 + (n - 7) * 0.083;
   return Math.round(45 * Math.min(1, anteil));
+}
+
+// ---------- Wegsuche (für Bots) ----------
+const BEGEHBAR_WEG = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ]);
+
+// gerade Strecke mit Radius rad frei?
+export function linieFrei(welt, x1, y1, x2, y2, rad) {
+  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.max(1, Math.ceil(d / 8));
+  for (let i = 1; i <= n; i++) {
+    if (!frei(welt, x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n, rad)) return false;
+  }
+  return true;
+}
+
+// Breitensuche über Kacheln; liefert Wegpunkte (Pixel), schon mit Abkürzungen über freie Strecken
+export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = 4000) {
+  const sx = Math.floor(vonX / KACHEL), sy = Math.floor(vonY / KACHEL);
+  const zx = Math.floor(nachX / KACHEL), zy = Math.floor(nachY / KACHEL);
+  if (!BEGEHBAR_WEG.has(welt.hole(zx, zy))) return null;
+  const vor = new Int32Array(BREITE * HOEHE).fill(-1);
+  const start = sy * BREITE + sx, ziel = zy * BREITE + zx;
+  vor[start] = start;
+  const q = [start];
+  for (let k = 0; k < q.length && k < maxKnoten; k++) {
+    const i = q[k];
+    if (i === ziel) break;
+    const x = i % BREITE, y = (i - x) / BREITE;
+    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+      if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
+      const j = ny * BREITE + nx;
+      if (vor[j] !== -1 || !BEGEHBAR_WEG.has(welt.hole(nx, ny))) continue;
+      vor[j] = i; q.push(j);
+    }
+  }
+  if (vor[ziel] === -1) return null;
+  const kacheln = [];
+  for (let i = ziel; i !== start; i = vor[i]) kacheln.push(i);
+  kacheln.reverse();
+  const punkte = kacheln.map(i => ({ x: (i % BREITE + 0.5) * KACHEL, y: (Math.floor(i / BREITE) + 0.5) * KACHEL }));
+  punkte.push({ x: nachX, y: nachY });
+  // Abkürzen: von jedem Punkt so weit wie möglich geradeaus
+  const glatt = [];
+  let ax = vonX, ay = vonY, i = 0;
+  while (i < punkte.length) {
+    let j = punkte.length - 1;
+    while (j > i && !linieFrei(welt, ax, ay, punkte[j].x, punkte[j].y, rad)) j--;
+    glatt.push(punkte[j]);
+    ax = punkte[j].x; ay = punkte[j].y; i = j + 1;
+  }
+  return glatt;
 }
