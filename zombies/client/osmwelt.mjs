@@ -1,6 +1,6 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
-import { KACHEL, BREITE, HOEHE, T, zufall } from './welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX } from './welt.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -198,5 +198,119 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
   for (const h of haeuser) h.umriss = karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss;
   // Gärten, Zaunarten und Gartenausstattung (tools/osm_karte.py) – nur fürs Aussehen; das Raster enthält sie schon
   const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [], zaeune: karte.zaeune ?? null } : null;
-  return { seed, karte: true, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details };
+  const welt = { seed, karte: true, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details };
+  if (karte.zaeune) welt.fein = baueFein(welt, karte);
+  return welt;
+}
+
+// Feines Kollisionsraster (1 m) aus den echten Umrissen: Häuser nach ihrem OSM-Polygon, Gartenzäune und Hecken nach den
+// geglätteten Zaunlinien; alles andere (Safe Rooms, Wasser, Gartenhäuser, Kartenrand, Busse …) wie im groben Raster.
+// Wo das grobe Raster begehbar ist und der Kachelmittelpunkt frei liegt, bleibt der Weg offen (Wegsuche bleibt grob).
+function baueFein(welt, karte) {
+  const fb = BREITE * FEIN, fh = HOEHE * FEIN, f = new Uint8Array(fb * fh);
+  const hole = welt.hole, zaunart = welt.details?.zaunart ?? '';
+  const safe = new Uint8Array(BREITE * HOEHE);
+  for (const h of welt.haeuser) if (h.safe) for (let y = h.y - 1; y <= h.y + h.h; y++) for (let x = h.x - 1; x <= h.x + h.b; x++) if (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) safe[y * BREITE + x] = 1;
+  const grob = new Uint8Array(BREITE * HOEHE);   // 1 = Kachel wird grob übernommen
+  for (const o of welt.details?.objekte ?? []) if (o.a === 'gartenhaus' || o.a === 'pool') for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) grob[y * BREITE + x] = 1;
+  const kachelFuellen = (kx, ky, wert) => { for (let dy = 0; dy < FEIN; dy++) for (let dx = 0; dx < FEIN; dx++) f[(ky * FEIN + dy) * fb + kx * FEIN + dx] = wert; };
+  // 1. grob übernehmen – außer Hauswänden (Polygon) und Gartenzäunen (Linien)
+  for (let ky = 0; ky < HOEHE; ky++) for (let kx = 0; kx < BREITE; kx++) {
+    const t = hole(kx, ky), i = ky * BREITE + kx;
+    if (!BLOCKIERT.has(t)) continue;
+    const haus = (t === T.WAND || t === T.LEER) && !safe[i] && !grob[i];
+    const zaun = t === T.ZAUN && 'hzmw'.includes(zaunart[i]);
+    if (!haus && !zaun) kachelFuellen(kx, ky, 1);
+  }
+  // 2. Häuser nach ihrem Umriss
+  const imPolygon = (px, py, p) => {
+    let drin = false;
+    for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) if ((p[i + 1] > py) !== (p[j + 1] > py) && px < (p[j] - p[i]) * (py - p[i + 1]) / (p[j + 1] - p[i + 1]) + p[i]) drin = !drin;
+    return drin;
+  };
+  for (const g of karte.gebaeude) {
+    const p = g.umriss;
+    if (!p || p.length < 6) continue;
+    if (welt.haeuser.some(h => h.safe && h.x === g.x && h.y === g.y)) continue;
+    const kx0 = Math.max(0, g.x - 2), ky0 = Math.max(0, g.y - 2), kx1 = Math.min(BREITE - 1, g.x + g.b + 1), ky1 = Math.min(HOEHE - 1, g.y + g.h + 1);
+    for (let ky = ky0; ky <= ky1; ky++) for (let kx = kx0; kx <= kx1; kx++) {
+      const t = hole(kx, ky), i = ky * BREITE + kx;
+      if (safe[i] || grob[i] || t === T.STRASSE || t === T.PLATZ || t === T.TUER || t === T.ZAUN) continue;
+      // begehbare Kachel, deren Mitte im Haus liegt: offen lassen (sonst bricht die grobe Wegsuche)
+      if (!BLOCKIERT.has(t) && imPolygon(kx + 0.5, ky + 0.5, p)) continue;
+      for (let dy = 0; dy < FEIN; dy++) for (let dx = 0; dx < FEIN; dx++) {
+        if (imPolygon(kx + (dx + 0.5) / FEIN, ky + (dy + 0.5) / FEIN, p)) f[(ky * FEIN + dy) * fb + kx * FEIN + dx] = 3;   // 3 = Hausumriss (am Ende 1)
+      }
+    }
+  }
+  // 3. Gartenzäune und Hecken entlang der Linien (Hecken etwas dicker)
+  for (const z of karte.zaeune ?? []) {
+    const dicke = (z.a === 'h' ? 9 : 6) / KACHEL;   // in Kacheln
+    for (let i = 0; i + 3 < z.p.length; i += 2) {
+      const ax = z.p[i], ay = z.p[i + 1], bx = z.p[i + 2], by = z.p[i + 3], L2 = (bx - ax) ** 2 + (by - ay) ** 2 || 1e-9;
+      const fx0 = Math.max(0, Math.floor((Math.min(ax, bx) - dicke) * FEIN)), fx1 = Math.min(fb - 1, Math.ceil((Math.max(ax, bx) + dicke) * FEIN));
+      const fy0 = Math.max(0, Math.floor((Math.min(ay, by) - dicke) * FEIN)), fy1 = Math.min(fh - 1, Math.ceil((Math.max(ay, by) + dicke) * FEIN));
+      for (let fy = fy0; fy <= fy1; fy++) for (let fx = fx0; fx <= fx1; fx++) {
+        const px = (fx + 0.5) / FEIN, py = (fy + 0.5) / FEIN;
+        const t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / L2));
+        if (Math.hypot(ax + t * (bx - ax) - px, ay + t * (by - ay) - py) > dicke) continue;
+        const kt = hole(Math.floor(px), Math.floor(py));
+        if (kt === T.TUER || kt === T.STRASSE) continue;
+        if (!f[fy * fb + fx]) f[fy * fb + fx] = 2;
+      }
+    }
+  }
+  // 4. vor jeder Haustür einen Zugang freihalten (Türkachel und die zwei Kacheln davor)
+  for (const h of welt.haeuser) {
+    if (!h.tuer) continue;
+    for (let s = 0; s <= 2; s++) {
+      const kx = h.tuer.x + h.raus.dx * s, ky = h.tuer.y + h.raus.dy * s;
+      if (kx < 0 || ky < 0 || kx >= BREITE || ky >= HOEHE || (s > 0 && BLOCKIERT.has(hole(kx, ky)))) break;
+      kachelFuellen(kx, ky, 0);
+    }
+  }
+  // 5. jede Tür muss ohne Klettern erreichbar sein: Durchgang mit Spielerbreite prüfen, sonst Zaun auf dem kürzesten Weg öffnen
+  zugaengeOeffnen(f, fb, fh, welt);
+  for (let i = 0; i < f.length; i++) if (f[i] === 3) f[i] = 1;
+  return f;
+}
+
+function zugaengeOeffnen(f, fb, fh, welt) {
+  const W2 = 2;   // Spielerradius 12 px ≈ 1,5 Feinfelder → Fenster ±2
+  // frei[c] = im Fenster um c kein Hindernis (getrennt für Zäune und feste Dinge)
+  const fenster = (bed) => {
+    const zeile = new Uint8Array(fb * fh), aus = new Uint8Array(fb * fh);
+    for (let y = 0; y < fh; y++) { let n = 0; for (let x = -W2; x < fb; x++) { if (x + W2 < fb && bed(f[y * fb + x + W2])) n++; if (x - W2 - 1 >= 0 && bed(f[y * fb + x - W2 - 1])) n--; if (x >= 0) zeile[y * fb + x] = n > 0 ? 1 : 0; } }
+    for (let x = 0; x < fb; x++) { let n = 0; for (let y = -W2; y < fh; y++) { if (y + W2 < fh && zeile[(y + W2) * fb + x]) n++; if (y - W2 - 1 >= 0 && zeile[(y - W2 - 1) * fb + x]) n--; if (y >= 0) aus[y * fb + x] = n > 0 ? 1 : 0; } }
+    return aus;
+  };
+  const belegt = fenster(v => v !== 0), fest = fenster(v => v === 1), umriss = fenster(v => v === 3);
+  const start = Math.floor(welt.start.y / FEIN_PX) * fb + Math.floor(welt.start.x / FEIN_PX);
+  const erreicht = new Uint8Array(fb * fh), q = [start]; erreicht[start] = 1;
+  const nach = c => { const x = c % fb, y = (c - x) / fb, r = []; if (x > 0) r.push(c - 1); if (x < fb - 1) r.push(c + 1); if (y > 0) r.push(c - fb); if (y < fh - 1) r.push(c + fb); return r; };
+  for (let i = 0; i < q.length; i++) for (const n of nach(q[i])) if (!erreicht[n] && !belegt[n]) { erreicht[n] = 1; q.push(n); }
+  for (const h of welt.haeuser) {
+    if (!h.tuer || !(h.betretbar || h.safe)) continue;
+    // Vorplatz (gut eine Kachel vor der Tür, freigehalten) muss erreichbar sein
+    const vx = Math.floor((h.tuer.x + 0.5 + h.raus.dx * 1.3) * FEIN), vy = Math.floor((h.tuer.y + 0.5 + h.raus.dy * 1.3) * FEIN);
+    const ziel = vy * fb + vx;
+    if ([0, -1, -fb, -fb - 1, 1, fb].some(d => erreicht[ziel + d])) continue;
+    // Suche: freie Felder kosten 0, Zaun 1, Hausumriss 6 (notfalls ein Stück freigeben); grob feste Dinge sind tabu
+    const kosten = new Map([[ziel, 0]]), vor = new Map(), dq = [ziel];
+    const preis = n => !belegt[n] ? 0 : umriss[n] ? 6 : 1;
+    let gefunden = -1;
+    while (dq.length) {
+      const c = dq.shift();
+      if (erreicht[c]) { gefunden = c; break; }
+      for (const n of nach(c)) {
+        if (fest[n]) continue;   // zu nah an festen Dingen: dort passt die Figur nicht durch
+        const k = kosten.get(c) + preis(n);
+        if (k < (kosten.get(n) ?? Infinity)) { kosten.set(n, k); vor.set(n, c); if (preis(n)) dq.push(n); else dq.unshift(n); }
+      }
+    }
+    for (let c = gefunden; c !== undefined && c !== ziel; c = vor.get(c)) {
+      const x = c % fb, y = (c - x) / fb;
+      for (let dy = -W2; dy <= W2; dy++) for (let dx = -W2; dx <= W2; dx++) { const i = (y + dy) * fb + x + dx; if (f[i] === 2 || f[i] === 3) f[i] = 0; }
+    }
+  }
 }

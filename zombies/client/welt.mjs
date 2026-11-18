@@ -411,8 +411,25 @@ export function blockiert(welt, px, py) {
   return BLOCKIERT.has(welt.hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL)));
 }
 
-// Kreis mit Radius rad frei? (prüft die vier Ecken des umschließenden Quadrats)
+// Feines Kollisionsraster (1 m): 4 × 4 Felder je Kachel; 0 = frei, 1 = fest, 2 = Zaun/Hecke (kletterbar)
+export const FEIN = 4, FEIN_PX = KACHEL / FEIN;
+export function feinWert(welt, x, y) {
+  const fx = Math.floor(x / FEIN_PX), fy = Math.floor(y / FEIN_PX), fb = BREITE * FEIN;
+  if (fx < 0 || fy < 0 || fx >= fb || fy >= HOEHE * FEIN) return 1;
+  return welt.fein[fy * fb + fx];
+}
+
+// Kreis mit Radius rad frei? Mit feinem Raster: alle überdeckten Feinfelder; sonst die vier Ecken des Quadrats
 export function frei(welt, x, y, rad) {
+  const f = welt.fein;
+  if (f) {
+    const fb = BREITE * FEIN, fh = HOEHE * FEIN;
+    const x0 = Math.floor((x - rad) / FEIN_PX), x1 = Math.floor((x + rad) / FEIN_PX);
+    const y0 = Math.floor((y - rad) / FEIN_PX), y1 = Math.floor((y + rad) / FEIN_PX);
+    if (x0 < 0 || y0 < 0 || x1 >= fb || y1 >= fh) return false;
+    for (let fy = y0; fy <= y1; fy++) for (let fx = x0, i = fy * fb + x0; fx <= x1; fx++, i++) if (f[i]) return false;
+    return true;
+  }
   return !blockiert(welt, x - rad, y - rad) && !blockiert(welt, x + rad, y - rad)
       && !blockiert(welt, x - rad, y + rad) && !blockiert(welt, x + rad, y + rad);
 }
@@ -520,6 +537,8 @@ export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = I
       if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
       const j = ny * BREITE + nx;
       if (vor[j] !== -1 || !BEGEHBAR_WEG.has(welt.hole(nx, ny))) continue;
+      // mit feinem Raster: Kachelmitte und Übergang dorthin müssen auch fein frei sein (Zaunlinien, Hausumrisse)
+      if (welt.fein && j !== ziel && (!frei(welt, (nx + 0.5) * KACHEL, (ny + 0.5) * KACHEL, 9) || !frei(welt, (x + nx + 1) * KACHEL / 2, (y + ny + 1) * KACHEL / 2, 9))) continue;
       vor[j] = i; q.push(j);
     }
   }
@@ -581,9 +600,28 @@ export function aktiveWaffe(p) {
 
 // Über einen Gartenzaun, eine Hecke oder Gartenmauer steigen: Zaunfeld direkt vor der Figur (Blickrichtung zuerst,
 // dann die vier Hauptrichtungen) und ein freier Landeplatz dahinter. Rückgabe { x, y, art } oder null.
-export function zaunUeberstieg(welt, x, y, richtung, rad) {
+// streng = nur genau in Laufrichtung und direkt vor der Figur (für das automatische Klettern beim Dagegenlaufen)
+export function zaunUeberstieg(welt, x, y, richtung, rad, streng = false) {
   const zaunart = welt.details?.zaunart;
   if (!zaunart) return null;
+  if (welt.fein) {
+    // feines Raster: Zaunfeld (2) kurz vor der Figur suchen, Landeplatz dahinter
+    const richtungen = streng ? [richtung, richtung + 0.35, richtung - 0.35] : [richtung, richtung + 0.5, richtung - 0.5, 0, Math.PI / 2, Math.PI, -Math.PI / 2];
+    for (const w of richtungen) {
+      const dx = Math.cos(w), dy = Math.sin(w);
+      for (let a = rad; a <= rad + (streng ? 8 : 12); a += 2) {
+        if (feinWert(welt, x + dx * a, y + dy * a) !== 2) continue;
+        const kx = Math.floor((x + dx * a) / KACHEL), ky = Math.floor((y + dy * a) / KACHEL);
+        const art = 'hzmw'.includes(zaunart[ky * BREITE + kx]) ? zaunart[ky * BREITE + kx] : 'z';
+        for (let b = a + 6; b <= a + 44; b += 3) {
+          const zx = x + dx * (b + rad), zy = y + dy * (b + rad);
+          if (frei(welt, zx, zy, rad)) return { x: zx, y: zy, art };
+        }
+        break;
+      }
+    }
+    return null;
+  }
   const richtungen = [richtung, 0, Math.PI / 2, Math.PI, -Math.PI / 2]
     .sort((a, b) => Math.abs(Math.atan2(Math.sin(a - richtung), Math.cos(a - richtung))) - Math.abs(Math.atan2(Math.sin(b - richtung), Math.cos(b - richtung))));
   for (const w of richtungen) {

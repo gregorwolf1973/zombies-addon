@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.0 – 18.11.2026
+
+- Feines Kollisionsraster (1 m statt 4 m) draußen: Man stößt genau an der gezeichneten Hauswand und am gezeichneten
+  Zaun bzw. an der Hecke an, schmale Durchgänge zwischen Häusern bleiben begehbar
+- Jede Haustür bleibt ohne Klettern erreichbar (wird beim Start geprüft und notfalls geöffnet)
+- Drübersteigen klappt auch, wenn man schräg an einem Zaun entlangrutscht – es zählt, wie lange direkt vor einem
+  ein Zaun ist
+- Bots und Bewohner meiden bei der Wegsuche Stellen, die im feinen Raster versperrt sind
+
 ## 0.21.2 – 18.11.2026
 
 - Haustüren zeigen zur Straße statt zum Fußweg zwischen zwei Häusern (35 Türen verlegt, 18 Häuser mehr betretbar);

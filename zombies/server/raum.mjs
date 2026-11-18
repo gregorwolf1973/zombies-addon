@@ -1216,8 +1216,8 @@ export class SpielRaum extends Room {
 
   // Über Hecken, Gartenzäune und -mauern steigen: etwa 0,9 s an derselben Stelle dagegenlaufen
   klettern(id, p, x, e, laenge, steckt, dt) {
-    if (p.ebene || !steckt) { x.kletter = 0; return; }
-    const z = zaunUeberstieg(this.welt, p.x, p.y, Math.atan2(e.dy, e.dx), W.spielerRadius);
+    // zählt, solange direkt in Laufrichtung ein Zaun ist – auch wenn man dabei am Zaun entlangrutscht
+    const z = p.ebene ? null : zaunUeberstieg(this.welt, p.x, p.y, Math.atan2(e.dy, e.dx), W.spielerRadius, true);
     if (!z) { x.kletter = 0; return; }
     x.kletter = (x.kletter ?? 0) + dt;
     if (x.kletter < 0.8) return;

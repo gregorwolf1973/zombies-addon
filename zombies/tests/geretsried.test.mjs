@@ -133,24 +133,48 @@ test('Über Gartenzäune steigen: länger dagegenlaufen, dann drüber; Kartenran
   try {
     const raum = matchMaker.getLocalRoomById(c.roomId), w = raum.welt, p = raum.state.spieler.get(c.sessionId);
     raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
-    // ein waagrechter Gartenzaun mit freier Wiese oben und unten
+    // im feinen Raster eine gerade, waagrechte Zaunlinie (mind. 10 Felder) mit freier Fläche darüber und darunter
+    const fb = 281 * 4, f = w.fein;
     let ort = null;
-    for (let y = 3; y < 200 && !ort; y++) for (let x = 3; x < 275 && !ort; x++) {
-      if (w.hole(x, y) !== T.ZAUN || !'hzmw'.includes(w.details.zaunart[y * 281 + x])) continue;
-      if (w.hole(x - 1, y) === T.ZAUN && w.hole(x + 1, y) === T.ZAUN && w.hole(x, y - 1) === T.WIESE && w.hole(x, y - 2) === T.WIESE && w.hole(x, y + 1) === T.WIESE && w.hole(x, y + 2) === T.WIESE) ort = { x, y };
+    for (let fy = 20; fy < 208 * 4 - 20 && !ort; fy++) for (let fx = 20; fx < fb - 30 && !ort; fx++) {
+      let gut = true;
+      for (let i = 0; i < 10 && gut; i++) {
+        if (f[fy * fb + fx + i] !== 2) gut = false;
+        for (let d = 2; d <= 9 && gut; d++) if (f[(fy - d) * fb + fx + i] || f[(fy + d) * fb + fx + i]) gut = false;
+      }
+      if (gut) ort = { x: (fx + 5) / 4, y: (fy + 0.5) / 4 };   // in Kacheln
     }
-    assert.ok(ort, 'kein passender Zaun');
+    assert.ok(ort, 'keine gerade Zaunlinie');
+    ort = { x: ort.x - 0.5, y: Math.floor(ort.y), fy: ort.y };
     // 1. schräg dagegenlaufen (am Handy selten genau senkrecht)
-    p.ebene = ''; p.x = (ort.x + 0.5) * KACHEL; p.y = (ort.y - 0.5) * KACHEL;
-    c.send('eingabe', { dx: 0.35, dy: 0.94 });
-    assert.ok(await bis(() => p.y > (ort.y + 1) * KACHEL, 5000), 'nicht automatisch hinübergestiegen');
+    p.ebene = ''; p.x = (ort.x + 0.5) * KACHEL; p.y = (ort.fy - 1.1) * KACHEL;
+    c.send('eingabe', { dx: 0.3, dy: 0.95 });
+    assert.ok(await bis(() => p.y > (ort.fy + 0.4) * KACHEL, 5000), 'nicht automatisch hinübergestiegen: ' + Math.round(p.x) + ',' + Math.round(p.y) + ' Ort ' + JSON.stringify(ort) + ' fein ' + !!w.fein);
     c.send('eingabe', { dx: 0, dy: 0 });
     // 2. mit dem Aktionsknopf zurück
     await new Promise(r => setTimeout(r, 300));
-    p.x = (ort.x + 0.5) * KACHEL; p.y = (ort.y + 1.5) * KACHEL; p.richtung = -Math.PI / 2;
+    p.x = (ort.x + 0.5) * KACHEL; p.y = ort.fy * KACHEL + 16; p.richtung = -Math.PI / 2;
     const k = raum.kontext(p);
     assert.equal(k?.art, 'klettern', 'kein Drübersteigen angeboten: ' + k?.art);
     c.send('aktion');
-    assert.ok(await bis(() => p.y < ort.y * KACHEL, 3000), 'Aktionsknopf steigt nicht hinüber');
+    assert.ok(await bis(() => p.y < ort.fy * KACHEL - 8, 3000), 'Aktionsknopf steigt nicht hinüber');
   } finally { await c.leave(); }
+});
+
+test('Feines Kollisionsraster: jede Haustür ist ohne Klettern erreichbar', () => {
+  const karte = JSON.parse(fs.readFileSync(new URL('../client/karten/geretsried.json', import.meta.url)));
+  setzeKartengroesse(karte.breite, karte.hoehe);
+  const w = baueWeltAusKarte(karte, 7);
+  assert.ok(w.fein, 'kein feines Raster');
+  const fb = karte.breite * 4, fh = karte.hoehe * 4;
+  const ok = new Uint8Array(fb * fh), da = new Uint8Array(fb * fh);
+  for (let y = 0; y < fh; y++) for (let x = 0; x < fb; x++) ok[y * fb + x] = frei(w, (x + 0.5) * 8, (y + 0.5) * 8, 11) ? 1 : 0;
+  const s0 = Math.floor(w.start.y / 8) * fb + Math.floor(w.start.x / 8), q = [s0]; da[s0] = 1;
+  for (let i = 0; i < q.length; i++) { const c = q[i], x = c % fb; for (const n of [c - 1, c + 1, c - fb, c + fb]) if (n >= 0 && n < fb * fh && Math.abs((n % fb) - x) <= 1 && ok[n] && !da[n]) { da[n] = 1; q.push(n); } }
+  const fehlt = w.haeuser.filter(h => (h.betretbar || h.safe) && h.tuer).filter(h => {
+    const cx = Math.floor((h.tuer.x + 0.5 + h.raus.dx * 1.3) * 4), cy = Math.floor((h.tuer.y + 0.5 + h.raus.dy * 1.3) * 4);
+    return ![0, 1, -1, fb, -fb].some(d => da[cy * fb + cx + d]);
+  });
+  assert.equal(fehlt.length, 0, 'unerreichbare Türen: ' + fehlt.map(h => h.nr).join(','));
+  setzeKartengroesse(64, 48);
 });
