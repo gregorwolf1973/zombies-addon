@@ -232,6 +232,27 @@ function fahrbahn(l) {
   else m = ART_BREITE[l.t] ?? 5;
   return (l.fb = m * METER);
 }
+// Plätze für geparkte Autos: längs am Fahrbahnrand, nach der Straße ausgerichtet (Kartendaten in Kacheln, Ergebnis in Pixeln).
+// Der Wagen steht mit der Innenkante knapp auf dem Asphalt, sonst auf Bordstein und Gehweg – wie in Wohnstraßen üblich.
+const PARKEN = new Set(['residential', 'unclassified', 'living_street', 'tertiary']);
+export function randParkplaetze(strassen) {
+  const liste = [], LANG = 46, LUECKE = 12;
+  for (const s of strassen ?? []) {
+    if (!PARKEN.has(s.t) || !s.p || s.p.length < 4) continue;
+    const fb = fahrbahn({ t: s.t, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0 });
+    const ab = fb / 2 + 9;
+    for (let i = 0; i + 3 < s.p.length; i += 2) {
+      const ax = s.p[i] * K, ay = s.p[i + 1] * K, bx = s.p[i + 2] * K, by = s.p[i + 3] * K, len = Math.hypot(bx - ax, by - ay);
+      if (len < LANG + 30) continue;   // kurze Stücke (Kurven, Kreuzungen) auslassen
+      const ux = (bx - ax) / len, uy = (by - ay) / len, w = Math.atan2(uy, ux);
+      for (let d = 20 + LANG / 2; d < len - 20 - LANG / 2; d += LANG + LUECKE) {
+        for (const seite of [1, -1]) liste.push({ x: ax + ux * d - uy * ab * seite, y: ay + uy * d + ux * ab * seite, winkel: w, ux, uy });
+      }
+    }
+  }
+  return liste;
+}
+
 export function zeichneStrassen(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect), m = musterHolen(ctx);
   const hier = v.linien.filter(l => schneidet(l.box, r) && l.pts.length > 1);

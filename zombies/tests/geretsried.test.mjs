@@ -178,3 +178,48 @@ test('Feines Kollisionsraster: jede Haustür ist ohne Klettern erreichbar', () =
   assert.equal(fehlt.length, 0, 'unerreichbare Türen: ' + fehlt.map(h => h.nr).join(','));
   setzeKartengroesse(64, 48);
 });
+
+test('Biss-Chance: 0 % beißt nie, 100 % sofort', async () => {
+  const c = await new Client(`ws://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Bader', spielerId: crypto.randomBytes(16).toString('hex') });
+  try {
+    const raum = matchMaker.getLocalRoomById(c.roomId);
+    const s = raum.state, e = raum.einstellungen(), vorher = e.bissChance;
+    const versuch = (chance, sekunden) => {
+      e.bissChance = chance;
+      const [, m] = [...s.menschen.entries()].find(([, q]) => q.sichtbar && !q.infiziert);
+      const zid = raum.setzeZombie(m.x, m.y, ''), z = s.zombies.get(zid);
+      for (let i = 0; i < sekunden * 20 && !m.infiziert; i++) {
+        z.x = m.x; z.y = m.y; raum.zombieInfo.get(zid).ziel = null; raum.zombieInfo.get(zid).bissVersuch = undefined;
+        raum.stadt.takt += 0.05; raum.stadt.zombiesWittern([[zid, z]]);
+      }
+      s.zombies.delete(zid); raum.zombieInfo.delete(zid);
+      return m.infiziert;
+    };
+    try {
+      assert.equal(versuch(0, 30), false, 'bei 0 % gebissen');
+      assert.equal(versuch(1, 1), true, 'bei 100 % nicht gebissen');
+    } finally { e.bissChance = vorher; }
+  } finally { await c.leave(); }
+});
+
+test('Verkehr: Fahrzeuge fahren nicht übereinander', async () => {
+  const c = await new Client(`ws://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Schupo', spielerId: crypto.randomBytes(16).toString('hex') });
+  try {
+    const raum = matchMaker.getLocalRoomById(c.roomId);
+    const s = raum.state, v = raum.verkehr;
+    // 20 s Verkehr laufen lassen und nachmessen: kein Paar auf derselben Spur ineinander
+    let schlimm = 0;
+    for (let t = 0; t < 400; t++) {
+      v.schritt(0.05);
+      const liste = [...s.fahrzeuge.values()].filter(f => f.art !== 'wrack');
+      for (const a of liste) for (const b of liste) {
+        if (a === b) continue;
+        const c2 = Math.cos(a.richtung), sn = Math.sin(a.richtung), rx = b.x - a.x, ry = b.y - a.y;
+        const vor = rx * c2 + ry * sn, quer = -rx * sn + ry * c2;
+        const gleicheRichtung = Math.cos(a.richtung - b.richtung) > 0.9;
+        if (gleicheRichtung && Math.abs(quer) < 10 && vor > 0 && vor < 30) schlimm++;
+      }
+    }
+    assert.ok(schlimm < 20, 'Fahrzeuge übereinander: ' + schlimm);
+  } finally { await c.leave(); }
+});

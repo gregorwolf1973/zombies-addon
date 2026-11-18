@@ -64,6 +64,7 @@ export function bereinige(e = {}, alt = {}) {
     tagMinuten: Math.round(zahl(e.tagMinuten ?? a.tagMinuten, 10, 240, 48)),   // so viele echte Minuten dauert ein Spieltag
     menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50)),         // Bewohner zu Beginn einer Welt
     ansteckung: Math.round(zahl(e.ansteckung ?? a.ansteckung, 1, 30, 5)),     // Minuten vom Biss bis zur Verwandlung
+    biss: Math.round(zahl(e.biss ?? a.biss, 0, 100, 100)),                   // Stadtbewohner: Chance in % je Bissversuch (einmal pro Sekunde bei Berührung)
     feuer: zahl(e.feuer ?? a.feuer, 0, 30, 1),                                 // Minuten zwischen zwei Bränden (0 = keine)
     feuerPhase: Math.round(zahl(e.feuerPhase ?? a.feuerPhase, 0, 240, 20)),  // so lange (Spielminuten ab Weltbeginn) brennt es immer wieder
     verkehr: Math.round(zahl(e.verkehr ?? a.verkehr, 0, 30, 6)),             // fahrende Autos am Anfang
@@ -88,7 +89,7 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, menschen: 50, ansteckung: 5, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE },
+    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, menschen: 50, ansteckung: 5, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE },
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15 },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     test: { zeitraffer: 1, unsterblich: [] },

@@ -320,7 +320,8 @@ export function autoVonOben(ctx, b) {
   const lang = 46, breit = 21, f = AUTO_FARBEN[b.farbe % AUTO_FARBEN.length];
   ctx.save();
   ctx.translate(b.x, b.y);
-  if (b.senkrecht) ctx.rotate(Math.PI / 2);
+  if (Number.isFinite(b.winkel)) ctx.rotate(b.winkel);   // längs zur Straße
+  else if (b.senkrecht) ctx.rotate(Math.PI / 2);
   if ((b.farbe + Math.round(b.x)) % 2) ctx.rotate(Math.PI);   // mal vorwärts, mal rückwärts geparkt
   const rund = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
   ctx.fillStyle = 'rgba(0,0,0,.32)'; rund(-lang / 2 + 3, -breit / 2 + 4, lang, breit, 7); ctx.fill();

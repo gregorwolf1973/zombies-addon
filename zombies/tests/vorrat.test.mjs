@@ -529,7 +529,7 @@ test('Figur: gewähltes Aussehen kommt an, wird gespeichert, Unsinn wird ersetzt
   await c.leave(); await warte(200);
   c = await new Client(URL_).joinOrCreate('zombies', { name: 'Böse', spielerId: neueId(), aussehen: '<script>' });
   raum = matchMaker.getLocalRoomById(c.roomId);
-  assert.match(raum.state.spieler.get(c.sessionId).aussehen, /^[mw],[0-5],[0-7]$/);
+  assert.match(raum.state.spieler.get(c.sessionId).aussehen, /^[mws],[0-5],[0-7]$/);
   await c.leave();
 });
 
@@ -569,5 +569,33 @@ test('Bots durchsuchen Schränke in der Nähe und nehmen bessere Waffen', async 
     assert.ok(await bis(() => bot.waffe === 'gewehr' || bot.rucksack.includes('gewehr'), 9000),
       'Bot hat nicht durchsucht: ' + JSON.stringify([...bot.rucksack]) + ' Aktion ' + bot.aktion);
     assert.ok(await bis(() => bot.waffe === 'gewehr', 3000), 'Bot nimmt das Gewehr nicht in die Hand');
+  } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
+});
+
+test('Bots legen Überzähliges ab und heben auf, was ein Mitspieler fallen lässt', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 1, zombieFaktor: 0 };
+  const a = await beitreten('Chef');
+  try {
+    const { raum, p } = a;
+    raum.state.zombies.clear(); raum.zombieInfo.clear();
+    const [bid] = [...raum.extra.entries()].find(([, e]) => e.bot);
+    const bot = raum.state.spieler.get(bid);
+    // freier Fleck draußen mit Platz drumherum
+    let ort = null;
+    for (let y = 200; y < 1800 && !ort; y += 32) for (let x = 200; x < 2400 && !ort; x += 32) {
+      if ([[0, 0], [60, 0], [-60, 0], [0, 60], [0, -60]].every(([dx, dy]) => W.frei(raum.welt, x + dx, y + dy, 14)) && W.sichtfrei(raum.welt, x - 60, y, x + 60, y)) ort = { x, y };
+    }
+    assert.ok(ort, 'kein freier Platz');
+    raum.state.boden.clear();
+    bot.ebene = p.ebene = ''; bot.x = ort.x; bot.y = ort.y; p.x = ort.x + 50; p.y = ort.y;
+    bot.rucksack.clear(); for (let i = 0; i < 5; i++) bot.rucksack.push('wasser');
+    bot.durst = 100;
+    assert.ok(await bis(() => bot.rucksack.filter(d => d === 'wasser').length === 3, 6000), 'Bot legt überzähliges Wasser nicht ab');
+    await warte(1500);
+    assert.equal(bot.rucksack.filter(d => d === 'wasser').length, 3, 'Bot hebt sein eigenes Wasser wieder auf');
+    // der Mensch lässt einen Verband fallen
+    raum.legeHin('verband', p.x, p.y, '');
+    assert.ok(await bis(() => bot.rucksack.includes('verband'), 8000), 'Bot hebt den Verband nicht auf');
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });

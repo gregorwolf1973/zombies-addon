@@ -199,6 +199,7 @@ export class Stadtleben {
     const menschen = [...s.menschen.entries()].filter(([, m]) => m.sichtbar);
     if (!menschen.length) return;
     const minuten = this.raum.einstellungen?.()?.ansteckungMin ?? 5;
+    const chance = this.raum.einstellungen?.()?.bissChance ?? 1;
     for (const [zid, z] of zombies) {
       const info = this.raum.zombieInfo.get(zid);
       if (!info || info.ziel || info.schlaeft) continue;
@@ -213,6 +214,10 @@ export class Stadtleben {
       const [mid, m] = best;
       info.punkt = { x: m.x, y: m.y };
       if (bd < BISS_ABSTAND && !m.infiziert) {
+        // einmal pro Sekunde ein Bissversuch; die Einstellung „Biss-Chance“ entscheidet, ob er trifft
+        if ((info.bissVersuch ?? -1) > this.takt) continue;
+        info.bissVersuch = this.takt + 1;
+        if (this.raum.rnd() >= chance) continue;
         m.infiziert = true;
         this.info.get(mid).inf = minuten * 60;
         this.raum.broadcast('menschGebissen', { x: m.x, y: m.y });

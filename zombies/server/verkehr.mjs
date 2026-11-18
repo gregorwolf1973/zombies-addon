@@ -14,6 +14,7 @@ export const Fahrzeug = schema({
 const FAHRBAR = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service']);
 const KOSTEN = { primary: 0.55, secondary: 0.6, tertiary: 0.75, unclassified: 1, residential: 1.2, living_street: 1.6, service: 3 };
 const HAUPT = new Set(['primary', 'secondary', 'tertiary']);
+const LAENGE = { auto: 46, bus: 124, polizei: 50, feuerwehr: 74 };   // Fahrzeuglänge in Pixeln (für den Abstand)
 const TEMPO = { bus: 85, auto: 115, polizei: 175, feuerwehr: 160 };
 const SPUR = { bus: 0.22, auto: 0.22, polizei: 0.12, feuerwehr: 0.12 };   // Abstand zur Mitte in Kacheln je Meter Fahrbahn
 
@@ -196,7 +197,12 @@ export class Verkehr {
       // Fußgänger und Spieler direkt vor dem Fahrzeug: bremsen (Polizei und Feuerwehr fahren langsam vorbei)
       const vorn = { x: f.x + Math.cos(f.richtung) * 40, y: f.y + Math.sin(f.richtung) * 40 };
       const imWeg = [...s.spieler.values(), ...s.menschen.values()].some(p => !p.ebene && p.sichtbar !== false && Math.hypot(p.x - vorn.x, p.y - vorn.y) < 30);
-      let rest = (TEMPO[f.art] ?? 100) * dt * (imWeg ? (inf.durchfahrt ? 0.3 : 0) : 1);
+      // Fahrzeug direkt voraus (gleiche Spur): dahinter warten statt hindurchzufahren;
+      // steht es länger als 5 s (Wrack, Pannenauto, verkeilt an der Kreuzung), wird vorbeigefahren
+      const vorder = this.vorausFahrzeug(id, f);
+      if (vorder) inf.gestaut = (inf.gestaut ?? 0) + dt; else inf.gestaut = 0;
+      const stau = vorder && inf.gestaut < 5;
+      let rest = (TEMPO[f.art] ?? 100) * dt * (imWeg ? (inf.durchfahrt ? 0.3 : 0) : 1) * (stau ? 0 : 1);
       while (rest > 0) {
         const ziel = inf.weg[inf.pos + 1];
         if (!ziel) { inf.weg = null; this.angekommen(id, f, inf, zeitMin, e); break; }
@@ -206,6 +212,17 @@ export class Verkehr {
         else { f.x += Math.cos(w) * rest; f.y += Math.sin(w) * rest; rest = 0; }
       }
     }
+  }
+
+  vorausFahrzeug(id, f) {
+    const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), lf = LAENGE[f.art] ?? 46;
+    for (const [oid, o] of this.raum.state.fahrzeuge) {
+      if (oid === id) continue;
+      const rx = o.x - f.x, ry = o.y - f.y;
+      const vor = rx * c + ry * sn, quer = -rx * sn + ry * c;
+      if (vor > 0 && vor < lf / 2 + (LAENGE[o.art === 'wrack' ? 'auto' : o.art] ?? 46) / 2 + 10 && Math.abs(quer) < 17) return o;
+    }
+    return null;
   }
 
   angekommen(id, f, inf, zeitMin, e) {

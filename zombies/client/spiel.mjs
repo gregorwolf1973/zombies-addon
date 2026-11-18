@@ -215,11 +215,19 @@ async function starteSpiel() {
   });
 }
 
+// Rechteck im Koordinatensystem eines geparkten Autos (wie autoVonOben gedreht): längs von a bis b, quer ±halb
+function autoFlaeche(g, b, a, e, halb) {
+  const w = (Number.isFinite(b.winkel) ? b.winkel : b.senkrecht ? Math.PI / 2 : 0) + ((b.farbe + Math.round(b.x)) % 2 ? Math.PI : 0);
+  const c = Math.cos(w), s = Math.sin(w), p = (x, y) => ({ x: b.x + x * c - y * s, y: b.y + x * s + y * c });
+  g.fillPoints([p(a, -halb), p(e, -halb), p(e, halb), p(a, halb)], true);
+}
+
 // ---------- Meldungen und Anzeige ----------
 function meldung(text, lang = false) {
-  const d = document.createElement('div');
+  const d = document.createElement('div'), box = $('meldungen');
   d.textContent = text;
-  $('meldungen').appendChild(d);
+  box.appendChild(d);
+  while (box.children.length > 3) box.firstElementChild.remove();   // höchstens drei auf einmal
   setTimeout(() => { d.style.opacity = '0'; }, lang ? 3500 : 2200);
   setTimeout(() => d.remove(), lang ? 4100 : 2800);
 }
@@ -698,7 +706,7 @@ class Ort extends Phaser.Scene {
       } else {
         const b = this.welt.behaelter.find(q => q.id === rest);
         if (!b) continue;
-        if (art === 'auto') { const sk = b.senkrecht; w.fillStyle(0x15100c, 0.92).fillRoundedRect(b.x - (sk ? 11 : 23), b.y - (sk ? 23 : 11), sk ? 22 : 46, sk ? 46 : 22, 5); w.fillStyle(0x6d3a1a, 0.6).fillRect(b.x - 4, b.y - 4, 8, 8); }
+        if (art === 'auto') { autoFlaeche(w.fillStyle(0x15100c, 0.92), b, -23, 23, 11); w.fillStyle(0x6d3a1a, 0.6).fillRect(b.x - 4, b.y - 4, 8, 8); }
         else { const d = this.welt.deko.find(q => q.art === 'bus' && Math.hypot(q.x - b.x, q.y - b.y) < 4); const sk = d?.senkrecht; g.fillStyle(0x15100c, 0.9).fillRect(b.x - (sk ? 15 : 62), b.y - (sk ? 62 : 15), sk ? 30 : 124, sk ? 124 : 30); }
       }
     }
@@ -719,9 +727,8 @@ class Ort extends Phaser.Scene {
       const leer = z.rest === 0;
       if (b.art === 'auto') {
         if (s.verbrannt?.has('auto:' + b.id)) continue;
-        const sk = b.senkrecht;
-        g.fillStyle(0x111111, 0.85).fillRect(b.x - (sk ? 9 : 25), b.y - (sk ? 25 : 9), sk ? 18 : 9, sk ? 9 : 18);   // offener Kofferraum
-        if (leer) g.fillStyle(0x9e9e9e, 0.45).fillRoundedRect(b.x - (sk ? 11 : 23), b.y - (sk ? 23 : 11), sk ? 22 : 46, sk ? 46 : 22, 5);
+        autoFlaeche(g.fillStyle(0x111111, 0.85), b, -25, -16, 9);   // offener Kofferraum am Heck
+        if (leer) autoFlaeche(g.fillStyle(0x9e9e9e, 0.45), b, -23, 23, 11);
       } else if (b.art !== 'bus') {
         g.lineStyle(2, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokeRect(b.x - 12, b.y - 12, 24, 24);
         g.fillStyle(0x111111, 0.55).fillRect(b.x - 9, b.y - 9, 18, 18);                    // geöffnete Türen
@@ -1042,8 +1049,8 @@ class Ort extends Phaser.Scene {
       if (!o) {
         // passend zum Zombietyp; Dirndl, Feuerwehr und Lederhose gibt es in zwei Fassungen
         const typ = ZOMBIE_TYPEN[(l.variante ?? 0) % ZOMBIE_TYPEN.length], zweite = this.figurListe['leiche_' + typ + '2'] && (Math.round(l.x) + Math.round(l.y)) % 2;
-        if (typ === 'z7') { const fol = (Math.round(l.x) % 2) ? 'z7_sterben2' : 'z7_sterben'; o = this.add.image(l.x, l.y, 'figuren2', this.figurBild2(fol, -1)).setScale(BOGEN2_GROESSE).setDepth(1.6).setRotation(l.richtung); }
-        else o = this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + (typ === 'z6' ? 'hemd' : typ) + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
+        // beide neuen Arten mit den bisherigen Leichenbildern (die Sterbebilder von z7 gefielen nicht)
+        o = this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : typ) + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
         this.leichen.set(id, o);
       }
       o.setVisible((l.ebene ?? '') === this.aktEbene);

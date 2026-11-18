@@ -89,11 +89,16 @@ button:disabled { opacity: .6; }
 #liste .unten { color: #ff8a80; }
 #liste .weg { opacity: .5; }
 
+/* Meldungen oben unter der Anzeige, klein und halbdurchsichtig – nicht mehr mitten im Bild */
 #meldungen {
-  position: fixed; left: 0; right: 0; top: 30%; text-align: center; pointer-events: none;
-  font-weight: 800; font-size: 18px; text-shadow: 0 2px 5px #000;
+  position: fixed; left: 50%; transform: translateX(-50%); top: 44px; width: min(520px, 70vw);
+  display: flex; flex-direction: column; align-items: center; pointer-events: none;
+  font-weight: 700; font-size: 13px;
 }
-#meldungen div { transition: opacity .5s; margin: 4px 0; }
+#meldungen div {
+  transition: opacity .5s; margin: 2px 0; padding: 3px 10px; border-radius: 10px;
+  background: #0009; text-shadow: 0 1px 2px #000; text-align: center; max-width: 100%;
+}
 #hinweis {
   position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); display: none;
   background: #000b; padding: 10px 16px; border-radius: 12px; font-weight: 700; text-align: center;

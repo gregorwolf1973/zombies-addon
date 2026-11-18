@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.23.2 – 18.11.2026
+
+- Neue Einstellung „Biss-Chance bei Stadtbewohnern“ (Tag, Nacht, Ausbruch): Bei Berührung versucht ein Zombie einmal
+  pro Sekunde zu beißen; 100 % wie bisher, 0 % nie
+- Meldungen erscheinen klein oben unter der Anzeige statt mitten im Bild, höchstens drei auf einmal
+- Geparkte Autos stehen gerade längs am Straßenrand, nach der Straße ausgerichtet (auch Wrack und offener Kofferraum)
+- Fahrende Autos und Busse halten Abstand zum Vordermann statt übereinander zu fahren; steht der Vordermann länger
+  als 5 s, wird vorbeigefahren. Busse halten nicht mehr vor Haustüren
+- Bots heben brauchbare Dinge vom Boden auf (z. B. was ein Mitspieler fallen lässt), legen Überzähliges ab und legen
+  aufgehobene Munition ein
+- Der neue Zombie, der rückwärts lief, läuft jetzt vorwärts; die neuen Zombies hinterlassen wieder die bisherigen Leichen
+
 ## 0.23.1 – 18.11.2026
 
 - Handy: Der Figurenbogen ist kleiner (4000×1760 statt 2688×5152 Pixel, WebP 0,5 MB statt 2,8 MB). Viele Handys laden

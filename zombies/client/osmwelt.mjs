@@ -1,6 +1,7 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX } from './welt.mjs';
+import { randParkplaetze } from './vektor.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -127,7 +128,23 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     }
   }
   const autos = Math.round(Math.min(260, randStrasse.length / 16) * autoFaktor);
-  for (let n = 0, v = 0; n < autos && v < autos * 20; v++) {
+  if (karte.strassen) {
+    // längs am Rand der echten Straßenlinie, gerade nach der Straße ausgerichtet
+    const plaetze = randParkplaetze(karte.strassen);
+    const PLATZ_OK = new Set([T.STRASSE, T.PLATZ, T.WIESE, T.TUER]);
+    const passt = q => [-20, 0, 20].every(d => {
+      const kx = Math.floor((q.x + q.ux * d) / KACHEL), ky = Math.floor((q.y + q.uy * d) / KACHEL);
+      return PLATZ_OK.has(hole(kx, ky)) && hole(kx, ky) !== T.TUER;
+    });
+    for (let n = 0, v = 0; n < autos && v < autos * 20 && plaetze.length; v++) {
+      const q = plaetze[Math.floor(r() * plaetze.length)];
+      if (!passt(q)) continue;
+      if (behaelter.some(b => Math.hypot(b.x - q.x, b.y - q.y) < 52)) continue;
+      if (Math.hypot(q.x - start.x, q.y - start.y) < KACHEL * 4) continue;
+      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', x: q.x, y: q.y, winkel: q.winkel, farbe: Math.floor(r() * 6) });
+      n++;
+    }
+  } else for (let n = 0, v = 0; n < autos && v < autos * 20; v++) {
     const [x, y, senkrecht] = randStrasse[Math.floor(r() * randStrasse.length)];
     const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
     if (behaelter.some(b => Math.hypot(b.x - px, b.y - py) < KACHEL * 2.6)) continue;
@@ -171,6 +188,8 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     if (!kacheln.every(([a, b]) => hole(a, b) === T.STRASSE)) continue;
     if (behaelter.some(b => kacheln.some(([a, c]) => Math.abs(Math.floor(b.x / KACHEL) - a) <= 1 && Math.abs(Math.floor(b.y / KACHEL) - c) <= 1))) continue;
     if (deko.some(d => Math.abs(d.kx - x) < 12 && Math.abs(d.ky - y) < 12)) continue;
+    // nicht vor einer Haustür (sonst kommt man nicht mehr hinein)
+    if (haeuser.some(h => h.tuer && kacheln.some(([a, c]) => Math.abs(h.tuer.x + h.raus.dx - a) <= 2 && Math.abs(h.tuer.y + h.raus.dy - c) <= 2))) continue;
     // Straße muss danach noch passierbar sein: neben jeder Buskachel quer noch Straße
     if (!kacheln.every(([a, b]) => senkrecht ? (hole(a - 1, b) === T.STRASSE || hole(a + 1, b) === T.STRASSE) : (hole(a, b - 1) === T.STRASSE || hole(a, b + 1) === T.STRASSE))) continue;
     for (const [a, b] of kacheln) setze(a, b, T.DEKO);

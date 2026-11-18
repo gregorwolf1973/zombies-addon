@@ -75,7 +75,7 @@ for art, unser, n in (("walk", "laufen", 12), ("attack01", "angriff", 6), ("idle
     fs = auswahl(dateien(f"zombie01/{art}/*.png"), n)
     if not fs: continue
     m = schwerpunkt(Image.open(fs[0]).convert("RGBA"), lambda r, g, b, a: a > 128)
-    gruppe(f"z7_{unser}", fs, 1.35, lambda im, f, m=m: (im.width - m[0], im.height - m[1]), drehen=180)   # blickt nach links → umdrehen
+    gruppe(f"z7_{unser}", fs, 1.35, lambda im, f, m=m: m)   # blickt schon nach rechts (Arme vorn)
 
 # ---------- Bürger: Bilder verschieden groß → jedes Bild am Haar ausrichten ----------
 haar = lambda r, g, b, a: a > 128 and r > 95 and g < 85 and b > 60 and r > b

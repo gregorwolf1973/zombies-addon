@@ -26,12 +26,54 @@ function versorgen(p, b, jetzt) {
   const rang = w => (WAFFEN[w]?.fern && !p.munition) ? 0 : WAFFEN_RANG.indexOf(w) + 1;
   const besser = WAFFEN_RANG.filter(w => p.rucksack.includes(w) && rang(w) > rang(p.waffe)).at(-1);
   if (besser && nimm(besser, () => { if (p.waffe) p.rucksack.push(p.waffe); p.waffe = besser; })) return;
+  // aufgehobene Munitionsschachtel einlegen
+  if (p.munition < 30 && nimm('munition', () => { p.munition = Math.min(99, p.munition + 12); })) return;
   // größere Tasche umpacken
   for (const t of ['trekking', 'tasche']) {
     if (p.rucksack.includes(t) && (DINGE[t]?.plaetze ?? 0) > p.plaetze && nimm(t, () => { p.plaetze = DINGE[t].plaetze; })) return;
   }
 }
 const WAFFEN_RANG = ['messer', 'schlaeger', 'pistole', 'sense', 'schrotflinte', 'gewehr'];
+
+// so viele Stück eines Dings will ein Bot höchstens tragen (Waffen: die getragene zählt mit); der Rest fliegt raus
+const GRENZE = { wasser: 3, essen: 3, schokoriegel: 3, verband: 3, spritze: 2, bretter: 3, munition: 4, schluessel: 1, brechstange: 1, seil: 1,
+  taschenlampe: 1, kleidung: 1, tasche: 0, trekking: 0 };
+const grenze = d => GRENZE[d] ?? (WAFFEN[d] ? 1 : 2);
+const anzahl = (p, d) => p.rucksack.filter(q => q === d).length + (p.waffe === d ? 1 : 0);
+function willHaben(p, d) {
+  if ((d === 'tasche' || d === 'trekking') && (DINGE[d]?.plaetze ?? 0) > p.plaetze) return true;   // größere Tasche
+  if (WAFFEN[d] && WAFFEN_RANG.indexOf(d) < WAFFEN_RANG.indexOf(p.waffe) && p.rucksack.some(q => WAFFEN[q])) return false;   // schlechtere Waffe, Ersatz schon da
+  return anzahl(p, d) < grenze(d);
+}
+
+// Überzähliges ablegen (höchstens eins je Sekunde); der Bot merkt sich das Ding, damit er es nicht wieder aufhebt
+function ueberzaehligesAblegen(raum, p, b) {
+  if (raum.uhr - (b.abgelegt ?? 0) < 1) return false;
+  const d = p.rucksack.find((q, i) => p.rucksack.slice(0, i + 1).filter(r => r === q).length + (p.waffe === q ? 1 : 0) > grenze(q)
+    && !((q === 'tasche' || q === 'trekking') && (DINGE[q]?.plaetze ?? 0) > p.plaetze));
+  if (!d) return false;
+  p.rucksack.splice(p.rucksack.lastIndexOf(d), 1);
+  const id = raum.legeHin(d, p.x, p.y, p.ebene ?? '');
+  (b.verschmaeht ??= new Set()).add(id);
+  b.abgelegt = raum.uhr;
+  return true;
+}
+
+// Dinge vom Boden aufheben, die der Bot brauchen kann (z. B. was ein Mitspieler fallen lässt)
+function aufheben(raum, sid, p, x, welt) {
+  const b = x.bot;
+  if (p.rucksack.length >= p.plaetze) return false;
+  const kandidaten = [];
+  for (const [id, d] of raum.state.boden) {
+    if ((d.ebene ?? '') !== (p.ebene ?? '') || b.verschmaeht?.has(id) || !willHaben(p, d.ding)) continue;
+    kandidaten.push({ id, x: d.x, y: d.y });
+  }
+  const ziel = naechster(kandidaten, p, 220, c => sichtfrei(welt, p.x, p.y, c.x, c.y));
+  if (!ziel) return false;
+  if (abstand(p, ziel) > AKTION_ABSTAND - 8) { geheZu(raum, sid, p, x, ziel, 0.9, AKTION_ABSTAND - 12); return true; }
+  p.aktion = 'aufheben'; p.fortschritt = 0; x.aktionZiel = { art: 'aufheben', id: ziel.id, dauer: 0.4 };
+  return true;
+}
 
 // Gelegenheit nutzen: nahe Schränke, Kofferräume (mit Brechstange) und tote Zombies durchsuchen
 function durchsuchen(raum, sid, p, x, welt) {
@@ -144,9 +186,10 @@ export function botSchritt(raum, sid, p, x, dt) {
     }
   }
 
-  // 2b. Gelegenheit: in der Nähe durchsuchen, solange der Mensch nicht weit weg ist
+  // 2b. Gelegenheit: Überzähliges ablegen, Brauchbares aufheben, in der Nähe durchsuchen – solange der Mensch nicht weit weg ist
+  if (!gefahr && ueberzaehligesAblegen(raum, p, b)) return;
   const mensch = naechster(spieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten).map(([, o]) => o), p, Infinity);
-  if (!gefahr && mensch && abstand(p, mensch) < 260 && durchsuchen(raum, sid, p, x, welt)) return;
+  if (!gefahr && mensch && abstand(p, mensch) < 260 && (aufheben(raum, sid, p, x, welt) || durchsuchen(raum, sid, p, x, welt))) return;
 
   // 3. Dem nächsten Menschen folgen – auf festem Platz hinter ihm (ist er auf einer anderen Ebene: zum Übergang)
   const ueberall = alleSpieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten && !(o.zombie > 0)).map(([, o]) => o);

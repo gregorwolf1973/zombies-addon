@@ -1026,7 +1026,9 @@ export class SpielRaum extends Room {
     const b = new BodenDing(); b.ebene = ebene;
     const w = this.rnd() * Math.PI * 2;
     b.x = x + Math.cos(w) * 10; b.y = y + Math.sin(w) * 10; b.ding = ding; b.alter = 0;
-    this.state.boden.set('d' + (this.naechsteBodenId++), b);
+    const id = 'd' + (this.naechsteBodenId++);
+    this.state.boden.set(id, b);
+    return id;
   }
 
   bodenAltern(dt) {

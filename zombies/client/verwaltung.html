@@ -552,6 +552,8 @@
   <div class="tn-zeile"><input type="range" id="tnMenschen" min="0" max="200" step="5"><span id="tnMenschenWert">50</span></div>
   <label for="tnAnst">Vom Biss bis zur Verwandlung</label>
   <div class="tn-zeile"><input type="range" id="tnAnst" min="1" max="30" step="1"><span id="tnAnstWert">5 min</span></div>
+  <label for="tnBiss">Biss-Chance bei Stadtbewohnern (je Sekunde Berührung)</label>
+  <div class="tn-zeile"><input type="range" id="tnBiss" min="0" max="100" step="5"><span id="tnBissWert">100 %</span></div>
   <label for="tnFeuer">Brände am Anfang: alle</label>
   <div class="tn-zeile"><input type="range" id="tnFeuer" min="0" max="10" step="0.5"><span id="tnFeuerWert">1 min</span></div>
   <label for="tnFeuerPhase">… während der ersten</label>
@@ -623,6 +625,7 @@
     if (aktiv !== 'tnMenschen') { $('tnMenschen').value = e.menschen === undefined ? 50 : e.menschen; $('tnMenschenWert').textContent = $('tnMenschen').value; }
     if (aktiv !== 'tnAnst') { $('tnAnst').value = e.ansteckung || 5; $('tnAnstWert').textContent = $('tnAnst').value + ' min'; }
     var feld = function (id, wert, text) { if (aktiv !== id) { $(id).value = wert; $(id + 'Wert').textContent = text(Number($(id).value)); } };
+    feld('tnBiss', e.biss === undefined ? 100 : e.biss, function (v) { return v ? v + ' %' : 'nie'; });
     feld('tnFeuer', e.feuer === undefined ? 1 : e.feuer, function (v) { return v ? String(v).replace('.', ',') + ' min' : 'aus'; });
     feld('tnFeuerPhase', e.feuerPhase === undefined ? 20 : e.feuerPhase, function (v) { return v + ' min'; });
     feld('tnVerkehr', e.verkehr === undefined ? 6 : e.verkehr, function (v) { return String(v); });
@@ -666,6 +669,7 @@
     anfrage('verwaltung/api', { sichtkegel: $('tnKegel').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { ansteckung: v }; });
+  regler('tnBiss', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { biss: v }; });
   Array.prototype.forEach.call(document.querySelectorAll('#tagNachtKarte [data-uhr]'), function (b) {
     b.addEventListener('click', function () {
       anfrage('verwaltung/uhr', { uhr: Number(b.getAttribute('data-uhr')) }).then(function (d) { zeige(d); status(d.uhr === null ? 'Niemand spielt – Uhrzeit nicht gesetzt' : '✓ Uhrzeit gesetzt', d.uhr === null); })

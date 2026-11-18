@@ -68,6 +68,7 @@ export async function starte({
       tagMinuten: w.tagMinuten,
       menschen: w.menschen,
       ansteckungMin: w.ansteckung,
+      bissChance: w.biss / 100,
       feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, sichtkegel: w.sichtkegel,
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
