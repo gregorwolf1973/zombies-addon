@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.20.2 – 18.11.2026
+
+- Bots durchsuchen gezielt den Schrank, zu dem sie gehen – vorher blieben sie hängen, wenn ein verschlossenes Auto oder
+  eine Tür näher lag
+
 ## 0.20.1 – 18.11.2026
 
 - Wasser gibt es dort, wo man es erwartet, um die Hälfte häufiger: Lebensmittelläden, Kaufhäuser, Gaststätten und

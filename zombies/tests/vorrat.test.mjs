@@ -1,6 +1,7 @@
 // Rucksack, Durchsuchen, Safe Rooms, Barrikade und Speichern
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import * as W from '../client/welt.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -552,12 +553,19 @@ test('Bots durchsuchen Schränke in der Nähe und nehmen bessere Waffen', async 
     raum.state.zombies.clear(); raum.zombieInfo.clear();
     const [bid, x] = [...raum.extra.entries()].find(([, e]) => e.bot);
     const bot = raum.state.spieler.get(bid);
-    const schrank = raum.welt.behaelter.find(c => c.art !== 'auto' && c.art !== 'bus');
+    // ein Schrank mit freiem Platz und freier Sicht daneben (Bot und Mensch stehen dort)
+    let schrank = null, rx = 0, ry = 0;
+    for (const c of raum.welt.behaelter) {
+      if (c.art === 'auto' || c.art === 'bus' || schrank) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (W.frei(raum.welt, c.x + dx * 30, c.y + dy * 30, 13) && W.frei(raum.welt, c.x + dx * 60, c.y + dy * 60, 13) && W.sichtfrei(raum.welt, c.x + dx * 30, c.y + dy * 30, c.x, c.y)) { schrank = c; rx = dx; ry = dy; break; }
+      }
+    }
     assert.ok(schrank, 'kein Schrank');
     raum.setzeInhalt(schrank.id, ['wasser', 'gewehr']);
     bot.rucksack.clear(); bot.waffe = 'messer'; bot.munition = 5;
-    p.x = schrank.x + 60; p.y = schrank.y;
-    bot.x = schrank.x + 30; bot.y = schrank.y; bot.ebene = p.ebene = '';
+    p.x = schrank.x + rx * 60; p.y = schrank.y + ry * 60;
+    bot.x = schrank.x + rx * 30; bot.y = schrank.y + ry * 30; bot.ebene = p.ebene = '';
     assert.ok(await bis(() => bot.waffe === 'gewehr' || bot.rucksack.includes('gewehr'), 9000),
       'Bot hat nicht durchsucht: ' + JSON.stringify([...bot.rucksack]) + ' Aktion ' + bot.aktion);
     assert.ok(await bis(() => bot.waffe === 'gewehr', 3000), 'Bot nimmt das Gewehr nicht in die Hand');

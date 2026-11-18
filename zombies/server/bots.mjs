@@ -48,15 +48,12 @@ function durchsuchen(raum, sid, p, x, welt) {
   const ziel = naechster(kandidaten, p, 170, c => sichtfrei(welt, p.x, p.y, c.x, c.y));
   if (!ziel) return false;
   if (abstand(p, ziel) > AKTION_ABSTAND - 8) { geheZu(raum, sid, p, x, ziel, 0.9, AKTION_ABSTAND - 12); return true; }
-  const k = raum.kontext(p);
-  if (k?.art === 'durchsuchen') {
-    b.durchsucht.add(k.behaelter.id);
-    if (k.behaelter.art === 'auto' && !p.rucksack.includes('brechstange')) return false;
-    p.aktion = 'durchsuchen'; p.fortschritt = 0; x.aktionZiel = k; x.laermUhr = 0;
-    return true;
-  }
+  // genau diesen Behälter durchsuchen (nicht, was zufällig am nächsten liegt – z. B. ein verschlossenes Auto)
   b.durchsucht.add(ziel.id);
-  return false;
+  const behaelter = ziel.leiche ? { id: ziel.id, art: 'leiche', x: ziel.x, y: ziel.y } : ziel;
+  const dauer = behaelter.art === 'auto' || behaelter.art === 'bus' ? 3.5 : behaelter.art === 'leiche' ? 1.5 : 2.5;
+  p.aktion = 'durchsuchen'; p.fortschritt = 0; x.aktionZiel = { art: 'durchsuchen', behaelter, dauer }; x.laermUhr = 0;
+  return true;
 }
 
 // zum Ziel gehen: Weg berechnen (gelegentlich neu), Wegpunkten folgen, Abstand zu anderen halten
