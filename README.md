@@ -69,6 +69,9 @@ Map data: © OpenStreetMap contributors, available under the Open Database Licen
 
 
 Character, tree and prop graphics: [Kenney](https://www.kenney.nl) – Topdown Shooter pack (CC0).
+Survivor player, zombies „z6“/„z7“: Riley Gombart on OpenGameArt ([survivor](https://opengameart.org/content/animated-top-down-survivor-player) CC-BY 3.0, tds_zombie CC0, [zombie set](https://opengameart.org/content/top-down-animated-zombie-set) OGA-BY 3.0).
+Citizens: KonitaTutorials ([civilians](https://opengameart.org/content/top-down-civillians-and-police-man), CC-BY 3.0). Weapon images and muzzle flash: „Survivor Spine“ (OpenGameArt, CC-BY 3.0).
+Details: `zombies/client/grafik/LIZENZ.txt`.
 
 ## License
 

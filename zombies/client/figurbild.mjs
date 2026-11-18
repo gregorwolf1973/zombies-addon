@@ -13,7 +13,7 @@ export const KLEIDFARBEN = [
 export const WAFFEN_BILD = ['hand', 'pistole', 'schlaeger', 'messer'];
 
 export function aussehenLesen(text) {
-  const m = /^([mw]),([0-5]),([0-7])$/.exec(String(text ?? ''));
+  const m = /^([mws]),([0-5]),([0-7])$/.exec(String(text ?? ''));
   return m ? { g: m[1], haar: Number(m[2]), kleid: Number(m[3]) } : { g: 'm', haar: 1, kleid: 0 };
 }
 export const aussehenText = a => `${a.g},${a.haar},${a.kleid}`;

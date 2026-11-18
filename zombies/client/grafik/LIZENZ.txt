@@ -3,3 +3,14 @@ Grafiken: Kenney „Topdown Shooter“ (www.kenney.nl), Lizenz CC0 1.0 (Public D
 figuren.png / figuren.json (Zombies, Kriecher, tote Zombies, Spielerfiguren):
 mit KI-Bildgeneratoren (ChatGPT, Microsoft Designer) für dieses Spiel erzeugt und mit
 tools/figuren_schneiden.py zugeschnitten.
+
+figuren2.png / figuren2.json (mit tools/figuren2_schneiden.py aus OpenGameArt-Paketen zusammengestellt):
+- Survivor (Spielerfigur „Survivor“, Bots): Riley Gombart, „Animated Top Down Survivor Player“,
+  https://opengameart.org/content/animated-top-down-survivor-player – CC-BY 3.0
+- Zombie „z6“: Riley Gombart, „tds_zombie“ (OpenGameArt) – CC0 1.0
+- Zombie „z7“ mit Sterbeanimation: Riley Gombart, „Top Down Animated Zombie Set“,
+  https://opengameart.org/content/top-down-animated-zombie-set – OGA-BY 3.0
+- Bürger (Stadtbewohner): KonitaTutorials, „Top Down Civillians and Police Man“,
+  https://opengameart.org/content/top-down-civillians-and-police-man – CC-BY 3.0
+- Waffenbilder und Mündungsblitz: „Survivor Spine“ (OpenGameArt) – CC-BY 3.0
+Die Bilder wurden zugeschnitten, skaliert, gedreht und neu angeordnet.

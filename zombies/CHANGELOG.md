@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.23.0 – 18.11.2026
+
+- Neue Spielfigur „Survivor“ zur Auswahl auf der Startseite: eigene Animationen für Stehen, Laufen (mit Füßen),
+  Schießen, Nahkampf und Nachladen, je nach Waffe Pistole, Gewehr, Schrotflinte oder Messer; Bots nehmen sie manchmal
+- Zwei neue Zombiearten, eine davon mit Sterbeanimation (die Leiche bleibt liegen)
+- Stadtbewohner als eigene Bürgerfiguren mit Laufanimation
+- Mündungsblitz als Bild statt gezeichnetem Blitz
+- Grafiken von OpenGameArt (Riley Gombart, KonitaTutorials, Survivor Spine); Namensnennung in grafik/LIZENZ.txt,
+  README und auf der Startseite
+
 ## 0.22.1 – 18.11.2026
 
 - Neue Geräusch-Ereignisse mit Tondateien: Schüsse je Waffe (Pistole, Jagdgewehr, Schrotflinte), Tür auf und zu,

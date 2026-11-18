@@ -52,7 +52,7 @@ export const Zombie = schema({
   hp: t.uint8(),
   kriecht: t.boolean(),     // „nicht ganz tot“: robbt am Boden
   ebene: t.string(),
-  variante: t.uint8(),      // Zombietyp 0–4 (Tarnjacke, Dirndl, Feuerwehr, Hemd, Lederhose)
+  variante: t.uint8(),      // Zombietyp 0–6 (Tarnjacke, Dirndl, Feuerwehr, Hemd, Lederhose, Grünhemd, Schlurfer)
 }, 'Zombie');
 
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
@@ -98,7 +98,7 @@ const SPEICHER_TAKT = 30;
 const ID_MUSTER = /^[a-f0-9]{32}$/;
 const BLOCKIERT_FELD = new Set([...BLOCKIERT].filter(t => t !== T.INNENTUER).concat([T.INNENTUER]));
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
-const AUSSEHEN = /^[mw],[0-5],[0-7]$/;
+const AUSSEHEN = /^[mws],[0-5],[0-7]$/;   // m/w = eigene Figur mit Farben, s = Survivor (feste Figur)
 export const TOR_RAETSEL = 3;
 const TOR_ABSTAND = 70;
 
@@ -339,7 +339,8 @@ export class SpielRaum extends Room {
   }
 
   zufallsAussehen() {
-    return `${this.rnd() < 0.5 ? 'm' : 'w'},${Math.floor(this.rnd() * 6)},${Math.floor(this.rnd() * 8)}`;
+    const r = this.rnd();
+    return `${r < 0.2 ? 's' : r < 0.6 ? 'm' : 'w'},${Math.floor(this.rnd() * 6)},${Math.floor(this.rnd() * 8)}`;
   }
 
   freieFarbe() {
@@ -595,7 +596,7 @@ export class SpielRaum extends Room {
   setzeZombie(x, y, ebene = '', schlaeft = false) {
     const z = new Zombie();
     z.x = x; z.y = y; z.hp = ZOMBIE_HP; z.richtung = this.rnd() * Math.PI * 2; z.jagt = false;
-    z.kriecht = false; z.variante = Math.floor(this.rnd() * 5); z.ebene = ebene;
+    z.kriecht = false; z.variante = Math.floor(this.rnd() * 7); z.ebene = ebene;
     const id = 'z' + (this.naechsteZombieId++);
     this.state.zombies.set(id, z);
     this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft });

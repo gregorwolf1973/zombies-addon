@@ -89,15 +89,31 @@ document.addEventListener('keydown', musikAn, { once: true });
 // ---------- Figurenwahl ----------
 let meinAussehen = aussehenLesen(null);
 try { meinAussehen = aussehenLesen(localStorage.getItem('zob_aussehen')); } catch {}
-const figurVorlage = { bild: new Image(), liste: null };
+const figurVorlage = { bild: new Image(), liste: null, bild2: new Image(), liste2: null };
 figurVorlage.bild.src = 'grafik/figuren.png';
 fetch('grafik/figuren.json').then(r => r.json()).then(j => { figurVorlage.liste = j; vorschauZeichnen(); }).catch(() => {});
 figurVorlage.bild.onload = () => vorschauZeichnen();
+figurVorlage.bild2.src = 'grafik/figuren2.png';
+fetch('grafik/figuren2.json').then(r => r.json()).then(j => { figurVorlage.liste2 = j; vorschauZeichnen(); }).catch(() => {});
+figurVorlage.bild2.onload = () => vorschauZeichnen();
 function vorschauZeichnen() {
   const l = figurVorlage.liste;
   if (!l || !figurVorlage.bild.complete) return;
   const c = $('figurvorschau'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
+  document.querySelector('.figurknoepfe')?.classList.toggle('fest', meinAussehen.g === 's');
+  if (meinAussehen.g === 's') {
+    // Survivor: feste Figur aus dem zweiten Bogen (224er Felder)
+    const l2 = figurVorlage.liste2;
+    if (!l2 || !figurVorlage.bild2.complete) return;
+    const nr = l2.bilder.sv_pistole_idle[0], F = l2.feld, sx = (nr % l2.spalten) * F, sy = Math.floor(nr / l2.spalten) * F;
+    const fn = l2.bilder.sv_fuesse_idle[0], fx = (fn % l2.spalten) * F, fy = Math.floor(fn / l2.spalten) * F;
+    ctx.save(); ctx.translate(80, 112); ctx.rotate(-Math.PI / 2); ctx.scale(0.8, 0.8);
+    ctx.drawImage(figurVorlage.bild2, fx, fy, F, F, -F / 2, -F / 2, F, F);
+    ctx.drawImage(figurVorlage.bild2, sx, sy, F, F, -F / 2, -F / 2, F, F);
+    ctx.restore();
+    return;
+  }
   ctx.save(); ctx.translate(80, 80); ctx.rotate(-Math.PI / 2); ctx.scale(1.45, 1.45); ctx.translate(-80, -80);   // nach oben schauend, vergrößert
   umgefaerbt(ctx, figurVorlage.bild, l.feld, l.bilder[(meinAussehen.g === 'w' ? 'frau' : 'mann') + '_hand'][0], 8, 0, 0, meinAussehen);
   ctx.restore();
@@ -218,8 +234,9 @@ const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 // ---------- Szene ----------
 const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
-const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42;
-const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose'];
+const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.34;   // figuren2: 224er Felder
+const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7'];   // z6/z7 aus figuren2 (Riley Gombart)
+const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer' };   // sonst Taschenlampe
 
 class Ort extends Phaser.Scene {
   constructor() { super('ort'); }
@@ -229,6 +246,9 @@ class Ort extends Phaser.Scene {
     // Figuren aus den KI-Bögen (tools/figuren_schneiden.py): 160er-Felder, Drehpunkt in der Feldmitte
     this.load.spritesheet('figuren', 'grafik/figuren.png', { frameWidth: 160, frameHeight: 160 });
     this.load.json('figurenliste', 'grafik/figuren.json');
+    // zweiter Bogen: Survivor, Zombies und Bürger von OpenGameArt (siehe grafik/LIZENZ.txt)
+    this.load.spritesheet('figuren2', 'grafik/figuren2.png', { frameWidth: 224, frameHeight: 224 });
+    this.load.json('figurenliste2', 'grafik/figuren2.json');
   }
 
   create() {
@@ -311,13 +331,15 @@ class Ort extends Phaser.Scene {
     this.input.on('pointerup', loslassen);
     this.input.on('pointerupoutside', loslassen);
 
+    const naechsteFigur = (x, y) => { let best = null, bd = 30; for (const f of this.figuren.values()) { const d = Math.hypot(f.x - x, f.y - y); if (d < bd) { bd = d; best = f; } } return best; };
     raum.onMessage('schuss', m => {
+      const fs = naechsteFigur(m.x1, m.y1); if (fs) fs.schussBis = this.time.now + 150;
       this.schuss(m);
       // Schrot kommt als mehrere Linien – nur ein Knall
       const jetzt = performance.now();
       if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; }
     });
-    raum.onMessage('stoss', m => { this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
+    raum.onMessage('stoss', m => { const fs = naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
     raum.onMessage('klettern', m => {
@@ -396,6 +418,7 @@ class Ort extends Phaser.Scene {
     // Boden, Bäume, Deko und Dächer entstehen stückweise beim Hinsehen (chunksAktualisieren)
     this.bilder = Object.fromEntries(GRAFIK.map(g => [g, this.textures.get(g).getSourceImage()]));
     this.figurListe = this.cache.json.get('figurenliste')?.bilder ?? {};
+    this.figurListe2 = this.cache.json.get('figurenliste2')?.bilder ?? {};
     this.stuecke = new Map();
     const g = this.add.graphics().setDepth(0.5);
     // Böden der Safe Rooms etwas wärmer
@@ -537,11 +560,12 @@ class Ort extends Phaser.Scene {
     // eigener Spieler: heller Ring am Boden
     const ring = this.add.ellipse(0, 0, 34, 34).setStrokeStyle(2, 0xffffff, ich ? 0.7 : 0).setFillStyle(0x000000, 0);
     const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE);
+    const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE).setVisible(false);
     const name = this.add.text(0, -28, p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
-    box.add([ring, bild, name, hp, tun]);
-    return { box, bild, koerper: bild, name, hp, tun, farbe, n, x: p.x, y: p.y, altX: p.x, altY: p.y };
+    box.add([ring, fuesse, bild, name, hp, tun]);
+    return { box, bild, fuesse, koerper: bild, name, hp, tun, farbe, n, x: p.x, y: p.y, altX: p.x, altY: p.y };
   }
 
   neuerZombie(z) {
@@ -681,6 +705,11 @@ class Ort extends Phaser.Scene {
       }
     }
     g.setDepth(this.aktEbene ? 0.45 : 1.08);
+  }
+
+  figurBild2(name, i = 0) {
+    const l = this.figurListe2[name];
+    return l?.length ? l[((i % l.length) + l.length) % l.length] : 0;
   }
 
   // Bildnummer im Figurenbogen (Name aus figuren.json, i-tes Bild der Folge)
@@ -949,9 +978,19 @@ class Ort extends Phaser.Scene {
       f.box.setVisible(zeigen);
       const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
       const typ = ZOMBIE_TYPEN[(z.variante ?? 0) % ZOMBIE_TYPEN.length];
+      const neu = !z.kriecht && (typ === 'z6' || typ === 'z7');
+      const tex = neu ? 'figuren2' : 'figuren';
+      if (f.bild.texture.key !== tex) f.bild.setTexture(tex, 0);
       if (z.kriecht) {
         f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
         f.bild.setRotation(0).setScale(ZOMBIE_GROESSE);
+      } else if (neu) {
+        // flüssig animierte Zombies (Riley Gombart): Laufen, Angriff, Stehen
+        let nah = false;
+        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < W.spielerRadius + W.zombieRadius + 16) { nah = true; break; }
+        const art = nah ? 'angriff' : bildNr < 0 ? 'stehen' : 'laufen';
+        const i = art === 'laufen' ? Math.floor((f.lauf ?? 0) / 6) : Math.floor(this.time.now / (art === 'angriff' ? 70 : 140));
+        f.bild.setFrame(this.figurBild2(`${typ}_${art}`, i)).setRotation(0).setScale(BOGEN2_GROESSE * (typ === 'z6' ? 1.05 : 1));
       } else {
         // Angriff: beim Zubeißen das Bild mit offenem Mund (wo vorhanden)
         let nah = false;
@@ -979,7 +1018,8 @@ class Ort extends Phaser.Scene {
       if (!o) {
         // passend zum Zombietyp; Dirndl, Feuerwehr und Lederhose gibt es in zwei Fassungen
         const typ = ZOMBIE_TYPEN[(l.variante ?? 0) % ZOMBIE_TYPEN.length], zweite = this.figurListe['leiche_' + typ + '2'] && (Math.round(l.x) + Math.round(l.y)) % 2;
-        o = this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + typ + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
+        if (typ === 'z7') { const fol = (Math.round(l.x) % 2) ? 'z7_sterben2' : 'z7_sterben'; o = this.add.image(l.x, l.y, 'figuren2', this.figurBild2(fol, -1)).setScale(BOGEN2_GROESSE).setDepth(1.6).setRotation(l.richtung); }
+        else o = this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + (typ === 'z6' ? 'hemd' : typ) + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
         this.leichen.set(id, o);
       }
       o.setVisible((l.ebene ?? '') === this.aktEbene);
@@ -991,8 +1031,10 @@ class Ort extends Phaser.Scene {
     for (const [id, m] of s.menschen ?? []) {
       let o = this.menschenObj.get(id);
       if (!o) {
-        const bild = this.add.image(0, 0, this.menschTextur(m.aussehen), 0).setScale(MENSCH_GROESSE * 0.92);
-        o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, x: m.x, y: m.y, r: m.richtung };
+        // Bürger (KonitaTutorials) mit Laufanimation, Sorte nach Kennung
+        const sorte = 'buerger' + (1 + (id.charCodeAt(id.length - 1) % 3));
+        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2(sorte)).setScale(BOGEN2_GROESSE * 0.95);
+        o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, sorte, x: m.x, y: m.y, r: m.richtung };
         this.menschenObj.set(id, o);
       }
       const vx = o.x, vy = o.y;
@@ -1001,7 +1043,8 @@ class Ort extends Phaser.Scene {
       o.r = Phaser.Math.Angle.RotateTo(o.r, m.richtung, dt * 8);
       const weg = Math.hypot(o.x - vx, o.y - vy);
       o.lauf = (o.lauf ?? 0) + weg;
-      o.box.setPosition(o.x, o.y).setRotation(o.r + (weg > 0.2 ? Math.sin(o.lauf / 6) * 0.08 : 0));
+      o.box.setPosition(o.x, o.y).setRotation(o.r);
+      o.bild.setFrame(this.figurBild2(o.sorte, weg > 0.2 ? Math.floor(o.lauf / 7) : 0));
       o.box.setVisible(m.sichtbar && this.aktEbene === '');
       o.bild.setTint(m.infiziert ? 0xb5d99c : 0xffffff);
     }
@@ -1098,17 +1141,31 @@ class Ort extends Phaser.Scene {
     const geht = weg / Math.max(dt, 0.001) > 12;
     // Haltung nach Ausrüstung: Pistole, Nahkampf/Lampe in der Hand, sonst ohne
     let textur, bild = 0;
+    const survivor = !p.unten && !zombie && String(p.aussehen ?? '').startsWith('s');
     if (p.unten) textur = 'liegend-' + f.n;
     else if (zombie) { textur = 'figuren'; bild = this.figurBild('zombie_hemd', geht ? Math.floor(f.lauf / 11) : 0); }
+    else if (survivor) {
+      // Survivor (Riley Gombart): Haltung je Waffe; Schießen, Zuschlagen, Gehen, Stehen
+      const w = SV_WAFFE[aktiveWaffe(p)[0]] ?? 'lampe', jetzt = this.time.now;
+      let art = 'idle', i = Math.floor(jetzt / 110);
+      if (f.schussBis > jetzt && this.figurListe2[`sv_${w}_shoot`]) { art = 'shoot'; i = Math.floor((150 - (f.schussBis - jetzt)) / 50); }
+      else if (f.schlagBis > jetzt) { art = 'meleeattack'; i = Math.floor((400 - (f.schlagBis - jetzt)) / 50); }
+      else if (geht) { art = 'move'; i = Math.floor(f.lauf / 8); }
+      textur = 'figuren2'; bild = this.figurBild2(`sv_${w}_${art}`, i);
+      const fb = geht ? this.figurBild2('sv_fuesse_walk', Math.floor(f.lauf / 6)) : this.figurBild2('sv_fuesse_idle');
+      if (f.fuesse.frame.name != fb) f.fuesse.setFrame(fb);   // eslint-disable-line eqeqeq
+      f.fuesse.setRotation(p.richtung).setScale(BOGEN2_GROESSE * (p.schleicht ? 0.92 : 1));
+    }
     else {
       textur = this.menschTextur(p.aussehen);
       bild = aktiveWaffe(p)[1].bild;
     }
+    f.fuesse.setVisible(survivor);
     if (f.bild.texture.key !== textur || f.bild.frame.name != bild) f.bild.setTexture(textur, bild);   // eslint-disable-line eqeqeq
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
-    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE : MENSCH_GROESSE;
+    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE : survivor ? BOGEN2_GROESSE : MENSCH_GROESSE;
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
@@ -1291,8 +1348,10 @@ class Ort extends Phaser.Scene {
     g.fillStyle(0xff7043, 0.8);
     g.fillTriangle(m.x1 + c * (vorn + 4) - sn * 2, m.y1 + sn * (vorn + 4) + c * 2, m.x1 + c * (vorn + 4) + sn * 2, m.y1 + sn * (vorn + 4) - c * 2, m.x1 + c * (vorn + lang * 0.7), m.y1 + sn * (vorn + lang * 0.7));
     this.tweens.add({ targets: g, alpha: 0, duration: schrot ? 90 : 110, onComplete: () => g.destroy() });
-    const blitz = this.add.circle(m.x1 + c * vorn, m.y1 + sn * vorn, gewehr ? 8 : 6, 0xfff59d, 0.9).setDepth(7);
-    this.tweens.add({ targets: blitz, alpha: 0, scale: 1.7, duration: 100, onComplete: () => blitz.destroy() });
+    // Mündungsblitz (Survivor-Paket), additiv: das Schwarz im Bild verschwindet
+    const blitz = this.add.image(m.x1 + c * (vorn - 4), m.y1 + sn * (vorn - 4), 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5)
+      .setBlendMode('ADD').setRotation(w).setScale(gewehr ? 0.42 : schrot ? 0.38 : 0.3).setDepth(7);
+    this.tweens.add({ targets: blitz, alpha: 0, duration: 90, onComplete: () => blitz.destroy() });
   }
 
   stoss(m) {

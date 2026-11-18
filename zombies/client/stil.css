@@ -175,3 +175,6 @@ button:disabled { opacity: .6; }
 }
 #zoomrein { right: 236px; }
 #zoomraus { right: 276px; }
+
+.figurknoepfe.fest .farben, .figurknoepfe.fest .farbtitel { opacity: .35; pointer-events: none; }
+.grafiknachweis { font-size: 10px; opacity: .6; margin-top: 8px; }
