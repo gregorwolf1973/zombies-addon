@@ -399,7 +399,8 @@ export class SpielRaum extends Room {
   // Zombies draußen: Grundmenge × Einstellung, nachts × Nachtfaktor
   zombieSollJetzt() {
     const e = SpielRaum.einstellungen;
-    return Math.round(zombieSoll(this.state.spieler.size) * (e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1));
+    // this.zombieFaktor: Vorgabe nur für diesen Raum (Tests), sonst die Einstellung
+    return Math.round(zombieSoll(this.state.spieler.size) * (this.zombieFaktor ?? e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1));
   }
 
   // Taschenlampe nötig: drinnen in dunklen Häusern (Keller immer), draußen nachts

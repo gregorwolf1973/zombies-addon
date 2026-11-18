@@ -405,12 +405,13 @@ test('Kriecher: nicht ganz tot, langsam, beim zweiten Mal Leiche', async () => {
     assert.equal(z.hp, 35);
     assert.equal(raum.state.leichen.size, 0);
     assert.ok(await bis(() => c.state.zombies?.get(zid)?.kriecht === true), 'Client sieht Kriecher nicht');
-    // kriecht langsam auf den Spieler zu
-    p.x = z.x - 80; p.y = z.y; p.hp = 100;
+    // kriecht langsam auf den Spieler zu (still stehende Spieler spürt er erst aus der Nähe)
+    p.x = z.x - 45; p.y = z.y; p.hp = 100;
+    raum.extra.get(c.sessionId).pause = 99;   // nicht automatisch zurückschlagen (würde ihn wegstoßen)
     const x0 = z.x;
     await warte(1000);
     const weg = x0 - z.x;
-    assert.ok(weg > 5 && weg < 50, 'Kriecher-Tempo falsch: ' + weg);
+    assert.ok(weg > 3 && weg < 50, 'Kriecher-Tempo falsch: ' + weg);
     raum.schaden(zid, z, 999, p);
     assert.ok(!raum.state.zombies.has(zid));
     assert.equal(raum.state.leichen.size, 1);

@@ -237,8 +237,10 @@ test('Tag und Nacht: Dämmerung, helle Häuser, Lampe draußen nur nachts', asyn
     p.rucksack.clear(); p.rucksack.push('taschenlampe'); p.ebene = '';
     raum.state.uhr = 23 * 60;
     assert.ok(await bis(() => p.lampe > 0), 'Lampe geht nachts draußen nicht an');
+    raum.zombieFaktor = 1;
     const nachts = raum.zombieSollJetzt(); raum.state.uhr = 12 * 60;
     assert.ok(nachts > raum.zombieSollJetzt(), 'nachts nicht mehr Zombies');
+    raum.zombieFaktor = 0;
   } finally { await c.leave(); }
 });
 
@@ -260,8 +262,10 @@ test('Anschleichen: von hinten schleichend unbemerkt, erster Schlag mit Überras
     z.richtung = 0;                                     // schaut nach rechts, weg vom Spieler
     raum.zombieInfo.get(zid).wechsel = 99;
     p.x = ort.x; p.y = ort.y;
+    // der Zombie bleibt stehen und schaut weg, solange er nichts bemerkt (hier wird nur das Bemerken geprüft)
+    const halten = setInterval(() => { if (!raum.zombieInfo.get(zid)?.ziel) { z.x = ort.x + 80; z.y = ort.y; z.richtung = 0; } }, 20);
     c.send('eingabe', { dx: 0.4, dy: 0, s: true });     // schleichen
-    assert.ok(await bis(() => z.hp < 100 || !raum.state.zombies.has(zid), 6000), 'kein Schlag');
+    try { assert.ok(await bis(() => z.hp < 100 || !raum.state.zombies.has(zid), 6000), 'kein Schlag'); } finally { clearInterval(halten); }
     // Messer von hinten: 30 × 4 = tödlich
     assert.ok(!raum.state.zombies.has(zid) || z.kriecht, 'Überraschungsschlag nicht tödlich');
   } finally { c.send('eingabe', { dx: 0, dy: 0 }); await c.leave(); }
@@ -269,26 +273,32 @@ test('Anschleichen: von hinten schleichend unbemerkt, erster Schlag mit Überras
 
 test('Neue Waffen: Schrot trifft mehrere und braucht Munition, Sense mäht im Bogen, Gewehr reicht weit', async () => {
   const { c, raum, p } = await beitreten('Waffenmeister');
+  let halten = null;
   try {
     raum.zombieFaktor = 0;
     const welt = raum.welt;
     let ort = null;
     for (let y = 5; y < 40 && !ort; y++) for (let x = 5; x < 55 && !ort; x++) {
       const px = x * KACHEL + 16, py = y * KACHEL + 16;
-      if ([0, 60, 120, 200, 300].every(dx => [-40, 0, 40].every(dy => frei(welt, px + dx, py + dy, 16)))) ort = { x: px, y: py };
+      if ([0, 60, 120, 200, 300].every(dx => [-40, 0, 40].every(dy => frei(welt, px + dx, py + dy, 16)))
+        && [[300, 0], [90, -12], [100, 14], [40, -25], [40, 25]].every(([dx, dy]) => sichtfrei(welt, px, py, px + dx, py + dy))) ort = { x: px, y: py };
     }
     assert.ok(ort, 'kein freier Platz');
     const aufstellen = punkte => {
+      clearInterval(halten);
       raum.state.zombies.clear(); raum.zombieInfo.clear();
-      for (const [dx, dy] of punkte) { raum.setzeZombie(ort.x + dx, ort.y + dy, ''); const z = [...raum.state.zombies.values()].at(-1); z.richtung = Math.PI; }
+      const plaetze = [];
+      for (const [dx, dy] of punkte) { raum.setzeZombie(ort.x + dx, ort.y + dy, ''); const z = [...raum.state.zombies.values()].at(-1); z.richtung = Math.PI; plaetze.push([z, ort.x + dx, ort.y + dy]); }
       for (const [id, z] of raum.state.zombies) { const i = raum.zombieInfo.get(id); i.ziel = c.sessionId; z.jagt = true; }   // kein Überraschungsbonus
-      return [...raum.state.zombies.values()];
+      // festhalten: geprüft wird nur, wen die Waffe trifft
+      halten = setInterval(() => { for (const [z, x, y] of plaetze) { z.x = x; z.y = y; } p.x = ort.x; p.y = ort.y; p.hp = 100; p.unten = false; }, 10);
+      return plaetze.map(q => q[0]);
     };
     p.ebene = ''; p.x = ort.x; p.y = ort.y;
     // Schrotflinte: zwei Zombies nebeneinander vorne
     p.waffe = 'schrotflinte'; p.munition = 3;
     let zs = aufstellen([[90, -12], [100, 14]]);
-    assert.ok(await bis(() => zs.every(z => z.hp < 100 || !raum.state.zombies.size), 3000), 'Schrot trifft nicht beide');
+    assert.ok(await bis(() => zs.every(z => z.hp < 100), 3000), 'Schrot trifft nicht beide: ' + JSON.stringify(zs.map(z => [Math.round(z.hp), Math.round(z.x - ort.x), Math.round(z.y - ort.y)])) + ' Munition ' + p.munition + ' Zombies ' + raum.state.zombies.size);
     assert.ok(p.munition < 3, 'keine Munition verbraucht');
     // Sense: zwei Zombies links und rechts vorne
     p.waffe = 'sense'; p.munition = 0; p.x = ort.x; p.y = ort.y;
@@ -298,5 +308,5 @@ test('Neue Waffen: Schrot trifft mehrere und braucht Munition, Sense mäht im Bo
     p.waffe = 'gewehr'; p.munition = 2; p.x = ort.x; p.y = ort.y;
     zs = aufstellen([[300, 0]]);
     assert.ok(await bis(() => zs[0].hp < 100 || !raum.state.zombies.size, 3000), 'Gewehr reicht nicht');
-  } finally { await c.leave(); }
+  } finally { clearInterval(halten); await c.leave(); }
 });

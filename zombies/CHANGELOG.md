@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.1 – 18.11.2026
+
+- Straßen wie im Prototyp: schmalere Fahrbahn mit dunkler Kante, Gehweg nur angedeutet, Fußwege als helle Linien
+- Zoomen: Knöpfe − und + oben rechts, Mausrad oder Tasten + und −; die Wahl wird gespeichert
+- Schüsse zeigen nur noch Mündungsblitz und einen kurzen Feuerstrahl Richtung Ziel statt eines durchgehenden Strichs
+- Sense schwingt breiter
+
 ## 0.18.0 – 18.11.2026
 
 - Anschleichen: Wer schleicht oder still steht, kann sich von hinten an Zombies heranpirschen – sie merken es erst

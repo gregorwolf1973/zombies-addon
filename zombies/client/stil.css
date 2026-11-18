@@ -166,3 +166,12 @@ button:disabled { opacity: .6; }
 .farben { display: flex; flex-wrap: wrap; gap: 5px; }
 .farben button { width: 26px !important; height: 26px; margin: 0 !important; padding: 0 !important; border-radius: 50%; border: 2px solid #ffffff55; }
 .farben button.an { border: 3px solid #fff; box-shadow: 0 0 0 2px #ffd54f; }
+
+/* Zoomknöpfe neben dem Lautsprecher */
+.zoomknopf {
+  position: fixed; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
+  margin: 0 !important; padding: 0 !important; font-size: 20px; line-height: 1; border-radius: 8px; background: #0007; color: #fff;
+  display: none; z-index: 6;
+}
+#zoomrein { right: 236px; }
+#zoomraus { right: 276px; }

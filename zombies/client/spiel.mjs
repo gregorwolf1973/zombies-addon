@@ -320,6 +320,16 @@ class Ort extends Phaser.Scene {
     $('tauschok').onclick = () => raum.send('tausch_ok');
     $('tauschab').onclick = () => raum.send('tausch_ende');
     this.hudZeit = 0;
+    // Zoom: Knöpfe, Mausrad, Tasten + und −
+    $('zoomrein').style.display = $('zoomraus').style.display = 'block';
+    $('zoomrein').onclick = () => this.zoomen(1.25);
+    $('zoomraus').onclick = () => this.zoomen(0.8);
+    this.input.on('wheel', (_p, _o, _dx, dy) => this.zoomen(dy < 0 ? 1.12 : 1 / 1.12));
+    this.input.keyboard.on('keydown', e => {
+      if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+      if (e.key === '+' || e.key === '=') this.zoomen(1.25);
+      else if (e.key === '-') this.zoomen(0.8);
+    });
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
     if (new URLSearchParams(location.search).has('debug')) { window.szene = this; window.raum = raum; window.meineId = meineId; }
   }
@@ -327,7 +337,17 @@ class Ort extends Phaser.Scene {
   passeZoomAn() {
     const kurz = Math.min(this.scale.width, this.scale.height);
     this.grundZoom = Phaser.Math.Clamp(kurz / 520, 0.55, 1.6);
-    this.cameras.main.setZoom(this.grundZoom * (this.aktEbene ? INNEN_ZOOM : 1));
+    if (this.zoomWahl === undefined) { this.zoomWahl = 1; try { this.zoomWahl = Phaser.Math.Clamp(Number(localStorage.getItem('zob_zoom')) || 1, 0.4, 1.8); } catch {} }
+    this.cameras.main.setZoom(this.zielZoom());
+  }
+
+  // Kamerazoom: Bildschirmgröße × eigene Wahl (Knöpfe, Mausrad, +/−) × drinnen näher
+  zielZoom(ebene = this.aktEbene) { return this.grundZoom * this.zoomWahl * (ebene ? INNEN_ZOOM : 1); }
+
+  zoomen(faktor) {
+    this.zoomWahl = Phaser.Math.Clamp((this.zoomWahl ?? 1) * faktor, 0.4, 1.8);
+    try { localStorage.setItem('zob_zoom', this.zoomWahl.toFixed(2)); } catch {}
+    this.cameras.main.zoomTo(this.zielZoom(), 160, 'Sine.easeOut');
   }
 
   zeichneKarte() {
@@ -580,7 +600,7 @@ class Ort extends Phaser.Scene {
     cam.setBackgroundColor(ebene ? '#0b0b0d' : '#1b2a1b');
     ton.umgebung(!!ebene);
     // weich hinein- bzw. herauszoomen
-    cam.zoomTo(this.grundZoom * (ebene ? INNEN_ZOOM : 1), 450, 'Sine.easeInOut');
+    cam.zoomTo(this.zielZoom(ebene), 450, 'Sine.easeInOut');
     kisteZu(); popupZu();
   }
 
@@ -1002,16 +1022,25 @@ class Ort extends Phaser.Scene {
   }
 
   // ---------- Effekte ----------
+  // Schuss: Mündungsblitz und ein kurzer, angedeuteter Feuerstrahl Richtung Ziel (kein durchgehender Strich)
   schuss(m) {
-    const l = this.add.line(0, 0, m.x1, m.y1, m.x2, m.y2, 0xfff176, m.art === 'schrotflinte' ? 0.6 : 0.9).setOrigin(0).setLineWidth(m.art === 'gewehr' ? 3 : m.art === 'schrotflinte' ? 1.2 : 2).setDepth(7);
-    this.tweens.add({ targets: l, alpha: 0, duration: 140, onComplete: () => l.destroy() });
-    const blitz = this.add.circle(m.x1, m.y1, 7, 0xffeb3b, 0.8).setDepth(7);
-    this.tweens.add({ targets: blitz, alpha: 0, scale: 1.6, duration: 120, onComplete: () => blitz.destroy() });
+    const w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), c = Math.cos(w), sn = Math.sin(w);
+    const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr';
+    const vorn = 16, lang = gewehr ? 38 : schrot ? 22 : 26;
+    const g = this.add.graphics().setDepth(7);
+    // Feuerzunge: breit und gelb an der Mündung, schmal und rot nach vorn auslaufend
+    g.fillStyle(0xffe082, 0.95);
+    g.fillTriangle(m.x1 + c * vorn - sn * 3.5, m.y1 + sn * vorn + c * 3.5, m.x1 + c * vorn + sn * 3.5, m.y1 + sn * vorn - c * 3.5, m.x1 + c * (vorn + lang), m.y1 + sn * (vorn + lang));
+    g.fillStyle(0xff7043, 0.8);
+    g.fillTriangle(m.x1 + c * (vorn + 4) - sn * 2, m.y1 + sn * (vorn + 4) + c * 2, m.x1 + c * (vorn + 4) + sn * 2, m.y1 + sn * (vorn + 4) - c * 2, m.x1 + c * (vorn + lang * 0.7), m.y1 + sn * (vorn + lang * 0.7));
+    this.tweens.add({ targets: g, alpha: 0, duration: schrot ? 90 : 110, onComplete: () => g.destroy() });
+    const blitz = this.add.circle(m.x1 + c * vorn, m.y1 + sn * vorn, gewehr ? 8 : 6, 0xfff59d, 0.9).setDepth(7);
+    this.tweens.add({ targets: blitz, alpha: 0, scale: 1.7, duration: 100, onComplete: () => blitz.destroy() });
   }
 
   stoss(m) {
     const g = this.add.graphics().setDepth(7);
-    if (m.sense) { g.lineStyle(4, 0xe0e0e0, 0.9).beginPath().arc(m.x, m.y, 52, m.w - 1.1, m.w + 1.1).strokePath(); g.lineStyle(2, 0x8d6e63, 0.9).beginPath().arc(m.x, m.y, 40, m.w - 0.9, m.w + 0.9).strokePath(); }
+    if (m.sense) { g.lineStyle(4, 0xe0e0e0, 0.9).beginPath().arc(m.x, m.y, 52, m.w - 1.4, m.w + 1.4).strokePath(); g.lineStyle(2, 0x8d6e63, 0.9).beginPath().arc(m.x, m.y, 40, m.w - 1.2, m.w + 1.2).strokePath(); }
     else if (m.messer) g.lineStyle(2, 0xeceff1, 0.95).beginPath().arc(m.x, m.y, 24, m.w - 0.5, m.w + 0.5).strokePath();
     else g.lineStyle(m.schlag ? 5 : 3, m.schlag ? 0xd7ccc8 : 0xffffff, 0.85).beginPath().arc(m.x, m.y, m.schlag ? 34 : 26, m.w - 0.8, m.w + 0.8).strokePath();
     this.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });

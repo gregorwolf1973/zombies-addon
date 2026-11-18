@@ -112,41 +112,36 @@ export function zeichneFlaechen(ctx, welt, rect) {
 // ---------- Straßen und Wege ----------
 const AUTO = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
 const MITTELLINIE = new Set(['primary', 'secondary', 'tertiary']);
+const fahrbahn = l => l.b * (l.t === 'service' ? 0.8 : 0.72);   // sichtbare Fahrbahnbreite (schmaler als das begehbare Raster)
 export function zeichneStrassen(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect), m = musterHolen(ctx);
   const hier = v.linien.filter(l => schneidet(l.box, r) && l.pts.length > 1);
   ctx.save();
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  // 1. Wege (Kies/Pflaster) ganz unten
+  // Stil wie im Prototyp: schmale Fahrbahn mit dunkler Kante, Gehweg nur angedeutet, Fußwege als helle Linien
+  // 1. Fußwege und Feldwege
   for (const l of hier) {
     if (AUTO.has(l.t) || l.t === 'service' || l.t === 'pedestrian') continue;
     pfad(ctx, l.pts);
-    ctx.strokeStyle = 'rgba(70,60,40,.35)'; ctx.lineWidth = (l.t === 'footway' ? 0.75 : 0.9) * K + 3; ctx.stroke();
-    ctx.strokeStyle = l.t === 'footway' || l.t === 'cycleway' ? m.pflaster : m.kies; ctx.lineWidth = (l.t === 'footway' ? 0.75 : 0.9) * K; ctx.stroke();
+    ctx.strokeStyle = 'rgba(60,50,30,.25)'; ctx.lineWidth = 9; ctx.stroke();
+    ctx.strokeStyle = l.t === 'track' ? '#c9b98f' : '#d8cfb0'; ctx.lineWidth = 6; ctx.stroke();
   }
-  // 2. Bordstein und Gehwege der Fahrstraßen
+  // 2. angedeuteter Gehweg
   for (const l of hier) {
-    if (!AUTO.has(l.t) && l.t !== 'pedestrian') continue;
-    pfad(ctx, l.pts);
-    ctx.strokeStyle = '#8f8a7f'; ctx.lineWidth = l.b + 1.5 * K; ctx.stroke();
-    ctx.strokeStyle = m.gehweg; ctx.lineWidth = l.b + 1.4 * K - 2; ctx.stroke();
+    if (!AUTO.has(l.t)) continue;
+    pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(200,194,178,.55)'; ctx.lineWidth = fahrbahn(l) + 14; ctx.stroke();
   }
-  // 3. Fahrbahn (Zufahrten schmal ohne Gehweg)
-  for (const l of hier) {
-    if (l.t === 'pedestrian') continue;
-    if (!AUTO.has(l.t) && l.t !== 'service') continue;
-    pfad(ctx, l.pts);
-    if (l.t === 'service') { ctx.strokeStyle = 'rgba(40,40,40,.4)'; ctx.lineWidth = l.b + 3; ctx.stroke(); }
-    else { ctx.strokeStyle = '#d8d4cc'; ctx.lineWidth = l.b + 4; ctx.stroke(); }   // Bordsteinkante
-    ctx.strokeStyle = m.asphalt; ctx.lineWidth = l.b; ctx.stroke();
-  }
-  for (const l of hier) if (l.t === 'pedestrian') { pfad(ctx, l.pts); ctx.strokeStyle = m.pflaster; ctx.lineWidth = l.b + K; ctx.stroke(); }
-  // 4. Markierung: Randlinien und gestrichelte Mittellinie
+  for (const l of hier) if (l.t === 'pedestrian') { pfad(ctx, l.pts); ctx.strokeStyle = m.pflaster; ctx.lineWidth = l.b; ctx.stroke(); }
+  // 3. dunkle Kanten aller Fahrbahnen zuerst, dann der Asphalt – so bleiben Kreuzungen sauber
+  const fahr = hier.filter(l => AUTO.has(l.t) || l.t === 'service');
+  for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = '#34363a'; ctx.lineWidth = fahrbahn(l) + 5; ctx.stroke(); }
+  for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = m.asphalt; ctx.lineWidth = fahrbahn(l); ctx.stroke(); }
+  // 4. Mittellinie nur auf großen Straßen
   for (const l of hier) {
     if (!MITTELLINIE.has(l.t)) continue;
     pfad(ctx, l.pts);
-    ctx.setLineDash([22, 26]); ctx.lineCap = 'butt';
-    ctx.strokeStyle = 'rgba(240,240,235,.75)'; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.setLineDash([14, 14]); ctx.lineCap = 'butt';
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.8; ctx.stroke();
     ctx.setLineDash([]); ctx.lineCap = 'round';
   }
   ctx.restore();
@@ -279,7 +274,7 @@ export function laternen(welt) {
     for (let i = 0; i + 1 < l.pts.length; i++) {
       const [ax, ay] = l.pts[i], [bx, by] = l.pts[i + 1], len = Math.hypot(bx - ax, by - ay);
       if (len < 1) continue;
-      const nx = -(by - ay) / len, ny = (bx - ax) / len, off = l.b / 2 + 0.5 * K;
+      const nx = -(by - ay) / len, ny = (bx - ax) / len, off = fahrbahn(l) / 2 + 0.35 * K;
       for (let d = rest; d < len; d += ABSTAND) {
         const x = ax + (bx - ax) * d / len + nx * off * seite, y = ay + (by - ay) * d / len + ny * off * seite;
         if (!liste.some(q => Math.abs(q.x - x) < 4 * K && Math.abs(q.y - y) < 4 * K)) liste.push({ x, y, nx: -nx * seite, ny: -ny * seite });
