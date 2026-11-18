@@ -374,6 +374,13 @@ function zeichneMoebel(ctx, m) {
   const rand = () => { ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.5; ctx.strokeRect(x + 2.5, y + 2.5, b - 5, h - 5); };
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + 5, y + 6, b - 6, h - 6);
   switch (m.art) {
+    case 'regal_lang': {
+      k('#8d8d8d', x + 3, y + 2, b - 6, h - 4, 2);
+      const waren = ['#e53935', '#fdd835', '#43a047', '#1e88e5', '#fb8c00', '#8e24aa'];
+      for (let i = 0; i < 9; i++) { ctx.fillStyle = waren[(m.x * 3 + m.y + i) % waren.length]; ctx.fillRect(x + 6 + (i % 2) * ((b - 12) / 2), y + 5 + Math.floor(i / 2) * ((h - 10) / 5), (b - 14) / 2, (h - 10) / 6); }
+      break;
+    }
+    case 'kasse': k('#5d4037', x + 2, y + 6, b - 4, h - 12, 3); k('#263238', x + b - 22, y + 9, 14, 10, 2); ctx.fillStyle = '#80cbc4'; ctx.fillRect(x + b - 20, y + 11, 10, 4); break;
     case 'bett': k('#6d4c41', x + 2, y + 2, b - 4, h - 4); k('#eceff1', x + 5, y + 5, b - 10, 14); k('#5c8fd6', x + 5, y + 22, b - 10, h - 27); break;
     case 'sofa': k('#6a4f9c', x + 2, y + 2, b - 4, h - 4, 6); k('#8064b8', x + 7, y + 9, b - 14, h - 14, 4); break;
     case 'couchtisch': case 'esstisch': k('#8d6e63', x + 4, y + 4, b - 8, h - 8, 4); k('#a1887f', x + 7, y + 7, b - 14, h - 14, 3); break;

@@ -3,6 +3,8 @@
 import { KACHEL, BREITE, HOEHE, T, zufall } from './welt.mjs';
 
 export const MOEBEL_NAMEN = {
+  regal_lang: 'Ladenregal',
+  kasse: 'Kasse',
   sofa: 'Sofa',
   couchtisch: 'Couchtisch',
   schrank: 'Schrank',
@@ -22,7 +24,7 @@ export const MOEBEL_NAMEN = {
   alter_schrank: 'Alter Schrank',
 };
 
-const BEHAELTER_ARTEN = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe']);
+const BEHAELTER_ARTEN = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang']);
 
 // Hilfsfunktion: Index im Raster
 function idx(x, y) {
@@ -145,7 +147,7 @@ function platziereMoebel(kacheln, moebelListe, behaelterListe, art, x, y, b, h, 
 
   // Behälter hinzufügen
   if (BEHAELTER_ARTEN.has(art)) {
-    const behaelterArt = art === 'kiste' ? 'spind' : (art === 'alter_schrank' || art === 'garderobe' || art === 'kommode' ? 'schrank' : art);
+    const behaelterArt = art === 'regal_lang' ? 'laden' : art === 'kiste' ? 'spind' : (art === 'alter_schrank' || art === 'garderobe' || art === 'kommode' ? 'schrank' : art);
     // Pixelmitte der Kachel, die an Boden grenzt
     // (Claude) Kachel des Möbels mit Boden daneben suchen; ohne Zugang kein Behälter
     let bx = -1, by = -1;
@@ -173,7 +175,7 @@ function platziereMoebel(kacheln, moebelListe, behaelterListe, art, x, y, b, h, 
 
 // (Claude) Position für ein Möbelstück: bündig an einer Wand (ganze Seite liegt an), davor ein freier
 // Streifen Boden. Tische stehen frei im Raum, aber mit einem Ring freien Bodens rundherum.
-const FREISTEHEND = new Set(['esstisch', 'couchtisch']);
+const FREISTEHEND = new Set(['esstisch', 'couchtisch', 'regal_lang']);
 function findeMoebelPosition(kacheln, raum, moebelB, moebelH, ox, oy, hausB, hausH, rng, art) {
   const { x: rx, y: ry, b: rb, h: rh } = raum;
   const istWand = (x, y) => kacheln[idx(x, y)] === T.WAND;
@@ -207,7 +209,7 @@ function findeMoebelPosition(kacheln, raum, moebelB, moebelH, ox, oy, hausB, hau
   return kandidaten[Math.floor(rng() * kandidaten.length)];
 }
 
-export function baueInnenraum(seed, nr, stock, seite = 'unten') {   // seite: wo draußen die Haustür ist
+export function baueInnenraum(seed, nr, stock, seite = 'unten', laden = false) {   // laden: Geschäft mit Verkaufsraum und Lager   // seite: wo draußen die Haustür ist
   const rng = zufall(seed ^ Math.imul(nr + 1, 7919) ^ (stock === 'eg' ? 0 : stock === 'keller' ? 0x51ed : 0xa77e));
   const kacheln = new Uint8Array(BREITE * HOEHE).fill(T.LEER);
 
@@ -252,7 +254,8 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten') {   // seite: wo
   const queue = [initialRaum];
 
   let maxZimmer;
-  if (stock === 'eg') maxZimmer = 4 + Math.floor(rng() * 4); // 4-7
+  if (stock === 'eg' && laden) maxZimmer = 2;   // (Claude) Geschäft: Verkaufsraum + Lager
+  else if (stock === 'eg') maxZimmer = 4 + Math.floor(rng() * 4); // 4-7
   else if (stock === 'keller') maxZimmer = 2 + Math.floor(rng() * 3); // 2-4
   else maxZimmer = 1 + Math.floor(rng() * 3); // 1-3
 
@@ -269,7 +272,7 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten') {   // seite: wo
 
     // Entscheiden, ob geteilt wird
     // (Claude) bis zur Mindestzahl immer teilen
-    const mindest = stock === 'eg' ? 4 : stock === 'keller' ? 2 : 1;
+    const mindest = stock === 'eg' ? (laden ? 2 : 4) : stock === 'keller' ? 2 : 1;
     const teilen = raeume.length + queue.length < mindest || rng() < 0.7;
     if (!teilen) {
       raeume.push(raum);
@@ -504,7 +507,9 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten') {   // seite: wo
 
   // Zimmerarten zuweisen
   const raumTypen = new Array(raeume.length).fill('');
-  if (stock === 'eg') {
+  if (stock === 'eg' && laden) {
+    for (let i = 0; i < raeume.length; i++) raumTypen[i] = i === flurIndex ? 'verkaufsraum' : 'lager';
+  } else if (stock === 'eg') {
     raumTypen[flurIndex] = 'flur';
     const typen = ['wohnzimmer', 'kueche', 'schlafzimmer', 'bad', 'kinderzimmer', 'abstellraum'];
     let typIndex = 0;
@@ -662,6 +667,17 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten') {   // seite: wo
         break;
       case 'heizungsraum':
         moebelArten.push({ art: 'heizung', b: 2, h: 1 });
+        moebelArten.push({ art: 'kiste', b: 1, h: 1 });
+        break;
+      case 'verkaufsraum':
+        // Regalreihen und eine Kasse am Eingang
+        moebelArten.push({ art: 'kasse', b: 2, h: 1 });
+        for (let i = 0; i < 8; i++) moebelArten.push({ art: 'regal_lang', b: 1, h: 3 });
+        break;
+      case 'lager':
+        moebelArten.push({ art: 'regal', b: 1, h: 2 });
+        moebelArten.push({ art: 'regal', b: 1, h: 2 });
+        moebelArten.push({ art: 'kiste', b: 1, h: 1 });
         moebelArten.push({ art: 'kiste', b: 1, h: 1 });
         break;
       case 'dachboden':

@@ -87,3 +87,21 @@ for (const seed of [1, 42, 1234]) {
     assert.ok(verschlossen >= 3 && verschlossen < tueren * 0.5, `verschlossen ${verschlossen}/${tueren}`);
   });
 }
+
+test('Läden: Verkaufsraum mit Regalreihen und Kasse, Regale durchsuchbar', () => {
+  let regale = 0;
+  for (let nr = 0; nr < 8; nr++) {
+    const r = baueInnenraum(5, nr, 'eg', ['unten', 'oben', 'links', 'rechts'][nr % 4], true);
+    assert.ok(r.raeume.some(x => x.typ === 'verkaufsraum'), 'kein Verkaufsraum');
+    assert.ok(r.moebel.some(m => m.art === 'kasse') || r.moebel.filter(m => m.art === 'regal_lang').length >= 2, 'keine Ladeneinrichtung');
+    regale += r.behaelter.filter(b => b.art === 'laden').length;
+    // alle Bodenkacheln erreichbar (gleiche Prüfung wie bei Wohnhäusern, ohne Behälterart-Prüfung)
+    const GEH = new Set([T.BODEN, T.TUER_OFFEN, T.INNENTUER, T.AUSGANG, T.TREPPE_RUNTER, T.TREPPE_HOCH]);
+    const sx = Math.floor(r.start.x / KACHEL), sy = Math.floor(r.start.y / KACHEL);
+    const seen = new Set([sy * BREITE + sx]), q = [[sx, sy]];
+    for (let i = 0; i < q.length; i++) { const [x, y] = q[i]; for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) { const k = ny * BREITE + nx; if (!seen.has(k) && GEH.has(r.hole(nx, ny))) { seen.add(k); q.push([nx, ny]); } } }
+    let ges = 0; for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) if (GEH.has(r.hole(x, y))) ges++;
+    assert.equal(seen.size, ges, `Laden ${nr}: ${ges - seen.size} Kacheln nicht erreichbar`);
+  }
+  assert.ok(regale >= 12, `nur ${regale} Regale in 8 Läden`);
+});

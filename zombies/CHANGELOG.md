@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0 – 18.11.2026
+
+- Geschäfte: Verkaufsraum mit Regalreihen und Kasse, dahinter ein Lager
+- Funde je Ladenart: Lebensmittel (PENNY, Getränkemarkt …) Konserven/Wasser/Schokoriegel, Apotheke und Drogerie
+  (Rehmaus Apotheke, Rossmann) Verbände/Spritzen, Kaufhaus (TEDi, Woolworth, Spielwaren …) große Rucksäcke,
+  Taschenlampen, Seile, Kleidung, Messer, Gaststätten Essen/Wasser/Messer
+- Namen der Geschäfte und Einrichtungen stehen auf den Dächern
+
 ## 0.11.0 – 18.11.2026
 
 - Phase C: Geretsried-Stadtmitte aus OpenStreetMap (etwa 1,1 × 0,8 km, 281 × 208 Kacheln à 4 m) ist die neue Standardkarte

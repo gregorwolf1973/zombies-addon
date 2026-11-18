@@ -50,6 +50,12 @@ test('Geretsried im Spiel: Zombies nur in der Nähe, Haus betreten', async () =>
     assert.ok(await bis(() => raum.state.zombies.size > 5, 4000), 'keine Zombies');
     const weit = [...raum.state.zombies.values()].filter(z => !z.ebene && Math.hypot(z.x - p.x, z.y - p.y) > 1600).length;
     assert.equal(weit, 0, 'Zombies weit weg erzeugt');
+    // Geschäfte: PENNY mit Lebensmittelregalen, Apotheke mit Apothekenregalen
+    const penny = raum.welt.haeuser.find(h => /penny/i.test(h.name));
+    assert.ok(penny, 'PENNY fehlt');
+    assert.ok(raum.wv(`h${penny.nr}eg`).behaelter.some(b => b.art === 'laden_lebensmittel'), 'PENNY ohne Lebensmittelregal');
+    const apo = raum.welt.haeuser.find(h => /apotheke/i.test(h.name));
+    assert.ok(raum.wv(`h${apo.nr}eg`).behaelter.some(b => b.art === 'laden_apotheke'), 'Apotheke ohne Regal');
     // Haus betreten (Tür in beliebiger Richtung)
     const h = raum.welt.haeuser.find(h => h.betretbar);
     p.x = (h.tuer.x + 0.5 + h.raus.dx) * KACHEL; p.y = (h.tuer.y + 0.5 + h.raus.dy) * KACHEL;

@@ -9,6 +9,18 @@ export let BREITE = 64;
 export let HOEHE = 48;
 export function setzeKartengroesse(b, h) { BREITE = b; HOEHE = h; }
 // Seite der Haustür für den Innenraum-Generator (aus der Austrittsrichtung)
+// Art eines Gebäudes für Einrichtung und Funde (aus den OSM-Tags shop/amenity)
+const LADEN_ARTEN = {
+  lebensmittel: ['supermarket', 'beverages', 'convenience', 'bakery', 'butcher', 'kiosk', 'greengrocer'],
+  apotheke: ['pharmacy', 'chemist', 'doctors', 'dentist', 'medical_supply'],
+  kaufhaus: ['variety_store', 'department_store', 'toys', 'clothes', 'sports', 'shoes', 'outdoor', 'second_hand', 'bag', 'hardware', 'doityourself'],
+  gaststaette: ['restaurant', 'cafe', 'fast_food', 'bar', 'pub', 'ice_cream'],
+};
+export function ladenArt(h) {
+  const a = h?.art ?? '';
+  for (const [kat, liste] of Object.entries(LADEN_ARTEN)) if (liste.includes(a)) return kat;
+  return '';
+}
 export function seiteVon(h) {
   const r = h?.raus ?? { dx: 0, dy: 1 };
   return r.dy < 0 ? 'oben' : r.dy > 0 ? 'unten' : r.dx < 0 ? 'links' : 'rechts';
@@ -356,12 +368,18 @@ export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
 export const LEICHEN_MAX = 30;
 export const RUCKSACK_PLAETZE = 8;   // Grundausstattung; größere Taschen erhöhen p.plaetze
 export const KISTE_PLAETZE = 24;
-export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus' };
+export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
+  laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
   schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', null, null],
   spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', null, null],
   auto: ['wasser', 'verband', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'brechstange', null],
+  laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
+  laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
+  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', null],
+  laden_gaststaette: ['essen', 'essen', 'wasser', 'wasser', 'messer', 'schokoriegel', null],
+  laden: ['essen', 'wasser', 'schokoriegel', null, null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
 };
 export const MUNITION_PRO_FUND = 12;

@@ -1,6 +1,6 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn, setzeKartengroesse, seiteVon,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn, setzeKartengroesse, seiteVon, ladenArt,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, TAUSCH_ABSTAND,
 } from './welt.mjs';
@@ -333,6 +333,14 @@ class Ort extends Phaser.Scene {
       const bild = this.add.image(h.x * KACHEL - DACH_RAND, h.y * KACHEL - DACH_RAND, schluessel).setOrigin(0).setDepth(5.2);
       return { haus: h, grafik: bild };
     });
+    // Namen der Geschäfte und Einrichtungen auf den Dächern (OSM)
+    for (const h of this.welt.haeuser) {
+      if (!h.name || h.safe) continue;
+      this.add.text((h.x + h.b / 2) * KACHEL, (h.y + h.h / 2) * KACHEL, h.name, {
+        fontSize: '11px', fontStyle: 'bold', color: '#fff8e1', stroke: '#3e2723', strokeThickness: 3, align: 'center',
+        wordWrap: { width: Math.max(80, h.b * KACHEL) },
+      }).setOrigin(0.5).setDepth(6);
+    }
     // Schilder und Barrikaden der Safe Rooms
     this.barrikaden = new Map();
     for (const s of this.welt.safeRooms) {
@@ -424,7 +432,9 @@ class Ort extends Phaser.Scene {
     if (!w) {
       const m = EBENE_MUSTER.exec(ebene);
       const haus = this.welt.haeuser[Number(m[1])];
-      w = baueInnenraum(raum.state.seed, Number(m[1]), m[2], seiteVon(haus));
+      const kat = ladenArt(haus);
+      w = baueInnenraum(raum.state.seed, Number(m[1]), m[2], seiteVon(haus), !!kat);
+      if (kat) w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; });
       w.ebene = ebene; w.nr = Number(m[1]); w.stock = m[2];
       w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
       this.innenWelten.set(ebene, w);

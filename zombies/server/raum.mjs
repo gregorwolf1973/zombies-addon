@@ -11,7 +11,7 @@ import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen,
   bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
-  BLOCKIERT, ziehe, setzeKartengroesse, seiteVon, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
+  BLOCKIERT, ziehe, setzeKartengroesse, seiteVon, ladenArt, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
 } from '../client/welt.mjs';
 
 export const Spieler = schema({
@@ -472,7 +472,9 @@ export class SpielRaum extends Room {
     const m = EBENE_MUSTER.exec(ebene);
     if (!m) return this.welt;
     const haus = this.welt.haeuser[Number(m[1])];
-    const w = baueInnenraum(this.state.seed, Number(m[1]), m[2], seiteVon(haus));
+    const kat = ladenArt(haus);
+    const w = baueInnenraum(this.state.seed, Number(m[1]), m[2], seiteVon(haus), !!kat);
+    if (kat) w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; });
     w.ebene = ebene; w.nr = Number(m[1]); w.stock = m[2];
     w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
     w.safeRooms = [];

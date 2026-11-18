@@ -59,7 +59,7 @@ If you expose the game to the internet (reverse proxy or Cloudflare Tunnel, WebS
 The map is generated from a seed on both sides, so only the game state travels over the network (20 updates per second).
 
 ```sh
-cd zombies && npm install && npm test   # 53 tests
+cd zombies && npm install && npm test   # 56 tests
 npm start                               # http://localhost:2567
 ```
 
