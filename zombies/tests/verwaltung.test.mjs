@@ -50,3 +50,10 @@ test('Einstellungen bereinigen: Unsinn wird zu gültigen Werten', () => {
   assert.equal(e.karte, 'geretsried'); assert.equal(e.bots, 0); assert.equal(e.zombies.dichte, 10);
   assert.equal(e.test.zeitraffer, 1); assert.deepEqual(e.test.unsterblich, []);
 });
+
+test('Töne: Ereignisse und Zuordnung werden bereinigt', () => {
+  const e = bereinige({ toene: { zombieTod: { dateien: ['ok.mp3', '../böse.mp3', 'x.exe', 'ok.mp3'], laut: 300 }, unbekannt: { dateien: ['a.mp3'] } } });
+  assert.deepEqual(e.toene.zombieTod, { dateien: ['ok.mp3'], laut: 100 });
+  assert.ok(!('unbekannt' in e.toene));
+  assert.deepEqual(e.toene.stadt.dateien, []);
+});

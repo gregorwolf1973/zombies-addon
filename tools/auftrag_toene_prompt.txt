@@ -1,0 +1,29 @@
+Schreibe ein eigenständiges HTML-Stück (KEINE ganze Seite): genau ein `<section class="karte" id="toeneKarte" aria-labelledby="titelToene">…</section>`, danach ein `<style>`-Block (alle Regeln mit `#toeneKarte` davor) und ein `<script>`-Block (in einer IIFE, keine globalen Variablen). Es wird in eine bestehende deutsche Einstellungsseite eingefügt. Vorhandene CSS-Variablen benutzen: --card, --text, --text-soft, --border, --akzent, --akzent-text, --gefahr, --chip, --track. Die Seite hat schon allgemeine Stile für `button`, `input`, `select`, `.karte`, `h2`. Vanilla JS, keine externen Ressourcen, Texte mit textContent (Dateinamen sind Benutzereingaben → nie innerHTML mit Daten). Alle URLs RELATIV ohne führenden Schrägstrich.
+
+ZWECK: Geräusche (Tondateien) bestimmten Spielereignissen zuordnen.
+
+API
+GET `verwaltung/api` → JSON, daraus brauchst du:
+{
+ "einstellungen": { "toene": { "zombieTod": { "dateien": ["a.mp3"], "laut": 80 }, "stadt": { "dateien": [], "laut": 50 } } },
+ "toene": [ { "datei": "a.mp3", "groesse": 253000, "quelle": "mitgeliefert" }, { "datei": "b.mp3", "groesse": 120000, "quelle": "hochgeladen" } ],
+ "ereignisse": [ { "id": "zombieTod", "name": "Zombie stirbt", "beschreibung": "…", "art": "einmal", "bald": false },
+                 { "id": "zombielandNacht", "name": "Zombieland (Nacht)", "beschreibung": "…", "art": "schleife", "bald": true } ]
+}
+POST `verwaltung/api` mit JSON {"toene": {"<id>": {"dateien": [...], "laut": 0-100}}} speichert (nur das geänderte Ereignis schicken). Antwort wie GET.
+POST `verwaltung/ton` zum Hochladen: Body = die rohe Datei (fetch mit body: file), Header `x-dateiname`: encodeURIComponent(file.name). Erlaubt mp3/ogg/wav/m4a bis 8 MB (vorher im Browser prüfen und Fehler zeigen). Antwort wie GET oder {"fehler": "…"} mit Status 400.
+DELETE `verwaltung/ton/<encodeURIComponent(datei)>` löscht eine hochgeladene Datei. Antwort wie GET.
+Abspielen zum Probehören: `new Audio('toene/' + encodeURIComponent(datei))`.
+
+AUFBAU
+- Überschrift „🔊 Geräusche“, darunter kurzer Hinweis: „Ordne jedem Ereignis eine oder mehrere Tondateien zu – bei mehreren wird zufällig gewählt. Ohne Zuordnung erzeugt das Spiel einen eigenen Ton.“
+- Für jedes Ereignis (Reihenfolge wie in `ereignisse`) ein Block:
+  - Name fett, rechts klein „Schleife“ oder „einmalig“; wenn bald=true ein grauer Hinweis „kommt mit Tag und Nacht“.
+  - Beschreibung klein darunter.
+  - Liste der Dateien als Ankreuzfelder (eine Zeile je Datei aus `toene`, mit Label = Dateiname gekürzt auf 40 Zeichen mit …, title = voller Name), angekreuzt = in `dateien` enthalten. Bei vielen Dateien: Liste mit max-height 180px und eigenem Scrollen. Neben jeder Datei ein kleiner ▶-Knopf zum Probehören (läuft gerade etwas, zuerst stoppen; nochmal drücken = Stopp ■).
+  - Schieberegler „Lautstärke“ 0–100 mit Anzeige „80 %“; beim Probehören diese Lautstärke verwenden (audio.volume = laut/100).
+  - Ändern eines Ankreuzfelds oder Loslassen des Reglers speichert sofort per POST nur dieses Ereignis.
+- Unten Bereich „Dateien“: Liste aller Dateien mit Größe (KB/MB, deutsche Schreibweise), Quelle („mitgeliefert“ grau / „hochgeladen“), ▶ Probehören, bei hochgeladenen ein „Löschen“-Knopf mit confirm(). Darunter Knopf „Tondatei hochladen …“ (verstecktes input type=file accept=".mp3,.ogg,.wav,.m4a,audio/*", multiple) – lädt nacheinander hoch, zeigt Fortschritt „Lade 2 von 3 …“.
+- Rückmeldung: kleine Statuszeile in der Karte („✓ Gespeichert“ grün 2 s, Fehler rot).
+- Beim Laden einmal GET und alles aufbauen; nach jedem POST/DELETE/Upload mit der Antwort neu aufbauen. Kein automatisches Neuladen im Intervall.
+- Handy-tauglich (ab 360 px), Knöpfe mindestens 36 px hoch, Ankreuzfelder groß genug zum Tippen.

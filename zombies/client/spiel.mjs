@@ -83,7 +83,7 @@ try {
   const m = sessionStorage.getItem('zob_meldung');
   if (m) { $('fehler').textContent = m; $('fehler').classList.add('gut'); sessionStorage.removeItem('zob_meldung'); }
 } catch {}
-fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; }).catch(() => {});
+fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; ton.toeneZuordnen(i.toene); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); mitspielen(); });
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
@@ -960,7 +960,7 @@ class Ort extends Phaser.Scene {
     if (this.stoehnZeit <= 0) {
       this.stoehnZeit = 1.5 + Math.random() * 3;
       const nahe = [...raum.state.zombies.values()].filter(z => (z.ebene ?? "") === this.aktEbene && Math.hypot(z.x - this.lokal.x, z.y - this.lokal.y) < 700);
-      if (nahe.length) { const z = nahe[Math.floor(Math.random() * nahe.length)]; ton.stoehnen(z.x, z.y, z.kriecht ? 0.35 : 0.55); }
+      if (nahe.length) { const z = nahe[Math.floor(Math.random() * nahe.length)]; ton.stoehnen(z.x, z.y, z.kriecht ? 0.35 : 0.55, z.kriecht); }
     }
   }
 

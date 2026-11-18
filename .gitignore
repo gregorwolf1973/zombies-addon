@@ -3,3 +3,4 @@ node_modules/
 tools/osm/roh_*.json
 tools/osm/*_test.json
 tools/kenney_roh/
+toene-lokal/

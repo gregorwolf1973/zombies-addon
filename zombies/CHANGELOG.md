@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.0 – 18.11.2026
+
+- Geräusche aus Tondateien: Auf der Einstellungsseite lassen sich Dateien hochladen, probehören und Ereignissen zuordnen
+  (Zombie stirbt, Kriecher, Zombie stöhnt, Zombie entdeckt dich, Stadtgeräusche, Zombieland Tag und Nacht, Nachteinbruch),
+  jeweils mit eigener Lautstärke; bei mehreren Dateien wird zufällig gewählt
+- Stadtgeräusche laufen draußen als Schleife (drinnen leise), ferne Zombies ertönen ab und zu aus wechselnder Richtung
+- Ohne Zuordnung bleibt es bei den im Browser erzeugten Tönen
+
 ## 0.14.0 – 18.11.2026
 
 - Einstellungsseite in der Seitenleiste „Zombies“: Zombies (Menge draußen, in Häusern, Tempo), Bots, Karte,

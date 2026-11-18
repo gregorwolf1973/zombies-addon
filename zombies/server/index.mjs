@@ -9,7 +9,7 @@ import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { SpielRaum } from './raum.mjs';
 import { Speicher } from './speicher.mjs';
-import { EinstellungsDatei, KARTEN, ZEITRAFFER } from './einstellungen.mjs';
+import { EinstellungsDatei, KARTEN, ZEITRAFFER, EREIGNISSE, TON_DATEI } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +40,11 @@ export async function starte({
   leise = false,
   datenbank = process.env.ZOMBIES_DB || '/data/zombies.db',
   einstellungsDatei = process.env.ZOMBIES_EINSTELLUNGEN ?? (datenbank === ':memory:' ? null : path.join(path.dirname(datenbank), 'einstellungen.json')),
+  // Tondateien: mitgelieferte liegen in /share (nicht im öffentlichen Repo – Lizenz), hochgeladene in /data
+  tonOrdner = [
+    { pfad: process.env.ZOMBIES_TOENE ?? '/share/zombies/toene', quelle: 'mitgeliefert' },
+    ...(datenbank === ':memory:' ? [] : [{ pfad: path.join(path.dirname(datenbank), 'toene'), quelle: 'hochgeladen', schreiben: true }]),
+  ],
 } = {}) {
   SpielRaum.speicher = new Speicher(datenbank);
   const app = express();
@@ -67,7 +72,36 @@ export async function starte({
     };
     SpielRaum.aktiv?.einstellungenGeaendert?.();
   };
+  // erste Zuordnung der Töne aus zuordnung.json im Tonordner, solange noch nichts zugeordnet ist
+  if (Object.values(datei.werte.toene).every(t => !t.dateien.length)) {
+    for (const o of tonOrdner) {
+      try { datei.aendern({ toene: JSON.parse(fs.readFileSync(path.join(o.pfad, 'zuordnung.json'), 'utf8')) }); break; } catch { /* keine */ }
+    }
+  }
   anwenden(datei.werte);
+
+  const toeneListe = () => {
+    const liste = new Map();
+    for (const o of tonOrdner) {
+      let namen = [];
+      try { namen = fs.readdirSync(o.pfad); } catch { continue; }
+      for (const n of namen) {
+        if (!TON_DATEI.test(n) || liste.has(n)) continue;
+        try { liste.set(n, { datei: n, groesse: fs.statSync(path.join(o.pfad, n)).size, quelle: o.quelle }); } catch { /* weg */ }
+      }
+    }
+    return [...liste.values()].sort((a, b) => a.datei.localeCompare(b.datei, 'de'));
+  };
+  const tonPfad = name => {
+    if (!TON_DATEI.test(name)) return null;
+    for (const o of tonOrdner) { const p = path.join(o.pfad, name); if (fs.existsSync(p)) return p; }
+    return null;
+  };
+  app.get('/toene/:datei', (req, res) => {
+    const p = tonPfad(req.params.datei);
+    if (!p) return res.status(404).end();
+    res.set('Cache-Control', 'public, max-age=86400').sendFile(p);
+  });
 
   // ---------- Verwaltung: nur über die HA-Seitenleiste (Ingress, schon bei HA angemeldet) ----------
   // (ZOMBIES_VERWALTUNG_LOKAL=1 erlaubt sie zum Testen auch von diesem Rechner aus)
@@ -87,12 +121,36 @@ export async function starte({
         drinnen: !!p.ebene, hp: Math.round(p.hp), verbunden: !!p.verbunden,
       })) : [],
       spielzeit: raum ? Math.round(raum.state.zeit) : 0,
+      toene: toeneListe(), ereignisse: EREIGNISSE,
       version: paketVersion,
     };
   };
   app.get('/verwaltung/api', nurIngress, (req, res) => res.json(lage()));
   app.post('/verwaltung/api', nurIngress, express.json({ limit: '20kb' }), (req, res) => {
     anwenden(datei.aendern(req.body ?? {}));
+    res.json(lage());
+  });
+  const hochladeOrdner = tonOrdner.find(o => o.schreiben);
+  app.post('/verwaltung/ton', nurIngress, express.raw({ type: () => true, limit: '8mb' }), (req, res) => {
+    let name = '';
+    try { name = decodeURIComponent(req.get('x-dateiname') ?? ''); } catch { /* unten */ }
+    name = path.basename(name).replace(/[^\w.()+\- ]/g, '_');
+    if (!hochladeOrdner) return res.status(400).json({ fehler: 'Hochladen hier nicht möglich' });
+    if (!TON_DATEI.test(name)) return res.status(400).json({ fehler: 'Nur MP3, OGG, WAV oder M4A' });
+    if (!req.body?.length) return res.status(400).json({ fehler: 'Leere Datei' });
+    try {
+      fs.mkdirSync(hochladeOrdner.pfad, { recursive: true });
+      fs.writeFileSync(path.join(hochladeOrdner.pfad, name), req.body);
+    } catch (e) { return res.status(400).json({ fehler: 'Speichern fehlgeschlagen: ' + e.message }); }
+    res.json(lage());
+  });
+  app.delete('/verwaltung/ton/:datei', nurIngress, (req, res) => {
+    const name = req.params.datei;
+    if (!hochladeOrdner || !TON_DATEI.test(name)) return res.status(400).json({ fehler: 'Unbekannte Datei' });
+    try { fs.unlinkSync(path.join(hochladeOrdner.pfad, path.basename(name))); } catch { return res.status(404).json({ fehler: 'Nur hochgeladene Dateien lassen sich löschen' }); }
+    // aus allen Zuordnungen entfernen
+    const toene = Object.fromEntries(Object.entries(datei.werte.toene).map(([id, t]) => [id, { ...t, dateien: t.dateien.filter(d => d !== name) }]));
+    anwenden(datei.aendern({ toene }));
     res.json(lage());
   });
   app.post('/verwaltung/neustart', nurIngress, express.json({ limit: '2kb' }), (req, res) => {
@@ -110,6 +168,7 @@ export async function starte({
   app.get('/info', (req, res) => res.json({
     code: !!SpielRaum.einstellungen.zugangscode && !req.get('x-ingress-path'),
     wiki: String(optionen.wiki_adresse ?? '').trim(),
+    toene: datei.werte.toene,
   }));
   app.use(nocache, express.static(path.join(hier, '..', 'client'), { extensions: ['html'] }));
 

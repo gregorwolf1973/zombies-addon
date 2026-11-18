@@ -6,6 +6,19 @@ import { DINGE } from '../client/welt.mjs';
 
 export const KARTEN = ['geretsried', 'dorf'];
 export const ZEITRAFFER = [1, 5, 10, 60];
+export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
+
+// Spielereignisse, denen auf der Einstellungsseite Tondateien zugeordnet werden
+export const EREIGNISSE = [
+  { id: 'zombieTod', name: 'Zombie stirbt', beschreibung: 'Wenn ein Zombie erledigt wird', art: 'einmal' },
+  { id: 'kriecher', name: 'Kriecher', beschreibung: 'Stöhnen kriechender Zombies in der Nähe', art: 'einmal' },
+  { id: 'stoehnen', name: 'Zombie stöhnt', beschreibung: 'Stöhnen gehender Zombies in der Nähe', art: 'einmal' },
+  { id: 'entdeckt', name: 'Zombie entdeckt dich', beschreibung: 'Schrei, wenn ein Zombie zu jagen beginnt', art: 'einmal' },
+  { id: 'stadt', name: 'Stadtgeräusche', beschreibung: 'Hintergrund draußen (Verkehr in der Ferne)', art: 'schleife' },
+  { id: 'zombielandTag', name: 'Zombieland (Tag)', beschreibung: 'Ferne Zombies tagsüber – kurze Töne kommen ab und zu aus wechselnder Richtung', art: 'schleife' },
+  { id: 'zombielandNacht', name: 'Zombieland (Nacht)', beschreibung: 'Ferne Zombies und Schreie in der Nacht', art: 'schleife', bald: true },
+  { id: 'nachteinbruch', name: 'Nachteinbruch', beschreibung: 'Einmal, wenn es dunkel wird', art: 'einmal', bald: true },
+];
 
 const zahl = (v, min, max, vorgabe) => {
   const n = Number(v);
@@ -19,6 +32,15 @@ export function bereinige(e = {}, alt = {}) {
   const t = { ...a.test, ...(e.test ?? {}) };
   const funde = { ...a.funde };
   for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10));
+  const toene = {};
+  for (const ev of EREIGNISSE) {
+    const alt = a.toene?.[ev.id] ?? { dateien: [], laut: 80 }, neu = e.toene?.[ev.id] ?? {};
+    const dateien = Array.isArray(neu.dateien) ? neu.dateien : alt.dateien;
+    toene[ev.id] = {
+      dateien: [...new Set((dateien ?? []).map(String).filter(d => TON_DATEI.test(d)))].slice(0, 12),
+      laut: Math.round(zahl(neu.laut ?? alt.laut, 0, 100, 80)),
+    };
+  }
   return {
     zugangscode: String(e.zugangscode ?? a.zugangscode ?? '').trim().slice(0, 40),
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
@@ -30,6 +52,7 @@ export function bereinige(e = {}, alt = {}) {
       tempo: Math.round(zahl(z.tempo, 50, 150, 100)),    // Laufgeschwindigkeit in Prozent
     },
     funde,
+    toene,
     test: {
       zeitraffer: ZEITRAFFER.includes(Number(t.zeitraffer)) ? Number(t.zeitraffer) : 1,
       unsterblich: [...new Set((Array.isArray(t.unsterblich) ? t.unsterblich : []).map(n => String(n).trim().slice(0, 16)).filter(Boolean))].slice(0, 20),
@@ -43,6 +66,7 @@ export function vorgaben() {
     zombies: { dichte: 10, haeuser: 10, tempo: 100 },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     test: { zeitraffer: 1, unsterblich: [] },
+    toene: {},
   };
 }
 

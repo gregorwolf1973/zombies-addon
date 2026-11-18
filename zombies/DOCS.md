@@ -22,6 +22,10 @@ Alles Wichtige stellst du bequem in der Seitenleiste „Zombies“ ein. Änderun
   ein Mensch spielt), „Jede Spielrunde mit frischer Welt beginnen“, Zugangscode für Mitspieler von außen
 - **Fundhäufigkeit** je Gegenstand (10 = normal, 0 = nie, 20 = doppelt)
 - **Testwerkzeuge:** Unsterblichkeit je Spieler, Zeitraffer (gilt bis zum nächsten Add-on-Neustart)
+- **Geräusche:** Tondateien (MP3, OGG, WAV, M4A bis 8 MB) hochladen und Ereignissen zuordnen – Zombie stirbt, Kriecher,
+  Zombie stöhnt, Zombie entdeckt dich, Stadtgeräusche, Zombieland (Tag/Nacht), Nachteinbruch. Bei mehreren Dateien wird
+  zufällig gewählt, ohne Zuordnung erzeugt das Spiel selbst einen Ton. Mitgelieferte Töne liegen in `/share/zombies/toene`
+  (dort kann auch eine `zuordnung.json` als Startzuordnung liegen), hochgeladene in `/data/toene`.
 - **Welt neu starten:** Stadt beginnt neu (Kisten, Türen, Zombies); Rucksäcke bleiben, wenn gewünscht
 
 Gespeichert wird in `/data/einstellungen.json`. Die Add-on-Optionen (`karte`, `zombies`, `funde`, `zugangscode`, `bots`)

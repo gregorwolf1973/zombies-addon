@@ -10,6 +10,71 @@ try { an = localStorage.getItem('zombies_ton') !== 'aus'; } catch { /* ohne Spei
 
 export function tonAn() { return an; }
 
+// ---------- Tondateien (auf der Einstellungsseite Ereignissen zugeordnet) ----------
+let zuordnung = {};                 // Ereignis → { dateien, laut }
+const puffer = new Map();           // Datei → AudioBuffer | Promise | null (fehlt)
+let drinnenJetzt = false, nachtJetzt = false;
+const hintergrund = { stadt: null, streuTimer: 0 };
+
+export function toeneZuordnen(z) { zuordnung = z && typeof z === 'object' ? z : {}; if (ctx) vorladen(); }
+
+function laden(datei) {
+  if (puffer.has(datei)) return puffer.get(datei);
+  const p = fetch('toene/' + encodeURIComponent(datei))
+    .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))
+    .then(b => new Promise((ok, fehl) => ctx.decodeAudioData(b, ok, fehl)))
+    .then(buf => { puffer.set(datei, buf); hintergrundPruefen(); return buf; })
+    .catch(() => { puffer.set(datei, null); return null; });
+  puffer.set(datei, p);
+  return p;
+}
+function vorladen() { for (const t of Object.values(zuordnung)) for (const d of t.dateien ?? []) laden(d); hintergrundPruefen(); }
+const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer ? b : null; };
+
+// eine zugeordnete Datei abspielen; false = keine da (dann erzeugt das Spiel selbst einen Ton)
+function probe(id, x, y, extra = 1) {
+  const t = zuordnung[id];
+  if (!ctx || !t?.dateien?.length) return false;
+  const bereit = t.dateien.map(geladen).filter(Boolean);
+  if (!bereit.length) { t.dateien.forEach(laden); return false; }
+  const z = ort(x, y, (t.laut ?? 80) / 100 * extra);
+  if (!z) return true;   // zu weit weg: still, aber auch kein Ersatzton
+  const src = ctx.createBufferSource(); src.buffer = bereit[Math.floor(Math.random() * bereit.length)];
+  src.playbackRate.value = 0.94 + Math.random() * 0.12;
+  src.connect(z); src.start();
+  return true;
+}
+
+export function ereignis(id, x = null, y = null) { return probe(id, x, y); }
+
+// Stadtgeräusche als Schleife; Zombieland: kurze Töne ab und zu aus wechselnder Richtung (lange Dateien als Schleife)
+function hintergrundPruefen() {
+  if (!ctx) return;
+  const t = zuordnung.stadt, buf = t?.dateien?.map(geladen).find(Boolean);
+  if (buf && !hintergrund.stadt) {
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const g = ctx.createGain(); g.gain.value = 0;
+    src.connect(g); g.connect(haupt); src.start(0, Math.random() * buf.duration);
+    hintergrund.stadt = { src, g };
+  }
+  if (hintergrund.stadt) hintergrund.stadt.g.gain.setTargetAtTime(((t?.laut ?? 50) / 100) * (drinnenJetzt ? 0.15 : 0.6), ctx.currentTime, 0.8);
+  if (wind) wind.gain.setTargetAtTime(drinnenJetzt ? 0.01 : hintergrund.stadt ? 0.025 : 0.07, ctx.currentTime, 0.8);
+}
+
+function streuen() {
+  hintergrund.streuTimer = setTimeout(streuen, 9000 + Math.random() * 16000);
+  if (!ctx || !an) return;
+  const id = nachtJetzt ? 'zombielandNacht' : 'zombielandTag';
+  const w = Math.random() * Math.PI * 2, d = 350 + Math.random() * 450;
+  probe(id, hx + Math.cos(w) * d, hy + Math.sin(w) * d, drinnenJetzt ? 0.6 : 1.8);
+}
+
+export function tageszeit(nacht) {
+  if (nacht === nachtJetzt) return;
+  nachtJetzt = nacht;
+  if (nacht) probe('nachteinbruch');
+}
+
 // erst nach einer Berührung/einem Klick erlaubt der Browser Ton
 export function tonStarten() {
   if (ctx) { ctx.resume?.(); return; }
@@ -22,6 +87,8 @@ export function tonStarten() {
   const d = rauschPuffer.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   hintergrundAufbauen();
+  vorladen();
+  if (!hintergrund.streuTimer) hintergrund.streuTimer = setTimeout(streuen, 6000);
 }
 
 export function tonUmschalten() {
@@ -86,13 +153,15 @@ export function stoss(x, y, messer) {
 }
 
 export function zombieWeg(x, y) {
+  if (probe('zombieTod', x, y)) return;
   const z = ort(x, y, 0.8); if (!z) return;
   rauschen(z, 0.3, { freq: 600, freqEnde: 120, laut: 0.7 });
   ton(z, 0.45, { typ: 'sawtooth', freq: 160, freqEnde: 55, laut: 0.18 });
 }
 
 // Stöhnen: tiefe Sägezahnstimme mit Formantfilter und Zittern
-export function stoehnen(x, y, laut = 0.5) {
+export function stoehnen(x, y, laut = 0.5, kriecht = false) {
+  if (probe(kriecht ? 'kriecher' : 'stoehnen', x, y, laut * 1.6)) return;
   const z = ort(x, y, laut); if (!z) return;
   const t = ctx.currentTime, dauer = 0.9 + Math.random() * 0.9, f0 = 75 + Math.random() * 45;
   const o = ctx.createOscillator(); o.type = 'sawtooth';
@@ -108,6 +177,7 @@ export function stoehnen(x, y, laut = 0.5) {
 }
 
 export function entdeckt(x, y) {
+  if (probe('entdeckt', x, y)) return;
   stoehnen(x, y, 0.9);
   const z = ort(x, y, 0.4); if (z) rauschen(z, 0.5, { typ: 'bandpass', freq: 1200, q: 2, laut: 0.4 });   // Fauchen
 }
@@ -169,8 +239,8 @@ function hintergrundAufbauen() {
 }
 
 export function umgebung(drinnen) {
+  drinnenJetzt = drinnen;
   if (!ctx) return;
-  const t = ctx.currentTime;
-  wind.gain.setTargetAtTime(drinnen ? 0.01 : 0.07, t, 0.8);
-  brumm.gain.setTargetAtTime(drinnen ? 0.035 : 0, t, 0.8);
+  brumm.gain.setTargetAtTime(drinnen ? 0.035 : 0, ctx.currentTime, 0.8);
+  hintergrundPruefen();
 }

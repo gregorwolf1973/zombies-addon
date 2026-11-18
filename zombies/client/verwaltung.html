@@ -522,6 +522,654 @@
   </section>
 
   <!-- Welt neu starten -->
+<section class="karte" id="toeneKarte" aria-labelledby="titelToene">
+  <h2 id="titelToene">🔊 Geräusche</h2>
+  <p class="tk-hinweis">Ordne jedem Ereignis eine oder mehrere Tondateien zu – bei mehreren wird zufällig gewählt. Ohne Zuordnung erzeugt das Spiel einen eigenen Ton.</p>
+
+  <div class="tk-status" id="tkStatus" role="status" aria-live="polite"></div>
+  <div class="tk-lade" id="tkLade">Wird geladen …</div>
+  <div id="tkEreignisse"></div>
+
+  <h3 class="tk-abschnitt">Dateien</h3>
+  <div class="tk-dateien" id="tkDateien"></div>
+
+  <div class="tk-upload">
+    <input type="file" id="tkFileInput" accept=".mp3,.ogg,.wav,.m4a,audio/*" multiple hidden>
+    <button type="button" id="tkUploadBtn" class="tk-btn">Tondatei hochladen …</button>
+  </div>
+</section>
+
+<style>
+  #toeneKarte { color: var(--text); }
+  #toeneKarte .tk-hinweis { color: var(--text-soft); font-size: 0.9rem; margin: 0 0 0.75rem; }
+  #toeneKarte .tk-lade { color: var(--text-soft); font-size: 0.9rem; padding: 0.5rem 0; }
+  #toeneKarte .tk-status { min-height: 1.3em; font-size: 0.9rem; margin-bottom: 0.5rem; }
+  #toeneKarte .tk-status.tk-ok { color: var(--akzent); }
+  #toeneKarte .tk-status.tk-fehler { color: var(--gefahr); }
+
+  #toeneKarte .tk-block {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    background: var(--card);
+  }
+  #toeneKarte .tk-block-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    justify-content: space-between;
+  }
+  #toeneKarte .tk-name { font-weight: 700; }
+  #toeneKarte .tk-art {
+    font-size: 0.8rem;
+    color: var(--text-soft);
+    background: var(--chip);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    white-space: nowrap;
+  }
+  #toeneKarte .tk-bald { font-size: 0.8rem; color: var(--text-soft); width: 100%; }
+  #toeneKarte .tk-beschreibung { font-size: 0.85rem; color: var(--text-soft); margin: 0.2rem 0 0.5rem; }
+
+  #toeneKarte .tk-dateiliste {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.25rem;
+    margin-bottom: 0.6rem;
+    background: var(--track);
+  }
+  #toeneKarte .tk-dateiliste.tk-leer { padding: 0.5rem; font-size: 0.85rem; color: var(--text-soft); }
+  #toeneKarte .tk-datei-zeile {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    padding: 0.1rem 0.25rem;
+    border-radius: 4px;
+  }
+  #toeneKarte .tk-datei-zeile:hover { background: var(--chip); }
+  #toeneKarte .tk-datei-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  #toeneKarte .tk-datei-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    margin: 0;
+    accent-color: var(--akzent);
+  }
+  #toeneKarte .tk-datei-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #toeneKarte .tk-play {
+    flex: 0 0 auto;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0 0.4rem;
+    font-size: 1rem;
+    line-height: 1;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--chip);
+    color: var(--text);
+    cursor: pointer;
+  }
+  #toeneKarte .tk-play:hover { border-color: var(--akzent); }
+  #toeneKarte .tk-play.tk-aktiv { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); }
+
+  #toeneKarte .tk-laut {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+  }
+  #toeneKarte .tk-laut input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 80px;
+    max-width: 260px;
+    accent-color: var(--akzent);
+    min-height: 36px;
+  }
+  #toeneKarte .tk-laut-wert {
+    min-width: 3em;
+    text-align: right;
+    color: var(--text-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #toeneKarte .tk-abschnitt { margin: 1.25rem 0 0.6rem; }
+
+  #toeneKarte .tk-dateien {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    margin-bottom: 0.75rem;
+  }
+  #toeneKarte .tk-datei-zeile-all {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    min-height: 44px;
+  }
+  #toeneKarte .tk-datei-zeile-all:last-child { border-bottom: 0; }
+  #toeneKarte .tk-datei-zeile-all .tk-datei-name {
+    flex: 1 1 100%;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #toeneKarte .tk-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+    flex: 1 1 auto;
+    font-size: 0.8rem;
+  }
+  #toeneKarte .tk-groesse { color: var(--text-soft); font-variant-numeric: tabular-nums; }
+  #toeneKarte .tk-quelle { color: var(--text-soft); }
+  #toeneKarte .tk-quelle.tk-hoch { color: var(--text); }
+
+  #toeneKarte .tk-btn {
+    min-height: 36px;
+    padding: 0.35rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--chip);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  #toeneKarte .tk-btn:hover { border-color: var(--akzent); }
+  #toeneKarte .tk-btn:disabled { opacity: 0.55; cursor: default; }
+  #toeneKarte .tk-loeschen {
+    min-height: 36px;
+    padding: 0.3rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--gefahr);
+    background: transparent;
+    color: var(--gefahr);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #toeneKarte .tk-loeschen:hover { background: var(--gefahr); color: var(--card); }
+  #toeneKarte .tk-upload { margin-top: 0.25rem; }
+
+  @media (max-width: 420px) {
+    #toeneKarte .tk-datei-zeile-all .tk-datei-name { flex: 1 1 100%; }
+  }
+</style>
+
+<script>
+(function () {
+  'use strict';
+
+  var API = 'verwaltung/api';
+  var UPLOAD = 'verwaltung/ton';
+  var TON_BASIS = 'toene/';
+  var MAX_BYTES = 8 * 1024 * 1024;
+
+  var card = document.getElementById('toeneKarte');
+  if (!card) return;
+  var elEreignisse = document.getElementById('tkEreignisse');
+  var elDateien = document.getElementById('tkDateien');
+  var elStatus = document.getElementById('tkStatus');
+  var elLade = document.getElementById('tkLade');
+  var fileInput = document.getElementById('tkFileInput');
+  var uploadBtn = document.getElementById('tkUploadBtn');
+
+  var daten = null;
+  var audio = null;
+  var audioDatei = null;
+  var statusTimer = null;
+  var speicherLaeuft = {};
+
+  function zeigeStatus(text, art) {
+    if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
+    elStatus.textContent = text || '';
+    elStatus.className = 'tk-status' + (art ? ' tk-' + art : '');
+    if (!art) return;
+    statusTimer = setTimeout(function () {
+      elStatus.textContent = '';
+      elStatus.className = 'tk-status';
+      statusTimer = null;
+    }, art === 'ok' ? 2000 : 4000);
+  }
+
+  function zeigeFehler(text) {
+    zeigeStatus(text || 'Unbekannter Fehler', 'fehler');
+  }
+
+  function kuerzen(name, max) {
+    if (name.length <= max) return name;
+    return name.slice(0, max - 1) + '…';
+  }
+
+  function groesseFormat(bytes) {
+    if (typeof bytes !== 'number' || !isFinite(bytes) || bytes < 0) return '';
+    if (bytes < 1024 * 1024) {
+      var kb = bytes / 1024;
+      return kb.toFixed(1).replace('.', ',') + ' KB';
+    }
+    var mb = bytes / (1024 * 1024);
+    return mb.toFixed(1).replace('.', ',') + ' MB';
+  }
+
+  function stoppeAudio() {
+    if (audio) {
+      try { audio.pause(); } catch (e) {}
+      audio = null;
+      audioDatei = null;
+    }
+    var kn = card.querySelectorAll('.tk-play.tk-aktiv');
+    for (var i = 0; i < kn.length; i++) {
+      kn[i].classList.remove('tk-aktiv');
+      kn[i].textContent = '▶';
+    }
+  }
+
+  function spiele(datei, lautProzent, knopf) {
+    var warAktiv = audioDatei === datei;
+    stoppeAudio();
+    if (warAktiv) return;
+    var a;
+    try {
+      a = new Audio(TON_BASIS + encodeURIComponent(datei));
+    } catch (e) {
+      zeigeFehler('Datei kann nicht abgespielt werden.');
+      return;
+    }
+    var l = typeof lautProzent === 'number' ? lautProzent : 100;
+    if (l < 0) l = 0;
+    if (l > 100) l = 100;
+    try { a.volume = l / 100; } catch (e) {}
+    a.addEventListener('ended', stoppeAudio);
+    a.addEventListener('error', function () {
+      if (audio === a) {
+        stoppeAudio();
+        zeigeFehler('Wiedergabe fehlgeschlagen: ' + datei);
+      }
+    });
+    audio = a;
+    audioDatei = datei;
+    if (knopf) {
+      knopf.classList.add('tk-aktiv');
+      knopf.textContent = '■';
+    }
+    var p = a.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(function () {
+        if (audio === a) {
+          stoppeAudio();
+          zeigeFehler('Wiedergabe fehlgeschlagen: ' + datei);
+        }
+      });
+    }
+  }
+
+  function machePlayKnopf(datei, lautFn) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tk-play';
+    b.textContent = '▶';
+    b.setAttribute('aria-label', 'Probehören: ' + datei);
+    if (audioDatei === datei) {
+      b.classList.add('tk-aktiv');
+      b.textContent = '■';
+    }
+    b.addEventListener('click', function () {
+      var l = lautFn ? lautFn() : 100;
+      spiele(datei, l, b);
+    });
+    return b;
+  }
+
+  function findeEinstellung(id) {
+    if (!daten || !daten.einstellungen || !daten.einstellungen.toene) return { dateien: [], laut: 100 };
+    var e = daten.einstellungen.toene[id];
+    if (!e) return { dateien: [], laut: 100 };
+    return {
+      dateien: Array.isArray(e.dateien) ? e.dateien.slice() : [],
+      laut: typeof e.laut === 'number' ? e.laut : 100
+    };
+  }
+
+  function speichereEreignis(id, objekt) {
+    if (!daten || speicherLaeuft[id]) return;
+    speicherLaeuft[id] = true;
+    var body = {};
+    body.toene = {};
+    body.toene[id] = {
+      dateien: objekt.dateien.slice(),
+      laut: objekt.laut
+    };
+    fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; });
+    }).then(function (res) {
+      if (!res.ok || !res.json || res.json.fehler) {
+        throw new Error((res.json && res.json.fehler) || ('Fehler ' + res.status));
+      }
+      daten = res.json;
+      neuAufbauen();
+      zeigeStatus('✓ Gespeichert', 'ok');
+    }).catch(function (err) {
+      zeigeFehler('Speichern fehlgeschlagen: ' + err.message);
+    }).then(function () {
+      speicherLaeuft[id] = false;
+    });
+  }
+
+  function baueEreignisBlock(ev) {
+    var einst = findeEinstellung(ev.id);
+    var block = document.createElement('div');
+    block.className = 'tk-block';
+
+    var kopf = document.createElement('div');
+    kopf.className = 'tk-block-kopf';
+    var name = document.createElement('span');
+    name.className = 'tk-name';
+    name.textContent = ev.name || ev.id;
+    var art = document.createElement('span');
+    art.className = 'tk-art';
+    art.textContent = ev.art === 'schleife' ? 'Schleife' : 'einmalig';
+    kopf.appendChild(name);
+    kopf.appendChild(art);
+    if (ev.bald) {
+      var bald = document.createElement('span');
+      bald.className = 'tk-bald';
+      bald.textContent = 'kommt mit Tag und Nacht';
+      kopf.appendChild(bald);
+    }
+    block.appendChild(kopf);
+
+    if (ev.beschreibung) {
+      var beschr = document.createElement('p');
+      beschr.className = 'tk-beschreibung';
+      beschr.textContent = ev.beschreibung;
+      block.appendChild(beschr);
+    }
+
+    var liste = dokumentListe();
+    var dateienLaut = function () { return einst.laut; };
+    if (!daten.toene || daten.toene.length === 0) {
+      var leer = document.createElement('div');
+      leer.className = 'tk-dateiliste tk-leer';
+      leer.textContent = 'Noch keine Tondateien vorhanden.';
+      block.appendChild(leer);
+    } else {
+      var box = document.createElement('div');
+      box.className = 'tk-dateiliste';
+      for (var i = 0; i < daten.toene.length; i++) {
+        var datei = daten.toene[i].datei;
+        var zeile = document.createElement('div');
+        zeile.className = 'tk-datei-zeile';
+
+        var label = document.createElement('label');
+        label.className = 'tk-datei-label';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = einst.dateien.indexOf(datei) !== -1;
+        cb.value = datei;
+        cb.addEventListener('change', function (dateiname, istAktiv) {
+          var idx = einst.dateien.indexOf(dateiname);
+          if (istAktiv && idx === -1) einst.dateien.push(dateiname);
+          else if (!istAktiv && idx !== -1) einst.dateien.splice(idx, 1);
+          speichereEreignis(ev.id, einst);
+        }.bind(null, datei, cb.checked));
+        var txt = document.createElement('span');
+        txt.className = 'tk-datei-text';
+        txt.textContent = kuerzen(datei, 40);
+        txt.title = datei;
+        label.appendChild(cb);
+        label.appendChild(txt);
+
+        zeile.appendChild(label);
+        zeile.appendChild(machePlayKnopf(datei, dateienLaut));
+        box.appendChild(zeile);
+      }
+      block.appendChild(box);
+    }
+
+    var laut = document.createElement('div');
+    laut.className = 'tk-laut';
+    var lautLabel = document.createElement('label');
+    lautLabel.textContent = 'Lautstärke';
+    lautLabel.setAttribute('for', 'laut-' + ev.id);
+    var slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = '100';
+    slider.step = '1';
+    slider.id = 'laut-' + ev.id;
+    slider.value = String(einst.laut);
+    var wert = document.createElement('span');
+    wert.className = 'tk-laut-wert';
+    wert.textContent = einst.laut + ' %';
+
+    slider.addEventListener('input', function () {
+      einst.laut = parseInt(slider.value, 10) || 0;
+      wert.textContent = einst.laut + ' %';
+      if (audio && audioDatei && einst.dateien.indexOf(audioDatei) !== -1) {
+        try { audio.volume = einst.laut / 100; } catch (e) {}
+      }
+    });
+    slider.addEventListener('change', function () {
+      einst.laut = parseInt(slider.value, 10) || 0;
+      speichereEreignis(ev.id, einst);
+    });
+
+    laut.appendChild(lautLabel);
+    laut.appendChild(slider);
+    laut.appendChild(wert);
+    block.appendChild(laut);
+
+    return block;
+  }
+
+  function dokumentListe() { return null; }
+
+  function baueDateienBereich() {
+    elDateien.textContent = '';
+    if (!daten.toene || daten.toene.length === 0) {
+      var leer = document.createElement('div');
+      leer.className = 'tk-datei-zeile-all';
+      leer.textContent = 'Keine Tondateien vorhanden.';
+      elDateien.appendChild(leer);
+      return;
+    }
+    for (var i = 0; i < daten.toene.length; i++) {
+      (function (eintrag) {
+        var zeile = document.createElement('div');
+        zeile.className = 'tk-datei-zeile-all';
+
+        var nameEl = document.createElement('span');
+        nameEl.className = 'tk-datei-name';
+        nameEl.textContent = eintrag.datei;
+        nameEl.title = eintrag.datei;
+        zeile.appendChild(nameEl);
+
+        var meta = document.createElement('span');
+        meta.className = 'tk-meta';
+        var groesse = document.createElement('span');
+        groesse.className = 'tk-groesse';
+        groesse.textContent = groesseFormat(eintrag.groesse);
+        var quelle = document.createElement('span');
+        quelle.className = 'tk-quelle' + (eintrag.quelle === 'hochgeladen' ? ' tk-hoch' : '');
+        quelle.textContent = eintrag.quelle === 'hochgeladen' ? 'hochgeladen' : 'mitgeliefert';
+        meta.appendChild(groesse);
+        meta.appendChild(quelle);
+        zeile.appendChild(meta);
+
+        zeile.appendChild(machePlayKnopf(eintrag.datei, function () { return 100; }));
+
+        if (eintrag.quelle === 'hochgeladen') {
+          var loesch = document.createElement('button');
+          loesch.type = 'button';
+          loesch.className = 'tk-loeschen';
+          loesch.textContent = 'Löschen';
+          loesch.addEventListener('click', function () {
+            if (!confirm('Datei „' + eintrag.datei + '“ wirklich löschen?')) return;
+            loescheDatei(eintrag.datei, loesch);
+          });
+          zeile.appendChild(loesch);
+        }
+
+        elDateien.appendChild(zeile);
+      })(daten.toene[i]);
+    }
+  }
+
+  function loescheDatei(dateiname, knopf) {
+    knopf.disabled = true;
+    fetch('verwaltung/ton/' + encodeURIComponent(dateiname), { method: 'DELETE' })
+      .then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; });
+      })
+      .then(function (res) {
+        if (!res.ok || !res.json || res.json.fehler) {
+          throw new Error((res.json && res.json.fehler) || ('Fehler ' + res.status));
+        }
+        daten = res.json;
+        stoppeAudio();
+        neuAufbauen();
+        zeigeStatus('✓ Gespeichert', 'ok');
+      })
+      .catch(function (err) {
+        knopf.disabled = false;
+        zeigeFehler('Löschen fehlgeschlagen: ' + err.message);
+      });
+  }
+
+  function neuAufbauen() {
+    elLade.style.display = 'none';
+    stoppeAudio();
+    elEreignisse.textContent = '';
+    if (daten && Array.isArray(daten.ereignisse)) {
+      for (var i = 0; i < daten.ereignisse.length; i++) {
+        elEreignisse.appendChild(baueEreignisBlock(daten.ereignisse[i]));
+      }
+    }
+    baueDateienBereich();
+  }
+
+  function ladeDaten() {
+    fetch(API, { method: 'GET' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('Fehler ' + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        daten = j;
+        neuAufbauen();
+      })
+      .catch(function (err) {
+        elLade.style.display = 'none';
+        zeigeFehler('Laden fehlgeschlagen: ' + err.message);
+      });
+  }
+
+  function dateiGueltig(file) {
+    var n = (file.name || '').toLowerCase();
+    if (!/\.(mp3|ogg|wav|m4a)$/.test(n)) {
+      return 'Ungültiger Dateityp: ' + file.name + ' (erlaubt: mp3, ogg, wav, m4a)';
+    }
+    if (file.size > MAX_BYTES) {
+      return 'Datei zu groß: ' + file.name + ' (max. 8 MB)';
+    }
+    return null;
+  }
+
+  function ladeHoch(files) {
+    if (!files || files.length === 0) return;
+    var gesamt = files.length;
+    var fehler = [];
+    var kette = Promise.resolve();
+    uploadBtn.disabled = true;
+
+    for (var i = 0; i < gesamt; i++) {
+      (function (file, index) {
+        kette = kette.then(function () {
+          var pruef = dateiGueltig(file);
+          if (pruef) {
+            fehler.push(pruef);
+            return;
+          }
+          elLade.style.display = 'none';
+          zeigeStatus('Lade ' + (index + 1) + ' von ' + gesamt + ' …');
+          return fetch(UPLOAD, {
+            method: 'POST',
+            headers: { 'x-dateiname': encodeURIComponent(file.name) },
+            body: file
+          }).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; });
+          }).then(function (res) {
+            if (!res.ok || res.json === null || res.json === undefined) {
+              var msg = (res.json && res.json.fehler) || ('Fehler ' + res.status);
+              throw new Error(msg);
+            }
+            if (typeof res.json === 'object' && res.json.fehler) {
+              throw new Error(res.json.fehler);
+            }
+            daten = res.json;
+          }).catch(function (err) {
+            fehler.push(file.name + ': ' + err.message);
+          });
+        });
+      })(files[i], i);
+    }
+
+    kette.then(function () {
+      uploadBtn.disabled = false;
+      if (daten) {
+        stoppeAudio();
+        neuAufbauen();
+      }
+      if (fehler.length > 0) {
+        zeigeFehler('Fehler: ' + fehler.join(' | '));
+      } else {
+        zeigeStatus('✓ Gespeichert', 'ok');
+      }
+    });
+  }
+
+  uploadBtn.addEventListener('click', function () {
+    fileInput.value = '';
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', function () {
+    var files = fileInput.files;
+    if (!files || files.length === 0) return;
+    var arr = [];
+    for (var i = 0; i < files.length; i++) arr.push(files[i]);
+    ladeHoch(arr);
+  });
+
+  ladeDaten();
+})();
+</script>
+
   <section class="karte gefahr" aria-labelledby="titelNeustart">
     <h2 id="titelNeustart">Welt neu starten</h2>
     <p>Alle Spieler werden kurz getrennt, die Stadt beginnt neu (Kisten, Türen, Zombies). Rucksäcke bleiben, außer du hakst unten an.</p>
