@@ -196,5 +196,7 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     })),
   };
   for (const h of haeuser) h.umriss = karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss;
-  return { seed, karte: true, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null };
+  // Gärten, Zaunarten und Gartenausstattung (tools/osm_karte.py) – nur fürs Aussehen; das Raster enthält sie schon
+  const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [] } : null;
+  return { seed, karte: true, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details };
 }

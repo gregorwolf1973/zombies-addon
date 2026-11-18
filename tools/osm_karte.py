@@ -12,7 +12,10 @@ if not roh.exists() or "--neu" in sys.argv:
  way["landuse"]({sued},{west},{nord},{ost}); way["leisure"]({sued},{west},{nord},{ost});
  way["natural"]({sued},{west},{nord},{ost}); way["waterway"]({sued},{west},{nord},{ost});
  way["amenity"]({sued},{west},{nord},{ost}); node["amenity"]({sued},{west},{nord},{ost});
- node["shop"]({sued},{west},{nord},{ost}); way["shop"]({sued},{west},{nord},{ost}););
+ node["shop"]({sued},{west},{nord},{ost}); way["shop"]({sued},{west},{nord},{ost});
+ way["barrier"]({sued},{west},{nord},{ost}); node["barrier"]({sued},{west},{nord},{ost});
+ node["natural"]({sued},{west},{nord},{ost}); node["highway"="bus_stop"]({sued},{west},{nord},{ost});
+ node["leisure"]({sued},{west},{nord},{ost}); way["man_made"]({sued},{west},{nord},{ost}););
 out body; >; out skel qt;"""
     req = urllib.request.Request("https://overpass-api.de/api/interpreter", data=urllib.parse.urlencode({"data": q}).encode(),
                                  headers={"User-Agent": "zombies-karte/0.1"})
@@ -117,16 +120,186 @@ for w in wege:
     t, hw = w["tags"], w["tags"].get("highway")
     if hw in BREITEN and not (w["nodes"][0] == w["nodes"][-1] and t.get("area") == "yes"):
         if w["nodes"][0] == w["nodes"][-1] and hw == "pedestrian": continue
-        strassen.append({"t": hw, "b": BREITEN[hw] * 4 / mpk, "p": flach(poly(w)), **({"n": t["name"]} if t.get("name") else {})})
+        zusatz = {kk: t[ok] for kk, ok in (("n", "name"), ("ref", "ref"), ("spuren", "lanes"), ("breite", "width")) if t.get(ok)}
+        strassen.append({"t": hw, "b": BREITEN[hw] * 4 / mpk, "p": flach(poly(w)), **zusatz})
     art = ("wald" if t.get("natural") in ("wood", "scrub") or t.get("landuse") == "forest" else
            "parkplatz" if t.get("amenity") == "parking" else
            "platz" if (hw == "pedestrian" and w["nodes"][0] == w["nodes"][-1]) or t.get("place") == "square" else
            "gruen" if t.get("landuse") in ("grass", "meadow", "village_green", "recreation_ground") or t.get("leisure") in ("park", "garden") else
            "acker" if t.get("landuse") in ("farmland", "orchard", "allotments") else
-           "sport" if t.get("leisure") in ("pitch", "playground", "sports_centre", "track") else
+           "spielplatz" if t.get("leisure") == "playground" else
+           "laufbahn" if t.get("leisure") == "track" else
+           "sport" if t.get("leisure") in ("pitch", "sports_centre") else
+           "gewerbe" if t.get("landuse") in ("commercial", "retail", "industrial", "garages") else
            "friedhof" if t.get("landuse") == "cemetery" or t.get("amenity") == "grave_yard" else None)
     if art and w["nodes"][0] == w["nodes"][-1] and len(w["nodes"]) > 3:
-        flaechen.append({"a": art, "p": flach(poly(w)[:-1])})
+        flaechen.append({"a": art, "p": flach(poly(w)[:-1]), **({"s": t["sport"]} if t.get("sport") else {})})
+# 3c. Details, die in OSM fehlen (fest gesät, damit jede Erzeugung gleich ausfällt):
+#     Gärten mit Hecke/Zaun/Mauer und Gartentor, Gartenhaus, Pool, Trampolin, Beete, Obstbäume,
+#     Alleebäume, Bänke und Kübel auf Plätzen, Bushaltestellen und Bäume aus OSM.
+import random
+zufall = random.Random(20261118)
+R4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
+def drin(x, y): return 0 < x < B - 1 and 0 < y < H - 1
+garten = [[-1] * B for _ in range(H)]          # Besitzer (Index in gebaeude) je Wiesenkachel
+zaunart = [['.'] * B for _ in range(H)]
+objekte = []
+WOHN = {"yes", "house", "detached", "residential", "semidetached_house", "terrace", "bungalow"}
+haeuser_g = [i for i, g in enumerate(gebaeude) if g["tuer"] and 12 <= g["flaeche"] <= 140
+             and not (g.get("name") or g.get("shop") or g.get("amenity")) and g.get("building", "yes") in WOHN]
+# Mehrquellen-Breitensuche: jede Wiesenkachel bis 4 Schritte vom Haus gehört dem nächsten Haus
+from collections import deque
+q = deque(); abstand = {}
+for i in haeuser_g:
+    g = gebaeude[i]
+    for y in range(g["y"], g["y"] + g["h"]):
+        for x in range(g["x"], g["x"] + g["b"]):
+            if k[y][x] in (WAND, TUER):
+                for dx, dy in R4:
+                    nx, ny = x + dx, y + dy
+                    if drin(nx, ny) and k[ny][nx] in (WIESE, BAUM) and garten[ny][nx] == -1:
+                        garten[ny][nx] = i; abstand[(nx, ny)] = 1; q.append((nx, ny))
+while q:
+    x, y = q.popleft(); d = abstand[(x, y)]
+    if d >= 4: continue
+    for dx, dy in R4:
+        nx, ny = x + dx, y + dy
+        if drin(nx, ny) and k[ny][nx] in (WIESE, BAUM) and garten[ny][nx] == -1:
+            garten[ny][nx] = garten[y][x]; abstand[(nx, ny)] = d + 1; q.append((nx, ny))
+# Gartentor: von der Haustür geradeaus nach draußen
+tor_frei = set()
+for i in haeuser_g:
+    t = gebaeude[i]["tuer"]; tx, ty = t["x"], t["y"]
+    for dx, dy in R4:
+        if k[ty - dy][tx - dx] == BODEN and k[ty + dy][tx + dx] not in (WAND, BODEN):
+            x, y = tx + dx, ty + dy
+            for _ in range(8):
+                if not drin(x, y): break
+                tor_frei.add((x, y)); tor_frei.add((x - dy, y - dx)) if zufall.random() < 0.5 else None
+                if garten[y][x] != i: break
+                x += dx; y += dy
+            break
+# Grenze des Gartens wird Hecke, Zaun oder Mauer
+ARTEN = "hhhhzzzmmw"
+art_von = {i: zufall.choice(ARTEN) for i in haeuser_g}
+for y in range(1, H - 1):
+    for x in range(1, B - 1):
+        i = garten[y][x]
+        if i < 0 or (x, y) in tor_frei: continue
+        g = gebaeude[i]
+        def eigen(nx, ny): return garten[ny][nx] == i or (g["x"] <= nx < g["x"] + g["b"] and g["y"] <= ny < g["y"] + g["h"] and k[ny][nx] in (WAND, TUER, BODEN))
+        # an der Grenze zu einem Nachbargarten setzt nur einer der beiden den Zaun (sonst doppelt)
+        fremd = [(x + dx, y + dy) for dx, dy in R4 if not eigen(x + dx, y + dy)]
+        if fremd and any(not (garten[ny][nx] >= 0 and garten[ny][nx] < i and k[ny][nx] == ZAUN) for nx, ny in fremd):
+            if all(garten[ny][nx] >= 0 and garten[ny][nx] < i for nx, ny in fremd) and any(k[ny][nx] == ZAUN for nx, ny in fremd): continue
+            k[y][x] = ZAUN; zaunart[y][x] = art_von[i]
+# Gartenausstattung
+def innen_frei(x, y, b, h, i):
+    for yy in range(y - 1, y + h + 1):
+        for xx in range(x - 1, x + b + 1):
+            if not drin(xx, yy) or (xx, yy) in tor_frei or k[yy][xx] == TUER: return False
+            innen = x <= xx < x + b and y <= yy < y + h
+            if innen and (garten[yy][xx] != i or k[yy][xx] not in (WIESE, BAUM)): return False
+    return True
+for i in haeuser_g:
+    zellen = [(x, y) for y in range(gebaeude[i]["y"] - 4, gebaeude[i]["y"] + gebaeude[i]["h"] + 4)
+              for x in range(gebaeude[i]["x"] - 4, gebaeude[i]["x"] + gebaeude[i]["b"] + 4) if drin(x, y) and garten[y][x] == i]
+    zufall.shuffle(zellen)
+    wuensche = []
+    if zufall.random() < 0.10: wuensche.append(("pool", 3, 2))
+    if zufall.random() < 0.22: wuensche.append(("gartenhaus", 1, 1))
+    if zufall.random() < 0.12: wuensche.append(("trampolin", 1, 1))
+    if zufall.random() < 0.30: wuensche.append(("beet", 2, 1))
+    if zufall.random() < 0.18: wuensche.append(("sitzgruppe", 1, 1))
+    for _ in range(zufall.choice((0, 1, 1, 2))): wuensche.append(("obstbaum", 1, 1))
+    for art, b, h in wuensche:
+        if zufall.random() < 0.5: b, h = h, b
+        for (x, y) in zellen:
+            if innen_frei(x, y, b, h, i):
+                if art == "pool":
+                    for yy in range(y, y + h):
+                        for xx in range(x, x + b): k[yy][xx] = WASSER
+                elif art == "gartenhaus": k[y][x] = WAND
+                elif art == "obstbaum": k[y][x] = BAUM
+                if art != "obstbaum": objekte.append({"a": art, "x": x, "y": y, "b": b, "h": h})
+                for yy in range(y, y + h):
+                    for xx in range(x, x + b): garten[yy][xx] = -2   # belegt (nicht nochmal verwenden)
+                break
+# Bäume aus OSM, Bänke, Bushaltestellen
+for (px, py, pt) in punkt_infos:
+    x, y = int(px), int(py)
+    if not drin(x, y): continue
+    if pt.get("natural") == "tree" and k[y][x] == WIESE: k[y][x] = BAUM
+    elif pt.get("amenity") == "bench": objekte.append({"a": "bank", "x": round(px, 1), "y": round(py, 1)})
+    elif pt.get("highway") == "bus_stop": objekte.append({"a": "haltestelle", "x": round(px, 1), "y": round(py, 1), "n": pt.get("name", "")})
+    elif pt.get("amenity") in ("waste_basket", "recycling"): objekte.append({"a": "muell", "x": round(px, 1), "y": round(py, 1)})
+# Alleebäume an größeren Straßen
+for w in wege:
+    hw = w["tags"].get("highway")
+    if hw not in ("secondary", "tertiary", "primary"): continue
+    pts = poly(w); off = BREITEN[hw] / 2 + 1.3
+    rest = 3.0
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+        L = math.hypot(x2 - x1, y2 - y1)
+        if L < 0.5: continue
+        nx, ny = -(y2 - y1) / L, (x2 - x1) / L
+        d = rest
+        while d < L:
+            for seite in (1, -1):
+                tx, ty = int(x1 + (x2 - x1) * d / L + nx * off * seite), int(y1 + (y2 - y1) * d / L + ny * off * seite)
+                if drin(tx, ty) and k[ty][tx] == WIESE and garten[ty][tx] == -1: k[ty][tx] = BAUM
+            d += 6
+        rest = d - L
+# Plätze: Bänke und Blumenkübel am Rand der Fußgängerflächen
+for w in wege:
+    t = w["tags"]
+    if not ((t.get("highway") == "pedestrian" and w["nodes"][0] == w["nodes"][-1]) or t.get("place") == "square"): continue
+    pts = poly(w); n = 0
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+        L = math.hypot(x2 - x1, y2 - y1); d = 2.0
+        while d < L - 1 and n < 14:
+            # leicht nach innen versetzt
+            cx, cy = x1 + (x2 - x1) * d / L, y1 + (y2 - y1) * d / L
+            mx, my = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+            l2 = math.hypot(mx - cx, my - cy) or 1
+            ox, oy = cx + (mx - cx) / l2 * 1.2, cy + (my - cy) / l2 * 1.2
+            objekte.append({"a": "bank" if n % 3 else "kuebel", "x": round(ox, 1), "y": round(oy, 1), "w": round(math.atan2(y2 - y1, x2 - x1), 2)})
+            n += 1; d += 5
+# Kein Haus darf durch Zäune abgeschnitten sein: von den Straßen aus erreichbar machen (Zaun-Kacheln auf dem kürzesten Weg öffnen)
+GEHBAR = {WIESE, STRASSE, PLATZ, BAUM, TUER}
+erreicht = [[False] * B for _ in range(H)]
+q = deque((x, y) for y in range(H) for x in range(B) if k[y][x] == STRASSE)
+for (x, y) in q: erreicht[y][x] = True
+while q:
+    x, y = q.popleft()
+    for dx, dy in R4:
+        nx, ny = x + dx, y + dy
+        if drin(nx, ny) and not erreicht[ny][nx] and k[ny][nx] in GEHBAR:
+            erreicht[ny][nx] = True; q.append((nx, ny))
+geoeffnet = 0
+for i in haeuser_g:
+    t = gebaeude[i]["tuer"]
+    if erreicht[t["y"]][t["x"]]: continue
+    # 0-1-Suche: Zaun kostet 1
+    start = (t["x"], t["y"]); kosten = {start: 0}; vor = {}; dq = deque([start]); ziel = None
+    while dq:
+        x, y = dq.popleft()
+        if erreicht[y][x] and (x, y) != start: ziel = (x, y); break
+        for dx, dy in R4:
+            nx, ny = x + dx, y + dy
+            if not drin(nx, ny) or k[ny][nx] not in GEHBAR | {ZAUN}: continue
+            c = kosten[(x, y)] + (1 if k[ny][nx] == ZAUN else 0)
+            if c < kosten.get((nx, ny), 1e9):
+                kosten[(nx, ny)] = c; vor[(nx, ny)] = (x, y)
+                (dq.append if k[ny][nx] == ZAUN else dq.appendleft)((nx, ny))
+    while ziel and ziel != start:
+        x, y = ziel
+        if k[y][x] == ZAUN: k[y][x] = WIESE; zaunart[y][x] = '.'; geoeffnet += 1
+        ziel = vor.get(ziel)
+gartenzeichen = [['.' if garten[y][x] < 0 else "01234"[garten[y][x] % 5] for x in range(B)] for y in range(H)]
+print(f"Details: {len(haeuser_g)} Gärten, {sum(r.count('h') + r.count('z') + r.count('m') + r.count('w') for r in zaunart)} Zaunkacheln, "
+      f"{len(objekte)} Objekte, {geoeffnet} Zaunlücken für erreichbare Türen")
+
 # 4. Ränder: Zaun
 for x in range(B): k[0][x] = k[H - 1][x] = ZAUN
 for y in range(H): k[y][0] = k[y][B - 1] = ZAUN
@@ -136,7 +309,9 @@ benannt = [g for g in gebaeude if g.get("name") or g.get("amenity") or g.get("sh
 ausgabe.write_text(json.dumps({"quelle": "© OpenStreetMap-Mitwirkende (ODbL 1.0)", "bbox": [sued, west, nord, ost],
                                "meterProKachel": mpk, "breite": B, "hoehe": H,
                                "kacheln": "".join("0123456789"[v] for zeile in k for v in zeile), "gebaeude": gebaeude,
-                               "strassen": strassen, "flaechen": flaechen},
+                               "strassen": strassen, "flaechen": flaechen,
+                               "zaunart": "".join("".join(r) for r in zaunart), "garten": "".join("".join(r) for r in gartenzeichen),
+                               "objekte": objekte},
                               ensure_ascii=False))
 print(f"{B}×{H} Kacheln ({mpk} m), Gebäude {len(gebaeude)} (mit Tür {sum(1 for g in gebaeude if g['tuer'])}), benannt {len(benannt)}")
 print("Kacheln:", {n: zaehl[v] for n, v in [("Wiese", WIESE), ("Straße", STRASSE), ("Wand", WAND), ("Boden", BODEN), ("Tür", TUER), ("Wasser", WASSER), ("Baum", BAUM), ("Platz", PLATZ)]})

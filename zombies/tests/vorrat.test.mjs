@@ -542,3 +542,24 @@ test('Figurenbogen enthält alle Bilder, die das Spiel braucht', async () => {
   for (const k of 'abcd') assert.equal(j.bilder['kriecher_' + k]?.length, 2, 'Kriecher ' + k);
   for (const wer of ['mann', 'frau']) for (const w of ['hand', 'pistole', 'schlaeger', 'messer']) assert.ok(j.bilder[`${wer}_${w}`], `${wer}_${w}`);
 });
+
+test('Bots durchsuchen Schränke in der Nähe und nehmen bessere Waffen', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 1, zombieFaktor: 0 };
+  const a = await beitreten('Chef');
+  try {
+    const { raum, p } = a;
+    raum.state.zombies.clear(); raum.zombieInfo.clear();
+    const [bid, x] = [...raum.extra.entries()].find(([, e]) => e.bot);
+    const bot = raum.state.spieler.get(bid);
+    const schrank = raum.welt.behaelter.find(c => c.art !== 'auto' && c.art !== 'bus');
+    assert.ok(schrank, 'kein Schrank');
+    raum.setzeInhalt(schrank.id, ['wasser', 'gewehr']);
+    bot.rucksack.clear(); bot.waffe = 'messer'; bot.munition = 5;
+    p.x = schrank.x + 60; p.y = schrank.y;
+    bot.x = schrank.x + 30; bot.y = schrank.y; bot.ebene = p.ebene = '';
+    assert.ok(await bis(() => bot.waffe === 'gewehr' || bot.rucksack.includes('gewehr'), 9000),
+      'Bot hat nicht durchsucht: ' + JSON.stringify([...bot.rucksack]) + ' Aktion ' + bot.aktion);
+    assert.ok(await bis(() => bot.waffe === 'gewehr', 3000), 'Bot nimmt das Gewehr nicht in die Hand');
+  } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
+});

@@ -46,7 +46,7 @@ function vorbereiten(welt) {
   const v = welt.vektor;
   const linien = v.strassen.map(s => {
     const pts = []; for (let i = 0; i < s.p.length; i += 2) pts.push([s.p[i] * K, s.p[i + 1] * K]);
-    return { t: s.t, b: s.b * K, pts, box: bbox(pts, (s.b + 2) * K) };
+    return { t: s.t, b: s.b * K, pts, box: bbox(pts, (s.b + 2) * K), n: s.n, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0 };
   });
   const flaechen = v.flaechen.map(f => {
     const pts = []; for (let i = 0; i < f.p.length; i += 2) pts.push([f.p[i] * K, f.p[i + 1] * K]);
@@ -55,7 +55,8 @@ function vorbereiten(welt) {
   const FLACH = new Set(['industrial', 'commercial', 'retail', 'supermarket', 'school', 'warehouse', 'garages', 'garage', 'carport', 'shed', 'kindergarten', 'public', 'civic', 'office', 'hospital']);
   const gebaeude = v.gebaeude.map((g, i) => {
     const pts = vereinfache(g.p);
-    const flach = FLACH.has(g.typ) || g.flaeche > 260 || (g.typ === 'apartments' && g.flaeche > 160);
+    // Flachdach: Gewerbe, große Bauten, Wohnblocks – und etwa jedes fünfte Wohnhaus (moderne Bauweise)
+    const flach = FLACH.has(g.typ) || g.flaeche > 260 || (g.typ === 'apartments' && g.flaeche > 160) || hash(i * 17 + 5) < 0.2;
     return { pts, box: bbox(pts, 16), flach, safe: g.safe, kx: g.x, ky: g.y,
       // Zeichnen auf das Rastergebäude + 1 Kachel begrenzen (manche OSM-Umrisse ragen über Straßen)
       clip: [(g.x - 1) * K, (g.y - 1) * K, (g.b + 2) * K, (g.h + 2) * K], farbe: flach ? FLACHDACH[Math.floor(hash(i * 7 + 3) * FLACHDACH.length)] : ZIEGEL[Math.floor(hash(i * 13 + 1) * ZIEGEL.length)] };
@@ -86,6 +87,7 @@ function musterHolen(ctx) {
       for (let y = 0; y < g; y += 8) for (let x = (y / 8) % 2 * 6; x < g + 12; x += 12) c.strokeRect(x + 0.5, y + 0.5, 12, 8);
     }),
     waldboden: mach(64, (c, g) => koerner(c, g, '#3d6b2f', 200, ['rgba(80,60,30,.25)', 'rgba(0,0,0,.15)', 'rgba(120,160,70,.2)'])),
+    beton: mach(48, (c, g) => { koerner(c, g, '#b4b1a8', 80, ['rgba(0,0,0,.07)', 'rgba(255,255,255,.1)']); c.fillStyle = 'rgba(0,0,0,.1)'; c.fillRect(0, 0, g, 1); c.fillRect(0, 0, 1, g); }),
     acker: mach(32, (c, g) => { koerner(c, g, '#8a7a4e', 60, ['rgba(0,0,0,.1)']); c.fillStyle = 'rgba(60,45,20,.35)'; for (let y = 0; y < g; y += 8) c.fillRect(0, y, g, 3); }),
   };
   return muster;
@@ -98,21 +100,138 @@ function pfad(ctx, pts, zu = false) {
 }
 
 // ---------- Flächen (unter allem anderen) ----------
+// kleinstes umschließendes Rechteck (Ausrichtung an einer Polygonkante): für Spielfeldlinien und Parkbuchten
+function orientierteBox(pts) {
+  if (pts._box) return pts._box;
+  let best = null;
+  for (let i = 0; i < pts.length; i++) {
+    const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
+    const w = Math.atan2(by - ay, bx - ax), c = Math.cos(w), sn = Math.sin(w);
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const [x, y] of pts) { const u = x * c + y * sn, v = -x * sn + y * c; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+    const fl = (u1 - u0) * (v1 - v0);
+    if (!best || fl < best.fl) best = { fl, w, u0, u1, v0, v1 };
+  }
+  let { w, u0, u1, v0, v1 } = best;
+  if (u1 - u0 < v1 - v0) { w += Math.PI / 2; [u0, u1, v0, v1] = [v0, v1, -u1, -u0]; }   // lange Seite entlang w
+  const c = Math.cos(w), sn = Math.sin(w), uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
+  return (pts._box = { cx: uc * c - vc * sn, cy: uc * sn + vc * c, w, lang: u1 - u0, breit: v1 - v0 });
+}
+// im gedrehten Rechteck zeichnen: Ursprung = Mitte, x entlang der langen Seite
+function imRechteck(ctx, b, f) { ctx.save(); ctx.translate(b.cx, b.cy); ctx.rotate(b.w); f(b.lang / 2, b.breit / 2); ctx.restore(); }
+
+function fussballfeld(ctx, b) {
+  imRechteck(ctx, b, (L, Bt) => {
+    const l = L - 6, br = Bt - 6;
+    for (let x = -l, i = 0; x < l; x += 20, i++) { ctx.fillStyle = i % 2 ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.05)'; ctx.fillRect(x, -br, 20, br * 2); }
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2;
+    ctx.strokeRect(-l, -br, l * 2, br * 2);
+    ctx.beginPath(); ctx.moveTo(0, -br); ctx.lineTo(0, br); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, Math.min(br * 0.3, 9.15 * METER), 0, Math.PI * 2); ctx.stroke();
+    const tiefe = Math.min(l * 0.17, 16.5 * METER), weite = Math.min(br * 0.6, 20 * METER);
+    for (const s of [-1, 1]) {
+      ctx.strokeRect(s > 0 ? l - tiefe : -l, -weite, tiefe, weite * 2);
+      ctx.fillStyle = '#fff'; ctx.fillRect(s > 0 ? l : -l - 4, -3.66 * METER, 4, 7.32 * METER);   // Tor
+    }
+  });
+}
+function basketballfeld(ctx, b) {
+  imRechteck(ctx, b, (L, Bt) => {
+    ctx.fillStyle = '#b8603f'; ctx.fillRect(-L, -Bt, L * 2, Bt * 2);
+    const l = L - 4, br = Bt - 4;
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2;
+    ctx.strokeRect(-l, -br, l * 2, br * 2);
+    ctx.beginPath(); ctx.moveTo(0, -br); ctx.lineTo(0, br); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, Math.min(br * 0.3, 1.8 * METER), 0, Math.PI * 2); ctx.stroke();
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(s * l, 0, Math.min(br * 0.8, 6.75 * METER), s > 0 ? Math.PI / 2 : -Math.PI / 2, s > 0 ? Math.PI * 1.5 : Math.PI / 2); ctx.stroke(); }
+  });
+}
+function parkbuchten(ctx, b) {
+  // Reihen quer zur langen Seite: 5 m tiefe Buchten, 6 m Fahrgasse, Buchten 2,5 m breit
+  imRechteck(ctx, b, (L, Bt) => {
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.5;
+    const tiefe = 5 * METER, gasse = 6 * METER, breit = 2.5 * METER;
+    for (let y = -Bt + 2; y + tiefe <= Bt; y += tiefe * 2 + gasse) {
+      for (const [y0, y1] of [[y, y + tiefe], [y + tiefe + gasse, y + tiefe * 2 + gasse]]) {
+        if (y1 > Bt) continue;
+        for (let x = -L + 2; x <= L - 2; x += breit) { ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke(); }
+      }
+    }
+  });
+}
+function spielplatz(ctx, f, i) {
+  const b = orientierteBox(f.pts);
+  ctx.fillStyle = '#ddc995'; ctx.fill();
+  ctx.fillStyle = 'rgba(120,90,40,.25)';
+  for (let k = 0; k < 40; k++) ctx.fillRect(b.cx + (hash(i * 97 + k) - 0.5) * b.lang * 0.8, b.cy + (hash(i * 31 + k * 7) - 0.5) * b.breit * 0.8, 2, 2);
+  imRechteck(ctx, b, (L, Bt) => {
+    const s = Math.min(1, Math.min(L, Bt) / 40);
+    // Schaukel
+    ctx.save(); ctx.translate(-L * 0.45, -Bt * 0.3); ctx.scale(s, s);
+    ctx.fillStyle = '#6d4c41'; ctx.fillRect(-18, -2, 36, 4); ctx.fillStyle = '#e53935'; ctx.fillRect(-12, 4, 8, 4); ctx.fillRect(4, 4, 8, 4); ctx.restore();
+    // Rutsche
+    ctx.save(); ctx.translate(L * 0.35, -Bt * 0.25); ctx.scale(s, s);
+    ctx.fillStyle = '#1e88e5'; ctx.fillRect(-4, -14, 8, 28); ctx.fillStyle = '#8d6e63'; ctx.fillRect(-7, -18, 14, 7); ctx.restore();
+    // Sandkasten
+    ctx.save(); ctx.translate(0, Bt * 0.35); ctx.scale(s, s);
+    ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 4; ctx.strokeRect(-14, -10, 28, 20); ctx.fillStyle = '#f0dca4'; ctx.fillRect(-12, -8, 24, 16); ctx.restore();
+    // Wippe
+    ctx.save(); ctx.translate(L * 0.45, Bt * 0.3); ctx.rotate(0.4); ctx.scale(s, s);
+    ctx.fillStyle = '#fbc02d'; ctx.fillRect(-16, -2.5, 32, 5); ctx.fillStyle = '#5d4037'; ctx.fillRect(-3, -4, 6, 8); ctx.restore();
+  });
+}
+function friedhof(ctx, f, i) {
+  const b = orientierteBox(f.pts);
+  imRechteck(ctx, b, (L, Bt) => {
+    for (let y = -Bt + 10; y < Bt - 6; y += 14) for (let x = -L + 8; x < L - 6; x += 11) {
+      if (hash(i + x * 13 + y * 7) < 0.25) continue;
+      ctx.fillStyle = 'rgba(90,110,70,.5)'; ctx.fillRect(x - 1, y, 8, 9);
+      ctx.fillStyle = '#9e9e9e'; ctx.fillRect(x + 1, y - 2, 4, 3);
+    }
+  });
+}
+
+// ---------- Flächen (unter allem anderen) ----------
 export function zeichneFlaechen(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect), m = musterHolen(ctx);
-  const stil = { wald: m.waldboden, gruen: 'rgba(120,180,80,.25)', acker: m.acker, sport: '#5f9e4a', friedhof: 'rgba(40,80,40,.25)', parkplatz: m.asphalt, platz: m.pflaster };
-  for (const f of v.flaechen) {
-    if (!schneidet(f.box, r) || !stil[f.a]) continue;
+  const stil = { wald: m.waldboden, gruen: 'rgba(130,190,85,.3)', acker: m.acker, sport: '#5a9c45', friedhof: 'rgba(60,100,50,.35)',
+    parkplatz: m.asphalt, platz: m.pflaster, laufbahn: '#b0553c', gewerbe: m.beton, spielplatz: '#ddc995' };
+  v.flaechen.forEach((f, i) => {
+    if (!schneidet(f.box, r) || !stil[f.a]) return;
+    ctx.save();
     pfad(ctx, f.pts, true); ctx.fillStyle = stil[f.a]; ctx.fill();
-    if (f.a === 'parkplatz' || f.a === 'platz') { ctx.strokeStyle = '#9e978a'; ctx.lineWidth = 3; ctx.stroke(); }
-    if (f.a === 'sport') { ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2; ctx.stroke(); }
-  }
+    ctx.clip();
+    const b = orientierteBox(f.pts);
+    if (f.a === 'sport' && f.s === 'basketball') basketballfeld(ctx, b);
+    else if (f.a === 'sport' && (f.s === 'soccer' || !f.s) && b.lang > 30 * METER) fussballfeld(ctx, b);
+    else if (f.a === 'parkplatz') parkbuchten(ctx, b);
+    else if (f.a === 'spielplatz') spielplatz(ctx, f, i);
+    else if (f.a === 'friedhof') friedhof(ctx, f, i);
+    else if (f.a === 'laufbahn') imRechteck(ctx, b, (L, Bt) => { ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; for (let k = 1; k < 5; k++) ctx.strokeRect(-L + k * 4, -Bt + k * 4, (L - k * 4) * 2, (Bt - k * 4) * 2); });
+    ctx.restore();
+    pfad(ctx, f.pts, true);
+    if (f.a === 'parkplatz' || f.a === 'platz' || f.a === 'gewerbe') { ctx.strokeStyle = '#8f8a7f'; ctx.lineWidth = 3; ctx.stroke(); }
+    else if (f.a === 'sport' || f.a === 'spielplatz') { ctx.strokeStyle = 'rgba(60,60,60,.5)'; ctx.lineWidth = 2; ctx.stroke(); }
+  });
 }
 
 // ---------- Straßen und Wege ----------
 const AUTO = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
 const MITTELLINIE = new Set(['primary', 'secondary', 'tertiary']);
-const fahrbahn = l => l.b * (l.t === 'service' ? 0.8 : 0.72);   // sichtbare Fahrbahnbreite (schmaler als das begehbare Raster)
+// sichtbare Fahrbahnbreite wie in echt: OSM-Breite, sonst Spurzahl, sonst Straßennummer (B, St, Kreis), sonst Straßenart
+const METER = K / 4;   // 4 m je Kachel
+const ART_BREITE = { primary: 7.5, secondary: 6.5, tertiary: 6, unclassified: 5, residential: 5, living_street: 4, service: 3, pedestrian: 5 };
+function fahrbahn(l) {
+  if (l.fb) return l.fb;
+  let m;
+  if (l.breite >= 2.5) m = Math.min(10, l.breite);
+  else if (l.spuren) m = Math.min(4, l.spuren) * (l.t === 'primary' || l.t === 'secondary' ? 3.4 : 3);
+  else if (/^B\s?\d/.test(l.ref ?? '')) m = 7.5;
+  else if (/^St\s?\d/.test(l.ref ?? '')) m = 6.8;
+  else if (/^(K|[A-ZÄÖÜ]{2,3})\s?\d/.test(l.ref ?? '')) m = 6;
+  else m = ART_BREITE[l.t] ?? 5;
+  return (l.fb = m * METER);
+}
 export function zeichneStrassen(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect), m = musterHolen(ctx);
   const hier = v.linien.filter(l => schneidet(l.box, r) && l.pts.length > 1);
@@ -136,7 +255,9 @@ export function zeichneStrassen(ctx, welt, rect) {
   const fahr = hier.filter(l => AUTO.has(l.t) || l.t === 'service');
   for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = '#34363a'; ctx.lineWidth = fahrbahn(l) + 5; ctx.stroke(); }
   for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = m.asphalt; ctx.lineWidth = fahrbahn(l); ctx.stroke(); }
-  // 4. Mittellinie nur auf großen Straßen
+  // 4. Straßennamen leicht sichtbar auf der Fahrbahn (B 11, St 2369 als Nummer dazu)
+  strassenNamen(ctx, v, r);
+  // 5. Mittellinie nur auf großen Straßen
   for (const l of hier) {
     if (!MITTELLINIE.has(l.t)) continue;
     pfad(ctx, l.pts);
@@ -219,6 +340,41 @@ export function dachBild(g, farbeOverride) {
   return { bild: c, x: box.x0, y: box.y0, b: W * AUFL, h: H * AUFL };
 }
 
+// Lüfter und Solarmodule auf Flachdächern, Solaranlage und Kamin auf geneigten Dächern
+function dachDetails(ctx, g) {
+  const b = orientierteBox(g.pts), n = Math.round(g.pts[0][0] * 7 + g.pts[0][1] * 13);
+  if (b.lang < 3 * K || b.breit < 2 * K) return;
+  imRechteck(ctx, b, (L, Bt) => {
+    if (g.flach) {
+      if (hash(n) < 0.45) {   // Solarfeld
+        const w = L * 1.1, h = Bt * 0.9;
+        for (let x = -w / 2; x < w / 2 - 6; x += 9) for (let y = -h / 2; y < h / 2 - 5; y += 7) {
+          ctx.fillStyle = '#23345a'; ctx.fillRect(x, y, 8, 6); ctx.fillStyle = 'rgba(150,180,255,.25)'; ctx.fillRect(x, y, 8, 1.5);
+        }
+      }
+      for (let k = 0; k < 1 + Math.floor(hash(n + 3) * 3); k++) {   // Lüftungsgeräte
+        const x = (hash(n + k * 11) - 0.5) * L * 1.4, y = (hash(n + k * 23) - 0.5) * Bt * 1.4;
+        ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x + 2, y + 2, 9, 9);
+        ctx.fillStyle = '#c7c7c2'; ctx.fillRect(x, y, 9, 9); ctx.strokeStyle = '#7d7d78'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, 8, 8);
+        ctx.beginPath(); ctx.arc(x + 4.5, y + 4.5, 2.5, 0, Math.PI * 2); ctx.stroke();
+      }
+    } else {
+      const sued = Math.cos(b.w) >= 0 ? 1 : -1;   // Dachseite, die nach Süden (unten) zeigt
+      if (hash(n) < 0.3) {
+        const w = L * 1.1, h = Bt * 0.55;
+        ctx.fillStyle = '#20304f'; ctx.fillRect(-w / 2, sued * Bt * 0.18 - h / 2 + sued * h * 0.1, w, h);
+        ctx.strokeStyle = 'rgba(160,190,255,.35)'; ctx.lineWidth = 1;
+        for (let x = -w / 2 + 8; x < w / 2; x += 8) { ctx.beginPath(); ctx.moveTo(x, sued * Bt * 0.18 - h / 2 + sued * h * 0.1); ctx.lineTo(x, sued * Bt * 0.18 + h / 2 + sued * h * 0.1); ctx.stroke(); }
+      }
+      if (hash(n + 7) < 0.55) {   // Kamin
+        const x = (hash(n + 9) - 0.5) * L, y = -sued * Bt * 0.15;
+        ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x + 2, y + 3, 7, 7);
+        ctx.fillStyle = '#8d6e63'; ctx.fillRect(x, y, 7, 7); ctx.fillStyle = '#3e2723'; ctx.fillRect(x + 2, y + 2, 3, 3);
+      }
+    }
+  });
+}
+
 function schatten(ctx, g) {
   ctx.save(); ctx.translate(7, 10);
   pfad(ctx, g.pts, true); ctx.fillStyle = 'rgba(0,0,0,.26)'; ctx.fill();
@@ -231,10 +387,10 @@ export function zeichneVektorDaecher(ctx, welt, rect) {
   const begrenzt = (g, f) => { ctx.save(); ctx.beginPath(); ctx.rect(...g.clip); ctx.clip(); f(); ctx.restore(); };
   for (const g of hier) begrenzt(g, () => schatten(ctx, g));
   ctx.imageSmoothingEnabled = true;
-  for (const g of hier) {
+  hier.forEach(g => {
     const b = dachBild(g);
-    if (b) begrenzt(g, () => ctx.drawImage(b.bild, b.x, b.y, b.b, b.h));
-  }
+    if (b) begrenzt(g, () => { ctx.drawImage(b.bild, b.x, b.y, b.b, b.h); dachDetails(ctx, g); });
+  });
   for (const l of laternen(welt)) if (l.x > r.x0 - 30 && l.x < r.x1 + 30 && l.y > r.y0 - 30 && l.y < r.y1 + 30) laterneZeichnen(ctx, l);
   // Haustüren der betretbaren Häuser (unter dem Dachrand hervor)
   for (const h of welt.haeuser) {
@@ -292,4 +448,50 @@ function laterneZeichnen(ctx, l) {
   ctx.fillStyle = '#263238'; ctx.beginPath(); ctx.arc(l.x, l.y, 3.5, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#fff3c4'; ctx.beginPath(); ctx.ellipse(l.x + l.nx * 13, l.y + l.ny * 13, 4, 3, Math.atan2(l.ny, l.nx), 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#455a64'; ctx.lineWidth = 1; ctx.stroke();
+}
+
+// Namensplätze einmal je Welt: je Straße die längsten geraden Stücke, lange Straßen mehrfach (etwa alle 50 Kacheln)
+function namensPlaetze(v) {
+  if (v.namen) return v.namen;
+  const liste = [];
+  const gruppen = new Map();
+  for (const l of v.linien) {
+    if (!(AUTO.has(l.t) || l.t === 'pedestrian') || !(l.n || l.ref)) continue;
+    const text = l.n && l.ref ? `${l.n} · ${l.ref}` : (l.n || l.ref);
+    for (let i = 0; i + 1 < l.pts.length; i++) {
+      const [ax, ay] = l.pts[i], [bx, by] = l.pts[i + 1], len = Math.hypot(bx - ax, by - ay);
+      if (len < 5 * K) continue;
+      if (!gruppen.has(text)) gruppen.set(text, []);
+      gruppen.get(text).push({ text, ax, ay, bx, by, len, fb: fahrbahn(l) });
+    }
+  }
+  for (const [, stuecke] of gruppen) {
+    stuecke.sort((a, b) => b.len - a.len);
+    const gewaehlt = [];
+    for (const s of stuecke) {
+      const mx = (s.ax + s.bx) / 2, my = (s.ay + s.by) / 2;
+      if (gewaehlt.some(g => Math.hypot(g.mx - mx, g.my - my) < 50 * K)) continue;
+      gewaehlt.push({ ...s, mx, my });
+      if (gewaehlt.length >= 4) break;
+    }
+    liste.push(...gewaehlt);
+  }
+  return (v.namen = liste);
+}
+
+function strassenNamen(ctx, v, r) {
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const s of namensPlaetze(v)) {
+    if (s.mx < r.x0 - 400 || s.mx > r.x1 + 400 || s.my < r.y0 - 400 || s.my > r.y1 + 400) continue;
+    const gr = Math.max(10, Math.min(15, s.fb * 0.42));
+    ctx.font = `600 ${gr}px sans-serif`;
+    if (ctx.measureText(s.text).width > s.len * 0.8) continue;
+    let w = Math.atan2(s.by - s.ay, s.bx - s.ax);
+    if (w > Math.PI / 2) w -= Math.PI; else if (w < -Math.PI / 2) w += Math.PI;
+    ctx.save(); ctx.translate(s.mx, s.my); ctx.rotate(w);
+    ctx.fillStyle = 'rgba(255,255,255,.32)'; ctx.fillText(s.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
 }

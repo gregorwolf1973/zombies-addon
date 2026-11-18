@@ -337,7 +337,7 @@ export function safeRoomAn(welt, x, y) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 3;
+export const WELT_VERSION = 4;
 
 // ---------- Gegenstände ----------
 export const DINGE = {

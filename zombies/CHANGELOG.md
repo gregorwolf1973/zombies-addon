@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.19.0 – 18.11.2026
+
+- Viel mehr Details in Geretsried: jedes Wohnhaus hat einen Garten mit Hecke, Holz- oder Metallzaun oder Mauer und
+  Gartentor zur Straße (Zäune versperren den Weg); in den Gärten Gartenhäuser, Pools, Trampoline, Blumenbeete,
+  Sitzgruppen und Obstbäume
+- Sportplätze mit Spielfeldlinien (Fußball, Basketball), Laufbahn, Spielplätze mit Schaukel, Rutsche, Sandkasten und
+  Wippe, Parkplätze mit Parkbuchten, Friedhof mit Gräbern, Gewerbeflächen
+- Mehr Flachdächer mit Lüftungsgeräten und Solarfeldern, Solaranlagen und Kamine auf Satteldächern
+- Alleebäume an größeren Straßen, Bäume, Bänke, Mülleimer und Bushaltestellen aus OpenStreetMap
+- Straßen so breit wie in echt (OSM-Breite und Spuren, sonst Bundes-, Staats- oder Kreisstraße, sonst Straßenart),
+  Straßennamen und -nummern leicht sichtbar auf der Fahrbahn
+- Bots durchsuchen Schränke, Kofferräume (mit Brechstange) und tote Zombies in der Nähe, nehmen bessere Waffen in die
+  Hand und packen in größere Taschen um
+- Die Welt beginnt wegen der neuen Karte einmal neu (Rucksäcke bleiben)
+
 ## 0.18.1 – 18.11.2026
 
 - Straßen wie im Prototyp: schmalere Fahrbahn mit dunkler Kante, Gehweg nur angedeutet, Fußwege als helle Linien

@@ -54,6 +54,11 @@ export function zeichneBoden(ctx, welt, rect = null) {
     // Gebäude zeigt das Dach nach dem echten Umriss; Rasterwände nur in Safe Rooms (deren Dach wird durchsichtig)
     if (vek && (t === T.LEER || t === T.WAND || t === T.BODEN || t === T.TUER) && !safeMaske(welt)[ky * BREITE + kx]) continue;
     if (t === T.LEER) { ctx.fillStyle = '#5d4a40'; ctx.fillRect(px, py, KACHEL, KACHEL); continue; }
+    const gart = welt.details?.garten[ky * BREITE + kx];
+    if (gart && gart !== '.' && (t === T.WIESE || t === T.BAUM || t === T.ZAUN)) {
+      // gepflegter Rasen: etwas heller, ohne Kachelkanten
+      ctx.fillStyle = 'rgba(150,210,95,.13)'; ctx.fillRect(px, py, KACHEL, KACHEL);
+    }
     if (begehbarWiese(t) || t === T.ZAUN) {
       // Grasbüschel
       ctx.strokeStyle = 'rgba(30,70,25,.55)'; ctx.lineWidth = 1; ctx.beginPath();
@@ -111,6 +116,8 @@ export function zeichneBoden(ctx, welt, rect = null) {
     } else if (t === T.WAND) {
       ctx.fillStyle = '#efe4d8'; ctx.fillRect(px, py, KACHEL, KACHEL);
       ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(px, py + KACHEL - 4, KACHEL, 4);
+    } else if (t === T.ZAUN && welt.details && kx > 0 && ky > 0 && kx < BREITE - 1 && ky < HOEHE - 1) {
+      zaunTeil(ctx, welt.details.zaunart[ky * BREITE + kx], px, py, nb, kx, ky);
     } else if (t === T.ZAUN) {
       // Holzzaun: Latten zu den Nachbarzäunen, Pfosten in der Mitte
       const m = KACHEL / 2;
@@ -127,6 +134,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
     }
   }
   if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
+  if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
     if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
@@ -254,8 +262,10 @@ export function zeichneDaecher(ctx, welt, rect) {
   const { x0, y0, x1, y1 } = rect;
   ctx.save();
   ctx.translate(-x0 * KACHEL, -y0 * KACHEL);
-  if (welt.vektor) zeichneVektorDaecher(ctx, welt, rect);
-  else if (welt.karte) {
+  if (welt.vektor) {
+    zeichneVektorDaecher(ctx, welt, rect);
+    if (welt.details) gartenObjekte(ctx, welt, rect, true);   // Gartenhäuser, Haltestellen
+  } else if (welt.karte) {
     const nr = dachIndex(welt);
     const istDach = (x, y) => { const t = welt.hole(x, y); return (t === T.WAND || t === T.LEER || t === T.TUER) && nr[y * BREITE + x] !== -2; };
     for (let ky = Math.max(0, y0 - 1); ky < Math.min(HOEHE, y1 + 1); ky++) for (let kx = Math.max(0, x0 - 1); kx < Math.min(BREITE, x1 + 1); kx++) {
@@ -309,6 +319,90 @@ function autoVonOben(ctx, b) {
   ctx.fillStyle = '#e53935'; ctx.fillRect(-lang / 2 + 0.5, -breit / 2 + 2, 2, 4); ctx.fillRect(-lang / 2 + 0.5, breit / 2 - 6, 2, 4);
   ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(lang / 2 - 20, -breit / 2 - 1, 3, 2); ctx.fillRect(lang / 2 - 20, breit / 2 - 1, 3, 2);   // Spiegel
   ctx.restore();
+}
+
+// Gartenzäune: Hecke (h), Holz (z), Metall (m), Mauer (w). Verbunden wird auch schräg, damit treppige Grenzen durchgehen.
+function zaunTeil(ctx, art, px, py, nb, kx, ky) {
+  const m = KACHEL / 2, cx = px + m, cy = py + m;
+  const gerade = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => nb(dx, dy) === T.ZAUN);
+  const schraeg = [[1, 1], [1, -1], [-1, 1], [-1, -1]].filter(([dx, dy]) => nb(dx, dy) === T.ZAUN && nb(dx, 0) !== T.ZAUN && nb(0, dy) !== T.ZAUN);
+  const ziele = [...gerade.map(([dx, dy]) => [cx + dx * m, cy + dy * m]), ...schraeg.map(([dx, dy]) => [cx + dx * m, cy + dy * m])];
+  const linien = (farbe, breite, versatz = 0) => {
+    ctx.strokeStyle = farbe; ctx.lineWidth = breite; ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (!ziele.length) { ctx.moveTo(cx - 6 + versatz, cy + versatz); ctx.lineTo(cx + 6 + versatz, cy + versatz); }
+    for (const [zx, zy] of ziele) { ctx.moveTo(cx + versatz, cy + versatz); ctx.lineTo(zx + versatz, zy + versatz); }
+    ctx.stroke();
+  };
+  if (art === 'h') {
+    linien('rgba(0,0,0,.22)', 18, 3);
+    linien('#2f6b2a', 18);
+    ctx.fillStyle = '#3f8a37';
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(cx - 6 + hash(kx * 9 + i, ky) * 12, cy - 6 + hash(kx, ky * 9 + i) * 12, 4.5, 0, TAU); ctx.fill(); }
+  } else if (art === 'm') {
+    linien('rgba(0,0,0,.18)', 3, 2);
+    linien('#90a4ae', 2);
+    ctx.fillStyle = '#455a64'; ctx.fillRect(cx - 2.5, cy - 2.5, 5, 5);
+  } else if (art === 'w') {
+    linien('rgba(0,0,0,.25)', 10, 3);
+    linien('#8a8580', 10);
+    linien('#b5b0a8', 5);
+  } else {
+    // Holzzaun: zwei Latten und Pfosten
+    linien('rgba(0,0,0,.22)', 7, 3);
+    linien('#a1887f', 6);
+    linien('#8d6e63', 2);
+    ctx.fillStyle = '#5d4037'; ctx.fillRect(cx - 3.5, cy - 3.5, 7, 7);
+  }
+}
+
+// Gartenausstattung, Bänke, Haltestellen. oben = false: flache Dinge (Boden), true: Dächer (Gartenhaus, Haltestelle)
+function gartenObjekte(ctx, welt, rect, oben) {
+  const K = KACHEL;
+  for (const o of welt.details.objekte) {
+    const x = o.x * K, y = o.y * K, b = (o.b ?? 1) * K, h = (o.h ?? 1) * K;
+    if (x + b < rect.x0 * K - 60 || x > rect.x1 * K + 60 || y + h < rect.y0 * K - 60 || y > rect.y1 * K + 60) continue;
+    ctx.save();
+    if (!oben && o.a === 'pool') {
+      ctx.fillStyle = '#d7d2c8'; ctx.fillRect(x + 2, y + 2, b - 4, h - 4);
+      const g = ctx.createLinearGradient(x, y, x + b, y + h); g.addColorStop(0, '#4fc3f7'); g.addColorStop(1, '#0288d1');
+      ctx.fillStyle = g; ctx.fillRect(x + 6, y + 6, b - 12, h - 12);
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(x + 10 + i * 14, y + 14 + i * 9); ctx.quadraticCurveTo(x + 16 + i * 14, y + 10 + i * 9, x + 22 + i * 14, y + 14 + i * 9); ctx.stroke(); }
+    } else if (!oben && o.a === 'trampolin') {
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(x + 19, y + 20, 14, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#1565c0'; ctx.beginPath(); ctx.arc(x + 16, y + 16, 14, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#212121'; ctx.beginPath(); ctx.arc(x + 16, y + 16, 11, 0, TAU); ctx.fill();
+    } else if (!oben && o.a === 'beet') {
+      ctx.fillStyle = '#6d4c41'; ctx.fillRect(x + 3, y + 5, b - 6, h - 10);
+      for (let i = 0; i < 10; i++) {
+        ctx.fillStyle = ['#e53935', '#fdd835', '#ab47bc', '#ffffff', '#43a047'][i % 5];
+        ctx.beginPath(); ctx.arc(x + 7 + hash(o.x * 7 + i, o.y) * (b - 14), y + 9 + hash(o.y * 5 + i, o.x) * (h - 18), 2.6, 0, TAU); ctx.fill();
+      }
+    } else if (!oben && o.a === 'sitzgruppe') {
+      ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.arc(x + 18, y + 18, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#eeeeee'; ctx.beginPath(); ctx.arc(x + 16, y + 16, 8, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#8d6e63'; for (const [dx, dy] of [[-12, 0], [12, 0], [0, -12], [0, 12]]) ctx.fillRect(x + 13 + dx, y + 13 + dy, 6, 6);
+      ctx.fillStyle = '#ef5350'; ctx.beginPath(); ctx.arc(x + 16, y + 16, 3, 0, TAU); ctx.fill();   // Sonnenschirm-Mitte
+    } else if (!oben && (o.a === 'bank' || o.a === 'kuebel' || o.a === 'muell')) {
+      ctx.translate(x, y); ctx.rotate(o.w ?? 0);
+      if (o.a === 'bank') { ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-12, -2, 26, 9); ctx.fillStyle = '#8d6e63'; ctx.fillRect(-13, -4, 26, 8); ctx.fillStyle = '#5d4037'; ctx.fillRect(-13, -4, 26, 2); }
+      else if (o.a === 'kuebel') { ctx.fillStyle = '#9e9e9e'; ctx.fillRect(-8, -8, 16, 16); ctx.fillStyle = '#388e3c'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill(); ctx.fillStyle = '#f06292'; ctx.beginPath(); ctx.arc(2, -2, 2, 0, TAU); ctx.fill(); }
+      else { ctx.fillStyle = '#37474f'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill(); ctx.fillStyle = '#607d8b'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, TAU); ctx.fill(); }
+    } else if (oben && o.a === 'gartenhaus') {
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x + 4, y + 6, b, h);
+      ctx.fillStyle = '#8d6e63'; ctx.fillRect(x - 2, y - 2, b + 4, h + 4);
+      ctx.fillStyle = '#a1887f'; ctx.fillRect(x - 2, y - 2, (b + 4) / 2, h + 4);
+      ctx.strokeStyle = '#5d4037'; ctx.lineWidth = 1; for (let i = 4; i < h; i += 5) { ctx.beginPath(); ctx.moveTo(x - 2, y + i); ctx.lineTo(x + b + 2, y + i); ctx.stroke(); }
+    } else if (oben && o.a === 'haltestelle') {
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x - 14, y - 4, 32, 14);
+      ctx.fillStyle = 'rgba(180,220,240,.75)'; ctx.fillRect(x - 16, y - 7, 32, 12);
+      ctx.strokeStyle = '#455a64'; ctx.lineWidth = 2; ctx.strokeRect(x - 16, y - 7, 32, 12);
+      ctx.fillStyle = '#fdd835'; ctx.beginPath(); ctx.arc(x + 20, y - 8, 6, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#2e7d32'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('H', x + 20, y - 8);
+    }
+    ctx.restore();
+  }
 }
 
 function bildZeichnen(ctx, bild, x, y, gr, dreh = 0) {

@@ -1,6 +1,6 @@
 // Steuerung der simulierten Mitspieler (zweite Fassung, Claude): Wegsuche über Kacheln, feste Plätze hinter
 // dem Anführer, Abstand zu allen Figuren, bewaffnete Bots kämpfen. Ein Bot steuert sich nur über x.eingabe.
-import { frei, sichtfrei, safeRoomAn, findeWeg, KACHEL, WAFFEN } from '../client/welt.mjs';
+import { frei, sichtfrei, safeRoomAn, findeWeg, KACHEL, WAFFEN, DINGE, AKTION_ABSTAND } from '../client/welt.mjs';
 
 export const BOT_NAMEN = ['Resi', 'Vroni', 'Sepp', 'Wastl', 'Kathi', 'Hias', 'Burgi', 'Girgl', 'Loisl', 'Zenzi'];
 
@@ -22,7 +22,41 @@ function versorgen(p, b, jetzt) {
   if (p.hp < 40 && nimm('verband', () => { p.hp = Math.min(100, p.hp + 45); })) return;
   if (p.durst < 35 && nimm('wasser', () => { p.durst = Math.min(100, p.durst + 45); })) return;
   if (p.hunger < 35 && (nimm('essen', () => { p.hunger = Math.min(100, p.hunger + 45); }) || nimm('schokoriegel', () => { p.hunger = Math.min(100, p.hunger + 20); }))) return;
-  if (!p.waffe) for (const w of ['gewehr', 'schrotflinte', 'sense', 'schlaeger', 'messer', 'pistole']) if (nimm(w, () => { p.waffe = w; })) return;
+  // bessere Waffe aus dem Rucksack nehmen (die alte kommt hinein); Fernwaffen nur mit Munition
+  const rang = w => (WAFFEN[w]?.fern && !p.munition) ? 0 : WAFFEN_RANG.indexOf(w) + 1;
+  const besser = WAFFEN_RANG.filter(w => p.rucksack.includes(w) && rang(w) > rang(p.waffe)).at(-1);
+  if (besser && nimm(besser, () => { if (p.waffe) p.rucksack.push(p.waffe); p.waffe = besser; })) return;
+  // größere Tasche umpacken
+  for (const t of ['trekking', 'tasche']) {
+    if (p.rucksack.includes(t) && (DINGE[t]?.plaetze ?? 0) > p.plaetze && nimm(t, () => { p.plaetze = DINGE[t].plaetze; })) return;
+  }
+}
+const WAFFEN_RANG = ['messer', 'schlaeger', 'pistole', 'sense', 'schrotflinte', 'gewehr'];
+
+// Gelegenheit nutzen: nahe Schränke, Kofferräume (mit Brechstange) und tote Zombies durchsuchen
+function durchsuchen(raum, sid, p, x, welt) {
+  const b = x.bot;
+  b.durchsucht ??= new Set();
+  if (p.rucksack.length >= p.plaetze) return false;
+  const kandidaten = [];
+  for (const c of welt.behaelter ?? []) {
+    if (b.durchsucht.has(c.id) || raum.state.behaelter.get(c.id)?.rest === 0) continue;
+    if (c.art === 'auto' && !p.rucksack.includes('brechstange')) continue;
+    kandidaten.push(c);
+  }
+  for (const [id, l] of raum.state.leichen) if ((l.ebene ?? '') === (p.ebene ?? '') && l.rest !== 0 && !b.durchsucht.has(id)) kandidaten.push({ id, x: l.x, y: l.y, leiche: true });
+  const ziel = naechster(kandidaten, p, 170, c => sichtfrei(welt, p.x, p.y, c.x, c.y));
+  if (!ziel) return false;
+  if (abstand(p, ziel) > AKTION_ABSTAND - 8) { geheZu(raum, sid, p, x, ziel, 0.9, AKTION_ABSTAND - 12); return true; }
+  const k = raum.kontext(p);
+  if (k?.art === 'durchsuchen') {
+    b.durchsucht.add(k.behaelter.id);
+    if (k.behaelter.art === 'auto' && !p.rucksack.includes('brechstange')) return false;
+    p.aktion = 'durchsuchen'; p.fortschritt = 0; x.aktionZiel = k; x.laermUhr = 0;
+    return true;
+  }
+  b.durchsucht.add(ziel.id);
+  return false;
 }
 
 // zum Ziel gehen: Weg berechnen (gelegentlich neu), Wegpunkten folgen, Abstand zu anderen halten
@@ -75,6 +109,12 @@ export function botSchritt(raum, sid, p, x, dt) {
   if (p.unten || p.zombie > 0) { b.weg = null; return; }
   if (raum.tausche?.has(sid)) return;   // beim Tauschen stillhalten
   versorgen(p, b, raum.uhr);
+  // beim Durchsuchen stillstehen – außer ein Zombie kommt zu nah
+  if (p.aktion) {
+    const nah = [...raum.state.zombies.values()].some(z => (z.ebene ?? '') === (p.ebene ?? '') && abstand(p, z) < 110);
+    if (!nah) return;
+    p.aktion = ''; p.fortschritt = 0; x.aktionZiel = null;
+  }
 
   const welt = raum.wv(p.ebene);
   const alleSpieler = [...raum.state.spieler.entries()];
@@ -106,6 +146,10 @@ export function botSchritt(raum, sid, p, x, dt) {
       }
     }
   }
+
+  // 2b. Gelegenheit: in der Nähe durchsuchen, solange der Mensch nicht weit weg ist
+  const mensch = naechster(spieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten).map(([, o]) => o), p, Infinity);
+  if (!gefahr && mensch && abstand(p, mensch) < 260 && durchsuchen(raum, sid, p, x, welt)) return;
 
   // 3. Dem nächsten Menschen folgen – auf festem Platz hinter ihm (ist er auf einer anderen Ebene: zum Übergang)
   const ueberall = alleSpieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
