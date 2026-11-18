@@ -6,19 +6,26 @@ import { KACHEL, BREITE, HOEHE } from '../client/welt.mjs';
 
 export const Fahrzeug = schema({
   x: t.number(), y: t.number(), richtung: t.number(),
-  art: t.string(),          // 'bus' | 'auto' | 'polizei' | 'feuerwehr' | 'wrack'
+  art: t.string(),          // 'bus' | 'auto' | 'laster' | 'polizei' | 'feuerwehr' | 'wrack'
   farbe: t.uint8(),
   haelt: t.boolean(),
 }, 'Fahrzeug');
 
 const FAHRBAR = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service']);
 const KOSTEN = { primary: 0.55, secondary: 0.6, tertiary: 0.75, unclassified: 1, residential: 1.2, living_street: 1.6, service: 3 };
+export const LASTER_ANTEIL = 0.1;   // Anteil Laster im normalen Verkehr
 const HAUPT = new Set(['primary', 'secondary', 'tertiary']);
-const LAENGE = { auto: 46, bus: 124, polizei: 50, feuerwehr: 74 };   // Fahrzeuglänge in Pixeln (für den Abstand)
-const TEMPO = { bus: 85, auto: 115, polizei: 175, feuerwehr: 160 };
-const SPUR = { bus: 0.22, auto: 0.22, polizei: 0.12, feuerwehr: 0.12 };   // Abstand zur Mitte in Kacheln je Meter Fahrbahn
+export const LAENGE = { auto: 46, laster: 90, bus: 124, polizei: 50, feuerwehr: 74 };   // Fahrzeuglänge in Pixeln (für den Abstand)
+const TEMPO = { bus: 85, auto: 115, laster: 90, polizei: 175, feuerwehr: 160 };
+const SPUR = { bus: 0.22, auto: 0.22, laster: 0.22, polizei: 0.12, feuerwehr: 0.12 };   // Abstand zur Mitte in Kacheln je Meter Fahrbahn
 
 // ---------- Straßengraph aus den Polylinien ----------
+// Kante (Kachelkoordinaten, in beiden Richtungen) durch eine Straßensperre gesperrt? (welt.sperren aus osmwelt.mjs)
+function gesperrt(welt, ax, ay, bx, by) {
+  const nah = (a, b) => Math.abs(a - b) < 0.05;
+  return (welt.sperren ?? []).some(({ kante: k }) =>
+    (nah(k[0], ax) && nah(k[1], ay) && nah(k[2], bx) && nah(k[3], by)) || (nah(k[0], bx) && nah(k[1], by) && nah(k[2], ax) && nah(k[3], ay)));
+}
 export function strassenGraph(welt) {
   if (welt._graph) return welt._graph;
   const knoten = new Map();   // "x,y" → { id, x, y, nach: [{ziel, laenge, haupt, t}] }
@@ -34,6 +41,7 @@ export function strassenGraph(welt) {
       // nur innerhalb der Karte (OSM-Wege ragen über den Rand hinaus)
       const innen = (x, y) => x > 1.5 && y > 1.5 && x < BREITE - 1.5 && y < HOEHE - 1.5;
       if (!innen(s.p[i], s.p[i + 1]) || !innen(s.p[i + 2], s.p[i + 3])) continue;
+      if (gesperrt(welt, s.p[i], s.p[i + 1], s.p[i + 2], s.p[i + 3])) continue;   // Polizeisperre: Autos fahren drumherum
       const a = holen(s.p[i], s.p[i + 1]), b = holen(s.p[i + 2], s.p[i + 3]);
       if (a === b) continue;
       const l = Math.hypot(b.x - a.x, b.y - a.y);
@@ -145,7 +153,7 @@ export class Verkehr {
       this.busId = id;
     }
     for (let i = 0; i < autos && this.graph.haupt.length; i++) {
-      const id = this.neu('auto', this.graph.haupt[Math.floor(r() * this.graph.haupt.length)]);
+      const id = this.neu(r() < LASTER_ANTEIL ? 'laster' : 'auto', this.graph.haupt[Math.floor(r() * this.graph.haupt.length)]);
       this.neuesZiel(id);
     }
   }

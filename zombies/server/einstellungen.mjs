@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DINGE } from '../client/welt.mjs';
 
-export const KARTEN = ['geretsried', 'dorf'];
+export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
 export const ZEITRAFFER = [1, 5, 10, 60];
 export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20 };   // Meter
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
@@ -31,7 +31,7 @@ export const EREIGNISSE = [
   { id: 'autoradio', name: 'Autoradio', beschreibung: 'Läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren', art: 'schleife' },
   { id: 'startmusik', name: 'Startmusik', beschreibung: 'Auf der Startseite (nach dem ersten Antippen), blendet beim Spielbeginn aus', art: 'schleife' },
   { id: 'funk', name: 'Funkgerät', beschreibung: 'Kurzer Klick bei wichtigen Meldungen', art: 'einmal' },
-  { id: 'wasser', name: 'Wasser', beschreibung: 'Rauschen in der Nähe von Bach und Fluss', art: 'schleife', bald: true },
+  { id: 'wasser', name: 'Wasser', beschreibung: 'Rauschen in der Nähe von Bach und Fluss', art: 'schleife' },
 ];
 
 const zahl = (v, min, max, vorgabe) => {

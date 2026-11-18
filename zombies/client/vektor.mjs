@@ -1,7 +1,7 @@
 // Echtere Darstellung der OSM-Karte: glatte Straßen mit Gehweg, Flächen und Dächer nach den echten Gebäudeumrissen.
 // Nur Aussehen – Kollision und Türen bleiben beim Kachelraster (osmwelt.mjs).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
-import { KACHEL } from './welt.mjs';
+import { KACHEL, BREITE, T } from './welt.mjs';
 
 const K = KACHEL;
 
@@ -232,6 +232,8 @@ function fahrbahn(l) {
   else m = ART_BREITE[l.t] ?? 5;
   return (l.fb = m * METER);
 }
+// Fahrbahnbreite in Pixeln (für Straßensperren in osmwelt.mjs)
+export const fahrbahnBreite = fahrbahn;
 // Plätze für geparkte Autos: längs am Fahrbahnrand, nach der Straße ausgerichtet (Kartendaten in Kacheln, Ergebnis in Pixeln).
 // Der Wagen steht mit der Innenkante knapp auf dem Asphalt, sonst auf Bordstein und Gehweg – wie in Wohnstraßen üblich.
 const PARKEN = new Set(['residential', 'unclassified', 'living_street', 'tertiary']);
@@ -270,7 +272,9 @@ export function strassenBuchten(strassen) {
       for (const seite of [1, -1]) {
         let d = 24 + hash(zaehler++ * 7 + 3) * 30;
         while (true) {
-          const n = 2 + Math.floor(hash(zaehler++ * 13 + 1) * 3), L = n * BUCHT_PLATZ;
+          // 2–4 Plätze; etwa jede dritte Bucht ist 1–2 Plätze länger als nötig (dort bleiben Plätze sichtbar frei)
+          const extra = hash(zaehler++ * 17 + 2) < 0.5 ? 1 + Math.floor(hash(zaehler++ * 19 + 4) * 2) : 0;
+          const n = 2 + Math.floor(hash(zaehler++ * 13 + 1) * 3) + extra, L = n * BUCHT_PLATZ;
           if (d + L > len - 24) break;
           if (hash(zaehler++ * 11 + 5) > 0.2) {   // etwa jede fünfte Stelle bleibt frei
             const mitte = d + L / 2, ab = fb / 2 + BUCHT_TIEFE / 2;
@@ -280,7 +284,7 @@ export function strassenBuchten(strassen) {
               const t = d + BUCHT_PLATZ * (j + 0.5);
               plaetze.push({ x: ax + ux * t - uy * ab * seite, y: ay + uy * t + ux * ab * seite });
             }
-            liste.push({ x, y, winkel: w, laenge: L, tiefe: BUCHT_TIEFE, seite, ux, uy, plaetze });
+            liste.push({ x, y, winkel: w, laenge: L, tiefe: BUCHT_TIEFE, seite, ux, uy, plaetze, extra });
           }
           d += L + 36 + hash(zaehler++ * 3 + 9) * 40;
         }
@@ -318,6 +322,31 @@ function zeichneBuchten(ctx, welt, r, m) {
   }
 }
 
+const GEHWEG = 10;   // Breite eines Gehwegs in Pixeln (gut 1 m)
+// Beschneidung auf die Kacheln, auf denen ein Gehweg liegen darf (je Aufruf nur der sichtbare Ausschnitt, Läufe zu Rechtecken verbunden)
+function gehwegClip(ctx, welt, r) {
+  const kx0 = Math.max(0, Math.floor(r.x0 / K) - 1), kx1 = Math.min(BREITE - 1, Math.ceil(r.x1 / K) + 1);
+  const ky0 = Math.max(0, Math.floor(r.y0 / K) - 1), ky1 = Math.ceil(r.y1 / K) + 1;
+  const garten = welt.details?.garten;
+  const ok = (kx, ky) => {
+    const t = welt.hole(kx, ky);
+    if (t === T.STRASSE || t === T.PLATZ) return true;
+    if (t !== T.WIESE && t !== T.BAUM) return false;
+    const g = garten?.[ky * BREITE + kx];
+    return !g || g === '.';
+  };
+  ctx.beginPath();
+  for (let ky = ky0; ky <= ky1; ky++) {
+    for (let kx = kx0; kx <= kx1; kx++) {
+      if (!ok(kx, ky)) continue;
+      let ende = kx; while (ende + 1 <= kx1 && ok(ende + 1, ky)) ende++;
+      ctx.rect(kx * K, ky * K, (ende - kx + 1) * K, K);
+      kx = ende;
+    }
+  }
+  ctx.clip();
+}
+
 export function zeichneStrassen(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect), m = musterHolen(ctx);
   const hier = v.linien.filter(l => schneidet(l.box, r) && l.pts.length > 1);
@@ -331,10 +360,18 @@ export function zeichneStrassen(ctx, welt, rect) {
     ctx.strokeStyle = 'rgba(60,50,30,.25)'; ctx.lineWidth = 9; ctx.stroke();
     ctx.strokeStyle = l.t === 'track' ? '#c9b98f' : '#d8cfb0'; ctx.lineWidth = 6; ctx.stroke();
   }
-  // 2. angedeuteter Gehweg
-  for (const l of hier) {
-    if (!AUTO.has(l.t)) continue;
-    pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(200,194,178,.55)'; ctx.lineWidth = fahrbahn(l) + 14; ctx.stroke();
+  // 2. Gehwege: schmale hellgraue Streifen beidseitig der Fahrstraßen mit feiner Bordsteinlinie.
+  // Nur auf freiem Gelände (Straße, Platz, ungezäunte Wiese): nicht über Häusern, Gärten, Zäunen und Wasser.
+  const gehwege = hier.filter(l => AUTO.has(l.t));
+  if (gehwege.length) {
+    ctx.save();
+    gehwegClip(ctx, welt, r);
+    for (const l of gehwege) {
+      const fb = fahrbahn(l);
+      pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = fb + 2 * GEHWEG + 2; ctx.stroke();
+      pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(208,206,198,.88)'; ctx.lineWidth = fb + 2 * GEHWEG; ctx.stroke();
+    }
+    ctx.restore();
   }
   for (const l of hier) if (l.t === 'pedestrian') { pfad(ctx, l.pts); ctx.strokeStyle = m.pflaster; ctx.lineWidth = l.b; ctx.stroke(); }
   // 3. dunkle Kanten aller Fahrbahnen zuerst, dann der Asphalt – so bleiben Kreuzungen sauber

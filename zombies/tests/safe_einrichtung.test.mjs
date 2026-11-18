@@ -1,0 +1,95 @@
+// Safe Rooms als Notlager: Möblierung (Dorf und Geretsried) und Ruhen auf dem Feldbett
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import { matchMaker } from '@colyseus/core';
+import { Client } from '@colyseus/sdk';
+import { starte } from '../server/index.mjs';
+import { KACHEL, T, baueWelt, setzeKartengroesse } from '../client/welt.mjs';
+import { baueWeltAusKarte } from '../client/osmwelt.mjs';
+import { innenraumFuer, SAFE_MOEBEL } from '../client/innen.mjs';
+import { BEUTE } from '../client/welt.mjs';
+
+const WOHNUNG = ['bett', 'badewanne', 'klo', 'herd', 'sofa', 'fernseher', 'couchtisch', 'esstisch', 'kuehlschrank', 'spuele', 'waschbecken'];
+const GEHBAR = new Set([T.BODEN, T.TUER_OFFEN, T.INNENTUER, T.AUSGANG]);
+
+function pruefeSafe(welt, seed, name) {
+  assert.ok(welt.safeRooms.length > 0);
+  for (const s of welt.safeRooms) {
+    const w = innenraumFuer(seed, welt, s.ebene);
+    const wo = `${name} Seed ${seed} ${s.name}`;
+    const zahl = art => w.moebel.filter(m => m.art === art).length;
+    assert.ok(zahl('feldbett') >= 2 && zahl('feldbett') <= 6, `${wo}: Feldbetten ${zahl('feldbett')}`);
+    assert.ok(zahl('vorratsregal') >= 1, `${wo}: kein Vorratsregal`);
+    assert.ok(zahl('funktisch') >= 1, `${wo}: kein Funktisch`);
+    assert.ok(!w.moebel.some(m => WOHNUNG.includes(m.art)), `${wo}: Wohnungsmöbel übrig`);
+    assert.ok(w.behaelter.some(b => b.art === 'vorratsregal'), `${wo}: Regal nicht durchsuchbar`);
+    // Erreichbarkeit vom Start aus: Ausgang, Kiste und alle Behälter (über Nachbarkachel)
+    const besucht = new Set(), q = [[Math.floor(w.start.x / KACHEL), Math.floor(w.start.y / KACHEL)]];
+    besucht.add(q[0].join());
+    for (let i = 0; i < q.length; i++) {
+      const [x, y] = q[i];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const k = (x + dx) + ',' + (y + dy);
+        if (!besucht.has(k) && GEHBAR.has(w.hole(x + dx, y + dy))) { besucht.add(k); q.push([x + dx, y + dy]); }
+      }
+    }
+    const erreichbar = (kx, ky) => besucht.has(kx + ',' + ky) || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => besucht.has((kx + dx) + ',' + (ky + dy)));
+    assert.ok(besucht.has(w.ausgang.x + ',' + w.ausgang.y), `${wo}: Ausgang nicht erreichbar`);
+    assert.ok(erreichbar(Math.floor(w.kiste.x / KACHEL), Math.floor(w.kiste.y / KACHEL)), `${wo}: Kiste nicht erreichbar`);
+    for (const b of w.behaelter) assert.ok(erreichbar(Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL)), `${wo}: Behälter ${b.art} nicht erreichbar`);
+    for (const t of w.tueren) assert.ok(erreichbar(t.x, t.y), `${wo}: Tür nicht erreichbar`);
+    for (const m of w.moebel) assert.ok(SAFE_MOEBEL.has(m.art), `${wo}: fremdes Möbel ${m.art}`);
+  }
+}
+
+test('Safe Rooms im Dorf sind Notlager', () => {
+  for (const seed of [1, 7, 42, 1234, 99999]) pruefeSafe(baueWelt(seed), seed, 'Dorf');
+});
+
+test('Safe Rooms in Geretsried sind Notlager', () => {
+  const karte = JSON.parse(fs.readFileSync(new URL('../client/karten/geretsried.json', import.meta.url)));
+  setzeKartengroesse(karte.breite, karte.hoehe);
+  try { for (const seed of [3, 7, 21]) pruefeSafe(baueWeltAusKarte(karte, seed), seed, 'Geretsried'); }
+  finally { setzeKartengroesse(64, 48); }
+});
+
+test('Möblierung ist deterministisch, Beute-Tabellen vorhanden', () => {
+  const w = baueWelt(5), a = innenraumFuer(5, w, w.safeRooms[0].ebene), b = innenraumFuer(5, w, w.safeRooms[0].ebene);
+  assert.deepEqual(a.moebel, b.moebel);
+  assert.ok(BEUTE.vorratsregal.includes('wasser') && BEUTE.erstehilfe.includes('verband'));
+});
+
+const PORT = 28100 + Math.floor(Math.random() * 200);
+let server;
+const warte = ms => new Promise(r => setTimeout(r, ms));
+async function bis(f, ms = 3000) { const e = Date.now() + ms; while (Date.now() < e) { if (f()) return true; await warte(20); } return f(); }
+before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: ':memory:' }); });
+after(async () => { await server.gracefullyShutdown(false); });
+
+test('Ruhen: neben dem Feldbett steigt das Leben, Bewegen beendet es', async () => {
+  const c = await new Client(`http://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Schlaefer', spielerId: crypto.randomBytes(16).toString('hex') });
+  const raum = matchMaker.getLocalRoomById(c.roomId);
+  raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+  const p = raum.state.spieler.get(c.sessionId);
+  try {
+    const s = raum.welt.safeRooms[0], w = raum.wv(s.ebene);
+    const bett = w.moebel.find(m => m.art === 'feldbett');
+    // freie Kachel neben dem Bett
+    let ort = null;
+    for (let dy = -1; dy <= bett.h && !ort; dy++) for (let dx = -1; dx <= bett.b && !ort; dx++) if (w.hole(bett.x + dx, bett.y + dy) === T.BODEN) ort = { x: bett.x + dx, y: bett.y + dy };
+    assert.ok(ort, 'keine freie Kachel am Bett');
+    p.ebene = s.ebene; p.x = (ort.x + 0.5) * KACHEL; p.y = (ort.y + 0.5) * KACHEL;
+    p.hp = 50; p.durst = 80; p.hunger = 80;
+    assert.ok(await bis(() => p.sicher === s.id), 'nicht im Safe Room');
+    assert.equal(p.ruht, false, 'ruht sofort');
+    assert.ok(await bis(() => p.ruht === true, 4000), 'ruht nicht');
+    const hp0 = p.hp;
+    await warte(1500);
+    assert.ok(p.hp >= hp0 + 1, `Leben steigt nicht (${hp0} → ${p.hp})`);
+    c.send('eingabe', { dx: 0, dy: 1 });
+    assert.ok(await bis(() => p.ruht === false, 2000), 'Bewegen beendet das Ruhen nicht');
+    c.send('eingabe', { dx: 0, dy: 0 });
+  } finally { await c.leave(); }
+});

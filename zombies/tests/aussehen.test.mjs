@@ -38,7 +38,7 @@ test('zweiter Figurenbogen: alle Gruppen vorhanden, Survivor-Aussehen gültig', 
   const j = JSON.parse(readFileSync(new URL('../client/grafik/figuren2.json', import.meta.url)));
   assert.equal(j.feld, 160);
   for (const g of ['sv_pistole_idle', 'sv_pistole_move', 'sv_pistole_shoot', 'sv_gewehr_move', 'sv_schrot_shoot', 'sv_messer_meleeattack',
-    'sv_fuesse_walk', 'sv_fuesse_idle', 'z6_laufen', 'z6_angriff', 'z7_laufen', 'z7_sterben', 'z7_sterben2', 'buerger1', 'buerger3', 'muendungsblitz']) {
+    'sv_fuesse_walk', 'sv_fuesse_idle', 'z6_laufen', 'z6_angriff', 'z7_laufen', 'z7_sterben', 'z7_sterben2', 'buerger1', 'buerger3', 'polizist', 'muendungsblitz']) {
     assert.ok(j.bilder[g]?.length > 0, 'fehlt: ' + g);
   }
   const webp = readFileSync(new URL('../client/grafik/figuren2.webp', import.meta.url));

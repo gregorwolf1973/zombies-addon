@@ -1,0 +1,56 @@
+{
+ "feldB": 100,
+ "feldH": 50,
+ "spalten": 8,
+ "mass": 2,
+ "autos": [
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "farbe": 0,
+   "nr": 0
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "farbe": 1,
+   "nr": 1
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "farbe": 2,
+   "nr": 2
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "farbe": 3,
+   "nr": 3
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "farbe": 4,
+   "nr": 4
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "farbe": 5,
+   "nr": 5
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "farbe": 6,
+   "nr": 6
+  },
+  {
+   "art": "pkw",
+   "laenge": 46,
+   "farbe": 7,
+   "nr": 7
+  }
+ ]
+}

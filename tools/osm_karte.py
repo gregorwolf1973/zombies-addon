@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Holt OpenStreetMap-Daten (Overpass) für ein Gebiet und rechnet sie in das Kachelraster des Spiels um.
 Daten © OpenStreetMap-Mitwirkende, Lizenz ODbL 1.0 – die erzeugte Karte steht ebenfalls unter ODbL.
-Aufruf: python3 tools/osm_karte.py <süd> <west> <nord> <ost> <meter_pro_kachel> <ausgabe.json> [--neu]"""
-import json, math, sys, urllib.request, urllib.parse, pathlib, collections
+Aufruf: python3 tools/osm_karte.py <süd> <west> <nord> <ost> <meter_pro_kachel> <ausgabe.json> [--neu] [--fluss=<Meter>]
+  --fluss=<Meter>: waterway=river (Linie) mindestens so breit zeichnen (für große Flüsse wie die Isar); ohne Angabe bleibt es bei 3 Kacheln.
+  Umgebungsvariable OVERPASS_URL: anderer Overpass-Server."""
+import json, math, sys, os, urllib.request, urllib.parse, pathlib, collections
 
 sued, west, nord, ost, mpk = map(float, sys.argv[1:6]); ausgabe = pathlib.Path(sys.argv[6])
 roh = pathlib.Path(__file__).parent / "osm" / f"roh_{sued}_{west}_{nord}_{ost}.json"
@@ -17,7 +19,7 @@ if not roh.exists() or "--neu" in sys.argv:
  node["natural"]({sued},{west},{nord},{ost}); node["highway"="bus_stop"]({sued},{west},{nord},{ost});
  node["leisure"]({sued},{west},{nord},{ost}); way["man_made"]({sued},{west},{nord},{ost}););
 out body; >; out skel qt;"""
-    req = urllib.request.Request("https://overpass-api.de/api/interpreter", data=urllib.parse.urlencode({"data": q}).encode(),
+    req = urllib.request.Request(os.environ.get("OVERPASS_URL", "https://overpass-api.de/api/interpreter"), data=urllib.parse.urlencode({"data": q}).encode(),
                                  headers={"User-Agent": "zombies-karte/0.1"})
     roh.write_bytes(urllib.request.urlopen(req, timeout=120).read())
 daten = json.loads(roh.read_text())["elements"]
@@ -29,6 +31,7 @@ punkte = [e for e in daten if e["type"] == "node" and "tags" in e]
 mlat, mlon = (sued + nord) / 2, (west + ost) / 2
 kx = lambda lon: (lon - west) * 111320 * math.cos(math.radians(mlat)) / mpk
 ky = lambda lat: (nord - lat) * 110540 / mpk
+FLUSS_M = next((float(a[8:]) for a in sys.argv if a.startswith("--fluss=")), 0.0)
 B = int(math.ceil(kx(ost))); H = int(math.ceil(ky(sued)))
 WIESE, STRASSE, WAND, BODEN, TUER, WASSER, BAUM, PLATZ, ZAUN = 0, 1, 2, 3, 4, 5, 6, 7, 8
 k = [[WIESE] * B for _ in range(H)]
@@ -69,7 +72,7 @@ for w in wege:
     elif t.get("amenity") == "parking" or t.get("highway") == "pedestrian" and w["nodes"][0] == w["nodes"][-1] or t.get("place") == "square":
         fuelle(poly(w), PLATZ)
 for w in wege:
-    if w["tags"].get("waterway") in ("river", "stream", "canal"): linie(poly(w), 3 if w["tags"]["waterway"] == "river" else 1.5, WASSER)
+    if w["tags"].get("waterway") in ("river", "stream", "canal"): linie(poly(w), max(3 if w["tags"]["waterway"] == "river" else 1.5, FLUSS_M / mpk if w["tags"]["waterway"] == "river" else 0), WASSER)
 # 2. Straßen und Wege
 BREITEN = {"primary": 4, "secondary": 3.5, "tertiary": 3, "residential": 2.5, "unclassified": 2.5, "living_street": 2,
            "service": 1.5, "pedestrian": 2, "footway": 1, "path": 1, "cycleway": 1, "track": 1.2}

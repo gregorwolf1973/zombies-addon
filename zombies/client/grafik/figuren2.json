@@ -332,20 +332,28 @@
    258,
    259
   ],
+  "polizist": [
+   260,
+   261,
+   262,
+   263,
+   264,
+   265
+  ],
   "waffe_rifle": [
-   260
+   266
   ],
   "waffe_shotgun": [
-   261
+   267
   ],
   "waffe_knife": [
-   262
+   268
   ],
   "waffe_flashlight": [
-   263
+   269
   ],
   "muendungsblitz": [
-   264
+   270
   ]
  }
 }

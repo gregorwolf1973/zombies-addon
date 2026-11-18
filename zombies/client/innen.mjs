@@ -22,9 +22,16 @@ export const MOEBEL_NAMEN = {
   kiste: 'Kiste',
   heizung: 'Heizung',
   alter_schrank: 'Alter Schrank',
+  // Safe Room (Notlager)
+  feldbett: 'Feldbett',
+  vorratsregal: 'Vorratsregal',
+  funktisch: 'Funktisch',
+  generator: 'Generator',
+  kanister: 'Wasserkanister',
+  erstehilfe: 'Erste-Hilfe-Kasten',
 };
 
-const BEHAELTER_ARTEN = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang']);
+const BEHAELTER_ARTEN = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang', 'vorratsregal', 'erstehilfe']);
 
 // Hilfsfunktion: Index im Raster
 function idx(x, y) {
@@ -854,11 +861,74 @@ export function innenraumFuer(seed, welt, ebene) {
   return w;
 }
 
+// Safe Room als Notlager: Wohnungsmöbel raus, dann Feldbetten, Vorratsregale, Funktisch, Generator, Kanister, Erste Hilfe.
+// Alles deterministisch aus dem Seed; jedes Stück wird nur gesetzt, wenn der Raum begehbar zusammenhängend bleibt.
+export const SAFE_MOEBEL = new Set(['feldbett', 'vorratsregal', 'funktisch', 'generator', 'kanister', 'erstehilfe']);
+function safeMoeblieren(w) {
+  const kacheln = w.kacheln;
+  for (const m of w.moebel) for (let dy = 0; dy < m.h; dy++) for (let dx = 0; dx < m.b; dx++) kacheln[idx(m.x + dx, m.y + dy)] = T.BODEN;
+  w.moebel = []; w.behaelter = [];
+  for (const tr of w.treppen) kacheln[tr.y * BREITE + tr.x] = T.BODEN;
+  const rng = zufall((w.seed ^ Math.imul(w.nr + 1, 104729) ^ 0x5afe) >>> 0);
+  let flaeche = 0;
+  for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++) if (kacheln[idx(x, y)] === T.BODEN) flaeche++;
+  const zaehler = { count: 0 };
+  const raeume = [...w.raeume].sort((a, b) => b.b * b.h - a.b * a.h);
+  const ganz = { x: w.ox, y: w.oy, b: w.b, h: w.h };
+  const setze = (art, b, h) => {
+    for (const raum of [...raeume, ganz]) {
+      for (let versuch = 0; versuch < 3; versuch++) {
+        const pos = findeMoebelPosition(kacheln, raum, b, h, w.ox, w.oy, w.b, w.h, rng, art);
+        if (!pos) break;
+        if (platziereMoebel(kacheln, w.moebel, w.behaelter, art, pos.x, pos.y, pos.b, pos.h, w.ox, w.oy, w.b, w.h, zaehler)) return true;
+      }
+    }
+    return false;
+  };
+  setze('funktisch', 2, 1);
+  setze('vorratsregal', 2, 1);
+  setze('feldbett', 1, 2);
+  setze('feldbett', 1, 2);
+  setze('erstehilfe', 1, 1);
+  setze('generator', 1, 1);
+  setze('kanister', 1, 1);
+  const betten = Math.max(2, Math.min(6, Math.floor(flaeche / 30)));
+  for (let i = 2; i < betten; i++) setze('feldbett', 1, 2);
+  const regale = Math.max(2, Math.min(4, Math.floor(flaeche / 24)));
+  for (let i = 1; i < regale; i++) setze('vorratsregal', rng() < 0.5 ? 2 : 1, 1);
+  if (rng() < 0.7) setze('kanister', 1, 1);
+  // Behälter, die später zugestellt wurden: anderes Feld desselben Möbels nehmen, sonst Behälter weglassen
+  const gehbar = new Set([T.BODEN, T.TUER_OFFEN, T.INNENTUER, T.AUSGANG]);
+  const zugang = (mx, my) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => gehbar.has(kacheln[idx(mx + dx, my + dy)]));
+  for (let i = w.behaelter.length - 1; i >= 0; i--) {
+    const bh = w.behaelter[i];
+    const kx = Math.floor(bh.x / KACHEL), ky = Math.floor(bh.y / KACHEL);
+    if (zugang(kx, ky)) continue;
+    const m = w.moebel.find(m => kx >= m.x && kx < m.x + m.b && ky >= m.y && ky < m.y + m.h);
+    let neu = null;
+    if (m) for (let dy = 0; dy < m.h && !neu; dy++) for (let dx = 0; dx < m.b && !neu; dx++) if (zugang(m.x + dx, m.y + dy)) neu = [m.x + dx, m.y + dy];
+    if (neu) { bh.x = neu[0] * KACHEL + KACHEL / 2; bh.y = neu[1] * KACHEL + KACHEL / 2; continue; }
+    w.behaelter.splice(i, 1);   // Möbel bleibt als Deko stehen (sonst entstünde ein unerreichbares Bodenloch)
+  }
+  // Startpunkt darf nicht auf einem Möbel liegen: nächste freie Bodenkachel
+  const sx = Math.floor(w.start.x / KACHEL), sy = Math.floor(w.start.y / KACHEL);
+  if (kacheln[idx(sx, sy)] !== T.BODEN) {
+    let best = null, bd = Infinity;
+    for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++) {
+      const d = Math.hypot(x - sx, y - sy);
+      if (kacheln[idx(x, y)] === T.BODEN && d < bd) { bd = d; best = { x, y }; }
+    }
+    if (best) w.start = { x: best.x * KACHEL + KACHEL / 2, y: best.y * KACHEL + KACHEL / 2 };
+  }
+  w.behaelter = w.behaelter.map(b => ({ ...b, id: w.ebene + ':' + b.id }));
+}
+
 // Safe Room: keine schlafenden Zombies, keine Treppen, alle Türen offen und unverschlossen, immer Licht;
 // Vorratskiste an einer Wand möglichst weit vom Ausgang
 function safeEinrichten(w, haus) {
   w.safe = haus.safeId; w.safeName = haus.safe;
   w.zombiePlaetze = [];
+  safeMoeblieren(w);
   for (const tr of w.treppen) w.kacheln[tr.y * BREITE + tr.x] = T.BODEN;
   w.treppen = []; w.hatKeller = false; w.hatDach = false;
   for (const t of w.tueren) { t.verschlossen = false; t.offen = true; }

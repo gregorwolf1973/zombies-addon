@@ -6,7 +6,8 @@ import {
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
-import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben } from './aussehen.mjs';
+import { zeichneSandsaecke } from './safe_moebel.mjs';
+import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder } from './aussehen.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
@@ -57,7 +58,7 @@ const BASIS = location.href.replace(/[?#].*$/, '').replace(/\/[^/]*$/, '');
 
 let raum = null;
 let meineId = null;
-let wikiAdresse = '';
+let wikiAdresse = '', externeAdresse = '';
 
 // fester, geheimer Spieler-Schlüssel dieses Browsers – daran hängt der Spielstand
 function spielerId() {
@@ -80,7 +81,7 @@ try {
   const m = sessionStorage.getItem('zob_meldung');
   if (m) { $('fehler').textContent = m; $('fehler').classList.add('gut'); sessionStorage.removeItem('zob_meldung'); }
 } catch {}
-fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; ton.toeneZuordnen(i.toene); }).catch(() => {});
+fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 
 // ---------- Startseite: Freigaben (Mikrofon) abfragen, danach Installation als App anbieten ----------
@@ -99,12 +100,21 @@ $('installieren').onclick = async () => {
   try { await installEreignis.userChoice; } catch { /* abgebrochen */ }
   installEreignis = null; $('installieren').hidden = true;
 };
+let mikroNurHttps = false;
+// Ohne sicheren Kontext (http:// außer localhost) geht kein Mikrofon: Link zur https-Adresse anbieten, falls eingestellt
+function mikroLink() {
+  const a = /^https:\/\//i.test(externeAdresse) ? externeAdresse : '';
+  const z = $('fgMikro'); z.textContent = 'nur über https:// möglich';
+  if (!a) return;
+  z.textContent = 'Mit Mikrofon spielen: ';
+  const l = document.createElement('a'); l.href = a; l.textContent = a; l.rel = 'noopener'; z.append(l);
+}
 async function freigabenAbfragen() {
   const text = t => { $('fgMikro').textContent = t; };
   const imRahmen = (() => { try { return window.self !== window.top; } catch { return true; } })();
   if (imRahmen) { $('fgRahmen').hidden = false; $('fgEigen').href = location.href; }
   try {
-    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { text('nur über https:// möglich'); return; }
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { mikroNurHttps = true; mikroLink(); return; }
     let stand = 'prompt';
     try { stand = (await navigator.permissions.query({ name: 'microphone' })).state; } catch { /* Safari kennt das nicht überall */ }
     if (stand === 'granted') { text('erlaubt ✓'); return; }
@@ -403,12 +413,16 @@ class Ort extends Phaser.Scene {
     // zweiter Bogen: Survivor, Zombies und Bürger von OpenGameArt (siehe grafik/LIZENZ.txt)
     this.load.spritesheet('figuren2', 'grafik/figuren2.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('figurenliste2', 'grafik/figuren2.json');
+    // Auto-Bogen (CC0, tools/autos_schneiden.py); fehlt er, bleiben die Autos gezeichnet
+    this.load.image('autos', 'grafik/autos.webp');
+    this.load.json('autosliste', 'grafik/autos.json');
   }
 
   create() {
     const s = raum.state;
     if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
+    try { setzeAutoBilder(this.textures.get('autos').getSourceImage(), this.cache.json.get('autosliste')); } catch { setzeAutoBilder(null, null); }   // vor den ersten Kartenstücken
     figurenVorzeichnen(this);
     this.zeichneKarte();
     this.aussenObjekte = this.children.list.slice();   // alles, was zur Außenwelt gehört
@@ -533,6 +547,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('tor', () => meldung('🎉 Level 1 geschafft! Level 2 – der Wald an der Isar – kommt bald.', true));
 
     $('aktion').onclick = () => this.aktion();
+    $('aktion2').onclick = () => raum.send('aktion2');
     $('ausruhen').onclick = () => raum.send('ausruhen');
     $('kistezu').onclick = () => kisteZu();
     $('raetselzu').onclick = () => raetselZu();
@@ -585,7 +600,7 @@ class Ort extends Phaser.Scene {
     this.behaelterObj = new Map();
     for (const b of this.welt.behaelter) {
       const c = this.add.container(b.x, b.y).setDepth(1);
-      if (b.art === 'bus') { /* der Bus selbst ist in der oberen Ebene gezeichnet */ }
+      if (b.art === 'bus' || b.art === 'container') { /* Bus: obere Ebene, Container: Kartenstücke (aussehen.mjs) */ }
       else if (b.art === 'auto') { /* geparkte Autos sind in die Kartenstücke gezeichnet (aussehen.mjs) */
       } else {
         const f = { schrank: 0x8d6e63, kuehlschrank: 0xeceff1, spind: 0x78909c }[b.art];
@@ -607,6 +622,14 @@ class Ort extends Phaser.Scene {
       const bild = this.add.image(h.x * KACHEL - DACH_RAND, h.y * KACHEL - DACH_RAND, schluessel).setOrigin(0).setDepth(5.2);
       return { haus: h, grafik: bild };
     });
+    // Sandsack-Wall links und rechts der Haustür jedes Safe Rooms (nur Grafik, die Tür bleibt frei)
+    for (const s of this.welt.safeRooms) {
+      const h = s.haus, r = h.raus ?? { dx: 0, dy: 1 }, schluessel = 'sand-' + s.id;
+      const tex = this.textures.createCanvas(schluessel, 160, 160), c2 = tex.getContext();
+      c2.translate(80, 80); c2.rotate(Math.atan2(r.dy, r.dx) - Math.PI / 2);
+      zeichneSandsaecke(c2); tex.refresh();
+      this.add.image((h.tuer.x + 0.5 + r.dx * 0.5) * KACHEL, (h.tuer.y + 0.5 + r.dy * 0.5) * KACHEL, schluessel).setDepth(0.9);   // gehört zur Außenwelt (aussenObjekte entsteht danach)
+    }
     // Namen der Geschäfte und Einrichtungen auf den Dächern (OSM)
     for (const h of this.welt.haeuser) {
       if (!h.name || h.safe) continue;
@@ -615,14 +638,13 @@ class Ort extends Phaser.Scene {
         wordWrap: { width: Math.max(80, h.b * KACHEL) },
       }).setOrigin(0.5).setDepth(6);
     }
-    // Schilder und Barrikaden der Safe Rooms
-    this.barrikaden = new Map();
+    // Schilder der Safe Rooms; Haustüren (Barrikaden, geschlossen, zerbrochen) zeichnet zeichneBarrikaden() für alle Häuser
+    this.hausTueren = new Map();
     for (const s of this.welt.safeRooms) {
       const h = s.haus;
       this.add.text((h.x + h.b / 2) * KACHEL, (h.y + h.h / 2) * KACHEL, '🛡 ' + s.name, {
         fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
       }).setOrigin(0.5).setDepth(6);
-      this.barrikaden.set(s.id, { grafik: this.add.graphics().setDepth(5.5), wert: -1, haus: h });
     }
   }
 
@@ -705,13 +727,33 @@ class Ort extends Phaser.Scene {
     st.oben = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'oben-' + st.key).setOrigin(0).setDepth(5).setVisible(!this.aktEbene);
   }
 
+  // Haustüren draußen: geschlossen = dunkler Balken, Barrikade = Bretter, zerbrochen = Splitter
   zeichneBarrikaden() {
-    for (const [id, b] of this.barrikaden) {
-      const wert = Math.ceil((raum.state.safes.get(id)?.barrikade ?? 0) / 34);
-      if (wert === b.wert) continue;
-      b.wert = wert;
-      const g = b.grafik.clear();
-      const tx = b.haus.tuer.x * KACHEL, ty = b.haus.tuer.y * KACHEL;
+    for (const [key, st] of raum.state.tueren) {
+      if (!key.startsWith('haus:')) continue;
+      const wert = Math.ceil((st.barrikade ?? 0) / 34), stand = `${st.offen ? 1 : 0}${wert}${st.kaputt ? 1 : 0}`;
+      let b = this.hausTueren.get(key);
+      if (!b) {
+        const h = this.welt.haeuser[Number(key.slice(5))];
+        if (!h) continue;
+        b = { grafik: this.add.graphics().setDepth(5.5), stand: '', haus: h };
+        this.hausTueren.set(key, b);
+      }
+      if (stand === b.stand) continue;
+      b.stand = stand;
+      const g = b.grafik.clear(), h = b.haus, tx = h.tuer.x * KACHEL, ty = h.tuer.y * KACHEL;
+      const quer = (h.raus?.dy ?? 1) !== 0;   // Tür in waagrechter Wand
+      if (!st.offen) {   // geschlossen: dunkles Türblatt (Haustüren sind sonst offen gezeichnet)
+        g.fillStyle(0x3e2723, 0.9);
+        if (quer) g.fillRect(tx + 3, ty + 13, KACHEL - 6, 6); else g.fillRect(tx + 13, ty + 3, 6, KACHEL - 6);
+      }
+      if (st.kaputt) {   // zerbrochen: Splitter des Türblatts
+        g.fillStyle(0x5d4037, 1);
+        g.fillTriangle(tx + 4, ty + 6, tx + 13, ty + 9, tx + 7, ty + 15);
+        g.fillTriangle(tx + 20, ty + 22, tx + 29, ty + 18, tx + 25, ty + 28);
+        g.fillTriangle(tx + 16, ty + 5, tx + 24, ty + 8, tx + 18, ty + 11);
+        g.fillStyle(0x8d6e63, 1).fillRect(tx + 8, ty + 24, 6, 2).fillRect(tx + 22, ty + 7, 5, 2);
+      }
       for (let i = 0; i < wert; i++) {
         g.fillStyle(0xa1887f, 1).fillRect(tx - 3, ty + 6 + i * 8, KACHEL + 6, 6);
         g.lineStyle(1, 0x4e342e, 1).strokeRect(tx - 3, ty + 6 + i * 8, KACHEL + 6, 6);
@@ -747,9 +789,9 @@ class Ort extends Phaser.Scene {
 
   // Fahrzeugbilder einmalig zeichnen (Front zeigt nach rechts)
   fahrzeugTextur(art, farbe = 0) {
-    const key = art === 'auto' ? 'fz-auto-' + (farbe % 8) : 'fz-' + art;
+    const key = art === 'auto' ? 'fz-auto-' + (farbe % 8) : art === 'laster' ? 'fz-laster-' + (farbe % 4) : 'fz-' + art;
     if (this.textures.exists(key)) return key;
-    const breit = art === 'bus' ? 136 : art === 'feuerwehr' ? 84 : 60, hoch = art === 'bus' ? 40 : 34;
+    const breit = art === 'bus' ? 136 : art === 'laster' ? 92 : art === 'feuerwehr' ? 84 : 60, hoch = art === 'bus' ? 40 : 34;
     const t = this.textures.createCanvas(key, breit, hoch), c = t.getContext();
     if (art === 'bus') busVonOben(c, breit / 2, hoch / 2, false, 0.6);
     else if (art === 'feuerwehr') {
@@ -759,14 +801,25 @@ class Ort extends Phaser.Scene {
       c.strokeStyle = '#90a4ae'; c.lineWidth = 1.5; for (let x = 10; x < 52; x += 6) { c.beginPath(); c.moveTo(x, 8); c.lineTo(x, 24); c.stroke(); }
       c.fillStyle = '#263238'; c.fillRect(64, 7, 8, 18);                     // Frontscheibe
       c.fillStyle = '#fff59d'; c.fillRect(76, 6, 2, 4); c.fillRect(76, 22, 2, 4);
+    } else if (art === 'laster') {
+      // Kastenwagen: Ladefläche mit Plane, Fahrerhaus vorn (rechts)
+      const plane = ['#eceff1', '#1565c0', '#f9a825', '#2e7d32'][farbe % 4];
+      c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(6, 7, 84, 24);
+      c.fillStyle = plane; c.beginPath(); c.roundRect(2, 4, 64, 26, 3); c.fill();
+      c.fillStyle = 'rgba(0,0,0,.14)'; for (let x = 10; x < 62; x += 10) c.fillRect(x, 5, 1.5, 24);
+      c.fillStyle = 'rgba(255,255,255,.2)'; c.fillRect(4, 6, 60, 3);
+      c.fillStyle = '#455a64'; c.beginPath(); c.roundRect(67, 6, 22, 22, 4); c.fill();      // Fahrerhaus
+      c.fillStyle = '#1f2a33'; c.fillRect(77, 8, 8, 18);                                    // Frontscheibe
+      c.fillStyle = '#fff59d'; c.fillRect(87, 8, 2, 4); c.fillRect(87, 22, 2, 4);
+      c.fillStyle = '#e53935'; c.fillRect(2, 7, 2, 4); c.fillRect(2, 23, 2, 4);
     } else if (art === 'wrack') {
-      autoVonOben(c, { x: breit / 2, y: hoch / 2, senkrecht: false, farbe: 4 });
+      autoVonOben(c, { x: breit / 2, y: hoch / 2, senkrecht: false, farbe: 4, gezeichnet: true });
       c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(30,20,15,.8)'; c.fillRect(0, 0, breit, hoch);
       c.fillStyle = 'rgba(120,60,20,.5)'; for (let i = 0; i < 12; i++) c.fillRect(8 + Math.random() * 44, 8 + Math.random() * 18, 3, 3);
       c.globalCompositeOperation = 'source-over';
     } else {
       const f = art === 'polizei' ? 2 : farbe;
-      autoVonOben(c, { x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f });
+      autoVonOben(c, { x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f, vorwaerts: true, gezeichnet: art === 'polizei' });
       if (art === 'polizei') { c.fillStyle = '#1565c0'; c.fillRect(10, hoch / 2 - 11, 40, 3); c.fillRect(10, hoch / 2 + 8, 40, 3); c.fillStyle = '#263238'; c.fillRect(27, hoch / 2 - 6, 6, 12); }
     }
     t.refresh();
@@ -982,9 +1035,9 @@ class Ort extends Phaser.Scene {
     const ebene = this.aktEbene;
     if (!ebene || !ich) return;
     const a = this.innenAnsicht(ebene), w = a.w;
-    // Safe Room: Bretter an der Eingangstür je nach Barrikade (34 % je Brett)
-    if (w.safe && w.ausgang) {
-      const wert = Math.ceil((raum.state.safes.get(w.safe)?.barrikade ?? 0) / 34);
+    // Bretter an der Haustür (am Ausgang) je nach Barrikade (34 % je Brett); Safe Rooms zeigen den Wert aus ihrem Safe
+    if (w.ausgang && w.nr !== undefined) {
+      const wert = Math.ceil(((w.safe ? raum.state.safes.get(w.safe)?.barrikade : raum.state.tueren.get('haus:' + w.nr)?.barrikade) ?? 0) / 34);
       if (wert !== a.bretterWert) {
         a.bretterWert = wert;
         const g = a.bretter.clear(), tx = w.ausgang.x * KACHEL, ty = w.ausgang.y * KACHEL;
@@ -996,16 +1049,19 @@ class Ort extends Phaser.Scene {
         }
       }
     }
-    let stand = '';
+    let stand = '', zus = '';
     for (const t of w.tueren) {
       const st = raum.state.tueren.get(`${ebene}:${t.x},${t.y}`);
       const offen = !!st?.offen, zu = st ? st.verschlossen : t.verschlossen;
       w.kacheln[t.y * BREITE + t.x] = offen ? T.TUER_OFFEN : T.INNENTUER;
       stand += offen ? 'o' : zu ? 'v' : 'z';
+      zus += `${Math.ceil((st?.barrikade ?? 0) / 34)}${st?.kaputt ? 'k' : ''},`;   // Bretter und Bruch
     }
-    if (stand !== a.stand) {
+    if (stand !== a.stand || zus !== a.zus) {
+      a.zus = zus;
       if (a.stand) for (let i = 0; i < stand.length; i++) if ((stand[i] === 'o') !== (a.stand[i] === 'o')) { ton.tuer(stand[i] === 'o'); break; }
       a.stand = stand;
+      const zusListe = zus.split(',');
       const g = a.tueren.clear();
       w.tueren.forEach((t, i) => {
         const x = t.x * KACHEL, y = t.y * KACHEL, z = stand[i];
@@ -1018,6 +1074,20 @@ class Ort extends Phaser.Scene {
           g.lineStyle(2, 0x3e2723, 1).strokeRect(x + 2, y + 2, KACHEL - 4, KACHEL - 4);
           g.fillStyle(0xffd54f, 1).fillCircle(x + KACHEL - 9, y + KACHEL / 2, 2.5);
           if (z === 'v') { g.fillStyle(0xb0bec5, 1).fillRect(x + KACHEL / 2 - 4, y + KACHEL / 2 - 2, 8, 7); g.lineStyle(2, 0xb0bec5, 1).strokeCircle(x + KACHEL / 2, y + KACHEL / 2 - 3, 3); }
+        }
+        const brett = parseInt(zusListe[i]) || 0;
+        if (zusListe[i].includes('k')) {   // zerbrochen: Splitter am Rahmen
+          g.fillStyle(0x5d4037, 1);
+          g.fillTriangle(x + 3, y + 5, x + 12, y + 8, x + 6, y + 14);
+          g.fillTriangle(x + 21, y + 22, x + 29, y + 18, x + 25, y + 28);
+          g.fillStyle(0x8d6e63, 1).fillRect(x + 9, y + 24, 6, 2).fillRect(x + 20, y + 6, 5, 2);
+        }
+        const quer = w.hole(t.x - 1, t.y) === T.WAND;   // Wand verläuft waagrecht: Bretter längs
+        for (let k = 0; k < brett; k++) {
+          const o = 4 + k * 9;
+          g.fillStyle(0xa1887f, 1); g.lineStyle(1, 0x4e342e, 1);
+          if (quer) { g.fillRect(x - 4, y + o, KACHEL + 8, 6); g.strokeRect(x - 4, y + o, KACHEL + 8, 6); }
+          else { g.fillRect(x + o, y - 4, 6, KACHEL + 8); g.strokeRect(x + o, y - 4, 6, KACHEL + 8); }
         }
       });
     }
@@ -1216,7 +1286,7 @@ class Ort extends Phaser.Scene {
       let o = this.menschenObj.get(id);
       if (!o) {
         // Bürger (KonitaTutorials) mit Laufanimation, Sorte nach Kennung
-        const sorte = 'buerger' + (1 + (id.charCodeAt(id.length - 1) % 3));
+        const sorte = String(m.aussehen ?? '').startsWith('p') ? 'polizist' : 'buerger' + (1 + (id.charCodeAt(id.length - 1) % 3));
         const bild = this.add.image(0, 0, 'figuren2', this.figurBild2(sorte)).setScale(BOGEN2_GROESSE * 0.95);
         o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, sorte, x: m.x, y: m.y, r: m.richtung };
         this.menschenObj.set(id, o);
@@ -1250,7 +1320,7 @@ class Ort extends Phaser.Scene {
       o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
       o.licht.clear();
       // dicht vorbeifahrende Autos und Busse rauschen vorbei; jedes dritte Auto hat das Radio an
-      if ((f.art === 'auto' || f.art === 'bus') && this.lokal && !this.aktEbene) {
+      if ((f.art === 'auto' || f.art === 'bus' || f.art === 'laster') && this.lokal && !this.aktEbene) {
         const d = Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y);
         if (d < 170 && o.vorher !== undefined && d > o.vorher && !o.vorbei && !f.haelt) { ton.ereignis('autoVorbei', o.x, o.y); o.vorbei = true; }
         if (d > 400) o.vorbei = false;
@@ -1354,7 +1424,7 @@ class Ort extends Phaser.Scene {
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
-    const tun = zombie ? '🧟' : p.aktion === 'klettern' ? '🧗' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.infektion > 0 ? '🦠' : '';
+    const tun = zombie ? '🧟' : p.aktion === 'klettern' ? '🧗' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.ruht ? '💤' : p.infektion > 0 ? '🦠' : '';
     if (f.tun.text !== tun) f.tun.setText(tun);
   }
 
@@ -1364,7 +1434,10 @@ class Ort extends Phaser.Scene {
     if (!p) return null;
     const f = this.figuren.get(meineId);
     if (!f) return p;
-    if (!this.lokal) { this.lokal = { x: p.x, y: p.y }; this.cameras.main.startFollow(f.box, true, 0.15, 0.15); }
+    if (!this.lokal) this.lokal = { x: p.x, y: p.y };
+    // Kamera hängt an der eigenen Figur – auch wenn man (z. B. im Safe Room) drinnen startet und die Position
+    // schon beim Ebenenwechsel gesetzt wurde, oder die Figur neu angelegt wurde
+    if (this.folgtFigur !== f.box) { this.folgtFigur = f.box; this.cameras.main.startFollow(f.box, true, 0.15, 0.15); this.cameras.main.centerOn(this.lokal.x, this.lokal.y); }
     if (this.sprung) {
       const sp = this.sprung;
       sp.t = Math.min(1, sp.t + dt / 0.32);
@@ -1432,23 +1505,59 @@ class Ort extends Phaser.Scene {
 
   // ---------- Aktionen ----------
   // was kann man hier gerade tun? (gleiche Regeln wie auf dem Server)
-  tuerKontext(ich, nurSchliessen) {
-    if (!ich.ebene || !this.lokal) return null;
-    const w = this.wv(ich.ebene);
-    let best = null, bd = 42;
-    for (const t of w.tueren) {
-      const d = Math.hypot((t.x + 0.5) * KACHEL - this.lokal.x, (t.y + 0.5) * KACHEL - this.lokal.y);
-      if (d < bd) { bd = d; best = t; }
+  // nächste bedienbare Tür: Zimmertür, Haustür von innen (am Ausgang) oder von außen
+  tuerWahl(ich) {
+    if (!this.lokal) return null;
+    const { x, y } = this.lokal;
+    let best = null, bd = Infinity;
+    if (ich.ebene) {
+      const w = this.wv(ich.ebene);
+      for (const t of w.tueren) {
+        const d = Math.hypot((t.x + 0.5) * KACHEL - x, (t.y + 0.5) * KACHEL - y);
+        if (d < 42 && d < bd) { bd = d; best = { key: `${ich.ebene}:${t.x},${t.y}`, tuer: t }; }
+      }
+      if (w.ausgang && w.nr !== undefined) {
+        const d = Math.hypot((w.ausgang.x + 0.5) * KACHEL - x, (w.ausgang.y + 0.5) * KACHEL - y);
+        if (d < 48 && d < bd) best = { key: 'haus:' + w.nr, nr: w.nr, safe: w.safe };
+      }
+    } else {
+      if (!this.hausTuerKarte) {
+        this.hausTuerKarte = new Map();
+        for (const h of this.welt.haeuser) if (h.betretbar) this.hausTuerKarte.set(h.tuer.y * BREITE + h.tuer.x, h);
+      }
+      const kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const h = this.hausTuerKarte.get((ky + dy) * BREITE + kx + dx);
+        if (!h) continue;
+        const d = Math.hypot((h.tuer.x + 0.5) * KACHEL - x, (h.tuer.y + 0.5) * KACHEL - y);
+        if (d < 44 && d < bd) { bd = d; best = { key: 'haus:' + h.nr, nr: h.nr, safe: this.welt.safeRooms.find(r => r.haus === h)?.id }; }
+      }
     }
-    if (!best) return null;
-    const st = raum.state.tueren.get(`${ich.ebene}:${best.x},${best.y}`);
-    if (!st) return null;
-    if (st.offen) return nurSchliessen ? { art: 'tuer_zu', text: '🚪 Tür schließen' } : null;
-    if (nurSchliessen) return null;
-    if (!st.verschlossen) return { art: 'tuer_auf', text: '🚪 Tür öffnen' };
-    if (ich.rucksack.includes('schluessel')) return { art: 'aufschliessen', text: '🔑 Aufschließen' };
-    if (ich.rucksack.includes('brechstange')) return { art: 'aufbrechen', text: '⚒️ Aufbrechen (laut!)' };
-    return { art: 'schlossraetsel', text: '🔐 Schloss knacken (Rätsel)' };
+    return best;
+  }
+
+  // wie auf dem Server: 'auf' = geschlossene Tür bedienen, 'zu' = offene Tür verbarrikadieren (mit Brettern) oder schließen, 'zweit' = die jeweils andere Möglichkeit
+  tuerKontext(ich, modus = 'auf') {
+    if (modus === true) modus = 'zu';
+    const wahl = this.tuerWahl(ich);
+    if (!wahl) return null;
+    const st = raum.state.tueren.get(wahl.key);
+    if (!st && wahl.tuer) return null;
+    const haus = wahl.nr !== undefined, name = haus ? 'Haustür' : 'Tür';
+    const offen = st ? st.offen : true, kaputt = !!st?.kaputt;
+    const bar = (wahl.safe ? raum.state.safes.get(wahl.safe)?.barrikade : st?.barrikade) ?? 0;
+    const schliessen = () => kaputt ? null : { art: 'tuer_zu', text: `🚪 ${name} schließen` };
+    const oeffnen = () => {
+      if (!st?.verschlossen) return { art: 'tuer_auf', text: `🚪 ${name} öffnen` };
+      if (ich.rucksack.includes('schluessel')) return { art: 'aufschliessen', text: '🔑 Aufschließen' };
+      if (ich.rucksack.includes('brechstange')) return { art: 'aufbrechen', text: '⚒️ Aufbrechen (laut!)' };
+      return { art: 'schlossraetsel', text: '🔐 Schloss knacken (Rätsel)' };
+    };
+    const brett = () => ich.rucksack.includes('bretter') && bar < 100 ? { art: 'barrikade', text: `🔨 ${name} verbarrikadieren` } : null;
+    if (modus === 'auf') return offen ? null : oeffnen();
+    if (modus === 'zu') return offen ? (brett() ?? schliessen()) : null;
+    const b = brett();
+    return b ? (offen ? (kaputt ? null : schliessen()) : b) : null;
   }
 
   bestimmeKontext(ich) {
@@ -1456,7 +1565,7 @@ class Ort extends Phaser.Scene {
     const { x, y } = this.lokal;
     const w = this.wv(ich.ebene);
     const safe = safeRoomVon(this.welt, ich);
-    const tuer = this.tuerKontext(ich, false);
+    const tuer = this.tuerKontext(ich, 'auf');
     if (tuer) return tuer;
     if (safe && w.ausgang) {
       const tx = (w.ausgang.x + 0.5) * KACHEL, ty = (w.ausgang.y + 0.5) * KACHEL;
@@ -1495,7 +1604,7 @@ class Ort extends Phaser.Scene {
     }
     if (best?.art === 'auto' && !ich.rucksack.includes('brechstange')) return { art: 'durchsuchen', text: '🔒 Kofferraum (⚒️ Brechstange nötig)' };
     if (best) return { art: 'durchsuchen', text: `${best.art === 'auto' ? '⚒️' : '🔍'} ${BEHAELTER_NAME[best.art]} ${best.art === 'auto' ? 'aufbrechen' : 'durchsuchen'}` };
-    const zu = this.tuerKontext(ich, true);
+    const zu = this.tuerKontext(ich, 'zu');
     if (zu) return zu;
     if (!ich.ebene) {
       const z = zaunUeberstieg(this.welt, x, y, ich.richtung, W.spielerRadius);
@@ -1607,6 +1716,29 @@ class Ort extends Phaser.Scene {
       }
       ton.brandRauschen(rauschen * (this.aktEbene ? 0.3 : 1));
     }
+    // Wasserrauschen: Lautstärke nach Abstand zur nächsten Wasserkachel (nur draußen, höchstens 4×/s)
+    this.wasserZeit = (this.wasserZeit ?? 0) - dt;
+    if (this.wasserZeit <= 0) {
+      this.wasserZeit = 0.25;
+      if (this.wasserWelt !== this.welt) {   // einmal beim Laden der Welt: Wasserkacheln sammeln
+        const w = this.welt, liste = [];
+        for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) if (w.hole(x, y) === T.WASSER) liste.push(x, y);
+        this.wasserKarte = liste.length ? liste : null; this.wasserWelt = w;
+      }
+      let naechste = Infinity;
+      if (this.wasserKarte && !this.aktEbene) {
+        const cx = this.lokal.x / KACHEL - 0.5, cy = this.lokal.y / KACHEL - 0.5, wk = this.wasserKarte;
+        for (let i = 0; i < wk.length; i += 2) {
+          const dx = wk[i] - cx, dy = wk[i + 1] - cy;
+          if (Math.abs(dx) < 12 && Math.abs(dy) < 12) naechste = Math.min(naechste, dx * dx + dy * dy);
+        }
+        naechste = Math.sqrt(naechste);
+      }
+      if (this.wasserKarte) {
+        if (naechste < 12 && !this.wasserTon && (this.wasserVersuch = (this.wasserVersuch ?? 0) + 1) % 8 === 1) this.wasserTon = ton.schleifeStarten('wasser');
+        if (this.wasserTon) ton.schleifeLaut(this.wasserTon, naechste < 12 ? (1 - naechste / 12) ** 1.5 : 0);
+      }
+    }
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {
       this.stoehnZeit = 1.5 + Math.random() * 3;
@@ -1654,6 +1786,11 @@ class Ort extends Phaser.Scene {
     const knopf = $('aktion');
     knopf.style.display = this.kontext ? 'block' : 'none';
     if (this.kontext && knopf.textContent !== this.kontext.text) knopf.textContent = this.kontext.text;
+    // zweiter Knopf: andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
+    const zweit = !ich || ich.unten || ich.aktion || ich.zombie > 0 || s.phase !== 'spiel' || !this.lokal ? null : this.tuerKontext(ich, 'zweit');
+    const knopf2 = $('aktion2');
+    knopf2.style.display = zweit ? 'block' : 'none';
+    if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
     tauschRucksack();
@@ -1677,6 +1814,7 @@ class Ort extends Phaser.Scene {
         const spritze = ich.rucksack.includes('spritze') ? ' – du hast eine 💉 im Rucksack!' : ' – du brauchst eine 💉 Rettungsspritze!';
         hinweis = `🦠 Infiziert: noch ${zeitText(ich.infektion)}${ich.sicher ? ' (ruht im Safe Room)' : ''}${spritze}`;
       }
+      if (!hinweis && ich.ruht) hinweis = '💤 Du ruhst dich aus';
       if (!hinweis && (ich.durst < 15 || ich.hunger < 15)) hinweis = ich.durst < ich.hunger ? '💧 Du hast großen Durst!' : '🥫 Du hast großen Hunger!';
     }
     const h = $('hinweis');

@@ -271,6 +271,12 @@ export function schleifeStarten(id) {
   return { g, pan, laut: (t?.laut ?? 50) / 100, quellen: [src], rate: src.playbackRate };
 }
 
+// Lautstärke einer Schleife (0–1 vor dem Einstellungs-Regler) sanft setzen, z. B. Wasserrauschen nach Uferabstand
+export function schleifeLaut(h, v) {
+  if (!h || !ctx) return;
+  h.g.gain.setTargetAtTime(an ? Math.max(0, v) * h.laut : 0, ctx.currentTime, 0.3);
+}
+
 export function sireneStarten() {
   if (!ctx) return null;
   const g = ctx.createGain(); g.gain.value = 0;

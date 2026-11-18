@@ -639,3 +639,175 @@ test('Bots nutzen die Vorratskiste im Safe Room', async () => {
     assert.equal(raum.state.boden.size, 0, 'Bot wirft im Safe Room auf den Boden statt in die Kiste');
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });
+
+// ---------- Türen: Bots blockieren sich nicht ----------
+test('Mehrere Bots folgen einem Menschen durch die Haustür ins Haus und wieder hinaus', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 4, zombieFaktor: 0 };
+  const a = await beitreten('Tuerfuehrer');
+  try {
+    const { raum, p } = a;
+    raum.state.zombies.clear(); raum.zombieInfo.clear();
+    const bots = () => [...raum.extra.entries()].filter(([, x]) => x.bot).map(([sid]) => raum.state.spieler.get(sid));
+    assert.equal(bots().length, 4);
+    const s = raum.welt.safeRooms[0], h = s.haus;
+    const tuerAussen = { x: (h.tuer.x + 0.5 + h.raus.dx * 1.3) * KACHEL, y: (h.tuer.y + 0.5 + h.raus.dy * 1.3) * KACHEL };
+    // Mensch steht im Haus, Bots dicht gedrängt vor der Tür
+    inDenSafeRoom(raum, p, s, 'mitte');
+    bots().forEach((b, i) => { b.ebene = ''; b.waffe = ''; b.munition = 0; b.x = tuerAussen.x + h.raus.dx * (20 + i * 14); b.y = tuerAussen.y + h.raus.dy * (20 + i * 14); });
+    const t0 = Date.now();
+    assert.ok(await bis(() => bots().every(b => safeRoomVon(raum.welt, b) === s), 20000),
+      'nicht alle Bots kommen ins Haus: ' + bots().map(b => `${b.ebene}@${Math.round(b.x)},${Math.round(b.y)}`).join(' '));
+    // wieder hinaus: Mensch geht vor die Tür, die Bots müssen alle durch den Ausgang folgen
+    p.ebene = ''; p.x = tuerAussen.x + h.raus.dx * 90; p.y = tuerAussen.y + h.raus.dy * 90;
+    assert.ok(await bis(() => bots().every(b => b.ebene === '' && Math.hypot(b.x - p.x, b.y - p.y) < 260), 20000),
+      'nicht alle Bots kommen heraus: ' + bots().map(b => `${b.ebene}@${Math.round(b.x)},${Math.round(b.y)}`).join(' ')
+      + ' Ausgang ' + JSON.stringify(raum.wv(s.ebene).ausgang) + ' ' + [...raum.extra.values()].filter(x => x.bot).map(x => JSON.stringify({ z: x.bot.uebergangZiel, w: x.bot.wartetSeit, o: x.bot.warteOrt, e: x.eingabe, f: x.bot.festZahl, zw: x.bot.zweig, ak: raum.state.spieler.get([...raum.extra.entries()].find(([, y]) => y === x)[0])?.aktion })).join(' '));
+    assert.ok(Date.now() - t0 < 40000);
+  } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
+});
+
+// ---------- Tauschen mit Bots ----------
+test('Tauschen mit Bot: er bietet Überzähliges an, der Tausch kommt zustande; seine einzige Waffe gibt er nicht her', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 1, zombieFaktor: 0 };
+  const a = await beitreten('Tauscher');
+  try {
+    const { raum, p } = a;
+    const [bsid, bx] = [...raum.extra.entries()].find(([, x]) => x.bot);
+    const bot = raum.state.spieler.get(bsid);
+    bot.ebene = ''; p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; bot.x = p.x + 20; bot.y = p.y;
+    let fenster = null; a.c.onMessage('tausch', m => { fenster = m; });
+    // Bot hat 5 Wasser (2 über der Grenze) und nur eine Waffe in der Hand
+    bot.rucksack.clear(); for (let i = 0; i < 5; i++) bot.rucksack.push('wasser'); bot.rucksack.push('verband'); bot.waffe = 'messer';
+    p.rucksack.clear(); p.rucksack.push('seil'); p.rucksack.push('bretter');
+    a.c.send('tausch_start', { mit: bsid });
+    assert.ok(await bis(() => fenster?.seinOk === true), 'kein Tauschfenster');
+    a.c.send('tausch_anbieten', { platz: 0 });
+    assert.ok(await bis(() => fenster?.meins?.length === 1 && fenster?.seins?.length === 1 && fenster?.seinOk), 'kein Gegenangebot: ' + JSON.stringify(fenster));
+    assert.equal(fenster.seins[0], 'wasser', 'Bot bietet nicht das Überzählige an');
+    a.c.send('tausch_ok');
+    assert.ok(await bis(() => p.rucksack.includes('wasser') && !raum.tausche.has(a.c.sessionId)), 'Tausch nicht ausgeführt');
+    assert.ok(bot.rucksack.includes('seil'));
+    assert.equal(bot.waffe, 'messer');
+    // Mensch ist verletzt: Bot gibt den Verband gegen eine Kleinigkeit
+    p.hp = 20; fenster = null;
+    a.c.send('tausch_start', { mit: bsid });
+    assert.ok(await bis(() => fenster?.seinOk === true));
+    a.c.send('tausch_anbieten', { platz: p.rucksack.indexOf('bretter') });
+    assert.ok(await bis(() => fenster?.seins?.length === 1));
+    assert.equal(fenster.seins[0], 'verband', 'verletzter Mensch bekommt keinen Verband');
+    a.c.send('tausch_ende');
+    // Bot hat nur seine eine Waffe und sonst fast nichts: gibt sie nicht her; Schenken nimmt er nur an, wenn er es will
+    await bis(() => !raum.tausche.has(a.c.sessionId));
+    bot.rucksack.clear(); bot.waffe = 'schrotflinte'; p.rucksack.clear(); p.rucksack.push('seil'); p.hp = 100; fenster = null;
+    a.c.send('tausch_start', { mit: bsid });
+    assert.ok(await bis(() => fenster?.seinOk === true));
+    a.c.send('tausch_anbieten', { platz: 0 });
+    await warte(200);
+    assert.deepEqual(fenster.seins, [], 'Bot gibt etwas her, obwohl er nichts übrig hat');
+    assert.equal(bot.waffe, 'schrotflinte');
+    a.c.send('tausch_ende');
+    // Bot mit Ersatzwaffe im Rucksack und Waffe in der Hand: einzige Waffe bleibt auch im Rucksack
+    await bis(() => !raum.tausche.has(a.c.sessionId));
+    bot.waffe = ''; bot.rucksack.clear(); bot.rucksack.push('pistole'); p.hp = 100; p.rucksack.clear(); p.rucksack.push('seil'); fenster = null;
+    a.c.send('tausch_start', { mit: bsid });
+    assert.ok(await bis(() => fenster));
+    a.c.send('tausch_anbieten', { platz: 0 });
+    await warte(200);
+    assert.ok(!fenster.seins.includes('pistole'), 'Bot gibt seine einzige Waffe her');
+    a.c.send('tausch_ende');
+  } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
+});
+
+test('Schenken: Bot nimmt an, was er brauchen kann – und lehnt ab, was er nicht will', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 1, zombieFaktor: 0 };
+  const a = await beitreten('Schenker');
+  try {
+    const { raum, p } = a;
+    const [bsid] = [...raum.extra.entries()].find(([, x]) => x.bot);
+    const bot = raum.state.spieler.get(bsid);
+    bot.ebene = ''; p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; bot.x = p.x + 20; bot.y = p.y;
+    let fenster = null; a.c.onMessage('tausch', m => { fenster = m; });
+    bot.rucksack.clear(); bot.waffe = 'messer';   // nichts übrig, braucht Wasser
+    p.hp = 100; p.durst = 100; p.rucksack.clear(); p.rucksack.push('wasser'); p.rucksack.push('seil');
+    a.c.send('tausch_start', { mit: bsid });
+    assert.ok(await bis(() => fenster));
+    a.c.send('tausch_anbieten', { platz: 0 });
+    assert.ok(await bis(() => fenster?.meins?.length === 1 && fenster.seinOk === true), 'Bot nimmt Wasser nicht an');
+    a.c.send('tausch_ok');
+    assert.ok(await bis(() => bot.rucksack.includes('wasser')), 'Geschenk kommt nicht an');
+    // Seil will der Bot nicht (hat schon keins? doch: Grenze 1) → nimmt er das erste, ein zweites nicht
+    fenster = null;
+    a.c.send('tausch_start', { mit: bsid });
+    assert.ok(await bis(() => fenster));
+    bot.rucksack.push('seil');
+    p.rucksack.push('seil');
+    a.c.send('tausch_anbieten', { platz: p.rucksack.length - 1 });
+    assert.ok(await bis(() => fenster?.meins?.length === 1));
+    await warte(100);
+    assert.equal(fenster.seinOk, false, 'Bot nimmt ein überflüssiges Seil an');
+    a.c.send('tausch_ende');
+  } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
+});
+
+// ---------- Hecken und niedrige Zäune für Zombies und Bots ----------
+test('Zombies und Bots: durch Hecke und Holzzaun langsam, Metallzaun bleibt zu', async () => {
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, bots: 1, zombieFaktor: 0 };
+  const { c, raum } = await beitreten('Gaertner');
+  const w = raum.welt, K = w.kacheln, alt = w.details, kopie = K.slice();
+  try {
+    // freie, gerade Reihe von 12 Kacheln auf Wiese suchen
+    let ort = null;
+    for (let ky = 3; ky < W.HOEHE - 3 && !ort; ky++) for (let kx = 2; kx < W.BREITE - 13 && !ort; kx++) {
+      let gut = true;
+      for (let i = 0; i < 12 && gut; i++) if (!W.frei(w, (kx + i + 0.5) * KACHEL, (ky + 0.5) * KACHEL, 12) || w.hole(kx + i, ky) !== W.T.WIESE) gut = false;
+      if (gut) ort = { kx, ky };
+    }
+    assert.ok(ort, 'keine freie Reihe');
+    const zaunart = new Array(W.BREITE * W.HOEHE).fill('');
+    const gehe = (z, ziel) => {   // Schritte (0,05 s, Tempo 100 px/s) bis zum Ziel, höchstens 400
+      let n = 0;
+      while (n < 400 && z.x < ziel) { raum.zombieGehen(z, 0, 100 * 0.05, 0.05); n++; }
+      return n;
+    };
+    const start = () => ({ x: (ort.kx + 1) * KACHEL, y: (ort.ky + 0.5) * KACHEL, ebene: '', jagt: true });
+    const ziel = (ort.kx + 10) * KACHEL;
+    const frei_ = gehe(start(), ziel);
+    // zwei Kacheln dicke Zaunwand über die ganze Kartenhöhe (Kartenrand und Wiese; so führt kein Weg drumherum)
+    const setze = art => {
+      K.set(kopie);
+      for (let ky = 1; ky < W.HOEHE - 1; ky++) for (const i of [4, 5]) { K[ky * W.BREITE + ort.kx + i] = W.T.ZAUN; zaunart[ky * W.BREITE + ort.kx + i] = art; }
+      w.details = { zaunart };
+    };
+    setze('h');
+    const hecke = gehe(start(), ziel);
+    assert.ok(hecke > frei_ + 20 && hecke < 390, `Hecke: ${hecke} Schritte, frei ${frei_}`);
+    setze('z');
+    const holz = gehe(start(), ziel);
+    assert.ok(holz > frei_ + 10 && holz < hecke, `Holzzaun: ${holz} Schritte (Hecke ${hecke}, frei ${frei_})`);
+    setze('m');
+    const z = start(); gehe(z, ziel);
+    assert.ok(z.x < (ort.kx + 4) * KACHEL, 'Zombie kommt durch den Metallzaun: ' + z.x);
+    // Bot folgt durch die Hecke
+    setze('h');
+    const bsid = [...raum.extra.entries()].find(([, x]) => x.bot)[0];
+    const bot = raum.state.spieler.get(bsid), p = raum.state.spieler.get(c.sessionId);
+    bot.ebene = ''; bot.waffe = ''; bot.x = (ort.kx + 1.5) * KACHEL; bot.y = (ort.ky + 0.5) * KACHEL;
+    p.ebene = ''; p.x = (ort.kx + 11) * KACHEL; p.y = (ort.ky + 0.5) * KACHEL;
+    assert.equal(W.findeWeg(w, bot.x, bot.y, p.x, p.y, 11, 40000), null, 'Weg ohne Zaun gefunden – Testaufbau kaputt');
+    assert.ok(W.findeWeg(w, bot.x, bot.y, p.x, p.y, 11, 40000, true), 'keine Wegsuche durch die Hecke');
+    assert.ok(await bis(() => bot.x > (ort.kx + 6.6) * KACHEL, 25000), 'Bot kommt nicht durch die Hecke: ' + Math.round(bot.x) + ' / ' + (ort.kx + 6.6) * KACHEL);
+    // Metallzaun: Bot bleibt davor
+    setze('m');
+    bot.x = (ort.kx + 1.5) * KACHEL; bot.y = (ort.ky + 0.5) * KACHEL; bot.weg = null;
+    await warte(2500);
+    assert.ok(bot.x < (ort.kx + 4) * KACHEL, 'Bot geht durch den Metallzaun');
+  } finally {
+    K.set(kopie); w.details = alt;
+    await c.leave();
+    SpielRaum.einstellungen = vorher;
+  }
+});

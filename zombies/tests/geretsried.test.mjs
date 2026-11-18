@@ -110,7 +110,7 @@ test('Stadtleben: Menschen gehen umher, Gebissene werden zu Zombies, der Bus fä
     assert.ok(s.menschen.size >= 40, 'zu wenige Menschen: ' + s.menschen.size);
     const busOf = () => [...s.fahrzeuge.values()].find(f => f.art === 'bus');
     assert.ok(busOf(), 'kein Bus');
-    assert.ok([...s.fahrzeuge.values()].filter(f => f.art === 'auto').length >= 3, 'kein Verkehr');
+    assert.ok([...s.fahrzeuge.values()].filter(f => f.art === 'auto' || f.art === 'laster').length >= 3, 'kein Verkehr');
     // jemand bewegt sich
     const vorher = new Map([...s.menschen.entries()].map(([id, m]) => [id, [m.x, m.y, m.sichtbar]]));
     const bus0 = { x: busOf().x, y: busOf().y };
@@ -243,4 +243,61 @@ test('Verkehr: Fahrzeuge fahren nicht übereinander', async () => {
     }
     assert.ok(schlimm < 20, 'Fahrzeuge übereinander: ' + schlimm);
   } finally { await c.leave(); }
+});
+
+// Straßendeko: Mülltonnen, durchsuchbare Container, Straßensperren (Autos umfahren sie), freie Plätze in Parkbuchten
+test('Geretsried: Mülltonnen, Container, Straßensperren, freie Parkplätze', async () => {
+  const { BEUTE, BEHAELTER_NAME } = await import('../client/welt.mjs');
+  const { strassenGraph, naechsterKnoten, route } = await import('../server/verkehr.mjs');
+  setzeKartengroesse(karte.breite, karte.hoehe);
+  try {
+    const w = baueWeltAusKarte(karte, 7);
+    // Tonnen: Gruppen mit grauer Restmülltonne, nur auf freiem Boden
+    assert.ok(w.muell.tonnen.length >= 40, 'zu wenige Tonnengruppen: ' + w.muell.tonnen.length);
+    for (const g of w.muell.tonnen) {
+      assert.ok(g.farben.includes('grau') && g.farben.length >= 2 && g.farben.every(f => ['grau', 'gelb', 'gruen', 'braun', 'blau'].includes(f)));
+      const t = w.hole(Math.floor(g.x / KACHEL), Math.floor(g.y / KACHEL));
+      assert.ok(t === T.WIESE || t === T.PLATZ, 'Tonnen auf Art ' + t);
+    }
+    // Vor Haustüren (Vorkachel) steht nichts
+    for (const h of w.haeuser.filter(h => h.tuer)) {
+      const fx = h.tuer.x + h.raus.dx, fy = h.tuer.y + h.raus.dy;
+      assert.ok(!w.muell.tonnen.some(g => Math.floor(g.x / KACHEL) === fx && Math.floor(g.y / KACHEL) === fy), 'Tonnen vor Haustür ' + h.nr);
+      assert.ok(!w.behaelter.some(b => b.art === 'container' && Math.floor(b.x / KACHEL) === fx && Math.floor(b.y / KACHEL) === fy), 'Container vor Haustür ' + h.nr);
+    }
+    // Container: durchsuchbar (Beute, Name) und zu Fuß erreichbar
+    const cont = w.behaelter.filter(b => b.art === 'container');
+    assert.ok(cont.length >= 10, 'zu wenige Container: ' + cont.length);
+    assert.ok(BEUTE.container.includes('essen') && BEUTE.container.includes('schokoriegel') && BEUTE.container.includes('bretter') && BEUTE.container.includes('kleidung') && BEUTE.container.includes('tasche'));
+    assert.ok(BEHAELTER_NAME.container);
+    assert.equal(new Set(w.behaelter.map(b => b.id)).size, w.behaelter.length, 'doppelte Behälter-IDs');
+    let ok = 0;
+    for (const c of cont) {
+      const nachbarn = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [c.x + dx * KACHEL, c.y + dy * KACHEL]).filter(([x, y]) => frei(w, x, y, 11));
+      if (nachbarn.some(([x, y]) => Math.hypot(x - c.x, y - c.y) < 40 && findeWeg(w, w.start.x, w.start.y, x, y, 11, 80000))) ok++;
+    }
+    assert.ok(ok >= cont.length * 0.9, `nur ${ok}/${cont.length} Container erreichbar`);
+    // Sperren: Hindernis im Raster, Verkehrsgraph ohne die Kante, Weg drumherum vorhanden
+    assert.ok(w.sperren.length >= 1 && w.sperren.length <= 2, 'Sperren: ' + w.sperren.length);
+    const g = strassenGraph(w);
+    for (const s of w.sperren) {
+      for (const [kx, ky] of s.kacheln) assert.equal(w.hole(kx, ky), T.DEKO);
+      const [ax, ay, bx, by] = s.kante, a = naechsterKnoten(g, ax * KACHEL, ay * KACHEL), b = naechsterKnoten(g, bx * KACHEL, by * KACHEL);
+      assert.ok(Math.hypot(a.x - ax * KACHEL, a.y - ay * KACHEL) < 2 && Math.hypot(b.x - bx * KACHEL, b.y - by * KACHEL) < 2, 'Sperrenenden nicht im Straßennetz');
+      assert.ok(!a.nach.some(e => e.ziel === b), 'gesperrte Kante noch im Graph');
+      assert.ok(route(g, a, b)?.length >= 3, 'kein Weg um die Sperre');
+      // zu Fuß: der Rand der Straße bleibt offen (Lücke), die Sperre trennt das Gelände nicht
+      assert.ok(s.kacheln.length === 0 || s.breite >= 24);
+    }
+    // Parkbuchten: jede hat mindestens einen freien Platz, längere lassen mehr frei
+    const inBucht = w.behaelter.filter(b => b.art === 'auto' && b.platz === 'bucht');
+    let lang = 0;
+    for (const b of w.parkbuchten) {
+      const belegt = b.plaetze.filter(q => inBucht.some(a => Math.hypot(a.x - q.x, a.y - q.y) < 1)).length;
+      assert.ok(belegt <= b.plaetze.length - 1, 'Bucht ohne freien Platz');
+      assert.ok(belegt <= b.plaetze.length - (b.extra ?? 0), 'lange Bucht nicht frei genug');
+      if (b.extra > 0) lang++;
+    }
+    assert.ok(lang >= w.parkbuchten.length * 0.15, `zu wenige längere Buchten: ${lang}/${w.parkbuchten.length}`);
+  } finally { setzeKartengroesse(64, 48); }
 });

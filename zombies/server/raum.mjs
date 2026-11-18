@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 import { holeFragen } from './fragenquelle.mjs';
 import { mischeAntworten, waehleFrage } from './raetsel.mjs';
-import { botSchritt, BOT_NAMEN } from './bots.mjs';
+import { botSchritt, BOT_NAMEN, botGegenangebot, botEinverstanden } from './bots.mjs';
 import { Mensch, Stadtleben } from './menschen.mjs';
 import { Fahrzeug, Verkehr } from './verkehr.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
@@ -12,7 +12,7 @@ import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zombieSoll, zufall, safeRoomVon, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
@@ -44,6 +44,7 @@ export const Spieler = schema({
   kleidung: t.number(),     // Haltbarkeit der festen Kleidung 0..100 (Schutz vor Bissen)
   infektion: t.number(),    // Sekunden bis zur Verwandlung, 0 = gesund
   zombie: t.number(),       // Sekunden, die man noch Zombie ist, 0 = Mensch
+  ruht: t.boolean(),        // ruht auf einem Feldbett im Safe Room (Leben +1/s, Hunger/Durst halb so schnell)
   spricht: t.boolean(),     // spricht gerade ins Mikrofon (Sprachübertragung, zeigt 🔊 über der Figur)
 }, 'Spieler');
 
@@ -60,7 +61,13 @@ export const Zombie = schema({
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
 export const Leiche = schema({ x: t.number(), y: t.number(), richtung: t.number(), rest: t.uint8(), alter: t.number(), variante: t.uint8(), ebene: t.string() }, 'Leiche');
 export const BodenDing = schema({ x: t.number(), y: t.number(), ding: t.string(), alter: t.number(), ebene: t.string() }, 'BodenDing');
-export const Tuer = schema({ offen: t.boolean(), verschlossen: t.boolean() }, 'Tuer');
+// Türen: Zimmertüren ('ebene:x,y') und Haustüren ('haus:nr'). barrikade und hp 0–100, kaputt = zerbrochen (bleibt offen)
+export const Tuer = schema({ offen: t.boolean(), verschlossen: t.boolean(), barrikade: t.number(), hp: t.number(), kaputt: t.boolean() }, 'Tuer');
+function neueTuer(offen, verschlossen) {
+  const st = new Tuer();
+  st.offen = !!offen; st.verschlossen = !!verschlossen; st.barrikade = 0; st.hp = TUER_HP; st.kaputt = false;
+  return st;
+}
 export const Safe = schema({ barrikade: t.number(), kiste: t.array("string") }, 'Safe');
 
 export const Zustand = schema({
@@ -77,7 +84,7 @@ export const Zustand = schema({
   behaelter: t.map(Behaelter),   // nur schon durchsuchte
   leichen: t.map(Leiche),       // tote Zombies, die eine Weile liegen bleiben
   boden: t.map(BodenDing),      // weggeworfene Gegenstände
-  tueren: t.map(Tuer),          // Zimmertüren der betretenen Häuser: Schlüssel 'ebene:x,y'
+  tueren: t.map(Tuer),          // Zimmertüren der betretenen Häuser ('ebene:x,y') und Haustüren mit Zustand ('haus:nr')
   safes: t.map(Safe),
   menschen: t.map(Mensch),      // Bewohner der Stadt (Abschnitt 4)
   fahrzeuge: t.map(Fahrzeug),   // Linienbus, Verkehr, Polizei, Feuerwehr, Wracks
@@ -85,6 +92,12 @@ export const Zustand = schema({
   verbrannt: t.map('boolean'),  // 'haus:nr', 'auto:bID', 'bus:ID', 'fz:ID'
   kegel: t.boolean(),           // Sichtkegel der Zombies anzeigen (Einstellung)
 }, 'Zustand');
+
+const TUER_HP = 100;          // Haltbarkeit einer Tür (nach der Barrikade)
+const TUER_SCHADEN = 4;       // hp pro Sekunde und hämmerndem Zombie
+const TUER_SCHADEN_ZU = 2.8;  // verschlossene Zimmertüren halten länger
+const BARRIKADE_SCHADEN = 2;  // Barrikade pro Sekunde und Zombie
+const BRETT_STAERKE = 35;
 
 const TICK = 50; // ms → 20 Updates pro Sekunde
 const ZOMBIE_HP = 100;
@@ -98,7 +111,8 @@ const START_MUNITION = 24;
 const DURST_DAUER = 3600, HUNGER_DAUER = 5400;   // Sekunden von voll bis leer
 const SPEICHER_TAKT = 30;
 const ID_MUSTER = /^[a-f0-9]{32}$/;
-const BLOCKIERT_FELD = new Set([...BLOCKIERT].filter(t => t !== T.INNENTUER).concat([T.INNENTUER]));
+// Wegfeld der Zombies: geschlossene Zimmertüren zählen als Weg (sie hämmern sie auf), alles andere Blockierte nicht
+const BLOCKIERT_FELD = new Set([...BLOCKIERT].filter(t => t !== T.INNENTUER));
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const AUSSEHEN = /^[mws],[0-5],[0-7]$/;   // m/w = eigene Figur mit Farben, s = Survivor (feste Figur)
 export const TOR_RAETSEL = 3;
@@ -195,6 +209,11 @@ export class SpielRaum extends Room {
     this.gespeichertTueren = null;
     if (passt) {
       this.gespeicherteTuerenStand = stand.tueren ?? {};
+      // Haustüren: Zustand mit Barrikade, Haltbarkeit und Bruch
+      for (const [key, g] of Object.entries(this.gespeicherteTuerenStand)) {
+        if (!key.startsWith('haus:') || !Array.isArray(g)) continue;
+        this.state.tueren.set(key, this.tuerAusStand(g, true));
+      }
       for (const [id, inhalt] of Object.entries(stand.behaelter ?? {})) this.setzeInhalt(id, inhalt);
       for (const [id, s] of Object.entries(stand.safes ?? {})) {
         const safe = this.state.safes.get(id);
@@ -203,6 +222,7 @@ export class SpielRaum extends Room {
         for (const d of (s.kiste ?? []).slice(0, KISTE_PLAETZE)) if (DINGE[d]) safe.kiste.push(d);
       }
     }
+    this.spiegleSafeTueren();
 
     this.extra = new Map();       // sessionId → { spielerId, letzterSafe, pause, eingabe, aktionZiel }
     this.wiederkehr = new Map();  // sessionId → Deferred der erlaubten Wiederverbindung
@@ -232,6 +252,7 @@ export class SpielRaum extends Room {
       if (x) x.eingabe = { dx, dy, s: !!m.s };
     });
     this.onMessage('aktion', client => this.starteAktion(client));
+    this.onMessage('aktion2', client => this.starteAktion(client, true));
     this.onMessage('benutze', (client, m) => this.benutze(client, m));
     this.onMessage('wegwerfen', (client, m) => this.wegwerfen(client, m));
     this.onMessage('kiste', (client, m) => this.kiste(client, m));
@@ -699,7 +720,7 @@ export class SpielRaum extends Room {
     this.speicher.speichereWelt({
       version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, behaelter, safes,
       torGeloest: this.state.torGeloest, gestellt: [...this.gestellt].slice(-500),
-      tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen]])),
+      tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen, Math.round(t.barrikade), Math.round(t.hp), t.kaputt]])),
       verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
       chat: this.chatVerlauf,
     });
@@ -731,7 +752,7 @@ export class SpielRaum extends Room {
         // ein toter Zombie in der Tür muss erst weg
         const imWeg = this.leicheInTuer(safe);
         if (imWeg) return { art: 'wegziehen', leiche: imWeg, safe, dauer: 1.5 };
-        if (p.rucksack.includes('bretter') && zustand.barrikade < 100) return { art: 'barrikade', safe, dauer: 3 };
+        if (p.rucksack.includes('bretter') && zustand.barrikade < 100) return { art: 'barrikade', safe, key: 'haus:' + safe.haus.nr, dauer: 3 };
       }
     }
     // Gegenstand am Boden aufheben
@@ -758,8 +779,8 @@ export class SpielRaum extends Room {
       if (d >= bd || l.rest === 0) continue;
       bd = d; best = { id, art: 'leiche', x: l.x, y: l.y };
     }
-    if (best) return { art: 'durchsuchen', behaelter: best, dauer: best.art === 'auto' || best.art === 'bus' ? 3.5 : best.art === 'leiche' ? 1.5 : 2.5 };
-    const tuerK = this.tuerKontext(p, true);
+    if (best) return { art: 'durchsuchen', behaelter: best, dauer: durchsuchDauer(best.art) };
+    const tuerK = this.tuerKontext(p, 'zu');
     if (tuerK) return tuerK;
     // an einer Hecke, einem Gartenzaun oder einer Gartenmauer: drübersteigen
     if (!p.ebene) { const z = zaunUeberstieg(this.welt, p.x, p.y, p.richtung, W.spielerRadius); if (z) return { art: 'klettern', ziel: z, dauer: 0.7 }; }
@@ -786,9 +807,8 @@ export class SpielRaum extends Room {
       const key = `${ebene}:${t.x},${t.y}`;
       let st = this.state.tueren.get(key);
       if (!st) {
-        st = new Tuer();
         const g = (this.gespeicherteTuerenStand ?? {})[key];
-        st.offen = g ? !!g[0] : !!t.offen; st.verschlossen = g ? !!g[1] : !!t.verschlossen;
+        st = g ? this.tuerAusStand(g) : neueTuer(t.offen, t.verschlossen);
         this.state.tueren.set(key, st);
       }
       if (st.offen) w.kacheln[t.y * BREITE + t.x] = T.TUER_OFFEN;
@@ -823,6 +843,9 @@ export class SpielRaum extends Room {
     if (x.wechselSperre > 0) return;
     // nach einem Wechsel erst wieder, wenn man sich vom Ankunftsort entfernt hat
     // (sonst läuft man mit gehaltener Taste sofort zurück durch Tür oder Treppe)
+    x.ankunftT = (x.ankunftT ?? 0) + dt;
+    // (Bots stehen nach dem Wechsel oft nur einen Schritt von der Tür entfernt und müssen sofort zurück können – nach 1 s darf es)
+    if (x.ankunft && x.bot && x.ankunftT > 1) x.ankunft = null;
     if (x.ankunft) {
       if (Math.hypot(p.x - x.ankunft.x, p.y - x.ankunft.y) < 44) return;
       x.ankunft = null;
@@ -841,9 +864,11 @@ export class SpielRaum extends Room {
         if (!x.bot) this.clients.find(c => c.sessionId === id)?.send('meldung', { text: '🔥 Das Haus brennt – da kommst du nicht rein' });
         bewege(welt, p, h.raus.dx * 20, h.raus.dy * 20, W.spielerRadius); return;
       }
+      this.haustuerOeffnen(h.nr);   // Menschen gehen durch geschlossene Haustüren hindurch (Barrikaden halten nur Zombies auf)
       ziel = `h${h.nr}eg`; pos = this.wv(ziel).start;
     } else if (p.ebene && t === T.AUSGANG) {
       const h = this.welt.haeuser[welt.nr];
+      this.haustuerOeffnen(h.nr);
       const r = h.raus ?? { dx: 0, dy: 1 };
       ziel = ''; pos = { x: (h.tuer.x + 0.5 + r.dx * 1.3) * KACHEL, y: (h.tuer.y + 0.5 + r.dy * 1.3) * KACHEL };
     } else if (p.ebene && (t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH)) {
@@ -856,7 +881,7 @@ export class SpielRaum extends Room {
     } else return;
     const platz = this.freierPlatz(pos, 0, ziel);
     p.ebene = ziel; p.x = platz.x; p.y = platz.y; p.aktion = ''; p.fortschritt = 0;
-    x.wechselSperre = 0.3; x.ankunft = { x: platz.x, y: platz.y };
+    x.wechselSperre = 0.3; x.ankunft = { x: platz.x, y: platz.y }; x.ankunftT = 0;
     if (x.bot) { x.bot.weg = null; x.bot.uebergangZiel = null; }
   }
 
@@ -885,36 +910,146 @@ export class SpielRaum extends Room {
     return w.ausgang ? mitte(w.ausgang) : null;
   }
 
-  // Türen in Innenräumen: öffnen, schließen, aufschließen, aufbrechen, Rätsel
-  tuerKontext(p, nurSchliessen = false) {
-    if (!p.ebene) return null;
-    const w = this.wv(p.ebene);
-    let best = null, bd = 42;
-    for (const t of w.tueren) {
-      const d = Math.hypot((t.x + 0.5) * KACHEL - p.x, (t.y + 0.5) * KACHEL - p.y);
-      if (d < bd) { bd = d; best = t; }
+  // ---------- Türen: Zimmertüren und Haustüren ----------
+
+  tuerAusStand(g, haus = false) {
+    const st = neueTuer(haus ? g[0] ?? true : g[0], g[1]);
+    st.barrikade = Math.max(0, Math.min(100, Number(g[2]) || 0));
+    st.hp = g[3] === undefined ? TUER_HP : Math.max(0, Math.min(100, Number(g[3]) || 0));
+    st.kaputt = !!g[4];
+    if (st.kaputt) { st.offen = true; st.verschlossen = false; }
+    return st;
+  }
+
+  hausNr(key) { return key.startsWith('haus:') ? Number(key.slice(5)) : null; }
+
+  safeVonHaus(nr) { return this.welt.safeRooms.find(r => r.haus.nr === nr) ?? null; }
+
+  // Zustand der Haustür (null = nie angefasst: offen, heil, ohne Barrikade)
+  hausTuer(nr, anlegen = false) {
+    const key = 'haus:' + nr;
+    let st = this.state.tueren.get(key);
+    if (!st && anlegen) { st = neueTuer(true, false); this.state.tueren.set(key, st); }
+    return st ?? null;
+  }
+
+  // Die Barrikade eines Safe-Room-Hauses lebt in state.safes (wird gespeichert und im HUD gezeigt), die Haustür spiegelt sie
+  spiegleSafeTueren() {
+    for (const r of this.welt.safeRooms) {
+      const st = this.hausTuer(r.haus.nr, true), b = this.state.safes.get(r.id)?.barrikade ?? 0;
+      if (Math.abs(st.barrikade - b) > 0.001) st.barrikade = b;
     }
-    if (!best) return null;
-    const key = `${p.ebene}:${best.x},${best.y}`, st = this.state.tueren.get(key);
-    if (!st) return null;
-    const basis = { key, tuer: best, ebene: p.ebene };
-    if (st.offen) {
-      if (!nurSchliessen) return null;
-      const cx = (best.x + 0.5) * KACHEL, cy = (best.y + 0.5) * KACHEL;
-      const belegt = [...this.state.spieler.values(), ...this.state.zombies.values()]
-        .some(o => (o.ebene ?? '') === p.ebene && Math.hypot(o.x - cx, o.y - cy) < 20);
+  }
+
+  tuerBarrikade(key) {
+    const nr = this.hausNr(key);
+    if (nr !== null) {
+      const s = this.safeVonHaus(nr);
+      if (s) return this.state.safes.get(s.id)?.barrikade ?? 0;
+    }
+    return this.state.tueren.get(key)?.barrikade ?? 0;
+  }
+
+  setzeBarrikade(key, wert) {
+    wert = Math.max(0, Math.min(100, wert));
+    const nr = this.hausNr(key);
+    let st;
+    if (nr !== null) {
+      st = this.hausTuer(nr, true);
+      const s = this.safeVonHaus(nr);
+      if (s) this.state.safes.get(s.id).barrikade = wert;
+    } else st = this.state.tueren.get(key);
+    if (st) st.barrikade = wert;
+  }
+
+  hausAnTuer(kx, ky) {
+    if (!this.haeuserTuer) {
+      this.haeuserTuer = new Map();
+      for (const h of this.welt.haeuser) if (h.betretbar) this.haeuserTuer.set(h.tuer.y * BREITE + h.tuer.x, h);
+    }
+    return this.haeuserTuer.get(ky * BREITE + kx) ?? null;
+  }
+
+  haustuerOeffnen(nr) {
+    const st = this.state.tueren.get('haus:' + nr);
+    if (st && !st.offen) st.offen = true;
+  }
+
+  // Orte (Ebene, Mitte) der Türkachel(n): wer dort steht, verhindert das Schließen
+  tuerStellen(wahl) {
+    const mitte = (k, ebene) => ({ ebene, x: (k.x + 0.5) * KACHEL, y: (k.y + 0.5) * KACHEL });
+    if (wahl.tuer) return [mitte(wahl.tuer, wahl.ebene)];
+    const h = this.welt.haeuser[wahl.nr], a = this.wv(`h${wahl.nr}eg`).ausgang;
+    return [mitte(h.tuer, ''), ...(a ? [mitte(a, `h${wahl.nr}eg`)] : [])];
+  }
+
+  // nächste bedienbare Tür: Zimmertür, Haustür von innen (am Ausgang) oder von außen
+  tuerWahl(p) {
+    let best = null, bd = Infinity;
+    if (p.ebene) {
+      const w = this.wv(p.ebene);
+      for (const t of w.tueren) {
+        const d = Math.hypot((t.x + 0.5) * KACHEL - p.x, (t.y + 0.5) * KACHEL - p.y);
+        if (d < 42 && d < bd) { bd = d; best = { key: `${p.ebene}:${t.x},${t.y}`, tuer: t, ebene: p.ebene }; }
+      }
+      if (w.ausgang && w.nr !== undefined) {
+        const d = Math.hypot((w.ausgang.x + 0.5) * KACHEL - p.x, (w.ausgang.y + 0.5) * KACHEL - p.y);
+        if (d < 48 && d < bd) best = { key: 'haus:' + w.nr, nr: w.nr, ebene: p.ebene };
+      }
+    } else {
+      const kx = Math.floor(p.x / KACHEL), ky = Math.floor(p.y / KACHEL);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const h = this.hausAnTuer(kx + dx, ky + dy);
+        if (!h) continue;
+        const d = Math.hypot((h.tuer.x + 0.5) * KACHEL - p.x, (h.tuer.y + 0.5) * KACHEL - p.y);
+        if (d < 44 && d < bd) { bd = d; best = { key: 'haus:' + h.nr, nr: h.nr, ebene: '' }; }
+      }
+    }
+    return best;
+  }
+
+  // Türen: öffnen, schließen, aufschließen, aufbrechen, Rätsel, verbarrikadieren
+  // modus 'auf': geschlossene Tür bedienen · 'zu': offene Tür verbarrikadieren (mit Brettern) oder schließen · 'zweit': die jeweils andere Möglichkeit
+  tuerKontext(p, modus = 'auf') {
+    if (modus === true) modus = 'zu';
+    const wahl = this.tuerWahl(p);
+    if (!wahl) return null;
+    const st = this.state.tueren.get(wahl.key);
+    if (!st && wahl.tuer) return null;
+    const offen = st ? st.offen : true, kaputt = !!st?.kaputt;
+    const bar = this.tuerBarrikade(wahl.key);
+    const basis = { key: wahl.key, tuer: wahl.tuer, ebene: wahl.ebene };
+    const schliessen = () => {
+      if (kaputt) return null;
+      const belegt = this.tuerStellen(wahl).some(o => [...this.state.spieler.values(), ...this.state.zombies.values()]
+        .some(q => (q.ebene ?? '') === o.ebene && Math.hypot(q.x - o.x, q.y - o.y) < 20));
       return belegt ? null : { ...basis, art: 'tuer_zu', dauer: 0.25 };
-    }
-    if (nurSchliessen) return null;
-    if (!st.verschlossen) return { ...basis, art: 'tuer_auf', dauer: 0.25 };
-    if (p.rucksack.includes('schluessel')) return { ...basis, art: 'aufschliessen', dauer: 1 };
-    if (p.rucksack.includes('brechstange')) return { ...basis, art: 'aufbrechen', dauer: 2.5 };
-    return { ...basis, art: 'schlossraetsel' };
+    };
+    const oeffnen = () => {
+      if (!st?.verschlossen) return { ...basis, art: 'tuer_auf', dauer: 0.25 };
+      if (p.rucksack.includes('schluessel')) return { ...basis, art: 'aufschliessen', dauer: 1 };
+      if (p.rucksack.includes('brechstange')) return { ...basis, art: 'aufbrechen', dauer: 2.5 };
+      return { ...basis, art: 'schlossraetsel' };
+    };
+    const brett = () => p.rucksack.includes('bretter') && bar < 100 ? { ...basis, art: 'barrikade', dauer: 3 } : null;
+    const umschalten = () => offen ? schliessen() : oeffnen();
+    if (modus === 'auf') return offen ? null : oeffnen();
+    if (modus === 'zu') return offen ? (brett() ?? schliessen()) : null;
+    const b = brett();
+    return b ? (offen ? umschalten() : b) : null;
   }
 
   setzeTuer(key, offen) {
+    const nr = this.hausNr(key);
+    if (nr !== null) {
+      const hs = this.hausTuer(nr, true);
+      if (hs.kaputt && !offen) return;
+      hs.offen = offen;
+      if (offen) hs.verschlossen = false;
+      return;
+    }
     const st = this.state.tueren.get(key);
-    if (!st) return;
+    if (!st || (st.kaputt && !offen)) return;
     const [ebene, xy] = key.split(':');
     const [x, y] = xy.split(',').map(Number);
     const w = this.wv(ebene);
@@ -922,6 +1057,45 @@ export class SpielRaum extends Room {
     if (offen) st.verschlossen = false;
     w.kacheln[y * BREITE + x] = offen ? T.TUER_OFFEN : T.INNENTUER;
     // wer hinter der Tür schläft und jemanden sieht, wacht im nächsten Schritt auf (Sichtprüfung)
+  }
+
+  // Spieler (Menschen) hinter dieser Tür: im Haus (Haustür) bzw. auf der Ebene (Zimmertür)
+  spielerHinterTuer(key) {
+    const nr = this.hausNr(key), erg = [];
+    for (const [sid, q] of this.state.spieler) {
+      if (q.zombie > 0 || !q.ebene) continue;
+      const m = EBENE_MUSTER.exec(q.ebene);
+      if (nr !== null ? m && Number(m[1]) === nr : q.ebene === key.split(':')[0]) erg.push([sid, q]);
+    }
+    return erg;
+  }
+
+  sageDrin(key, text) {
+    for (const [sid] of this.spielerHinterTuer(key)) this.clients.find(c => c.sessionId === sid)?.send('meldung', { text });
+  }
+
+  // Ein Zombie schlägt gegen die Tür: erst die Barrikade, dann die Tür selbst
+  tuerSchlag(key, dt, z) {
+    const st = this.state.tueren.get(key);
+    if (!st) return;
+    const bar = this.tuerBarrikade(key);
+    if (bar > 0) this.setzeBarrikade(key, bar - dt * BARRIKADE_SCHADEN);
+    else if (!st.kaputt) {
+      st.hp = Math.max(0, st.hp - dt * (st.verschlossen ? TUER_SCHADEN_ZU : TUER_SCHADEN));
+      if (st.hp <= 0) {
+        st.kaputt = true; st.verschlossen = false; st.hp = 0;
+        this.setzeTuer(key, true);
+        this.sageDrin(key, '💥 Die Tür ist zerbrochen!');
+        this.laerm(z.x, z.y, 300, true, z.ebene ?? '', z);
+        return;
+      }
+    }
+    // Lärm und Meldung höchstens einmal pro Sekunde bzw. alle 6 s
+    const jetzt = Date.now(), u = this.tuerUhr?.get(key) ?? { laerm: 0, meldung: 0 };
+    if (!this.tuerUhr) this.tuerUhr = new Map();
+    if (jetzt - u.laerm > 1000) { u.laerm = jetzt; this.laerm(z.x, z.y, 220, true, z.ebene ?? '', z); }
+    if (jetzt - u.meldung > 6000) { u.meldung = jetzt; this.sageDrin(key, '🧟 Zombies hämmern gegen die Tür!'); }
+    this.tuerUhr.set(key, u);
   }
 
   // ---------- Tauschen (wenn sich zwei Spieler berühren; das Spiel läuft weiter) ----------
@@ -934,9 +1108,9 @@ export class SpielRaum extends Room {
     if (!p || !q || ich === du || this.tausche.has(ich) || this.tausche.has(du)) return;
     if (p.unten || q.unten || p.zombie > 0 || q.zombie > 0 || p.ebene !== q.ebene) return;
     if (Math.hypot(p.x - q.x, p.y - q.y) > TAUSCH_ABSTAND + 8) return client.send('meldung', { text: 'Zum Tauschen musst du direkt neben ihm stehen' });
-    const t = { seiten: [ich, du], angebot: { [ich]: [], [du]: [] }, ok: { [ich]: false, [du]: this.istBot(du) } };
+    const t = { seiten: [ich, du], angebot: { [ich]: [], [du]: [] }, ok: { [ich]: false, [du]: false } };
     this.tausche.set(ich, t); this.tausche.set(du, t);
-    this.tauschSenden(t);
+    this.tauschGeaendert(t);
   }
 
   tauschSenden(t) {
@@ -950,7 +1124,21 @@ export class SpielRaum extends Room {
     }
   }
 
-  tauschGeaendert(t) { for (const s of t.seiten) t.ok[s] = this.istBot(s); this.tauschSenden(t); }
+  // Nach jeder Änderung: Bots legen ein Gegenangebot hin und stimmen zu, wenn der Tausch für sie in Ordnung ist
+  tauschGeaendert(t) {
+    for (const s of t.seiten) {
+      const andere = t.seiten.find(q => q !== s);
+      if (!this.istBot(s) || this.istBot(andere)) { t.ok[s] = this.istBot(s); continue; }
+      const bot = this.state.spieler.get(s), mensch = this.state.spieler.get(andere);
+      if (!bot || !mensch) { t.ok[s] = false; continue; }
+      for (const d of t.angebot[s]) bot.rucksack.push(d);   // altes Gegenangebot zurücklegen und neu zusammenstellen
+      t.angebot[s] = botGegenangebot(bot, mensch, t.angebot[andere]);
+      for (const d of t.angebot[s]) bot.rucksack.splice(bot.rucksack.indexOf(d), 1);
+      t.ok[s] = botEinverstanden(bot, t.angebot[andere], t.angebot[s]);
+    }
+    for (const s of t.seiten) if (!this.istBot(s)) t.ok[s] = false;
+    this.tauschSenden(t);
+  }
 
   tauschAnbieten(client, m) {
     const t = this.tausche.get(client.sessionId), p = this.state.spieler.get(client.sessionId);
@@ -973,7 +1161,11 @@ export class SpielRaum extends Room {
     if (!t) return;
     t.ok[client.sessionId] = true;
     const [a, b] = t.seiten;
-    if (!(t.ok[a] && t.ok[b])) return this.tauschSenden(t);
+    if (!(t.ok[a] && t.ok[b])) {
+      const bs = t.seiten.find(q => this.istBot(q) && !t.ok[q]);
+      if (bs) this.clients.find(k => k.sessionId === client.sessionId)?.send('meldung', { text: `${this.state.spieler.get(bs)?.name ?? 'Der Bot'} will das so nicht tauschen` });
+      return this.tauschSenden(t);
+    }
     const pa = this.state.spieler.get(a), pb = this.state.spieler.get(b);
     if (pa.rucksack.length + t.angebot[b].length > pa.plaetze || pb.rucksack.length + t.angebot[a].length > pb.plaetze) {
       for (const s of t.seiten) this.clients.find(k => k.sessionId === s)?.send('meldung', { text: 'Für den Tausch ist im Rucksack nicht genug Platz' });
@@ -1019,10 +1211,11 @@ export class SpielRaum extends Room {
     return null;
   }
 
-  starteAktion(client) {
+  starteAktion(client, zweit = false) {
     const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
     if (!p || !x || p.aktion) return;
-    const k = this.kontext(p);
+    // zweite Taste: die andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
+    const k = zweit ? (p.unten || p.zombie > 0 || this.state.phase !== 'spiel' ? null : this.tuerKontext(p, 'zweit')) : this.kontext(p);
     if (!k) return;
     if (k.art === 'raetsel') return this.stelleRaetsel(client);
     if (k.art === 'schlossraetsel') return this.stelleRaetsel(client, { art: 'tuer', key: k.key, tuer: k.tuer, ebene: k.ebene });
@@ -1083,13 +1276,13 @@ export class SpielRaum extends Room {
       client?.send('meldung', { text: 'Den toten Zombie aus der Tür gezogen' });
     }
     else if (k.art === 'barrikade') {
-      if (this.leicheInTuer(k.safe)) return client?.send('meldung', { text: 'Ein toter Zombie liegt in der Tür – erst wegziehen' });
+      if (k.safe && this.leicheInTuer(k.safe)) return client?.send('meldung', { text: 'Ein toter Zombie liegt in der Tür – erst wegziehen' });
       const i = p.rucksack.indexOf('bretter');
       if (i < 0) return;
+      if (this.tuerBarrikade(k.key) >= 100) return;
       p.rucksack.splice(i, 1);
-      const safe = this.state.safes.get(k.safe.id);
-      safe.barrikade = Math.min(100, safe.barrikade + 35);
-      client?.send('meldung', { text: `Tür verbarrikadiert (${Math.round(safe.barrikade)} %)` });
+      this.setzeBarrikade(k.key, this.tuerBarrikade(k.key) + BRETT_STAERKE);
+      client?.send('meldung', { text: `Tür verbarrikadiert (${Math.round(this.tuerBarrikade(k.key))} %)` });
     }
   }
 
@@ -1199,7 +1392,7 @@ export class SpielRaum extends Room {
       if (alt) p.rucksack[i] = alt; else p.rucksack.splice(i, 1);
       client.send('meldung', { text: `${DINGE[d].name} in der Hand` });
     } else if (d === 'bretter') {
-      client.send('meldung', { text: 'Bretter: im Safe Room an der Tür verbarrikadieren' });
+      client.send('meldung', { text: 'Bretter: an einer Tür verbarrikadieren (Taste an der Tür)' });
     }
   }
 
@@ -1373,6 +1566,7 @@ export class SpielRaum extends Room {
       this.aktionSchritt(id, p, x, dt);
     }
     this.messen('spieler', t0); t0 = performance.now();
+    this.spiegleSafeTueren();
     for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
     this.messen('zombies', t0); t0 = performance.now();
     this.stadt?.schritt(dt);
@@ -1409,12 +1603,16 @@ export class SpielRaum extends Room {
     // infiziert: langsamer
     const tempo = (p.schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1);
     if (laenge > 0.05) {
-      const f = Math.min(1, laenge / (p.schleicht ? 0.55 : 1)) * tempo * dt;
+      let f = Math.min(1, laenge / (p.schleicht ? 0.55 : 1)) * tempo * dt;
       const x0 = p.x, y0 = p.y;
-      bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
+      if (x.bot) {
+        // Bots steigen nicht über Zäune, gehen aber durch Hecken und Holzzäune – langsam
+        f *= Math.min(tierGelaende(welt, x0, y0, W.spielerRadius) || 1, tierGelaende(welt, x0 + e.dx / laenge * f, y0 + e.dy / laenge * f, W.spielerRadius) || 1);
+        bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius, freiTier);
+      } else bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
       p.richtung = Math.atan2(e.dy, e.dx);
       if (!p.schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen, false, p.ebene);
-      this.klettern(id, p, x, e, laenge, ((p.x - x0) * e.dx + (p.y - y0) * e.dy) / laenge < f * 0.35, dt);
+      if (!x.bot) this.klettern(id, p, x, e, laenge, ((p.x - x0) * e.dx + (p.y - y0) * e.dy) / laenge < f * 0.35, dt);
     } else x.kletter = 0;
     this.uebergang(id, p, x, dt);
     // automatischer Angriff (nicht während man durchsucht)
@@ -1493,8 +1691,18 @@ export class SpielRaum extends Room {
     }
   }
 
+  // Safe Room: auf oder direkt neben einem Feldbett (≤ 1 Kachel) und 2 s ohne Bewegung = ruhen
+  ruhtAmBett(p, x, dt) {
+    const e = x.eingabe;
+    if (!p.sicher || !p.ebene || p.unten || p.aktion || (e && Math.hypot(e.dx, e.dy) > 0.05)) { x.stillSeit = 0; return false; }
+    x.stillSeit = (x.stillSeit ?? 0) + dt;
+    if (x.stillSeit < 2) return false;
+    const kx = Math.floor(p.x / KACHEL), ky = Math.floor(p.y / KACHEL);
+    return !!this.wv(p.ebene).moebel?.some(m => m.art === 'feldbett' && kx >= m.x - 1 && kx <= m.x + m.b && ky >= m.y - 1 && ky <= m.y + m.h);
+  }
+
   beduerfnisse(p, x, dt) {
-    if (!p.verbunden) return;
+    if (!p.verbunden) { p.ruht = false; return; }
     if (this.brauchtLicht(p)) {
       if (p.lampe <= 0) {
         const i = p.rucksack.indexOf('taschenlampe');
@@ -1502,6 +1710,7 @@ export class SpielRaum extends Room {
       } else p.lampe = Math.max(0, p.lampe - dt);
     }
     if (p.zombie > 0) {
+      p.ruht = false;
       p.zombie = Math.max(0, p.zombie - dt);
       if (p.zombie === 0) this.zurueckverwandeln(p, x, 'Die Verwandlung lässt nach');
       return;
@@ -1511,12 +1720,17 @@ export class SpielRaum extends Room {
       p.infektion = Math.max(0, p.infektion - dt);
       if (p.infektion === 0) return this.verwandeln(p);
     }
-    p.durst = Math.max(0, p.durst - dt * 100 / DURST_DAUER);
-    p.hunger = Math.max(0, p.hunger - dt * 100 / HUNGER_DAUER);
+    const ruht = this.ruhtAmBett(p, x, dt);
+    if (p.ruht !== ruht) p.ruht = ruht;
+    const rate = ruht ? 0.5 : 1;
+    p.durst = Math.max(0, p.durst - dt * rate * 100 / DURST_DAUER);
+    p.hunger = Math.max(0, p.hunger - dt * rate * 100 / HUNGER_DAUER);
     if (p.unten) return;
     if (p.durst === 0 || p.hunger === 0) {
       p.hp = Math.max(0, p.hp - dt * 0.25);
       if (p.hp === 0) this.liegtAmBoden(p);
+    } else if (ruht && p.hp < 100) {
+      p.hp = Math.min(100, p.hp + dt);   // Feldbett: +1 Leben pro Sekunde
     } else if (p.sicher && p.durst > 20 && p.hunger > 20 && p.hp < 100) {
       p.hp = Math.min(100, p.hp + dt * 0.6);   // ausruhen im Safe Room
     }
@@ -1588,10 +1802,10 @@ export class SpielRaum extends Room {
     }
   }
 
-  laerm(x, y, weite, durchWaende, ebene = '') {
+  laerm(x, y, weite, durchWaende, ebene = '', ausser = null) {
     const welt = this.wv(ebene);
     for (const [id, z] of this.state.zombies) {
-      if ((z.ebene ?? '') !== ebene) continue;
+      if (z === ausser || (z.ebene ?? '') !== ebene) continue;
       if (Math.hypot(z.x - x, z.y - y) > weite) continue;
       const info = this.zombieInfo.get(id);
       if (!info || info.ziel) continue;
@@ -1665,7 +1879,15 @@ export class SpielRaum extends Room {
       }
     }
     let ziel = info.ziel ? this.state.spieler.get(info.ziel) : null;
-    if (ziel && (ziel.unten || ziel.zombie > 0 || ziel.ebene !== ebene)) { info.ziel = null; ziel = null; }
+    if (ziel && (ziel.unten || ziel.zombie > 0 || ziel.ebene !== ebene)) {
+      // der Gejagte ist in ein Haus gelaufen: zur Haustür (letzte bekannte Stelle)
+      const m = !ebene && !ziel.unten && !(ziel.zombie > 0) ? EBENE_MUSTER.exec(ziel.ebene ?? '') : null;
+      const h = m ? this.welt.haeuser[Number(m[1])] : null;
+      if (h && Math.hypot((h.tuer.x + 0.5) * KACHEL - z.x, (h.tuer.y + 0.5) * KACHEL - z.y) < 700) {
+        info.punkt = { x: (h.tuer.x + 0.5) * KACHEL, y: (h.tuer.y + 0.5) * KACHEL };
+      }
+      info.ziel = null; ziel = null;
+    }
     z.jagt = !!ziel;
 
     if (ziel) {
@@ -1719,47 +1941,62 @@ export class SpielRaum extends Room {
     }
   }
 
-  // Zombie steht in der unverbarrikadierten Tür eines Safe Rooms, in dem jemand ist: er kommt hinein
-  safeEindringen(z) {
+  // Zombie steht in der offenen, unverbarrikadierten Haustür eines Hauses, in dem Menschen sind: er kommt hinein
+  hausEindringen(z) {
     const kx = Math.floor(z.x / KACHEL), ky = Math.floor(z.y / KACHEL);
-    const s = this.welt.safeRooms.find(r => r.haus.tuer.x === kx && r.haus.tuer.y === ky);
-    if (!s || this.state.safes.get(s.id)?.barrikade > 0) return false;
-    if (![...this.state.spieler.values()].some(p => p.ebene === s.ebene && !(p.zombie > 0))) return false;
-    const w = this.wv(s.ebene), a = w.ausgang;
-    const pos = this.freierPlatz(a ? this.nebenKachel(w, a) : w.start, 0, s.ebene);
-    z.ebene = s.ebene; z.x = pos.x; z.y = pos.y;
+    const h = this.hausAnTuer(kx, ky);
+    if (!h) return false;
+    const key = 'haus:' + h.nr, st = this.state.tueren.get(key);
+    if ((st && !st.offen && !st.kaputt) || this.tuerBarrikade(key) > 0) return false;
+    if (!this.spielerHinterTuer(key).length) return false;
+    const ebene = `h${h.nr}eg`, w = this.wv(ebene), a = w.ausgang;
+    const pos = this.freierPlatz(a ? this.nebenKachel(w, a) : w.start, 0, ebene);
+    z.ebene = ebene; z.x = pos.x; z.y = pos.y;
     const info = [...this.zombieInfo.entries()].find(([id]) => this.state.zombies.get(id) === z)?.[1];
     if (info) { info.ziel = null; info.punkt = null; info.schlaeft = false; info.steht = false; }
-    this.broadcast('meldung', { text: `🧟 Ein Zombie ist in den ${s.name} eingedrungen!`, lang: true });
+    const s = this.safeVonHaus(h.nr);
+    if (s) this.broadcast('meldung', { text: `🧟 Ein Zombie ist in den ${s.name} eingedrungen!`, lang: true });
+    else this.sageDrin(key, '🧟 Ein Zombie ist ins Haus eingedrungen!');
     return true;
   }
 
-  // verbarrikadierte Tür eines Safe Rooms an dieser Stelle?
-  barrikadeAn(x, y) {
-    const kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
-    for (const s of this.welt.safeRooms) {
-      if (s.haus.tuer.x === kx && s.haus.tuer.y === ky) {
-        const zustand = this.state.safes.get(s.id);
-        if (zustand.barrikade > 0) return zustand;
+  // Tür, gegen die der Zombie gerade läuft und die ihn aufhält (geschlossen oder verbarrikadiert), sonst null
+  zombieSperre(z, w, welt) {
+    const pruefe = (x, y) => {
+      const kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
+      if (!z.ebene) {
+        const h = this.hausAnTuer(kx, ky);
+        if (!h) return null;
+        const key = 'haus:' + h.nr, st = this.state.tueren.get(key);
+        return st && (!st.offen || this.tuerBarrikade(key) > 0) ? key : null;
       }
-    }
-    return null;
+      const t = welt.hole(kx, ky);
+      if (t !== T.INNENTUER && t !== T.TUER_OFFEN) return null;
+      const key = `${z.ebene}:${kx},${ky}`, st = this.state.tueren.get(key);
+      return st && (!st.offen || this.tuerBarrikade(key) > 0) ? key : null;
+    };
+    return pruefe(z.x + Math.cos(w) * (W.zombieRadius + 3), z.y + Math.sin(w) * (W.zombieRadius + 3)) ?? pruefe(z.x, z.y);
   }
 
   zombieGehen(z, w, weg, dt) {
+    const eifrig = z.jagt || weg > W.zombieTempoWandern * dt * 1.5;   // jagt oder folgt einem Geräusch (nicht nur Umherirren)
     weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
-    bewege(welt, z, Math.cos(w) * weg, Math.sin(w) * weg, W.zombieRadius);
-    // Barrikade: nicht durch, sondern dagegen hämmern (nur draußen)
-    const sperre = z.ebene ? null : (this.barrikadeAn(z.x + Math.cos(w) * W.zombieRadius, z.y + Math.sin(w) * W.zombieRadius)
-      ?? this.barrikadeAn(z.x, z.y));
+    // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)
+    const schritt = weg * Math.min(tierGelaende(welt, x0, y0, W.zombieRadius) || 1, tierGelaende(welt, x0 + Math.cos(w) * weg, y0 + Math.sin(w) * weg, W.zombieRadius) || 1);
+    bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.zombieRadius, freiTier);
+    // geschlossene oder verbarrikadierte Tür (Haustür, Zimmertür): nicht durch, sondern dagegen hämmern
+    const sperre = this.zombieSperre(z, w, welt);
     if (sperre) {
       z.x = x0; z.y = y0;
-      if (z.jagt || weg > W.zombieTempoWandern * dt * 1.5) sperre.barrikade = Math.max(0, sperre.barrikade - dt * 2);
-      return false;
+      if (!eifrig) return false;
+      // hinter der Tür niemand? Dann gibt er auf (ein Zimmer ohne Menschen ist es nicht wert)
+      if (!this.spielerHinterTuer(sperre).length) return false;
+      this.tuerSchlag(sperre, dt, z);
+      return true;
     }
-    if (!z.ebene && this.safeEindringen(z)) return true;
+    if (!z.ebene && this.hausEindringen(z)) return true;
     // Abstand zu anderen Zombies halten
     for (const o of this.state.zombies.values()) {
       if (o === z || o.ebene !== z.ebene) continue;
@@ -1769,7 +2006,7 @@ export class SpielRaum extends Room {
         bewege(welt, z, (z.x - o.x) / d * f, (z.y - o.y) / d * f, W.zombieRadius);
       }
     }
-    return Math.hypot(z.x - x0, z.y - y0) > weg * 0.3;
+    return Math.hypot(z.x - x0, z.y - y0) > schritt * 0.3;
   }
 
   aufhelfen(dt) {

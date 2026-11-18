@@ -214,6 +214,7 @@ export async function starte({
   app.get('/info', (req, res) => res.json({
     code: !!SpielRaum.einstellungen.zugangscode && !req.get('x-ingress-path'),
     wiki: String(optionen.wiki_adresse ?? '').trim(),
+    extern: String(optionen.externe_adresse ?? '').trim(),   // https-Adresse, unter der das Mikrofon geht
     toene: datei.werte.toene,
   }));
   app.use(nocache, express.static(path.join(hier, '..', 'client'), { extensions: ['html'] }));

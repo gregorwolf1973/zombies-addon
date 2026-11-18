@@ -1,7 +1,7 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
-import { randParkplaetze, strassenBuchten } from './vektor.mjs';
+import { randParkplaetze, strassenBuchten, fahrbahnBreite } from './vektor.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -9,6 +9,16 @@ const SAFE_WUNSCH = [
   [/karl-lederer/i, 'Karl-Lederer-Schule'],
   [/franz-marc/i, 'Franz-Marc-Schule'],
   [/st\.? ?ursula|pflegeheim/i, 'Pflegeheim St. Ursula'],
+];
+// Zusatzmuster: nur wenn die Hauptliste weniger als 3 Safe Rooms ergibt (andere Karten wie die Isarauen);
+// Geretsried findet 4 Treffer und bleibt damit unverändert
+const SAFE_ZUSATZ = [
+  [/evangelische gemeinschaft|kirche|kapelle/i, 'Evangelische Gemeinschaft'],
+  [/g[äa]rtnerei/i, 'Gärtnerei Holzer'],
+  [/leitner|bauunternehm/i, 'Bauunternehmung Leitner'],
+  [/goldhofer|schauer/i, 'Werkhalle Goldhofer & Schauer'],
+  [/feuerwehr|kraftwerk|gasthof|gasthaus|wirtshaus|hof\b/i, null],
+  [/m[öo]max|k[üu]chenmarkt|intersport|xxxlutz/i, null],
 ];
 const RICHTUNGEN = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
@@ -67,6 +77,22 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     h.safe = anzeige; h.safeId = 's' + safeRooms.length;
     safeRooms.push({ id: h.safeId, name: anzeige, haus: h });   // Kiste und Schrank stehen im Innenraum
   }
+  // Zu wenige benannte Treffer (andere Karte): Zusatzmuster, dann die größten Gebäude mit Tür
+  if (safeRooms.length < 3) {
+    const nimm = (h, anzeige) => {
+      const zellen = flaecheVon(h).filter(([x, y]) => hole(x, y) === T.BODEN);
+      if (zellen.length < 6 || BLOCKIERT.has(hole(h.tuer.x + h.raus.dx, h.tuer.y + h.raus.dy))) return;   // Tür muss ins Freie führen
+      h.safe = anzeige; h.safeId = 's' + safeRooms.length;
+      safeRooms.push({ id: h.safeId, name: anzeige, haus: h });
+    };
+    for (const [muster, anzeige] of SAFE_ZUSATZ) {
+      if (safeRooms.length >= 5) break;
+      const h = haeuser.find(h => !h.safe && muster.test(h.name));
+      if (h) nimm(h, anzeige ?? h.name);
+    }
+    const gross = haeuser.filter(h => !h.safe && h.flaeche >= 40).sort((a, b) => b.flaeche - a.flaeche);
+    for (const h of gross) { if (safeRooms.length >= 3) break; nimm(h, h.name || 'Lagerhalle'); }
+  }
   safeRoomsVervollstaendigen(safeRooms);
   // betretbare Häuser (auch Safe Rooms): Außenhülle nicht begehbar (das Innere ist ein eigener Innenraum)
   for (const h of haeuser) {
@@ -74,9 +100,10 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.b; x++) if (hole(x, y) === T.BODEN) setze(x, y, T.LEER);
   }
 
-  // Startplatz: größter zusammenhängender Platz in der Kartenmitte
+  // Startplatz: größter zusammenhängender Platz in der Kartenmitte (er muss zum großen Gehgebiet gehören,
+  // nicht in einer abgeschnittenen Ecke z. B. am Flussufer liegen)
   const imPlatz = new Uint8Array(BREITE * HOEHE);
-  let besterPlatz = null;
+  const plaetze = [];
   for (let y = 1; y < HOEHE - 1; y++) for (let x = 1; x < BREITE - 1; x++) {
     if (hole(x, y) !== T.PLATZ || imPlatz[y * BREITE + x]) continue;
     const q = [[x, y]], zellen = []; imPlatz[y * BREITE + x] = 1;
@@ -89,7 +116,40 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     }
     const mx = zellen.reduce((s, z) => s + z[0], 0) / zellen.length, my = zellen.reduce((s, z) => s + z[1], 0) / zellen.length;
     const wert = Math.min(zellen.length, 120) - Math.hypot(mx - BREITE / 2, my - HOEHE / 2) * 2.5;
-    if (zellen.length >= 12 && (!besterPlatz || wert > besterPlatz.wert)) besterPlatz = { zellen, mx, my, wert };
+    if (zellen.length >= 12) plaetze.push({ zellen, mx, my, wert });
+  }
+  plaetze.sort((a, b) => b.wert - a.wert);
+  let besterPlatz = plaetze[0] ?? null;
+  if (besterPlatz) {
+    // Gehgebiete bestimmen (nur Kacheln mit freier Nachbarschaft, damit schmale Uferstreifen nicht zählen);
+    // der erste Platz in einem nicht winzigen Gebiet gewinnt
+    const frei3 = i => {
+      const cx = i % BREITE, cy = (i - cx) / BREITE;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (BLOCKIERT.has(hole(cx + dx, cy + dy))) return false;
+      return true;
+    };
+    const gebiet = new Int32Array(BREITE * HOEHE).fill(-1), groessen = [];
+    for (let i = 0; i < gebiet.length; i++) {
+      if (gebiet[i] >= 0 || !frei3(i)) continue;
+      const q = [i]; gebiet[i] = groessen.length;
+      for (let j = 0; j < q.length; j++) {
+        const cx = q[j] % BREITE, cy = (q[j] - cx) / BREITE;
+        for (const [dx, dy] of RICHTUNGEN) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
+          const n = ny * BREITE + nx;
+          if (gebiet[n] < 0 && frei3(n)) { gebiet[n] = gebiet[i]; q.push(n); }
+        }
+      }
+      groessen.push(q.length);
+    }
+    const gross = Math.max(...groessen);
+    const zaehlt = p => {
+      const z = p.zellen.reduce((a, c) => Math.hypot(c[0] - p.mx, c[1] - p.my) < Math.hypot(a[0] - p.mx, a[1] - p.my) ? c : a);
+      const g = gebiet[z[1] * BREITE + z[0]];
+      return g >= 0 && groessen[g] >= gross * 0.08;   // Platz in einer abgeschnittenen Ecke zählt nicht
+    };
+    if (!zaehlt(besterPlatz)) besterPlatz = plaetze.find(zaehlt) ?? besterPlatz;
   }
   let start, markt;
   if (besterPlatz) {
@@ -151,11 +211,19 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     }
   }
   // Autos auf Buchtplätzen: etwa 70 % belegt, Lücken dazwischen
+  // In jeder Bucht bleibt mindestens ein Platz frei; längere Buchten (b.extra) lassen entsprechend mehr Plätze frei
   let nBucht = 0;
-  for (const b of buchten) for (const q of b.plaetze) {
-    if (r() > 0.7 * autoFaktor) continue;
-    behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'bucht', x: q.x, y: q.y, winkel: b.winkel + (r() < 0.5 ? Math.PI : 0), farbe: Math.floor(r() * 6) });
-    nBucht++;
+  for (const b of buchten) {
+    const belegt = b.plaetze.map(() => r() <= 0.7 * autoFaktor);
+    let n = belegt.filter(Boolean).length;
+    const hoechstens = b.plaetze.length - Math.max(1, b.extra ?? 0);
+    while (n > hoechstens) { const i = Math.floor(r() * belegt.length); if (belegt[i]) { belegt[i] = false; n--; } }
+    b.belegt = n;
+    b.plaetze.forEach((q, i) => {
+      if (!belegt[i]) return;
+      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'bucht', x: q.x, y: q.y, winkel: b.winkel + (r() < 0.5 ? Math.PI : 0), farbe: Math.floor(r() * 6) });
+      nBucht++;
+    });
   }
 
   // Parkplätze (OSM-Flächen): Autos in Reihen, Lücken dazwischen
@@ -242,6 +310,160 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
     n++;
   }
 
+  // ---- Straßendeko ----
+  function strassenDeko() {
+    const garten = karte.garten, objektKachel = new Set();
+    for (const o of karte.objekte ?? []) for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) objektKachel.add(y * BREITE + x);
+    const imGarten = (x, y) => { const g = garten?.[y * BREITE + x]; return !!g && g !== '.'; };
+    const tuerVorn = haeuser.filter(h => h.tuer).map(h => [h.tuer.x + h.raus.dx, h.tuer.y + h.raus.dy]);
+    const nahTuer = (x, y, d) => tuerVorn.some(([a, b]) => Math.abs(a - x) <= d && Math.abs(b - y) <= d);
+    const bauart = new Map(karte.gebaeude.map(g => [g.x + ',' + g.y + ',' + g.b + ',' + g.h, g.building ?? '']));
+
+    // 1. Mülltonnen: Gruppen aus 2–4 Tonnen an der Hauswand neben der Haustür (nie auf der Vorkachel der Tür selbst)
+    const TONNEN = ['gelb', 'gruen', 'braun', 'blau'];
+    for (const h of haeuser) {
+      if (!h.tuer || !h.betretbar) continue;
+      const wohnblock = bauart.get(h.x + ',' + h.y + ',' + h.b + ',' + h.h) === 'apartments';
+      if (r() > (wohnblock ? 0.9 : 0.5)) continue;
+      const fx = h.tuer.x + h.raus.dx, fy = h.tuer.y + h.raus.dy, px = -h.raus.dy, py = h.raus.dx;
+      const seite = r() < 0.5 ? 1 : -1;
+      for (const s of [seite, -seite]) {
+        const tx = fx + px * s, ty = fy + py * s;
+        const t = hole(tx, ty);
+        if (t !== T.WIESE && t !== T.PLATZ) continue;
+        if (objektKachel.has(ty * BREITE + tx)) continue;
+        const wand = hole(tx - h.raus.dx, ty - h.raus.dy);
+        if (wand !== T.WAND && wand !== T.LEER) continue;                      // Tonnen stehen an der Wand
+        if (tuerVorn.some(([a, b]) => (a !== fx || b !== fy) && Math.abs(a - tx) <= 1 && Math.abs(b - ty) <= 1)) continue;   // nicht vor fremden Türen
+        const n = wohnblock ? 3 + Math.floor(r() * 2) : 2 + Math.floor(r() * 2);
+        const farben = ['grau'];
+        const rest = TONNEN.slice().sort(() => r() - 0.5);
+        while (farben.length < n) farben.push(rest.pop() ?? 'grau');
+        farben.sort((a, b) => (r() < 0.5 ? -1 : 1));
+        muell.tonnen.push({ x: (tx + 0.5) * KACHEL + h.raus.dx * 3, y: (ty + 0.5) * KACHEL + h.raus.dy * 3, winkel: Math.atan2(h.raus.dy, h.raus.dx), farben, rund: r() < 0.25, haus: h.nr });
+        break;
+      }
+    }
+
+    // 2. Container (durchsuchbar): Wertstoffinseln auf Parkplätzen, Mulden und Großtonnen an Läden/Gewerbe/Wohnblocks
+    const GEWERBE = new Set(['retail', 'industrial', 'commercial', 'supermarket', 'warehouse', 'office', 'kindergarten', 'school']);
+    const behTile = (b) => [Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL)];
+    const containerOK = (x, y) => {
+      const t = hole(x, y);
+      if ((t !== T.WIESE && t !== T.PLATZ) || imGarten(x, y) || objektKachel.has(y * BREITE + x)) return false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (BLOCKIERT.has(hole(x + dx, y + dy))) return false;   // nie eine Engstelle zustellen
+      if (nahTuer(x, y, 2)) return false;
+      const cx = (x + 0.5) * KACHEL, cy = (y + 0.5) * KACHEL;
+      if (Math.hypot(cx - start.x, cy - start.y) < KACHEL * 5) return false;
+      if (behaelter.some(b => Math.hypot(b.x - cx, b.y - cy) < (b.art === 'bus' ? 80 : b.art === 'container' ? KACHEL * 0.9 : 52))) return false;
+      if (buchten.some(bu => abstandRechteck(bu, cx, cy) < KACHEL)) return false;
+      if (muell.tonnen.some(g => Math.hypot(g.x - cx, g.y - cy) < KACHEL * 1.3)) return false;
+      return true;
+    };
+    const setzeContainer = (x, y, typ, farbe, winkel = 0) => {
+      setze(x, y, T.DEKO);
+      behaelter.push({ id: 'c' + behaelter.filter(b => b.art === 'container').length, art: 'container', typ, farbe, winkel, x: (x + 0.5) * KACHEL, y: (y + 0.5) * KACHEL });
+    };
+    const GLAS = ['gruen', 'weiss', 'braun'], MULDE = ['blau', 'gruen', 'braun'];
+    // Gebäude
+    for (const h of haeuser) {
+      const bau = bauart.get(h.x + ',' + h.y + ',' + h.b + ',' + h.h) ?? '';
+      const gewerbe = !!h.art || GEWERBE.has(bau), block = bau === 'apartments';
+      if (!gewerbe && !block) continue;
+      if (r() > (block ? 0.3 : 0.75)) continue;
+      for (let v = 0; v < 30; v++) {
+        const x = h.x - 3 + Math.floor(r() * (h.b + 6)), y = h.y - 3 + Math.floor(r() * (h.h + 6));
+        if (x >= h.x && x < h.x + h.b && y >= h.y && y < h.y + h.h) continue;
+        if (!containerOK(x, y)) continue;
+        if (block) setzeContainer(x, y, r() < 0.5 ? 'gross' : 'glas', r() < 0.5 ? 'grau' : GLAS[Math.floor(r() * 3)], 0);
+        else setzeContainer(x, y, r() < 0.55 ? 'mulde' : 'gross', MULDE[Math.floor(r() * 3)], r() < 0.5 ? 0 : Math.PI / 2);
+        break;
+      }
+    }
+    // Parkplätze: Wertstoffinsel aus bis zu drei Glascontainern (grün, weiß, braun) nebeneinander
+    for (const f of karte.flaechen ?? []) {
+      if (f.a !== 'parkplatz' || r() > 0.5) continue;
+      const xs = f.p.filter((_, i) => i % 2 === 0), ys = f.p.filter((_, i) => i % 2 === 1);
+      const x0 = Math.floor(Math.min(...xs)), x1 = Math.ceil(Math.max(...xs)), y0 = Math.floor(Math.min(...ys)), y1 = Math.ceil(Math.max(...ys));
+      for (let v = 0; v < 40; v++) {
+        const x = x0 + Math.floor(r() * (x1 - x0 + 1)), y = y0 + Math.floor(r() * (y1 - y0 + 1));
+        if (!imPolygon(x + 0.5, y + 0.5, f.p) || !containerOK(x, y)) continue;
+        let n = 0;
+        for (let i = 0; i < 3; i++) {
+          if (i > 0 && !(imPolygon(x + i + 0.5, y + 0.5, f.p) && containerOK(x + i, y))) break;
+          setzeContainer(x + i, y, 'glas', GLAS[i], 0); n++;
+          if (i < 2 && r() < 0.3) break;
+        }
+        if (n) break;
+      }
+    }
+
+    // 3. Straßensperren: 1–2 Absperrungen quer über eine Fahrstraße, nie die einzige Verbindung
+    const ART = new Set(['residential', 'tertiary', 'secondary', 'primary', 'unclassified', 'living_street']);
+    const FAHR = new Set([...ART, 'service']);
+    const innen = (x, y) => x > 1.5 && y > 1.5 && x < BREITE - 1.5 && y < HOEHE - 1.5;
+    const sk = (x, y) => x.toFixed(1) + ',' + y.toFixed(1);   // wie Knoten in server/verkehr.mjs
+    const knoten = new Map(), kanten = [];
+    for (const s of karte.strassen ?? []) {
+      if (!FAHR.has(s.t)) continue;
+      for (let i = 0; i + 3 < s.p.length; i += 2) {
+        const [ax, ay, bx, by] = [s.p[i], s.p[i + 1], s.p[i + 2], s.p[i + 3]];
+        if (!innen(ax, ay) || !innen(bx, by) || sk(ax, ay) === sk(bx, by)) continue;
+        for (const q of [sk(ax, ay), sk(bx, by)]) if (!knoten.has(q)) knoten.set(q, []);
+        knoten.get(sk(ax, ay)).push(sk(bx, by)); knoten.get(sk(bx, by)).push(sk(ax, ay));
+        if (ART.has(s.t)) kanten.push({ s, ax, ay, bx, by });
+      }
+    }
+    // Hängt a ohne die Kante a–b (und ihre Doppelgänger) noch mit b zusammen?
+    const umfahrbar = (a, b) => {
+      const gesehen = new Set([a]), q = [a];
+      for (let i = 0; i < q.length; i++) for (const n of knoten.get(q[i])) {
+        if ((q[i] === a && n === b) || (q[i] === b && n === a)) continue;
+        if (n === b) return true;
+        if (!gesehen.has(n)) { gesehen.add(n); q.push(n); }
+      }
+      return false;
+    };
+    const kandidaten = [];
+    for (const e of kanten) {
+      const laenge = Math.hypot(e.bx - e.ax, e.by - e.ay);
+      if (laenge < 6) continue;
+      const mx = (e.ax + e.bx) / 2, my = (e.ay + e.by) / 2, ux = (e.bx - e.ax) / laenge, uy = (e.by - e.ay) / laenge;
+      const fb = fahrbahnBreite({ t: e.s.t, ref: e.s.ref, spuren: Number(e.s.spuren) || 0, breite: parseFloat(e.s.breite) || 0 });
+      // Kacheln quer über die Fahrbahn: alle müssen Straße sein (keine Brücke, kein Haus)
+      const quer = [];
+      for (let o = -fb / 2; o <= fb / 2 + 0.01; o += 4) {
+        const kx = Math.floor((mx * KACHEL - uy * o) / KACHEL), ky = Math.floor((my * KACHEL + ux * o) / KACHEL);
+        if (hole(kx, ky) !== T.STRASSE) { quer.length = 0; break; }
+        if (!quer.some(([a, b]) => a === kx && b === ky)) quer.push([kx, ky]);
+      }
+      if (!quer.length) continue;
+      kandidaten.push({ e, mx, my, ux, uy, fb, quer, breit: quer.length >= 3 });
+    }
+    // deterministisch mischen, breitere Straßen zuerst
+    kandidaten.sort((a, b) => (b.breit - a.breit) || (r() - 0.5));
+    for (const c of kandidaten) {
+      if (sperren.length >= 2) break;
+      const px = c.mx * KACHEL, py = c.my * KACHEL;
+      if (Math.hypot(px - start.x, py - start.y) < KACHEL * 14) continue;
+      if (sperren.some(o => Math.hypot(o.x - px, o.y - py) < KACHEL * 40)) continue;
+      if (c.quer.some(([a, b]) => nahTuer(a, b, 4))) continue;
+      if (behaelter.some(b => Math.hypot(b.x - px, b.y - py) < 90)) continue;
+      if (buchten.some(bu => abstandRechteck(bu, px, py) < 80)) continue;
+      if (deko.some(d => Math.hypot(d.x - px, d.y - py) < 150)) continue;
+      if (!umfahrbar(sk(c.e.ax, c.e.ay), sk(c.e.bx, c.e.by))) continue;
+      // Fußgänger: mittlere Fahrbahnkacheln sind dicht, die äußeren bleiben als Lücke frei
+      const dicht = c.quer.length >= 3 ? c.quer.slice(1, -1) : [];
+      for (const [a, b] of dicht) setze(a, b, T.DEKO);
+      sperren.push({ x: px, y: py, winkel: Math.atan2(c.uy, c.ux), breite: Math.max(24, c.fb - 2), seite: r() < 0.5 ? 1 : -1,
+        kante: [c.e.ax, c.e.ay, c.e.bx, c.e.by], kacheln: dicht });
+    }
+  }
+
+  // Mülltonnen an Häusern, Container an Läden/Gewerbe/Parkplätzen, Straßensperren (Lage deterministisch über r())
+  const muell = { tonnen: [] }, sperren = [];
+  strassenDeko();
+
   // Vektordaten nur fürs Aussehen: echte Gebäudeumrisse, Straßenlinien, Flächen
   const safeBox = haeuser.filter(h => h.safe);
   const vektor = {
@@ -254,7 +476,7 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
   for (const h of haeuser) h.umriss = karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss;
   // Gärten, Zaunarten und Gartenausstattung (tools/osm_karte.py) – nur fürs Aussehen; das Raster enthält sie schon
   const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [], zaeune: karte.zaeune ?? null } : null;
-  const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details };
+  const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details, muell, sperren };
   if (karte.zaeune) welt.fein = baueFein(welt, karte);
   return welt;
 }

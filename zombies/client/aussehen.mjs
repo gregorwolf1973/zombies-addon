@@ -3,6 +3,7 @@
 // (proto_grafik.mjs, erzeugt von tools/baue_aussehen.py); hier wird nur unsere Karte darauf abgebildet.
 import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
 import { erzeugeZeichner } from './proto_grafik.mjs';
+import { zeichneSafeMoebel } from './safe_moebel.mjs';
 import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach } from './vektor.mjs';
 
 const TAU = Math.PI * 2;
@@ -77,6 +78,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
         const b = blumen[Math.floor(hash(kx, ky * 9) * 4)], bx = px + hash(kx, ky) * 28 + 2, by = py + hash(ky, kx) * 28 + 2;
         b.moveTo(bx + 1.8, by); b.arc(bx, by, 1.8, 0, TAU);
       }
+      if (t === T.WIESE && beetHier(welt, kx, ky, gart)) zeichneBeet(ctx, px, py, kx, ky);
     }
     if (t === T.STRASSE) {
       const n = hash(kx, ky) * 10;
@@ -145,6 +147,8 @@ export function zeichneBoden(ctx, welt, rect = null) {
   if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details?.zaeune) zaunLinien(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
+  zeichneMuell(ctx, welt, { x0, y0, x1, y1 });
+  zeichneSperren(ctx, welt, { x0, y0, x1, y1 });
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
     if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
@@ -308,13 +312,37 @@ export function zeichneSafeDach(ctx, welt, h) {
 
 // Auto von oben: Karosserie mit Glanz, Front- und Heckscheibe, Dach, Scheinwerfer und Rückleuchten
 const AUTO_FARBEN = ['#c62828', '#1565c0', '#eeeeee', '#2e7d32', '#424242', '#f9a825', '#6d4c41', '#90a4ae'];
+// Bilder-Autos (client/grafik/autos.webp, tools/autos_schneiden.py); ohne Bild (Server, Tests) bleibt die gezeichnete Fassung
+let autoBild = null, autoListe = null;
+export function setzeAutoBilder(bild, liste) {
+  autoBild = bild && liste?.autos?.length ? bild : null; autoListe = autoBild ? liste : null;
+}
+// PKW-artige Varianten (nicht Polizei/Krankenwagen/Laster/Bus), deterministisch nach Farbe und Ort; Taxi nur selten
+function autoVariante(b) {
+  if (!autoListe || b.gezeichnet) return null;
+  const pkw = autoListe.autos.filter(a => a.art === 'pkw' || a.art === 'kombi' || a.art === 'kleinbus' || (a.art === 'taxi' && b.farbe === 5));
+  if (!pkw.length) return null;
+  const h = Math.abs(b.farbe * 7 + (b.vorwaerts ? 0 : Math.round(b.x) * 3 + Math.round(b.y) * 7));
+  if (h % 5 >= 2) return null;   // etwa 40 % Bilder-Autos, der Rest bleibt gezeichnet
+  const farbige = pkw.filter(a => a.farbe === b.farbe % AUTO_FARBEN.length);
+  const wahl = farbige.length ? farbige : pkw;
+  return wahl[Math.floor(h / 5) % wahl.length];
+}
 export function autoVonOben(ctx, b) {
   const lang = 46, breit = 21, f = AUTO_FARBEN[b.farbe % AUTO_FARBEN.length];
+  const bildAuto = autoVariante(b);
   ctx.save();
   ctx.translate(b.x, b.y);
   if (Number.isFinite(b.winkel)) ctx.rotate(b.winkel);   // längs zur Straße
   else if (b.senkrecht) ctx.rotate(Math.PI / 2);
-  if ((b.farbe + Math.round(b.x)) % 2) ctx.rotate(Math.PI);   // mal vorwärts, mal rückwärts geparkt
+  if (!b.vorwaerts && (b.farbe + Math.round(b.x)) % 2) ctx.rotate(Math.PI);   // mal vorwärts, mal rückwärts geparkt
+  if (bildAuto) {
+    const m = autoListe.mass ?? 2, bw = autoListe.feldB, bh = autoListe.feldH;
+    ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.roundRect(-lang / 2 + 3, -breit / 2 + 4, lang, breit, 7); ctx.fill();
+    ctx.drawImage(autoBild, bildAuto.nr * bw, 0, bw, bh, -bw / m / 2, -bh / m / 2, bw / m, bh / m);
+    ctx.restore();
+    return;
+  }
   const rund = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
   ctx.fillStyle = 'rgba(0,0,0,.32)'; rund(-lang / 2 + 3, -breit / 2 + 4, lang, breit, 7); ctx.fill();
   const g = ctx.createLinearGradient(0, -breit / 2, 0, breit / 2);
@@ -561,6 +589,7 @@ const BODEN_FARBEN = {
 };
 
 function zeichneMoebel(ctx, m) {
+  if (zeichneSafeMoebel(ctx, m, KACHEL)) return;   // Notlager-Möbel der Safe Rooms
   const x = m.x * KACHEL, y = m.y * KACHEL, b = m.b * KACHEL, h = m.h * KACHEL;
   const k = (f, rx, ry, rb, rh, r = 3) => { ctx.fillStyle = f; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(rx, ry, rb, rh, r) : ctx.rect(rx, ry, rb, rh); ctx.fill(); };
   const rand = () => { ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.5; ctx.strokeRect(x + 2.5, y + 2.5, b - 5, h - 5); };
@@ -623,4 +652,152 @@ export function zeichneInnen(ctx, w) {
   }
   for (const m of w.moebel) zeichneMoebel(ctx, m);
   ctx.restore();
+}
+
+// ---------- Straßendeko: Blumenbeete, Mülltonnen, Container, Straßensperren (nur Grafik; Lage kommt aus osmwelt.mjs) ----------
+
+// Beete: in Gärten, auf Wiesen am Platz und gelegentlich in Grünflächen (Parks) – dezent, höchstens ein Beet je Kachel
+function imPolygonT(px, py, p) {
+  let drin = false;
+  for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
+    if ((p[i + 1] > py) !== (p[j + 1] > py) && px < (p[j] - p[i]) * (py - p[i + 1]) / (p[j + 1] - p[i + 1]) + p[i]) drin = !drin;
+  }
+  return drin;
+}
+function beetHier(welt, kx, ky, gart) {
+  const h = hash(kx * 41 + 7, ky * 29 + 3);
+  if (gart && gart !== '.') return h < 0.03;
+  if (h > 0.09) return false;
+  const platz = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => welt.hole(kx + dx, ky + dy) === T.PLATZ);
+  if (platz) return h < 0.06;
+  if (h > 0.025) return false;
+  return (welt.vektor?.flaechen ?? []).some(f => (f.a === 'gruen' || f.a === 'spielplatz') && imPolygonT(kx + 0.5, ky + 0.5, f.p));
+}
+const BEET_BLUMEN = ['#e53935', '#fdd835', '#ab47bc', '#fafafa', '#ff7043', '#f48fb1', '#42a5f5'];
+function zeichneBeet(ctx, px, py, kx, ky) {
+  const h = (a) => hash(kx * 17 + a, ky * 13 + a * 3);
+  const cx = px + 9 + h(1) * 14, cy = py + 9 + h(2) * 14, form = Math.floor(h(3) * 5), dreh = h(4) * Math.PI;
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(dreh);
+  const erde = '#6d4c41', rand = '#4e342e';
+  const punkt = (x, y, i) => { ctx.fillStyle = BEET_BLUMEN[Math.floor(h(10 + i) * BEET_BLUMEN.length)]; ctx.beginPath(); ctx.arc(x, y, 1.6 + h(30 + i) * 0.7, 0, TAU); ctx.fill(); };
+  const gruen = (x, y) => { ctx.fillStyle = '#3f7d34'; ctx.beginPath(); ctx.arc(x, y, 1.3, 0, TAU); ctx.fill(); };
+  if (form === 0) {            // Oval
+    ctx.fillStyle = rand; ctx.beginPath(); ctx.ellipse(0, 0, 11, 7.5, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = erde; ctx.beginPath(); ctx.ellipse(0, 0, 9.6, 6.2, 0, 0, TAU); ctx.fill();
+    for (let i = 0; i < 7; i++) { const a = h(50 + i) * TAU, d = Math.sqrt(h(60 + i)) * 0.8; gruen(Math.cos(a) * 9 * d, Math.sin(a) * 5.5 * d); punkt(Math.cos(a) * 9 * d + 1, Math.sin(a) * 5.5 * d, i); }
+  } else if (form === 1) {     // Rechteck mit abgerundeten Ecken
+    ctx.fillStyle = rand; ctx.beginPath(); ctx.roundRect(-11, -6.5, 22, 13, 3); ctx.fill();
+    ctx.fillStyle = erde; ctx.beginPath(); ctx.roundRect(-9.8, -5.3, 19.6, 10.6, 2); ctx.fill();
+    for (let i = 0; i < 8; i++) { const x = -7.5 + (i % 4) * 5, y = i < 4 ? -2.4 : 2.4; gruen(x, y); punkt(x + 0.6, y, i); }
+  } else if (form === 2) {     // Rundbeet mit Steinring und Mittelpflanze
+    ctx.fillStyle = '#b0aca0'; ctx.beginPath(); ctx.arc(0, 0, 8.8, 0, TAU); ctx.fill();
+    ctx.fillStyle = erde; ctx.beginPath(); ctx.arc(0, 0, 7.2, 0, TAU); ctx.fill();
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; punkt(Math.cos(a) * 4.6, Math.sin(a) * 4.6, i); }
+    ctx.fillStyle = '#2e7d32'; ctx.beginPath(); ctx.arc(0, 0, 2.4, 0, TAU); ctx.fill();
+    punkt(0, 0, 9);
+  } else if (form === 3) {     // Nierenform aus zwei Kreisen
+    ctx.fillStyle = rand; ctx.beginPath(); ctx.arc(-5, 0, 7.4, 0, TAU); ctx.arc(5, 1.5, 6.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = erde; ctx.beginPath(); ctx.arc(-5, 0, 6.2, 0, TAU); ctx.arc(5, 1.5, 5.2, 0, TAU); ctx.fill();
+    for (let i = 0; i < 7; i++) { const x = -9 + i * 2.9, y = Math.sin(i * 1.7) * 2.5; gruen(x, y); punkt(x + 0.5, y, i); }
+  } else {                     // schmaler Streifen am Rand
+    ctx.fillStyle = rand; ctx.fillRect(-13, -3.8, 26, 7.6);
+    ctx.fillStyle = erde; ctx.fillRect(-12, -2.8, 24, 5.6);
+    for (let i = 0; i < 7; i++) punkt(-9.5 + i * 3.2, (i % 2 ? 1 : -1) * 0.9, i);
+  }
+  ctx.restore();
+}
+
+// Mülltonnen in Gruppen an Hauswänden (welt.muell.tonnen) und Container (welt.behaelter, art 'container'), von oben
+const TONNEN_FARBE = { grau: ['#6a7075', '#868d92'], gelb: ['#e0b400', '#f6cf2a'], gruen: ['#2e7d3a', '#43a354'], braun: ['#5d4128', '#7a5a3a'], blau: ['#2a5fa8', '#4580cc'] };
+function tonneVonOben(ctx, u, v, farbe, rund) {
+  const [dunkel, hell] = TONNEN_FARBE[farbe] ?? TONNEN_FARBE.grau;
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  if (rund) { ctx.beginPath(); ctx.arc(u + 1.5, v + 2, 5.2, 0, TAU); ctx.fill(); } else ctx.fillRect(u - 4 + 1.5, v - 5 + 2, 9, 11);
+  ctx.fillStyle = dunkel;
+  if (rund) { ctx.beginPath(); ctx.arc(u, v, 5.2, 0, TAU); ctx.fill(); } else { ctx.beginPath(); ctx.roundRect(u - 4.5, v - 5.5, 9, 11, 1.8); ctx.fill(); }
+  ctx.fillStyle = hell;   // Deckel
+  if (rund) { ctx.beginPath(); ctx.arc(u, v, 4.1, 0, TAU); ctx.fill(); } else { ctx.beginPath(); ctx.roundRect(u - 3.6, v - 4.6, 7.2, 9.2, 1.2); ctx.fill(); }
+  ctx.fillStyle = dunkel; ctx.fillRect(u - 2, v - 4.3, 4, 1.4);   // Griff
+}
+function zeichneMuell(ctx, welt, rect) {
+  const rand = 60;
+  const x0 = rect.x0 * KACHEL - rand, x1 = rect.x1 * KACHEL + rand, y0 = rect.y0 * KACHEL - rand, y1 = rect.y1 * KACHEL + rand;
+  for (const g of welt.muell?.tonnen ?? []) {
+    if (g.x < x0 || g.x > x1 || g.y < y0 || g.y > y1) continue;
+    ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(g.winkel);   // u (x) = vom Haus weg, v (y) = entlang der Wand
+    g.farben.forEach((f, i) => tonneVonOben(ctx, 0, (i - (g.farben.length - 1) / 2) * 11.5, f, g.rund));
+    ctx.restore();
+  }
+  for (const b of welt.behaelter ?? []) {
+    if (b.art !== 'container' || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
+    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.winkel ?? 0);
+    if (b.typ === 'glas') {          // Altglas-Iglu: Kuppel mit Einwurfloch
+      const f = { gruen: ['#2e7d3a', '#43a354'], weiss: ['#c9ccd0', '#eceff1'], braun: ['#6b4a2f', '#8a6544'] }[b.farbe] ?? ['#2e7d3a', '#43a354'];
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(2, 3, 12.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = f[0]; ctx.beginPath(); ctx.arc(0, 0, 12, 0, TAU); ctx.fill();
+      ctx.fillStyle = f[1]; ctx.beginPath(); ctx.arc(-1.5, -1.5, 8.6, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#212121'; ctx.beginPath(); ctx.arc(3, 3, 3, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, 11.6, 0, TAU); ctx.stroke();
+    } else if (b.typ === 'gross') {    // Großmülltonne auf Rollen (1100 l)
+      const f = TONNEN_FARBE[b.farbe] ?? TONNEN_FARBE.grau;
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-13 + 2, -9 + 3, 27, 19);
+      ctx.fillStyle = f[0]; ctx.beginPath(); ctx.roundRect(-14, -9.5, 28, 19, 2.5); ctx.fill();
+      ctx.fillStyle = f[1]; ctx.beginPath(); ctx.roundRect(-12.5, -8, 25, 16, 1.5); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(-12.5, -0.6, 25, 1.2);
+      ctx.fillStyle = f[0]; ctx.fillRect(-7, -9.5, 14, 2);
+    } else {                          // Mulde / Wertstoffcontainer
+      const f = TONNEN_FARBE[b.farbe] ?? TONNEN_FARBE.blau;
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-18 + 3, -10 + 4, 36, 21);
+      ctx.fillStyle = f[0]; ctx.beginPath(); ctx.roundRect(-18, -10.5, 36, 21, 2); ctx.fill();
+      ctx.fillStyle = f[1]; ctx.fillRect(-16, -8.5, 32, 17);
+      ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1.2;
+      for (let x = -9; x <= 9; x += 9) { ctx.beginPath(); ctx.moveTo(x, -8.5); ctx.lineTo(x, 8.5); ctx.stroke(); }
+      ctx.fillStyle = f[0]; ctx.fillRect(-18, -2, 36, 4);   // Mittelholm
+      ctx.fillStyle = '#9e9e9e'; ctx.fillRect(-19, -4, 3, 8); ctx.fillRect(16, -4, 3, 8);   // Haken
+    }
+    ctx.restore();
+  }
+}
+
+// Polizeisperre quer über die Fahrbahn: Absperrgitter, Sandsäcke, Warnbaken und ein Streifenwagen (welt.sperren)
+function zeichneSperren(ctx, welt, rect) {
+  const rand = 90;
+  const x0 = rect.x0 * KACHEL - rand, x1 = rect.x1 * KACHEL + rand, y0 = rect.y0 * KACHEL - rand, y1 = rect.y1 * KACHEL + rand;
+  for (const s of welt.sperren ?? []) {
+    if (s.x < x0 || s.x > x1 || s.y < y0 || s.y > y1) continue;
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.winkel);   // x = Richtung der Straße, y = quer darüber
+    const B = s.breite, seite = s.seite ?? 1;
+    // Absperrgitter (rot-weiß) nebeneinander quer über die Fahrbahn
+    const n = Math.max(2, Math.round(B / 11)), w = B / n;
+    for (let i = 0; i < n; i++) {
+      const y = -B / 2 + (i + 0.5) * w, l = w - 1;
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(0.5, y - w / 2 + 2, 3, l);
+      ctx.fillStyle = '#f5f5f5'; ctx.fillRect(-1.5, y - w / 2 + 0.5, 3, l);
+      ctx.fillStyle = '#d32f2f'; ctx.fillRect(-1.5, y - w / 2 + 0.5, 3, l / 3); ctx.fillRect(-1.5, y - w / 2 + 0.5 + 2 * l / 3, 3, l / 3);
+      ctx.fillStyle = '#546e7a'; ctx.fillRect(-4, y - w / 2 + 1, 8, 1.4); ctx.fillRect(-4, y + w / 2 - 2.4, 8, 1.4);   // Füße
+    }
+    // Sandsäcke an beiden Enden (zwei unten, einer obenauf)
+    for (const e of [-1, 1]) for (let j = 0; j < 3; j++) {
+      const y = e * (B / 2 + 3), x = j === 1 ? 0 : (j - 1) * 4.5;
+      ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.roundRect(x - 3 + 1, y - 4 + 1.5, 6, 8, 2); ctx.fill();
+      ctx.fillStyle = j === 1 ? '#cdb98a' : '#bfa970'; ctx.beginPath(); ctx.roundRect(x - 3, y - 4 - (j === 1 ? 1.5 : 0), 6, 8, 2); ctx.fill();
+    }
+    // Warnbaken davor
+    for (const e of [-0.32, 0.32]) {
+      const x = -seite * 15, y = e * B;
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(x + 1.5, y + 1.5, 4.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ef6c00'; ctx.beginPath(); ctx.arc(x, y, 4.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#fafafa'; ctx.beginPath(); ctx.arc(x, y, 2.9, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ef6c00'; ctx.beginPath(); ctx.arc(x, y, 1.4, 0, TAU); ctx.fill();
+    }
+    // Streifenwagen schräg hinter der Sperre
+    ctx.translate(seite * 30, -B * 0.16); ctx.rotate(0.3 * seite);
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(-23 + 3, -10.5 + 4, 46, 21, 7); ctx.fill();
+    ctx.fillStyle = '#f2f4f5'; ctx.beginPath(); ctx.roundRect(-23, -10.5, 46, 21, 7); ctx.fill();
+    ctx.fillStyle = '#1e5aa8'; ctx.fillRect(-14, -10, 26, 3); ctx.fillRect(-14, 7, 26, 3);
+    ctx.fillStyle = '#263238'; ctx.beginPath(); ctx.roundRect(-9, -7.5, 9, 15, 2); ctx.fill(); ctx.fillRect(10, -7, 4, 14);
+    ctx.fillStyle = '#e53935'; ctx.fillRect(-4, -7, 2.4, 6); ctx.fillStyle = '#1e88e5'; ctx.fillRect(-4, 1, 2.4, 6);
+    ctx.restore();
+  }
 }

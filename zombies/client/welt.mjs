@@ -336,7 +336,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 8;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen
+export const WELT_VERSION = 9;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -371,8 +371,8 @@ export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
 export const LEICHEN_MAX = 30;
 export const RUCKSACK_PLAETZE = 8;   // Grundausstattung; größere Taschen erhöhen p.plaetze
 export const KISTE_PLAETZE = 24;
-export const BEHAELTER_NAME = { schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
-  laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
+export const BEHAELTER_NAME = { container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
+  vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
   schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', null, null],
@@ -384,7 +384,10 @@ export const BEUTE = {
   laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', null],
   laden_gaststaette: ['essen', 'essen', 'wasser', 'wasser', 'messer', 'schokoriegel', null],
   laden: ['essen', 'wasser', 'schokoriegel', null, null],
+  vorratsregal: ['wasser', 'wasser', 'wasser', 'essen', 'essen', 'essen', 'verband', 'bretter', 'schokoriegel', 'schokoriegel', 'spritze', 'funkgeraet', null],
+  erstehilfe: ['verband', 'verband', 'verband', 'spritze', null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
+  container: ['essen', 'essen', 'schokoriegel', 'schokoriegel', 'bretter', 'bretter', 'kleidung', 'kleidung', 'tasche', null, null, null],   // Müll: meist Krempel, selten eine Tasche
 };
 export const MUNITION_PRO_FUND = 12;
 
@@ -403,6 +406,8 @@ export function ziehe(tabelle, faktoren, rnd, bonus = null) {
   for (let i = 0; i < tabelle.length; i++) { r -= gewichte[i]; if (r < 0) return tabelle[i]; }
   return null;
 }
+// Dauer des Durchsuchens (Sekunden) je Behälterart – Spieler und Bots gleich
+export const durchsuchDauer = art => art === 'auto' || art === 'bus' ? 2.2 : art === 'leiche' ? 0.9 : 1.5;
 export const AKTION_ABSTAND = 40;
 export const INFEKTION_DAUER = 5400;   // 90 Minuten bis zur Verwandlung
 export const ZOMBIE_ZEIT = 180;        // so lange spielt man als Zombie gegen die anderen
@@ -420,6 +425,7 @@ export function feinWert(welt, x, y) {
 }
 
 // Kreis mit Radius rad frei? Mit feinem Raster: alle überdeckten Feinfelder; sonst die vier Ecken des Quadrats
+const freiStandard = (welt, x, y, rad) => frei(welt, x, y, rad);
 export function frei(welt, x, y, rad) {
   const f = welt.fein;
   if (f) {
@@ -434,8 +440,70 @@ export function frei(welt, x, y, rad) {
       && !blockiert(welt, x - rad, y + rad) && !blockiert(welt, x + rad, y + rad);
 }
 
+// ---------- Hecken und niedrige Zäune für Zombies und Bots (Menschen klettern bewusst, siehe zaunUeberstieg) ----------
+export const ZAUN_TEMPO = { h: 0.35, z: 0.45 };   // Tempo-Faktor, solange Zombie/Bot im Zaunfeld steht
+// Art des durchquerbaren Zauns ('h' Hecke, 'z' Holzzaun – im Dorf alle Rasterzäune) auf Kachel kx,ky oder null
+function tierZaunArt(welt, kx, ky) {
+  if (kx <= 0 || ky <= 0 || kx >= BREITE - 1 || ky >= HOEHE - 1) return null;   // Kartenrand bleibt zu
+  if (welt.hole(kx, ky) !== T.ZAUN) return null;
+  const za = welt.details?.zaunart;
+  if (!za) return 'z';
+  const a = za[ky * BREITE + kx];
+  return a === 'h' || a === 'z' ? a : null;
+}
+// Zaunart eines Feinfelds mit Wert 2: Art der Kachel; die geglätteten Zaunlinien laufen auch über andere Kacheln,
+// dort entscheidet die Nachbarschaft (Metall/Mauer in der Nähe → undurchlässig, sonst Hecke, sonst Holzzaun)
+function feinZaunArt(welt, kx, ky) {
+  const za = welt.details?.zaunart;
+  if (!za) return 'z';
+  const eigene = za[ky * BREITE + kx];
+  if (eigene && 'hzmw'.includes(eigene)) return eigene;
+  let h = false;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const x = kx + dx, y = ky + dy;
+    if (x < 0 || y < 0 || x >= BREITE || y >= HOEHE) continue;
+    const a = za[y * BREITE + x];
+    if (a === 'm' || a === 'w') return 'm';
+    if (a === 'h') h = true;
+  }
+  return h ? 'h' : 'z';
+}
+// Wie frei(), aber Hecken und Holzzäune sind betretbar (Metallzäune, Mauern, Häuser bleiben zu). Rückgabe: true/false
+export function freiTier(welt, x, y, rad) { return tierGelaende(welt, x, y, rad) > 0; }
+// 0 = blockiert, sonst Tempo-Faktor (1 = freies Gelände, kleiner = in Hecke/Zaun)
+export function tierGelaende(welt, x, y, rad) {
+  if (welt.ebene) return frei(welt, x, y, rad) ? 1 : 0;
+  const f = welt.fein;
+  let faktor = 1;
+  if (f) {
+    const fb = BREITE * FEIN, fh = HOEHE * FEIN;
+    const x0 = Math.floor((x - rad) / FEIN_PX), x1 = Math.floor((x + rad) / FEIN_PX);
+    const y0 = Math.floor((y - rad) / FEIN_PX), y1 = Math.floor((y + rad) / FEIN_PX);
+    if (x0 < 0 || y0 < 0 || x1 >= fb || y1 >= fh) return 0;
+    for (let fy = y0; fy <= y1; fy++) for (let fx = x0; fx <= x1; fx++) {
+      const w = f[fy * fb + fx];
+      if (!w) continue;
+      if (w !== 2) return 0;
+      const kx = Math.floor(fx / FEIN), ky = Math.floor(fy / FEIN);
+      if (kx <= 0 || ky <= 0 || kx >= BREITE - 1 || ky >= HOEHE - 1) return 0;
+      const art = feinZaunArt(welt, kx, ky);
+      if (art !== 'h' && art !== 'z') return 0;
+      faktor = Math.min(faktor, ZAUN_TEMPO[art]);
+    }
+    return faktor;
+  }
+  for (const [px, py] of [[x - rad, y - rad], [x + rad, y - rad], [x - rad, y + rad], [x + rad, y + rad]]) {
+    const kx = Math.floor(px / KACHEL), ky = Math.floor(py / KACHEL);
+    if (!blockiert(welt, px, py)) continue;
+    const art = tierZaunArt(welt, kx, ky);
+    if (!art) return 0;
+    faktor = Math.min(faktor, ZAUN_TEMPO[art]);
+  }
+  return faktor;
+}
+
 // Bewegen mit Gleiten an Wänden: erst x, dann y getrennt
-export function bewege(welt, obj, dx, dy, rad) {
+export function bewege(welt, obj, dx, dy, rad, frei = freiStandard) {
   const gehtX = dx && frei(welt, obj.x + dx, obj.y, rad);
   if (gehtX) obj.x += dx;
   const gehtY = dy && frei(welt, obj.x, obj.y + dy, rad);
@@ -512,19 +580,26 @@ export function zombieSoll(n) {
 export const BEGEHBAR_WEG = new Set([T.WIESE, T.STRASSE, T.BODEN, T.TUER, T.PLATZ, T.BAUM, T.AUSGANG, T.TREPPE_RUNTER, T.TREPPE_HOCH, T.TUER_OFFEN]);
 
 // gerade Strecke mit Radius rad frei?
-export function linieFrei(welt, x1, y1, x2, y2, rad) {
+export function linieFrei(welt, x1, y1, x2, y2, rad, freiFn = frei) {
   const d = Math.hypot(x2 - x1, y2 - y1), n = Math.max(1, Math.ceil(d / 8));
   for (let i = 1; i <= n; i++) {
-    if (!frei(welt, x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n, rad)) return false;
+    if (!freiFn(welt, x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n, rad)) return false;
   }
   return true;
 }
 
 // Breitensuche über Kacheln; liefert Wegpunkte (Pixel), schon mit Abkürzungen über freie Strecken
-export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = Infinity) {
+export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = Infinity, zaunOk = false) {
+  const weg = findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, false);
+  // Zombies und Bots dürfen notfalls durch Hecken und Holzzäune (teurer: erst nur der freie Weg, dann mit Zaun)
+  return weg ?? (zaunOk ? findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, true) : null);
+}
+function findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, zaunOk) {
+  const frei_ = zaunOk ? freiTier : frei;
+  const begehbar = (x, y) => { const t = welt.hole(x, y); return BEGEHBAR_WEG.has(t) || (zaunOk && t === T.ZAUN && tierZaunArt(welt, x, y) !== null); };
   const sx = Math.floor(vonX / KACHEL), sy = Math.floor(vonY / KACHEL);
   const zx = Math.floor(nachX / KACHEL), zy = Math.floor(nachY / KACHEL);
-  if (!BEGEHBAR_WEG.has(welt.hole(zx, zy))) return null;
+  if (!begehbar(zx, zy)) return null;
   const vor = new Int32Array(BREITE * HOEHE).fill(-1);
   const start = sy * BREITE + sx, ziel = zy * BREITE + zx;
   vor[start] = start;
@@ -536,9 +611,9 @@ export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = I
     for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
       if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
       const j = ny * BREITE + nx;
-      if (vor[j] !== -1 || !BEGEHBAR_WEG.has(welt.hole(nx, ny))) continue;
+      if (vor[j] !== -1 || !begehbar(nx, ny)) continue;
       // mit feinem Raster: Kachelmitte und Übergang dorthin müssen auch fein frei sein (Zaunlinien, Hausumrisse)
-      if (welt.fein && j !== ziel && (!frei(welt, (nx + 0.5) * KACHEL, (ny + 0.5) * KACHEL, 9) || !frei(welt, (x + nx + 1) * KACHEL / 2, (y + ny + 1) * KACHEL / 2, 9))) continue;
+      if (welt.fein && j !== ziel && (!frei_(welt, (nx + 0.5) * KACHEL, (ny + 0.5) * KACHEL, 9) || !frei_(welt, (x + nx + 1) * KACHEL / 2, (y + ny + 1) * KACHEL / 2, 9))) continue;
       vor[j] = i; q.push(j);
     }
   }
@@ -553,7 +628,7 @@ export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = I
   let ax = vonX, ay = vonY, i = 0;
   while (i < punkte.length) {
     let j = punkte.length - 1;
-    while (j > i && !linieFrei(welt, ax, ay, punkte[j].x, punkte[j].y, rad)) j--;
+    while (j > i && !linieFrei(welt, ax, ay, punkte[j].x, punkte[j].y, rad, frei_)) j--;
     glatt.push(punkte[j]);
     ax = punkte[j].x; ay = punkte[j].y; i = j + 1;
   }

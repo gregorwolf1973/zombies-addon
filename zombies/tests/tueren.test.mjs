@@ -1,0 +1,291 @@
+// Haustüren und Zimmertüren: Zombies kommen hinein, hämmern Türen und Barrikaden auf; Verbarrikadieren überall
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { matchMaker } from '@colyseus/core';
+import { Client } from '@colyseus/sdk';
+import { starte } from '../server/index.mjs';
+import { KACHEL, T, frei } from '../client/welt.mjs';
+
+const PORT = 27300 + Math.floor(Math.random() * 200);
+const URL_ = `http://127.0.0.1:${PORT}`;
+const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-tueren-'));
+let server;
+const warte = ms => new Promise(r => setTimeout(r, ms));
+async function bis(bedingung, ms = 3000) {
+  const ende = Date.now() + ms;
+  while (Date.now() < ende) { if (bedingung()) return true; await warte(20); }
+  return bedingung();
+}
+const neueId = () => crypto.randomBytes(16).toString('hex');
+const mitteK = k => ({ x: (k.x + 0.5) * KACHEL, y: (k.y + 0.5) * KACHEL });
+
+before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: path.join(ordner, 'spiel.db') }); });
+after(async () => { await server.gracefullyShutdown(false); fs.rmSync(ordner, { recursive: true, force: true }); });
+
+async function beitreten(name, spielerId = neueId()) {
+  const c = await new Client(URL_).joinOrCreate('zombies', { name, spielerId });
+  const raum = matchMaker.getLocalRoomById(c.roomId);
+  raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+  const meldungen = [];
+  c.onMessage('meldung', m => meldungen.push(m.text));
+  return { c, raum, p: raum.state.spieler.get(c.sessionId), meldungen, spielerId };
+}
+
+// n-tes normale (kein Safe Room) betretbare Haus
+// betretbares Haus (kein Safe Room), vor dessen Tür drei Kacheln weit Platz ist (nicht am Kartenrand)
+function normalesHaus(raum, n) {
+  const safe = new Set(raum.welt.safeRooms.map(s => s.haus.nr));
+  const platz = h => [1.2, 2, 3].every(f => { const q = vorDerTuer(h, f); return frei(raum.welt, q.x, q.y, 12); });
+  return raum.welt.haeuser.filter(h => h.betretbar && !safe.has(h.nr) && platz(h))[n];
+}
+const ebeneVon = h => `h${h.nr}eg`;
+function hinein(raum, p, h) {
+  const w = raum.wv(ebeneVon(h)), ort = raum.nebenKachel(w, w.ausgang);
+  p.ebene = ebeneVon(h); p.x = ort.x; p.y = ort.y;
+  raum.state.zombies.clear(); raum.zombieInfo.clear();
+  return w;
+}
+function vorDerTuer(h, faktor = 1.2) {
+  const r = h.raus ?? { dx: 0, dy: 1 }, m = mitteK(h.tuer);
+  return { x: m.x + r.dx * KACHEL * faktor, y: m.y + r.dy * KACHEL * faktor };
+}
+function zombieDraussen(raum, pos) {
+  const id = raum.setzeZombie(pos.x, pos.y, '');
+  const z = raum.state.zombies.get(id), info = raum.zombieInfo.get(id);
+  info.schlaeft = false; info.steht = false;
+  return { id, z, info };
+}
+function schritte(raum, id, z, n, bedingung) {
+  for (let i = 0; i < n; i++) {
+    raum.zombieSchritt(id, z, 0.05);
+    if (bedingung?.()) return i + 1;
+  }
+  return n;
+}
+
+test('Offene Haustür: der Zombie folgt dem Gejagten ins Haus', async () => {
+  const { c, raum, p } = await beitreten('Gejagter');
+  try {
+    const h = normalesHaus(raum, 0);
+    hinein(raum, p, h);
+    const { id, z, info } = zombieDraussen(raum, vorDerTuer(h, 3));
+    info.ziel = c.sessionId;
+    assert.equal(z.ebene, '');
+    const start = { x: z.x, y: z.y };
+    schritte(raum, id, z, 400, () => z.ebene === ebeneVon(h));
+    assert.equal(z.ebene, ebeneVon(h), 'Zombie ist nicht hineingefolgt: ' + JSON.stringify({ start, z: { x: Math.round(z.x), y: Math.round(z.y) }, tuer: mitteK(h.tuer), raus: h.raus, info: { ziel: info.ziel, punkt: info.punkt, jagt: z.jagt, steht: info.steht }, tuerst: raum.state.tueren.get('haus:' + h.nr)?.toJSON?.() }));
+  } finally { await c.leave(); }
+});
+
+test('Geschlossene Haustür: Zombie hämmert, Tür bricht, dann kommt er hinein', async () => {
+  const { c, raum, p, meldungen } = await beitreten('Hausherr');
+  try {
+    const h = normalesHaus(raum, 1), key = 'haus:' + h.nr;
+    hinein(raum, p, h);
+    raum.setzeTuer(key, false);
+    const st = raum.state.tueren.get(key);
+    assert.equal(st.offen, false);
+    const { id, z, info } = zombieDraussen(raum, vorDerTuer(h, 2));
+    info.punkt = mitteK(h.tuer);
+    // nach 10 s: noch zu, aber angeschlagen
+    schritte(raum, id, z, 200, () => z.ebene !== '');
+    assert.equal(z.ebene, '', 'Zombie ist durch die geschlossene Tür');
+    assert.ok(st.hp < 100 && !st.kaputt, `Tür nicht angeschlagen (hp ${st.hp})`);
+    // nach etwa 25 s Hämmern ist sie kaputt
+    const n = schritte(raum, id, z, 1500, () => st.kaputt);
+    assert.ok(st.kaputt && st.offen && st.hp === 0, 'Tür ist nicht zerbrochen');
+    assert.ok(n < 600, `zu langsam: ${n} Schritte`);
+    schritte(raum, id, z, 300, () => z.ebene !== '');
+    assert.equal(z.ebene, ebeneVon(h), 'Zombie kommt nach dem Bruch nicht hinein');
+    assert.ok(await bis(() => meldungen.some(m => m.includes('hämmern')) && meldungen.some(m => m.includes('zerbrochen'))), 'Meldungen fehlen: ' + meldungen);
+    // zerbrochen: nicht mehr schließbar
+    raum.setzeTuer(key, false);
+    assert.equal(st.offen, true);
+  } finally { await c.leave(); }
+});
+
+test('Barrikade hält zuerst, dann die Tür selbst; mehrere Zombies sind schneller', async () => {
+  const { c, raum, p } = await beitreten('Barrikadenbauer');
+  try {
+    const h = normalesHaus(raum, 2), key = 'haus:' + h.nr;
+    hinein(raum, p, h);
+    raum.setzeTuer(key, false);
+    raum.setzeBarrikade(key, 70);
+    const st = raum.state.tueren.get(key);
+    const a = zombieDraussen(raum, vorDerTuer(h, 2));
+    a.info.punkt = mitteK(h.tuer);
+    schritte(raum, a.id, a.z, 2000, () => raum.tuerBarrikade(key) <= 0);
+    assert.equal(raum.tuerBarrikade(key), 0, 'Barrikade bleibt stehen');
+    assert.equal(st.hp, 100, 'Tür wurde vor der Barrikade beschädigt');
+    schritte(raum, a.id, a.z, 20);
+    assert.ok(st.hp < 100, 'danach wird die Tür beschädigt');
+    const einzeln = schritte(raum, a.id, a.z, 2000, () => st.kaputt);
+    assert.ok(st.kaputt);
+    // zu zweit: doppelt so schnell (Barrikade + Tür zusammen gemessen)
+    raum.state.zombies.clear(); raum.zombieInfo.clear();
+    st.kaputt = false; st.hp = 100; raum.setzeTuer(key, false); raum.setzeBarrikade(key, 0);
+    const z1 = zombieDraussen(raum, vorDerTuer(h, 2)), z2 = zombieDraussen(raum, vorDerTuer(h, 2.7));
+    for (const q of [z1, z2]) q.info.punkt = mitteK(h.tuer);
+    let zu2 = 0;
+    for (; zu2 < 3000 && !st.kaputt; zu2++) { raum.zombieSchritt(z1.id, z1.z, 0.05); raum.zombieSchritt(z2.id, z2.z, 0.05); }
+    assert.ok(st.kaputt, 'zu zweit bricht die Tür nicht');
+    assert.ok(zu2 < 520, `zu zweit nicht schneller: ${zu2} Schritte`);
+  } finally { await c.leave(); }
+});
+
+// zwei gegenüberliegende Bodenkacheln neben einer Zimmertür
+function seitenDerTuer(w, t) {
+  for (const [dx, dy] of [[1, 0], [0, 1]]) {
+    if (w.hole(t.x + dx, t.y + dy) === T.BODEN && w.hole(t.x - dx, t.y - dy) === T.BODEN) return [mitteK({ x: t.x - dx, y: t.y - dy }), mitteK({ x: t.x + dx, y: t.y + dy })];
+  }
+  return null;
+}
+
+test('Jagender Zombie bricht eine geschlossene (auch verschlossene) Zimmertür auf', async () => {
+  const { c, raum, p } = await beitreten('Eingesperrter');
+  try {
+    let gefunden = null;
+    for (let n = 3; !gefunden && n < 40; n++) {
+      const h = normalesHaus(raum, n);
+      if (!h) break;
+      const w = raum.wv(ebeneVon(h));
+      for (const t of w.tueren) { const s = seitenDerTuer(w, t); if (s) { gefunden = { h, w, t, s }; break; } }
+    }
+    assert.ok(gefunden, 'keine passende Zimmertür');
+    const { h, w, t, s } = gefunden, key = `${ebeneVon(h)}:${t.x},${t.y}`;
+    for (const verschlossen of [false, true]) {
+      raum.state.zombies.clear(); raum.zombieInfo.clear();
+      raum.state.tueren.get(key).kaputt = false; raum.state.tueren.get(key).hp = 100;
+      raum.setzeTuer(key, true); raum.setzeTuer(key, false);
+      raum.state.tueren.get(key).verschlossen = verschlossen;
+      const st = raum.state.tueren.get(key);
+      p.ebene = ebeneVon(h); p.x = s[1].x; p.y = s[1].y;
+      const id = raum.setzeZombie(s[0].x, s[0].y, ebeneVon(h));
+      const z = raum.state.zombies.get(id), info = raum.zombieInfo.get(id);
+      info.schlaeft = false; info.ziel = c.sessionId;
+      let n = 0;
+      for (; n < 2500 && !st.kaputt; n++) {
+        if (n % 10 === 0) raum.baueFeld(ebeneVon(h));
+        p.hp = 100; p.x = s[1].x; p.y = s[1].y;
+        raum.zombieSchritt(id, z, 0.05);
+      }
+      assert.ok(st.kaputt, `Tür (verschlossen=${verschlossen}) nicht aufgebrochen`);
+      assert.equal(w.hole(t.x, t.y), T.TUER_OFFEN, 'Kachel nicht offen');
+      assert.equal(st.offen, true);
+      assert.equal(st.verschlossen, false);
+      if (verschlossen) assert.ok(n > 450, 'verschlossene Tür hält nicht länger');
+    }
+  } finally { await c.leave(); }
+});
+
+test('Verbarrikadieren: Zimmertür, Haustür von innen und von außen; zweite Taste schließt', async () => {
+  const { c, raum, p } = await beitreten('Tischler');
+  try {
+    const h = normalesHaus(raum, 3), key = 'haus:' + h.nr;
+    const w = hinein(raum, p, h);
+    p.rucksack.clear(); for (let i = 0; i < 6; i++) p.rucksack.push('bretter');
+    // Haustür von innen (am Ausgang)
+    assert.equal(raum.tuerKontext(p, 'zu').art, 'barrikade');
+    assert.equal(raum.tuerKontext(p, 'zweit').art, 'tuer_zu');
+    c.send('aktion2');
+    assert.ok(await bis(() => raum.state.tueren.get(key)?.offen === false), 'Haustür geht nicht zu');
+    assert.equal(raum.tuerKontext(p, 'zweit').art, 'barrikade', 'bei geschlossener Tür ist Barrikade die zweite Möglichkeit');
+    c.send('aktion2');
+    assert.ok(await bis(() => raum.tuerBarrikade(key) >= 35, 5000), 'keine Barrikade an der Haustür');
+    assert.equal(p.rucksack.length, 5);
+    assert.equal(raum.state.tueren.get(key).barrikade, 35);
+    // von außen
+    p.ebene = ''; const v = vorDerTuer(h, 1.2); p.x = v.x; p.y = v.y;
+    const k = raum.kontext(p);
+    assert.equal(k?.art, 'tuer_auf', 'draußen vor der geschlossenen Tür: öffnen');
+    c.send('aktion2');
+    assert.ok(await bis(() => raum.tuerBarrikade(key) >= 70, 5000), 'keine Barrikade von außen');
+    // Zimmertür
+    const w2 = raum.wv(ebeneVon(h));
+    const t = w2.tueren.find(t => seitenDerTuer(w2, t));
+    if (t) {
+      const ik = `${ebeneVon(h)}:${t.x},${t.y}`, s = seitenDerTuer(w2, t);
+      raum.setzeTuer(ik, true);
+      p.ebene = ebeneVon(h); p.x = s[0].x; p.y = s[0].y;
+      assert.equal(raum.kontext(p)?.art, 'barrikade');
+      c.send('aktion');
+      assert.ok(await bis(() => raum.tuerBarrikade(ik) >= 35, 5000), 'keine Barrikade an der Zimmertür');
+      assert.equal(raum.state.tueren.get(ik).barrikade, 35);
+    }
+  } finally { await c.leave(); }
+});
+
+test('Menschen gehen durch geschlossene, verbarrikadierte Haustüren (Tür geht dabei auf)', async () => {
+  const { c, raum, p } = await beitreten('Durchgänger');
+  try {
+    const h = normalesHaus(raum, 4), key = 'haus:' + h.nr, r = h.raus ?? { dx: 0, dy: 1 };
+    raum.setzeTuer(key, false); raum.setzeBarrikade(key, 100);
+    const v = vorDerTuer(h, 1.3); p.ebene = ''; p.x = v.x; p.y = v.y;
+    c.send('eingabe', { dx: -r.dx, dy: -r.dy });
+    assert.ok(await bis(() => p.ebene === ebeneVon(h), 4000), 'kommt nicht hinein');
+    c.send('eingabe', { dx: 0, dy: 0 });
+    assert.equal(raum.state.tueren.get(key).offen, true);
+    assert.equal(raum.tuerBarrikade(key), 100, 'Barrikade bleibt für Zombies');
+    // eine Zombie bleibt davon unbeeindruckt draußen
+    const z = zombieDraussen(raum, vorDerTuer(h, 2));
+    z.info.punkt = mitteK(h.tuer);
+    schritte(raum, z.id, z.z, 100);
+    assert.equal(z.z.ebene, '');
+  } finally { await c.leave(); }
+});
+
+test('Bots bleiben an geschlossenen Haustüren nicht hängen und bauen keine Barrikaden ab', async () => {
+  const { c, raum, p } = await beitreten('Gastgeber');
+  try {
+    const h = normalesHaus(raum, 5), key = 'haus:' + h.nr;
+    raum.setzeTuer(key, false); raum.setzeBarrikade(key, 50);
+    const x = { wechselSperre: 0, bot: { uebergangZiel: mitteK(h.tuer) } };
+    const q = { x: mitteK(h.tuer).x, y: mitteK(h.tuer).y, ebene: '', aktion: '', fortschritt: 0 };
+    raum.uebergang(null, q, x, 0.05);
+    assert.equal(q.ebene, ebeneVon(h), 'Bot kommt nicht durch die Tür');
+    assert.equal(raum.tuerBarrikade(key), 50);
+  } finally { await c.leave(); }
+});
+
+test('Speichern: Haustür und Zimmertür mit Barrikade, Haltbarkeit und Bruch bleiben erhalten; Safe-Barrikade ist die der Haustür', async () => {
+  let { c, raum, p } = await beitreten('Speicherer');
+  const h = normalesHaus(raum, 6), h2 = normalesHaus(raum, 7), key = 'haus:' + h.nr, key2 = 'haus:' + h2.nr;
+  const s = raum.welt.safeRooms[0], skey = 'haus:' + s.haus.nr;
+  const w = raum.wv(ebeneVon(h));
+  const t = w.tueren[0], ik = `${ebeneVon(h)}:${t.x},${t.y}`;
+  raum.setzeTuer(key, false); raum.setzeBarrikade(key, 55);
+  raum.state.tueren.get(key).hp = 40;
+  raum.setzeTuer(key2, true); raum.state.tueren.get(key2).kaputt = true; raum.state.tueren.get(key2).hp = 0;
+  raum.setzeTuer(ik, true); raum.setzeBarrikade(ik, 35); raum.state.tueren.get(ik).kaputt = true;
+  raum.state.safes.get(s.id).barrikade = 66;
+  raum.spiegleSafeTueren();
+  assert.equal(raum.state.tueren.get(skey).barrikade, 66, 'Haustür des Safe Rooms spiegelt die Safe-Barrikade');
+  assert.equal(raum.tuerBarrikade(skey), 66);
+  raum.setzeBarrikade(skey, 90);
+  assert.equal(raum.state.safes.get(s.id).barrikade, 90, 'Barrikade der Safe-Haustür landet im Safe');
+  await c.leave();
+  assert.ok(await bis(() => !matchMaker.getLocalRoomById(raum.roomId), 3000), 'Raum bleibt bestehen');
+  const neu = await beitreten('Speicherer2');
+  try {
+    const tu = neu.raum.state.tueren;
+    assert.equal(tu.get(key).offen, false);
+    assert.equal(tu.get(key).barrikade, 55);
+    assert.equal(Math.round(tu.get(key).hp), 40);
+    assert.equal(tu.get(key).kaputt, false);
+    assert.equal(tu.get(key2).kaputt, true);
+    assert.equal(tu.get(key2).offen, true);
+    assert.equal(neu.raum.state.safes.get(s.id).barrikade, 90);
+    assert.equal(neu.raum.tuerBarrikade(skey), 90);
+    neu.raum.wv(ebeneVon(h));
+    const st = tu.get(ik);
+    assert.ok(st, 'Zimmertür nicht geladen');
+    assert.equal(st.barrikade, 35);
+    assert.equal(st.kaputt, true);
+    assert.equal(st.offen, true);
+    assert.equal(neu.raum.wv(ebeneVon(h)).hole(t.x, t.y), T.TUER_OFFEN);
+  } finally { await neu.c.leave(); }
+});

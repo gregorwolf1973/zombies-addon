@@ -13,6 +13,7 @@ export const Mensch = schema({
 }, 'Mensch');
 
 
+export const POLIZIST_ANTEIL = 0.06;
 const RAD = 10;
 const TEMPO = W.tempoGehen * 0.55, FLUCHT = W.tempoGehen * 0.95;
 const BISS_ABSTAND = 26;
@@ -46,7 +47,8 @@ export class Stadtleben {
       m.x = p.x; m.y = p.y; m.richtung = 0; m.infiziert = false; m.flieht = false;
       // ein Teil ist noch zu Hause und kommt später heraus
       m.sichtbar = r() < 0.6;
-      m.aussehen = `${r() < 0.5 ? 'm' : 'w'},${Math.floor(r() * 6)},${Math.floor(r() * 8)}`;
+      // ca. 6 % Polizisten (Kennung 'p', der Client zeichnet sie mit dem Polizistenbild)
+      m.aussehen = `${r() < POLIZIST_ANTEIL ? 'p' : r() < 0.5 ? 'm' : 'w'},${Math.floor(r() * 6)},${Math.floor(r() * 8)}`;
       const id = 'm' + this.naechsteId++;
       this.raum.state.menschen.set(id, m);
       this.info.set(id, { heim, ziel: null, weg: null, warte: m.sichtbar ? 0 : 10 + r() * 120, inf: 0, steckt: 0 });

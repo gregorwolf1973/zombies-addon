@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Zweiter Figurenbogen aus OpenGameArt-Paketen: Survivor (Riley Gombart, CC-BY 3.0), Zombies (Riley Gombart: tds_zombie CC0,
-zombie_01 OGA-BY 3.0), Bürger (KonitaTutorials, CC-BY 3.0), Waffen und Mündungsblitz (Survivor Spine, CC-BY 3.0).
+zombie_01 OGA-BY 3.0), Bürger und Polizisten (KonitaTutorials, CC-BY 3.0), Waffen und Mündungsblitz (Survivor Spine, CC-BY 3.0).
 Ergebnis: zombies/client/grafik/figuren2.webp (Felder FELD×FELD, Drehpunkt = Feldmitte, Blick nach rechts) + figuren2.json.
 Aufruf: PYTHONPATH=~/code/ahnen-werkzeuge/pil python3 tools/figuren2_schneiden.py <Ordner mit entpackten Paketen>"""
 import glob, json, pathlib, re, sys
@@ -82,6 +82,10 @@ haar = lambda r, g, b, a: a > 128 and r > 95 and g < 85 and b > 60 and r > b
 for civ in (1, 2, 3):
     fs = [str(QUELLE / f"citizens/Citizens/Walk{i}Civ{civ}.png") for i in range(1, 7)]
     gruppe(f"buerger{civ}", fs, 0.55, lambda im, f: schwerpunkt(im, haar))
+
+# Polizisten (KonitaTutorials, gleiches Paket): Drehpunkt = dunkelblaue Dienstmütze
+muetze = lambda r, g, b, a: a > 128 and b > 70 and r < 60 and b > 1.6 * r and g < 90
+gruppe("polizist", [str(QUELLE / f"police/Police/Walk{i}.png") for i in range(1, 7)], 0.55, lambda im, f: schwerpunkt(im, muetze))
 
 # ---------- Waffen und Mündungsblitz aus Survivor Spine (als Einzelbilder für die eigenen Figuren) ----------
 for teil, massstab in (("rifle", 0.5), ("shotgun", 0.5), ("knife", 0.5), ("flashlight", 0.5)):

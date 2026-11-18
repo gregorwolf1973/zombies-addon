@@ -43,10 +43,11 @@ options:
     trekking: 10
   zugangscode: ""
   wiki_adresse: ""
+  externe_adresse: ""
   bots: 0
   stun_server: "stun:stun.l.google.com:19302"
 schema:
-  karte: list(geretsried|dorf)
+  karte: list(geretsried|isarauen|dorf)
   zombies: int(0,50)
   zombie_faktor: float(0.1,5)?
   funde:
@@ -70,6 +71,7 @@ schema:
     funkgeraet: int(0,50)?
   zugangscode: str?
   wiki_adresse: str?
+  externe_adresse: str?
   bots: int(0,9)
   stun_server: str?
   turn_server: str?

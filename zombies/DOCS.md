@@ -34,7 +34,8 @@ Alles Wichtige stellst du bequem in der Seitenleiste „Zombies“ ein. Änderun
 
 Gespeichert wird in `/data/einstellungen.json`. Die Add-on-Optionen (`karte`, `zombies`, `funde`, `zugangscode`, `bots`)
 dienen nur noch beim allerersten Start als Startwerte. `wiki_adresse` (Adresse eines DokuWiki für die Links nach jedem
-Rätsel) bleibt eine Add-on-Option.
+Rätsel) bleibt eine Add-on-Option, ebenso `externe_adresse` (https-Adresse des Spiels von außen; wird auf der Startseite
+als Link „Mit Mikrofon spielen“ gezeigt, wenn die Seite per http:// geöffnet wurde, weil das Mikrofon https braucht).
 
 ## Rätsel
 

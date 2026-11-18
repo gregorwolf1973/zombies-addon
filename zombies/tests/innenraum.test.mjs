@@ -195,6 +195,8 @@ test('Nach dem Betreten läuft man mit gehaltener Taste nicht sofort wieder hina
     p.x = vor.x; p.y = vor.y + raus * KACHEL;
     c.send('eingabe', { dx: 0, dy: -raus });          // auf die Tür zu …
     assert.ok(await bis(() => p.ebene !== '', 4000), 'nicht hineingekommen');
+    // schlafende Zombies im Haus könnten aufwachen und die Figur festhalten – hier geht es nur um die Tür
+    for (const [id, z] of raum.state.zombies) if (z.ebene === p.ebene) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); }
     c.send('eingabe', { dx: 0, dy: 1 });              // … und mit gedrückter Taste nach unten weiter (Ausgang liegt unten)
     await warte(1500);
     assert.notEqual(p.ebene, '', 'sofort wieder draußen');
