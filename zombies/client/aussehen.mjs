@@ -281,7 +281,7 @@ export function zeichneInnen(ctx, w) {
     else { ctx.fillStyle = 'rgba(0,0,0,.06)'; ctx.fillRect(px + ((x * 7) % 20), py + ((y * 11) % 20), 4, 3); }
     if (t === T.AUSGANG) {
       ctx.fillStyle = '#5d4037'; ctx.fillRect(px + 3, py, KACHEL - 6, KACHEL);
-      ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⬇', px + 16, py + 22);
+      ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(y === w.oy ? '⬆' : '⬇', px + 16, py + 22);
     } else if (t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH) {
       ctx.fillStyle = '#9e9e9e'; ctx.fillRect(px + 2, py + 2, KACHEL - 4, KACHEL - 4);
       ctx.fillStyle = '#616161'; for (let i = 0; i < 5; i++) ctx.fillRect(px + 2, py + 4 + i * 6, KACHEL - 4, 2);

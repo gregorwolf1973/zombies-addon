@@ -376,7 +376,8 @@ class Ort extends Phaser.Scene {
     let w = this.innenWelten.get(ebene);
     if (!w) {
       const m = EBENE_MUSTER.exec(ebene);
-      w = baueInnenraum(raum.state.seed, Number(m[1]), m[2]);
+      const haus = this.welt.haeuser[Number(m[1])];
+      w = baueInnenraum(raum.state.seed, Number(m[1]), m[2], haus && haus.tuer.y === haus.y ? 'oben' : 'unten');
       w.ebene = ebene; w.nr = Number(m[1]); w.stock = m[2];
       w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
       this.innenWelten.set(ebene, w);

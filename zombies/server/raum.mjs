@@ -460,7 +460,8 @@ export class SpielRaum extends Room {
   baueEbene(ebene) {
     const m = EBENE_MUSTER.exec(ebene);
     if (!m) return this.welt;
-    const w = baueInnenraum(this.state.seed, Number(m[1]), m[2]);
+    const haus = this.welt.haeuser[Number(m[1])];
+    const w = baueInnenraum(this.state.seed, Number(m[1]), m[2], haus && haus.tuer.y === haus.y ? 'oben' : 'unten');
     w.ebene = ebene; w.nr = Number(m[1]); w.stock = m[2];
     w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
     w.safeRooms = [];

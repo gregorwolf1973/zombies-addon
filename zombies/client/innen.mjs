@@ -207,7 +207,7 @@ function findeMoebelPosition(kacheln, raum, moebelB, moebelH, ox, oy, hausB, hau
   return kandidaten[Math.floor(rng() * kandidaten.length)];
 }
 
-export function baueInnenraum(seed, nr, stock) {
+export function baueInnenraum(seed, nr, stock, seite = 'unten') {   // seite: wo draußen die Haustür ist
   const rng = zufall(seed ^ Math.imul(nr + 1, 7919) ^ (stock === 'eg' ? 0 : stock === 'keller' ? 0x51ed : 0xa77e));
   const kacheln = new Uint8Array(BREITE * HOEHE).fill(T.LEER);
 
@@ -480,16 +480,17 @@ export function baueInnenraum(seed, nr, stock) {
   if (stock === 'eg') {
     // (Claude) nur dort, wo innen Boden ist (nicht unter einer Trennwand)
     const moeglich = [];
-    for (let x = ox + 2; x < ox + b - 2; x++) if (kacheln[idx(x, oy + h - 2)] === T.BODEN) moeglich.push(x);
+    const innenY = seite === 'oben' ? oy + 1 : oy + h - 2;   // (Claude) Ausgang auf derselben Seite wie draußen
+    for (let x = ox + 2; x < ox + b - 2; x++) if (kacheln[idx(x, innenY)] === T.BODEN) moeglich.push(x);
     const ausgangX = moeglich.length ? moeglich[Math.floor(rng() * moeglich.length)] : ox + 1 + Math.floor(rng() * (b - 2));
-    const ausgangY = oy + h - 1;
+    const ausgangY = seite === 'oben' ? oy : oy + h - 1;
     kacheln[idx(ausgangX, ausgangY)] = T.AUSGANG;
     ausgang = { x: ausgangX, y: ausgangY };
 
     // Flur bestimmen: Zimmer, das an den Ausgang grenzt
     for (let i = 0; i < raeume.length; i++) {
       const r = raeume[i];
-      if (ausgangX >= r.x && ausgangX < r.x + r.b && r.y + r.h === ausgangY) {
+      if (ausgangX >= r.x && ausgangX < r.x + r.b && (r.y + r.h === ausgangY || r.y - 1 === ausgangY)) {
         flurIndex = i;
         break;
       }
@@ -722,7 +723,7 @@ export function baueInnenraum(seed, nr, stock) {
   if (stock === 'eg') {
     // Bodenkachel direkt innen vor dem Ausgang
     const sx = ausgang.x;
-    const sy = ausgang.y - 1;
+    const sy = seite === 'oben' ? ausgang.y + 1 : ausgang.y - 1;
     start = { x: sx * KACHEL + KACHEL / 2, y: sy * KACHEL + KACHEL / 2 };
   } else {
     // Neben der Treppe

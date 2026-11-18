@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.2 – 18.11.2026
+
+- Der Ausgang liegt innen auf derselben Seite wie die Haustür draußen (oben bzw. unten) –
+  man läuft nach dem Hinausgehen nicht mehr sofort wieder hinein
+- Die Außenhülle betretbarer Häuser ist nicht mehr begehbar, die Haustür ist nur noch Eingang
+- Bots: nur zwei Begleiter bleiben in deiner Nähe (mit mehr Abstand), die übrigen streifen umher;
+  Bots weichen nicht mehr aus, wenn du auf sie zugehst, und halten beim Tauschen still
+
 ## 0.9.1 – 18.11.2026
 
 - Fehler behoben: Wer mit gehaltener Taste ein Haus betrat oder eine Treppe nahm, landete sofort wieder auf der anderen Seite –

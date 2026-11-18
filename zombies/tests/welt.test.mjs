@@ -54,6 +54,7 @@ test('Ecken-Hilfe: knapp neben der Tür gegen die Wand laufen führt hinein', as
     const w = baueWelt(seed);
     let geschafft = 0;
     for (const h of w.haeuser) {
+      if (h.betretbar) continue;                 // betretbare Häuser haben einen eigenen Innenraum
       const oben = h.tuer.y === h.y;
       const richtung = oben ? 1 : -1;            // von der Straße aus ins Haus
       for (const versatz of [-12, 12]) {
@@ -65,7 +66,7 @@ test('Ecken-Hilfe: knapp neben der Tür gegen die Wand laufen führt hinein', as
         else assert.fail(`Seed ${seed}, Haus ${h.x},${h.y}: bei Versatz ${versatz} nicht hineingekommen`);
       }
     }
-    assert.ok(geschafft > 10);
+    assert.ok(geschafft >= 3, "nur " + geschafft);
   }
 });
 

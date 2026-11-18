@@ -40,9 +40,9 @@ function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
   const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
   // Abstand zu anderen Figuren (nicht durch Mitspieler hindurchdrängeln)
   for (const [osid, o] of raum.state.spieler) {
-    if (osid === sid || o.ebene !== p.ebene) continue;
+    if (osid === sid || o.ebene !== p.ebene || !raum.extra.get(osid)?.bot) continue;
     const d = abstand(p, o);
-    if (d > 0 && d < 30) { dx += (p.x - o.x) / d * (30 - d) / 30 * 1.2; dy += (p.y - o.y) / d * (30 - d) / 30 * 1.2; }
+    if (d > 0 && d < 44) { dx += (p.x - o.x) / d * (44 - d) / 44 * 1.4; dy += (p.y - o.y) / d * (44 - d) / 44 * 1.4; }
   }
   const n = Math.hypot(dx, dy) || 1;
   // festhängen: nach 1 s ohne Fortschritt Weg neu und kurz seitlich
@@ -72,6 +72,7 @@ export function botSchritt(raum, sid, p, x, dt) {
   x.eingabe = { dx: 0, dy: 0, s: false };
   b.uebergangZiel = null;
   if (p.unten || p.zombie > 0) { b.weg = null; return; }
+  if (raum.tausche?.has(sid)) return;   // beim Tauschen stillhalten
   versorgen(p, b, raum.uhr);
 
   const welt = raum.wv(p.ebene);
@@ -114,21 +115,31 @@ export function botSchritt(raum, sid, p, x, dt) {
   const menschen = spieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
   const anfuehrer = naechster(menschen, p, Infinity);
   if (anfuehrer) {
-    const bots = spieler.filter(([s]) => raum.extra.get(s)?.bot).map(([s]) => s).sort();
-    const nr = bots.indexOf(sid), n = Math.max(1, bots.length);
-    const winkel = anfuehrer.richtung + Math.PI + (nr - (n - 1) / 2) * 0.55;
-    const drinnen = !!p.ebene || safeRoomAn(raum.welt, anfuehrer.x, anfuehrer.y) || raum.welt.hole(Math.floor(anfuehrer.x / KACHEL), Math.floor(anfuehrer.y / KACHEL)) === 3;
-    const entf = drinnen ? 38 : 48 + (nr % 2) * 22;
+    const bots = alleSpieler.filter(([s]) => raum.extra.get(s)?.bot).map(([s]) => s).sort();
+    const nr = Math.max(0, bots.indexOf(sid));
+    const d = abstand(p, anfuehrer);
+    const drinnen = !!p.ebene || !!safeRoomAn(raum.welt, anfuehrer.x, anfuehrer.y);
+    // Erkunder (alle außer den ersten beiden): streifen draußen in der Nähe umher, kommen bei Abstand näher
+    if (nr >= 2 && !drinnen && d < 320) {
+      if (!b.streifZiel || raum.uhr > b.streifBis || abstand(b.streifZiel, anfuehrer) > 300) {
+        for (let v = 0; v < 12; v++) {
+          const w = Math.random() * Math.PI * 2, r = 120 + Math.random() * 140;
+          const z = { x: anfuehrer.x + Math.cos(w) * r, y: anfuehrer.y + Math.sin(w) * r };
+          if (frei(welt, z.x, z.y, RAD)) { b.streifZiel = z; break; }
+        }
+        b.streifBis = raum.uhr + 6 + Math.random() * 6;
+      }
+      if (b.streifZiel) { geheZu(raum, sid, p, x, b.streifZiel, 0.6, 18); return; }
+    }
+    // Begleiter: feste, weit verteilte Plätze hinter dem Menschen – kein Zurückweichen, wenn er herankommt
+    const n = Math.min(2, Math.max(1, bots.length));
+    const winkel = anfuehrer.richtung + Math.PI + ((nr % 2) - (n - 1) / 2) * 1.1;
+    const entf = drinnen ? 55 : 75 + (nr % 2) * 30;
     let platz = { x: anfuehrer.x + Math.cos(winkel) * entf, y: anfuehrer.y + Math.sin(winkel) * entf };
     if (!frei(welt, platz.x, platz.y, RAD) || !sichtfrei(welt, anfuehrer.x, anfuehrer.y, platz.x, platz.y)) platz = anfuehrer;
-    const d = abstand(p, anfuehrer);
-    if (d < 30) {   // zu nah am Menschen: Platz machen
-      const w = Math.atan2(p.y - anfuehrer.y, p.x - anfuehrer.x);
-      x.eingabe = { dx: Math.cos(w) * 0.5, dy: Math.sin(w) * 0.5, s: true };
-      return;
-    }
-    const tempo = anfuehrer.schleicht ? 0.45 : d > 160 ? 1 : 0.8;
-    geheZu(raum, sid, p, x, platz, tempo, platz === anfuehrer ? 40 : 16);
+    if (d < 70) return;   // nah genug: stehen bleiben (auch wenn der Mensch auf den Bot zugeht)
+    const tempo = anfuehrer.schleicht ? 0.45 : d > 180 ? 1 : 0.8;
+    geheZu(raum, sid, p, x, platz, tempo, platz === anfuehrer ? 60 : 18);
     return;
   }
 

@@ -358,9 +358,19 @@ test('Bots: fünf Mitspieler, folgen, helfen auf, weichen echten Spielern', asyn
     const ziel = raum.welt.safeRooms[0].innen;
     a.c.send('eingabe', { dx: 0, dy: 0 });
     for (const b of bots()) { b.x = p.x + 150; b.y = p.y; }
-    await warte(2500);
-    const naeher = bots().filter(b => Math.hypot(b.x - p.x, b.y - p.y) < 140).length;
-    assert.ok(naeher >= 3, `nur ${naeher} Bots folgen`);
+    await warte(4000);
+    const naeher = bots().filter(b => Math.hypot(b.x - p.x, b.y - p.y) < 150).length;
+    assert.ok(naeher >= 2, `nur ${naeher} Begleiter in der Nähe`);
+    assert.ok(bots().every(b => Math.hypot(b.x - p.x, b.y - p.y) < 340), 'ein Bot ist zu weit weg');
+    const paare = bots().flatMap((b, i) => bots().slice(i + 1).map(c => Math.hypot(b.x - c.x, b.y - c.y)));
+    assert.ok(paare.filter(d => d < 16).length === 0, 'Bots kleben aneinander: ' + paare.map(Math.round).join(','));
+    // auf einen Bot zugehen und tauschen: er weicht nicht aus
+    const partner = bots()[0], zid = [...raum.extra.entries()].find(([sid]) => raum.state.spieler.get(sid) === partner)[0];
+    p.x = partner.x - 20; p.y = partner.y;
+    let fenster = null; a.c.onMessage('tausch', m => { fenster = m; });
+    a.c.send('tausch_start', { mit: zid });
+    assert.ok(await bis(() => fenster?.seinOk === true), 'kein Tausch mit dem Bot');
+    a.c.send('tausch_ende');
     // Mensch liegt am Boden → ein Bot hilft auf
     p.unten = true; p.hp = 0; p.hilfe = 0;
     assert.ok(await bis(() => !p.unten, 15000), 'kein Bot hilft auf');

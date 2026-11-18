@@ -54,9 +54,11 @@ for (const seed of [1, 42, 1234]) {
   test(`Innenräume für Karte ${seed}`, () => {
     let keller = 0, dach = 0, verschlossen = 0, tueren = 0;
     for (let nr = 0; nr < 10; nr++) {
-      const eg = baueInnenraum(seed, nr, 'eg');
+      const seite = nr % 2 ? 'oben' : 'unten';
+      const eg = baueInnenraum(seed, nr, 'eg', seite);
       pruefe(eg, `eg ${seed}/${nr}`);
-      assert.ok(eg.ausgang && eg.hole(eg.ausgang.x, eg.ausgang.y) === T.AUSGANG && eg.ausgang.y === eg.oy + eg.h - 1, 'Ausgang');
+      assert.ok(eg.ausgang && eg.hole(eg.ausgang.x, eg.ausgang.y) === T.AUSGANG, 'Ausgang');
+      assert.equal(eg.ausgang.y, seite === 'oben' ? eg.oy : eg.oy + eg.h - 1, 'Ausgang auf der falschen Seite');
       assert.ok(eg.raeume.length >= 4, `eg ${seed}/${nr}: nur ${eg.raeume.length} Zimmer`);
       assert.ok(eg.moebel.length >= 6 && eg.behaelter.length >= 2, `eg ${seed}/${nr}: zu wenig Möbel/Behälter`);
       assert.equal(eg.treppen.some(t => t.ziel === 'keller'), eg.hatKeller);
@@ -74,7 +76,7 @@ for (const seed of [1, 42, 1234]) {
         pruefe(d, `dach ${seed}/${nr}`);
         assert.ok(d.treppen.some(t => t.ziel === 'eg'));
       }
-      assert.deepEqual(baueInnenraum(seed, nr, 'eg').kacheln, eg.kacheln, 'nicht deterministisch');
+      assert.deepEqual(baueInnenraum(seed, nr, 'eg', seite).kacheln, eg.kacheln, 'nicht deterministisch');
     }
     assert.ok(keller >= 2 && dach >= 1, `Keller ${keller}, Dach ${dach}`);
     assert.ok(verschlossen >= 3 && verschlossen < tueren * 0.5, `verschlossen ${verschlossen}/${tueren}`);

@@ -170,7 +170,11 @@ export function baueWelt(seed) {
   const deko = baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, safeRooms);
   const imHaus = (b, h) => b.x >= h.x * KACHEL && b.x < (h.x + h.b) * KACHEL && b.y >= h.y * KACHEL && b.y < (h.y + h.h) * KACHEL;
   const draussenBehaelter = behaelter.filter(b => b.art === 'auto' || haeuser.some(h => h.safe && imHaus(b, h)));
-  haeuser.forEach((h, i) => { h.nr = i; h.betretbar = !h.safe; });
+  haeuser.forEach((h, i) => {
+    h.nr = i; h.betretbar = !h.safe;
+    // das Innere betretbarer Häuser ist ein eigener Innenraum – die Außenhülle ist nicht begehbar
+    if (h.betretbar) for (let y = h.y + 1; y < h.y + h.h - 1; y++) for (let x = h.x + 1; x < h.x + h.b - 1; x++) setze(x, y, T.LEER);
+  });
   return { seed, kacheln: k, hole, haeuser, markt, tor, start, safeRooms, behaelter: draussenBehaelter, deko };
 }
 
