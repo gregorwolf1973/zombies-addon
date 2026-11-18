@@ -16,6 +16,7 @@ Alle landen im selben Spiel.
 
 | Option | Bedeutung |
 |---|---|
+| `karte` | `geretsried` (Stadtmitte aus OpenStreetMap, Standard) oder `dorf` (kleines erzeugtes Dorf) |
 | `zombies` | Wie viele Zombies draußen unterwegs sind: 10 = normal, 5 = halb so viele, 20 = doppelt so viele |
 | `funde` | Fundhäufigkeit je Gegenstand (Schränke, Autos, Kisten, tote Zombies): 10 = normal, 0 = nie, 20 = doppelt |
 | `zugangscode` | Wenn gesetzt, braucht jeder Mitspieler außerhalb der Seitenleiste diesen Code |

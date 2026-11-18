@@ -23,19 +23,22 @@ function rauschen(x, y) {
 const begehbarWiese = t => t === T.WIESE || t === T.BAUM;
 
 // ---------- Bodenebene: alles Flache ----------
-export function zeichneBoden(ctx, welt) {
-  const W = BREITE * KACHEL, H = HOEHE * KACHEL;
+export function zeichneBoden(ctx, welt, rect = null) {
+  const { x0, y0, x1, y1 } = rect ?? { x0: 0, y0: 0, x1: BREITE, y1: HOEHE };
+  ctx.save();
+  ctx.translate(-x0 * KACHEL, -y0 * KACHEL);
   // Wiese als Grundfläche mit Farbwolken
   ctx.fillStyle = '#4d8c3b';
-  ctx.fillRect(0, 0, W, H);
-  for (let y = 0; y < H; y += 8) for (let x = 0; x < W; x += 8) {
+  ctx.fillRect(x0 * KACHEL, y0 * KACHEL, (x1 - x0) * KACHEL, (y1 - y0) * KACHEL);
+  for (let y = y0 * KACHEL; y < y1 * KACHEL; y += 8) for (let x = x0 * KACHEL; x < x1 * KACHEL; x += 8) {
     const n = rauschen(x / 90, y / 90) * 0.7 + rauschen(x / 23, y / 23) * 0.3;
     if (n > 0.55) { ctx.fillStyle = `rgba(110,170,80,${(n - 0.55) * 0.5})`; ctx.fillRect(x, y, 8, 8); }
     else if (n < 0.4) { ctx.fillStyle = `rgba(20,50,15,${(0.4 - n) * 0.45})`; ctx.fillRect(x, y, 8, 8); }
   }
-  for (let ky = 0; ky < HOEHE; ky++) for (let kx = 0; kx < BREITE; kx++) {
+  for (let ky = y0; ky < y1; ky++) for (let kx = x0; kx < x1; kx++) {
     const t = welt.hole(kx, ky), px = kx * KACHEL, py = ky * KACHEL;
     const nb = (dx, dy) => welt.hole(kx + dx, ky + dy);
+    if (t === T.LEER) { ctx.fillStyle = '#5d4a40'; ctx.fillRect(px, py, KACHEL, KACHEL); continue; }
     if (begehbarWiese(t) || t === T.ZAUN) {
       // Grasbüschel
       ctx.strokeStyle = 'rgba(30,70,25,.55)'; ctx.lineWidth = 1; ctx.beginPath();
@@ -108,11 +111,17 @@ export function zeichneBoden(ctx, welt) {
       ctx.fillStyle = '#8d6e63'; ctx.fillRect(px + m - 3, py + m - 3, 4, 4);
     }
   }
+  ctx.restore();
 }
 
 // ---------- obere Ebene: Bäume und Deko aus dem Prototyp ----------
-export function zeichneOben(ctx, welt, bilder = {}) {
+export function zeichneOben(ctx, welt, bilder = {}, rect = null) {
+  const { x0, y0, x1, y1 } = rect ?? { x0: 0, y0: 0, x1: BREITE, y1: HOEHE };
+  ctx.save();
+  ctx.translate(-x0 * KACHEL, -y0 * KACHEL);
   const z = erzeugeZeichner(ctx);
+  const ax0 = Math.max(0, x0 - 2), ay0 = Math.max(0, y0 - 2), ax1 = Math.min(BREITE, x1 + 2), ay1 = Math.min(HOEHE, y1 + 2);
+  const imAusschnitt = (x, y, rand = 120) => x >= x0 * KACHEL - rand && x <= x1 * KACHEL + rand && y >= y0 * KACHEL - rand && y <= y1 * KACHEL + rand;
   const dinge = [];   // [y, zeichnen] – nach y sortiert, damit hintere zuerst kommen
   const wiese = (kx, ky, r = 1) => {
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (welt.hole(kx + dx, ky + dy) !== T.WIESE) return false;
@@ -120,7 +129,7 @@ export function zeichneOben(ctx, welt, bilder = {}) {
   };
   const mitte = (k) => k * KACHEL + KACHEL / 2;
 
-  for (let ky = 0; ky < HOEHE; ky++) for (let kx = 0; kx < BREITE; kx++) {
+  for (let ky = ay0; ky < ay1; ky++) for (let kx = ax0; kx < ax1; kx++) {
     const t = welt.hole(kx, ky);
     if (t === T.BAUM) {
       // Bäume von oben (Kenney, CC0): große und kleine Kronen, ein paar herbstliche
@@ -146,6 +155,7 @@ export function zeichneOben(ctx, welt, bilder = {}) {
   // Hindernisse und Deko: Lage kommt aus der Karte (welt.deko), damit Server und Browser übereinstimmen
   for (const d of welt.deko ?? []) {
     const { x, y } = d, v = d.v ?? 0.5;
+    if (!imAusschnitt(x, y)) continue;
     const f = {
       maibaum: () => z.maibaum(x, y),
       biertisch: () => z.biertisch(x, y),
@@ -172,6 +182,85 @@ export function zeichneOben(ctx, welt, bilder = {}) {
 
   dinge.sort((a, b) => a[0] - b[0]);
   for (const [, f] of dinge) { ctx.save(); f(); ctx.restore(); }
+  ctx.restore();
+}
+
+// ---------- Dächer für einen Kartenausschnitt ----------
+const DACH_FARBEN = [['#a1442f', '#8a3826', '#6d2a1c'], ['#8b4513', '#74390f', '#4e260a'], ['#6d6d6d', '#5a5a5a', '#3d3d3d'],
+  ['#9c5b3c', '#844b30', '#5d3420'], ['#7a3b2e', '#663126', '#45201a']];
+
+// Dachfläche je Kachel (OSM-Karten mit unregelmäßigen Grundrissen): Farbe je Gebäude, dunklere Traufe am Rand
+function dachKachel(ctx, welt, kx, ky, farbe, istDach) {
+  const px = kx * KACHEL, py = ky * KACHEL;
+  ctx.fillStyle = farbe[0]; ctx.fillRect(px, py, KACHEL, KACHEL);
+  ctx.fillStyle = 'rgba(0,0,0,.10)'; for (let i = 4; i < KACHEL; i += 6) ctx.fillRect(px, py + i, KACHEL, 1);
+  ctx.fillStyle = farbe[2];
+  if (!istDach(kx, ky - 1)) ctx.fillRect(px, py, KACHEL, 3);
+  if (!istDach(kx, ky + 1)) { ctx.fillRect(px, py + KACHEL - 3, KACHEL, 3); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(px + 3, py + KACHEL, KACHEL, 5); ctx.fillStyle = farbe[2]; }
+  if (!istDach(kx - 1, ky)) ctx.fillRect(px, py, 3, KACHEL);
+  if (!istDach(kx + 1, ky)) { ctx.fillRect(px + KACHEL - 3, py, 3, KACHEL); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(px + KACHEL, py + 4, 5, KACHEL); }
+}
+
+// zusammenhängende Dachflächen erkennen: eine Farbe je Dach (OSM-Gebäude bestehen oft aus mehreren Teilen)
+function dachIndex(welt) {
+  if (welt._dachNr) return welt._dachNr;
+  const nr = new Int32Array(BREITE * HOEHE).fill(-1);
+  const safe = new Uint8Array(BREITE * HOEHE);
+  for (const h of welt.haeuser) if (h.safe) for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.b; x++) {
+    if (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) safe[y * BREITE + x] = 1;
+  }
+  const istDach = (x, y) => { const t = welt.hole(x, y); return t === T.WAND || t === T.LEER || t === T.TUER; };
+  let id = 0;
+  for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) {
+    const i = y * BREITE + x;
+    if (nr[i] !== -1 || !istDach(x, y)) continue;
+    const q = [i]; nr[i] = safe[i] ? -2 : id;
+    for (let k = 0; k < q.length; k++) {
+      const cx = q[k] % BREITE, cy = (q[k] - cx) / BREITE;
+      for (const [nx, ny] of [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]) {
+        const j = ny * BREITE + nx;
+        if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE || nr[j] !== -1 || !istDach(nx, ny)) continue;
+        nr[j] = safe[j] ? -2 : id; q.push(j);
+      }
+    }
+    id++;
+  }
+  welt._dachNr = nr;
+  return nr;
+}
+
+export function zeichneDaecher(ctx, welt, rect) {
+  const { x0, y0, x1, y1 } = rect;
+  ctx.save();
+  ctx.translate(-x0 * KACHEL, -y0 * KACHEL);
+  if (welt.karte) {
+    const nr = dachIndex(welt);
+    const istDach = (x, y) => { const t = welt.hole(x, y); return (t === T.WAND || t === T.LEER || t === T.TUER) && nr[y * BREITE + x] !== -2; };
+    for (let ky = Math.max(0, y0 - 1); ky < Math.min(HOEHE, y1 + 1); ky++) for (let kx = Math.max(0, x0 - 1); kx < Math.min(BREITE, x1 + 1); kx++) {
+      const t = welt.hole(kx, ky);
+      if (t !== T.WAND && t !== T.LEER) continue;
+      const n = nr[ky * BREITE + kx];
+      if (n === -2) continue;   // Safe Rooms haben ein eigenes, ausblendbares Dach
+      dachKachel(ctx, welt, kx, ky, DACH_FARBEN[Math.max(0, n) % DACH_FARBEN.length], istDach);
+    }
+  } else {
+    for (const h of welt.haeuser) {
+      if (h.safe || h.x + h.b + 1 < x0 || h.x - 1 > x1 || h.y + h.h + 1 < y0 || h.y - 1 > y1) continue;
+      ctx.save(); ctx.translate(h.x * KACHEL - DACH_RAND, h.y * KACHEL - DACH_RAND); zeichneDach(ctx, h, h.nr); ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+// ausblendbares Dach eines Safe Rooms (Ursprung = Hausecke minus DACH_RAND)
+export function zeichneSafeDach(ctx, welt, h) {
+  if (!welt.karte) return zeichneDach(ctx, h, h.nr);
+  ctx.save();
+  ctx.translate(DACH_RAND - h.x * KACHEL, DACH_RAND - h.y * KACHEL);
+  const inBox = (x, y) => x >= h.x && y >= h.y && x < h.x + h.b && y < h.y + h.h;
+  const istDach = (x, y) => inBox(x, y) && [T.WAND, T.BODEN, T.TUER].includes(welt.hole(x, y));
+  for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.b; x++) if (istDach(x, y)) dachKachel(ctx, welt, x, y, ['#78909c', '#607d8b', '#37474f'], istDach);
+  ctx.restore();
 }
 
 function bildZeichnen(ctx, bild, x, y, gr, dreh = 0) {
@@ -325,7 +414,7 @@ export function zeichneInnen(ctx, w) {
     else { ctx.fillStyle = 'rgba(0,0,0,.06)'; ctx.fillRect(px + ((x * 7) % 20), py + ((y * 11) % 20), 4, 3); }
     if (t === T.AUSGANG) {
       ctx.fillStyle = '#5d4037'; ctx.fillRect(px + 3, py, KACHEL - 6, KACHEL);
-      ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(y === w.oy ? '⬆' : '⬇', px + 16, py + 22);
+      ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(y === w.oy ? '⬆' : x === w.ox ? '⬅' : x === w.ox + w.b - 1 ? '➡' : '⬇', px + 16, py + 22);
     } else if (t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH) {
       ctx.fillStyle = '#9e9e9e'; ctx.fillRect(px + 2, py + 2, KACHEL - 4, KACHEL - 4);
       ctx.fillStyle = '#616161'; for (let i = 0; i < 5; i++) ctx.fillRect(px + 2, py + 4 + i * 6, KACHEL - 4, 2);

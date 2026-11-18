@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.0 – 18.11.2026
+
+- Phase C: Geretsried-Stadtmitte aus OpenStreetMap (etwa 1,1 × 0,8 km, 281 × 208 Kacheln à 4 m) ist die neue Standardkarte
+  (Option `karte`: `geretsried` oder `dorf`); Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0
+- 293 betretbare Häuser mit echten Türen (auch seitlich), Garagen und Schuppen als geschlossene Blöcke
+- Safe Rooms: Kirche Maria Hilf, Karl-Lederer-Schule, Franz-Marc-Schule, Pflegeheim St. Ursula
+- Start auf dem Platz bei der Gaststätte Isarwinkel, Ortsausgang am westlichen Kartenrand, Autos und Busse auf den Straßen
+- Große Karten werden stückweise gezeichnet (nur der sichtbare Teil), Dächer folgen dem Gebäudeumriss
+- Zombies erscheinen im Umkreis der Spieler und verschwinden weit weg (große Karte bleibt leicht für den Server)
+
 ## 0.10.0 – 18.11.2026
 
 - Neue Figuren: Menschen und Zombies aus dem Kenney-Paket „Topdown Shooter“ (CC0, kenney.nl), Haltung je nach Ausrüstung

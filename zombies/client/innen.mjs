@@ -478,22 +478,27 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten') {   // seite: wo
   let ausgang = null;
   let flurIndex = 0;
   if (stock === 'eg') {
-    // (Claude) nur dort, wo innen Boden ist (nicht unter einer Trennwand)
+    // (Claude) Haustür auf der Seite, auf der sie draußen liegt (oben, unten, links, rechts),
+    // nur dort, wo innen Boden ist (nicht vor einer Trennwand)
+    const nach = { oben: [0, 1], unten: [0, -1], links: [1, 0], rechts: [-1, 0] }[seite] ?? [0, -1];
     const moeglich = [];
-    const innenY = seite === 'oben' ? oy + 1 : oy + h - 2;   // (Claude) Ausgang auf derselben Seite wie draußen
-    for (let x = ox + 2; x < ox + b - 2; x++) if (kacheln[idx(x, innenY)] === T.BODEN) moeglich.push(x);
-    const ausgangX = moeglich.length ? moeglich[Math.floor(rng() * moeglich.length)] : ox + 1 + Math.floor(rng() * (b - 2));
-    const ausgangY = seite === 'oben' ? oy : oy + h - 1;
+    if (seite === 'links' || seite === 'rechts') {
+      const ax = seite === 'links' ? ox : ox + b - 1;
+      for (let y = oy + 2; y < oy + h - 2; y++) if (kacheln[idx(ax + nach[0], y)] === T.BODEN) moeglich.push([ax, y]);
+      if (!moeglich.length) moeglich.push([ax, oy + 1 + Math.floor(rng() * (h - 2))]);
+    } else {
+      const ay = seite === 'oben' ? oy : oy + h - 1;
+      for (let x = ox + 2; x < ox + b - 2; x++) if (kacheln[idx(x, ay + nach[1])] === T.BODEN) moeglich.push([x, ay]);
+      if (!moeglich.length) moeglich.push([ox + 1 + Math.floor(rng() * (b - 2)), ay]);
+    }
+    const [ausgangX, ausgangY] = moeglich[Math.floor(rng() * moeglich.length)];
     kacheln[idx(ausgangX, ausgangY)] = T.AUSGANG;
-    ausgang = { x: ausgangX, y: ausgangY };
-
-    // Flur bestimmen: Zimmer, das an den Ausgang grenzt
+    ausgang = { x: ausgangX, y: ausgangY, nach };
+    // Flur = Zimmer hinter der Haustür
+    const fx = ausgangX + nach[0], fy = ausgangY + nach[1];
     for (let i = 0; i < raeume.length; i++) {
       const r = raeume[i];
-      if (ausgangX >= r.x && ausgangX < r.x + r.b && (r.y + r.h === ausgangY || r.y - 1 === ausgangY)) {
-        flurIndex = i;
-        break;
-      }
+      if (fx >= r.x && fx < r.x + r.b && fy >= r.y && fy < r.y + r.h) { flurIndex = i; break; }
     }
   }
 
@@ -722,8 +727,8 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten') {   // seite: wo
   let start;
   if (stock === 'eg') {
     // Bodenkachel direkt innen vor dem Ausgang
-    const sx = ausgang.x;
-    const sy = seite === 'oben' ? ausgang.y + 1 : ausgang.y - 1;
+    const sx = ausgang.x + ausgang.nach[0];
+    const sy = ausgang.y + ausgang.nach[1];
     start = { x: sx * KACHEL + KACHEL / 2, y: sy * KACHEL + KACHEL / 2 };
   } else {
     // Neben der Treppe

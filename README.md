@@ -26,7 +26,7 @@
 ## What works today
 
 - Up to 10 players in one shared world; the server is authoritative over movement, zombies and hits
-- A procedurally generated village with streets, a market square, houses you can enter (the roof fades away), trees and the Isar river
+- The real town centre of Geretsried (Bavaria) from OpenStreetMap – about 1.1 × 0.8 km with ~300 enterable buildings – or a small generated village with streets, a market square, houses you can enter (the roof fades away), trees and the Isar river
 - Zombies with a visible cone of vision; they hear running and gunshots and find their way around houses
 - Sneaking, an automatic pistol for 40 % of the players, shoving for the rest
 - Downed players get back up when a teammate stays next to them for 3 seconds
@@ -64,6 +64,9 @@ npm start                               # http://localhost:2567
 ```
 
 ## Credits
+
+Map data: © OpenStreetMap contributors, available under the Open Database License (ODbL 1.0); the converted map in `zombies/client/karten/` is licensed under the ODbL as well.
+
 
 Character, tree and prop graphics: [Kenney](https://www.kenney.nl) – Topdown Shooter pack (CC0).
 

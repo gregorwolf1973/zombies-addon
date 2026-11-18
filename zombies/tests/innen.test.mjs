@@ -15,6 +15,9 @@ function pruefe(r, info) {
   for (let x = r.ox; x < r.ox + r.b; x++) for (const y of [r.oy, r.oy + r.h - 1]) {
     assert.ok([T.WAND, T.AUSGANG].includes(hole(x, y)), `${info}: Außenwand offen bei ${x},${y}`);
   }
+  for (let y = r.oy; y < r.oy + r.h; y++) for (const x of [r.ox, r.ox + r.b - 1]) {
+    assert.ok([T.WAND, T.AUSGANG].includes(hole(x, y)), `${info}: Außenwand offen bei ${x},${y}`);
+  }
   // alle begehbaren Kacheln vom Start erreichbar (Türen gelten als offen)
   const [sx, sy] = kachel(r.start);
   assert.ok(GEHBAR.has(hole(sx, sy)), `${info}: Start nicht begehbar`);
@@ -54,11 +57,13 @@ for (const seed of [1, 42, 1234]) {
   test(`Innenräume für Karte ${seed}`, () => {
     let keller = 0, dach = 0, verschlossen = 0, tueren = 0;
     for (let nr = 0; nr < 10; nr++) {
-      const seite = nr % 2 ? 'oben' : 'unten';
+      const seite = ['unten', 'oben', 'links', 'rechts'][nr % 4];
       const eg = baueInnenraum(seed, nr, 'eg', seite);
       pruefe(eg, `eg ${seed}/${nr}`);
       assert.ok(eg.ausgang && eg.hole(eg.ausgang.x, eg.ausgang.y) === T.AUSGANG, 'Ausgang');
-      assert.equal(eg.ausgang.y, seite === 'oben' ? eg.oy : eg.oy + eg.h - 1, 'Ausgang auf der falschen Seite');
+      const richtig = { oben: eg.ausgang.y === eg.oy, unten: eg.ausgang.y === eg.oy + eg.h - 1,
+        links: eg.ausgang.x === eg.ox, rechts: eg.ausgang.x === eg.ox + eg.b - 1 }[seite];
+      assert.ok(richtig, `Ausgang auf der falschen Seite (${seite})`);
       assert.ok(eg.raeume.length >= 4, `eg ${seed}/${nr}: nur ${eg.raeume.length} Zimmer`);
       assert.ok(eg.moebel.length >= 6 && eg.behaelter.length >= 2, `eg ${seed}/${nr}: zu wenig Möbel/Behälter`);
       assert.equal(eg.treppen.some(t => t.ziel === 'keller'), eg.hatKeller);

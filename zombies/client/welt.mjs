@@ -3,8 +3,16 @@
 // der Server die Karte nicht übertragen.
 
 export const KACHEL = 32;
-export const BREITE = 64;   // Kacheln
-export const HOEHE = 48;
+// Kartengröße in Kacheln. Für Karten aus OpenStreetMap wird sie vor dem Bauen der Welt gesetzt
+// (live gebundene Exporte: alle Module sehen den neuen Wert).
+export let BREITE = 64;
+export let HOEHE = 48;
+export function setzeKartengroesse(b, h) { BREITE = b; HOEHE = h; }
+// Seite der Haustür für den Innenraum-Generator (aus der Austrittsrichtung)
+export function seiteVon(h) {
+  const r = h?.raus ?? { dx: 0, dy: 1 };
+  return r.dy < 0 ? 'oben' : r.dy > 0 ? 'unten' : r.dx < 0 ? 'links' : 'rechts';
+}
 
 export const T = {
   WIESE: 0, STRASSE: 1, WAND: 2, BODEN: 3, TUER: 4,
@@ -174,6 +182,7 @@ export function baueWelt(seed) {
   const draussenBehaelter = behaelter.filter(b => b.art === 'auto' || haeuser.some(h => h.safe && imHaus(b, h)));
   haeuser.forEach((h, i) => {
     h.nr = i; h.betretbar = !h.safe;
+    h.raus = { dx: 0, dy: h.tuer.y === h.y ? -1 : 1 };
     // das Innere betretbarer Häuser ist ein eigener Innenraum – die Außenhülle ist nicht begehbar
     if (h.betretbar) for (let y = h.y + 1; y < h.y + h.h - 1; y++) for (let x = h.x + 1; x < h.x + h.b - 1; x++) setze(x, y, T.LEER);
   });
@@ -468,7 +477,7 @@ export function linieFrei(welt, x1, y1, x2, y2, rad) {
 }
 
 // Breitensuche über Kacheln; liefert Wegpunkte (Pixel), schon mit Abkürzungen über freie Strecken
-export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = 4000) {
+export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = Infinity) {
   const sx = Math.floor(vonX / KACHEL), sy = Math.floor(vonY / KACHEL);
   const zx = Math.floor(nachX / KACHEL), zy = Math.floor(nachY / KACHEL);
   if (!BEGEHBAR_WEG.has(welt.hole(zx, zy))) return null;

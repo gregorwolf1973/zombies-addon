@@ -1,10 +1,14 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomAn, setzeKartengroesse, seiteVon,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, TAUSCH_ABSTAND,
 } from './welt.mjs';
-import { zeichneBoden, zeichneOben, zeichneDach, DACH_RAND, zeichneInnen } from './aussehen.mjs';
+import { zeichneBoden, zeichneOben, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen } from './aussehen.mjs';
+import { baueWeltAusKarte } from './osmwelt.mjs';
+
+let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
+const STUECK = 32;   // Kartenstücke à 32×32 Kacheln
 import { baueInnenraum } from './innen.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
@@ -134,9 +138,13 @@ async function mitspielen() {
 let abgemeldet = false;
 
 let gestartet = false;
-function starteSpiel() {
+async function starteSpiel() {
   if (gestartet) return;
   gestartet = true;
+  if (raum.state.karte) {
+    try { KARTE = await (await fetch(`karten/${raum.state.karte}.json`)).json(); }
+    catch (e) { console.error('Karte nicht geladen', e); }
+  }
   $('start').style.display = 'none';
   $('hud').style.display = 'block';
   $('unten').style.display = 'flex';
@@ -181,7 +189,8 @@ class Ort extends Phaser.Scene {
 
   create() {
     const s = raum.state;
-    this.welt = baueWelt(s.seed);
+    if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed); }
+    else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
     figurenVorzeichnen(this);
     this.zeichneKarte();
     this.aussenObjekte = this.children.list.slice();   // alles, was zur Außenwelt gehört
@@ -270,30 +279,22 @@ class Ort extends Phaser.Scene {
   }
 
   zeichneKarte() {
-    const W = BREITE * KACHEL, H = HOEHE * KACHEL;
-    // Boden und Deko im Stil des Prototyps, einmal in große Canvas-Texturen gezeichnet
-    const boden = this.textures.createCanvas('boden', W, H);
-    zeichneBoden(boden.getContext(), this.welt);
-    boden.refresh();
-    this.add.image(0, 0, 'boden').setOrigin(0).setDepth(0);
+    // Boden, Bäume, Deko und Dächer entstehen stückweise beim Hinsehen (chunksAktualisieren)
+    this.bilder = Object.fromEntries(GRAFIK.map(g => [g, this.textures.get(g).getSourceImage()]));
+    this.stuecke = new Map();
     const g = this.add.graphics().setDepth(0.5);
     // Böden der Safe Rooms etwas wärmer
     for (const s of this.welt.safeRooms) {
       const h = s.haus;
-      g.fillStyle(0xd7c4a3, 1).fillRect((h.x + 1) * KACHEL, (h.y + 1) * KACHEL, (h.b - 2) * KACHEL, (h.h - 2) * KACHEL);
+      if (!this.welt.karte) g.fillStyle(0xd7c4a3, 1).fillRect((h.x + 1) * KACHEL, (h.y + 1) * KACHEL, (h.b - 2) * KACHEL, (h.h - 2) * KACHEL);
       // Vorratskiste
       g.fillStyle(0x6d4c41, 1).fillRect(s.kiste.x - 12, s.kiste.y - 9, 24, 18);
       g.lineStyle(2, 0x3e2723, 1).strokeRect(s.kiste.x - 12, s.kiste.y - 9, 24, 18);
       g.fillStyle(0xffca28, 1).fillRect(s.kiste.x - 2, s.kiste.y - 3, 4, 5);
     }
-    const oben = this.textures.createCanvas('oben', W, H);
-    const bilder = Object.fromEntries(GRAFIK.map(g => [g, this.textures.get(g).getSourceImage()]));
-    zeichneOben(oben.getContext(), this.welt, bilder);
-    oben.refresh();
-    this.add.image(0, 0, 'oben').setOrigin(0).setDepth(5);
     this.torGrafik = this.add.graphics().setDepth(1.5);
     this.torStand = -1;
-    this.add.text((this.welt.tor.x + 1) * KACHEL + 4, (this.welt.tor.y) * KACHEL + 18, 'Ortsausgang', {
+    this.add.text((this.welt.tor.x + (this.welt.tor.x === 0 ? 1 : 0)) * KACHEL + 4, (this.welt.tor.y + (this.welt.tor.y === 0 ? 1 : 0)) * KACHEL + 18, 'Ortsausgang', {
       fontSize: '12px', fontStyle: 'bold', color: '#ffe082',
     }).setDepth(1);
 
@@ -301,7 +302,8 @@ class Ort extends Phaser.Scene {
     this.behaelterObj = new Map();
     for (const b of this.welt.behaelter) {
       const c = this.add.container(b.x, b.y).setDepth(1);
-      if (b.art === 'auto') {
+      if (b.art === 'bus') { /* der Bus selbst ist in der oberen Ebene gezeichnet */ }
+      else if (b.art === 'auto') {
         const lang = 46, breit = 22;
         const [w, h] = b.senkrecht ? [breit, lang] : [lang, breit];
         const k = this.add.graphics();
@@ -322,11 +324,11 @@ class Ort extends Phaser.Scene {
       this.behaelterObj.set(b.id, c);
     }
 
-    // Dächer: Häuser aus dem Prototyp; verdecken, was drinnen ist, solange man draußen steht
-    this.daecher = this.welt.haeuser.map((h, nr) => {
-      const schluessel = 'dach' + nr;
+    // Dächer der Safe Rooms als eigene Bilder (werden beim Hineingehen durchsichtig); die übrigen Dächer stecken in den Kartenstücken
+    this.daecher = this.welt.safeRooms.map(s => {
+      const h = s.haus, schluessel = 'dach-' + s.id;
       const tex = this.textures.createCanvas(schluessel, h.b * KACHEL + DACH_RAND * 2, h.h * KACHEL + DACH_RAND * 2);
-      zeichneDach(tex.getContext(), h, nr);
+      zeichneSafeDach(tex.getContext(), this.welt, h);
       tex.refresh();
       const bild = this.add.image(h.x * KACHEL - DACH_RAND, h.y * KACHEL - DACH_RAND, schluessel).setOrigin(0).setDepth(5.2);
       return { haus: h, grafik: bild };
@@ -340,6 +342,41 @@ class Ort extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(6);
       this.barrikaden.set(s.id, { grafik: this.add.graphics().setDepth(5.5), wert: -1, haus: h });
     }
+  }
+
+  // Kartenstücke um die Kamera herum erzeugen, entfernte freigeben (große Karten passen nicht in ein Bild)
+  chunksAktualisieren(alle = false) {
+    if (this.aktEbene) return;
+    const v = this.cameras.main.worldView, K = KACHEL * STUECK;
+    const nx = Math.ceil(BREITE / STUECK) - 1, ny = Math.ceil(HOEHE / STUECK) - 1;
+    const cx0 = Math.max(0, Math.floor((v.x - 160) / K)), cx1 = Math.min(nx, Math.floor((v.right + 160) / K));
+    const cy0 = Math.max(0, Math.floor((v.y - 160) / K)), cy1 = Math.min(ny, Math.floor((v.bottom + 160) / K));
+    let budget = alle || !this.stuecke.size ? 99 : 1;
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+      if (this.stuecke.has(cx + ',' + cy) || budget <= 0) continue;
+      budget--; this.baueStueck(cx, cy);
+    }
+    for (const [key, st] of this.stuecke) {
+      if (st.cx >= cx0 - 1 && st.cx <= cx1 + 1 && st.cy >= cy0 - 1 && st.cy <= cy1 + 1) continue;
+      st.boden.destroy(); st.oben.destroy();
+      this.textures.remove('boden-' + key); this.textures.remove('oben-' + key);
+      this.stuecke.delete(key);
+    }
+  }
+
+  baueStueck(cx, cy) {
+    const rect = { x0: cx * STUECK, y0: cy * STUECK, x1: Math.min(BREITE, (cx + 1) * STUECK), y1: Math.min(HOEHE, (cy + 1) * STUECK) };
+    const B = (rect.x1 - rect.x0) * KACHEL, H = (rect.y1 - rect.y0) * KACHEL, key = cx + ',' + cy;
+    const tb = this.textures.createCanvas('boden-' + key, B, H);
+    zeichneBoden(tb.getContext(), this.welt, rect); tb.refresh();
+    const to = this.textures.createCanvas('oben-' + key, B, H);
+    const ctx = to.getContext();
+    zeichneOben(ctx, this.welt, this.bilder, rect);
+    zeichneDaecher(ctx, this.welt, rect);
+    to.refresh();
+    const boden = this.add.image(rect.x0 * KACHEL, rect.y0 * KACHEL, 'boden-' + key).setOrigin(0).setDepth(0).setVisible(!this.aktEbene);
+    const oben = this.add.image(rect.x0 * KACHEL, rect.y0 * KACHEL, 'oben-' + key).setOrigin(0).setDepth(5).setVisible(!this.aktEbene);
+    this.stuecke.set(key, { cx, cy, boden, oben });
   }
 
   zeichneBarrikaden() {
@@ -387,7 +424,7 @@ class Ort extends Phaser.Scene {
     if (!w) {
       const m = EBENE_MUSTER.exec(ebene);
       const haus = this.welt.haeuser[Number(m[1])];
-      w = baueInnenraum(raum.state.seed, Number(m[1]), m[2], haus && haus.tuer.y === haus.y ? 'oben' : 'unten');
+      w = baueInnenraum(raum.state.seed, Number(m[1]), m[2], seiteVon(haus));
       w.ebene = ebene; w.nr = Number(m[1]); w.stock = m[2];
       w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
       this.innenWelten.set(ebene, w);
@@ -431,6 +468,7 @@ class Ort extends Phaser.Scene {
   wechsleAnsicht(ebene) {
     this.aktEbene = ebene;
     for (const o of this.aussenObjekte) o.setVisible(!ebene);
+    for (const st of this.stuecke.values()) { st.boden.setVisible(!ebene); st.oben.setVisible(!ebene); }
     for (const [e, a] of this.innenAnsichten) for (const o of [a.bild, a.tueren, a.dunkel]) o.setVisible(e === ebene);
     const cam = this.cameras.main;
     if (ebene) {
@@ -820,6 +858,7 @@ class Ort extends Phaser.Scene {
     }
     const ich = this.eigeneFigur(dt);
     this.innenAktualisieren(ich);
+    this.chunksAktualisieren();
     if (ich && this.lokal) {
       // Dach des Hauses, in dem man steht, wird durchsichtig
       for (const d of this.daecher) {

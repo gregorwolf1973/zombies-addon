@@ -24,7 +24,7 @@ async function bis(bedingung, ms = 3000) {
 }
 const neueId = () => crypto.randomBytes(16).toString('hex');
 
-before(async () => { server = await starte({ port: PORT, optionen: {}, leise: true, datenbank: DB }); });
+before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: DB }); });
 after(async () => { await server.gracefullyShutdown(false); fs.rmSync(ordner, { recursive: true, force: true }); });
 
 async function beitreten(name, spielerId = neueId()) {

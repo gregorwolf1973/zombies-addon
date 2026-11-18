@@ -15,7 +15,7 @@ async function bis(bedingung, ms = 3000) {
   return bedingung();
 }
 
-before(async () => { server = await starte({ port: PORT, optionen: {}, leise: true, datenbank: ':memory:' }); });
+before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: ':memory:' }); });
 after(async () => { await server.gracefullyShutdown(false); });
 
 test('Namen werden bereinigt', () => {

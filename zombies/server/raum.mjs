@@ -4,13 +4,14 @@ import { holeFragen } from './fragenquelle.mjs';
 import { mischeAntworten, waehleFrage } from './raetsel.mjs';
 import { botSchritt, BOT_NAMEN } from './bots.mjs';
 import { baueInnenraum } from '../client/innen.mjs';
+import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen,
   bewaffnetSoll, zombieSoll, zufall, safeRoomAn, WELT_VERSION,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
-  BLOCKIERT, ziehe, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
+  BLOCKIERT, ziehe, setzeKartengroesse, seiteVon, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
 } from '../client/welt.mjs';
 
 export const Spieler = schema({
@@ -58,6 +59,7 @@ export const Safe = schema({ barrikade: t.number(), kiste: t.array("string") }, 
 
 export const Zustand = schema({
   seed: t.number(),
+  karte: t.string(),        // '' = Dorf (erzeugt), sonst Name der OSM-Karte, z. B. 'geretsried'
   phase: t.string(),        // "spiel" | "erwischt"
   zeit: t.number(),         // Spielzeit in Sekunden (wird gespeichert)
   besiegt: t.uint16(),
@@ -128,7 +130,16 @@ export class SpielRaum extends Room {
     this.state = new Zustand();
     this.state.seed = Number.isInteger(optionen.seed) ? optionen.seed
       : stand?.seed ?? Math.floor(Math.random() * 2 ** 31);
-    this.welt = baueWelt(this.state.seed);
+    const karte = SpielRaum.einstellungen.karte;
+    if (karte?.kacheln) {
+      setzeKartengroesse(karte.breite, karte.hoehe);
+      this.welt = baueWeltAusKarte(karte, this.state.seed);
+      this.state.karte = karte.name;
+    } else {
+      setzeKartengroesse(64, 48);
+      this.welt = baueWelt(this.state.seed);
+      this.state.karte = '';
+    }
     this.rnd = zufall((this.state.seed ^ 0x5bd1e995) + Date.now() % 100000);
     this.state.phase = 'spiel';
     this.state.zeit = stand?.zeit ?? 0;
@@ -149,7 +160,7 @@ export class SpielRaum extends Room {
       const safe = new Safe(); safe.barrikade = 0;
       this.state.safes.set(s.id, safe);
     }
-    const passt = stand && stand.version === WELT_VERSION && stand.seed === this.state.seed;
+    const passt = stand && stand.version === WELT_VERSION && stand.seed === this.state.seed && (stand.karte ?? '') === this.state.karte;
     this.gespeichertTueren = null;
     if (passt) {
       this.gespeicherteTuerenStand = stand.tueren ?? {};
@@ -383,7 +394,7 @@ export class SpielRaum extends Room {
     for (const [id, inhalt] of this.inhalte) behaelter[id] = inhalt;
     for (const [id, s] of this.state.safes) safes[id] = { barrikade: Math.round(s.barrikade), kiste: [...s.kiste] };
     this.speicher.speichereWelt({
-      version: WELT_VERSION, seed: this.state.seed, zeit: this.state.zeit, besiegt: this.state.besiegt, behaelter, safes,
+      version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, besiegt: this.state.besiegt, behaelter, safes,
       torGeloest: this.state.torGeloest, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen]])),
     });
@@ -461,7 +472,7 @@ export class SpielRaum extends Room {
     const m = EBENE_MUSTER.exec(ebene);
     if (!m) return this.welt;
     const haus = this.welt.haeuser[Number(m[1])];
-    const w = baueInnenraum(this.state.seed, Number(m[1]), m[2], haus && haus.tuer.y === haus.y ? 'oben' : 'unten');
+    const w = baueInnenraum(this.state.seed, Number(m[1]), m[2], seiteVon(haus));
     w.ebene = ebene; w.nr = Number(m[1]); w.stock = m[2];
     w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
     w.safeRooms = [];
@@ -515,8 +526,8 @@ export class SpielRaum extends Room {
       ziel = `h${h.nr}eg`; pos = this.wv(ziel).start;
     } else if (p.ebene && t === T.AUSGANG) {
       const h = this.welt.haeuser[welt.nr];
-      const raus = h.tuer.y === h.y ? -1 : 1;
-      ziel = ''; pos = { x: (h.tuer.x + 0.5) * KACHEL, y: (h.tuer.y + 0.5 + raus * 1.3) * KACHEL };
+      const r = h.raus ?? { dx: 0, dy: 1 };
+      ziel = ''; pos = { x: (h.tuer.x + 0.5 + r.dx * 1.3) * KACHEL, y: (h.tuer.y + 0.5 + r.dy * 1.3) * KACHEL };
     } else if (p.ebene && (t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH)) {
       const tr = welt.treppen.find(tr => tr.x === kx && tr.y === ky);
       if (!tr) return;
@@ -1367,6 +1378,12 @@ export class SpielRaum extends Room {
 
   zombiesAuffuellen(dt) {
     this.nachspawn -= dt;
+    // weit von allen Spielern entfernte, nicht jagende Zombies draußen verschwinden (große Karten)
+    const draussenSpieler = [...this.state.spieler.values()].filter(p => !p.ebene);
+    if (draussenSpieler.length) for (const [id, z] of this.state.zombies) {
+      if (z.ebene || z.jagt) continue;
+      if (draussenSpieler.every(p => Math.hypot(p.x - z.x, p.y - z.y) > 1500)) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
+    }
     const soll = Math.round(zombieSoll(this.state.spieler.size) * this.zombieFaktor);
     const draussen = [...this.state.zombies.values()].filter(z => !z.ebene).length;
     if (draussen >= soll || this.nachspawn > 0) return;
@@ -1378,8 +1395,16 @@ export class SpielRaum extends Room {
   }
 
   neuerZombie(abstand) {
+    // im Ring um einen zufälligen Spieler draußen (bei großen Karten), sonst irgendwo
+    const draussen = [...this.state.spieler.values()].filter(p => !p.ebene);
     for (let versuch = 0; versuch < 60; versuch++) {
-      const x = (1 + this.rnd() * (BREITE - 8)) * KACHEL, y = (1 + this.rnd() * (HOEHE - 2)) * KACHEL;
+      let x, y;
+      if (draussen.length && abstand > 0) {
+        const p = draussen[Math.floor(this.rnd() * draussen.length)];
+        const w = this.rnd() * Math.PI * 2, d = abstand + this.rnd() * 450;
+        x = p.x + Math.cos(w) * d; y = p.y + Math.sin(w) * d;
+        if (x < KACHEL || y < KACHEL || x > (BREITE - 1) * KACHEL || y > (HOEHE - 1) * KACHEL) continue;
+      } else { x = (1 + this.rnd() * (BREITE - 8)) * KACHEL; y = (1 + this.rnd() * (HOEHE - 2)) * KACHEL; }
       if (!frei(this.welt, x, y, W.zombieRadius + 2)) continue;
       if (safeRoomAn(this.welt, x, y)) continue;
       const nah = [...this.state.spieler.values()].some(p => Math.hypot(p.x - x, p.y - y) < abstand);

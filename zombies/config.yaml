@@ -1,6 +1,6 @@
 name: "Zombies in Oberbayern"
 description: "Kooperatives Zombie-Survival für 2–10 Spieler im Handy-Browser – Spielserver mit Colyseus"
-version: "0.10.0"
+version: "0.11.0"
 slug: "zombies"
 url: "https://github.com/gregorwolf1973/zombies-addon"
 init: false
@@ -21,6 +21,7 @@ ports:
 ports_description:
   2567/tcp: "Spielzugang für Mitspieler (HTTP + WebSockets), z. B. hinter Reverse Proxy oder Cloudflare-Tunnel"
 options:
+  karte: geretsried
   zombies: 10
   funde:
     wasser: 10
@@ -44,6 +45,7 @@ options:
   wiki_adresse: ""
   bots: 0
 schema:
+  karte: list(geretsried|dorf)
   zombies: int(0,50)
   zombie_faktor: float(0.1,5)?
   funde:

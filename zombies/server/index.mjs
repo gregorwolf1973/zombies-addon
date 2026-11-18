@@ -23,6 +23,15 @@ export function entferneFremdenIngress(req, res, next) {
   next?.();
 }
 
+// OSM-Karte aus client/karten laden ('dorf' = erzeugtes Dorf ohne Datei)
+export function ladeKarte(name) {
+  if (!name || name === 'dorf' || !/^[a-z0-9_-]+$/.test(name)) return null;
+  try {
+    const daten = JSON.parse(fs.readFileSync(path.join(hier, '..', 'client', 'karten', name + '.json'), 'utf8'));
+    return { ...daten, name };
+  } catch (e) { console.error('Karte nicht gefunden:', name, e.message); return null; }
+}
+
 export async function starte({
   port = Number(process.env.PORT) || 2567,
   optionen = leseOptionen(),
@@ -45,6 +54,7 @@ export async function starte({
     // Fundhäufigkeit je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
     funde: Object.fromEntries(Object.entries(optionen.funde ?? {}).map(([k, v]) => [k, Math.max(0, Math.min(50, Number(v) || 0))])),
     bots: Math.max(0, Math.min(9, Number(optionen.bots) || 0)),
+    karte: ladeKarte(optionen.karte ?? 'geretsried'),
   };
   app.get('/gesund', (req, res) => res.json({ ok: true }));
   // sagt dem Client, ob er nach dem Zugangscode fragen muss
