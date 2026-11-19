@@ -54,6 +54,51 @@
   ],
   "langhaar": [
    17
+  ],
+  "leiche_kaminkehrer": [
+   18
+  ],
+  "leiche_kehrer": [
+   18
+  ],
+  "leiche_bauarbeiter": [
+   19
+  ],
+  "leiche_strassenarbeiter": [
+   19
+  ],
+  "leiche_koch": [
+   20
+  ],
+  "leiche_baecker": [
+   20
+  ],
+  "leiche_holzfaeller": [
+   21
+  ],
+  "leiche_flanell": [
+   21
+  ],
+  "leiche_mechaniker": [
+   22
+  ],
+  "leiche_werkstatt": [
+   22
+  ],
+  "leiche_vogelscheuche": [
+   23
+  ],
+  "leiche_tarn": [
+   24
+  ],
+  "leiche_streife": [
+   25
+  ],
+  "leiche_wachtmeister": [
+   25
+  ],
+  "leiche_postbote": [
+   26
   ]
  }
 }

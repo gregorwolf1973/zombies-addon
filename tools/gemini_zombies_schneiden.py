@@ -4,6 +4,9 @@ von oben, Blick nach rechts, abgetrennte Hände gehören zur Figur) frei und leg
 client/grafik/figuren3.webp (Felder 160 px, Drehpunkt = Körpermitte) plus figuren3.json ab.
 Freistellen: Flutfüllung von den Bildrändern über helle, ungesättigte Pixel (Weiß, Hellgrau); weiße Kleidung
 innerhalb der schwarzen Umrisse bleibt dadurch erhalten. Danach JPEG-Saum entfernen, Rand weich.
+Die lebenden Bögen liegen im Unterordner „alt“ des Ordners. Dazu zwei Bögen mit liegenden Toten (Blutlache gehört dazu,
+Kopf oben = Vorderansicht): sie werden um 90° gedreht (Kopf nach links, wie die alten Leichenbilder), auf eine
+gemeinsame Körperlänge gebracht und als Felder 18 ff. hinter die lebenden Typen gesetzt (Schlüssel „leiche_<typ>“).
 Aufruf: PYTHONPATH=~/code/ahnen-werkzeuge/pil python3 tools/gemini_zombies_schneiden.py [Ordner] [Kontaktbogen.png]"""
 import json, math, pathlib, statistics, sys
 from PIL import Image, ImageDraw, ImageFilter
@@ -152,12 +155,78 @@ def arme_ergaenzen(bild, info, mass):
 
 alle = []
 for kennung, namen in BOEGEN:
-    datei = next(QUELLE.glob(f"*{kennung}*.jpeg"))
+    datei = next(max(QUELLE / "alt", QUELLE, key=lambda o: o.is_dir() and any(o.glob(f"*{kennung}*.jpeg"))).glob(f"*{kennung}*.jpeg"))
     for name, (bild, mitte, info) in zip(namen, figuren(datei)): alle.append((name, bild, mitte, info))
+
+
+# ---------- Tote (liegend, auf Blutlache) ----------
+KOERPER = 100       # Länge Kopf bis Fuß der Leiche im Feld (alte Leichenbilder: ~100–112 px)
+TOTE_BOEGEN = [   # (Dateiteil, Zeilen, Namen)
+    ("8rw53x", 2, ["kaminkehrer", "bauarbeiter", "koch", "holzfaeller", "mechaniker", "vogelscheuche"]),
+    ("g26ab8", 1, ["tarn", "streife", "postbote"]),
+]
+# lebender Typ → Totenbild
+LEICHE_VON = {"kaminkehrer": "kaminkehrer", "kehrer": "kaminkehrer", "bauarbeiter": "bauarbeiter", "strassenarbeiter": "bauarbeiter",
+              "koch": "koch", "baecker": "koch", "holzfaeller": "holzfaeller", "flanell": "holzfaeller",
+              "mechaniker": "mechaniker", "werkstatt": "mechaniker", "vogelscheuche": "vogelscheuche",
+              "streife": "streife", "wachtmeister": "streife", "postbote": "postbote", "tarn": "tarn"}
+
+def blutfrei(px, x, y):
+    r, g, b = px[x, y][:3]
+    return not (r > 50 and g < 0.4 * r and b < 0.4 * r and r < 190)
+
+def tote_figuren(datei, zeilen, namen):
+    im = Image.open(datei).convert("RGB")
+    w, h = im.size
+    maske = freistellen(im)
+    k = maske.load(); px = im.load()
+    spalten = 3
+    zellen = {}
+    for n, bbox, (cx, cy) in komponenten(maske):
+        if n < 300: continue
+        zellen.setdefault((min(zeilen - 1, int(cy / (h / zeilen))), min(spalten - 1, int(cx / (w / spalten)))), []).append(bbox)
+    aus = []
+    for z in range(zeilen):
+        for s in range(spalten):
+            teile = zellen[(z, s)]
+            x0 = min(b[0] for b in teile); y0 = min(b[1] for b in teile); x1 = max(b[2] for b in teile); y1 = max(b[3] for b in teile)
+            m = Image.new("L", im.size, 0); mp = m.load()
+            for b in teile:
+                for y in range(b[1], b[3]):
+                    for x in range(b[0], b[2]): mp[x, y] = k[x, y]
+            # Ausdehnung der Figur ohne Blutlache
+            fx0 = fy0 = 10 ** 6; fx1 = fy1 = -1
+            for y in range(y0, y1):
+                for x in range(x0, x1):
+                    if mp[x, y] > 128 and blutfrei(px, x, y):
+                        fx0 = min(fx0, x); fx1 = max(fx1, x); fy0 = min(fy0, y); fy1 = max(fy1, y)
+            rgb = Image.composite(im, Image.new("RGB", im.size, (20, 20, 20)), m)
+            weich = m.filter(ImageFilter.GaussianBlur(0.8)).point(lambda v: 0 if v < 70 else min(255, int((v - 70) * 255 / 130)))
+            rgba = rgb.convert("RGBA"); rgba.putalpha(weich)
+            mass_t = KOERPER / (fy1 - fy0 + 1)
+            c = ((fx0 + fx1) / 2, (fy0 + fy1) / 2)
+            rgba = rgba.crop((x0 - 3, y0 - 3, x1 + 3, y1 + 3))
+            c = (c[0] - x0 + 3, c[1] - y0 + 3)
+            rgba = rgba.resize((round(rgba.width * mass_t), round(rgba.height * mass_t)), Image.LANCZOS)
+            c = (c[0] * mass_t, c[1] * mass_t)
+            # um 90° gegen den Uhrzeigersinn: Kopf (oben) → links wie bei den alten Leichen; Punkt (x, y) → (y, B − x)
+            rgba = rgba.rotate(90, expand=True)
+            c = (c[1], rgba.height - c[0])
+            feld = Image.new("RGBA", (FELD, FELD), (0, 0, 0, 0))
+            ox, oy = round(FELD / 2 - c[0]), round(FELD / 2 - c[1])
+            if min(ox, oy) < 0 or ox + rgba.width > FELD or oy + rgba.height > FELD: print("WARNUNG: Leiche ragt aus dem Feld:", namen[z * spalten + s], (ox, oy, rgba.size))
+            feld.paste(rgba, (ox, oy))
+            aus.append(feld)
+    return aus
+
+tote = []
+for kennung, zeilen, namen in TOTE_BOEGEN:
+    datei = next(QUELLE.glob(f"*{kennung}*.jpeg"))
+    tote += list(zip(namen, tote_figuren(datei, zeilen, namen)))
 
 mass = GROESSE / sorted(max(b.size) for _, b, _, _ in alle)[len(alle) // 2]     # ein gemeinsamer Maßstab (Median)
 SPALTEN = 6
-zeilen = (len(alle) + SPALTEN - 1) // SPALTEN
+zeilen = (len(alle) + len(tote) + SPALTEN - 1) // SPALTEN
 bogen = Image.new("RGBA", (SPALTEN * FELD, zeilen * FELD), (0, 0, 0, 0))
 liste = {}
 for i, (name, bild, (mx, my), info) in enumerate(alle):
@@ -170,9 +239,14 @@ for i, (name, bild, (mx, my), info) in enumerate(alle):
     if min(ox, oy) < 0 or ox + st.width > FELD or oy + st.height > FELD: print("WARNUNG: ragt aus dem Feld:", name, (ox, oy, st.size))
     bogen.paste(feld, ((i % SPALTEN) * FELD, (i // SPALTEN) * FELD))
     liste[name] = [i]
+for j, (name, feld) in enumerate(tote):
+    i = len(alle) + j
+    bogen.paste(feld, ((i % SPALTEN) * FELD, (i // SPALTEN) * FELD))
+    for typ, von in LEICHE_VON.items():
+        if von == name: liste["leiche_" + typ] = [i]
 ZIEL.mkdir(parents=True, exist_ok=True)
 bogen.save(ZIEL / "figuren3.webp", quality=88, method=6)
 (ZIEL / "figuren3.json").write_text(json.dumps({"feld": FELD, "bilder": liste}, ensure_ascii=False, indent=1))
-print(f"{len(alle)} Bilder, Maßstab {mass:.3f}, Bogen {bogen.size}, {(ZIEL / 'figuren3.webp').stat().st_size // 1024} KB")
+print(f"{len(alle)} + {len(tote)} Tote, Bilder, Maßstab {mass:.3f}, Bogen {bogen.size}, {(ZIEL / 'figuren3.webp').stat().st_size // 1024} KB")
 if KONTAKT:
     k = Image.new("RGBA", bogen.size, (96, 120, 70, 255)); k.alpha_composite(bogen); k.convert("RGB").save(KONTAKT)

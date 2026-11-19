@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.35.0 – 19.11.2026
+
+- Eigene Totenbilder (mit Google Gemini erzeugt) für 15 Zombie-Typen, jeweils passend zum lebenden Zombie, mit Blutlache; Tarn-Zombie mit neuem Totenbild.
+
 ## 0.34.0 – 19.11.2026
 
 - Keine lauten Schüsse und Schreie mehr direkt nach dem Beitritt (Ortstöne erst, wenn die eigene Position bekannt ist).
