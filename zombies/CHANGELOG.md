@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.37.0 – 19.11.2026
+
+- Verwaltung: Gesamtgröße für Zombies und Leichen (−50 % … +50 %), Zombie-Lebenspunkte einstellbar (Kriecher 35 % davon).
+- Verwaltung: bei jeder Waffe, beim MG-Nest und beim Puma live „Treffer bis Tod“ (normal/überrascht) und Schaden pro Sekunde.
+- Verwaltung: alle Zeitangaben mit Einheit (echte Zeit oder Spielzeit mit Umrechnung bei aktueller Tageslänge).
+
 ## 0.36.0 – 19.11.2026
 
 - Verwaltung: Zombie- und Leichengröße getrennt einstellbar (50–200 %) mit Live-Vorschau neben einer Spielerfigur, Vorschau-Typ wählbar.

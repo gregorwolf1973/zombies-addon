@@ -57,6 +57,26 @@ test('Einstellungen bereinigen: Zombie- und Leichengröße (50–200 %, Vorgabe 
   assert.equal(e.zombieGroesse, 200); assert.equal(e.leichenGroesse, 50);
 });
 
+test('Einstellungen bereinigen: Gesamtgröße (50–150 %) und Zombie-Leben (20–500, Vorgabe 100)', () => {
+  assert.equal(bereinige({}).groesseGesamt, 100); assert.equal(bereinige({}).zombieLeben, 100);
+  const e = bereinige({ groesseGesamt: 10, zombieLeben: 9999 });
+  assert.equal(e.groesseGesamt, 50); assert.equal(e.zombieLeben, 500);
+  assert.equal(bereinige({ groesseGesamt: 400, zombieLeben: 1 }).groesseGesamt, 150);
+  assert.equal(bereinige({ zombieLeben: 1 }).zombieLeben, 20);
+  assert.equal(bereinige({ zombieLeben: 250 }, bereinige({ groesseGesamt: 80 })).groesseGesamt, 80);
+});
+
+test('Verwaltungsseite: Überraschungsfaktoren im Schadenshinweis stimmen mit WAFFEN überein', async () => {
+  const { WAFFEN } = await import('../client/welt.mjs');
+  const html = fs.readFileSync(new URL('../client/verwaltung.html', import.meta.url), 'utf8');
+  const m = /var UEB = \{([^}]*)\};/.exec(html);
+  assert.ok(m, 'UEB fehlt');
+  for (const [k, w] of Object.entries(WAFFEN)) {
+    const g = new RegExp('\\b' + k + ': ([0-9.]+)').exec(m[1]);
+    assert.ok(g, k + ' fehlt in UEB'); assert.equal(Number(g[1]), w.ueberraschung, k);
+  }
+});
+
 test('Töne: Ereignisse und Zuordnung werden bereinigt', () => {
   const e = bereinige({ toene: { zombieTod: { dateien: ['ok.mp3', '../böse.mp3', 'x.exe', 'ok.mp3'], laut: 300 }, unbekannt: { dateien: ['a.mp3'] } } });
   assert.deepEqual(e.toene.zombieTod, { dateien: ['ok.mp3'], laut: 100 });

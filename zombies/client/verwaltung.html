@@ -535,7 +535,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
         <input type="range" id="welle" min="0" max="120" step="5">
         <span class="wert" id="welleWert">20 min</span>
       </div>
-      <p class="hinweis">Eine große Gruppe zieht von links oder rechts durchs Bild (Meldung 10 s vorher). 0 = keine Wellen. Spielminuten.</p>
+      <p class="hinweis">Eine große Gruppe zieht von links oder rechts durchs Bild (Meldung 10 echte Sekunden vorher). 0 = keine Wellen. Echte Minuten (bei Zeitraffer 1×).</p>
     </div>
 
     <div class="feld">
@@ -613,9 +613,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <p class="tn-leise">Uhrzeit setzen geht nur, solange jemand spielt. Dämmerung 5–7 Uhr und 19:30–21:30 Uhr.</p>
   <label for="tnTag">Ein Spieltag dauert</label>
   <div class="tn-zeile"><input type="range" id="tnTag" min="10" max="240" step="2"><span id="tnTagWert">48 min</span></div>
-  <label for="tnTagAb">Tag beginnt (ganz hell, 1 h Übergang davor)</label>
+  <label for="tnTagAb">Tag beginnt (ganz hell, Übergang davor)</label>
   <div class="tn-zeile"><input type="range" id="tnTagAb" min="240" max="660" step="15"><span id="tnTagAbWert">07:00</span></div>
-  <label for="tnNachtAb">Nacht beginnt (ganz dunkel, 1 h Übergang davor)</label>
+  <label for="tnNachtAb">Nacht beginnt (ganz dunkel, Übergang davor)</label>
   <div class="tn-zeile"><input type="range" id="tnNachtAb" min="1080" max="1425" step="15"><span id="tnNachtAbWert">21:30</span></div>
   <label for="tnNachtDunkel">Nachtdunkelheit (100 % = fast schwarz, Lichtquellen bleiben sichtbar)</label>
   <div class="tn-zeile"><input type="range" id="tnNachtDunkel" min="30" max="100" step="1"><span id="tnNachtDunkelWert">92 %</span></div>
@@ -626,13 +626,13 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <p class="tn-leise" id="tnAutosHinweis"></p>
   <label for="tnMenschen">Menschen in der Stadt (Ausbruch)</label>
   <div class="tn-zeile"><input type="range" id="tnMenschen" min="0" max="200" step="5"><span id="tnMenschenWert">50</span></div>
-  <label for="tnAnst">Verwandlungszeit Menschen (Spielminuten vom Biss bis zum Zombie)</label>
+  <label for="tnAnst">Verwandlungszeit Menschen (vom Biss bis zum Zombie)</label>
   <div class="tn-zeile"><input type="range" id="tnAnst" min="1" max="240" step="1"><span id="tnAnstWert">30 min</span></div>
   <label for="tnBissSp">Ansteckung der Spieler: Chance je Sekunde Biss eines lebenden Zombies</label>
   <div class="tn-zeile"><input type="range" id="tnBissSp" min="0" max="100" step="1"><span id="tnBissSpWert">12 %</span></div>
   <label for="tnBiss">Biss-Chance bei Stadtbewohnern (je Sekunde Berührung)</label>
   <div class="tn-zeile"><input type="range" id="tnBiss" min="0" max="100" step="5"><span id="tnBissWert">100 %</span></div>
-  <label for="tnFeuer">Brände am Anfang: alle</label>
+  <label for="tnFeuer">Brände am Anfang: etwa alle</label>
   <div class="tn-zeile"><input type="range" id="tnFeuer" min="0" max="10" step="0.5"><span id="tnFeuerWert">1 min</span></div>
   <label for="tnFeuerPhase">… während der ersten</label>
   <div class="tn-zeile"><input type="range" id="tnFeuerPhase" min="0" max="120" step="5"><span id="tnFeuerPhaseWert">20 min</span></div>
@@ -643,11 +643,16 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
   <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
+  <label for="tnZLeben">Lebenspunkte eines Zombies (100 = normal; ein Kriecher hat danach 35 % davon)</label>
+  <div class="tn-zeile"><input type="range" id="tnZLeben" min="20" max="500" step="5"><span id="tnZLebenWert">100</span></div>
+  <p class="tn-leise" id="tnZLebenHinweis"></p>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="grTitel">Darstellungsgröße</div>
   <label for="tnZGroesse">Zombiegröße (alle Zombietypen und Kriecher, 100 % = normal)</label>
   <div class="tn-zeile"><input type="range" id="tnZGroesse" min="50" max="200" step="5"><span id="tnZGroesseWert">100 %</span></div>
   <label for="tnLGroesse">Leichengröße (100 % = normal)</label>
   <div class="tn-zeile"><input type="range" id="tnLGroesse" min="50" max="200" step="5"><span id="tnLGroesseWert">100 %</span></div>
+  <label for="tnGGroesse">Gesamtgröße (Zombies + Leichen, wirkt zusätzlich zu den beiden Reglern oben)</label>
+  <div class="tn-zeile"><input type="range" id="tnGGroesse" min="50" max="150" step="5"><span id="tnGGroesseWert">±0 %</span></div>
   <div id="grVorschau" class="gr-vorschau">
     <label for="grTyp">Vorschau: Zombietyp</label>
     <div class="tn-zeile"><select id="grTyp"></select></div>
@@ -681,42 +686,52 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label class="tn-schalter"><input type="checkbox" id="zt_mantel"> Mantelträger</label>
   <label class="tn-schalter"><input type="checkbox" id="zt_langhaar"> Langhaar</label>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="wfTitel">Waffen: Schaden und Schussfolge</div>
+  <p class="tn-leise" id="wfHinweis"></p>
   <label for="wfS_pistole">🔫 Pistole: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_pistole" min="1" max="300" step="1"><span id="wfS_pistoleWert"></span></div>
   <label for="wfP_pistole">🔫 Pistole: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_pistole" min="0.05" max="3" step="0.01"><span id="wfP_pistoleWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_pistole"></p>
   <label for="wfS_gewehr">🎯 Jagdgewehr: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_gewehr" min="1" max="300" step="1"><span id="wfS_gewehrWert"></span></div>
   <label for="wfP_gewehr">🎯 Jagdgewehr: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_gewehr" min="0.05" max="3" step="0.01"><span id="wfP_gewehrWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_gewehr"></p>
   <label for="wfS_schrotflinte">💥 Schrotflinte: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_schrotflinte" min="1" max="300" step="1"><span id="wfS_schrotflinteWert"></span></div>
   <label for="wfP_schrotflinte">💥 Schrotflinte: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_schrotflinte" min="0.05" max="3" step="0.01"><span id="wfP_schrotflinteWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_schrotflinte"></p>
   <label for="wfS_mp">🪖 Maschinenpistole: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_mp" min="1" max="300" step="1"><span id="wfS_mpWert"></span></div>
   <label for="wfP_mp">🪖 Maschinenpistole: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_mp" min="0.05" max="3" step="0.01"><span id="wfP_mpWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_mp"></p>
   <label for="wfS_mg">🔥 Maschinengewehr: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_mg" min="1" max="300" step="1"><span id="wfS_mgWert"></span></div>
   <label for="wfP_mg">🔥 Maschinengewehr: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_mg" min="0.05" max="3" step="0.01"><span id="wfP_mgWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_mg"></p>
   <label for="wfS_schlaeger">🏏 Baseballschläger: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_schlaeger" min="1" max="300" step="1"><span id="wfS_schlaegerWert"></span></div>
   <label for="wfP_schlaeger">🏏 Baseballschläger: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_schlaeger" min="0.05" max="3" step="0.01"><span id="wfP_schlaegerWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_schlaeger"></p>
   <label for="wfS_sense">🌾 Sense: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_sense" min="1" max="300" step="1"><span id="wfS_senseWert"></span></div>
   <label for="wfP_sense">🌾 Sense: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_sense" min="0.05" max="3" step="0.01"><span id="wfP_senseWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_sense"></p>
   <label for="wfS_messer">🔪 Messer: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_messer" min="1" max="300" step="1"><span id="wfS_messerWert"></span></div>
   <label for="wfP_messer">🔪 Messer: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_messer" min="0.05" max="3" step="0.01"><span id="wfP_messerWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_messer"></p>
   <label for="wfS_faust">✊ Faust: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_faust" min="1" max="300" step="1"><span id="wfS_faustWert"></span></div>
   <label for="wfP_faust">✊ Faust: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_faust" min="0.05" max="3" step="0.01"><span id="wfP_faustWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_faust"></p>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px">Automatische Schussreichweite</div>
   <label for="rwPistole">🔫 Pistole</label>
   <div class="tn-zeile"><input type="range" id="rwPistole" min="5" max="80" step="1"><span id="rwPistoleWert">29 m</span></div>
@@ -728,10 +743,12 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="tn-zeile"><input type="range" id="rwMp" min="5" max="80" step="1"><span id="rwMpWert">30 m</span></div>
   <label for="rwMg">🔥 Maschinengewehr (Bundeswehr)</label>
   <div class="tn-zeile"><input type="range" id="rwMg" min="5" max="80" step="1"><span id="rwMgWert">45 m</span></div>
-  <label for="tnPumaPause">Panzer (Puma): Sekunden zwischen zwei Schüssen</label>
+  <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
   <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.5" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
+  <p class="tn-leise" id="bwInfoPuma"></p>
+  <p class="tn-leise" id="bwInfoMg"></p>
   <label class="tn-schalter"><input type="checkbox" id="tnBwAktiv"> Stützpunkt aktiv (schießt, handelt, kann fallen)</label>
-  <label for="tnBwTage">Stützpunkt fällt nach … Spieltagen</label>
+  <label for="tnBwTage">Stützpunkt fällt nach …</label>
   <div class="tn-zeile"><input type="range" id="tnBwTage" min="0" max="14" step="1"><span id="tnBwTageWert">3 Tage</span></div>
   <p class="tn-leise" id="tnBwStatus"></p>
   <p class="tn-leise" id="tnBewohner">Menschen gelten für neue Welten (nach „Welt neu starten“).</p>
@@ -773,6 +790,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   var $ = function (id) { return document.getElementById(id); };
   var komma = function (v) { return '×' + (v / 10).toFixed(1).replace('.', ','); };
   var uhrText = function (u) { u = Math.floor(u); return String(Math.floor(u / 60)).padStart(2, '0') + ':' + String(u % 60).padStart(2, '0'); };
+  var relProzent = function (v) { var d = Math.round(v) - 100; return d ? (d > 0 ? '+' : '−') + Math.abs(d) + ' %' : '±0 %'; };
   var tagAb = 420, nachtAb = 1290;
   var phase = function (u) { return (u >= nachtAb || u < tagAb - 60) ? 'Nacht' : (u >= nachtAb - 60 || u < tagAb) ? 'Dämmerung' : 'Tag'; };
   var aktiv = null;
@@ -796,6 +814,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     var feld = function (id, wert, text) { if (aktiv !== id) { $(id).value = wert; $(id + 'Wert').textContent = text(Number($(id).value)); } };
     feld('tnZGroesse', e.zombieGroesse === undefined ? 100 : e.zombieGroesse, function (v) { return v + ' %'; });
     feld('tnLGroesse', e.leichenGroesse === undefined ? 100 : e.leichenGroesse, function (v) { return v + ' %'; });
+    feld('tnGGroesse', e.groesseGesamt === undefined ? 100 : e.groesseGesamt, relProzent);
+    feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
     if (window.groessenVorschau) window.groessenVorschau();
     feld('tnBissSp', e.bissSpieler === undefined ? 12 : e.bissSpieler, function (v) { return v ? v + ' %' : 'nie'; });
     var typenE = (e.zombies && e.zombies.typen) || {};
@@ -876,6 +896,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { verwandlung: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
   regler('tnLGroesse', function (v) { return v + ' %'; }, function (v) { return { leichenGroesse: v }; });
+  regler('tnGGroesse', relProzent, function (v) { return { groesseGesamt: v }; });
+  regler('tnZLeben', function (v) { return String(v); }, function (v) { return { zombieLeben: v }; });
   regler('tnBissSp', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpieler: v }; });
   regler('tnPumaPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { pumaPause: v } }; });
   ZTYPEN.forEach(function (k) {
@@ -940,7 +962,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       ctx.restore(); return true;
     }
     function neuZeichnen() {
-      var ctx = cv.getContext('2d'), zf = Number($('tnZGroesse').value) / 100, lf = Number($('tnLGroesse').value) / 100;
+      var ctx = cv.getContext('2d'), gg = Number($('tnGGroesse').value) / 100, zf = Number($('tnZGroesse').value) / 100 * gg, lf = Number($('tnLGroesse').value) / 100 * gg;
       ctx.clearRect(0, 0, cv.width, cv.height);
       ctx.fillStyle = '#6a994e'; ctx.fillRect(0, 0, cv.width, cv.height);
       var k = sel.value, idx = ZTYPEN.indexOf(k), y = cv.height / 2;
@@ -962,6 +984,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     sel.addEventListener('change', neuZeichnen);
     $('tnZGroesse').addEventListener('input', neuZeichnen);
     $('tnLGroesse').addEventListener('input', neuZeichnen);
+    $('tnGGroesse').addEventListener('input', neuZeichnen);
     Object.keys(BG).forEach(function (b) {
       var img = new Image();
       img.onload = function () { bild[b] = img; neuZeichnen(); };
@@ -1057,7 +1080,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <h2 id="titelAufgaben">🚌 Aufgaben &amp; Evakuierung</h2>
   <p class="ag-leise">Jede Welt (Level) stellt der Gruppe gemeinsame Aufgaben. Der 📻 Funkspruch am Funktisch eines Safe Rooms ist immer Pflicht und ruft den Evakuierungsbus. Sind bei der Abfahrt alle Pflichtaufgaben und alle bis auf eine erledigt, geht es im Bus in die nächste Karte. Änderungen gelten ab der nächsten Aufgabenrunde (Aufgabenzahl: neue Welt oder neues Level).</p>
   <label class="ag-schalter"><input type="checkbox" id="agAn"> Aufgaben und Evakuierungsbus aktiv</label>
-  <label for="agStunde">Der Bus kommt um (Spieluhr)</label>
+  <label for="agStunde">Der Bus kommt um</label>
   <div class="ag-zeile"><input type="range" id="agStunde" min="6" max="23" step="1"><span id="agStundeWert">18:00</span></div>
   <label for="agWarte">Der Bus wartet</label>
   <div class="ag-zeile"><input type="range" id="agWarte" min="10" max="180" step="5"><span id="agWarteWert">60 min</span></div>
@@ -2607,9 +2630,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   var zk = karteVon('titelZombies');
   rein(P.zombies, zk);
   if (zk) { var ztt = $('ztTitel'); if (ztt) zk.appendChild(ztt); ZTYPEN.forEach(function (k) { zk.appendChild($('zt_' + k).closest('label')); }); }
-  if (zk) { zeile(zk, 'tnNacht'); var kegel = $('tnKegel'); if (kegel) zk.appendChild(kegel.closest('label'));
+  if (zk) { zeile(zk, 'tnNacht'); zeile(zk, 'tnZLeben'); rein(zk, $('tnZLebenHinweis')); var kegel = $('tnKegel'); if (kegel) zk.appendChild(kegel.closest('label'));
     var ztAnker = $('ztTitel'); ['grTitel'].concat([]).forEach(function (id) { if ($(id)) zk.insertBefore($(id), ztAnker); });
-    ['tnZGroesse', 'tnLGroesse'].forEach(function (id) { var l = document.querySelector('label[for="' + id + '"]'), r = $(id).closest('.tn-zeile'); zk.insertBefore(l, ztAnker); zk.insertBefore(r, ztAnker); });
+    ['tnZGroesse', 'tnLGroesse', 'tnGGroesse'].forEach(function (id) { var l = document.querySelector('label[for="' + id + '"]'), r = $(id).closest('.tn-zeile'); zk.insertBefore(l, ztAnker); zk.insertBefore(r, ztAnker); });
     if ($('grVorschau')) zk.insertBefore($('grVorschau'), ztAnker); }
   // 🌍 Welt & Ausbruch
   if (tn) {
@@ -2624,14 +2647,14 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     rein(ausbruch, $('tnBewohner'));
     var bundeswehr = neueKarte(P.welt, '🎖 Bundeswehr');
     var bwAktiv = $('tnBwAktiv'); if (bwAktiv) bundeswehr.appendChild(bwAktiv.closest('label'));
-    zeile(bundeswehr, 'tnBwTage'); zeile(bundeswehr, 'tnPumaPause'); rein(bundeswehr, $('tnBwStatus'));
+    zeile(bundeswehr, 'tnBwTage'); zeile(bundeswehr, 'tnPumaPause'); rein(bundeswehr, $('bwInfoPuma')); rein(bundeswehr, $('bwInfoMg')); rein(bundeswehr, $('tnBwStatus'));
     var stadt = neueKarte(P.welt, '🚗 Stadt & Verkehr');
     zeile(stadt, 'tnAutos'); rein(stadt, $('tnAutosHinweis'));
     ['tnVerkehr', 'tnVerkehrPhase', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt, id); });
   }
   // 🎒 Funde & Waffen
   rein(P.funde, karteVon('titelFunde'));
-  if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden und Schussfolge'); Object.keys(WFVORGABE).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
+  if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden und Schussfolge'); rein(wk, $('wfHinweis')); Object.keys(WFVORGABE).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); rein(wk, $('wfInfo_' + k)); }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
   if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg'].forEach(function (id) { zeile(waffen, id); }); }
   // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
   rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
@@ -2641,6 +2664,79 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   if (tn) { var st = $('tnStatus'); if (st) document.body.appendChild(st); tn.parentNode.removeChild(tn); }
 })();
 </script>
+<script>
+// Hinweise: Schaden/Treffer bis Tod (live aus den Reglern) und Zeiteinheiten (echt oder Spielzeit) an allen Zeit-Einstellungen
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var wert = function (id, vorgabe) { var e = $(id); var v = e ? Number(e.value) : NaN; return isFinite(v) ? v : vorgabe; };
+  var kommaZahl = function (v, st) { return String(Math.round(v * Math.pow(10, st || 0)) / Math.pow(10, st || 0)).replace('.', ','); };
+  // Überraschungsfaktor je Waffe (client/welt.mjs, WAFFEN[..].ueberraschung; tests/verwaltung.test.mjs prüft die Übereinstimmung)
+  var UEB = { pistole: 1.5, gewehr: 1.5, schrotflinte: 1.5, mp: 1.5, mg: 1.5, schlaeger: 3, sense: 3, messer: 4, faust: 2.5 };
+  var NEBEN = { schrotflinte: 45 / 70 };   // Schrot: Nebenschaden an weiteren Zombies im Kegel, im Verhältnis zum Hauptschaden
+  var KRIECHER = 0.35;                      // Kriecher hat 35 % der Zombie-Lebenspunkte (raum.mjs KRIECHER_HP)
+  var KANONE = 100, FLAECHE = 60, SOLDAT = 100;   // stuetzpunkt.mjs (feste Werte)
+  var treffer = function (hp, schaden) { return Math.max(1, Math.ceil(hp / Math.max(0.0001, schaden) - 1e-9)); };
+  var tText = function (n) { return n + ' Treffer'; };
+  var tDat = function (n) { return n + (n === 1 ? ' Treffer' : ' Treffern'); };
+  var dauer = function (minuten) {   // echte Minuten als Text
+    if (minuten < 1) return kommaZahl(minuten * 60, 0) + ' s';
+    if (minuten < 120) return kommaZahl(minuten, minuten < 10 ? 1 : 0) + ' min';
+    return kommaZahl(minuten / 60, 1) + ' h';
+  };
+  function schadenInfo() {
+    var hp = wert('tnZLeben', 100), kh = Math.max(1, Math.round(hp * KRIECHER));
+    if ($('tnZLebenHinweis')) $('tnZLebenHinweis').textContent = 'Gilt für neu auftauchende Zombies; vorhandene behalten ihr Leben. Kriecher: ' + kh + ' Leben. Spieler, die zum Zombie werden, haben immer 100 Leben.';
+    Object.keys(UEB).forEach(function (k) {
+      var p = $('wfInfo_' + k); if (!p) return;
+      var s = wert('wfS_' + k, 1), pause = wert('wfP_' + k, 1);
+      var t = treffer(hp, s), tu = treffer(hp, s * UEB[k]), tk = treffer(kh, s), tku = treffer(kh, s * UEB[k]);
+      var text = 'tötet einen Zombie mit ' + tDat(t) + ' (überrascht: ' + tu + ') · ' + kommaZahl(s / pause, 1) + ' Schaden/s';
+      text += ' · Kriecher: ' + tk + ' (überrascht: ' + tku + ')';
+      if (NEBEN[k]) { var ns = s * NEBEN[k]; text += ' · weitere Zombies im Streukegel: ' + kommaZahl(ns, 0) + ' Schaden, ' + tText(treffer(hp, ns)); }
+      if (k === 'sense') text += ' · trifft alle Zombies im Bogen';
+      p.textContent = text;
+    });
+    var g = wert('wfS_gewehr', 100);
+    if ($('bwInfoMg')) $('bwInfoMg').textContent = 'MG-Nest (Gewehrschaden ' + g + '): tötet einen Zombie mit ' + tDat(treffer(hp, g)) + ' (80 % der Schüsse treffen, Salven à 3 Schuss, im Mittel ca. ' + kommaZahl(g * 0.8 * 3 / 1.4, 0) + ' Schaden/s). Soldaten an den Posten: fest ' + SOLDAT + ' Schaden, ' + tDat(treffer(hp, SOLDAT)) + '.';
+    var pp = wert('tnPumaPause', 2.5);
+    if ($('bwInfoPuma')) $('bwInfoPuma').textContent = 'Panzer (Puma): Kanone ' + KANONE + ' Schaden, tötet einen Zombie mit ' + treffer(hp, KANONE) + (treffer(hp, KANONE) === 1 ? ' Schuss' : ' Schüssen') + ' (' + kommaZahl(KANONE / pp, 1) + ' Schaden/s); Splitterschaden ' + FLAECHE + ' im Umkreis ca. 4 m, ' + tText(treffer(hp, FLAECHE)) + '. Kanonen- und Soldatenschaden sind fest.';
+    if ($('wfHinweis')) $('wfHinweis').textContent = 'Zombie-Leben: ' + hp + ' (Einstellung im Reiter Zombies). Überrascht = der Zombie hat noch niemanden bemerkt (von hinten anschleichen). Fähigkeiten ändern den Waffenschaden nicht. Schaden/s = Schaden ÷ Abklingzeit (echte Sekunden). Ein Viertel der Zombies kriecht nach dem Tod mit '
+      + kh + ' Leben weiter. Granaten (150 Schaden) sind fest.';
+  }
+  // Echtzeit je Spielzeit-Einheit: ein Spieltag = 1440 Spielminuten = tagMinuten echte Minuten
+  function zeitNotizen() {
+    var tm = wert('tnTag', 48), pro = tm / 1440;   // echte Minuten je Spielminute
+    var spielh = dauer(pro * 60);
+    var liste = [
+      ['tnTag', 'echte Minuten je Spieltag · 1 Spielstunde ≈ ' + spielh + ' echt'],
+      ['tnTagAb', 'Uhrzeit der Spieluhr · Übergang davor 1 Spielstunde ≈ ' + spielh + ' echt'],
+      ['tnNachtAb', 'Uhrzeit der Spieluhr · Übergang davor 1 Spielstunde ≈ ' + spielh + ' echt'],
+      ['tnAnst', 'Spielminuten · ' + wert('tnAnst', 30) + ' Spielminuten ≈ ' + dauer(wert('tnAnst', 30) * pro) + ' echt bei ' + tm + ' min/Spieltag'],
+      ['tnFeuer', 'echte Minuten · Abstand schwankt um ±40 %'],
+      ['tnFeuerPhase', 'echte Minuten seit Weltbeginn'],
+      ['tnVerkehrPhase', 'echte Minuten seit Weltbeginn'],
+      ['welle', 'echte Minuten'],
+      ['agStunde', 'Uhrzeit der Spieluhr · ein Spieltag = ' + tm + ' echte min'],
+      ['agWarte', 'Spielminuten · ' + wert('agWarte', 60) + ' Spielminuten ≈ ' + dauer(wert('agWarte', 60) * pro) + ' echt bei ' + tm + ' min/Spieltag'],
+      ['tnBwTage', 'Spieltage ab Weltbeginn · ' + (wert('tnBwTage', 3) ? wert('tnBwTage', 3) + ' Spieltage = ' + dauer(wert('tnBwTage', 3) * tm) + ' echt bei ' + tm + ' min/Spieltag' : 'nie')],
+      ['tnPumaPause', 'echte Sekunden']
+    ];
+    Object.keys(UEB).forEach(function (k) { liste.push(['wfP_' + k, 'echte Sekunden']); });
+    liste.forEach(function (z) {
+      var l = document.querySelector('label[for="' + z[0] + '"]'); if (!l) return;
+      var n = l.querySelector('.zeit-notiz');
+      if (!n) { n = document.createElement('small'); n.className = 'zeit-notiz'; l.appendChild(n); }
+      var t = ' (' + z[1] + ')';
+      if (n.textContent !== t) n.textContent = t;
+    });
+    // Hinweis unter dem Stützpunkt-Regler gibt es nicht extra; alles steht im Label
+  }
+  function alles() { try { schadenInfo(); zeitNotizen(); } catch (e) { /* Anzeige nur Zugabe */ } }
+  document.addEventListener('input', alles); document.addEventListener('change', alles);
+  alles(); setInterval(alles, 1000);
+})();
+</script>
+<style>.zeit-notiz { font-weight: 400; color: var(--text-soft); font-size: .85em; }</style>
 <script>
 // Reiter umschalten (Grundlage: DeepSeek), Wahl merken, Tastatur ←/→/Pos1/Ende, Start aus #reiter oder localStorage
 (function () {

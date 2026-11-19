@@ -1339,7 +1339,7 @@ class Ort extends Phaser.Scene {
     // Zombies
     this.kegel.clear();
     const cam = this.cameras.main.worldView;
-    const zf = (s.zombieGroesse || 100) / 100;   // Einstellung: Zombiegröße in %
+    const zf = (s.zombieGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100;   // Einstellung: Zombiegröße in %
     for (const [id, z] of s.zombies) {
       let f = this.zombies.get(id);
       if (!f) { f = this.neuerZombie(z); this.zombies.set(id, f); }
@@ -1402,7 +1402,7 @@ class Ort extends Phaser.Scene {
           : this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : GEMINI_TYPEN.has(typ) ? GEMINI_LEICHEN[ZOMBIE_TYPEN.indexOf(typ) % GEMINI_LEICHEN.length] : typ) + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
         this.leichen.set(id, o);
       }
-      o.setScale(ZOMBIE_GROESSE * (s.leichenGroesse || 100) / 100);   // Einstellung: Leichengröße in %
+      o.setScale(ZOMBIE_GROESSE * (s.leichenGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100);   // Einstellung: Leichengröße in %
       o.setVisible((l.ebene ?? '') === this.aktEbene);
       const ausblenden = Math.min(1, (LEICHE_DAUER - l.alter) / 20);
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
@@ -1702,7 +1702,7 @@ class Ort extends Phaser.Scene {
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
-    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * ((raum.state?.zombieGroesse || 100) / 100) : survivor ? BOGEN2_GROESSE : MENSCH_GROESSE;
+    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * ((raum.state?.zombieGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 100) / 100) : survivor ? BOGEN2_GROESSE : MENSCH_GROESSE;
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);

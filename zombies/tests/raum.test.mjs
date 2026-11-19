@@ -127,6 +127,25 @@ test('Pistole trifft Zombie in Reichweite und verbraucht Munition', async () => 
   }
 });
 
+test('Einstellung zombieLeben und groesseGesamt gelten im Raum', async () => {
+  const { SpielRaum } = await import('../server/raum.mjs');
+  const vorher = SpielRaum.einstellungen;
+  SpielRaum.einstellungen = { ...vorher, zombieLeben: 250, groesseGesamt: 80 };
+  const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Leben' });
+  try {
+    const raum = matchMaker.getLocalRoomById(a.roomId);
+    raum.zombieFaktor = 0;
+    raum.state.zombies.clear(); raum.zombieInfo.clear();
+    raum.setzeZombie(10, 10);
+    assert.equal([...raum.state.zombies.values()][0].hp, 250);
+    raum.tageszeitenUebernehmen();
+    assert.equal(raum.state.groesseGesamt, 80);
+  } finally {
+    SpielRaum.einstellungen = vorher;
+    await a.leave();
+  }
+});
+
 test('Zugangscode: ohne Code abgewiesen, mit Code dabei, Ingress-Header von außen zählt nicht', async () => {
   const { SpielRaum } = await import('../server/raum.mjs');
   const vorher = SpielRaum.einstellungen;

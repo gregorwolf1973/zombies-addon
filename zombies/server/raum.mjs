@@ -98,6 +98,7 @@ export const Zustand = schema({
   nachtDunkel: t.number(),  // Nachtdunkelheit in % (Einstellung, für die Clients)
   zombieGroesse: t.number(),   // Zombiegröße in % (Einstellung, für die Clients)
   leichenGroesse: t.number(), // Leichengröße in %
+  groesseGesamt: t.number(),  // Gesamtgröße (Zombies + Leichen) in %
   autos: t.uint8(),         // Autodichte der Welt (10 = normal), gilt bis zum Neustart der Welt
   spieler: t.map(Spieler),
   zombies: t.map(Zombie),
@@ -123,7 +124,7 @@ const BARRIKADE_SCHADEN = 2;  // Barrikade pro Sekunde und Zombie
 const BRETT_STAERKE = 35;
 
 const TICK = 50; // ms → 20 Updates pro Sekunde
-const ZOMBIE_HP = 100;
+const ZOMBIE_HP = 100;   // Vorgabe; wirksam ist die Einstellung zombieLeben
 const STOSS_WEG = 34;   // Schläger und Faust stoßen den Zombie zurück (Waffenwerte: WAFFEN in client/welt.mjs)
 const ANKUNFT_ZOMBIEFREI = 144;   // Pixel (4,5 Kacheln): so weit um den Ankunftspunkt entstehen beim ersten Betreten keine Zombies
 const SCHONZEIT_EBENE = 1;   // Sekunden nach einem Ebenenwechsel, in denen Zombies nicht beißen
@@ -751,7 +752,7 @@ export class SpielRaum extends Room {
   tageszeitenUebernehmen() {
     const e = SpielRaum.einstellungen ?? {};
     setzeTageszeiten(e.tagAb ?? 420, e.nachtAb ?? 1290);
-    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.leichenGroesse = e.leichenGroesse ?? 100; }
+    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.leichenGroesse = e.leichenGroesse ?? 100; this.state.groesseGesamt = e.groesseGesamt ?? 100; }
   }
 
   einstellungenGeaendert() {
@@ -967,7 +968,7 @@ export class SpielRaum extends Room {
 
   setzeZombie(x, y, ebene = '', schlaeft = false) {
     const z = new Zombie();
-    z.x = x; z.y = y; z.hp = ZOMBIE_HP; z.richtung = this.rnd() * Math.PI * 2; z.jagt = false;
+    z.x = x; z.y = y; z.hp = SpielRaum.einstellungen?.zombieLeben ?? ZOMBIE_HP; z.richtung = this.rnd() * Math.PI * 2; z.jagt = false;
     z.kriecht = false; {
       const erlaubt = SpielRaum.einstellungen.zombieTypen;   // Verwaltung: erlaubte Zombietypen (Nummern), sonst alle
       z.variante = erlaubt?.length ? erlaubt[Math.floor(this.rnd() * erlaubt.length)] : Math.floor(this.rnd() * 25);
@@ -2045,7 +2046,7 @@ export class SpielRaum extends Room {
     }
     if (z.hp === 0 && !z.kriecht && this.rnd() < (this.kriecherChance ?? KRIECHER_CHANCE)) {
       // nicht ganz tot: bricht zusammen und kriecht weiter
-      z.kriecht = true; z.hp = KRIECHER_HP; z.jagt = false;
+      z.kriecht = true; z.hp = Math.max(1, Math.round(KRIECHER_HP * (SpielRaum.einstellungen?.zombieLeben ?? ZOMBIE_HP) / ZOMBIE_HP)); z.jagt = false;
       if (info) { info.ziel = null; info.punkt = null; }
       this.broadcast('weg', { x: z.x, y: z.y, halb: true });
       return;
