@@ -225,8 +225,13 @@ async function mitspielen() {
     raum.onLeave(() => {
       try { sessionStorage.removeItem('zob_token'); } catch {}
       if (abgemeldet) return;
-      $('verbindung').textContent = 'Verbindung beendet – Seite neu laden, um wieder mitzuspielen.';
-      $('verbindung').style.display = 'block';
+      // In der installierten App gibt es kein Neuladen per Wischen: Hinweis antippen lädt neu,
+      // und kommt die App aus dem Hintergrund zurück, lädt sie von selbst neu
+      const v = $('verbindung');
+      v.textContent = '🔄 Verbindung beendet – hier tippen zum Weiterspielen';
+      v.style.display = 'block'; v.style.pointerEvents = 'auto'; v.style.cursor = 'pointer'; v.style.padding = '14px 8px';
+      v.onclick = () => location.reload();
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) location.reload(); }, { once: true });
     });
     chatAnschliessen(raum);
     // Pi entlasten: Tab länger als 5 min im Hintergrund → abmelden (Fortschritt ist gespeichert), beim Zurückkommen neu laden
