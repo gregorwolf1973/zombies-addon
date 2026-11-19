@@ -1339,6 +1339,7 @@ class Ort extends Phaser.Scene {
     // Zombies
     this.kegel.clear();
     const cam = this.cameras.main.worldView;
+    const zf = (s.zombieGroesse || 100) / 100;   // Einstellung: Zombiegröße in %
     for (const [id, z] of s.zombies) {
       let f = this.zombies.get(id);
       if (!f) { f = this.neuerZombie(z); this.zombies.set(id, f); }
@@ -1356,18 +1357,18 @@ class Ort extends Phaser.Scene {
       if (f.bild.texture.key !== tex) f.bild.setTexture(tex, 0);
       if (z.kriecht) {
         f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
-        f.bild.setRotation(0).setScale(ZOMBIE_GROESSE);
+        f.bild.setRotation(0).setScale(ZOMBIE_GROESSE * zf);
       } else if (gem) {
         // Einzelbild (Gemini): beim Gehen leicht wanken, Maßstab wie die übrigen Zombies
         const l3 = this.figurListe3[typ];
-        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE);
+        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf);
       } else if (neu) {
         // flüssig animierte Zombies (Riley Gombart): Laufen, Angriff, Stehen
         let nah = false;
         if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < W.spielerRadius + W.zombieRadius + 16) { nah = true; break; }
         const art = nah ? 'angriff' : bildNr < 0 ? 'stehen' : 'laufen';
         const i = art === 'laufen' ? Math.floor((f.lauf ?? 0) / 6) : Math.floor(this.time.now / (art === 'angriff' ? 70 : 140));
-        f.bild.setFrame(this.figurBild2(`${typ}_${art}`, i)).setRotation(0).setScale(BOGEN2_GROESSE * (typ === 'z6' ? 1.05 : 1));
+        f.bild.setFrame(this.figurBild2(`${typ}_${art}`, i)).setRotation(0).setScale(BOGEN2_GROESSE * zf * (typ === 'z6' ? 1.05 : 1));
       } else {
         // Angriff: beim Zubeißen das Bild mit offenem Mund (wo vorhanden)
         let nah = false;
@@ -1375,7 +1376,7 @@ class Ort extends Phaser.Scene {
         const angriff = nah && this.figurListe['zombie_' + typ + '_angriff'];
         f.bild.setFrame(angriff ? angriff[0] : this.figurBild('zombie_' + typ, bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 11)));
         // schlurfen: leicht wanken
-        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * (angriff ? 1.06 : 1));
+        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * (angriff ? 1.06 : 1));
       }
       f.bild.setTint(z.jagt ? 0xffd2c8 : 0xffffff);
       if (s.kegel && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
@@ -1401,6 +1402,7 @@ class Ort extends Phaser.Scene {
           : this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : GEMINI_TYPEN.has(typ) ? GEMINI_LEICHEN[ZOMBIE_TYPEN.indexOf(typ) % GEMINI_LEICHEN.length] : typ) + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
         this.leichen.set(id, o);
       }
+      o.setScale(ZOMBIE_GROESSE * (s.leichenGroesse || 100) / 100);   // Einstellung: Leichengröße in %
       o.setVisible((l.ebene ?? '') === this.aktEbene);
       const ausblenden = Math.min(1, (LEICHE_DAUER - l.alter) / 20);
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
@@ -1700,7 +1702,7 @@ class Ort extends Phaser.Scene {
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
-    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE : survivor ? BOGEN2_GROESSE : MENSCH_GROESSE;
+    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * ((raum.state?.zombieGroesse || 100) / 100) : survivor ? BOGEN2_GROESSE : MENSCH_GROESSE;
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);

@@ -96,6 +96,8 @@ export const Zustand = schema({
   tagAb: t.number(),        // ab hier ganz hell (Einstellung, für die Clients)
   nachtAb: t.number(),      // ab hier ganz dunkel
   nachtDunkel: t.number(),  // Nachtdunkelheit in % (Einstellung, für die Clients)
+  zombieGroesse: t.number(),   // Zombiegröße in % (Einstellung, für die Clients)
+  leichenGroesse: t.number(), // Leichengröße in %
   autos: t.uint8(),         // Autodichte der Welt (10 = normal), gilt bis zum Neustart der Welt
   spieler: t.map(Spieler),
   zombies: t.map(Zombie),
@@ -749,7 +751,7 @@ export class SpielRaum extends Room {
   tageszeitenUebernehmen() {
     const e = SpielRaum.einstellungen ?? {};
     setzeTageszeiten(e.tagAb ?? 420, e.nachtAb ?? 1290);
-    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; this.state.nachtDunkel = e.nachtDunkel ?? 92; }
+    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.leichenGroesse = e.leichenGroesse ?? 100; }
   }
 
   einstellungenGeaendert() {

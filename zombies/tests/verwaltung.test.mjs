@@ -51,6 +51,12 @@ test('Einstellungen bereinigen: Unsinn wird zu gültigen Werten', () => {
   assert.equal(e.test.zeitraffer, 1); assert.deepEqual(e.test.unsterblich, []);
 });
 
+test('Einstellungen bereinigen: Zombie- und Leichengröße (50–200 %, Vorgabe 100)', () => {
+  assert.equal(bereinige({}).zombieGroesse, 100); assert.equal(bereinige({}).leichenGroesse, 100);
+  const e = bereinige({ zombieGroesse: 500, leichenGroesse: 10 });
+  assert.equal(e.zombieGroesse, 200); assert.equal(e.leichenGroesse, 50);
+});
+
 test('Töne: Ereignisse und Zuordnung werden bereinigt', () => {
   const e = bereinige({ toene: { zombieTod: { dateien: ['ok.mp3', '../böse.mp3', 'x.exe', 'ok.mp3'], laut: 300 }, unbekannt: { dateien: ['a.mp3'] } } });
   assert.deepEqual(e.toene.zombieTod, { dateien: ['ok.mp3'], laut: 100 });

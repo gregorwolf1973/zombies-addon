@@ -399,6 +399,18 @@
   .leistung td, .leistung th { text-align: left; padding: 3px 6px; border-bottom: 1px solid rgba(127,127,127,.2); }
   .leistung .warnung { color: #e8833a; }
 
+.gr-vorschau canvas { display: block; width: 100%; max-width: 320px; height: auto; margin: 8px 0 4px; border-radius: 8px; border: 1px solid var(--border); background: #6a994e; }
+/* ---------- Akkordeon in den Reitern ---------- */
+.akk-kopf { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 4px 0; font: inherit; font-size: 1.15rem; font-weight: 700; text-align: left;
+  color: var(--text); background: none; border: 0; box-shadow: none; cursor: pointer; -webkit-appearance: none; appearance: none; min-height: 44px; }
+.akk-kopf:focus-visible { outline: 3px solid var(--akzent); outline-offset: 2px; border-radius: 6px; }
+.akk-pfeil { flex: 0 0 auto; width: 1.2em; color: var(--akzent); }
+.akk-titel { flex: 1 1 auto; }
+.akk-huelle { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s ease; }
+.akk-huelle > .akk-inhalt { min-height: 0; overflow: hidden; visibility: hidden; transition: visibility 0s .25s; }
+section.akk-offen > .akk-huelle { grid-template-rows: 1fr; }
+section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-delay: 0s; overflow: visible; }
+@media (prefers-reduced-motion: reduce) { .akk-huelle, .akk-huelle > .akk-inhalt { transition: none; } }
 /* ---------- Reiter (Gliederung und Code-Grundlage: DeepSeek) ---------- */
 .reiterleiste { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; padding: 10px 12px; background: var(--bg);
   border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none;
@@ -631,6 +643,17 @@
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
   <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
+  <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="grTitel">Darstellungsgröße</div>
+  <label for="tnZGroesse">Zombiegröße (alle Zombietypen und Kriecher, 100 % = normal)</label>
+  <div class="tn-zeile"><input type="range" id="tnZGroesse" min="50" max="200" step="5"><span id="tnZGroesseWert">100 %</span></div>
+  <label for="tnLGroesse">Leichengröße (100 % = normal)</label>
+  <div class="tn-zeile"><input type="range" id="tnLGroesse" min="50" max="200" step="5"><span id="tnLGroesseWert">100 %</span></div>
+  <div id="grVorschau" class="gr-vorschau">
+    <label for="grTyp">Vorschau: Zombietyp</label>
+    <div class="tn-zeile"><select id="grTyp"></select></div>
+    <canvas id="grCanvas" width="320" height="150" aria-label="Vorschau: Spielerfigur, Zombie und Leiche in Spielgröße"></canvas>
+    <span class="hilfe">Links Spielerfigur (Normalgröße), Mitte Zombie, rechts Leiche – so groß wie im Spiel.</span>
+  </div>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="ztTitel">Zombietypen (mindestens einer bleibt an)</div>
   <label class="tn-schalter"><input type="checkbox" id="zt_tarn"> Tarnjacke</label>
   <label class="tn-schalter"><input type="checkbox" id="zt_dirndl"> Dirndl</label>
@@ -771,6 +794,9 @@
     if (aktiv !== 'tnMenschen') { $('tnMenschen').value = e.menschen === undefined ? 50 : e.menschen; $('tnMenschenWert').textContent = $('tnMenschen').value; }
     if (aktiv !== 'tnAnst') { $('tnAnst').value = e.verwandlung || 30; $('tnAnstWert').textContent = $('tnAnst').value + ' min'; }
     var feld = function (id, wert, text) { if (aktiv !== id) { $(id).value = wert; $(id + 'Wert').textContent = text(Number($(id).value)); } };
+    feld('tnZGroesse', e.zombieGroesse === undefined ? 100 : e.zombieGroesse, function (v) { return v + ' %'; });
+    feld('tnLGroesse', e.leichenGroesse === undefined ? 100 : e.leichenGroesse, function (v) { return v + ' %'; });
+    if (window.groessenVorschau) window.groessenVorschau();
     feld('tnBissSp', e.bissSpieler === undefined ? 12 : e.bissSpieler, function (v) { return v ? v + ' %' : 'nie'; });
     var typenE = (e.zombies && e.zombies.typen) || {};
     ZTYPEN.forEach(function (k) { if (document.activeElement !== $('zt_' + k)) $('zt_' + k).checked = typenE[k] !== false; });
@@ -848,6 +874,8 @@
     anfrage('verwaltung/api', { sichtkegel: $('tnKegel').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { verwandlung: v }; });
+  regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
+  regler('tnLGroesse', function (v) { return v + ' %'; }, function (v) { return { leichenGroesse: v }; });
   regler('tnBissSp', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpieler: v }; });
   regler('tnPumaPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { pumaPause: v } }; });
   ZTYPEN.forEach(function (k) {
@@ -890,6 +918,55 @@
       img.onload = function () { bild[b] = img; fertig(); };
       img.src = BOEGEN[b];
       fetch(BOEGEN[b].replace(/\.\w+$/, '.json')).then(function (r) { return r.json(); }).then(function (j) { liste[b] = j; fertig(); }).catch(function () {});
+    });
+  })();
+  // Größenvorschau: Spielerfigur, Zombie und Leiche in Spielgröße (spiel.mjs: Feld 160 px; Zombie 0,42, Bogen 2 0,476, Spieler 0,476) mal Faktor
+  (function () {
+    var BG = { figuren: 'grafik/figuren.png', figuren2: 'grafik/figuren2.webp', figuren3: 'grafik/figuren3.webp' };
+    var ZG = 0.42, BG2 = 0.476, LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];
+    var bild = {}, liste = {}, cv = $('grCanvas'), sel = $('grTyp');
+    if (!cv || !sel) return;
+    ZTYPEN.forEach(function (k) {
+      var cb = $('zt_' + k), lab = cb && cb.closest('label'), o = document.createElement('option');
+      o.value = k; o.textContent = lab ? lab.textContent.trim() : k; sel.appendChild(o);
+    });
+    var ok = document.createElement('option'); ok.value = 'kriecher'; ok.textContent = 'Kriecher'; sel.appendChild(ok);
+    function zeichne(ctx, bogen, name, mx, my, skala, drehung) {
+      var img = bild[bogen], l = liste[bogen];
+      if (!img || !l || !l.bilder || !l.bilder[name] || !img.naturalWidth) return false;
+      var feld = l.feld || 160, sp = Math.floor(img.naturalWidth / feld), nr = l.bilder[name][0], g = feld * skala;
+      ctx.save(); ctx.translate(mx, my); ctx.rotate(drehung || 0);
+      ctx.drawImage(img, (nr % sp) * feld, Math.floor(nr / sp) * feld, feld, feld, -g / 2, -g / 2, g, g);
+      ctx.restore(); return true;
+    }
+    function neuZeichnen() {
+      var ctx = cv.getContext('2d'), zf = Number($('tnZGroesse').value) / 100, lf = Number($('tnLGroesse').value) / 100;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = '#6a994e'; ctx.fillRect(0, 0, cv.width, cv.height);
+      var k = sel.value, idx = ZTYPEN.indexOf(k), y = cv.height / 2;
+      // Spielerfigur, Normalgröße
+      zeichne(ctx, 'figuren2', 'sv_pistole_idle', 55, y, BG2, 0);
+      // Zombie
+      if (k === 'kriecher') zeichne(ctx, 'figuren', 'kriecher_a', 160, y, ZG * zf, 0);
+      else if (k === 'z6' || k === 'z7') zeichne(ctx, 'figuren2', k + '_stehen', 160, y, BG2 * zf * (k === 'z6' ? 1.05 : 1), 0);
+      else if (idx >= 7) zeichne(ctx, 'figuren3', k, 160, y, ZG * zf, 0);
+      else zeichne(ctx, 'figuren', 'zombie_' + k, 160, y, ZG * zf, 0);
+      // Leiche (wie im Spiel: Bild von figuren3 oder die älteren Leichenbilder)
+      var typ = k === 'kriecher' ? 'hemd' : k;
+      if (!(liste.figuren3 && liste.figuren3.bilder && liste.figuren3.bilder['leiche_' + typ] && zeichne(ctx, 'figuren3', 'leiche_' + typ, 265, y, ZG * lf, 0))) {
+        var alt = typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : idx >= 7 ? LEICHEN[idx % LEICHEN.length] : typ;
+        zeichne(ctx, 'figuren', 'leiche_' + alt, 265, y, ZG * lf, 0);
+      }
+    }
+    window.groessenVorschau = neuZeichnen;
+    sel.addEventListener('change', neuZeichnen);
+    $('tnZGroesse').addEventListener('input', neuZeichnen);
+    $('tnLGroesse').addEventListener('input', neuZeichnen);
+    Object.keys(BG).forEach(function (b) {
+      var img = new Image();
+      img.onload = function () { bild[b] = img; neuZeichnen(); };
+      img.src = BG[b];
+      fetch(BG[b].replace(/\.\w+$/, '.json')).then(function (r) { return r.json(); }).then(function (j) { liste[b] = j; neuZeichnen(); }).catch(function () {});
     });
   })();
   Object.keys(WFVORGABE).forEach(function (k) {
@@ -2530,7 +2607,10 @@
   var zk = karteVon('titelZombies');
   rein(P.zombies, zk);
   if (zk) { var ztt = $('ztTitel'); if (ztt) zk.appendChild(ztt); ZTYPEN.forEach(function (k) { zk.appendChild($('zt_' + k).closest('label')); }); }
-  if (zk) { zeile(zk, 'tnNacht'); var kegel = $('tnKegel'); if (kegel) zk.appendChild(kegel.closest('label')); }
+  if (zk) { zeile(zk, 'tnNacht'); var kegel = $('tnKegel'); if (kegel) zk.appendChild(kegel.closest('label'));
+    var ztAnker = $('ztTitel'); ['grTitel'].concat([]).forEach(function (id) { if ($(id)) zk.insertBefore($(id), ztAnker); });
+    ['tnZGroesse', 'tnLGroesse'].forEach(function (id) { var l = document.querySelector('label[for="' + id + '"]'), r = $(id).closest('.tn-zeile'); zk.insertBefore(l, ztAnker); zk.insertBefore(r, ztAnker); });
+    if ($('grVorschau')) zk.insertBefore($('grVorschau'), ztAnker); }
   // 🌍 Welt & Ausbruch
   if (tn) {
     var zeit = neueKarte(P.welt, '🌗 Tag & Nacht');
@@ -2607,6 +2687,62 @@
   if (!istGueltig(start)) { try { start = String(window.localStorage.getItem(SCHLUESSEL) || ''); } catch (e) { start = ''; } }
   window.zeigeReiter = zeige;
   zeige(start);
+})();
+</script>
+<script>
+// Akkordeon: In jedem Reiter hat jede Karte eine klickbare Kopfzeile; es ist immer nur eine Karte pro Reiter offen
+// (Start: zuletzt geöffnete, sonst die erste). Inhalte werden nur in eine Hülle verschoben, ids und Regler bleiben.
+(function () {
+  'use strict';
+  var SCHLUESSEL = 'verwaltung-akkordeon';
+  var gemerkt = {};
+  try { gemerkt = JSON.parse(window.localStorage.getItem(SCHLUESSEL) || '{}') || {}; } catch (e) { gemerkt = {}; }
+  function merke(panel, nr) { gemerkt[panel] = nr; try { window.localStorage.setItem(SCHLUESSEL, JSON.stringify(gemerkt)); } catch (e) { /* kein Speicher */ } }
+  var panels = [].slice.call(document.querySelectorAll('.reiterpanel'));
+  panels.forEach(function (panel) {
+    var karten = [].slice.call(panel.children).filter(function (k) { return k.tagName === 'SECTION' && k.classList.contains('karte'); });
+    var akk = karten.filter(function (k) { return k.querySelector(':scope > h2'); });
+    if (!akk.length) return;
+    function setze(karte, offen) {
+      karte.classList.toggle('akk-offen', offen);
+      var kopf = karte.querySelector(':scope > .akk-kopf');
+      kopf.setAttribute('aria-expanded', offen ? 'true' : 'false');
+      kopf.querySelector('.akk-pfeil').textContent = offen ? '▾' : '▸';
+      var inh = karte.querySelector(':scope > .akk-huelle > .akk-inhalt');
+      if (offen) inh.removeAttribute('inert'); else inh.setAttribute('inert', '');
+      inh.setAttribute('aria-hidden', offen ? 'false' : 'true');
+    }
+    akk.forEach(function (karte, nr) {
+      var h2 = karte.querySelector(':scope > h2');
+      var id = (panel.id || 'p') + '-akk-' + nr;
+      var kopf = document.createElement('button');
+      kopf.type = 'button'; kopf.className = 'akk-kopf'; kopf.id = id + '-kopf'; kopf.setAttribute('aria-controls', id);
+      var pfeil = document.createElement('span'); pfeil.className = 'akk-pfeil'; pfeil.setAttribute('aria-hidden', 'true'); pfeil.textContent = '▸';
+      var titel = document.createElement('span'); titel.className = 'akk-titel';
+      while (h2.firstChild) titel.appendChild(h2.firstChild);
+      kopf.appendChild(pfeil); kopf.appendChild(titel);
+      h2.appendChild(kopf);
+      var huelle = document.createElement('div'); huelle.className = 'akk-huelle';
+      var inhalt = document.createElement('div'); inhalt.className = 'akk-inhalt'; inhalt.id = id;
+      inhalt.setAttribute('role', 'region'); inhalt.setAttribute('aria-labelledby', kopf.id);
+      while (h2.nextSibling) inhalt.appendChild(h2.nextSibling);
+      huelle.appendChild(inhalt); karte.appendChild(huelle);
+      kopf.addEventListener('click', function () {
+        var offen = !karte.classList.contains('akk-offen');
+        if (offen) akk.forEach(function (k) { if (k !== karte) setze(k, false); });
+        setze(karte, offen);
+        merke(panel.id, offen ? nr : -1);
+        if (offen) {
+          var rolle = function () { try { karte.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { karte.scrollIntoView(); } };
+          // nach dem Schließen der anderen verschiebt sich die Seite: erst danach in den sichtbaren Bereich
+          setTimeout(function () { var r = karte.getBoundingClientRect(); var oben = (document.querySelector('.reiterleiste') || { offsetHeight: 0 }).offsetHeight + 8; if (r.top < oben || r.top > window.innerHeight * 0.6) { try { window.scrollTo({ top: window.pageYOffset + r.top - oben, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, window.pageYOffset + r.top - oben); } } }, 280);
+        }
+      });
+    });
+    var start = typeof gemerkt[panel.id] === 'number' ? gemerkt[panel.id] : 0;
+    if (start >= akk.length) start = 0;
+    akk.forEach(function (k, nr) { setze(k, nr === start); });
+  });
 })();
 </script>
 </body>

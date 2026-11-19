@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.0 – 19.11.2026
+
+- Verwaltung: Zombie- und Leichengröße getrennt einstellbar (50–200 %) mit Live-Vorschau neben einer Spielerfigur, Vorschau-Typ wählbar.
+- Verwaltung als Akkordeon: je Reiter ist nur ein Abschnitt offen, der zuletzt geöffnete wird gemerkt.
+
 ## 0.35.0 – 19.11.2026
 
 - Eigene Totenbilder (mit Google Gemini erzeugt) für 15 Zombie-Typen, jeweils passend zum lebenden Zombie, mit Blutlache; Tarn-Zombie mit neuem Totenbild.
