@@ -70,6 +70,7 @@
     <span id="sichername"></span>
     <button id="ausruhen">💤 Ausruhen &amp; abmelden</button>
   </div>
+  <button id="listeknopf" type="button" aria-expanded="true" aria-controls="liste">👥 <span id="listezahl"></span></button>
   <ul id="liste"></ul>
   <div id="aufgaben" style="display:none">
     <button id="aufgabenknopf" type="button" aria-expanded="true" aria-controls="aufgabenkoerper">📋 <span id="aufgabenkopf"></span></button>
@@ -83,11 +84,14 @@
   <canvas id="karte"></canvas>
   <div class="kartenknoepfe"><button class="plus" aria-label="Hineinzoomen">+</button><button class="minus" aria-label="Herauszoomen">−</button><button class="mich" aria-label="Auf mich zentrieren">⌖</button></div>
 </div>
-<button id="ton" title="Ton an/aus">🔊</button>
+<button id="menueknopf" type="button" title="Menü" aria-label="Menü" aria-expanded="false" aria-controls="menue">☰<span id="menuepunkt"></span></button>
+<div id="menue">
+<button id="ton" title="Lautstärke">🔊</button>
 <button id="zoomraus" class="zoomknopf" title="Herauszoomen (−)" aria-label="Herauszoomen">−</button>
 <button id="zoomrein" class="zoomknopf" title="Hineinzoomen (+)" aria-label="Hineinzoomen">+</button>
 <button id="chatknopf" title="Chat" aria-label="Chat">💬<span id="chatzaehler"></span></button>
 <button id="sprachknopf" title="Mikrofon" aria-label="Mikrofon an/aus">🎤</button>
+</div>
 <div id="chat" role="dialog" aria-label="Chat">
   <div class="kopfzeile"><b>💬 Chat</b><button id="chatzu" aria-label="Chat schließen">✕</button></div>
   <div id="chatliste"></div>

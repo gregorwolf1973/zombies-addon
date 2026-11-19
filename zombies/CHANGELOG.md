@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.38.0 – 19.11.2026
+
+- Handy: Inventar als schmale Leiste ganz unten, Aufgaben als Knopf (pulsiert bei neuen), Spielerliste einklappbar, Kopfleisten-Knöpfe im ☰-Menü, kleinere Karte, höchstens 2 Meldungen.
+- Zoom-Knöpfe nur noch am PC (Touch: Zwei-Finger-Zoom).
+- Ton insgesamt leiser (etwa 45 %), 🔊-Knopf schaltet 100/50/25 %/stumm und merkt sich die Stufe.
+- Startseite auf dem Handy scrollbar und kompakter, das Namensfeld bleibt beim Tippen sichtbar.
+
 ## 0.37.0 – 19.11.2026
 
 - Verwaltung: Gesamtgröße für Zombies und Leichen (−50 % … +50 %), Zombie-Lebenspunkte einstellbar (Kriecher 35 % davon).

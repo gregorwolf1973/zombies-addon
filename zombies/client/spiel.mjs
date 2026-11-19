@@ -261,6 +261,35 @@ async function mitspielen() {
 }
 let abgemeldet = false;
 
+// ☰-Menü (schmale Bildschirme) und einklappbare Spielerliste; am PC (breit) ändert sich nichts
+function oberflaecheEinrichten() {
+  const kompakt = window.matchMedia('(max-width: 700px), (max-height: 520px)');
+  const menueZu = () => { document.body.classList.remove('menue'); $('menueknopf').setAttribute('aria-expanded', 'false'); };
+  $('menueknopf').onclick = e => {
+    e.stopPropagation();
+    const auf = document.body.classList.toggle('menue');
+    $('menueknopf').setAttribute('aria-expanded', String(auf));
+  };
+  // jeder Tipp außerhalb bzw. auf einen Menüeintrag schließt das Menü wieder
+  document.addEventListener('click', e => { if (e.target !== $('menueknopf')) menueZu(); });
+  kompakt.addEventListener?.('change', menueZu);
+  // Punkt am ☰, wenn drin etwas Neues wartet (ungelesener Chat, freie Fähigkeitspunkte)
+  setInterval(() => {
+    const chat = $('chatzaehler'), fk = document.getElementById('fkknopf');
+    const neu = (chat && chat.style.display !== 'none' && chat.textContent) || fk?.classList.contains('neu');
+    $('menuepunkt').style.display = neu ? 'block' : 'none';
+  }, 700);
+  // Spielerliste: auf schmalen Bildschirmen standardmäßig zu, Wahl bleibt im Browser
+  let zu = kompakt.matches;
+  try { const v = localStorage.getItem('zob_liste'); if (v === '0') zu = false; else if (v === '1') zu = true; } catch { /* egal */ }
+  const setze = z => { $('hud').classList.toggle('listezu', z); $('listeknopf').setAttribute('aria-expanded', String(!z)); };
+  setze(zu);
+  $('listeknopf').onclick = () => {
+    zu = !$('hud').classList.contains('listezu'); setze(zu);
+    try { localStorage.setItem('zob_liste', zu ? '1' : '0'); } catch { /* egal */ }
+  };
+}
+
 let gestartet = false;
 async function starteSpiel() {
   if (gestartet) return;
@@ -272,6 +301,7 @@ async function starteSpiel() {
   $('start').style.display = 'none';
   $('hud').style.display = 'block';
   $('unten').style.display = 'flex';
+  oberflaecheEinrichten();
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: document.body,
@@ -570,6 +600,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     fkStart(raum, meldung);
+    { const fk = document.getElementById('fkknopf'); if (fk) $('menue').prepend(fk); }   // auf schmalen Bildschirmen im ☰-Menü
     raum.onMessage('gefunden', m => {
       if (m.dinge.length) ton.aufheben(); else ton.suchen();
       if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : dingText(d)).join(', '));
@@ -603,8 +634,12 @@ class Ort extends Phaser.Scene {
     // Aufgabenliste ein- und ausklappen (Wahl bleibt im Browser)
     {
       const box = $('aufgaben');
-      try { if (localStorage.getItem('aufgabenZu') === '1') { box.classList.add('zu'); $('aufgabenknopf').setAttribute('aria-expanded', 'false'); } } catch { /* ohne Speicher: offen */ }
+      // Standard: eingeklappt (nur der Knopf); nur wer sie selbst aufgeklappt hat, sieht sie beim nächsten Mal offen
+      let zuStart = true;
+      try { if (localStorage.getItem('aufgabenZu') === '0') zuStart = false; } catch { /* ohne Speicher: zu */ }
+      box.classList.toggle('zu', zuStart); $('aufgabenknopf').setAttribute('aria-expanded', String(!zuStart));
       $('aufgabenknopf').onclick = () => {
+        box.classList.remove('puls');
         const zu = box.classList.toggle('zu');
         $('aufgabenknopf').setAttribute('aria-expanded', String(!zu));
         try { localStorage.setItem('aufgabenZu', zu ? '1' : '0'); } catch { /* egal */ }
@@ -714,8 +749,14 @@ class Ort extends Phaser.Scene {
     this.uebersicht = new Uebersicht(this.welt, $('kartenbox'));
     const knopf = $('ton');
     knopf.style.display = 'block';
-    knopf.textContent = ton.tonAn() ? '🔊' : '🔇';
-    knopf.onclick = () => { ton.tonStarten(); knopf.textContent = ton.tonUmschalten() ? '🔊' : '🔇'; };
+    const symbol = st => (st === 0 ? '🔇' : st <= 0.25 ? '🔈' : st <= 0.5 ? '🔉' : '🔊');
+    const beschriften = () => {
+      const st = ton.lautstaerke();
+      knopf.textContent = symbol(st);
+      knopf.title = `Lautstärke: ${st ? Math.round(st * 100) + ' %' : 'aus'} (antippen = ändern)`;
+    };
+    beschriften();
+    knopf.onclick = () => { ton.tonStarten(); ton.tonUmschalten(); beschriften(); meldung(`🔊 Lautstärke ${ton.lautstaerke() ? Math.round(ton.lautstaerke() * 100) + ' %' : 'aus'}`); };
     ton.umgebung(false);
     this.input.keyboard.on('keydown-M', () => { this.uebersicht.umschalten(); this.uebersichtZeichnen(); });
   }
@@ -727,7 +768,16 @@ class Ort extends Phaser.Scene {
     if (!n) return;
     const liste = [...s.aufgaben.values()];
     const fertig = liste.filter(a => a.erledigt).length;
-    textSetzen('aufgabenkopf', `Level ${s.level || 1} · ${fertig}/${n}`);
+    textSetzen('aufgabenkopf', `${n - fertig} offen · Level ${s.level || 1}`);
+    $('aufgabenknopf').title = `Aufgaben: ${fertig}/${n} erledigt`;
+    // neue Aufgabe: Knopf kurz pulsieren lassen statt die Liste aufzuklappen
+    const kennung = [...s.aufgaben.keys()];
+    if (this.aufgabenBekannt) {
+      if (kennung.some(k => !this.aufgabenBekannt.has(k)) && box.classList.contains('zu')) {
+        box.classList.add('puls'); clearTimeout(this.aufgabenPuls); this.aufgabenPuls = setTimeout(() => box.classList.remove('puls'), 5000);
+      }
+    }
+    this.aufgabenBekannt = new Set(kennung);
     const zeilen = liste.map(a => {
       const zahl = a.ziel > 1 && !a.erledigt ? ` <span class="ag-zahl">${Math.round(a.fortschritt)}/${Math.round(a.ziel)}</span>` : '';
       return `<li class="${a.erledigt ? 'fertig' : ''}">${a.erledigt ? '✓' : a.pflicht ? '★' : '•'} ${a.symbol} <span class="ag-text">${escapeHtml(a.text)}</span>${zahl}</li>`;
@@ -2100,6 +2150,7 @@ class Ort extends Phaser.Scene {
       return `<li class="${klasse}"><span class="punkt" style="background:${css(FARBEN[p.farbe % FARBEN.length])}"></span>${escapeHtml(p.name)}${p.afk && !p.name.includes('🤖') ? ' 🤖' : ''}${id === meineId ? ' (du)' : ''}${zusatz}</li>`;
     }).join('');
     if ($('liste').innerHTML !== liste) $('liste').innerHTML = liste;
+    textSetzen('listezahl', `${s.spieler.size} Spieler`);
 
     // Aktionsknopf
     this.kontext = this.bestimmeKontext(ich);

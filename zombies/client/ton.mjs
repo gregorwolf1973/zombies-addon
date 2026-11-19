@@ -1,14 +1,22 @@
 // Geräusche – alles im Browser erzeugt (WebAudio), keine Tondateien.
 // Lautstärke und Stereo-Seite richten sich nach der Entfernung zum eigenen Spieler.
 
-let ctx = null, haupt = null, rauschPuffer = null, an = true;
+let ctx = null, haupt = null, rauschPuffer = null, stufe = 1;
+const BASIS = 0.36;                          // Grundpegel (früher 0.8 – war zu laut); die Stufe regelt darunter
+const STUFEN = [1, 0.5, 0.25, 0];            // 100 %, 50 %, 25 %, stumm
 let hx = 0, hy = 0;                         // Hörer (eigene Figur) in Pixeln
 let wind = null, brumm = null;
 const HOERWEITE = 900;                      // ab hier nichts mehr zu hören
 
-try { an = localStorage.getItem('zombies_ton') !== 'aus'; } catch { /* ohne Speicher: an */ }
+try {
+  const v = Number(localStorage.getItem('zombies_lautstaerke'));
+  if (localStorage.getItem('zombies_lautstaerke') !== null && STUFEN.includes(v)) stufe = v;
+  else if (localStorage.getItem('zombies_ton') === 'aus') stufe = 0;
+} catch { /* ohne Speicher: 100 % */ }
 
-export function tonAn() { return an; }
+export function tonAn() { return stufe > 0; }
+export function lautstaerke() { return stufe; }
+const pegel = () => BASIS * stufe;
 
 // ---------- Tondateien (auf der Einstellungsseite Ereignissen zugeordnet) ----------
 let zuordnung = {};                 // Ereignis → { dateien, laut }
@@ -63,7 +71,7 @@ function hintergrundPruefen() {
 
 function streuen() {
   hintergrund.streuTimer = setTimeout(streuen, 9000 + Math.random() * 16000);
-  if (!ctx || !an || document.hidden) return;
+  if (!ctx || stufe === 0 || document.hidden) return;
   const id = nachtJetzt ? 'zombielandNacht' : 'zombielandTag';
   const w = Math.random() * Math.PI * 2, d = 350 + Math.random() * 450;
   probe(id, hx + Math.cos(w) * d, hy + Math.sin(w) * d, drinnenJetzt ? 0.6 : 1.8);
@@ -82,7 +90,7 @@ export function tonStarten() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
-  haupt = ctx.createGain(); haupt.gain.value = an ? 0.8 : 0; haupt.connect(ctx.destination);
+  haupt = ctx.createGain(); haupt.gain.value = pegel(); haupt.connect(ctx.destination);
   // 2 s weißes Rauschen als Grundstoff für Schuss, Wind, Schlurfen
   rauschPuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = rauschPuffer.getChannelData(0);
@@ -92,11 +100,12 @@ export function tonStarten() {
   if (!hintergrund.streuTimer) hintergrund.streuTimer = setTimeout(streuen, 6000);
 }
 
+// schaltet die Lautstärke durch (100 → 50 → 25 → stumm → 100 %), merkt sie im Browser, liefert die neue Stufe (0–1)
 export function tonUmschalten() {
-  an = !an;
-  try { localStorage.setItem('zombies_ton', an ? 'an' : 'aus'); } catch { /* egal */ }
-  if (haupt) haupt.gain.setTargetAtTime(an ? 0.8 : 0, ctx.currentTime, 0.05);
-  return an;
+  stufe = STUFEN[(STUFEN.indexOf(stufe) + 1) % STUFEN.length];
+  try { localStorage.setItem('zombies_lautstaerke', String(stufe)); localStorage.setItem('zombies_ton', stufe ? 'an' : 'aus'); } catch { /* egal */ }
+  if (haupt) haupt.gain.setTargetAtTime(pegel(), ctx.currentTime, 0.05);
+  return stufe;
 }
 
 // Hörerposition; ungültige Werte (Figur noch nicht da) ignorieren – sonst rechnet jedes Geräusch mit NaN
@@ -106,7 +115,7 @@ const endlich = (v, ersatz = 0) => Number.isFinite(v) ? v : ersatz;
 
 // Ausgang für ein Geräusch an Position (x, y); null = zu weit weg
 function ort(x, y, laut = 1) {
-  if (!ctx || !an) return null;
+  if (!ctx || stufe === 0) return null;
   let v = laut, pan = 0;
   if (x != null) {
     if (!hoerBekanntSeit || performance.now() - hoerBekanntSeit < 2000) return null;   // Hörer unbekannt (0/0) → sonst volle Lautstärke aus dem Nichts
@@ -326,7 +335,7 @@ export function schleifeStarten(id) {
 // Lautstärke einer Schleife (0–1 vor dem Einstellungs-Regler) sanft setzen, z. B. Wasserrauschen nach Uferabstand
 export function schleifeLaut(h, v) {
   if (!h || !ctx) return;
-  h.g.gain.setTargetAtTime(an ? Math.max(0, v) * h.laut : 0, ctx.currentTime, 0.3);
+  h.g.gain.setTargetAtTime(stufe > 0 ? Math.max(0, v) * h.laut : 0, ctx.currentTime, 0.3);
 }
 
 export function sireneStarten() {
@@ -353,7 +362,7 @@ export function sireneStarten() {
 export function sireneLage(h, x, y, naeher, weite = 1400, stumm = false) {
   if (!h || !ctx) return;
   const d = Math.hypot(x - hx, y - hy);
-  const v = endlich(an && !stumm ? Math.max(0, 1 - d / weite) ** 1.5 * h.laut : 0);
+  const v = endlich(stufe > 0 && !stumm ? Math.max(0, 1 - d / weite) ** 1.5 * h.laut : 0);
   h.g.gain.setTargetAtTime(v, ctx.currentTime, stumm ? 0.2 : 0.12);       // sanft ein- und ausblenden (kurz)
   if (h.pan) h.pan.pan.setTargetAtTime(endlich(Math.max(-1, Math.min(1, (x - hx) / 500))), ctx.currentTime, 0.1);
   const doppler = endlich(Math.max(0.9, Math.min(1.1, 1 + naeher / 1600)), 1);          // kommt näher: höher, fährt weg: tiefer
@@ -377,7 +386,7 @@ export function brandRauschen(staerke) {
     src.connect(f); f.connect(g); g.connect(haupt); src.start();
     brand = { g, f };
   }
-  brand.g.gain.setTargetAtTime(an ? Math.min(0.35, staerke * 0.3) : 0, ctx.currentTime, 0.4);
+  brand.g.gain.setTargetAtTime(stufe > 0 ? Math.min(0.35, staerke * 0.3) : 0, ctx.currentTime, 0.4);
   brand.f.frequency.setTargetAtTime(500 + Math.random() * 300, ctx.currentTime, 0.1);   // flackernd
 }
 
