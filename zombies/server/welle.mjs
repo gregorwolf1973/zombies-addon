@@ -8,7 +8,8 @@ import { KACHEL, BREITE, HOEHE, WERTE as W, T, BLOCKIERT, frei, drinnen } from '
 
 export const WELLE_MAX = 1000;       // so viele zusätzliche Zombies höchstens
 const ANSAGE = 10;                    // Sekunden zwischen Meldung und Auftauchen
-const ABSTAND = 800;                  // so weit außerhalb des Bildes tauchen sie auf (700–900 px)
+const SICHT = 1000;                   // halbe Bildbreite eines breiten PC-Bildschirms: so weit sieht man höchstens
+const ABSTAND = SICHT + 300;          // für die Seitenwahl am Kartenrand (Horde startet hinter dem Bildrand)
 const ZIEL_ABSTAND = 900;             // Gruppenziel: so weit auf der Gegenseite des Spielers
 const TEMPO = 0.5;                    // Anteil von W.zombieTempoJagen (ca. 52 px/s)
 const MAX_DAUER = 600;                // spätestens dann löst sich die Welle auf (Sekunden); bis dahin zieht sie von Ziel zu Ziel
@@ -83,18 +84,24 @@ export class Zombiewelle {
     const kl = (v, a, b) => Math.max(a, Math.min(b, v));
     const grenzeX = [2 * KACHEL, (BREITE - 2) * KACHEL], grenzeY = [2 * KACHEL, (HOEHE - 2) * KACHEL];
     const zielX = [RAND * KACHEL, (BREITE - RAND) * KACHEL], zielY = [RAND * KACHEL, (HOEHE - RAND) * KACHEL];   // Ziele bleiben im Ort
-    const cx = kl(ref.draussen ? ref.x - richtung * (700 + r.rnd() * 200) : (seite === 'west' ? 2.5 : BREITE - 2.5) * KACHEL, ...grenzeX);
-    const cy0 = kl(ref.y + (r.rnd() - 0.5) * 160, ...grenzeY);
-    const ziel = { x: kl(ref.x + richtung * ZIEL_ABSTAND, ...zielX), y: kl(ref.y, ...zielY) };
     // Streuradius so, dass n Zombies dicht stehen (ca. 26 px Platz je Zombie)
     const radius = 22 + Math.sqrt(n) * 14;
+    // Mitte so weit weg, dass auch der vorderste Zombie hinter dem Bildrand steht; dann laufen sie ins Bild ein
+    const randX = [Math.min(grenzeX[0] + radius, BREITE * KACHEL / 2), Math.max(grenzeX[1] - radius, BREITE * KACHEL / 2)];   // ganze Horde auf der Karte
+    const cx = kl(ref.draussen ? ref.x - richtung * (SICHT + radius + 80 + r.rnd() * 200) : (seite === 'west' ? 2.5 : BREITE - 2.5) * KACHEL, ...randX);
+    const cy0 = kl(ref.y + (r.rnd() - 0.5) * 160, ...grenzeY);
+    const ziel = { x: kl(ref.x + richtung * ZIEL_ABSTAND, ...zielX), y: kl(ref.y, ...zielY) };
+    // kein Zombie darf in Sichtweite irgendeines Spielers draußen auftauchen
+    const sehende = [...r.state.spieler.values()].filter(p => !p.ebene && !(p.zombie > 0));
+    let sicht = SICHT;   // wird gelockert, wenn die Karte zu klein ist (Testkarte, Kartenrand)
+    const gesehen = (x, y) => sehende.some(p => Math.abs(p.x - x) < sicht + 40 && Math.abs(p.y - y) < sicht * 0.75 + 40);
     const plaetze = cy => {
       const liste = [];
       for (let v = 0; v < n * 8 && liste.length < n; v++) {
         const a = r.rnd() * Math.PI * 2, d = radius * Math.sqrt(r.rnd());
         const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
         if (x < KACHEL || y < KACHEL || x > (BREITE - 1) * KACHEL || y > (HOEHE - 1) * KACHEL) continue;
-        if (!frei(welt, x, y, W.zombieRadius + 2) || drinnen(welt, x, y)) continue;
+        if (!frei(welt, x, y, W.zombieRadius + 2) || drinnen(welt, x, y) || gesehen(x, y)) continue;
         if (welt.safeRooms.some(s => Math.hypot(s.vorTuer.x - x, s.vorTuer.y - y) < 120)) continue;
         if (liste.some(q => Math.hypot(q.x - x, q.y - y) < W.zombieRadius * 1.6)) continue;
         liste.push({ x, y });
@@ -103,12 +110,16 @@ export class Zombiewelle {
     };
     // ist der Platz zugebaut (Häuser, Wasser), die Gruppe etwas nach oben/unten verschieben
     let beste = [];
-    for (const dy of [0, 96, -96, 192, -192, 288, -288, 384, -384]) {
-      const cy = cy0 + dy;
-      if (cy < grenzeY[0] || cy > grenzeY[1]) continue;
-      const l = plaetze(cy);
-      if (l.length > beste.length) beste = l;
-      if (beste.length >= n) break;
+    for (const stufe of [1, 0.75, 0.5, 0.3]) {   // erst ganz außerhalb jeder Sicht, sonst schrittweise näher
+      sicht = SICHT * stufe;
+      for (const dy of [0, 96, -96, 192, -192, 288, -288, 384, -384]) {
+        const cy = cy0 + dy;
+        if (cy < grenzeY[0] || cy > grenzeY[1]) continue;
+        const l = plaetze(cy);
+        if (l.length > beste.length) beste = l;
+        if (beste.length >= n) break;
+      }
+      if (beste.length >= n * 0.6) break;
     }
     if (!beste.length) return null;
     const ids = new Set();

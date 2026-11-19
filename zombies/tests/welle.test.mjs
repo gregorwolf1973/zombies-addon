@@ -89,9 +89,10 @@ test('Zombiewelle: Meldung, Gruppe außerhalb des Bildes, zieht zur Gegenseite, 
     // zählt nicht zum Soll: bleibt-Markierung, Auffüllen zählt sie nicht
     assert.ok(ids.every(id => raum.zombieInfo.get(id).bleibt && raum.zombieInfo.get(id).welle));
     const zs = ids.map(id => raum.state.zombies.get(id));
-    // links außerhalb des Bildes (ca. 700–900 px, Toleranz für Platzsuche)
+    // links, so weit weg wie die Karte erlaubt (auf großen Karten hinter dem Bildrand, hier begrenzt durch die kleine Testkarte)
     const mx = zs.reduce((a, z) => a + z.x, 0) / zs.length;
-    assert.ok(p.x - mx > 500 && p.x - mx < 1000, `Abstand ${p.x - mx}`);
+    assert.ok(p.x - mx > 300, `Abstand ${p.x - mx}`);
+    assert.ok(zs.every(z => Math.hypot(z.x - p.x, z.y - p.y) > 280), 'Zombie zu nah am Spieler aufgetaucht');
     // dichte Gruppe
     assert.ok(streuung(zs.map(z => z.x)) < 120 && streuung(zs.map(z => z.y)) < 120, 'zu verstreut');
     // Auffüllen: Soll 0 → nichts zu tun; mit Soll > 0 zählen Wellen-Zombies nicht als Ersatz

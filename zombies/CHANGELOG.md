@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.46.4 – 19.11.2026
+
+- Zombiehorde erscheint hinter dem Bildrand (auch der vorderste Zombie, für alle Spieler) und läuft dann ins Bild ein; auf kleinen Karten schrittweise näher.
+
 ## 0.46.3 – 19.11.2026
 
 - Zombiehorde bis 1000 Zombies (bisher 300), Regler in der Verwaltung entsprechend; Zustandspuffer vergrößert (Lasttest: ~1000 Zombies, Servertakt im Mittel 2,5 ms).
