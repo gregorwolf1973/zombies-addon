@@ -7,6 +7,9 @@ import { createRequire } from 'node:module';
 import express from 'express';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
+import { Encoder } from '@colyseus/schema';
+// Große Horden (bis 1000 Zombies): Zustandspuffer gleich groß genug anlegen, statt bei jedem Wachsen zu warnen
+Encoder.BUFFER_SIZE = 256 * 1024;
 import { SpielRaum } from './raum.mjs';
 import { Speicher } from './speicher.mjs';
 import { EinstellungsDatei, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';

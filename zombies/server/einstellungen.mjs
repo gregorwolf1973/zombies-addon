@@ -108,7 +108,7 @@ export function bereinige(e = {}, alt = {}) {
   }
   // Wellen: 0 = aus, sonst mindestens alle 5 Minuten; Maximum nie kleiner als Minimum
   if (z.welle > 0 && z.welle < 5) z.welle = 5;
-  z.welleMin = Math.round(zahl(z.welleMin, 5, 300, 20)); z.welleMax = Math.max(z.welleMin, Math.round(zahl(z.welleMax, 5, 300, 50)));
+  z.welleMin = Math.round(zahl(z.welleMin, 5, 1000, 20)); z.welleMax = Math.max(z.welleMin, Math.round(zahl(z.welleMax, 5, 1000, 50)));
   return {
     zugangscode: String(e.zugangscode ?? a.zugangscode ?? '').trim().slice(0, 40),
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
@@ -148,8 +148,8 @@ export function bereinige(e = {}, alt = {}) {
       tempo: Math.round(zahl(z.tempo, 50, 150, 100)),    // Laufgeschwindigkeit in Prozent
       nacht: Math.round(zahl(z.nacht, 10, 30, 15)),      // nachts so viel mehr draußen (15 = ×1,5)
       welle: Math.round(zahl(z.welle, 0, 120, 20)),      // alle so viele Spielminuten kommt eine Zombiewelle (0 = aus; sonst mindestens 5)
-      welleMin: Math.round(zahl(z.welleMin, 5, 300, 20)), // Größe der Welle: kleinste Zahl
-      welleMax: Math.round(zahl(z.welleMax, 5, 300, 50)), // … größte Zahl (höchstens 300)
+      welleMin: Math.round(zahl(z.welleMin, 5, 1000, 20)), // Größe der Welle: kleinste Zahl
+      welleMax: Math.round(zahl(z.welleMax, 5, 1000, 50)), // … größte Zahl (höchstens 1000)
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
     sprache: {

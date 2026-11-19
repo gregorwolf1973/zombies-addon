@@ -6,7 +6,7 @@
 // Sie zählen nicht zum normalen Zombie-Soll (info.bleibt) und werden vom Auffüllen nicht ersetzt.
 import { KACHEL, BREITE, HOEHE, WERTE as W, T, BLOCKIERT, frei, drinnen } from '../client/welt.mjs';
 
-export const WELLE_MAX = 300;        // so viele zusätzliche Zombies höchstens
+export const WELLE_MAX = 1000;       // so viele zusätzliche Zombies höchstens
 const ANSAGE = 10;                    // Sekunden zwischen Meldung und Auftauchen
 const ABSTAND = 800;                  // so weit außerhalb des Bildes tauchen sie auf (700–900 px)
 const ZIEL_ABSTAND = 900;             // Gruppenziel: so weit auf der Gegenseite des Spielers

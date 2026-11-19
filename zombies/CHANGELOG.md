@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.46.3 – 19.11.2026
+
+- Zombiehorde bis 1000 Zombies (bisher 300), Regler in der Verwaltung entsprechend; Zustandspuffer vergrößert (Lasttest: ~1000 Zombies, Servertakt im Mittel 2,5 ms).
+
 ## 0.46.2 – 19.11.2026
 
 - Versionsabgleich: Lief die App über ein Update hinweg im Hintergrund weiter (alter Code im Speicher, dadurch verschobene Welt), lädt sie vor dem Anmelden bzw. beim Zurückkehren selbst neu und tritt wieder bei. /info nennt dafür die Server-Version.

@@ -36,8 +36,8 @@ test('Einstellungen: Blaulicht und Welle werden bereinigt', () => {
   assert.equal(bereinige({ zombies: { welle: 2 } }).zombies.welle, 5);
   assert.equal(bereinige({ zombies: { welle: 0 } }).zombies.welle, 0);
   const z = bereinige({ zombies: { welleMin: 40, welleMax: 10 } }).zombies;
-  assert.ok(z.welleMax >= z.welleMin && z.welleMax <= 300);
-  assert.equal(bereinige({ zombies: { welleMax: 500 } }).zombies.welleMax, 300);
+  assert.ok(z.welleMax >= z.welleMin && z.welleMax <= 1000);
+  assert.equal(bereinige({ zombies: { welleMax: 5000 } }).zombies.welleMax, 1000);
   assert.equal(bereinige({ zombies: { welleMin: 200, welleMax: 250 } }).zombies.welleMin, 200);
 });
 
