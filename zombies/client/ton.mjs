@@ -108,6 +108,15 @@ export function tonUmschalten() {
   return stufe;
 }
 
+// setzt die Lautstärke direkt (nur 1, 0.5, 0.25 oder 0), merkt sie im Browser
+export function lautstaerkeSetzen(v) {
+  if (!STUFEN.includes(v)) return stufe;
+  stufe = v;
+  try { localStorage.setItem('zombies_lautstaerke', String(stufe)); localStorage.setItem('zombies_ton', stufe ? 'an' : 'aus'); } catch { /* egal */ }
+  if (haupt) haupt.gain.setTargetAtTime(pegel(), ctx.currentTime, 0.05);
+  return stufe;
+}
+
 // Hörerposition; ungültige Werte (Figur noch nicht da) ignorieren – sonst rechnet jedes Geräusch mit NaN
 let hoerBekanntSeit = 0;   // Zeitpunkt, ab dem die Hörerposition bekannt ist; Ortstöne erst ~2 s danach (Beitritt: Nachrichten/Erstabgleich)
 export function hoerer(x, y) { if (Number.isFinite(x) && Number.isFinite(y)) { hx = x; hy = y; if (!hoerBekanntSeit) hoerBekanntSeit = performance.now(); } }

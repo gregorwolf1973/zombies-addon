@@ -58,7 +58,7 @@
     <div class="anzeigen">
       <div class="anzeige" title="Gesundheit"><span>❤️</span><div id="hp" class="bar rot"><div></div></div></div>
       <div class="anzeige" title="Durst"><span>💧</span><div id="durst" class="bar blau"><div></div></div></div>
-      <div class="anzeige" title="Hunger"><span>🥫</span><div id="hunger" class="bar gelb"><div></div></div></div>
+      <div class="anzeige" title="Hunger"><span>🍖</span><div id="hunger" class="bar orange"><div></div></div></div>
     </div>
     <span id="zeit">00:00</span>
   </div>
@@ -70,7 +70,7 @@
     <span id="sichername"></span>
     <button id="ausruhen">💤 Ausruhen &amp; abmelden</button>
   </div>
-  <button id="listeknopf" type="button" aria-expanded="true" aria-controls="liste">👥 <span id="listezahl"></span></button>
+  <button id="listeknopf" type="button" aria-expanded="false" aria-controls="liste" title="Spielerliste ein-/ausklappen"><span id="punkte"></span></button>
   <ul id="liste"></ul>
   <div id="aufgaben" style="display:none">
     <button id="aufgabenknopf" type="button" aria-expanded="true" aria-controls="aufgabenkoerper">📋 <span id="aufgabenkopf"></span></button>
@@ -86,7 +86,7 @@
 </div>
 <button id="menueknopf" type="button" title="Menü" aria-label="Menü" aria-expanded="false" aria-controls="menue">☰<span id="menuepunkt"></span></button>
 <div id="menue">
-<button id="ton" title="Lautstärke">🔊</button>
+<button id="einstellknopf" title="Spieler-Einstellungen" aria-label="Spieler-Einstellungen">⚙️</button>
 <button id="zoomraus" class="zoomknopf" title="Herauszoomen (−)" aria-label="Herauszoomen">−</button>
 <button id="zoomrein" class="zoomknopf" title="Hineinzoomen (+)" aria-label="Hineinzoomen">+</button>
 <button id="chatknopf" title="Chat" aria-label="Chat">💬<span id="chatzaehler"></span></button>
@@ -100,10 +100,32 @@
     <button id="chatsenden" type="submit" aria-label="Senden">➤</button>
   </form>
 </div>
+<div id="kontextbox">
+  <button id="aktion2" type="button"></button>
+  <button id="aktion" type="button"></button>
+  <div id="kontextprobe">↔ Ziehen<br><small>Aktionsknopf</small></div>
+  <button id="kontextfertig" type="button">✔ Fertig</button>
+</div>
 <div id="unten">
-  <button id="aktion2"></button>
-  <button id="aktion"></button>
   <div id="rucksack"></div>
+</div>
+<div id="einstellungen" role="dialog" aria-label="Spieler-Einstellungen">
+  <div class="fenster">
+    <div class="kopfzeile"><b>⚙️ Einstellungen</b><button id="einstellzu" type="button" aria-label="Schließen">✕</button></div>
+    <div class="eg-titel">🔊 Lautstärke</div>
+    <div class="eg-reihe" id="eg-ton">
+      <button type="button" data-v="1">🔊 100 %</button><button type="button" data-v="0.5">🔉 50 %</button><button type="button" data-v="0.25">🔈 25 %</button><button type="button" data-v="0">🔇 Aus</button>
+    </div>
+    <div class="eg-titel">🎯 Aktionsknopf (Aufheben, Tür, Durchsuchen …)</div>
+    <div class="eg-reihe">
+      <button type="button" id="eg-schieben">↔ Verschieben</button><button type="button" id="eg-reset">↺ Zurücksetzen</button>
+    </div>
+    <div class="eg-hinweis">Kurz tippen = Aktion · lange drücken (halbe Sekunde) = weitere Aktionen.</div>
+    <div class="eg-titel">🗺 Eckkarte</div>
+    <div class="eg-reihe" id="eg-karte">
+      <button type="button" data-v="0.35">Sehr blass</button><button type="button" data-v="0.6">Blass</button><button type="button" data-v="1">Deckend</button>
+    </div>
+  </div>
 </div>
 <div id="popup"></div>
 <div id="kiste">

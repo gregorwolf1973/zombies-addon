@@ -280,7 +280,7 @@ function oberflaecheEinrichten() {
     $('menuepunkt').style.display = neu ? 'block' : 'none';
   }, 700);
   // Spielerliste: auf schmalen Bildschirmen standardmäßig zu, Wahl bleibt im Browser
-  let zu = kompakt.matches;
+  let zu = true;
   try { const v = localStorage.getItem('zob_liste'); if (v === '0') zu = false; else if (v === '1') zu = true; } catch { /* egal */ }
   const setze = z => { $('hud').classList.toggle('listezu', z); $('listeknopf').setAttribute('aria-expanded', String(!z)); };
   setze(zu);
@@ -288,6 +288,82 @@ function oberflaecheEinrichten() {
     zu = !$('hud').classList.contains('listezu'); setze(zu);
     try { localStorage.setItem('zob_liste', zu ? '1' : '0'); } catch { /* egal */ }
   };
+  einstellungenEinrichten();
+}
+
+// ---------- Spieler-Einstellungen, Aktionsknopf (Position, langer Druck) ----------
+const KNOPF_STANDARD = { x: 0.82, y: 0.58 };
+function knopfPosition() {
+  try { const p = JSON.parse(localStorage.getItem('zob_kontextpos')); if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return p; } catch { /* egal */ }
+  return KNOPF_STANDARD;
+}
+function knopfSetzen(p) {
+  const box = $('kontextbox');
+  const x = Math.min(0.95, Math.max(0.05, p.x)), y = Math.min(0.8, Math.max(0.12, p.y));
+  box.style.left = (x * 100).toFixed(1) + '%'; box.style.top = (y * 100).toFixed(1) + '%';
+  return { x, y };
+}
+function einstellungenEinrichten() {
+  const fenster = $('einstellungen');
+  const auf = () => { markieren(); fenster.classList.add('offen'); };
+  const zu = () => fenster.classList.remove('offen');
+  const markieren = () => {
+    for (const b of document.querySelectorAll('#eg-ton button')) b.classList.toggle('an', Number(b.dataset.v) === ton.lautstaerke());
+    let a = '0.6'; try { a = localStorage.getItem('zob_kartealpha') ?? '0.6'; } catch { /* egal */ }
+    for (const b of document.querySelectorAll('#eg-karte button')) b.classList.toggle('an', b.dataset.v === a);
+  };
+  $('einstellknopf').onclick = auf;
+  $('einstellzu').onclick = zu;
+  fenster.addEventListener('click', e => { if (e.target === fenster) zu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') zu(); });
+  for (const b of document.querySelectorAll('#eg-ton button')) b.onclick = () => {
+    ton.tonStarten(); ton.lautstaerkeSetzen(Number(b.dataset.v)); markieren();
+    $('einstellknopf').title = `Spieler-Einstellungen (Lautstärke ${ton.lautstaerke() ? Math.round(ton.lautstaerke() * 100) + ' %' : 'aus'})`;
+  };
+  const alpha = a => { document.documentElement.style.setProperty('--kartealpha', a); };
+  try { alpha(localStorage.getItem('zob_kartealpha') ?? '0.6'); } catch { alpha('0.6'); }
+  for (const b of document.querySelectorAll('#eg-karte button')) b.onclick = () => {
+    alpha(b.dataset.v); try { localStorage.setItem('zob_kartealpha', b.dataset.v); } catch { /* egal */ } markieren();
+  };
+  // Aktionsknopf verschieben
+  knopfSetzen(knopfPosition());
+  window.addEventListener('resize', () => knopfSetzen(knopfPosition()));
+  const probe = $('kontextprobe');
+  $('eg-schieben').onclick = () => { zu(); document.body.classList.add('kverschieben'); };
+  $('kontextfertig').onclick = () => document.body.classList.remove('kverschieben');
+  $('eg-reset').onclick = () => {
+    try { localStorage.removeItem('zob_kontextpos'); } catch { /* egal */ }
+    knopfSetzen(KNOPF_STANDARD); meldung('↺ Aktionsknopf zurückgesetzt');
+  };
+  let zieht = null;
+  probe.addEventListener('pointerdown', e => { zieht = e.pointerId; probe.setPointerCapture(e.pointerId); e.preventDefault(); });
+  probe.addEventListener('pointermove', e => {
+    if (zieht !== e.pointerId) return;
+    knopfSetzen({ x: e.clientX / window.innerWidth, y: (e.clientY + 30) / window.innerHeight });   // Knopfmitte etwas über dem Finger
+  });
+  const loslassen = e => {
+    if (zieht !== e.pointerId) return;
+    zieht = null;
+    const p = knopfSetzen({ x: e.clientX / window.innerWidth, y: (e.clientY + 30) / window.innerHeight });
+    try { localStorage.setItem('zob_kontextpos', JSON.stringify(p)); } catch { /* egal */ }
+  };
+  probe.addEventListener('pointerup', loslassen); probe.addEventListener('pointercancel', loslassen);
+}
+
+// Aktionsknopf: kurz = Hauptaktion, lang (≈ 0,5 s) = Auswahl der weiteren Aktion
+function aktionsknopfEinrichten(szene) {
+  const box = $('kontextbox'), knopf = $('aktion');
+  let timer = null, lang = false;
+  const menueZu = () => box.classList.remove('menue2');
+  knopf.addEventListener('pointerdown', () => {
+    lang = false; clearTimeout(timer);
+    timer = setTimeout(() => { if (szene.zweit && szene.kontext) { lang = true; box.classList.add('menue2'); } }, 500);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) knopf.addEventListener(ev, () => clearTimeout(timer));
+  knopf.addEventListener('contextmenu', e => e.preventDefault());
+  knopf.onclick = () => { if (lang) { lang = false; return; } menueZu(); szene.aktion(); };
+  $('aktion2').onclick = () => { menueZu(); szene.aktion2(); };
+  document.addEventListener('pointerdown', e => { if (!box.contains(e.target)) menueZu(); });
 }
 
 let gestartet = false;
@@ -345,7 +421,7 @@ function meldung(text, lang = false) {
   const d = document.createElement('div'), box = $('meldungen');
   d.textContent = text;
   box.appendChild(d);
-  while (box.children.length > 3) box.firstElementChild.remove();   // höchstens drei auf einmal
+  while (box.children.length > 2) box.firstElementChild.remove();   // höchstens zwei auf einmal
   setTimeout(() => { d.style.opacity = '0'; }, lang ? 2800 : 1600);
   setTimeout(() => d.remove(), lang ? 3300 : 2100);
 }
@@ -625,8 +701,7 @@ class Ort extends Phaser.Scene {
       ? (raum.state.funk ? '🔓 Das Tor ist offen! Der Evakuierungsbus holt euch dort ab.' : '🔓 Das Tor ist offen! Setzt am Funktisch im Safe Room einen 📻 Funkspruch ab – dann kommt der Evakuierungsbus.')
       : '🔓 Das Tor ist offen!', true));
 
-    $('aktion').onclick = () => this.aktion();
-    $('aktion2').onclick = () => this.aktion2();
+    aktionsknopfEinrichten(this);
     $('handelzu').onclick = () => handelZu();
     $('ausruhen').onclick = () => raum.send('ausruhen');
     $('kistezu').onclick = () => kisteZu();
@@ -747,16 +822,7 @@ class Ort extends Phaser.Scene {
   // ---------- Übersichtskarte (client/uebersicht.mjs) ----------
   uebersichtVorbereiten() {
     this.uebersicht = new Uebersicht(this.welt, $('kartenbox'));
-    const knopf = $('ton');
-    knopf.style.display = 'block';
-    const symbol = st => (st === 0 ? '🔇' : st <= 0.25 ? '🔈' : st <= 0.5 ? '🔉' : '🔊');
-    const beschriften = () => {
-      const st = ton.lautstaerke();
-      knopf.textContent = symbol(st);
-      knopf.title = `Lautstärke: ${st ? Math.round(st * 100) + ' %' : 'aus'} (antippen = ändern)`;
-    };
-    beschriften();
-    knopf.onclick = () => { ton.tonStarten(); ton.tonUmschalten(); beschriften(); meldung(`🔊 Lautstärke ${ton.lautstaerke() ? Math.round(ton.lautstaerke() * 100) + ' %' : 'aus'}`); };
+    $('einstellknopf').style.display = 'block';
     ton.umgebung(false);
     this.input.keyboard.on('keydown-M', () => { this.uebersicht.umschalten(); this.uebersichtZeichnen(); });
   }
@@ -1969,7 +2035,7 @@ class Ort extends Phaser.Scene {
 
   aktion() {
     const k = this.kontext;
-    if (!k) return;
+    if (!k) { if (this.zweit) this.aktion2(); return; }
     if (k.art === 'kiste') kisteAuf(k.safe);
     else if (k.art === 'kuehlschrank') raum.send('kuehlschrank');
     else if (k.art === 'tausch') raum.send('tausch_start', { mit: k.mit });
@@ -2150,22 +2216,30 @@ class Ort extends Phaser.Scene {
       return `<li class="${klasse}"><span class="punkt" style="background:${css(FARBEN[p.farbe % FARBEN.length])}"></span>${escapeHtml(p.name)}${p.afk && !p.name.includes('🤖') ? ' 🤖' : ''}${id === meineId ? ' (du)' : ''}${zusatz}</li>`;
     }).join('');
     if ($('liste').innerHTML !== liste) $('liste').innerHTML = liste;
-    textSetzen('listezahl', `${s.spieler.size} Spieler`);
+    const punkte = [...s.spieler.entries()].map(([id, p]) => {
+      const afk = p.afk || p.name.includes('🤖');
+      const kl = ['pt', p.unten ? 'unten' : '', afk ? 'afk' : '', !p.verbunden ? 'weg' : ''].filter(Boolean).join(' ');
+      return `<i class="${kl}" style="background:${css(FARBEN[p.farbe % FARBEN.length])}">${afk ? '🤖' : ''}</i>`;
+    }).join('');
+    if ($('punkte').innerHTML !== punkte) $('punkte').innerHTML = punkte;
+    $('listeknopf').title = `${s.spieler.size} Spieler – antippen für die Liste`;
 
     // Aktionsknopf
     this.kontext = this.bestimmeKontext(ich);
-    const knopf = $('aktion');
-    knopf.style.display = this.kontext ? 'block' : 'none';
-    if (this.kontext && knopf.textContent !== this.kontext.text) knopf.textContent = this.kontext.text;
     // zweiter Knopf: andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
     const frei2 = ich && !ich.unten && !ich.aktion && !(ich.zombie > 0) && s.phase === 'spiel' && this.lokal;
     let zweit = frei2 ? this.tuerKontext(ich, 'zweit') : null;
     if (frei2 && !zweit && this.handelKontext && this.kontext !== this.handelKontext && !handelOffen) zweit = this.handelKontext;
     if (frei2 && !zweit && ich.rucksack.includes('granate')) zweit = { art: 'wurf', text: '💣 Granate werfen (Q)' };
     this.zweit = zweit;
-    const knopf2 = $('aktion2');
-    knopf2.style.display = zweit ? 'block' : 'none';
+    // ein großer Knopf: Hauptaktion; gibt es nur eine zweite Aktion, übernimmt er diese; sonst steckt sie hinter langem Druck
+    const haupt = this.kontext ?? zweit;
+    const knopf = $('aktion'), knopf2 = $('aktion2');
+    knopf.style.display = haupt ? 'block' : 'none';
+    if (haupt && knopf.textContent !== haupt.text) knopf.textContent = haupt.text;
+    knopf.classList.toggle('mehr', !!(this.kontext && zweit));
     if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
+    if (!(this.kontext && zweit)) $('kontextbox').classList.remove('menue2');
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
     if (!this.kontext || this.kontext.art !== 'aufheben_wahl') auswahlZu();
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
@@ -2389,6 +2463,7 @@ function raetselZu() { clearTimeout(raetselTimer); raetselId = null; $('raetsel'
 
 function balkenSetzen(id, wert) {
   const el = $(id).firstElementChild;
+  $(id).classList.toggle('kritisch', wert < 20);
   const w = Math.max(0, Math.min(100, wert)).toFixed(0) + '%';
   if (el.style.width !== w) el.style.width = w;
 }

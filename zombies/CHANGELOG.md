@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.39.0 – 19.11.2026
+
+- Gesundheit, Wasser und Hunger als drei Balken oben links (blinken unter 20 %).
+- Spielerliste eingeklappt als farbige Punkte (rot blinkend am Boden, grau bei AFK/Bot).
+- Eckkarte wieder in voller Größe, halbtransparent (Stufe wählbar).
+- Großer, verschiebbarer Aktionsknopf (rechts in der Bildmitte), weitere Aktionen bei langem Druck.
+- Neue Spieler-Einstellungen (⚙️): Lautstärke, Aktionsknopf verschieben/zurücksetzen, Kartentransparenz.
+- Meldungen unten direkt über dem Inventar.
+- Verwaltung: Größe der Zombies und Leichen verständlicher (Einzelregler, Global ±50 % mit Knöpfen, Ergebniszeile) und große Vorschau.
+
 ## 0.38.0 – 19.11.2026
 
 - Handy: Inventar als schmale Leiste ganz unten, Aufgaben als Knopf (pulsiert bei neuen), Spielerliste einklappbar, Kopfleisten-Knöpfe im ☰-Menü, kleinere Karte, höchstens 2 Meldungen.

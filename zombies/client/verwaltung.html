@@ -399,7 +399,10 @@
   .leistung td, .leistung th { text-align: left; padding: 3px 6px; border-bottom: 1px solid rgba(127,127,127,.2); }
   .leistung .warnung { color: #e8833a; }
 
-.gr-vorschau canvas { display: block; width: 100%; max-width: 320px; height: auto; margin: 8px 0 4px; border-radius: 8px; border: 1px solid var(--border); background: #6a994e; }
+.gr-abschnitt { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.gr-knoepfe { gap: 8px; justify-content: flex-start; }
+.gr-ergebnis { margin: 6px 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.gr-vorschau canvas { display: block; width: 100%; height: 260px; margin: 8px 0 4px; border-radius: 8px; border: 1px solid var(--border); background: #6a994e; }
 /* ---------- Akkordeon in den Reitern ---------- */
 .akk-kopf { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 4px 0; font: inherit; font-size: 1.15rem; font-weight: 700; text-align: left;
   color: var(--text); background: none; border: 0; box-shadow: none; cursor: pointer; -webkit-appearance: none; appearance: none; min-height: 44px; }
@@ -646,18 +649,25 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label for="tnZLeben">Lebenspunkte eines Zombies (100 = normal; ein Kriecher hat danach 35 % davon)</label>
   <div class="tn-zeile"><input type="range" id="tnZLeben" min="20" max="500" step="5"><span id="tnZLebenWert">100</span></div>
   <p class="tn-leise" id="tnZLebenHinweis"></p>
-  <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="grTitel">Darstellungsgröße</div>
-  <label for="tnZGroesse">Zombiegröße (alle Zombietypen und Kriecher, 100 % = normal)</label>
-  <div class="tn-zeile"><input type="range" id="tnZGroesse" min="50" max="200" step="5"><span id="tnZGroesseWert">100 %</span></div>
-  <label for="tnLGroesse">Leichengröße (100 % = normal)</label>
-  <div class="tn-zeile"><input type="range" id="tnLGroesse" min="50" max="200" step="5"><span id="tnLGroesseWert">100 %</span></div>
-  <label for="tnGGroesse">Gesamtgröße (Zombies + Leichen, wirkt zusätzlich zu den beiden Reglern oben)</label>
-  <div class="tn-zeile"><input type="range" id="tnGGroesse" min="50" max="150" step="5"><span id="tnGGroesseWert">±0 %</span></div>
-  <div id="grVorschau" class="gr-vorschau">
-    <label for="grTyp">Vorschau: Zombietyp</label>
-    <div class="tn-zeile"><select id="grTyp"></select></div>
-    <canvas id="grCanvas" width="320" height="150" aria-label="Vorschau: Spielerfigur, Zombie und Leiche in Spielgröße"></canvas>
-    <span class="hilfe">Links Spielerfigur (Normalgröße), Mitte Zombie, rechts Leiche – so groß wie im Spiel.</span>
+  <div id="grAbschnitt" class="gr-abschnitt">
+    <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="grTitel">Größe der Zombies und Leichen</div>
+    <label for="tnZGroesse">Zombies (lebend)</label>
+    <span class="hilfe">Größe aller lebenden Zombies und Kriecher. 100 % = Originalgröße.</span>
+    <div class="tn-zeile"><input type="range" id="tnZGroesse" min="50" max="200" step="5"><span id="tnZGroesseWert">100 %</span></div>
+    <label for="tnLGroesse">Leichen</label>
+    <span class="hilfe">Größe der Leichen, unabhängig von den lebenden Zombies. 100 % = Originalgröße.</span>
+    <div class="tn-zeile"><input type="range" id="tnLGroesse" min="50" max="200" step="5"><span id="tnLGroesseWert">100 %</span></div>
+    <label for="tnGGroesse">Global – alle Zombies und Leichen</label>
+    <span class="hilfe">Vergrößert oder verkleinert beides zusammen um diesen Prozentsatz, zusätzlich zu den zwei Reglern oben.</span>
+    <div class="tn-zeile"><input type="range" id="tnGGroesse" min="50" max="150" step="5"><span id="tnGGroesseWert">±0 %</span></div>
+    <div class="tn-zeile gr-knoepfe"><button type="button" id="grGMinus">−10 %</button><button type="button" id="grGNull">0</button><button type="button" id="grGPlus">+10 %</button></div>
+    <p id="grErgebnis" class="gr-ergebnis"></p>
+    <div id="grVorschau" class="gr-vorschau">
+      <label for="grTyp">Vorschau: Zombietyp</label>
+      <div class="tn-zeile"><select id="grTyp"></select></div>
+      <canvas id="grCanvas" width="640" height="260" aria-label="Vorschau: Spielerfigur, Zombie und Leiche im gleichen Maßstab"></canvas>
+      <span class="hilfe" id="grMassstab">Alle drei im selben Maßstab: links Spielerfigur (Normalgröße), Mitte Zombie, rechts Leiche.</span>
+    </div>
   </div>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="ztTitel">Zombietypen (mindestens einer bleibt an)</div>
   <label class="tn-schalter"><input type="checkbox" id="zt_tarn"> Tarnjacke</label>
@@ -897,6 +907,14 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
   regler('tnLGroesse', function (v) { return v + ' %'; }, function (v) { return { leichenGroesse: v }; });
   regler('tnGGroesse', relProzent, function (v) { return { groesseGesamt: v }; });
+  function globalSetzen(f) {
+    var el = $('tnGGroesse'), v = f === 0 ? 100 : Math.max(50, Math.min(150, Number(el.value) + f));
+    el.value = v; $('tnGGroesseWert').textContent = relProzent(v); if (window.groessenVorschau) window.groessenVorschau();
+    anfrage('verwaltung/api', { groesseGesamt: v }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  }
+  $('grGMinus').addEventListener('click', function () { globalSetzen(-10); });
+  $('grGPlus').addEventListener('click', function () { globalSetzen(10); });
+  $('grGNull').addEventListener('click', function () { globalSetzen(0); });
   regler('tnZLeben', function (v) { return String(v); }, function (v) { return { zombieLeben: v }; });
   regler('tnBissSp', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpieler: v }; });
   regler('tnPumaPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { pumaPause: v } }; });
@@ -945,7 +963,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   // Größenvorschau: Spielerfigur, Zombie und Leiche in Spielgröße (spiel.mjs: Feld 160 px; Zombie 0,42, Bogen 2 0,476, Spieler 0,476) mal Faktor
   (function () {
     var BG = { figuren: 'grafik/figuren.png', figuren2: 'grafik/figuren2.webp', figuren3: 'grafik/figuren3.webp' };
-    var ZG = 0.42, BG2 = 0.476, LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];
+    var ZG = 0.42, BG2 = 0.476, VERGR = 2.5, LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];
     var bild = {}, liste = {}, cv = $('grCanvas'), sel = $('grTyp');
     if (!cv || !sel) return;
     ZTYPEN.forEach(function (k) {
@@ -962,26 +980,34 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       ctx.restore(); return true;
     }
     function neuZeichnen() {
-      var ctx = cv.getContext('2d'), gg = Number($('tnGGroesse').value) / 100, zf = Number($('tnZGroesse').value) / 100 * gg, lf = Number($('tnLGroesse').value) / 100 * gg;
-      ctx.clearRect(0, 0, cv.width, cv.height);
-      ctx.fillStyle = '#6a994e'; ctx.fillRect(0, 0, cv.width, cv.height);
-      var k = sel.value, idx = ZTYPEN.indexOf(k), y = cv.height / 2;
-      // Spielerfigur, Normalgröße
-      zeichne(ctx, 'figuren2', 'sv_pistole_idle', 55, y, BG2, 0);
-      // Zombie
-      if (k === 'kriecher') zeichne(ctx, 'figuren', 'kriecher_a', 160, y, ZG * zf, 0);
-      else if (k === 'z6' || k === 'z7') zeichne(ctx, 'figuren2', k + '_stehen', 160, y, BG2 * zf * (k === 'z6' ? 1.05 : 1), 0);
-      else if (idx >= 7) zeichne(ctx, 'figuren3', k, 160, y, ZG * zf, 0);
-      else zeichne(ctx, 'figuren', 'zombie_' + k, 160, y, ZG * zf, 0);
-      // Leiche (wie im Spiel: Bild von figuren3 oder die älteren Leichenbilder)
+      var gg = Number($('tnGGroesse').value) / 100, zf = Number($('tnZGroesse').value) / 100 * gg, lf = Number($('tnLGroesse').value) / 100 * gg;
+      var erg = $('grErgebnis');
+      if (erg) erg.textContent = 'Im Spiel: Zombies ' + Math.round(zf * 100) + ' % · Leichen ' + Math.round(lf * 100) + ' % der Originalgröße';
+      var dpr = window.devicePixelRatio || 1, bw = cv.clientWidth || 600, bh = 260;
+      if (cv.width !== Math.round(bw * dpr) || cv.height !== Math.round(bh * dpr)) { cv.width = Math.round(bw * dpr); cv.height = Math.round(bh * dpr); }
+      var ctx = cv.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#6a994e'; ctx.fillRect(0, 0, bw, bh);
+      // gleicher Maßstab für alle drei; bei sehr großen Faktoren etwas kleiner, damit nichts abgeschnitten wird
+      var S = Math.min(VERGR, 230 / (160 * Math.max(BG2, ZG * zf, BG2 * zf * 1.05, ZG * lf)));
+      var k = sel.value, idx = ZTYPEN.indexOf(k), y = bh / 2 - 8, x1 = bw * 0.18, x2 = bw * 0.5, x3 = bw * 0.82;
+      zeichne(ctx, 'figuren2', 'sv_pistole_idle', x1, y, BG2 * S, 0);
+      if (k === 'kriecher') zeichne(ctx, 'figuren', 'kriecher_a', x2, y, ZG * zf * S, 0);
+      else if (k === 'z6' || k === 'z7') zeichne(ctx, 'figuren2', k + '_stehen', x2, y, BG2 * zf * S * (k === 'z6' ? 1.05 : 1), 0);
+      else if (idx >= 7) zeichne(ctx, 'figuren3', k, x2, y, ZG * zf * S, 0);
+      else zeichne(ctx, 'figuren', 'zombie_' + k, x2, y, ZG * zf * S, 0);
       var typ = k === 'kriecher' ? 'hemd' : k;
-      if (!(liste.figuren3 && liste.figuren3.bilder && liste.figuren3.bilder['leiche_' + typ] && zeichne(ctx, 'figuren3', 'leiche_' + typ, 265, y, ZG * lf, 0))) {
+      if (!(liste.figuren3 && liste.figuren3.bilder && liste.figuren3.bilder['leiche_' + typ] && zeichne(ctx, 'figuren3', 'leiche_' + typ, x3, y, ZG * lf * S, 0))) {
         var alt = typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : idx >= 7 ? LEICHEN[idx % LEICHEN.length] : typ;
-        zeichne(ctx, 'figuren', 'leiche_' + alt, 265, y, ZG * lf, 0);
+        zeichne(ctx, 'figuren', 'leiche_' + alt, x3, y, ZG * lf * S, 0);
       }
+      ctx.font = '600 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 3;
+      ctx.fillText('Spieler (zum Vergleich)', x1, bh - 10); ctx.fillText('Zombie ' + Math.round(zf * 100) + ' %', x2, bh - 10); ctx.fillText('Leiche ' + Math.round(lf * 100) + ' %', x3, bh - 10);
+      ctx.shadowBlur = 0;
     }
     window.groessenVorschau = neuZeichnen;
     sel.addEventListener('change', neuZeichnen);
+    if (window.ResizeObserver) new ResizeObserver(function () { neuZeichnen(); }).observe(cv); else window.addEventListener('resize', neuZeichnen);
     $('tnZGroesse').addEventListener('input', neuZeichnen);
     $('tnLGroesse').addEventListener('input', neuZeichnen);
     $('tnGGroesse').addEventListener('input', neuZeichnen);
@@ -2631,9 +2657,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   rein(P.zombies, zk);
   if (zk) { var ztt = $('ztTitel'); if (ztt) zk.appendChild(ztt); ZTYPEN.forEach(function (k) { zk.appendChild($('zt_' + k).closest('label')); }); }
   if (zk) { zeile(zk, 'tnNacht'); zeile(zk, 'tnZLeben'); rein(zk, $('tnZLebenHinweis')); var kegel = $('tnKegel'); if (kegel) zk.appendChild(kegel.closest('label'));
-    var ztAnker = $('ztTitel'); ['grTitel'].concat([]).forEach(function (id) { if ($(id)) zk.insertBefore($(id), ztAnker); });
-    ['tnZGroesse', 'tnLGroesse', 'tnGGroesse'].forEach(function (id) { var l = document.querySelector('label[for="' + id + '"]'), r = $(id).closest('.tn-zeile'); zk.insertBefore(l, ztAnker); zk.insertBefore(r, ztAnker); });
-    if ($('grVorschau')) zk.insertBefore($('grVorschau'), ztAnker); }
+    var ztAnker = $('ztTitel'); if ($('grAbschnitt')) zk.insertBefore($('grAbschnitt'), ztAnker); }
   // 🌍 Welt & Ausbruch
   if (tn) {
     var zeit = neueKarte(P.welt, '🌗 Tag & Nacht');

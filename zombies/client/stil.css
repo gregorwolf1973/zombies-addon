@@ -38,13 +38,16 @@ button:disabled { opacity: .6; }
   padding-top: max(10px, env(safe-area-inset-top));
 }
 #hud .zeile { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-#hud .anzeigen { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; }
-.anzeige { display: flex; align-items: center; gap: 4px; font-size: 12px; }
-.bar { width: 70px; height: 8px; background: #0008; border-radius: 4px; overflow: hidden; }
+#hud .anzeigen { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.anzeige { display: flex; align-items: center; gap: 5px; font-size: 12px; line-height: 1; }
+.anzeige > span { width: 16px; text-align: center; }
+.bar { width: 96px; height: 9px; background: #0009; border: 1px solid #fff3; border-radius: 5px; overflow: hidden; box-sizing: content-box; }
+.bar.kritisch { animation: balken-blink .7s ease-in-out infinite; }
+@keyframes balken-blink { 50% { opacity: .25; } }
 .bar > div { height: 100%; width: 100%; transition: width .25s; }
 .bar.rot > div { background: #e53935; }
 .bar.blau > div { background: #42a5f5; }
-.bar.gelb > div { background: #ffca28; }
+.bar.orange > div { background: #fb8c00; }
 #sicher {
   display: none; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px;
   background: #263238cc; border: 1px solid #90a4ae66; border-radius: 10px; padding: 5px 8px; width: fit-content;
@@ -57,15 +60,27 @@ button:disabled { opacity: .6; }
   position: fixed; left: 0; right: 0; bottom: 0; display: none; flex-direction: column; align-items: stretch;
   gap: 8px; padding: 0; pointer-events: none; z-index: 5;
 }
-#aktion, #aktion2 { margin-right: max(10px, env(safe-area-inset-right)) !important; }
+/* Aktionsknopf: schwebt mittig-rechts (Position verschiebbar), lange drücken öffnet weitere Aktionen */
+#kontextbox { position: fixed; left: 82%; top: 58%; transform: translate(-50%, -50%); z-index: 6; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+#kontextbox button { width: auto; margin: 0; pointer-events: auto; touch-action: none; }
 #aktion {
-  display: none; align-self: flex-end; font-size: 16px; padding: 12px 16px; border-radius: 14px;
-  background: #ffd54f; color: #2b1d00; box-shadow: 0 3px 10px #0008;
+  display: none; position: relative; min-width: 88px; max-width: 150px; min-height: 64px; font-size: 16px; line-height: 1.2; padding: 10px 14px; border-radius: 18px;
+  background: #ffd54f; color: #2b1d00; box-shadow: 0 3px 12px #000a; border: 2px solid #fff8;
 }
+#aktion.mehr::after { content: '⋯'; position: absolute; top: -9px; right: -6px; background: #263238; color: #fff; border-radius: 10px; padding: 0 6px; font-size: 16px; line-height: 16px; }
 #aktion2 {
-  display: none; align-self: flex-end; font-size: 14px; padding: 9px 14px; border-radius: 14px;
-  background: #ffffff33; color: #fff; box-shadow: 0 3px 10px #0008; pointer-events: auto;
+  display: none; position: absolute; bottom: calc(100% + 8px); white-space: nowrap; font-size: 15px; padding: 12px 16px; border-radius: 14px;
+  background: #263238; color: #fff; border: 1px solid #fff5; box-shadow: 0 3px 10px #000a;
 }
+#kontextbox.menue2 #aktion2 { display: block; }
+#kontextprobe, #kontextfertig { display: none; }
+body.kverschieben #kontextbox { pointer-events: auto; z-index: 28; }
+body.kverschieben #aktion, body.kverschieben #aktion2 { display: none !important; }
+body.kverschieben #kontextprobe {
+  display: block; min-width: 96px; padding: 14px 16px; border-radius: 18px; text-align: center; font-weight: 700; font-size: 16px; line-height: 1.2;
+  background: #ffd54fcc; color: #2b1d00; border: 3px dashed #fff; box-shadow: 0 3px 12px #000a; cursor: grab; touch-action: none; pointer-events: auto;
+}
+body.kverschieben #kontextfertig { display: block; margin-top: 8px; padding: 10px 16px; font-size: 16px; background: #2e7d32; color: #fff; border-radius: 12px; }
 /* Inventar: schmale Leiste ganz unten über die volle Breite (scrollbar, wenn die Plätze nicht passen) */
 #rucksack {
   display: flex; flex-wrap: nowrap; gap: 5px; pointer-events: auto; background: #000a; box-sizing: border-box; width: 100%;
@@ -100,7 +115,14 @@ button:disabled { opacity: .6; }
 #kiste .raster { display: flex; flex-wrap: wrap; gap: 6px; }
 #kiste .ding { font-size: 14px; padding: 7px 10px; border-radius: 9px; background: #ffffff1f; color: #fff; }
 #kiste .leer { opacity: .6; font-size: 13px; }
-#listeknopf { display: none; pointer-events: auto; width: auto; margin: 0 0 3px; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #000a; color: #fff; border: 1px solid #fff3; }
+#listeknopf { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; pointer-events: auto; width: auto; margin: 4px 0 3px; padding: 3px 9px; border-radius: 12px; font-size: 12px; font-weight: 700; background: #000a; color: #fff; border: 1px solid #fff3; }
+#listeknopf:empty, #punkte:empty { display: none; }
+#punkte { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; max-width: 150px; }
+#punkte .pt { width: 13px; height: 13px; border-radius: 50%; box-sizing: border-box; border: 1px solid #fff8; font-size: 12px; line-height: 13px; font-style: normal; text-align: center; }
+#punkte .pt.weg { opacity: .35; }
+#punkte .pt.afk { background: #78909c !important; }
+#punkte .pt.unten { background: #e53935 !important; animation: balken-blink .6s ease-in-out infinite; }
+#hud.listezu #liste { display: none; }
 #liste { list-style: none; margin: 0; padding: 0; font-size: 12px; opacity: .9; }
 #liste li { margin: 2px 0; }
 #liste .punkt { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
@@ -125,9 +147,9 @@ button:disabled { opacity: .6; }
   #aufgabenkoerper { padding: 4px 7px; }
 }
 
-/* Meldungen oben unter der Anzeige, klein und halbdurchsichtig – nicht mehr mitten im Bild */
+/* Meldungen unten direkt über dem Inventar, klein und halbdurchsichtig, höchstens zwei */
 #meldungen {
-  position: fixed; left: 50%; transform: translateX(-50%); top: 4px; width: min(420px, 62vw); opacity: .8;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(54px + env(safe-area-inset-bottom)); width: min(420px, 90vw); opacity: .85; z-index: 21;
   display: flex; flex-direction: column; align-items: center; pointer-events: none;
   font-weight: 600; font-size: 11px; line-height: 1.25;
 }
@@ -178,7 +200,9 @@ button:disabled { opacity: .6; }
 /* Übersichtskarte: klein oben rechts, angetippt groß */
 #kartenbox {
   position: fixed; right: 10px; top: max(36px, calc(env(safe-area-inset-top) + 28px)); width: 180px; display: none; z-index: 6;
+  opacity: var(--kartealpha, .6); transition: opacity .2s;
 }
+#kartenbox:hover, #kartenbox:active, #kartenbox.gross { opacity: 1; }
 #kartenbox canvas {
   display: block; width: 100%; border: 2px solid #fff6; border-radius: 10px; background: #1b2a1b; box-shadow: 0 3px 12px #000a;
   cursor: pointer; touch-action: none;
@@ -192,10 +216,21 @@ button:disabled { opacity: .6; }
   border-radius: 7px; background: #000a; color: #fff; border: 1px solid #fff4;
 }
 #kartenbox.gross .kartenknoepfe button { width: 40px !important; height: 40px; font-size: 22px; }
-#ton {
+#einstellknopf {
   position: fixed; right: 196px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
   margin: 0 !important; padding: 0 !important; font-size: 16px; border-radius: 8px; background: #0007; color: #fff; display: none; z-index: 6;
 }
+/* Spieler-Einstellungen */
+#einstellungen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #0008; z-index: 27; padding: 16px; }
+#einstellungen.offen { display: flex; }
+#einstellungen .fenster { background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 12px 14px; width: min(460px, 100%); max-height: 90vh; overflow: auto; touch-action: pan-y; }
+#einstellungen .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+#einstellzu { width: auto; margin: 0; background: #ffffff22; color: #fff; padding: 6px 12px; font-size: 18px; }
+.eg-titel { font-weight: 700; margin: 14px 0 6px; font-size: 15px; }
+.eg-reihe { display: flex; flex-wrap: wrap; gap: 8px; }
+.eg-reihe button { flex: 1 1 90px; width: auto; margin: 0; min-height: 48px; font-size: 16px; padding: 8px; background: #ffffff1f; color: #fff; }
+.eg-reihe button.an { background: #ffd54f; color: #2b1d00; }
+.eg-hinweis { font-size: 12px; opacity: .75; margin-top: 6px; }
 
 /* Figurenwahl auf der Startseite */
 #figurwahl { display: flex; gap: 12px; align-items: center; }
@@ -316,18 +351,14 @@ body.tastatur #chat { top: calc(var(--vvtop, 0px) + 8px); }
   }
   #menue > #sprachknopf.aus { background: #7f1d1d99 !important; }
   #menue > #fkknopf.neu { background: #f9a825cc !important; }
-  #kartenbox { width: 120px; top: var(--oben); }
+  #kartenbox { top: var(--oben); }
   #hud { padding: max(6px, env(safe-area-inset-top)) 10px 6px; }
   #hud .zeile { margin-bottom: 3px; gap: 8px; }
-  #hud .anzeigen { gap: 6px; flex-wrap: nowrap; }
-  .bar { width: 48px; }
-  #listeknopf { display: inline-block; }
-  #hud.listezu #liste { display: none; }
+  .bar { width: 78px; }
   #liste { font-size: 11px; }
-  #meldungen { width: min(360px, 56vw); font-size: 10px; }
-  #meldungen div:nth-last-child(n+3) { display: none; }
+  #meldungen { font-size: 11px; }
   .platz { width: 38px !important; height: 38px; font-size: 21px; }
-  #aktion { font-size: 15px; padding: 10px 14px; }
+  #aktion { font-size: 15px; }
 }
 
 /* Startseite auf kleinen Höhen: kompakter, oben beginnen */
