@@ -947,7 +947,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
   var ZTYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7', 'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];
+  window.ZTYPEN = ZTYPEN;   // auch für den Karten-Umbau weiter unten (eigener Skriptblock)
   var WFVORGABE = { pistole: { schaden: 34, pause: 0.45 }, gewehr: { schaden: 100, pause: 1.2 }, schrotflinte: { schaden: 70, pause: 0.95 }, mp: { schaden: 28, pause: 0.14 }, mg: { schaden: 30, pause: 0.09 }, armbrust: { schaden: 80, pause: 2.4 }, scharfschuetze: { schaden: 220, pause: 2.8 }, schlaeger: { schaden: 40, pause: 0.6 }, sense: { schaden: 55, pause: 0.85 }, messer: { schaden: 30, pause: 0.45 }, faust: { schaden: 20, pause: 0.7 } };
+  window.WFVORGABE = WFVORGABE;
   function laden() { anfrage('verwaltung/api').then(zeige).catch(function () {}); }
   function regler(id, wert, teil) {
     var el = $(id);
@@ -2829,7 +2831,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   // 🧟 Zombies: Menge/Tempo, dazu nachts und Sichtkegel
   var zk = karteVon('titelZombies');
   rein(P.zombies, zk);
-  if (zk) { var ztt = $('ztTitel'); if (ztt) zk.appendChild(ztt); ZTYPEN.forEach(function (k) { zk.appendChild($('zt_' + k).closest('label')); }); }
+  if (zk) { var ztt = $('ztTitel'); if (ztt) zk.appendChild(ztt); (window.ZTYPEN || []).forEach(function (k) { var el = $('zt_' + k); if (el && el.closest('label')) zk.appendChild(el.closest('label')); }); }
   if (zk) { zeile(zk, 'tnNacht'); zeile(zk, 'tnZLeben'); rein(zk, $('tnZLebenHinweis')); var kegel = $('tnKegel'); if (kegel) zk.appendChild(kegel.closest('label'));
     var ztAnker = $('ztTitel'); if ($('grAbschnitt')) zk.insertBefore($('grAbschnitt'), ztAnker); }
   // 🌍 Welt & Ausbruch
@@ -2852,7 +2854,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   }
   // 🎒 Funde & Waffen
   rein(P.funde, karteVon('titelFunde'));
-  if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden und Schussfolge'); rein(wk, $('wfHinweis')); Object.keys(WFVORGABE).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); rein(wk, $('wfInfo_' + k)); }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
+  if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden und Schussfolge'); rein(wk, $('wfHinweis')); Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); rein(wk, $('wfInfo_' + k)); }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
   if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwScharf'].forEach(function (id) { zeile(waffen, id); }); }
   // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
   rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
@@ -3001,7 +3003,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     if (!akk.length) return;
     function setze(karte, offen) {
       karte.classList.toggle('akk-offen', offen);
-      var kopf = karte.querySelector(':scope > .akk-kopf');
+      var kopf = karte.querySelector(':scope > h2 > .akk-kopf');
       kopf.setAttribute('aria-expanded', offen ? 'true' : 'false');
       kopf.querySelector('.akk-pfeil').textContent = offen ? '▾' : '▸';
       var inh = karte.querySelector(':scope > .akk-huelle > .akk-inhalt');

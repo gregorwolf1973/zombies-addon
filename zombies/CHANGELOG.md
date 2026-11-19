@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.48.2 – 19.11.2026
+
+- Verwaltung: zwei Skriptfehler behoben („ZTYPEN/WFVORGABE is not defined“ beim Umsortieren der Karten, Akkordeon fand seinen Kopf nicht) – Zombietypen- und Waffenkarten werden wieder richtig einsortiert, Karten klappen sauber auf und zu.
+
 ## 0.48.1 – 19.11.2026
 
 - Schützenpanzer Puma (Stützpunkt und Evakuierungspanzer in den Isarauen) als Draufsicht aus einem 3D-Modell statt gezeichnet: Wanne und drehbarer Turm getrennt, Turm sitzt wie im Original links hinter der Mitte, Mündungsfeuer an der echten Rohrspitze.
