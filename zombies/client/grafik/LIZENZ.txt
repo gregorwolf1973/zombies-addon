@@ -38,3 +38,8 @@ Möbel (grafik/moebel.webp, moebel.json): mit Google Gemini für dieses Spiel er
 (64 px je Kachel) skaliert und angeordnet mit tools/gemini_moebel_schneiden.py.
 
 App-Icons und Favicon (client/icon-*.png, favicon*, apple-touch-icon.png): aus einem von Gregor bereitgestellten Zombie-Bild, Hintergrund mit Google Gemini entfernt (19.11.2026).
+
+Schützenpanzer Puma (grafik/puma_wanne.webp, puma_turm.webp): Draufsichten, gerendert aus dem 3D-Modell „SPz Puma“
+von 42manako, https://sketchfab.com/3d-models/spz-puma-8e7d946d4b3d4fdeaf458a3fc4226e1b – dort als CC-BY 4.0 angegeben
+(laut Beschreibung des Hochladers aus dem Spiel „Call to Arms“ übernommen). Gerendert mit tools/glb_draufsicht
+(three.js, Wanne und Turm getrennt), verkleinert mit tools/puma_bilder.py.

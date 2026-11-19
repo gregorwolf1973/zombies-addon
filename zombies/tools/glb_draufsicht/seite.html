@@ -1,0 +1,38 @@
+<!doctype html><html><body style="margin:0;background:#0000">
+<pre id="out">LAEUFT</pre>
+<script type="importmap">{"imports":{"three":"./lib/three/three.module.js","three/addons/":"./lib/three/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const out = document.getElementById('out');
+const q = new URLSearchParams(location.search);
+const PX = +(q.get('px') || 8);          // Bildpunkte je Modelleinheit
+const TURM = ['turret', 'gun', 'rocket00', 'rocket01', 'spike_lr'];
+try {
+  const g = await new GLTFLoader().loadAsync('spz_puma.glb');
+  const root = g.scene; root.updateMatrixWorld(true);
+  const box = o => new THREE.Box3().setFromObject(o);
+  const fmt = b => [b.min, b.max].map(v => [v.x, v.y, v.z].map(n => n.toFixed(2)).join(',')).join(' .. ');
+  const info = ['GESAMT ' + fmt(box(root))];
+  root.traverse(o => { if (o.isMesh) return; const b = box(o); if (!b.isEmpty() && o.name && !o.name.includes('#')) info.push(o.name + ' <' + (o.parent?.name || '') + '> ' + fmt(b)); });
+  for (const n of ['turret','gun_rot','gun']) { const o = root.getObjectByName(n); if (o) { const v = o.getWorldPosition(new THREE.Vector3()); info.push('URSPRUNG ' + n + ' ' + [v.x,v.y,v.z].map(z=>z.toFixed(2)).join(',')); } }
+  if (q.get('nur') === 'info') { out.textContent = info.join('\n'); throw 0; }
+  // Teile auswählen: wanne = alles ohne Turm, turm = nur Turm
+  const istTurm = o => { for (let p = o; p; p = p.parent) if (TURM.includes(p.name)) return true; return false; };
+  const teil = q.get('teil') || 'alles';
+  root.traverse(o => { if (o.isMesh) o.visible = teil === 'alles' || (teil === 'turm') === istTurm(o); });
+  const b = new THREE.Box3(); root.traverse(o => { if (o.isMesh && o.visible) b.expandByObject(o); });
+  // Draufsicht: Kamera über dem Modell (+Y oben), Bildrichtung: Modell-X nach rechts, Modell-Z nach unten
+  const w = Math.ceil((b.max.x - b.min.x) * PX) + 4, h = Math.ceil((b.max.z - b.min.z) * PX) + 4;
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(w, h); r.setClearColor(0x000000, 0); r.outputColorSpace = THREE.SRGBColorSpace;
+  const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2, hw = w / PX / 2, hh = h / PX / 2;
+  const cam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.1, 1000);
+  cam.position.set(cx, b.max.y + 50, cz); cam.up.set(0, 0, -1); cam.lookAt(cx, b.min.y, cz);
+  const sz = new THREE.Scene(); sz.add(root);
+  sz.add(new THREE.AmbientLight(0xffffff, 1.2));
+  const sonne = new THREE.DirectionalLight(0xffffff, 2.2); sonne.position.set(cx - 20, b.max.y + 60, cz - 30); sonne.target.position.set(cx, 0, cz); sz.add(sonne, sonne.target);
+  r.render(sz, cam);
+  out.textContent = 'BILD ' + JSON.stringify({ w, h, min: b.min, max: b.max, px: PX }) + '\n' + r.domElement.toDataURL('image/png');
+} catch (e) { if (e !== 0) out.textContent = 'FEHLER ' + (e && e.stack || e); }
+</script></body></html>

@@ -606,6 +606,10 @@ export function zeichnePumaWanne(ctx, L = 72, B = 34) {
 
 // Puma-Turm: unbemannt, 30-mm-Maschinenkanone nach vorn (+x); Drehpunkt = (PUMA_TURM.mx, PUMA_TURM.my) im Bild
 export const PUMA_TURM = { b: 96, h: 48, mx: 30, my: 24 };
+// Puma-Draufsicht aus dem 3D-Modell (grafik/puma_wanne.webp, puma_turm.webp; tools/glb_draufsicht + tools/puma_bilder.py).
+// Maße in Modelleinheiten: Wannenlänge, Bildpunkte je Einheit, Turm-Drehpunkt relativ zur Wannenmitte (x = Bug, y = rechts),
+// Drehpunkt im Turmbild (Bildpunkte) und Abstand Drehpunkt → Mündung
+export const PUMA_BILD = { laenge: 146.06, px: 2.4, turmX: -25.36, turmY: -8.36, turmMx: 62.4, turmMy: 55.6, muendung: 72.78 };
 export function zeichnePumaTurm(ctx) {
   ctx.save(); ctx.translate(PUMA_TURM.mx, PUMA_TURM.my);
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(3, 4, 17, 13, 0, 0, TAU); ctx.fill();

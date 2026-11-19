@@ -9,7 +9,7 @@ import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenT
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
-import { PUMA_TURM, PUMA_SKALA, zeichnePumaTurm, zeichnePumaWanne, handelPartner } from './stuetzpunkt.mjs';
+import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
@@ -620,6 +620,8 @@ class Ort extends Phaser.Scene {
     this.load.json('heldenliste', 'grafik/helden160.json');
     // Auto-Bogen (CC0, tools/autos_schneiden.py); fehlt er, bleiben die Autos gezeichnet
     this.load.image('autos', 'grafik/autos.webp');
+    this.load.image('puma-wanne-bild', 'grafik/puma_wanne.webp');   // Draufsicht aus dem 3D-Modell (Bug rechts)
+    this.load.image('puma-turm-bild', 'grafik/puma_turm.webp');
     this.load.json('autosliste', 'grafik/autos.json');
     this.load.image('moebel', 'grafik/moebel.webp');
     this.load.json('moebelliste', 'grafik/moebel.json');
@@ -1202,12 +1204,13 @@ class Ort extends Phaser.Scene {
       : art === 'polizei' && sp ? 'fz-polizei-s' + anim : 'fz-' + art;
     if (this.textures.exists(key)) return key;
     const breit = art === 'bus' || art === 'evakuierung' ? 136 : art === 'laster' ? 92 : art === 'feuerwehr' ? 84 : 60;
-    const hoch = panzer ? 56 : art === 'bus' || art === 'evakuierung' ? 40 : sp && art === 'laster' ? 46 : 34;
+    const hoch = panzer ? 68 : art === 'bus' || art === 'evakuierung' ? 40 : sp && art === 'laster' ? 46 : 34;
     const t = this.textures.createCanvas(key, breit, hoch), c = t.getContext();
     if (panzer) {
-      const k = 1.35;   // Puma-Wanne und -Turm (client/stuetzpunkt.mjs), Bug nach rechts wie bei allen Fahrzeugen
-      c.save(); c.translate(breit / 2, hoch / 2); c.scale(k, k); zeichnePumaWanne(c, 84, 34); c.restore();
-      c.save(); c.translate(breit / 2 - 6 * k - PUMA_TURM.mx * k, hoch / 2 - PUMA_TURM.my * k); c.scale(k, k); zeichnePumaTurm(c); c.restore();
+      // Puma-Draufsicht aus dem 3D-Modell (Wanne + Turm nach vorn), Bug nach rechts wie bei allen Fahrzeugen; Wanne 113 px lang
+      const m = this.pumaMasse(113), wb = this.textures.get('puma-wanne').getSourceImage(), tb = this.textures.get('puma-turm').getSourceImage();
+      c.save(); c.translate(breit / 2, hoch / 2); c.scale(m.skala, m.skala); c.drawImage(wb, -wb.width / 2, -wb.height / 2);
+      c.translate(PUMA_BILD.turmX * PUMA_BILD.px, PUMA_BILD.turmY * PUMA_BILD.px); c.drawImage(tb, -PUMA_BILD.turmMx - m.R, -PUMA_BILD.turmMy - m.R); c.restore();
     } else if (sp) {
       // Fahrzeuglänge im Verkehr: Laster 90 px, Polizei 50 px (LAENGE in server/verkehr.mjs); Sprite auf diese Länge strecken
       const e = art === 'polizei' ? autoAnimEintrag(sp, anim) : sp, soll = art === 'laster' ? 90 : 50, k = soll / e.laenge;
@@ -1864,6 +1867,30 @@ class Ort extends Phaser.Scene {
     this.zeichneTor();
   }
 
+  // Puma-Texturen 'puma-wanne'/'puma-turm' aus den Modell-Draufsichten (mit Rand R und weichem Schlagschatten, einmal angelegt);
+  // liefert für eine Wannenlänge L (Spielpixel) f = Spielpixel je Modelleinheit und den Bildmaßstab skala
+  pumaMasse(L) {
+    const R = 8;
+    for (const [teil, schatten] of [['wanne', 0.45], ['turm', 0.35]]) {
+      const key = 'puma-' + teil;
+      if (this.textures.exists(key)) continue;
+      const img = this.textures.get(key + '-bild').getSourceImage();
+      const tex = this.textures.createCanvas(key, img.width + 2 * R, img.height + 2 * R), c = tex.getContext();
+      c.shadowColor = `rgba(0,0,0,${schatten})`; c.shadowBlur = 5; c.shadowOffsetX = 3; c.shadowOffsetY = 4;
+      c.drawImage(img, R, R); tex.refresh();
+    }
+    const f = L / PUMA_BILD.laenge;
+    return { f, skala: f / PUMA_BILD.px, R };
+  }
+
+  // Turm auf den Turmring der Wanne setzen (Versatz im Wannen-Rahmen, dreht mit der Wanne)
+  pumaTurmSetzen() {
+    const o = this.stuetzpunktObj, w = o?.wanne, v = o?.pumaVersatz;
+    if (!w || !v || !o.turm) return;
+    const c = Math.cos(w.rotation), s = Math.sin(w.rotation);
+    o.turm.setPosition(w.x + c * v.x - s * v.y, w.y + s * v.x + c * v.y);
+  }
+
   // Bundeswehr-Stützpunkt (client/stuetzpunkt.mjs): Soldaten, Ärzte, Verwundete und der Puma-Turm als eigene Objekte, einmal beim
   // Aufbau der Welt angelegt (nur draußen sichtbar, über aussenObjekte). Verhalten kommt vom Server später; hier nur Darstellung.
   baueStuetzpunktFiguren() {
@@ -1872,14 +1899,15 @@ class Ort extends Phaser.Scene {
     if (!sp) return;
     const pumaT = sp.teile.find(t => t.art === 'puma');
     if (pumaT) {
-      if (!this.textures.exists('puma-turm')) { const tex = this.textures.createCanvas('puma-turm', PUMA_TURM.b, PUMA_TURM.h); zeichnePumaTurm(tex.getContext()); tex.refresh(); }
-      o.turm = this.add.image(pumaT.turm.x, pumaT.turm.y, 'puma-turm').setOrigin(PUMA_TURM.mx / PUMA_TURM.b, PUMA_TURM.my / PUMA_TURM.h).setRotation(pumaT.turm.winkel).setScale(PUMA_SKALA).setDepth(5.1);
-      // Wanne als eigenes Bild (der Puma fährt; Position/Richtung kommen aus dem State: bwX, bwY, bwW)
-      if (!this.textures.exists('puma-wanne')) {
-        const tex = this.textures.createCanvas('puma-wanne', pumaT.laenge + 12, pumaT.breite + 12), c = tex.getContext();
-        c.translate((pumaT.laenge + 12) / 2, (pumaT.breite + 12) / 2); zeichnePumaWanne(c, pumaT.laenge, pumaT.breite); tex.refresh();
-      }
-      o.wanne = this.add.image(pumaT.x, pumaT.y, 'puma-wanne').setRotation(pumaT.winkel).setScale(PUMA_SKALA).setDepth(5);
+      // Wanne und Turm als eigene Bilder (Draufsicht aus dem 3D-Modell); der Puma fährt (bwX, bwY, bwW), der Turm dreht (bwTurm)
+      // und sitzt wie im Original links hinter der Mitte (Versatz dreht mit der Wanne, siehe pumaTurmSetzen)
+      const m = this.pumaMasse(pumaT.laenge), tb = this.textures.get('puma-turm').getSourceImage(), k = PUMA_SKALA * m.f;
+      o.pumaVersatz = { x: PUMA_BILD.turmX * k, y: PUMA_BILD.turmY * k };
+      o.pumaMuendung = PUMA_BILD.muendung * k;
+      o.wanne = this.add.image(pumaT.x, pumaT.y, 'puma-wanne').setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(5);
+      o.turm = this.add.image(0, 0, 'puma-turm').setOrigin((PUMA_BILD.turmMx + m.R) / tb.width, (PUMA_BILD.turmMy + m.R) / tb.height)
+        .setRotation(pumaT.turm.winkel).setScale(PUMA_SKALA * m.skala).setDepth(5.1);
+      this.pumaTurmSetzen();
     }
     this.bwLicht = new BwLicht(this, sp);
     const soldat = (x, y, blick, phase, n = -1) => {
@@ -1933,7 +1961,7 @@ class Ort extends Phaser.Scene {
       o.wanne.x += (st.bwX - o.wanne.x) * k; o.wanne.y += (st.bwY - o.wanne.y) * k;
       let dw = st.bwW - o.wanne.rotation; dw = Math.atan2(Math.sin(dw), Math.cos(dw));
       o.wanne.setRotation(o.wanne.rotation + dw * k);
-      o.turm.setPosition(o.wanne.x, o.wanne.y);
+      this.pumaTurmSetzen();
       // Kettenrasseln (Ereignis „Panzer fährt“), nur solange er sich bewegt, draußen und in Hörweite
       const faehrt = o.letztX !== undefined && Math.hypot(st.bwX - o.letztX, st.bwY - o.letztY) > 0.05;
       o.letztX = st.bwX; o.letztY = st.bwY;
@@ -1976,7 +2004,7 @@ class Ort extends Phaser.Scene {
   bwSchuss(m) {
     const o = this.stuetzpunktObj, w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), c = Math.cos(w), sn = Math.sin(w);
     const kanone = m.art === 'kanone', vorn = kanone ? 58 * PUMA_SKALA : 30;
-    const mx = m.x1 + c * vorn, my = m.y1 + sn * vorn;
+    const pt = kanone && o?.turm, mx = pt ? o.turm.x + c * o.pumaMuendung : m.x1 + c * vorn, my = pt ? o.turm.y + sn * o.pumaMuendung : m.y1 + sn * vorn;
     if (!kanone) {
       const sold = o?.soldaten.find(q => q.n === m.n);
       if (sold) { sold.schussBis = this.time.now + 260; sold.w = w; }
