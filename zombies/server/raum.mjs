@@ -2124,6 +2124,7 @@ export class SpielRaum extends Room {
 
   laerm(x, y, weite, durchWaende, ebene = '', ausser = null) {
     const welt = this.wv(ebene);
+    if (!ebene && !ausser) this.welle?.laermHoeren(x, y, weite);   // die Zombiehorde dreht ggf. kurz zum Lärm
     for (const [id, z] of this.state.zombies) {
       if (z === ausser || (z.ebene ?? '') !== ebene) continue;
       if (Math.hypot(z.x - x, z.y - y) > weite) continue;

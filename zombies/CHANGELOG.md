@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.47.0 – 19.11.2026
+
+- Zombiehorde mit Zielen: Safe Rooms, Läden, Stützpunkt, Lärm, Menschengruppen, Nähe von Spielern, Kreuzungen; neues Ziel alle 2–5 Minuten oder bei Ankunft, Lärm lenkt um.
+- Kein Gleichschritt mehr: eigenes Tempo, Schlängeln, Pausen und Taumeln je Zombie, lockere Schwarmbewegung mit Nachzüglern.
+- Aufsplitten: Kommt die Horde Spielern, Bots, Soldaten oder Menschen nahe (Vorgabe 18 m), lösen sich Angriffstrupps (5–15 Zombies) und greifen an; der Rest zieht weiter. Spieler am Boden bleiben tabu.
+- Neue Regler in der Verwaltung: Zielwechsel, Truppgröße, Angriffsreichweite.
+
 ## 0.46.4 – 19.11.2026
 
 - Zombiehorde erscheint hinter dem Bildrand (auch der vorderste Zombie, für alle Spieler) und läuft dann ins Bild ein; auf kleinen Karten schrittweise näher.

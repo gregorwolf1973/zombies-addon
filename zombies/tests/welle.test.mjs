@@ -237,3 +237,125 @@ test('Zombies lassen am Boden liegende Spieler in Ruhe', async () => {
     assert.ok(p.hp === 0);
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
+
+// ---- Horde: Ziele, Angriffstrupps, kein Gleichschritt ----
+
+test('Einstellungen: Hordenziel, Trupp und Reichweite werden bereinigt', () => {
+  const v = vorgaben().zombies;
+  assert.equal(v.hordeZielMin, 2); assert.equal(v.hordeZielMax, 5);
+  assert.equal(v.hordeTruppMin, 5); assert.equal(v.hordeTruppMax, 15); assert.equal(v.hordeReichweite, 18);
+  const z = bereinige({ zombies: { hordeZielMin: 9, hordeZielMax: 3, hordeTruppMin: 40, hordeTruppMax: 10, hordeReichweite: 999 } }).zombies;
+  assert.ok(z.hordeZielMax >= z.hordeZielMin && z.hordeTruppMax >= z.hordeTruppMin && z.hordeReichweite <= 60);
+  assert.equal(bereinige({ zombies: { hordeReichweite: 1 } }).zombies.hordeReichweite, 5);
+});
+
+test('Horde: Zielwechsel nach Ablauf der Zeit (2–5 echte Minuten)', async () => {
+  const { c, raum, p } = await beitreten('Zielzeit');
+  try {
+    einst({ welleMinuten: 20, welleMin: 30, welleMax: 30, hordeZielMin: 2, hordeZielMax: 3 });
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.unten = true;
+    raum.welle.erzeugen('west');
+    const a = raum.welle.aktiv;
+    const dauern = Array.from({ length: 50 }, () => raum.welle.zielDauer());
+    assert.ok(dauern.every(d => d >= 120 && d <= 180), 'Zieldauer außerhalb 2–3 min');
+    assert.ok(a.zielUhr >= 120 && a.zielUhr <= 180);
+    const ziele0 = a.ziele; a.zielUhr = 1; a.pruef.t = 0;
+    for (let i = 0; i < 30; i++) raum.welle.schritt(0.05);
+    assert.ok(raum.welle.aktiv.ziele > ziele0, 'Ziel wurde nach Ablauf der Zeit nicht gewechselt');
+    assert.ok(raum.welle.aktiv.zielUhr >= 100, 'Zeitgeber nicht neu gesetzt');
+    raum.welle.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+// stellt den Spieler frei und draußen neben einen Wellen-Zombie
+function spielerNebenHorde(raum, p) {
+  const a = raum.welle.aktiv, z = raum.state.zombies.get([...a.ids][0]);
+  for (let w = 0; w < 6.3; w += 0.4) {
+    const x = z.x + Math.cos(w) * 70, y = z.y + Math.sin(w) * 70;
+    if (frei(raum.welt, x, y, 12)) { p.x = x; p.y = y; return true; }
+  }
+  return false;
+}
+
+test('Horde: Trupp löst sich bei Spieler in Reichweite und greift an; Liegende bleiben unangetastet', async () => {
+  const { c, raum, p } = await beitreten('Trupp');
+  try {
+    einst({ welleMinuten: 20, welleMin: 40, welleMax: 40, hordeTruppMin: 6, hordeTruppMax: 6, hordeReichweite: 18 });
+    p.ebene = ''; p.unten = true;
+    raum.welle.erzeugen('west');
+    const a = raum.welle.aktiv, gesamt = a.ids.size;
+    assert.ok(spielerNebenHorde(raum, p), 'kein freier Platz');
+    // am Boden: nichts passiert
+    raum.welle.schritt(0.6);
+    assert.equal(a.trupps.length, 0, 'Trupp gegen Liegenden');
+    assert.ok([...raum.zombieInfo.values()].every(i => !i.ziel));
+    // aufrecht: Trupp
+    p.unten = false;
+    raum.welle.schritt(0.6);
+    assert.equal(a.trupps.length, 1, 'kein Trupp');
+    const t = a.trupps[0], sid = [...raum.state.spieler.keys()][0];
+    assert.ok(t.ids.size >= 3 && t.ids.size < gesamt, `Truppgröße ${t.ids.size}`);
+    assert.ok([...t.ids].every(id => raum.zombieInfo.get(id).ziel === sid && !a.ids.has(id)), 'Trupp jagt nicht');
+    assert.equal(a.ids.size + t.ids.size, gesamt);
+    // derselbe Spieler bekommt nicht gleich noch einen
+    raum.welle.schritt(0.6); assert.equal(a.trupps.length, 1);
+    // Spieler geht zu Boden: Trupp lässt los (Jagdlogik) und löst sich auf
+    p.unten = true;
+    for (const id of t.ids) raum.zombieSchritt(id, raum.state.zombies.get(id), 0.1);
+    assert.ok([...t.ids].every(id => !raum.zombieInfo.get(id).ziel), 'Zombie jagt Liegenden weiter');
+    raum.welle.schritt(0.6);
+    assert.equal(a.trupps.length, 0, 'Trupp bleibt trotz Liegendem');
+    raum.welle.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Horde: Trupp kehrt zurück oder streunt, wenn das Ziel 20–30 s außer Sicht ist', async () => {
+  const { c, raum, p } = await beitreten('Truppende');
+  try {
+    einst({ welleMinuten: 20, welleMin: 40, welleMax: 40, hordeTruppMin: 8, hordeTruppMax: 8 });
+    p.ebene = ''; p.unten = false;
+    raum.welle.erzeugen('west');
+    const a = raum.welle.aktiv, gesamt = a.ids.size;
+    assert.ok(spielerNebenHorde(raum, p));
+    raum.welle.schritt(0.6);
+    assert.equal(a.trupps.length, 1);
+    const t = a.trupps[0], ids = [...t.ids];
+    p.x = 2 * KACHEL; p.y = 2 * KACHEL; p.ebene = 'h0eg';   // Spieler im Haus: nicht mehr angreifbar
+    raum.welle.schritt(0.6);
+    assert.equal(a.trupps.length, 0);
+    const zurueck = ids.filter(id => a.ids.has(id)).length;
+    const streunt = ids.filter(id => raum.zombieInfo.get(id) && !raum.zombieInfo.get(id).welle).length;
+    assert.equal(zurueck + streunt, ids.length);
+    assert.ok(a.ids.size >= gesamt - ids.length);
+    // außer Sicht: Spieler draußen, aber weit weg
+    p.ebene = ''; p.unten = false;
+    raum.welle.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Horde: kein Gleichschritt – Tempi, Richtungen und Wege streuen', async () => {
+  const { c, raum, p } = await beitreten('Streuung');
+  try {
+    einst({ welleMinuten: 20, welleMin: 80, welleMax: 80 });
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.unten = true;
+    raum.welle.erzeugen('west');
+    const ids = [...raum.welle.aktiv.ids];
+    const tempi = ids.map(id => raum.zombieInfo.get(id).wTempo);
+    assert.ok(tempi.every(x => x >= 0.8 && x <= 1.2), 'Tempo außerhalb ±20 %');
+    assert.ok(streuung(tempi) > 0.07, `Tempi zu gleichförmig (${streuung(tempi)})`);
+    const start = ids.map(id => ({ x: raum.state.zombies.get(id).x, y: raum.state.zombies.get(id).y }));
+    const winkel = [];
+    for (let i = 0; i < 160; i++) {
+      raum.welle.schritt(0.05);
+      raum.baueZombieRaster();
+      for (const [id, z] of raum.state.zombies) raum.zombieSchritt(id, z, 0.05);
+      if (i % 20 === 0) winkel.push(ids.map(id => raum.state.zombies.get(id)?.richtung ?? 0));
+    }
+    raum.zRaster = null;
+    const weg = ids.map((id, k) => { const z = raum.state.zombies.get(id); return Math.hypot(z.x - start[k].x, z.y - start[k].y); });
+    assert.ok(streuung(weg) / (weg.reduce((x, y) => x + y, 0) / weg.length) > 0.05, 'zurückgelegte Wege zu gleich');
+    const rs = winkel.map(w => { const sx = w.reduce((x, y) => x + Math.cos(y), 0) / w.length, sy = w.reduce((x, y) => x + Math.sin(y), 0) / w.length; return 1 - Math.hypot(sx, sy); });
+    assert.ok(rs.some(r => r > 0.01), 'Blickrichtungen laufen im Gleichschritt');
+    raum.welle.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});

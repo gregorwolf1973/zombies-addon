@@ -109,6 +109,8 @@ export function bereinige(e = {}, alt = {}) {
   // Wellen: 0 = aus, sonst mindestens alle 5 Minuten; Maximum nie kleiner als Minimum
   if (z.welle > 0 && z.welle < 5) z.welle = 5;
   z.welleMin = Math.round(zahl(z.welleMin, 5, 1000, 20)); z.welleMax = Math.max(z.welleMin, Math.round(zahl(z.welleMax, 5, 1000, 50)));
+  z.hordeZielMin = Math.round(zahl(z.hordeZielMin, 1, 30, 2) * 2) / 2; z.hordeZielMax = Math.max(z.hordeZielMin, Math.round(zahl(z.hordeZielMax, 1, 30, 5) * 2) / 2);
+  z.hordeTruppMin = Math.round(zahl(z.hordeTruppMin, 1, 100, 5)); z.hordeTruppMax = Math.max(z.hordeTruppMin, Math.round(zahl(z.hordeTruppMax, 1, 100, 15)));
   return {
     zugangscode: String(e.zugangscode ?? a.zugangscode ?? '').trim().slice(0, 40),
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
@@ -150,6 +152,11 @@ export function bereinige(e = {}, alt = {}) {
       welle: Math.round(zahl(z.welle, 0, 120, 20)),      // alle so viele Spielminuten kommt eine Zombiewelle (0 = aus; sonst mindestens 5)
       welleMin: Math.round(zahl(z.welleMin, 5, 1000, 20)), // Größe der Welle: kleinste Zahl
       welleMax: Math.round(zahl(z.welleMax, 5, 1000, 50)), // … größte Zahl (höchstens 1000)
+      hordeZielMin: z.hordeZielMin,                      // Horde wechselt ihr Ziel alle … bis … echte Minuten (Vorgabe 2–5)
+      hordeZielMax: z.hordeZielMax,
+      hordeTruppMin: z.hordeTruppMin,                    // Angriffstrupp je Ziel: Größe von … bis … Zombies (Vorgabe 5–15, wächst mit der Horde)
+      hordeTruppMax: z.hordeTruppMax,
+      hordeReichweite: Math.round(zahl(z.hordeReichweite, 5, 60, 18)), // so nah (Meter) an Spielern/Bots/Soldaten/Menschen löst sich ein Trupp
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
     sprache: {
@@ -193,7 +200,7 @@ export function bereinige(e = {}, alt = {}) {
 export function vorgaben() {
   return {
     zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, zombieGroesse: 100, leichenGroesse: 100, heldenGroesse: 85, groesseGesamt: 100, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { geretsried: 12, isarauen: 12 }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
-    zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
+    zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50, hordeZielMin: 2, hordeZielMax: 5, hordeTruppMin: 5, hordeTruppMax: 15, hordeReichweite: 18, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4 },
     faehigkeiten: { an: true, xpFaktor: 100 },

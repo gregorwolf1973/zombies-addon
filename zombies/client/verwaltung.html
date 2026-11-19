@@ -557,6 +557,48 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
         <span class="wert" id="welleMaxWert">50</span>
       </div>
     </div>
+
+    <div class="feld">
+      <label for="hordeZielMin">Horde wechselt ihr Ziel: frühestens nach</label>
+      <div class="wertzeile">
+        <input type="range" id="hordeZielMin" min="1" max="30" step="0.5">
+        <span class="wert" id="hordeZielMinWert">2 min</span>
+      </div>
+      <p class="hinweis">Die Horde marschiert auf ein Ziel zu (Safe-Room, Laden, Stützpunkt, Lärm, Menschen, Spielernähe, Kreuzung) und wählt nach dieser Zeit (echte Minuten) oder bei Ankunft ein neues.</p>
+    </div>
+
+    <div class="feld">
+      <label for="hordeZielMax">… spätestens nach</label>
+      <div class="wertzeile">
+        <input type="range" id="hordeZielMax" min="1" max="30" step="0.5">
+        <span class="wert" id="hordeZielMaxWert">5 min</span>
+      </div>
+    </div>
+
+    <div class="feld">
+      <label for="hordeTruppMin">Angriffstrupp: mindestens</label>
+      <div class="wertzeile">
+        <input type="range" id="hordeTruppMin" min="1" max="100" step="1">
+        <span class="wert" id="hordeTruppMinWert">5</span>
+      </div>
+      <p class="hinweis">Kommt die Horde in Reichweite von Spielern, Bots, Soldaten oder Menschen, lösen sich die nächsten Zombies als Trupp und jagen sie; die Horde zieht weiter. Die Größe wächst mit der Hordengröße (Stützpunkt: doppelt).</p>
+    </div>
+
+    <div class="feld">
+      <label for="hordeTruppMax">… höchstens</label>
+      <div class="wertzeile">
+        <input type="range" id="hordeTruppMax" min="1" max="100" step="1">
+        <span class="wert" id="hordeTruppMaxWert">15</span>
+      </div>
+    </div>
+
+    <div class="feld">
+      <label for="hordeReichweite">Reichweite für Trupps</label>
+      <div class="wertzeile">
+        <input type="range" id="hordeReichweite" min="5" max="60" step="1">
+        <span class="wert" id="hordeReichweiteWert">18 m</span>
+      </div>
+    </div>
   </section>
 
   <!-- Spiel -->
@@ -2374,13 +2416,14 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     $("haeuserWert").textContent = faktor(Number(haeuser.value));
     $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
     var wz = d.einstellungen && d.einstellungen.zombies || {};
-    [["welle", wz.welle === undefined ? 20 : wz.welle], ["welleMin", wz.welleMin || 20], ["welleMax", wz.welleMax || 50]].forEach(function (p) {
+    [["welle", wz.welle === undefined ? 20 : wz.welle], ["welleMin", wz.welleMin || 20], ["welleMax", wz.welleMax || 50],
+      ["hordeZielMin", wz.hordeZielMin || 2], ["hordeZielMax", wz.hordeZielMax || 5], ["hordeTruppMin", wz.hordeTruppMin || 5], ["hordeTruppMax", wz.hordeTruppMax || 15], ["hordeReichweite", wz.hordeReichweite || 18]].forEach(function (p) {
       var el = $(p[0]);
       if (!zeitGeber[p[0]] && !istFokussiert(el)) el.value = p[1];
       $(p[0] + "Wert").textContent = welleText(p[0], Number(el.value));
     });
   }
-  function welleText(id, v) { return id === "welle" ? (v ? v + " min" : "aus") : String(v); }
+  function welleText(id, v) { return id === "welle" ? (v ? v + " min" : "aus") : id.indexOf("hordeZiel") === 0 ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : String(v); }
 
   function rendereSpiel(d) {
     var e = d.einstellungen || {};
@@ -2536,7 +2579,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       sendenTeil("zombies", "tempo", Number(tempo.value));
     });
 
-    ["welle", "welleMin", "welleMax"].forEach(function (id) {
+    ["welle", "welleMin", "welleMax", "hordeZielMin", "hordeZielMax", "hordeTruppMin", "hordeTruppMax", "hordeReichweite"].forEach(function (id) {
       var el = $(id);
       el.addEventListener("input", function () { $(id + "Wert").textContent = welleText(id, Number(el.value)); });
       el.addEventListener("change", function () {
