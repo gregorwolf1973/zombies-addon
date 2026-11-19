@@ -418,19 +418,19 @@ test('Bundeswehr-Beute: Granate/MP/MG nur in bw_kiste und bw_container; Bots ord
 
 test('Einstellungen: Bundeswehr (aktiv, Falltage) und Reichweiten von MP/MG werden bereinigt', () => {
   const v = bereinige({});
-  assert.deepEqual(v.bundeswehr, { aktiv: true, falltage: 3 });
+  assert.deepEqual(v.bundeswehr, { aktiv: true, falltage: 3, pumaPause: 2.5 });
   assert.equal(v.reichweite.mp, 30); assert.equal(v.reichweite.mg, 45);
   const e = bereinige({ bundeswehr: { aktiv: 'ja', falltage: 99 }, reichweite: { mp: 500, mg: 1 } });
   assert.equal(e.bundeswehr.aktiv, true); assert.equal(e.bundeswehr.falltage, 30);
   assert.equal(e.reichweite.mp, 80); assert.equal(e.reichweite.mg, 5);
   assert.equal(bereinige({ bundeswehr: { aktiv: false, falltage: 0 } }).bundeswehr.aktiv, false);
   assert.equal(bereinige({ bundeswehr: { falltage: -4 } }, e).bundeswehr.falltage, 0);
-  assert.deepEqual(SpielRaum.einstellungen.bundeswehr, { aktiv: true, falltage: 3 });
+  assert.deepEqual(SpielRaum.einstellungen.bundeswehr, { aktiv: true, falltage: 3, pumaPause: 2.5 });
 });
 
 test('Handel: Preise, Bezahlung mit dem, was man am meisten hat', () => {
   assert.deepEqual(bezahlung(['essen', 'essen', 'wasser', 'bretter'], HANDEL.arzt.angebote[0].kostet), ['essen', 'essen']);
-  assert.deepEqual(bezahlung(['wasser', 'bretter', 'bretter', 'bretter'], HANDEL.arzt.angebote[0].kostet), ['bretter', 'bretter']);
+  assert.deepEqual(bezahlung(['wasser', 'schokoriegel', 'schokoriegel', 'schokoriegel'], HANDEL.arzt.angebote[0].kostet), ['schokoriegel', 'schokoriegel']);
   assert.equal(bezahlung(['wasser'], HANDEL.arzt.angebote[1].kostet), null);
   assert.equal(bezahlung(['essen', 'wasser'], HANDEL.soldat.angebote[0].kostet), null, 'Granate nur für 2 Konserven');
   assert.deepEqual(bezahlung(['essen', 'essen', 'wasser'], HANDEL.soldat.angebote[0].kostet), ['essen', 'essen']);
@@ -457,9 +457,10 @@ test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, M
   let r = await sende('arzt', 'verband');
   assert.equal(r.ok, true, r.text);
   assert.deepEqual(hat(), ['bretter', 'verband', 'wasser'], 'zwei Konserven bezahlt (davon hatte er am meisten)');
+  rucksack('bretter', 'verband', 'wasser', 'schokoriegel');   // Bretter zahlen nicht mehr (höchstens 3 Gegenstandstypen)
   r = await sende('arzt', 'spritze');
   assert.equal(r.ok, true);
-  assert.deepEqual(hat(), ['spritze', 'verband']);
+  assert.deepEqual(hat(), ['bretter', 'spritze', 'verband']);
   // ohne Mittel: abgelehnt, nichts passiert
   rucksack('wasser', 'verband');   // Verband bezahlt nicht beim Arzt
   r = await sende('arzt', 'verband');
@@ -483,7 +484,7 @@ test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, M
   r = await sende('soldat', 'granate');
   assert.equal(r.ok, false, 'ohne Konserven keine Granate'); assert.deepEqual(hat(), ['granate', 'granate']);
   // 100 Schuss für 3 beliebige Dinge; Obergrenze
-  rucksack('wasser', 'bretter', 'verband', 'schokoriegel');
+  rucksack('wasser', 'bretter', 'verband', 'essen');
   p.munition = 10;
   r = await sende('soldat', 'munition');
   assert.equal(r.ok, true, r.text);
@@ -573,3 +574,37 @@ test('Funkspruch am Funkpunkt des Funkzelts zählt wie am Funktisch; „Bretter�
   await beenden(c);
 });
 
+
+test('Handel per Rätsel: 6 richtige in Folge zahlen, eine falsche setzt zurück; Handelswaren höchstens 3 Gegenstandstypen', async () => {
+  for (const h of Object.values(HANDEL)) for (const a of h.angebote) assert.ok(a.kostet.aus.length <= 3, `${a.id}: mehr als 3 Gegenstandstypen`);
+  await frisch();
+  const { c, raum, p, nachrichten } = await beitreten('Raetsler');
+  const arzt = handelsleute(raum.welt.stuetzpunkt).find(h => h.wer === 'arzt');
+  p.x = arzt.x + 18; p.y = arzt.y;
+  p.rucksack.splice(0, p.rucksack.length);
+  const fragen = [], lösungen = [];
+  c.onMessage('raetsel', m => fragen.push(m));
+  c.onMessage('aufloesung', m => lösungen.push(m));
+  const antworte = async (richtig, n) => {
+    assert.ok(await bis(() => fragen.length === n), 'keine Frage');
+    const o = raum.offeneRaetsel.get(c.sessionId);
+    c.send('antwort', { id: o.id, index: richtig ? o.richtigIndex : (o.richtigIndex + 1) % 4 });
+    assert.ok(await bis(() => lösungen.length === n), 'keine Auflösung');
+    return lösungen[n - 1];
+  };
+  c.send('handel_raetsel', { wer: 'arzt', angebot: 'verband' });
+  assert.equal((await antworte(true, 1)).handel.nr, 1);
+  c.send('handel_raetsel', { wer: 'arzt', angebot: 'verband', weiter: true });
+  let a = await antworte(false, 2);
+  assert.equal(a.handel.nr, 0, 'falsch setzt zurück');
+  c.send('handel_raetsel', { wer: 'arzt', angebot: 'verband', weiter: true });   // ohne laufende Serie fängt sie neu an
+  a = await antworte(true, 3); assert.equal(a.handel.nr, 1);
+  for (let i = 2; i <= 6; i++) {
+    c.send('handel_raetsel', { wer: 'arzt', angebot: 'verband', weiter: true });
+    a = await antworte(true, 2 + i);
+  }
+  assert.equal(a.handel.fertig, true);
+  assert.deepEqual([...p.rucksack], ['verband']);
+  assert.ok(nachrichten.handel.some(m => m.ok && /Rätsel/.test(m.text)));
+  await beenden(c);
+});

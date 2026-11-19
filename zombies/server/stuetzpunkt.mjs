@@ -2,7 +2,7 @@
 // MG-Nester und Puma schießen auf Zombies draußen, Ärzte heilen, Ärzte und Soldaten handeln, nach N Spieltagen fällt das Lager.
 // Zustand in state.stuetzpunkt: '' = kein Stützpunkt auf der Karte, 'steht', 'gefallen' (wird mit der Welt gespeichert) oder
 // 'aus' (Schalter „Stützpunkt aktiv“ aus: Figuren weg, nichts schießt, kein Handel – ohne Zombies und ohne Fall).
-import { KACHEL, WAFFEN, sichtfrei, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, DINGE } from '../client/welt.mjs';
+import { KACHEL, WAFFEN, sichtfrei, HANDEL, HANDEL_ABSTAND, HANDEL_RAETSEL, bezahlung, MUNITION_MAX, DINGE } from '../client/welt.mjs';
 import { imLager, planKoord, handelPartner, zeltWandImWeg } from '../client/stuetzpunkt.mjs';
 
 export const MG_REICHWEITE = 45 * 8;       // 45 m (8 px je Meter)
@@ -204,7 +204,7 @@ export class Stuetzpunkt {
     const schritt = Math.min(Math.abs(diff), PUMA_DREH * dt);
     if (schritt > 0) { let w = s.bwTurm + Math.sign(diff) * schritt; if (w > Math.PI) w -= TAU; if (w < -Math.PI) w += TAU; s.bwTurm = w; }
     if (Math.abs(diff) > 0.06 || p.kuehl > 0) return;
-    p.kuehl = PUMA_PAUSE;
+    p.kuehl = this.einst().pumaPause ?? PUMA_PAUSE;   // Einstellung „Panzer: Schussfolge“ (Sekunden zwischen zwei Schüssen)
     // Treffpunkt: meist genau das Ziel, manchmal etwas daneben; kleiner Flächenschaden um den Einschlag
     const ix = z.x + (r.rnd() - 0.5) * 14, iy = z.y + (r.rnd() - 0.5) * 14;
     r.broadcast('bwschuss', { art: 'kanone', n: p.n, x1: p.x, y1: p.y, x2: ix, y2: iy, w: s.bwTurm });
@@ -258,6 +258,56 @@ export class Stuetzpunkt {
     else for (let i = 0; i < a.menge; i++) p.rucksack.push(a.gibt);
     const was = a.gibt === 'munition' ? `🧰 ${a.menge} Schuss` : `${DINGE[a.gibt].zeichen} ${DINGE[a.gibt].name}`;
     client.send('handel', { ok: true, text: `${h.zeichen} Getauscht: ${was}` });
+  }
+
+  // Gegenwert prüfen und übergeben (für die Rätsel-Bezahlung): null = ok, sonst Fehltext
+  uebergeben(p, a) {
+    if (a.gibt === 'munition') {
+      if (p.munition >= MUNITION_MAX) return 'Deine Munition ist schon voll';
+      p.munition = Math.min(MUNITION_MAX, p.munition + a.menge);
+    } else {
+      if (p.rucksack.length + a.menge > p.plaetze) return 'Dein Rucksack ist zu voll';
+      for (let i = 0; i < a.menge; i++) p.rucksack.push(a.gibt);
+    }
+    return null;
+  }
+
+  // Nachricht 'handel_raetsel' { wer, angebot, weiter }: statt Gegenständen HANDEL_RAETSEL Rätsel in Folge richtig beantworten
+  handelRaetsel(client, m) {
+    const r = this.raum, p = r.state.spieler.get(client.sessionId);
+    const sag = text => client.send('handel', { ok: false, text });
+    if (!p || p.unten || p.zombie > 0 || p.ebene || !this.steht()) return;
+    const wer = String(m?.wer ?? ''), h = HANDEL[wer], a = h?.angebote.find(q => q.id === m?.angebot);
+    if (!h || !a || !handelPartner(this.sp, p.x, p.y, HANDEL_ABSTAND, wer)) return;
+    this.serien ??= new Map();
+    const alt = this.serien.get(client.sessionId);
+    const nr = m?.weiter && alt && alt.wer === wer && alt.angebot === a.id ? alt.nr : 0;
+    if (a.gibt === 'munition' ? p.munition >= MUNITION_MAX : p.rucksack.length + a.menge > p.plaetze) return sag(a.gibt === 'munition' ? 'Deine Munition ist schon voll' : 'Dein Rucksack ist zu voll');
+    this.serien.set(client.sessionId, { wer, angebot: a.id, nr });
+    r.stelleRaetsel(client, { art: 'handel', nr, von: HANDEL_RAETSEL });
+  }
+
+  // Antwort auf eine Handels-Rätselfrage (aus raum.antwort): richtig zählt hoch, falsch setzt die Serie zurück
+  raetselAntwort(client, p, offen, richtig) {
+    const serie = this.serien?.get(client.sessionId);
+    const h = serie && HANDEL[serie.wer], a = h?.angebote.find(q => q.id === serie.angebot);
+    let fertig = false, nr = 0, text = '';
+    if (!serie || !a || p.ebene || !this.steht() || !handelPartner(this.sp, p.x, p.y, HANDEL_ABSTAND + 14, serie.wer)) {
+      this.serien?.delete(client.sessionId);
+    } else if (!richtig) {
+      this.serien.delete(client.sessionId);
+      text = 'Falsch – die Serie beginnt von vorn';
+    } else {
+      serie.nr++; nr = serie.nr;
+      if (nr >= HANDEL_RAETSEL) {
+        const fehler = this.uebergeben(p, a);
+        this.serien.delete(client.sessionId);
+        fertig = true;
+        text = fehler ?? `${h.zeichen} Getauscht (Rätsel): ${a.gibt === 'munition' ? `🧰 ${a.menge} Schuss` : `${DINGE[a.gibt].zeichen} ${DINGE[a.gibt].name}`}`;
+        client.send('handel', { ok: !fehler, text });
+      }
+    }
+    client.send('aufloesung', { richtig, loesung: offen.richtig, seite: offen.seite, handel: { nr, von: HANDEL_RAETSEL, fertig, text, weiter: richtig && !fertig && !!serie && this.serien.has(client.sessionId) } });
   }
 }
 

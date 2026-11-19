@@ -336,7 +336,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 11;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 12;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -375,7 +375,7 @@ export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
 export const LEICHEN_MAX = 30;
 export const RUCKSACK_PLAETZE = 8;   // Grundausstattung; größere Taschen erhöhen p.plaetze
 export const KISTE_PLAETZE = 24;
-export const BEHAELTER_NAME = { container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
+export const BEHAELTER_NAME = { bad: 'Toilette / Waschbecken', muelltonne: 'Mülltonnen', container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
   vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
@@ -396,29 +396,33 @@ export const BEUTE = {
   bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', null],
   sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
+  bad: ['wasser', 'wasser', 'wasser', 'verband', 'schokoriegel', null, null],   // Bad: oft Wasser (Spülkasten, Hahn)
+  muelltonne: ['essen', 'wasser', 'seil', 'schokoriegel', null, null, null, null, null],   // Hausmüll: meist leer, selten etwas Brauchbares
   container: ['essen', 'essen', 'schokoriegel', 'schokoriegel', 'bretter', 'bretter', 'kleidung', 'kleidung', 'tasche', null, null, null],   // Müll: meist Krempel, selten eine Tasche
 };
 export const MUNITION_PRO_FUND = 12;
 export const MUNITION_MAX = 150;   // so viel Munition trägt man höchstens (Maschinengewehr und Soldaten-Handel brauchen mehr Platz als die alten 99)
 
 // ---------- Handel mit den Ärzten und Soldaten des Bundeswehr-Stützpunkts ----------
+// Bezahlt wird mit Dingen (höchstens 3 Gegenstandstypen in 'aus') ODER mit HANDEL_RAETSEL richtig beantworteten Rätselfragen am Stück.
 // kostet: anzahl Dinge aus der Liste 'aus' (beliebig gemischt); gibt: Ding (menge Stück) oder 'munition' (menge Schuss)
 export const HANDEL = {
   arzt: {
     name: 'Arzt', zeichen: '🩺',
     angebote: [
-      { id: 'verband', gibt: 'verband', menge: 1, kostet: { anzahl: 2, aus: ['essen', 'wasser', 'schokoriegel', 'bretter'] } },
-      { id: 'spritze', gibt: 'spritze', menge: 1, kostet: { anzahl: 2, aus: ['essen', 'wasser', 'schokoriegel', 'bretter'] } },
+      { id: 'verband', gibt: 'verband', menge: 1, kostet: { anzahl: 2, aus: ['essen', 'wasser', 'schokoriegel'] } },
+      { id: 'spritze', gibt: 'spritze', menge: 1, kostet: { anzahl: 2, aus: ['essen', 'wasser', 'schokoriegel'] } },
     ],
   },
   soldat: {
     name: 'Soldat', zeichen: '🎖',
     angebote: [
       { id: 'granate', gibt: 'granate', menge: 1, kostet: { anzahl: 2, aus: ['essen'] } },
-      { id: 'munition', gibt: 'munition', menge: 100, kostet: { anzahl: 3, aus: ['essen', 'wasser', 'schokoriegel', 'bretter', 'verband'] } },
+      { id: 'munition', gibt: 'munition', menge: 100, kostet: { anzahl: 3, aus: ['essen', 'wasser', 'verband'] } },
     ],
   },
 };
+export const HANDEL_RAETSEL = 6;   // so viele Rätsel in Folge richtig = Bezahlung ohne Gegenstände (eine falsche Antwort setzt zurück)
 export const HANDEL_ABSTAND = 56;   // so nah muss man an Arzt bzw. Soldat stehen (Pixel; 2,5 m wären nur 20 px – kleiner als die Figuren selbst)
 // Womit bezahlt wird: Liste der abzugebenden Dinge (zuerst das, wovon man am meisten hat) oder null, wenn der Rucksack nicht reicht
 export function bezahlung(rucksack, kostet) {

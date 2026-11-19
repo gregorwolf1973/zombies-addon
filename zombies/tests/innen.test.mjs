@@ -48,7 +48,7 @@ function pruefe(r, info) {
   for (const b of r.behaelter) {
     const [bx, by] = kachel(b);
     assert.equal(hole(bx, by), T.MOEBEL, `${info}: Behälter ${b.id} nicht an einem Möbel`);
-    assert.ok(['schrank', 'kuehlschrank', 'spind'].includes(b.art), `${info}: Behälterart ${b.art}`);
+    assert.ok(['schrank', 'kuehlschrank', 'spind', 'bad'].includes(b.art), `${info}: Behälterart ${b.art}`);
     assert.ok([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => GEHBAR.has(hole(bx + dx, by + dy))), `${info}: Behälter ${b.id} unerreichbar`);
   }
   for (const z of r.zombiePlaetze) assert.equal(hole(...kachel(z)), T.BODEN, info + ' Zombieplatz');
@@ -105,4 +105,15 @@ test('Läden: Verkaufsraum mit Regalreihen und Kasse, Regale durchsuchbar', () =
     assert.equal(seen.size, ges, `Laden ${nr}: ${ges - seen.size} Kacheln nicht erreichbar`);
   }
   assert.ok(regale >= 12, `nur ${regale} Regale in 8 Läden`);
+});
+
+test('Möbel berühren sich nie nur über Eck (man kommt immer vorbei)', () => {
+  for (const seed of [1, 7, 42, 99, 1234]) for (let nr = 0; nr < 12; nr++) for (const stock of ['eg', 'keller']) {
+    const r = baueInnenraum(seed, nr, stock, ['unten', 'oben', 'links', 'rechts'][nr % 4]);
+    const m = (x, y) => r.hole(x, y) === T.MOEBEL;
+    for (let y = r.oy; y < r.oy + r.h - 1; y++) for (let x = r.ox; x < r.ox + r.b - 1; x++) {
+      if (m(x, y) && m(x + 1, y + 1) && !m(x + 1, y) && !m(x, y + 1)) assert.fail(`${stock} ${seed}/${nr}: Eck-Berührung bei ${x},${y}`);
+      if (m(x + 1, y) && m(x, y + 1) && !m(x, y) && !m(x + 1, y + 1)) assert.fail(`${stock} ${seed}/${nr}: Eck-Berührung bei ${x + 1},${y}`);
+    }
+  }
 });

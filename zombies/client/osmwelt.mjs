@@ -23,14 +23,106 @@ const SAFE_ZUSATZ = [
 ];
 const RICHTUNGEN = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+// Zäune/Hecken ausdünnen (deterministisch, nach Position): rund 15 % der Linienstücke fallen weg, bevorzugt zwischen eng
+// stehenden Gebäuden; zwischen zwei benachbarten Häusern bleibt mindestens eine Lücke. Die JSON-Karte bleibt unverändert,
+// es entsteht eine Kopie mit gelichteten Zaunlinien, Zaunart und groben Zaunkacheln.
+const LUECKE_BASIS = 0.025, LUECKE_ENG = 0.14;
+const posHash = (x, y) => { let h = (Math.round(x * 8) * 73856093) ^ (Math.round(y * 8) * 19349663); h = Math.imul(h ^ (h >>> 13), 0x5bd1e995); return ((h ^ (h >>> 15)) >>> 0) / 4294967296; };
+export function zaeuneAusduennen(karte) {
+  if (!karte.zaeune?.length) return karte;
+  const geb = karte.gebaeude.map(g => ({ x0: g.x, y0: g.y, x1: g.x + g.b, y1: g.y + g.h }));
+  const abstand = (b, px, py) => Math.hypot(Math.max(b.x0 - px, 0, px - b.x1), Math.max(b.y0 - py, 0, py - b.y1));
+  const segs = [];
+  // Linien in Stücke von höchstens 0,75 Kacheln zerlegen, damit Lücken fein ausfallen
+  karte.zaeune.forEach((z, li) => { let nr = 0; for (let i = 0; i + 3 < z.p.length; i += 2) {
+    const ax = z.p[i], ay = z.p[i + 1], bx = z.p[i + 2], by = z.p[i + 3], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 0.75));
+    for (let j = 0; j < n; j++) {
+      const x0 = ax + (bx - ax) * j / n, y0 = ay + (by - ay) * j / n, x1 = ax + (bx - ax) * (j + 1) / n, y1 = ay + (by - ay) * (j + 1) / n;
+      segs.push({ li, i: nr++, ax: x0, ay: y0, bx: x1, by: y1, mx: (x0 + x1) / 2, my: (y0 + y1) / 2, len: Math.hypot(x1 - x0, y1 - y0), weg: false });
+    }
+  } });
+  const nahe = (px, py, r) => { let n = 0; for (const b of geb) if (abstand(b, px, py) <= r && ++n >= 2) break; return n; };
+  for (const sg of segs) sg.weg = posHash(sg.mx, sg.my) < (nahe(sg.mx, sg.my, 3) >= 2 ? LUECKE_ENG : LUECKE_BASIS);
+  // benachbarte Häuser (Abstand 0,3–4 Kacheln, sich gegenüberstehend): mindestens ein Stück je Zaunlinie im Zwischenraum frei
+  for (let a = 0; a < geb.length; a++) for (let c = a + 1; c < geb.length; c++) {
+    const A = geb[a], B = geb[c];
+    const dx = Math.max(0, A.x0 - B.x1, B.x0 - A.x1), dy = Math.max(0, A.y0 - B.y1, B.y0 - A.y1);
+    const ueberX = Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0), ueberY = Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0);
+    const gap = Math.hypot(dx, dy);
+    if (gap > 3.5 || !((dx > 0 && ueberY > 0) || (dy > 0 && ueberX > 0))) continue;
+    const x0 = Math.max(A.x0, B.x0) - (dx > 0 ? 0 : 0), x1 = Math.min(A.x1, B.x1), y0 = Math.max(A.y0, B.y0), y1 = Math.min(A.y1, B.y1);
+    const rx0 = dx > 0 ? Math.min(A.x1, B.x1) - 0.5 : x0, rx1 = dx > 0 ? Math.max(A.x0, B.x0) + 0.5 : x1;
+    const ry0 = dy > 0 ? Math.min(A.y1, B.y1) - 0.5 : y0, ry1 = dy > 0 ? Math.max(A.y0, B.y0) + 0.5 : y1;
+    const cx = (rx0 + rx1) / 2, cy = (ry0 + ry1) / 2;
+    const korridor = segs.filter(sg => sg.mx >= rx0 && sg.mx <= rx1 && sg.my >= ry0 && sg.my <= ry1);
+    const nachLinie = new Map();
+    for (const sg of korridor) { (nachLinie.get(sg.li) ?? nachLinie.set(sg.li, []).get(sg.li)).push(sg); }
+    for (const liste of nachLinie.values()) {
+      if (liste.some(sg => sg.weg)) continue;
+      liste.sort((p, q) => Math.hypot(p.mx - cx, p.my - cy) - Math.hypot(q.mx - cx, q.my - cy));
+      const sg = liste[0]; sg.weg = true;
+      // Nachbarstück (das näher am Zentrum) mit entfernen: Lücke ≈ 1,5 Kacheln
+      const nb = segs.filter(n => n.li === sg.li && Math.abs(n.i - sg.i) === 1).sort((p, q) => Math.hypot(p.mx - cx, p.my - cy) - Math.hypot(q.mx - cx, q.my - cy))[0];
+      if (nb) nb.weg = true;
+    }
+  }
+  const zaeune = [];
+  karte.zaeune.forEach((z, li) => {
+    let teil = null;
+    for (const sg of segs) {
+      if (sg.li !== li) continue;
+      if (sg.weg) { teil = null; continue; }
+      if (!teil) { teil = { a: z.a, p: [sg.ax, sg.ay] }; zaeune.push(teil); }
+      teil.p.push(sg.bx, sg.by);
+    }
+  });
+  // grobe Zaunkacheln, die nur zu entfernten Stücken gehören, wieder zur Wiese machen
+  const alle = segs, bleibt = segs.filter(sg => !sg.weg);
+  const nah = (liste, px, py) => liste.some(sg => {
+    const L2 = (sg.bx - sg.ax) ** 2 + (sg.by - sg.ay) ** 2 || 1e-9;
+    const t = Math.max(0, Math.min(1, ((px - sg.ax) * (sg.bx - sg.ax) + (py - sg.ay) * (sg.by - sg.ay)) / L2));
+    return Math.hypot(sg.ax + t * (sg.bx - sg.ax) - px, sg.ay + t * (sg.by - sg.ay) - py) <= 0.6;
+  });
+  const kach = karte.kacheln.split(''), art = karte.zaunart.split('');
+  for (let i = 0; i < kach.length; i++) {
+    if (kach[i] !== String(T.ZAUN) || !'hzmw'.includes(art[i])) continue;
+    const px = (i % BREITE) + 0.5, py = Math.floor(i / BREITE) + 0.5;
+    if (nah(alle, px, py) && !nah(bleibt, px, py)) { kach[i] = String(T.WIESE); art[i] = '.'; }
+  }
+  return { ...karte, zaeune, kacheln: kach.join(''), zaunart: art.join('') };
+}
+
+// Fluss glätten: Wasserkacheln (nur Wiese <-> Wasser) per Weichzeichner mit Schwelle 0,5 neu entscheiden; Straßen/Brücken,
+// Zäune, Gebäude bleiben unberührt, neues Wasser entsteht nur mitten in freier Wiese.
+function wasserGlaetten(k, hole, setze, durchgaenge = 3, R = 4) {
+  for (let d = 0; d < durchgaenge; d++) {
+    const aend = [];
+    for (let y = 1; y < HOEHE - 1; y++) for (let x = 1; x < BREITE - 1; x++) {
+      const t = k[y * BREITE + x];
+      if (t !== T.WIESE && t !== T.WASSER) continue;
+      let summe = 0, n = 0, rein = true;
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const w = (R + 1 - Math.abs(dx)) * (R + 1 - Math.abs(dy)), v = hole(x + dx, y + dy);
+        summe += w * (v === T.WASSER ? 1 : v === T.WIESE ? 0 : (t === T.WASSER ? 1 : 0)); n += w;
+        if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && v !== T.WIESE && v !== T.WASSER) rein = false;
+      }
+      const neu = summe / n > 0.5 ? T.WASSER : T.WIESE;
+      if (neu !== t && (neu === T.WIESE || rein)) aend.push([x, y, neu]);
+    }
+    for (const [x, y, v] of aend) setze(x, y, v);
+  }
+}
+
 // optionen.autos: Faktor für geparkte Autos (1 = normal)
-export function baueWeltAusKarte(karte, seed, optionen = {}) {
+export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
+  const karte = zaeuneAusduennen(karteOrig);
   const autoFaktor = Number.isFinite(optionen.autos) ? Math.max(0, optionen.autos) : 1;
   const r = zufall(seed ^ 0x6a09e667);
   const k = new Uint8Array(BREITE * HOEHE);
   for (let i = 0; i < k.length; i++) k[i] = karte.kacheln.charCodeAt(i) - 48;
   const setze = (x, y, v) => { if (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) k[y * BREITE + x] = v; };
   const hole = (x, y) => (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) ? k[y * BREITE + x] : T.ZAUN;
+  wasserGlaetten(k, hole, setze);
 
   // Gebäudeflächen (Boden/Wand) einer Gebäude-Bbox, die zur Tür zusammenhängen
   const flaecheVon = g => {
@@ -342,6 +434,7 @@ export function baueWeltAusKarte(karte, seed, optionen = {}) {
         while (farben.length < n) farben.push(rest.pop() ?? 'grau');
         farben.sort((a, b) => (r() < 0.5 ? -1 : 1));
         muell.tonnen.push({ x: (tx + 0.5) * KACHEL + h.raus.dx * 3, y: (ty + 0.5) * KACHEL + h.raus.dy * 3, winkel: Math.atan2(h.raus.dy, h.raus.dx), farben, rund: r() < 0.25, haus: h.nr });
+        behaelter.push({ id: 't' + muell.tonnen.length, art: 'muelltonne', x: (tx + 0.5) * KACHEL + h.raus.dx * 3, y: (ty + 0.5) * KACHEL + h.raus.dy * 3 });   // Tonnengruppe ist durchsuchbar
         break;
       }
     }

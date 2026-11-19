@@ -666,7 +666,7 @@ function zeichneMoebel(ctx, m) {
       ctx.fillStyle = '#ffd54f'; ctx.fillRect(x + b / 2 - 4, y + h / 2 - 1, 3, 3); ctx.fillRect(x + b / 2 + 1, y + h / 2 - 1, 3, 3); break;
     case 'regal': k('#6d4c41', x + 2, y + 2, b - 4, h - 4); for (let i = 1; i < 4; i++) { ctx.fillStyle = ['#c62828', '#1565c0', '#2e7d32'][i % 3]; ctx.fillRect(x + 6, y + i * h / 4 - 3, b - 12, 5); } break;
     case 'kiste': k('#a1887f', x + 4, y + 4, b - 8, h - 8, 2); ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 2; ctx.strokeRect(x + 5, y + 5, b - 10, h - 10); ctx.beginPath(); ctx.moveTo(x + 5, y + 5); ctx.lineTo(x + b - 5, y + h - 5); ctx.stroke(); break;
-    case 'kuehlschrank': k('#eceff1', x + 3, y + 3, b - 6, h - 6); rand(); ctx.fillStyle = '#90a4ae'; ctx.fillRect(x + b - 9, y + 8, 3, h - 16); break;
+    case 'kuehlschrank': case 'safe_kuehlschrank': k('#eceff1', x + 3, y + 3, b - 6, h - 6); rand(); ctx.fillStyle = '#90a4ae'; ctx.fillRect(x + b - 9, y + 8, 3, h - 16); break;
     case 'herd': k('#cfd8dc', x + 3, y + 3, b - 6, h - 6); ctx.fillStyle = '#37474f'; for (const [a, c] of [[9, 9], [21, 9], [9, 21], [21, 21]]) { ctx.beginPath(); ctx.arc(x + a, y + c, 4, 0, Math.PI * 2); ctx.fill(); } break;
     case 'spuele': case 'waschbecken': k('#eceff1', x + 4, y + 4, b - 8, h - 8, 5); k('#b0bec5', x + 9, y + 9, b - 18, h - 18, 6); break;
     case 'badewanne': k('#fafafa', x + 2, y + 2, b - 4, h - 4, 10); k('#b3e5fc', x + 7, y + 7, b - 14, h - 14, 8); break;

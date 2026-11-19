@@ -15,8 +15,8 @@ export const Mensch = schema({
 
 export const POLIZIST_ANTEIL = 0.06;
 const RAD = 10;
-const TEMPO = W.tempoGehen * 0.55, FLUCHT = W.tempoGehen * 0.95;
-const BISS_ABSTAND = 26;
+const TEMPO = W.tempoGehen * 0.55, FLUCHT = W.tempoGehen * 0.62;   // Flucht langsamer als ein jagender Zombie (105 px/s), sonst holt er sie nie ein
+const BISS_ABSTAND = 30;
 const FERN = 1400;   // weiter von allen Spielern weg: seltener rechnen
 
 const winkelDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
@@ -200,13 +200,16 @@ export class Stadtleben {
     const s = this.raum.state, welt = this.raum.welt;
     const menschen = [...s.menschen.entries()].filter(([, m]) => m.sichtbar);
     if (!menschen.length) return;
-    const minuten = this.raum.einstellungen?.()?.ansteckungMin ?? 5;
+    // Verwandlungszeit in Spielminuten → Sekunden der Spieluhr (ein Spieltag = tagMinuten echte Minuten = 1440 Spielminuten)
+    const spielMin = this.raum.einstellungen?.()?.verwandlungMin ?? 30;
+    const sekunden = spielMin * ((this.raum.einstellungen?.()?.tagMinuten || 48) * 60 / 1440);
     const chance = this.raum.einstellungen?.()?.bissChance ?? 1;
     for (const [zid, z] of zombies) {
       const info = this.raum.zombieInfo.get(zid);
       if (!info || info.ziel || info.schlaeft) continue;
       let best = null, bd = W.sichtWeite;
       for (const [mid, m] of menschen) {
+        if (m.infiziert) continue;   // schon gebissen: nicht noch einmal jagen
         const d = Math.hypot(m.x - z.x, m.y - z.y);
         if (d > bd) continue;
         const imKegel = winkelDiff(Math.atan2(m.y - z.y, m.x - z.x), z.richtung) < W.sichtWinkel / 2;
@@ -214,14 +217,14 @@ export class Stadtleben {
       }
       if (!best) continue;
       const [mid, m] = best;
-      info.punkt = { x: m.x, y: m.y };
+      info.punkt = { x: m.x, y: m.y }; info.mensch = mid;   // aktiv verfolgen (raum.mjs, zombieSchritt)
       if (bd < BISS_ABSTAND && !m.infiziert) {
         // einmal pro Sekunde ein Bissversuch; die Einstellung „Biss-Chance“ entscheidet, ob er trifft
         if ((info.bissVersuch ?? -1) > this.takt) continue;
         info.bissVersuch = this.takt + 1;
         if (this.raum.rnd() >= chance) continue;
         m.infiziert = true;
-        this.info.get(mid).inf = minuten * 60;
+        this.info.get(mid).inf = sekunden;
         this.raum.broadcast('menschGebissen', { x: m.x, y: m.y });
       }
     }

@@ -363,6 +363,25 @@ export function musikStarten() {
   musik = { g, src };
 }
 let musikAus = false;
+// Beim Öffnen der Seite sofort versuchen; blockiert der Browser (AudioContext bleibt "suspended"), startet die erste
+// Berührung/Taste irgendwo auf der Seite die Musik (Listener entfernt sich, sobald der Ton läuft).
+export function musikSofort(startseiteSichtbar = () => true) {
+  const los = () => {
+    if (musikAus || !startseiteSichtbar()) return;
+    try { musikStarten(); } catch { /* egal */ }
+    if (!ctx || document.hidden) return;
+    try { Promise.resolve(ctx.resume?.()).catch(() => { /* weiter warten */ }); } catch { /* egal */ }
+  };
+  const ARTEN = ['pointerdown', 'touchstart', 'mousedown', 'keydown', 'click'];
+  const ab = () => { for (const a of ARTEN) document.removeEventListener(a, geste, true); };
+  const geste = () => {
+    los();
+    // erst abmelden, wenn der Ton wirklich läuft; sonst bei der nächsten Geste noch einmal
+    setTimeout(() => { if (musikAus || !startseiteSichtbar() || ctx?.state === 'running') ab(); }, 300);
+  };
+  for (const a of ARTEN) document.addEventListener(a, geste, true);
+  los();
+}
 export function musikAusblenden(sek = 4) {
   musikAus = true;
   if (!musik || !ctx) return;

@@ -2,7 +2,7 @@
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten,
+  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten,
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
@@ -134,10 +134,8 @@ async function freigabenAbfragen() {
 $('fgMikroKnopf').onclick = () => freigabenAbfragen();
 freigabenAbfragen();
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service Worker:', e?.message ?? e));
-// Startmusik: der Browser erlaubt Ton erst nach einer Berührung – also beim ersten Antippen der Startseite
-const musikAn = () => { if ($('start').style.display !== 'none') ton.musikStarten(); };
-document.addEventListener('pointerdown', musikAn, { once: true });
-document.addEventListener('keydown', musikAn, { once: true });
+// Startmusik: sofort beim Öffnen versuchen; blockiert der Browser den Ton, startet sie bei der ersten Berührung/Taste
+ton.musikSofort(() => $('start').style.display !== 'none');
 
 // ---------- Figurenwahl ----------
 let meinAussehen = aussehenLesen(null);
@@ -227,6 +225,17 @@ async function mitspielen() {
       $('verbindung').style.display = 'block';
     });
     chatAnschliessen(raum);
+    // Pi entlasten: Tab länger als 5 min im Hintergrund → abmelden (Fortschritt ist gespeichert), beim Zurückkommen neu laden
+    let versteckTimer = null, autoGetrennt = false;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clearTimeout(versteckTimer);
+        versteckTimer = setTimeout(() => { autoGetrennt = true; abgemeldet = true; try { raum.leave(true); } catch {} }, 5 * 60 * 1000);
+      } else {
+        clearTimeout(versteckTimer);
+        if (autoGetrennt) location.reload();
+      }
+    });
     raum.onMessage('ausgeruht', async () => {
       abgemeldet = true;
       try {
@@ -639,7 +648,7 @@ class Ort extends Phaser.Scene {
     this.behaelterObj = new Map();
     for (const b of this.welt.behaelter) {
       const c = this.add.container(b.x, b.y).setDepth(1);
-      if (b.art === 'bus' || b.art === 'container' || b.art === 'sanikiste' || b.art.startsWith('bw_')) { /* Bus: obere Ebene, Container und Stützpunkt-Kisten: Kartenstücke (aussehen.mjs, stuetzpunkt.mjs) */ }
+      if (b.art === 'bus' || b.art === 'container' || b.art === 'muelltonne' || b.art === 'sanikiste' || b.art.startsWith('bw_')) { /* Bus: obere Ebene, Container und Stützpunkt-Kisten: Kartenstücke (aussehen.mjs, stuetzpunkt.mjs) */ }
       else if (b.art === 'auto') { /* geparkte Autos sind in die Kartenstücke gezeichnet (aussehen.mjs) */
       } else {
         const f = { schrank: 0x8d6e63, kuehlschrank: 0xeceff1, spind: 0x78909c }[b.art];
@@ -1813,6 +1822,9 @@ class Ort extends Phaser.Scene {
         const nx = Math.max(funkTisch.x * KACHEL, Math.min((funkTisch.x + funkTisch.b) * KACHEL, x)), ny = Math.max(funkTisch.y * KACHEL, Math.min((funkTisch.y + funkTisch.h) * KACHEL, y));
         if (Math.hypot(x - nx, y - ny) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
       }
+      if (w.kuehlschrank && Math.hypot(x - w.kuehlschrank.x, y - w.kuehlschrank.y) < AKTION_ABSTAND + 20) {
+        return { art: 'kuehlschrank', text: '🧊 Kühlschrank (Notvorrat, unter 30 %)' };
+      }
       if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < AKTION_ABSTAND + 20) {
         return { art: 'kiste', text: '📦 Vorräte', safe };
       }
@@ -1866,6 +1878,7 @@ class Ort extends Phaser.Scene {
     const k = this.kontext;
     if (!k) return;
     if (k.art === 'kiste') kisteAuf(k.safe);
+    else if (k.art === 'kuehlschrank') raum.send('kuehlschrank');
     else if (k.art === 'tausch') raum.send('tausch_start', { mit: k.mit });
     else if (k.art === 'handel') handelAuf(k.wer);
     else raum.send('aktion');
@@ -2153,7 +2166,7 @@ function kisteZeigen(ich, safe) {
 }
 
 // ---------- Handel mit Ärzten und Soldaten im Bundeswehr-Lager ----------
-let handelOffen = null, handelSchluessel = '';
+let handelOffen = null, handelSchluessel = '', handelAngebot = '';
 function handelAuf(wer) { handelOffen = wer; handelSchluessel = ''; $('handel').style.display = 'flex'; }
 function handelZu() { handelOffen = null; $('handel').style.display = 'none'; }
 function handelZeigen(ich, sp) {
@@ -2181,7 +2194,11 @@ function handelZeigen(ich, sp) {
     knopf.disabled = !zahl || !platzOk;
     if (zahl && !platzOk) knopf.title = a.gibt === 'munition' ? 'Munition voll' : 'Rucksack voll';
     knopf.onclick = () => raum.send('handel', { wer: handelOffen, angebot: a.id });
-    zeile.append(text, knopf); box.appendChild(zeile);
+    const rknopf = document.createElement('button'); rknopf.textContent = `🎓 ${HANDEL_RAETSEL} Rätsel`;
+    rknopf.title = `Statt zu bezahlen: ${HANDEL_RAETSEL} Rätselfragen hintereinander richtig beantworten`;
+    rknopf.disabled = !platzOk;
+    rknopf.onclick = () => { handelAngebot = a.id; raum.send('handel_raetsel', { wer: handelOffen, angebot: a.id }); };
+    zeile.append(text, knopf, rknopf); box.appendChild(zeile);
   }
 }
 
@@ -2222,11 +2239,11 @@ function tauschRucksack() {
 function tauschZu() { tauschOffen = null; $('tausch').style.display = 'none'; $('tauschrucksack').dataset.k = ''; }
 
 // ---------- Rätsel am Tor ----------
-let raetselId = null, raetselTuer = false, raetselNoetig = 0, raetselTimer = null;
+let raetselId = null, raetselTuer = false, raetselNoetig = 0, raetselTimer = null, raetselHandel = null;
 function zeigeRaetsel(m) {
   clearTimeout(raetselTimer);
-  raetselId = m.id; raetselTuer = !!m.tuer; raetselNoetig = m.noetig;
-  $('raetseltitel').textContent = (m.tuer ? '🔐 Verschlossene Tür' : `🔐 Schloss ${m.geloest + 1} von ${m.noetig}`) + (m.thema ? ` · ${m.thema}` : '');
+  raetselId = m.id; raetselTuer = !!m.tuer; raetselNoetig = m.noetig; raetselHandel = m.handel ? { wer: handelOffen, angebot: handelAngebot } : null;
+  $('raetseltitel').textContent = (m.handel ? `🎓 Rätsel-Tausch ${m.handel.nr + 1} von ${m.handel.von}` : m.tuer ? '🔐 Verschlossene Tür' : `🔐 Schloss ${m.geloest + 1} von ${m.noetig}`) + (m.thema ? ` · ${m.thema}` : '');
   $('raetselfrage').textContent = m.frage;
   const box = $('raetselantworten');
   box.innerHTML = '';
@@ -2252,13 +2269,15 @@ function zeigeAufloesung(m) {
   }
   const link = m.seite && wikiAdresse
     ? ` <a href="${escapeHtml(wikiAdresse.replace(/\/$/, ''))}/doku.php?id=${encodeURIComponent(m.seite)}" target="_blank" rel="noopener">Mehr dazu im Wiki ↗</a>` : '';
-  $('raetselergebnis').innerHTML = (m.richtig ? '✅ Richtig! Das Schloss springt auf.' : `❌ Falsch – richtig ist: <b>${escapeHtml(m.loesung)}</b>. Die Zombies haben es gehört!`) + link;
+  const hd = m.handel;
+  $('raetselergebnis').innerHTML = (hd ? (m.richtig ? `✅ Richtig! (${hd.nr}/${hd.von})${hd.text ? ' ' + escapeHtml(hd.text) : ''}` : '❌ Falsch – richtig ist: <b>' + escapeHtml(m.loesung) + '</b>. Die Serie beginnt von vorn.') : m.richtig ? '✅ Richtig! Das Schloss springt auf.' : `❌ Falsch – richtig ist: <b>${escapeHtml(m.loesung)}</b>. Die Zombies haben es gehört!`) + link;
   if (m.richtig) {
     // kurze Bestätigung, dann von selbst weiter: nächste Frage am Tor (falls noch Schlösser offen) oder Fenster zu
     const id = raetselId;
     clearTimeout(raetselTimer);
     raetselTimer = setTimeout(() => {
       if (raetselId !== id || $('raetsel').style.display === 'none') return;
+      if (raetselHandel) { const rh = raetselHandel; raetselZu(); if (hd?.weiter) raum.send('handel_raetsel', { wer: rh.wer, angebot: rh.angebot, weiter: true }); return; }
       const weiter = !raetselTuer && (raum.state.torGeloest ?? 0) < raetselNoetig;
       raetselZu();
       if (weiter) raum.send('aktion');

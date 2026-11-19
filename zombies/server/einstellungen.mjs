@@ -2,11 +2,15 @@
 // Gespeichert in /data/einstellungen.json; beim allerersten Start dienen die Add-on-Optionen als Startwerte.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DINGE } from '../client/welt.mjs';
+import { DINGE, WAFFEN } from '../client/welt.mjs';
 
 export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
 export const ZEITRAFFER = [1, 5, 10, 60];
 export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20, mp: 30, mg: 45 };   // Meter
+// Zombietypen (Reihenfolge = Nummer der Variante, siehe ZOMBIE_TYPEN im Client)
+export const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7'];
+// je Waffe einstellbar: Schaden und Abklingzeit (Sekunden zwischen zwei Schlägen/Schüssen); Vorgabe = Werte aus WAFFEN
+export const WAFFEN_VORGABE = Object.fromEntries(Object.entries(WAFFEN).map(([w, v]) => [w, { schaden: v.schaden, pause: v.pause }]));
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 
 // Spielereignisse, denen auf der Einstellungsseite Tondateien zugeordnet werden
@@ -47,6 +51,8 @@ export function bereinige(e = {}, alt = {}) {
   const sp = { ...a.sprache, ...(e.sprache ?? {}) };
   const ag = { ...a.aufgaben, ...(e.aufgaben ?? {}) };
   const bw = { ...a.bundeswehr, ...(e.bundeswehr ?? {}) };
+  const typen = Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, typeof z.typen?.[k] === 'boolean' ? z.typen[k] : (typeof a.zombies?.typen?.[k] === 'boolean' ? a.zombies.typen[k] : true)]));
+  if (!Object.values(typen).some(Boolean)) typen[ZOMBIE_TYPEN[0]] = true;
   const funde = { ...a.funde };
   for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10));
   const toene = {};
@@ -72,7 +78,8 @@ export function bereinige(e = {}, alt = {}) {
     nachtAb: Math.round(zahl(e.nachtAb ?? a.nachtAb, 1080, 1439, 1290) / 15) * 15,   // ab dieser Uhrzeit ganz dunkel
     nachtDunkel: Math.round(zahl(e.nachtDunkel ?? a.nachtDunkel, 30, 100, 92)),       // Nachtdunkelheit in % (100 = fast schwarz)
     menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50)),         // Bewohner zu Beginn einer Welt
-    ansteckung: Math.round(zahl(e.ansteckung ?? a.ansteckung, 1, 30, 5)),     // Minuten vom Biss bis zur Verwandlung
+    verwandlung: Math.round(zahl(e.verwandlung ?? a.verwandlung, 1, 240, 30)),   // Menschen: Spielminuten vom Biss bis zur Verwandlung in einen Zombie
+    bissSpieler: Math.round(zahl(e.bissSpieler ?? a.bissSpieler, 0, 100, 12)),   // Spieler: Ansteckungschance in % je Sekunde Biss durch einen lebenden Zombie
     biss: Math.round(zahl(e.biss ?? a.biss, 0, 100, 100)),                   // Stadtbewohner: Chance in % je Bissversuch (einmal pro Sekunde bei Berührung)
     feuer: zahl(e.feuer ?? a.feuer, 0, 30, 1),                                 // Minuten zwischen zwei Bränden (0 = keine)
     feuerPhase: Math.round(zahl(e.feuerPhase ?? a.feuerPhase, 0, 240, 20)),  // so lange (Spielminuten ab Weltbeginn) brennt es immer wieder
@@ -81,6 +88,10 @@ export function bereinige(e = {}, alt = {}) {
     blaulicht: ['aus', 'selten', 'normal'].includes(e.blaulicht) ? e.blaulicht : (['aus', 'selten', 'normal'].includes(a.blaulicht) ? a.blaulicht : 'selten'),   // Polizei/Feuerwehr-Durchfahrten
     sichtkegel: typeof e.sichtkegel === 'boolean' ? e.sichtkegel : !!a.sichtkegel,   // Sichtkegel der Zombies anzeigen
     reichweite: Object.fromEntries(Object.entries(REICHWEITE_VORGABE).map(([w, v]) => [w, Math.round(zahl(e.reichweite?.[w] ?? a.reichweite?.[w], 5, 80, v))])),   // automatische Schussreichweite in Metern
+    waffen: Object.fromEntries(Object.entries(WAFFEN_VORGABE).map(([w, v]) => [w, {
+      schaden: Math.round(zahl(e.waffen?.[w]?.schaden ?? a.waffen?.[w]?.schaden, 1, 500, v.schaden)),
+      pause: Math.round(zahl(e.waffen?.[w]?.pause ?? a.waffen?.[w]?.pause, 0.05, 5, v.pause) * 100) / 100,
+    }])),
     toeneVorbelegt: Array.isArray(e.toeneVorbelegt) ? e.toeneVorbelegt.filter(x => typeof x === 'string').slice(0, 50) : (a.toeneVorbelegt ?? []),
     zombies: {
       dichte: Math.round(zahl(z.dichte, 0, 50, 10)),     // draußen, 10 = normal
@@ -90,6 +101,7 @@ export function bereinige(e = {}, alt = {}) {
       welle: Math.round(zahl(z.welle, 0, 120, 20)),      // alle so viele Spielminuten kommt eine Zombiewelle (0 = aus; sonst mindestens 5)
       welleMin: Math.round(zahl(z.welleMin, 5, 50, 20)), // Größe der Welle: kleinste Zahl
       welleMax: Math.round(zahl(z.welleMax, 5, 50, 50)), // … größte Zahl (höchstens 50)
+      typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
     sprache: {
       an: typeof sp.an === 'boolean' ? sp.an : true,                          // Sprachübertragung zwischen Mitspielern
@@ -107,6 +119,7 @@ export function bereinige(e = {}, alt = {}) {
     },
     bundeswehr: {
       aktiv: typeof bw.aktiv === 'boolean' ? bw.aktiv : true,                 // Stützpunkt schießt, handelt und kann fallen
+      pumaPause: Math.round(zahl(bw.pumaPause, 0.5, 10, 2.5) * 10) / 10,     // Panzer (Puma): Sekunden zwischen zwei Schüssen
       falltage: Math.round(zahl(bw.falltage, 0, 30, 3)),                      // fällt nach so vielen Spieltagen seit Weltbeginn (0 = nie)
     },
     funde,
@@ -120,11 +133,11 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschen: 50, ansteckung: 5, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE },
-    zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50 },
+    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschen: 50, verwandlung: 30, bissSpieler: 12, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, anzahl: 4 },
-    bundeswehr: { aktiv: true, falltage: 3 },
+    bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     toene: {},

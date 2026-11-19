@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.32.0 – 19.11.2026
+
+- Verwaltung: Schaden und Schussfolge je Waffe, Schussfolge des Puma (Vorgabe 2,5 s), Zombietypen einzeln an/aus, Ansteckung der Spieler in %, Verwandlungszeit der Menschen in Spielminuten.
+- Zombies verfolgen Menschen gezielt; ein Biss genügt, Menschen fliehen langsamer.
+- Tod: volle Werte nach dem Aufwachen, die gesamte Ausrüstung bleibt einen Spieltag am Sterbeort liegen.
+- Innenräume: Möbel berühren sich nicht mehr über Eck; Bad/Toilette oft mit Wasser; Safe-Room-Kühlschrank als Notvorrat (unter 30 %, einmal je Spielstunde).
+- Mülltonnen mit Essen, Seil, Wasser.
+- Bundeswehr: Munitionskisten mit eigenem Inhalt für jeden Mitspieler; Tausch bei Soldaten und Arzt mit höchstens 3 Gegenstandstypen oder 6 richtigen Rätseln am Stück.
+- Karte: etwa 15 % weniger Zäune und Hecken, Durchgang zwischen Nachbarhäusern; Fluss geglättet (Welt wird neu gebaut).
+- Startmusik beginnt sofort (bzw. bei der ersten Berührung, wenn der Browser blockiert).
+- Wer den Tab über 5 Minuten im Hintergrund hat, wird abgemeldet, damit der Server ruht; beim Zurückkommen lädt die Seite neu.
+
 ## 0.31.0 – 19.11.2026
 
 - Evakuierungsbus auf Karte und Eckkarte auffällig (pulsierendes Bussymbol mit Ring); Mitspieler am Boden als blinkendes rotes Kreuz.

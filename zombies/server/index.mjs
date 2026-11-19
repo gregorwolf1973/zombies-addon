@@ -9,7 +9,7 @@ import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { SpielRaum } from './raum.mjs';
 import { Speicher } from './speicher.mjs';
-import { EinstellungsDatei, KARTEN, ZEITRAFFER, EREIGNISSE, TON_DATEI } from './einstellungen.mjs';
+import { EinstellungsDatei, KARTEN, ZEITRAFFER, EREIGNISSE, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
@@ -85,8 +85,11 @@ export async function starte({
       tagMinuten: w.tagMinuten,
       tagAb: w.tagAb, nachtAb: w.nachtAb, nachtDunkel: w.nachtDunkel,
       menschen: w.menschen,
-      ansteckungMin: w.ansteckung,
+      verwandlungMin: w.verwandlung,               // Spielminuten Biss → Zombie (Menschen)
       bissChance: w.biss / 100,
+      bissSpieler: w.bissSpieler / 100,            // je Sekunde Biss eines lebenden Zombies
+      waffen: w.waffen,                            // je Waffe { schaden, pause }
+      zombieTypen: ZOMBIE_TYPEN.filter(k => w.zombies.typen[k]).map(k => ZOMBIE_TYPEN.indexOf(k)),
       feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, welleMinuten: w.zombies.welle, welleMin: w.zombies.welleMin, welleMax: w.zombies.welleMax, sichtkegel: w.sichtkegel,
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt

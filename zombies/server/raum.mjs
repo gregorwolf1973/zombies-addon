@@ -283,9 +283,11 @@ export class SpielRaum extends Room {
     this.onMessage('aktion2', client => this.starteAktion(client, true));
     this.onMessage('wurf', client => this.granaten.werfen(client));
     this.onMessage('handel', (client, m) => this.stuetzpunkt.handel(client, m));
+    this.onMessage('handel_raetsel', (client, m) => this.stuetzpunkt.handelRaetsel(client, m));
     this.onMessage('benutze', (client, m) => this.benutze(client, m));
     this.onMessage('wegwerfen', (client, m) => this.wegwerfen(client, m));
     this.onMessage('kiste', (client, m) => this.kiste(client, m));
+    this.onMessage('kuehlschrank', client => this.kuehlschrank(client));
     this.onMessage('ausruhen', client => this.ausruhen(client));
     this.onMessage('antwort', (client, m) => this.antwort(client, m));
     this.onMessage('tausch_start', (client, m) => this.tauschStart(client, m));
@@ -882,7 +884,10 @@ export class SpielRaum extends Room {
   setzeZombie(x, y, ebene = '', schlaeft = false) {
     const z = new Zombie();
     z.x = x; z.y = y; z.hp = ZOMBIE_HP; z.richtung = this.rnd() * Math.PI * 2; z.jagt = false;
-    z.kriecht = false; z.variante = Math.floor(this.rnd() * 7); z.ebene = ebene;
+    z.kriecht = false; {
+      const erlaubt = SpielRaum.einstellungen.zombieTypen;   // Verwaltung: erlaubte Zombietypen (Nummern), sonst alle
+      z.variante = erlaubt?.length ? erlaubt[Math.floor(this.rnd() * erlaubt.length)] : Math.floor(this.rnd() * 7);
+    } z.ebene = ebene;
     const id = 'z' + (this.naechsteZombieId++);
     this.state.zombies.set(id, z);
     // tempo: fester Tempofaktor 0,9–1,1, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen)
@@ -1320,6 +1325,7 @@ export class SpielRaum extends Room {
       if (!b || p.rucksack.length >= p.plaetze) return;
       const d = b.ding;
       if (DINGE[d]?.waffe && !p.waffe) p.waffe = d;
+      else if (d === 'munition') p.munition = Math.min(MUNITION_MAX, p.munition + MUNITION_PRO_FUND);
       else if (d === 'taschenlampe' && !(p.lampe > 0)) p.lampe = LAMPE_DAUER;
       else if (d === 'kleidung' && !(p.kleidung > 0)) p.kleidung = 100;
       else p.rucksack.push(d);
@@ -1349,6 +1355,23 @@ export class SpielRaum extends Room {
 
   durchsucht(client, p, b) {
     if (b.art === 'leiche') return this.leicheDurchsucht(client, p, b.id);
+    // Munitionskisten der Bundeswehr: für jeden Mitspieler ein eigener Inhalt (nie leer), der Haufen für die anderen bleibt unberührt
+    if (b.art === 'bw_kiste') {
+      const schluessel = b.id + '@' + (this.extra.get(client?.sessionId)?.spielerId ?? client?.sessionId ?? 'x');
+      if (!this.inhalte.has(schluessel)) {
+        const funde = [];
+        for (let v = 0; v < 8 && funde.length < 2; v++) {
+          const d = ziehe(BEUTE.bw_kiste, SpielRaum.einstellungen.funde, this.rnd, BEUTE_BONUS.bw_kiste);
+          if (d) funde.push(d);
+        }
+        if (!funde.length) funde.push('munition');
+        this.inhalte.set(schluessel, funde);
+      }
+      const inhalt = this.inhalte.get(schluessel);
+      const genommen = this.einpacken(p, inhalt);
+      this.aufgaben?.gefunden(b, genommen);
+      return client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+    }
     // ausgebrannt: nichts mehr zu holen
     if ((b.art === 'auto' || b.art === 'bus') && this.state.verbrannt.has((b.art === 'auto' ? 'auto:' : 'bus:') + b.id)) this.setzeInhalt(b.id, []);
     if (!this.inhalte.has(b.id)) {
@@ -1502,6 +1525,28 @@ export class SpielRaum extends Room {
     }
   }
 
+  // Notvorrat im Safe-Room-Kühlschrank: Wasser bzw. Essen nur bei unter 30 %, höchstens einmal je Spieler und Spielstunde
+  kuehlschrank(client) {
+    const p = this.state.spieler.get(client.sessionId);
+    if (!p || p.unten || p.zombie > 0) return;
+    const s = safeRoomVon(this.welt, p), k = s && this.wv(s.ebene).kuehlschrank;
+    if (!k || Math.hypot(k.x - p.x, k.y - p.y) > AKTION_ABSTAND + 24) return;
+    const sage = text => client.send('meldung', { text });
+    const stunde = (SpielRaum.einstellungen.tagMinuten || 48) * 60 / 24;
+    const schluessel = this.extra.get(client.sessionId)?.spielerId ?? client.sessionId;
+    this.kuehlLetzte ??= new Map();
+    const letzte = this.kuehlLetzte.get(schluessel);
+    if (letzte !== undefined && this.state.zeit - letzte < stunde) {
+      return sage(`🧊 Du hast gerade erst etwas genommen – in ${Math.ceil((stunde - (this.state.zeit - letzte)) / 60)} Min. wieder`);
+    }
+    if (p.durst >= 30 && p.hunger >= 30) return sage('🧊 Der Kühlschrank ist für den Notfall: erst bei unter 30 % Wasser oder Hunger');
+    if (p.rucksack.length >= p.plaetze) return sage('Dein Rucksack ist voll');
+    const ding = p.durst <= p.hunger ? 'wasser' : 'essen';
+    p.rucksack.push(ding);
+    this.kuehlLetzte.set(schluessel, this.state.zeit);
+    sage(`🧊 Aus dem Kühlschrank: ${DINGE[ding].zeichen} ${DINGE[ding].name}`);
+  }
+
   kiste(client, m) {
     const p = this.state.spieler.get(client.sessionId);
     if (!p || p.unten) return;
@@ -1527,7 +1572,7 @@ export class SpielRaum extends Room {
     this.gestellt.add(f.id);
     const { antworten, richtigIndex } = mischeAntworten(f, this.rnd);
     this.offeneRaetsel.set(client.sessionId, { id: f.id, richtigIndex, seite: f.seite, richtig: f.richtig, bis: Date.now() + 120000, zweck });
-    client.send('raetsel', { id: f.id, thema: f.thema, frage: f.frage, antworten, geloest: this.state.torGeloest, noetig: TOR_RAETSEL, tuer: !!zweck });
+    client.send('raetsel', { id: f.id, thema: f.thema, frage: f.frage, antworten, geloest: this.state.torGeloest, noetig: TOR_RAETSEL, tuer: zweck?.art === 'tuer', handel: zweck?.art === 'handel' ? { nr: zweck.nr, von: zweck.von } : null });
   }
 
   antwort(client, m) {
@@ -1536,6 +1581,7 @@ export class SpielRaum extends Room {
     if (!offen || !p || m?.id !== offen.id) return;
     this.offeneRaetsel.delete(client.sessionId);
     const richtig = Number(m.index) === offen.richtigIndex && offen.bis > Date.now();
+    if (offen.zweck?.art === 'handel') return this.stuetzpunkt.raetselAntwort(client, p, offen, richtig);
     if (offen.zweck?.art === 'tuer') {
       const z = offen.zweck;
       if (richtig) { this.setzeTuer(z.key, true); client.send('meldung', { text: '🔓 Das Schloss springt auf' }); }
@@ -1688,7 +1734,13 @@ export class SpielRaum extends Room {
     if (pause <= 0 && !p.aktion) {
       const [name, wf0] = aktiveWaffe(p);
       const meter = SpielRaum.einstellungen.reichweite?.[name];
-      const wf = meter ? { ...wf0, reichweite: meter * KACHEL / 4 } : wf0;   // eingestellte Reichweite (Meter, 4 m je Kachel)
+      const ew = SpielRaum.einstellungen.waffen?.[name];   // Verwaltung: Schaden und Abklingzeit je Waffe
+      const wf = { ...wf0 };
+      if (meter) wf.reichweite = meter * KACHEL / 4;   // eingestellte Reichweite (Meter, 4 m je Kachel)
+      if (ew) {
+        if (wf0.nebenSchaden) wf.nebenSchaden = wf0.nebenSchaden * ew.schaden / wf0.schaden;
+        wf.schaden = ew.schaden; wf.pause = ew.pause;
+      }
       const ziel = this.naechsterZombie(p.x, p.y, wf.reichweite, p);
       if (ziel) {
         const [zid, z] = ziel;
@@ -1976,7 +2028,7 @@ export class SpielRaum extends Room {
           const schutz = ziel.kleidung > 0;
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1));
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);
-          if (!(ziel.infektion > 0) && this.rnd() < BISS_CHANCE * dt * (schutz ? 0.5 : 1)) {
+          if (!(ziel.infektion > 0) && this.rnd() < (SpielRaum.einstellungen.bissSpieler ?? BISS_CHANCE) * dt * (schutz ? 0.5 : 1)) {
             ziel.infektion = INFEKTION_DAUER;
             this.broadcast('meldung', { text: `🦠 ${ziel.name} wurde gebissen! Eine Rettungsspritze hilft.`, lang: true });
           }
@@ -1986,6 +2038,19 @@ export class SpielRaum extends Room {
       }
     }
 
+    // Mensch (Stadtbewohner) verfolgen: volle Jagdgeschwindigkeit, bis er gebissen ist oder entkommt (gesetzt in menschen.mjs zombiesWittern)
+    if (info.mensch) {
+      const m = this.state.menschen.get(info.mensch);
+      const d = m ? Math.hypot(m.x - z.x, m.y - z.y) : Infinity;
+      if (!m || !m.sichtbar || m.infiziert || ebene || d > W.sichtWeite * 1.6 || !sichtfrei(welt, z.x, z.y, m.x, m.y)) {
+        if (m && m.sichtbar && !m.infiziert && d < W.sichtWeite * 1.6) info.punkt = { x: m.x, y: m.y };   // aus den Augen: letzte Stelle ansteuern
+        info.mensch = null;
+      } else {
+        z.richtung = Math.atan2(m.y - z.y, m.x - z.x); z.jagt = true;
+        this.zombieGehen(z, z.richtung, W.zombieTempoJagen * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt, info);
+        return;
+      }
+    }
     if (info.punkt) {
       // Geräusch nachgehen
       const d = Math.hypot(info.punkt.x - z.x, info.punkt.y - z.y);
@@ -2149,6 +2214,24 @@ export class SpielRaum extends Room {
     }
   }
 
+  // Tod: Rucksack, Waffe, Munition, Kleidung und Lampe fallen als Einzelgegenstände an den Sterbeort und bleiben einen Spieltag liegen
+  sterbeHaufen(p) {
+    const dinge = [...p.rucksack];
+    if (p.waffe) dinge.push(p.waffe);
+    if (p.munition > 0) for (let i = 0; i < Math.min(3, Math.ceil(p.munition / MUNITION_PRO_FUND)); i++) dinge.push('munition');
+    if (p.kleidung > 0) dinge.push('kleidung');
+    if (p.lampe > 0) dinge.push('taschenlampe');
+    if (p.plaetze > RUCKSACK_PLAETZE) dinge.push(p.plaetze >= 16 ? 'trekking' : 'tasche');
+    const tag = ((SpielRaum.einstellungen.tagMinuten || 48) * 60);
+    for (const d of dinge) {
+      if (!DINGE[d]) continue;
+      const id = this.legeHin(d, p.x, p.y, p.ebene);
+      this.state.boden.get(id).alter = BODEN_DAUER - tag;   // BODEN_DAUER + (Spieltag) Sekunden bis zum Verschwinden
+    }
+    p.rucksack.splice(0, p.rucksack.length);
+    p.waffe = ''; p.munition = 0; p.kleidung = 0; p.lampe = 0; p.plaetze = RUCKSACK_PLAETZE;
+  }
+
   // alle am Boden: jeder wacht in seinem letzten Safe Room auf, die Welt bleibt erhalten
   zurueckInDieSafeRooms() {
     const s = this.state;
@@ -2158,9 +2241,10 @@ export class SpielRaum extends Room {
       const safe = this.safeFuer(x?.letzterSafe, p.x, p.y);
       const n = besetzt.get(safe.id) ?? 0;
       besetzt.set(safe.id, n + 1);
+      this.sterbeHaufen(p);   // Ausrüstung bleibt am Sterbeort liegen (1 Spieltag)
       const pos = this.safePlatz(safe, n);
       p.x = pos.x; p.y = pos.y; p.ebene = pos.ebene;
-      p.hp = 50; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0; p.zombie = 0;
+      p.hp = 100; p.durst = 100; p.hunger = 100; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0; p.zombie = 0;
     }
     // Zombies rund um die Safe Rooms vertreiben
     for (const [id, z] of s.zombies) {

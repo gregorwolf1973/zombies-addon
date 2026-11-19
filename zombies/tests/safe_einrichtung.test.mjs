@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
+import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, T, baueWelt, setzeKartengroesse } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { innenraumFuer, SAFE_MOEBEL } from '../client/innen.mjs';
@@ -91,5 +92,49 @@ test('Ruhen: neben dem Feldbett steigt das Leben, Bewegen beendet es', async () 
     c.send('eingabe', { dx: 0, dy: 1 });
     assert.ok(await bis(() => p.ruht === false, 2000), 'Bewegen beendet das Ruhen nicht');
     c.send('eingabe', { dx: 0, dy: 0 });
+  } finally { await c.leave(); }
+});
+
+test('Safe-Room-Kühlschrank: nur unter 30 %, höchstens einer je Spielstunde', async () => {
+  const c = await new Client(`http://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Durstig', spielerId: crypto.randomBytes(16).toString('hex') });
+  const raum = matchMaker.getLocalRoomById(c.roomId);
+  raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+  const p = raum.state.spieler.get(c.sessionId);
+  const meldungen = []; c.onMessage('meldung', m => meldungen.push(m.text));
+  try {
+    const s = raum.welt.safeRooms.find(q => raum.wv(q.ebene).kuehlschrank), w = raum.wv(s.ebene);
+    assert.ok(s, 'kein Safe Room mit Kühlschrank');
+    p.ebene = s.ebene; p.x = w.kuehlschrank.x; p.y = w.kuehlschrank.y + 20;
+    p.rucksack.splice(0, p.rucksack.length);
+    p.durst = 80; p.hunger = 80;
+    raum.kuehlschrank({ sessionId: c.sessionId, send: () => {} });
+    assert.equal(p.rucksack.length, 0, 'bei 80 % gibt es nichts');
+    p.durst = 10;
+    raum.kuehlschrank({ sessionId: c.sessionId, send: () => {} });
+    assert.deepEqual([...p.rucksack], ['wasser']);
+    raum.kuehlschrank({ sessionId: c.sessionId, send: () => {} });
+    assert.equal(p.rucksack.length, 1, 'zweites Mal innerhalb der Stunde gesperrt');
+    p.hunger = 5; p.durst = 50;
+    raum.state.zeit += (SpielRaum.einstellungen.tagMinuten || 48) * 60 / 24 + 1;   // eine Spielstunde später
+    raum.kuehlschrank({ sessionId: c.sessionId, send: () => {} });
+    assert.deepEqual([...p.rucksack], ['wasser', 'essen']);
+  } finally { await c.leave(); }
+});
+
+test('Tod: Ausrüstung bleibt am Sterbeort liegen, Neustart im Safe Room mit vollen Werten', async () => {
+  const c = await new Client(`http://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Gefallen', spielerId: crypto.randomBytes(16).toString('hex') });
+  const raum = matchMaker.getLocalRoomById(c.roomId);
+  raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+  const p = raum.state.spieler.get(c.sessionId);
+  try {
+    p.rucksack.splice(0, p.rucksack.length, 'wasser', 'verband'); p.waffe = 'pistole'; p.munition = 20; p.kleidung = 50;
+    p.x = 100; p.y = 100; p.ebene = ''; p.hp = 0; p.durst = 3; p.hunger = 4; p.unten = true;
+    raum.boden0 = raum.state.boden.size;
+    raum.zurueckInDieSafeRooms();
+    assert.equal(p.rucksack.length, 0); assert.equal(p.waffe, ''); assert.equal(p.munition, 0); assert.equal(p.kleidung, 0);
+    assert.equal(p.hp, 100); assert.equal(p.durst, 100); assert.equal(p.hunger, 100);
+    const da = [...raum.state.boden.values()].filter(b => Math.hypot(b.x - 100, b.y - 100) < 15).map(b => b.ding).sort();
+    assert.deepEqual(da, ['kleidung', 'munition', 'munition', 'pistole', 'verband', 'wasser']);
+    assert.ok([...raum.state.boden.values()].every(b => b.alter < 0), 'bleibt mehr als die übliche Zeit liegen');
   } finally { await c.leave(); }
 });

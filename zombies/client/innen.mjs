@@ -29,9 +29,10 @@ export const MOEBEL_NAMEN = {
   generator: 'Generator',
   kanister: 'Wasserkanister',
   erstehilfe: 'Erste-Hilfe-Kasten',
+  safe_kuehlschrank: 'Kühlschrank',
 };
 
-const BEHAELTER_ARTEN = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang', 'vorratsregal', 'erstehilfe']);
+const BEHAELTER_ARTEN = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang', 'vorratsregal', 'erstehilfe', 'klo', 'waschbecken']);
 
 // Hilfsfunktion: Index im Raster
 function idx(x, y) {
@@ -127,6 +128,19 @@ function moebelPlatzFrei(kacheln, x, y, b, h, ox, oy, hausB, hausH) {
       if (nebenTuerOderTreppe(kacheln, x + dx, y + dy, ox, oy, hausB, hausH)) return false;
     }
   }
+  // Keine Berührung nur über Eck: ein Möbel auf der Diagonale, dessen beide Nachbarkacheln dazwischen frei sind
+  const drin = (px, py) => px >= x && px < x + b && py >= y && py < y + h;
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < b; dx++) {
+      for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = x + dx + sx, ny = y + dy + sy;
+        if (drin(nx, ny) || nx < ox || ny < oy || nx >= ox + hausB || ny >= oy + hausH) continue;
+        if (kacheln[idx(nx, ny)] !== T.MOEBEL) continue;
+        const a1 = x + dx + sx, b1 = y + dy, a2 = x + dx, b2 = y + dy + sy;
+        if (!drin(a1, b1) && kacheln[idx(a1, b1)] !== T.MOEBEL && !drin(a2, b2) && kacheln[idx(a2, b2)] !== T.MOEBEL) return false;
+      }
+    }
+  }
   return true;
 }
 
@@ -157,7 +171,7 @@ function platziereMoebel(kacheln, moebelListe, behaelterListe, art, x, y, b, h, 
 
   // Behälter hinzufügen
   if (BEHAELTER_ARTEN.has(art)) {
-    const behaelterArt = art === 'regal_lang' ? 'laden' : art === 'kiste' ? 'spind' : (art === 'alter_schrank' || art === 'garderobe' || art === 'kommode' ? 'schrank' : art);
+    const behaelterArt = art === 'regal_lang' ? 'laden' : art === 'kiste' ? 'spind' : art === 'klo' || art === 'waschbecken' ? 'bad' : (art === 'alter_schrank' || art === 'garderobe' || art === 'kommode' ? 'schrank' : art);
     // Pixelmitte der Kachel, die an Boden grenzt
     // (Claude) Kachel des Möbels mit Boden daneben suchen; ohne Zugang kein Behälter
     let bx = -1, by = -1;
@@ -863,7 +877,7 @@ export function innenraumFuer(seed, welt, ebene) {
 
 // Safe Room als Notlager: Wohnungsmöbel raus, dann Feldbetten, Vorratsregale, Funktisch, Generator, Kanister, Erste Hilfe.
 // Alles deterministisch aus dem Seed; jedes Stück wird nur gesetzt, wenn der Raum begehbar zusammenhängend bleibt.
-export const SAFE_MOEBEL = new Set(['feldbett', 'vorratsregal', 'funktisch', 'generator', 'kanister', 'erstehilfe']);
+export const SAFE_MOEBEL = new Set(['feldbett', 'vorratsregal', 'funktisch', 'generator', 'kanister', 'erstehilfe', 'safe_kuehlschrank']);
 function safeMoeblieren(w) {
   const kacheln = w.kacheln;
   for (const m of w.moebel) for (let dy = 0; dy < m.h; dy++) for (let dx = 0; dx < m.b; dx++) kacheln[idx(m.x + dx, m.y + dy)] = T.BODEN;
@@ -890,6 +904,7 @@ function safeMoeblieren(w) {
   setze('feldbett', 1, 2);
   setze('feldbett', 1, 2);
   setze('erstehilfe', 1, 1);
+  setze('safe_kuehlschrank', 1, 1);   // Notvorrat für Notfälle (server/raum.mjs kuehlschrank())
   setze('generator', 1, 1);
   setze('kanister', 1, 1);
   const betten = Math.max(2, Math.min(6, Math.floor(flaeche / 30)));
@@ -944,4 +959,6 @@ function safeEinrichten(w, haus) {
   }
   best ??= { x: Math.floor(w.start.x / KACHEL), y: Math.floor(w.start.y / KACHEL) };
   w.kiste = { x: (best.x + 0.5) * KACHEL, y: (best.y + 0.5) * KACHEL };
+  const kue = w.moebel.find(m => m.art === 'safe_kuehlschrank');
+  if (kue) w.kuehlschrank = { x: (kue.x + 0.5) * KACHEL, y: (kue.y + 0.5) * KACHEL };
 }
