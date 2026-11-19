@@ -22,14 +22,20 @@ export const XP = { zombie: 10, aufgabe: 60, raetsel: 25, wiederbelebt: 40, mens
 // Erfahrung, die von Level L zu L+1 nötig ist
 export const xpFuerAufstieg = level => Math.round(100 * Math.pow(Math.max(1, level), 1.5));
 
-export function neuerStand() { return { xp: 0, s: Object.fromEntries(FAEHIGKEITEN.map(f => [f.id, 0])) }; }
+// Startwahl vor Level 1: 5 zusätzliche Punkte (bonus), die über die normalen Level-Punkte hinausgehen
+export const START_PUNKTE = 5;
+export const START_GEGENSTAENDE = ['waffe', 'lampe', 'brecheisen', 'wasser'];   // 'wasser' ist vorgewählt
+export const START_BOT = { zielen: 2, leben: 2, tempo: 1 };   // sinnvolle Verteilung für Bots
+
+export function neuerStand() { return { xp: 0, bonus: 0, s: Object.fromEntries(FAEHIGKEITEN.map(f => [f.id, 0])) }; }
 
 // gespeicherte Daten prüfen; mehr Stufen als Punkte gibt es nicht
 export function normiere(roh) {
   const st = neuerStand();
   st.xp = Math.max(0, Math.min(1e9, Math.floor(Number(roh?.xp) || 0)));
+  st.bonus = Number(roh?.bonus) === START_PUNKTE ? START_PUNKTE : 0;
   for (const id of IDS) st.s[id] = Math.max(0, Math.min(MAX_STUFE, Math.floor(Number(roh?.s?.[id]) || 0)));
-  const frei = levelAus(st.xp) - 1;
+  const frei = levelAus(st.xp) - 1 + st.bonus;
   let ueber = Object.values(st.s).reduce((a, b) => a + b, 0) - frei;
   for (const f of [...FAEHIGKEITEN].reverse()) { while (ueber > 0 && st.s[f.id] > 0) { st.s[f.id]--; ueber--; } }
   return st;
@@ -49,7 +55,7 @@ export function fortschritt(xp) {
 }
 
 export const punkteVerteilt = st => Object.values(st.s).reduce((a, b) => a + b, 0);
-export const freiePunkte = st => Math.max(0, levelAus(st.xp) - 1 - punkteVerteilt(st));
+export const freiePunkte = st => Math.max(0, levelAus(st.xp) - 1 + (st.bonus || 0) - punkteVerteilt(st));
 
 // Erfahrung gutschreiben; Rückgabe: Anzahl neuer Level (0 = keiner)
 export function gebeXp(st, menge, faktor = 1) {
@@ -58,6 +64,21 @@ export function gebeXp(st, menge, faktor = 1) {
   const vorher = levelAus(st.xp);
   st.xp = Math.min(1e9, st.xp + m);
   return levelAus(st.xp) - vorher;
+}
+
+// Startwahl: genau START_PUNKTE Punkte auf bekannte Fähigkeiten verteilen (je höchstens MAX_STUFE), nur einmal je Stand.
+// verteilung: { id: anzahl }. true bei Erfolg, sonst bleibt der Stand unverändert.
+export function startVergabe(st, verteilung) {
+  if (!st || st.bonus || !verteilung || typeof verteilung !== 'object') return false;
+  let summe = 0;
+  for (const [id, n] of Object.entries(verteilung)) {
+    if (!IDS.has(id) || !Number.isInteger(n) || n < 0 || st.s[id] + n > MAX_STUFE) return false;
+    summe += n;
+  }
+  if (summe !== START_PUNKTE) return false;
+  for (const [id, n] of Object.entries(verteilung)) st.s[id] += n;
+  st.bonus = START_PUNKTE;
+  return true;
 }
 
 // Punkt einsetzen; true, wenn es geklappt hat (der Server prüft alles selbst)

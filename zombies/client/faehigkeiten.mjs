@@ -1,7 +1,7 @@
 // Fähigkeiten-Fenster: Level, Erfahrungsbalken, freie Punkte, Fähigkeiten mit „+“. Baut sein Fenster selbst auf;
 // der Server prüft jede Punktevergabe (Nachricht fk_punkt) und schickt den Stand als „fk“.
 // Die Liste muss zu server/faehigkeiten.mjs passen (nur Anzeige).
-const LISTE = [
+export const LISTE = [
   ['zielen', '🎯', 'Zielen', 'Chance, beim Schuss keine Munition zu verbrauchen (+8 % je Stufe)'],
   ['tempo', '🏃', 'Tempo', 'Lauftempo +4 % je Stufe'],
   ['leben', '❤️', 'Lebensenergie', 'Du hältst ca. 10 % je Stufe mehr aus'],

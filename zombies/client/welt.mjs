@@ -15,6 +15,7 @@ const LADEN_ARTEN = {
   apotheke: ['pharmacy', 'chemist', 'doctors', 'dentist', 'medical_supply'],
   kaufhaus: ['variety_store', 'department_store', 'toys', 'clothes', 'sports', 'shoes', 'outdoor', 'second_hand', 'bag', 'hardware', 'doityourself'],
   gaststaette: ['restaurant', 'cafe', 'fast_food', 'bar', 'pub', 'ice_cream'],
+  polizei: ['police'],
 };
 export function ladenArt(h) {
   const a = h?.art ?? '';
@@ -349,7 +350,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 15;   // 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 16;   // 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -370,6 +371,10 @@ export const DINGE = {
   granate: { name: 'Handgranate', zeichen: '💣', wurf: true },
   mp: { name: 'Maschinenpistole', zeichen: '🪖', waffe: true },
   mg: { name: 'Maschinengewehr', zeichen: '🔥', waffe: true },
+  // Armbrust (leise, braucht Pfeile) und Scharfschützengewehr (nutzt normale Munition; selten bei Bundeswehr und Polizei)
+  armbrust: { name: 'Armbrust', zeichen: '🏹', waffe: true },
+  pfeil: { name: 'Pfeil', zeichen: '➶' },
+  scharfschuetze: { name: 'Scharfschützengewehr', zeichen: '🔭', waffe: true },
   sense: { name: 'Sense', zeichen: '🌾', waffe: true },
   kleidung: { name: 'Feste Kleidung', zeichen: '🧥' },
   seil: { name: 'Seil', zeichen: '🪢' },
@@ -386,27 +391,30 @@ export const LEICHE_SELTEN = ['pistole', 'munition', 'messer', 'schrotflinte'];
 export const LEICHE_OFT = ['kleidung', 'seil', 'taschenlampe', 'schokoriegel'];
 export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
 export const LEICHEN_MAX = 30;
+export const LEICHE_WOHNUNG = 0.2;   // Anteil der Wohnhaus-Ebenen mit einer Leiche (deterministisch aus Seed und Ebene, nicht in Safe Rooms und Läden)
 export const RUCKSACK_PLAETZE = 8;   // Grundausstattung; größere Taschen erhöhen p.plaetze
 export const KISTE_PLAETZE = 24;
 export const BEHAELTER_NAME = { bad: 'Toilette / Waschbecken', muelltonne: 'Mülltonnen', container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
-  vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal' };
+  vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal', laden_polizei: 'Waffenschrank' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
-  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', null, null],
-  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', 'gewehr', 'schrotflinte', 'funkgeraet', null, null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', 'pfeil', null, null],
+  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', 'gewehr', 'schrotflinte', 'funkgeraet', 'armbrust', 'pfeil', null, null],
   // Kofferraum geht nur mit Brechstange auf – darum liegt drin keine, dafür etwas mehr Gutes
   auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', 'funkgeraet', null],
   laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
   laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
-  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', null],
+  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', 'armbrust', 'pfeil', 'pfeil', null],
   laden_gaststaette: ['essen', 'essen', 'wasser', 'wasser', 'messer', 'schokoriegel', null],
   laden: ['essen', 'wasser', 'schokoriegel', null, null],
   vorratsregal: ['wasser', 'wasser', 'wasser', 'essen', 'essen', 'essen', 'verband', 'bretter', 'schokoriegel', 'schokoriegel', 'spritze', 'funkgeraet', null],
   erstehilfe: ['verband', 'verband', 'verband', 'spritze', null],
   // Bundeswehr-Stützpunkt (Teil 2 ergänzt hier die neuen Waffen)
   // Handgranaten häufiger, Maschinenpistole und Maschinengewehr selten (nur hier zu finden)
-  bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', null],
-  bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', null],
+  bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', 'pfeil', null],   // MG/Scharfschütze der Kiste: raum.mjs (durchsucht), nicht hier
+  bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', null],
+  // Polizeiwache (OSM amenity=police): Pistolen, Schrot, selten Maschinenpistole, Maschinengewehr, Scharfschützengewehr
+  laden_polizei: ['munition', 'munition', 'verband', 'taschenlampe', 'pistole', 'pistole', 'schrotflinte', 'mp', 'mg', 'scharfschuetze', 'funkgeraet', null],
   sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
   bad: ['wasser', 'wasser', 'wasser', 'verband', 'schokoriegel', null, null],   // Bad: oft Wasser (Spülkasten, Hahn)
@@ -414,6 +422,9 @@ export const BEUTE = {
   container: ['essen', 'essen', 'schokoriegel', 'schokoriegel', 'bretter', 'bretter', 'kleidung', 'kleidung', 'tasche', null, null, null],   // Müll: meist Krempel, selten eine Tasche
 };
 export const MUNITION_PRO_FUND = 12;
+// Pfeile für die Armbrust zählen wie Munition als Vorrat (p.pfeile), nicht im Rucksack. Aus Behältern gibt es PFEILE_PRO_FUND, vom Boden 1 Stück.
+export const PFEILE_PRO_FUND = 6;
+export const PFEILE_MAX = 40;
 export const MUNITION_MAX = 150;   // so viel Munition trägt man höchstens (Maschinengewehr und Soldaten-Handel brauchen mehr Platz als die alten 99)
 
 // ---------- Handel mit den Ärzten und Soldaten des Bundeswehr-Stützpunkts ----------
@@ -738,16 +749,22 @@ export const WAFFEN = {
   // Bundeswehr: Maschinenpistole (30 m, hohe Feuerrate, etwas weniger Schaden als die Pistole) und Maschinengewehr (45 m, sehr hohe Feuerrate)
   mp: { fern: true, reichweite: 30 * 8, schaden: 28, pause: 0.14, laut: 1.1, ueberraschung: 1.5, bild: 1 },
   mg: { fern: true, reichweite: 45 * 8, schaden: 30, pause: 0.09, laut: 1.3, ueberraschung: 1.5, bild: 1 },
+  // Armbrust: fast lautlos, 25 m, kräftiger Einzelschuss, langsam gespannt; verbraucht Pfeile (p.pfeile), der Pfeil bleibt am Ziel liegen
+  armbrust: { fern: true, pfeil: true, reichweite: 25 * 8, schaden: 80, pause: 2.4, laut: 0.06, ueberraschung: 2, bild: 1 },
+  // Scharfschützengewehr: 75 m, sehr hoher Schaden, langsame Schussfolge, sehr laut; Gewehrmunition
+  scharfschuetze: { fern: true, reichweite: 75 * 8, schaden: 220, pause: 2.8, laut: 2.2, ueberraschung: 1.5, bild: 1 },
   schrotflinte: { fern: true, reichweite: 160, schaden: 70, nebenSchaden: 45, kegel: 0.45, pause: 0.95, laut: 1.3, ueberraschung: 1.5, bild: 1 },
   schlaeger: { reichweite: 42, schaden: 40, pause: 0.6, stoss: true, ueberraschung: 3, bild: 2 },
   sense: { reichweite: 58, schaden: 55, bogen: 1.4, pause: 0.85, ueberraschung: 3, bild: 2 },
   messer: { reichweite: 36, schaden: 30, pause: 0.45, ueberraschung: 4, bild: 3 },
   faust: { reichweite: WERTE.nahkampfReichweite, schaden: 20, pause: 0.7, stoss: true, ueberraschung: 2.5, bild: 0 },
 };
+// Vorrat für die Fernwaffe: Pfeile bei der Armbrust, sonst Munition
+export const vorratVon = (p, w) => (w?.pfeil ? p.pfeile : p.munition) ?? 0;
 // womit kämpft der Spieler gerade? (Fernwaffe ohne Munition → Faust)
 export function aktiveWaffe(p) {
   const w = WAFFEN[p.waffe];
-  return w && (!w.fern || p.munition > 0) ? [p.waffe, w] : ['faust', WAFFEN.faust];
+  return w && (!w.fern || vorratVon(p, w) > 0) ? [p.waffe, w] : ['faust', WAFFEN.faust];
 }
 
 // Über einen Gartenzaun, eine Hecke oder Gartenmauer steigen: Zaunfeld direkt vor der Figur (Blickrichtung zuerst,

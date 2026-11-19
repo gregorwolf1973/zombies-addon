@@ -714,6 +714,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     <label for="tnHGroesse">Helden (Aussehen Held/Heldin)</label>
     <span class="hilfe">Größe der Helden, gleiche Bezugsgröße wie die Zombies. Vorgabe 85 % (etwa 15 % kleiner als früher).</span>
     <div class="tn-zeile"><input type="range" id="tnHGroesse" min="50" max="200" step="5"><span id="tnHGroesseWert">85 %</span></div>
+    <label for="tnSGroesse">Soldaten (Bundeswehr-Lager, Ärzte, Verwundete)</label>
+    <span class="hilfe">Größe der Soldaten im Lager. 100 % = so groß wie ein Held bei 100 %.</span>
+    <div class="tn-zeile"><input type="range" id="tnSGroesse" min="50" max="200" step="5"><span id="tnSGroesseWert">100 %</span></div>
     <label for="tnGGroesse">Global – alle Zombies und Leichen</label>
     <span class="hilfe">Vergrößert oder verkleinert beides zusammen um diesen Prozentsatz, zusätzlich zu den zwei Reglern oben.</span>
     <div class="tn-zeile"><input type="range" id="tnGGroesse" min="50" max="150" step="5"><span id="tnGGroesseWert">±0 %</span></div>
@@ -779,6 +782,16 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label for="wfP_mg">🔥 Maschinengewehr: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_mg" min="0.05" max="3" step="0.01"><span id="wfP_mgWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_mg"></p>
+  <label for="wfS_armbrust">🏹 Armbrust: Schaden</label>
+  <div class="tn-zeile"><input type="range" id="wfS_armbrust" min="1" max="300" step="1"><span id="wfS_armbrustWert"></span></div>
+  <label for="wfP_armbrust">🏹 Armbrust: Abklingzeit (Schussfolge)</label>
+  <div class="tn-zeile"><input type="range" id="wfP_armbrust" min="0.05" max="3" step="0.01"><span id="wfP_armbrustWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_armbrust"></p>
+  <label for="wfS_scharfschuetze">🔭 Scharfschützengewehr: Schaden</label>
+  <div class="tn-zeile"><input type="range" id="wfS_scharfschuetze" min="1" max="300" step="1"><span id="wfS_scharfschuetzeWert"></span></div>
+  <label for="wfP_scharfschuetze">🔭 Scharfschützengewehr: Abklingzeit (Schussfolge)</label>
+  <div class="tn-zeile"><input type="range" id="wfP_scharfschuetze" min="0.05" max="3" step="0.01"><span id="wfP_scharfschuetzeWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_scharfschuetze"></p>
   <label for="wfS_schlaeger">🏏 Baseballschläger: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_schlaeger" min="1" max="300" step="1"><span id="wfS_schlaegerWert"></span></div>
   <label for="wfP_schlaeger">🏏 Baseballschläger: Abklingzeit (Schussfolge)</label>
@@ -810,6 +823,10 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="tn-zeile"><input type="range" id="rwMp" min="5" max="80" step="1"><span id="rwMpWert">30 m</span></div>
   <label for="rwMg">🔥 Maschinengewehr (Bundeswehr)</label>
   <div class="tn-zeile"><input type="range" id="rwMg" min="5" max="80" step="1"><span id="rwMgWert">45 m</span></div>
+  <label for="rwArmbrust">🏹 Armbrust (leise, Pfeile)</label>
+  <div class="tn-zeile"><input type="range" id="rwArmbrust" min="5" max="80" step="1"><span id="rwArmbrustWert">25 m</span></div>
+  <label for="rwScharf">🔭 Scharfschützengewehr (Bundeswehr, Polizei)</label>
+  <div class="tn-zeile"><input type="range" id="rwScharf" min="5" max="80" step="1"><span id="rwScharfWert">75 m</span></div>
   <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
   <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.1" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
   <p class="tn-leise" id="bwInfoPuma"></p>
@@ -882,6 +899,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     feld('tnZGroesse', e.zombieGroesse === undefined ? 100 : e.zombieGroesse, function (v) { return v + ' %'; });
     feld('tnLGroesse', e.leichenGroesse === undefined ? 100 : e.leichenGroesse, function (v) { return v + ' %'; });
     feld('tnHGroesse', e.heldenGroesse === undefined ? 85 : e.heldenGroesse, function (v) { return v + ' %'; });
+    feld('tnSGroesse', e.soldatenGroesse === undefined ? 100 : e.soldatenGroesse, function (v) { return v + ' %'; });
     feld('tnGGroesse', e.groesseGesamt === undefined ? 100 : e.groesseGesamt, relProzent);
     feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
     if (window.groessenVorschau) window.groessenVorschau();
@@ -909,6 +927,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     feld('rwSchrot', rw.schrotflinte || 20, function (v) { return v + ' m'; });
     feld('rwMp', rw.mp || 30, function (v) { return v + ' m'; });
     feld('rwMg', rw.mg || 45, function (v) { return v + ' m'; });
+    feld('rwArmbrust', rw.armbrust || 25, function (v) { return v + ' m'; });
+    feld('rwScharf', rw.scharfschuetze || 75, function (v) { return v + ' m'; });
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnBwTage', bwe.falltage === undefined ? 3 : bwe.falltage, function (v) { return v ? v + (v === 1 ? ' Tag' : ' Tage') : 'nie'; });
@@ -927,7 +947,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
   var ZTYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7', 'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];
-  var WFVORGABE = { pistole: { schaden: 34, pause: 0.45 }, gewehr: { schaden: 100, pause: 1.2 }, schrotflinte: { schaden: 70, pause: 0.95 }, mp: { schaden: 28, pause: 0.14 }, mg: { schaden: 30, pause: 0.09 }, schlaeger: { schaden: 40, pause: 0.6 }, sense: { schaden: 55, pause: 0.85 }, messer: { schaden: 30, pause: 0.45 }, faust: { schaden: 20, pause: 0.7 } };
+  var WFVORGABE = { pistole: { schaden: 34, pause: 0.45 }, gewehr: { schaden: 100, pause: 1.2 }, schrotflinte: { schaden: 70, pause: 0.95 }, mp: { schaden: 28, pause: 0.14 }, mg: { schaden: 30, pause: 0.09 }, armbrust: { schaden: 80, pause: 2.4 }, scharfschuetze: { schaden: 220, pause: 2.8 }, schlaeger: { schaden: 40, pause: 0.6 }, sense: { schaden: 55, pause: 0.85 }, messer: { schaden: 30, pause: 0.45 }, faust: { schaden: 20, pause: 0.7 } };
   function laden() { anfrage('verwaltung/api').then(zeige).catch(function () {}); }
   function regler(id, wert, teil) {
     var el = $(id);
@@ -953,6 +973,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('rwSchrot', function (v) { return v + ' m'; }, function (v) { return { reichweite: { schrotflinte: v } }; });
   regler('rwMp', function (v) { return v + ' m'; }, function (v) { return { reichweite: { mp: v } }; });
   regler('rwMg', function (v) { return v + ' m'; }, function (v) { return { reichweite: { mg: v } }; });
+  regler('rwArmbrust', function (v) { return v + ' m'; }, function (v) { return { reichweite: { armbrust: v } }; });
+  regler('rwScharf', function (v) { return v + ' m'; }, function (v) { return { reichweite: { scharfschuetze: v } }; });
   regler('tnBwTage', function (v) { return Number(v) ? v + (Number(v) === 1 ? ' Tag' : ' Tage') : 'nie'; }, function (v) { return { bundeswehr: { falltage: v } }; });
   $('tnBwAktiv').addEventListener('change', function () {
     anfrage('verwaltung/api', { bundeswehr: { aktiv: $('tnBwAktiv').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
@@ -966,6 +988,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { verwandlung: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
   regler('tnLGroesse', function (v) { return v + ' %'; }, function (v) { return { leichenGroesse: v }; });
+  regler('tnSGroesse', function (v) { return v + ' %'; }, function (v) { return { soldatenGroesse: v }; });
   regler('tnHGroesse', function (v) { return v + ' %'; }, function (v) { return { heldenGroesse: v }; });
   regler('tnGGroesse', relProzent, function (v) { return { groesseGesamt: v }; });
   function globalSetzen(f) {
@@ -2830,7 +2853,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   // 🎒 Funde & Waffen
   rein(P.funde, karteVon('titelFunde'));
   if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden und Schussfolge'); rein(wk, $('wfHinweis')); Object.keys(WFVORGABE).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); rein(wk, $('wfInfo_' + k)); }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
-  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg'].forEach(function (id) { zeile(waffen, id); }); }
+  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwScharf'].forEach(function (id) { zeile(waffen, id); }); }
   // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
   rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
   rein(P.aufgaben, $('aufgabenKarte'));
@@ -2847,7 +2870,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   var wert = function (id, vorgabe) { var e = $(id); var v = e ? Number(e.value) : NaN; return isFinite(v) ? v : vorgabe; };
   var kommaZahl = function (v, st) { return String(Math.round(v * Math.pow(10, st || 0)) / Math.pow(10, st || 0)).replace('.', ','); };
   // Überraschungsfaktor je Waffe (client/welt.mjs, WAFFEN[..].ueberraschung; tests/verwaltung.test.mjs prüft die Übereinstimmung)
-  var UEB = { pistole: 1.5, gewehr: 1.5, schrotflinte: 1.5, mp: 1.5, mg: 1.5, schlaeger: 3, sense: 3, messer: 4, faust: 2.5 };
+  var UEB = { pistole: 1.5, gewehr: 1.5, schrotflinte: 1.5, mp: 1.5, mg: 1.5, armbrust: 2, scharfschuetze: 1.5, schlaeger: 3, sense: 3, messer: 4, faust: 2.5 };
   var NEBEN = { schrotflinte: 45 / 70 };   // Schrot: Nebenschaden an weiteren Zombies im Kegel, im Verhältnis zum Hauptschaden
   var KRIECHER = 0.35;                      // Kriecher hat 35 % der Zombie-Lebenspunkte (raum.mjs KRIECHER_HP)
   var KANONE = 100, FLAECHE = 60, SOLDAT = 100;   // stuetzpunkt.mjs (feste Werte)

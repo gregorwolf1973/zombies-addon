@@ -490,10 +490,11 @@ test('Maschinenpistole und Maschinengewehr: hohe Feuerrate, Reichweiten einstell
   await beenden(c);
 });
 
-test('Bundeswehr-Beute: Granate/MP/MG nur in bw_kiste und bw_container; Bots ordnen MP/MG über das Gewehr', () => {
+test('Bundeswehr-Beute: Granate/MP/MG nur in bw_kiste, bw_container und (MP/MG) Polizeiwache; Bots ordnen MP/MG über das Gewehr', () => {
   for (const [art, liste] of Object.entries(BEUTE)) {
     const neu = liste.filter(d => ['granate', 'mp', 'mg'].includes(d));
     if (art === 'bw_kiste' || art === 'bw_container') assert.ok(neu.length > 0, art);
+    else if (art === 'laden_polizei') assert.ok(neu.includes('mp') && neu.includes('mg'), 'Polizeiwache: MP und MG selten');
     else assert.equal(neu.length, 0, 'neue Bundeswehr-Waffen dürfen nicht in ' + art + ' liegen');
   }
   const zahl = (liste, d) => liste.filter(q => q === d).length;

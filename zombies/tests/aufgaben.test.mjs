@@ -10,7 +10,7 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { Aufgaben } from '../server/aufgaben.mjs';
-import { KACHEL } from '../client/welt.mjs';
+import { KACHEL, WELT_VERSION } from '../client/welt.mjs';
 
 // Figur in den Innenraum eines Safe Rooms setzen (neben die Eingangstür oder an einen Punkt darin)
 function inDenSafeRoom(raum, p, s, wo = 'tuer') {
@@ -353,4 +353,66 @@ test('Einstellungen: Aufgaben und Evakuierung werden begrenzt, Vorgaben stimmen'
   assert.deepEqual(f.aufgaben, { an: false, stunde: 23, wartezeit: 10, wartenEchtMin: 1, anzahl: 3 });
   assert.equal(bereinige({ bundeswehr: { pumaPause: 0.01 } }).bundeswehr.pumaPause, 0.1);
   assert.equal(bereinige({}).aufgaben.stunde, 18);
+});
+
+test('Evakuierungsbus und -panzer schießen auf Zombies in der Nähe, nie auf Spieler, nach der Abfahrt nicht mehr', async () => {
+  await frisch();
+  const a = await beitreten('Schuetze');
+  const { raum } = a;
+  try {
+    setzeAufgaben(raum, ['funk', 'tor', 'zombies', 'lampen']);
+    const schuesse = [];
+    a.c.onMessage('bwschuss', m => schuesse.push(m));
+    raum.aufgaben.funkAbsetzen(a.p, raum.welt.safeRooms[0]);
+    raum.aufgaben.evakTrefferChance = 1;
+    raum.state.uhr = 18 * 60 + 0.1;
+    assert.ok(await bis(() => busVon(raum)), 'kein Bus');
+    const [, bus] = busVon(raum);
+    // Spieler draußen neben dem Bus: bekommt nie Schaden durch den Bus
+    a.p.ebene = ''; a.p.x = bus.x + 60; a.p.y = bus.y + 60; const hp = a.p.hp;
+    // Zombie in Reichweite (zu weit: kein Schuss)
+    const zid = raum.setzeZombie(bus.x + 150, bus.y, '');
+    const z = raum.state.zombies.get(zid); raum.zombieInfo.get(zid).steht = true; z.hp = 100;
+    const fern = raum.setzeZombie(bus.x + 900, bus.y, ''); raum.zombieInfo.get(fern).steht = true;
+    assert.ok(await bis(() => !raum.state.zombies.has(zid) || z.hp < 100), 'Bus schießt nicht');
+    assert.ok(schuesse.length > 0 && schuesse.every(m => m.art === 'mg'), 'Schussdarstellung fehlt');
+    assert.ok(raum.state.zombies.has(fern), 'Zombie außer Reichweite getroffen');
+    assert.equal(a.p.hp, hp, 'Spieler getroffen');
+    // Panzer in Level 2 (Isarauen): Turm-MG aus der Fahrzeugmitte
+    raum.state.karte = 'isarauen'; schuesse.length = 0;
+    const z2 = raum.setzeZombie(bus.x - 120, bus.y, ''); raum.zombieInfo.get(z2).steht = true;
+    assert.ok(await bis(() => schuesse.some(m => Math.hypot(m.x1 - bus.x, m.y1 - bus.y) < 1)), 'Panzer schießt nicht aus der Mitte');
+    // Abfahrt: Schluss mit Schießen
+    raum.aufgaben.busWeg();
+    await warte(100); schuesse.length = 0;
+    raum.setzeZombie(bus.x + 100, bus.y, '');
+    await warte(700);
+    assert.equal(schuesse.length, 0, 'schießt nach der Abfahrt');
+  } finally { await beenden(a.c); }
+});
+
+test('Neues Level: alle Spieler und Bots erscheinen im selben Safe House', async () => {
+  await frisch();
+  const alt = SpielRaum.einstellungen;
+  const id1 = neueId(), id2 = neueId();
+  const a = await beitreten('Eins', id1), b = await beitreten('Zwei', id2);
+  try {
+    a.raum.weltNeuStarten(false, { version: WELT_VERSION, karte: 'geretsried', seed: 4242, zeit: 0, uhr: 480, besiegt: 0, level: 2, chat: [] });
+    await bis(() => !SpielRaum.aktiv, 3000);
+    SpielRaum.einstellungen = { ...alt, bots: 4 };
+    const c1 = await beitreten('Eins', id1);
+    const c2 = await beitreten('Zwei', id2);
+    const c3 = await beitreten('Neu');   // ohne gespeicherten Stand
+    try {
+      const raum = c1.raum;
+      assert.equal(raum.state.level, 2);
+      const ps = [...raum.state.spieler.values()];
+      assert.ok(ps.length >= 5, 'Bots fehlen: ' + ps.length);
+      const ebenen = new Set(ps.map(p => p.ebene));
+      assert.equal(ebenen.size, 1, 'verschiedene Orte: ' + [...ebenen].join(','));
+      const e = [...ebenen][0];
+      assert.ok(e && raum.welt.safeRooms.some(s => s.ebene === e), 'nicht in einem Safe House: ' + e);
+      assert.equal(e, raum.startSafe().ebene);
+    } finally { await beenden(c1.c, c2.c, c3.c); }
+  } finally { SpielRaum.einstellungen = alt; }
 });

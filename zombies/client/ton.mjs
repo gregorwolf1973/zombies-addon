@@ -239,8 +239,14 @@ function ton(ziel, dauer, { typ = 'sine', freq = 440, freqEnde, start = 0, a = 0
 }
 
 // ---------- einzelne Geräusche ----------
-const SCHUSS_EREIGNIS = { pistole: 'schussPistole', mp: 'schussPistole', gewehr: 'schussGewehr', mg: 'schussGewehr', schrotflinte: 'schussSchrot' };
+const SCHUSS_EREIGNIS = { pistole: 'schussPistole', mp: 'schussPistole', gewehr: 'schussGewehr', mg: 'schussGewehr', scharfschuetze: 'schussGewehr', schrotflinte: 'schussSchrot' };
 export function schuss(x, y, laut = 1, art = 'pistole') {
+  if (art === 'armbrust') {   // leises Sirren der Sehne, kein Knall
+    const z = ort(x, y, laut); if (!z) return;
+    ton(z, 0.14, { typ: 'triangle', freq: 520, freqEnde: 190, a: 0.002, laut: 0.5 });
+    rauschen(z, 0.06, { freq: 3500, freqEnde: 1800, a: 0.002, laut: 0.25 });
+    return;
+  }
   if (probe(SCHUSS_EREIGNIS[art] ?? 'schussPistole', x, y, art === 'schrotflinte' ? 1.1 : 1)) return;
   const z = ort(x, y, laut); if (!z) return;
   rauschen(z, 0.35, { freq: 2500, freqEnde: 300, a: 0.002, laut: 1 });

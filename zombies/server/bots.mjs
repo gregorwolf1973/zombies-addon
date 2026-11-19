@@ -121,6 +121,7 @@ function brauchtDringend(p, d) {
   if (d === 'verband') return p.hp < 50 && !p.rucksack.includes('verband');
   if (d === 'spritze') return p.infektion > 0;
   if (d === 'munition') return WAFFEN[p.waffe]?.fern && p.munition < 10;
+  if (WAFFEN[d]?.pfeil) return false;   // Bots nutzen die Armbrust nicht (Pfeile als eigener Vorrat)
   if (WAFFEN[d]) return !p.waffe || (WAFFEN_RANG.indexOf(d) > WAFFEN_RANG.indexOf(p.waffe) && !(WAFFEN[d]?.fern && !p.munition));
   if (d === 'tasche' || d === 'trekking') return (DINGE[d]?.plaetze ?? 0) > p.plaetze;
   return false;   // Bretter, Lampen, Seile, Schlüssel … bleiben für die Gruppe in der Kiste

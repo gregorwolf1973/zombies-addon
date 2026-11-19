@@ -3,7 +3,7 @@
 // Der Bus steht zur eingestellten Zeit am Ortsausgang; sind bei der Abfahrt genug Aufgaben erledigt, geht es in
 // die nächste Karte (Level), sonst fährt er ohne die Gruppe ab und kommt am nächsten Spieltag wieder.
 import { schema, t } from '@colyseus/schema';
-import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall } from '../client/welt.mjs';
+import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN } from '../client/welt.mjs';
 
 export const Aufgabe = schema({
   id: t.string(),
@@ -71,6 +71,8 @@ export const hhmm = min => {
   const m = ((Math.round(min) % 1440) + 1440) % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 };
+
+const EVAK_REICHWEITE = 230, EVAK_PAUSE = 0.4, EVAK_TREFFER = 0.8;   // Bus/Panzer: Reichweite (px), Schussfolge (s), Trefferchance
 
 export class Aufgaben {
   constructor(raum) {
@@ -198,6 +200,7 @@ export class Aufgaben {
   schritt(dt) {
     const s = this.raum.state;
     if (!this.an()) { if (s.busDa) this.busWeg(); return; }
+    if (s.busDa) this.evakFeuer(dt);
     if (!s.aufgaben.size) { this.basis = s.besiegt; this.ziehen(); }   // zur Laufzeit eingeschaltet
     this.takt -= dt;
     if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); }
@@ -240,6 +243,41 @@ export class Aufgaben {
     const alleDa = this.mitfahrer();
     // sofortige Abfahrt nur, wenn die Fahrt auch gelingt – sonst wartet er bis zum Ablauf der Zeit
     if ((alleDa && this.fahrtGelingt()) || this.busRest <= 0) this.abfahrt();
+  }
+
+  // Bus (Gewehre aus den Fenstern) und Panzer (Turm-MG) schießen vom Erscheinen bis zur Abfahrt auf Zombies in der Nähe;
+  // Treffer nur auf Zombies draußen, nie auf Spieler. Darstellung wie bei Soldaten/MG-Nest ('bwschuss', n = -1).
+  evakFeuer(dt) {
+    const r = this.raum, s = r.state, f = s.fahrzeuge.get(this.busId);
+    if (!f) return;
+    this.feuerKuehl = (this.feuerKuehl ?? 0) - dt;
+    if (this.feuerKuehl > 0) return;
+    let ziel = null, bd = EVAK_REICHWEITE;
+    for (const [id, z] of s.zombies) {
+      if (z.ebene || !(z.hp > 0)) continue;
+      const d = Math.hypot(z.x - f.x, z.y - f.y);
+      if (d < bd) { bd = d; ziel = [id, z]; }
+    }
+    if (!ziel) return;
+    this.feuerKuehl = EVAK_PAUSE;
+    const [id, z] = ziel, panzer = s.karte === 'isarauen';
+    // Bus: Fenster verteilt über die Länge, auf der Seite zum Ziel; Panzer: aus dem Turm in der Mitte
+    let x = f.x, y = f.y;
+    if (!panzer) {
+      const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), laengs = (r.rnd() - 0.5) * 100;
+      const links = (z.y - f.y) * c - (z.x - f.x) * sn > 0 ? 1 : -1;   // Seite des Ziels
+      x = f.x + c * laengs - sn * 9 * links; y = f.y + sn * laengs + c * 9 * links;
+    }
+    const treffer = r.rnd() < (this.evakTrefferChance ?? EVAK_TREFFER);
+    const w = Math.atan2(z.y - y, z.x - x) + (treffer ? 0 : (r.rnd() < 0.5 ? -1 : 1) * (0.06 + r.rnd() * 0.08));
+    const d = Math.hypot(z.x - x, z.y - y);
+    r.broadcast('bwschuss', { art: 'mg', n: -1, x1: x, y1: y, x2: x + Math.cos(w) * d, y2: y + Math.sin(w) * d, w, t: treffer ? 1 : 0 });
+    if (treffer) {
+      const vorher = s.besiegt, von = this.schuetze ??= { name: panzer ? 'Evakuierungspanzer' : 'Evakuierungsbus', x, y, besiegt: 0 };
+      von.x = x; von.y = y;
+      r.schaden(id, z, r.einstellungen?.()?.waffen?.gewehr?.schaden ?? WAFFEN.gewehr.schaden, von);
+      s.besiegt = vorher;   // zählt nicht für die Aufgaben der Spieler (wie die Bundeswehr)
+    }
   }
 
   restSetzen() {

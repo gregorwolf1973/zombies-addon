@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.48.0 – 19.11.2026
+
+- Startdialog vor Level 1: 5 Fähigkeitspunkte verteilen und einen Startgegenstand wählen (Pistole mit 12 Schuss, Taschenlampe, Brecheisen oder +1 Wasser); nur einmal je Runde, Bots wählen selbst.
+- Neue Waffen: Armbrust (leise, 25 m, Pfeile bleiben am Einschlag liegen und lassen sich aufheben) und Scharfschützengewehr (75 m, hoher Schaden, langsam, laut); Werte in der Verwaltung.
+- Maschinengewehr und Scharfschützengewehr jetzt auch in Munitionskisten der Bundeswehr (12 % bzw. 8 %); Polizeiwachen (falls auf der Karte) mit Waffenschrank. WELT_VERSION 16.
+- In etwa jeder fünften Wohnung liegt eine Leiche (durchsuchbar).
+- Nach dem Levelwechsel starten alle Spieler und Bots im selben Safe House.
+- Evakuierungsbus und -panzer feuern während der Evakuierung auf Zombies in der Nähe.
+- Anzeige „Uhrzeit · Tag N“; Soldatengröße mit eigenem Regler (Bezug: Held).
+
 ## 0.47.1 – 19.11.2026
 
 - Horde-Ziele sichtbar (Verwaltung „Horde-Ziele anzeigen“ oder ?debug): Zielfahne mit Namen, Linie von der Hordenmitte, Countdown bis zum Zielwechsel, letzte 5 Zielwechsel mit Grund; jeder Zielwechsel steht im Add-on-Protokoll.

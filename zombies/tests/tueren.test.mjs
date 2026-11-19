@@ -9,7 +9,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { KACHEL, T, frei, schlossArt } from '../client/welt.mjs';
+import { KACHEL, T, frei, schlossArt, ladenArt } from '../client/welt.mjs';
 
 const PORT = 27300 + Math.floor(Math.random() * 200);
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -335,4 +335,74 @@ test('Schlossart auf dem Server: Anteile aus den Einstellungen, Kontext je Art, 
     raum.tuerAnteileUebernehmen();
     assert.deepEqual([raum.state.tuerFrei, raum.state.tuerRaetsel, raum.state.tuerSchluessel], [10, 20, 70]);
   } finally { SpielRaum.einstellungen = { ...SpielRaum.einstellungen, tueren: { frei: 50, raetsel: 25, schluessel: 25 } }; await c.leave(); }
+});
+
+test('Rätsel-Tür: wird im echten Haus gefunden, löst die Frage aus und geht per Rätsel auf', async () => {
+  const { c, raum, p } = await beitreten('Raetsler');
+  const gesehen = [];
+  c.onMessage('raetsel', m => gesehen.push(m));
+  try {
+    // erste Zimmertür aller Häuser, die laut Seed nur per Rätsel aufgeht
+    let fund = null;
+    for (const h of raum.welt.haeuser.filter(q => q.betretbar)) {
+      const w = raum.wv(ebeneVon(h));
+      const t = w.tueren.find(q => raum.state.tueren.get(`${w.ebene}:${q.x},${q.y}`)?.verschlossen && raum.tuerArt(`${w.ebene}:${q.x},${q.y}`) === 'raetsel');
+      if (t) { fund = { h, w, t, key: `${w.ebene}:${t.x},${t.y}` }; break; }
+    }
+    assert.ok(fund, 'keine Rätsel-Tür in der Welt');
+    const { h, w, t, key } = fund;
+    hinein(raum, p, h);
+    const nebenTuer = [[0, 1], [0, -1], [1, 0], [-1, 0]].map(([dx, dy]) => ({ x: (t.x + dx + 0.5) * KACHEL, y: (t.y + dy + 0.5) * KACHEL, k: w.hole(t.x + dx, t.y + dy) })).find(o => o.k === T.BODEN);
+    Object.assign(p, { x: nebenTuer.x, y: nebenTuer.y });
+    w.behaelter = [];
+    p.rucksack.clear();
+    const k = raum.kontext(p);
+    assert.equal(k?.art, 'schlossraetsel');
+    raum.starteAktion(c.client ?? { sessionId: c.sessionId, send: (typ, m) => { if (typ === 'raetsel') gesehen.push(m); } });
+    assert.ok(await bis(() => gesehen.length > 0), 'keine Rätselfrage angekommen');
+    assert.equal(gesehen[0].tuer, true);
+    const offen = raum.offeneRaetsel.get(c.sessionId);
+    assert.ok(offen);
+    c.send('antwort', { id: offen.id, index: offen.richtigIndex });
+    assert.ok(await bis(() => raum.state.tueren.get(key).offen), 'Tür blieb zu');
+    assert.equal(raum.state.tueren.get(key).verschlossen, false);
+  } finally { await c.leave(); }
+});
+
+test('Tote in Wohnungen: ca. 20 % der Wohnhaus-Ebenen, fest, durchsuchbar, nicht in Safe Rooms und Läden', async () => {
+  const { c, raum, p } = await beitreten('Leichenfinder');
+  try {
+    const haeuser = raum.welt.haeuser.filter(q => q.betretbar);
+    let ebenen = 0, mit = 0;
+    for (const h of haeuser) {
+      const ebene = ebeneVon(h), vorher = raum.state.leichen.size;
+      raum.wv(ebene);
+      const neu = [...raum.state.leichen].filter(([, l]) => l.ebene === ebene);
+      if (h.safe || ladenArt(h)) { assert.equal(neu.length, 0, 'Leiche in Safe Room/Laden ' + ebene); continue; }
+      ebenen++;
+      assert.ok(neu.length <= 1);
+      if (neu.length) { mit++; assert.equal(neu[0][1].fest, true); }
+    }
+    assert.ok(ebenen >= 8, 'zu wenige Häuser: ' + ebenen);
+    if (ebenen >= 40) assert.ok(mit / ebenen > 0.08 && mit / ebenen < 0.35, `Anteil ${mit}/${ebenen}`);   // (Dorf: Zahl der Häuser hängt vom Seed ab)
+    const orte = [...raum.state.leichen.values()].map(l => `${l.ebene}@${Math.round(l.x)},${Math.round(l.y)}`).sort();
+    // feste Tote altern nicht und fallen nicht dem Limit zum Opfer
+    for (const l of raum.state.leichen.values()) l.alter = 0;
+    raum.leichenAltern(10000);
+    for (let i = 0; i < 40; i++) raum.neueLeiche({ x: 100, y: 100, richtung: 0, variante: 0, ebene: '' });
+    assert.equal([...raum.state.leichen.values()].filter(l => l.fest).length, orte.length, 'feste Tote verschwunden');
+    // durchsuchbar wie Leichen draußen
+    if (![...raum.state.leichen.values()].some(q => q.fest)) {   // kleine Welt ohne Zufallstreffer: eine feste Leiche selbst legen
+      const h0 = haeuser.find(q => !q.safe && !ladenArt(q)), w0 = raum.wv(ebeneVon(h0));
+      raum.neueLeiche({ x: w0.start.x, y: w0.start.y, richtung: 0, variante: 0, ebene: ebeneVon(h0) }, true);
+    }
+    const [id, l] = [...raum.state.leichen].find(([, q]) => q.fest);
+    l.rest = 1; raum.leichenInhalt.set(id, ['wasser']);   // (leere Leichen sind nicht durchsuchbar, auch draußen nicht)
+    const w = raum.wv(l.ebene);
+    Object.assign(p, { ebene: l.ebene, x: l.x + 10, y: l.y });
+    w.behaelter = [];
+    const k = raum.kontext(p);
+    assert.equal(k?.art, 'durchsuchen');
+    assert.equal(k.behaelter.art, 'leiche');
+  } finally { await c.leave(); }
 });

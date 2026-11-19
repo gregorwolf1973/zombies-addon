@@ -21,6 +21,7 @@ import { naheBodenDinge, auswahlAuf, auswahlZu } from './aufheben.mjs';
 import * as sprache from './sprache.mjs';
 import { merkzettelAnschliessen, merkzettelErwarten } from './merkzettel.mjs';
 import { fkStart } from './faehigkeiten.mjs';
+import { startwahlStart } from './startwahl.mjs';
 import { Uebersicht } from './uebersicht.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
@@ -586,6 +587,8 @@ const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
 const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   // figuren2: 160er Felder
+// Soldaten/Ärzte/Verwundete im Lager: Bezug = Held bei 100 % (0,42), mal Regler soldatenGroesse
+const soldatSkala = () => ZOMBIE_GROESSE * ((raum.state?.soldatenGroesse || 100) / 100);
 const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // z6/z7 aus figuren2 (Riley Gombart), ab 'kaminkehrer' aus figuren3 (Gemini)
 const GEMINI_TYPEN = new Set(ZOMBIE_TYPEN.slice(7));
@@ -594,8 +597,8 @@ const ZIEL_NAMEN = { pharmacy: 'Apotheke', chemist: 'Drogerie', doctors: 'Arzt',
   apotheke: 'Apotheke', lebensmittel: 'Lebensmittel', kaufhaus: 'Kaufhaus' };
 const ZIEL_SYMBOL = { apotheke: '💊', lebensmittel: '🛒', kaufhaus: '🔦' };
 const HELD_HALTUNGEN = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe'];
-const HELD_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'gewehr', mp: 'gewehr', mg: 'gewehr', schlaeger: 'messer', sense: 'messer', messer: 'messer', brechstange: 'messer' };   // sonst keine Waffe in der Hand
-const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer', mp: 'pistole', mg: 'gewehr' };   // sonst Taschenlampe
+const HELD_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'gewehr', mp: 'gewehr', mg: 'gewehr', armbrust: 'gewehr', scharfschuetze: 'gewehr', schlaeger: 'messer', sense: 'messer', messer: 'messer', brechstange: 'messer' };   // sonst keine Waffe in der Hand
+const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer', mp: 'pistole', mg: 'gewehr', armbrust: 'gewehr', scharfschuetze: 'gewehr' };   // sonst Taschenlampe
 
 class Ort extends Phaser.Scene {
   constructor() { super('ort'); }
@@ -726,7 +729,7 @@ class Ort extends Phaser.Scene {
       fetzenBeiSchuss(this, raum.state.zombies.values(), m);
       // Schrot kommt als mehrere Linien – nur ein Knall
       const jetzt = performance.now();
-      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp') ton.huelse(m.x1, m.y1); }
+      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'scharfschuetze' ? 1.8 : m.art === 'armbrust' ? 0.3 : m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp' && m.art !== 'armbrust') ton.huelse(m.x1, m.y1); }
     });
     raum.onMessage('bwschuss', m => this.bwSchuss(m));
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
@@ -758,10 +761,11 @@ class Ort extends Phaser.Scene {
       meldung('⚠️ Deine Karte weicht vom Server ab – Kisten und Türen stehen evtl. woanders. Bitte App ganz schließen und neu öffnen.', true);
     });
     fkStart(raum, meldung);
+    startwahlStart(raum);   // Startwahl vor Level 1 (5 Punkte + Gegenstand)
     { const fk = document.getElementById('fkknopf'); if (fk) $('leiste').prepend(fk); }   // Symbolleiste über der Eckkarte
     raum.onMessage('gefunden', m => {
       if (m.dinge.length) ton.aufheben(); else if (m.rest || !ton.ereignis('truheLeer')) ton.suchen();
-      if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : dingText(d)).join(', '));
+      if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : d === 'pfeil' ? '➶ 6 Pfeile' : dingText(d)).join(', '));
       else if (m.rest) meldung('Rucksack voll – der Rest bleibt hier');
       else meldung('Nichts Brauchbares gefunden');
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
@@ -1745,7 +1749,7 @@ class Ort extends Phaser.Scene {
       if (l.x < rx0 || l.x > rx1 || l.y < ry0 || l.y > ry1) { if (o.visible) o.setVisible(false); continue; }
       o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * (s.leichenGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100);   // Einstellung: Leichengröße in %
       o.setVisible((l.ebene ?? '') === this.aktEbene);
-      const ausblenden = Math.min(1, (LEICHE_DAUER - l.alter) / 20);
+      const ausblenden = l.fest ? 1 : Math.min(1, (LEICHE_DAUER - l.alter) / 20);
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
     }
     for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.destroy(); this.leichen.delete(id); }
@@ -1879,8 +1883,8 @@ class Ort extends Phaser.Scene {
     }
     this.bwLicht = new BwLicht(this, sp);
     const soldat = (x, y, blick, phase, n = -1) => {
-      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle'));
-      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle'));
+      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(soldatSkala() * groesse('figuren2', 'soldat_idle'));
+      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(soldatSkala() * groesse('figuren2', 'soldat_idle'));
       const box = this.add.container(x, y, [fuesse, bild]).setDepth(3.5).setRotation(blick);
       const e = { box, bild, fuesse, phase, blick, schussBis: 0, n };
       o.soldaten.push(e);
@@ -1889,11 +1893,11 @@ class Ort extends Phaser.Scene {
       if (t.art === 'mgnest') soldat(t.x - Math.cos(t.blick) * 5, t.y - Math.sin(t.blick) * 5, t.blick, i, i);   // hinter dem MG
       else if (t.art === 'posten' && t.rolle === 'soldat') soldat(t.x, t.y, t.blick, i, i);   // n = Teil-Nummer: Schüsse vom Server zeigen den Soldaten feuernd
       else if (t.art === 'posten' && t.rolle === 'arzt') {
-        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', 'arzt'));
+        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(soldatSkala() * 0.95 * groesse('figuren2', 'arzt'));
         o.aerzte.push({ box: this.add.container(t.x, t.y, [bild]).setDepth(3.5).setRotation(t.blick), bild });
       } else if (t.art === 'posten' && t.rolle === 'verwundet') {
-        const bild = this.add.image(t.x, t.y, 'figuren2', this.figurBild2('verwundet', t.variante)).setScale(BOGEN2_GROESSE * 1.26).setRotation(t.blick).setDepth(0.6);
-        o.verwundete.push({ bild, s0: BOGEN2_GROESSE * 1.26, phase: i });
+        const bild = this.add.image(t.x, t.y, 'figuren2', this.figurBild2('verwundet', t.variante)).setScale(soldatSkala() * 1.26).setRotation(t.blick).setDepth(0.6);
+        o.verwundete.push({ bild, s0: soldatSkala() * 1.26, phase: i });
       }
     });
   }
@@ -1963,7 +1967,7 @@ class Ort extends Phaser.Scene {
     const o = this.stuetzpunktObj, e = o?.soldaten.find(q => q.n === m.n);
     if (!e || e.tot) return;
     e.tot = true;
-    const bild = this.add.image(m.x, m.y, 'figuren2', this.figurBild2('verwundet', m.n)).setScale(BOGEN2_GROESSE * 1.26).setRotation(m.w ?? 0).setDepth(0.6).setTint(0xb0a0a0);
+    const bild = this.add.image(m.x, m.y, 'figuren2', this.figurBild2('verwundet', m.n)).setScale(soldatSkala() * 1.26).setRotation(m.w ?? 0).setDepth(0.6).setTint(0xb0a0a0);
     (o.leichen ??= []).push(bild);
     if (laut) { ton.ereignis('menschGebissen', m.x, m.y); fetzen(this, m.x, m.y, m.w ?? 0, 1.4); }
   }
@@ -2167,6 +2171,7 @@ class Ort extends Phaser.Scene {
     let s = k.SHIFT.isDown;
     if (dx || dy) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; }
     else if (this.joystick.id !== null) { dx = this.joystick.vx; dy = this.joystick.vy; s = false; }
+    if (window.__startwahlOffen) { dx = 0; dy = 0; s = false; }   // Startwahl-Dialog offen: Figur steht still
     this.eingabe = { dx, dy, s };
     const g = this.gesendet, jetzt = this.time.now;
     const anders = Math.abs(g.dx - dx) > 0.05 || Math.abs(g.dy - dy) > 0.05 || g.s !== s;
@@ -2350,7 +2355,17 @@ class Ort extends Phaser.Scene {
   // Schuss: Mündungsblitz und ein kurzer, angedeuteter Feuerstrahl Richtung Ziel (kein durchgehender Strich)
   schuss(m) {
     const w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), c = Math.cos(w), sn = Math.sin(w);
-    const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr' || m.art === 'mg';
+    // Armbrust: kein Mündungsblitz, ein sichtbarer Bolzen fliegt zum Ziel
+    if (m.art === 'armbrust') {
+      const g = this.add.graphics().setDepth(7).setRotation(w);
+      g.lineStyle(2.5, 0x6d4c41, 1).lineBetween(-9, 0, 5, 0);
+      g.lineStyle(2.5, 0xcfd8dc, 1).lineBetween(5, 0, 9, 0);
+      g.lineStyle(1.5, 0xeeeeee, 0.9).lineBetween(-9, -2, -12, -3).lineBetween(-9, 2, -12, 3);
+      g.setPosition(m.x1 + c * 14, m.y1 + sn * 14);
+      this.tweens.add({ targets: g, x: m.x2, y: m.y2, duration: Math.min(260, 60 + Math.hypot(m.x2 - m.x1, m.y2 - m.y1) * 0.7), onComplete: () => g.destroy() });
+      return;
+    }
+    const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr' || m.art === 'mg' || m.art === 'scharfschuetze';
     const vorn = 16, lang = gewehr ? 38 : schrot ? 22 : 26;
     const g = this.add.graphics().setDepth(7);
     // Feuerzunge: breit und gelb an der Mündung, schmal und rot nach vorn auslaufend
@@ -2494,9 +2509,11 @@ class Ort extends Phaser.Scene {
       balkenSetzen('durst', ich.durst);
       balkenSetzen('hunger', ich.hunger);
       const wf = WAFFEN[ich.waffe], d = DINGE[ich.waffe];
-      const waffe = !wf ? `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`
-        : wf.fern ? (ich.munition > 0 ? `${d.zeichen} ${d.name} · ${ich.munition} Schuss` : `${d.zeichen} ${d.name} – keine Munition, stoßen`)
-        : `${d.zeichen} ${d.name}${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`;
+      const pfeile = ich.pfeile ? ` · ➶ ${ich.pfeile} Pfeile` : '';
+      const waffe = !wf ? `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}${pfeile}`
+        : wf.pfeil ? (ich.pfeile > 0 ? `${d.zeichen} ${d.name} · ${ich.pfeile} Pfeile` : `${d.zeichen} ${d.name} – keine Pfeile, stoßen`)
+        : wf.fern ? (ich.munition > 0 ? `${d.zeichen} ${d.name} · ${ich.munition} Schuss${pfeile}` : `${d.zeichen} ${d.name} – keine Munition, stoßen${pfeile}`)
+        : `${d.zeichen} ${d.name}${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}${pfeile}`;
       textSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
         + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
       textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gemeinsam`);
@@ -2513,7 +2530,7 @@ class Ort extends Phaser.Scene {
     }
     this.aufgabenZeigen(ich);
     const uhr = s.uhr ?? 480, hellJetzt = helligkeit(uhr);
-    textSetzen('zeit', `${istNacht(uhr) ? '🌙' : hellJetzt < 1 ? '🌅' : '☀️'} ${uhrText(uhr)}`);
+    textSetzen('zeit', `${istNacht(uhr) ? '🌙' : hellJetzt < 1 ? '🌅' : '☀️'} ${uhrText(uhr)} · Tag ${s.tag || 1}`);
     ton.tageszeit(istNacht(uhr));
     const liste = [...s.spieler.entries()].map(([id, p]) => {
       const zusatz = p.unten ? ' – am Boden' : !p.verbunden ? ' – Verbindung weg' : p.sicher ? ' 🛡' : '';
