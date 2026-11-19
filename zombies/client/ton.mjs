@@ -39,19 +39,86 @@ function laden(datei) {
 function vorladen() { for (const t of Object.values(zuordnung)) for (const d of t.dateien ?? []) laden(d); hintergrundPruefen(); }
 const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer ? b : null; };
 
+// ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------
+const MAX_STIMMEN = 8, MAX_ZOMBIE_STIMMEN = 4;
+const ZOMBIE_IDS = new Set(['entdeckt', 'kriecher', 'stoehnen', 'zombieTod', 'zombielandTag', 'zombielandNacht']);
+const MIN_ABSTAND = { entdeckt: 400, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 150, stoehnen: 300, kriecher: 400, menschGebissen: 300 };   // ms je Ereignis-ID
+const stimmen = [];            // laufende Einzel-Geräusche aus Dateien: { ende (s), v, zombie, g, src }
+const zuletzt = new Map();     // Ereignis-ID → Zeitpunkt (ms) des letzten Abspielens
+
+// erlaubt dieses Ereignis jetzt (Mindestabstand)? Ohne Treffer wird nichts vermerkt
+function abstandOk(id) {
+  const min = MIN_ABSTAND[id] ?? 0;
+  return !min || performance.now() - (zuletzt.get(id) ?? -1e9) >= min;
+}
+function abstandMerken(id) { if (MIN_ABSTAND[id]) zuletzt.set(id, performance.now()); }
+
+// Platz für eine neue Stimme (Lautstärke v)? Sonst wird die leiseste verdrängt – ist es die neue, false
+function stimmePlatz(zombie, v) {
+  const jetzt = ctx.currentTime;
+  for (let i = stimmen.length - 1; i >= 0; i--) if (stimmen[i].ende <= jetzt) stimmen.splice(i, 1);
+  const leisest = liste => liste.reduce((m, q) => !m || q.v < m.v ? q : m, null);
+  for (const [liste, max] of [[stimmen, MAX_STIMMEN], [stimmen.filter(q => q.zombie), MAX_ZOMBIE_STIMMEN]]) {
+    if (!(zombie || liste === stimmen) || liste.length < max) continue;
+    const l = leisest(liste);
+    if (!l || l.v >= v) return false;
+    try { l.g.gain.setTargetAtTime(0, jetzt, 0.03); l.src.stop(jetzt + 0.15); } catch { /* schon zu Ende */ }
+    stimmen.splice(stimmen.indexOf(l), 1);
+  }
+  return true;
+}
+
 // eine zugeordnete Datei abspielen; false = keine da (dann erzeugt das Spiel selbst einen Ton)
 function probe(id, x, y, extra = 1) {
   const t = zuordnung[id];
   if (!ctx || !t?.dateien?.length) return false;
   const bereit = t.dateien.map(geladen).filter(Boolean);
   if (!bereit.length) { t.dateien.forEach(laden); return false; }
-  const z = ort(x, y, (t.laut ?? 80) / 100 * extra);
+  if (!abstandOk(id)) return true;   // zu kurz nach dem letzten: verworfen, auch kein Ersatzton
+  const laut = (t.laut ?? 80) / 100 * extra;
+  const z = ort(x, y, laut);
   if (!z) return true;   // zu weit weg: still, aber auch kein Ersatzton
-  const src = ctx.createBufferSource(); src.buffer = bereit[Math.floor(Math.random() * bereit.length)];
-  src.playbackRate.value = 0.94 + Math.random() * 0.12;
+  const v = z.gain.value, zombie = ZOMBIE_IDS.has(id);
+  const buf = bereit[Math.floor(Math.random() * bereit.length)], rate = 0.94 + Math.random() * 0.12;
+  if (!stimmePlatz(zombie, v)) { try { z.disconnect(); } catch { /* egal */ } return true; }
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  src.playbackRate.value = rate;
   src.connect(z); src.start();
+  stimmen.push({ ende: ctx.currentTime + buf.duration / rate, v, zombie, g: z, src });
+  abstandMerken(id);
   return true;
 }
+
+// ---------- Horden-Grollen: viele Zombies in Hörweite → ein dauerndes tiefes Brummen statt vieler Einzellaute ----------
+const HORDE_AB = 25;            // ab so vielen Zombies in Hörweite
+let hordeKnoten = null, hordeAnzahl = 0, hordeStand = 0;
+export const hordeAktiv = () => hordeAnzahl > HORDE_AB;
+// n = Zahl der Zombies in Hörweite; wird vom Spiel regelmäßig gemeldet (bleibt es aus, verklingt das Grollen)
+export function horde(n) {
+  hordeAnzahl = endlich(n); hordeStand = performance.now();
+  hordeLaut();
+}
+function hordeLaut() {
+  if (!ctx) return;
+  const an = stufe > 0 && !document.hidden && hordeAnzahl > HORDE_AB;
+  if (!hordeKnoten && !an) return;
+  if (!hordeKnoten) {
+    // Rauschen → Tiefpass, dazu zwei leicht verstimmte Sägezahn-Brummer; ein langsamer LFO lässt es wogen
+    const src = ctx.createBufferSource(); src.buffer = rauschPuffer; src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220; f.Q.value = 1.5;
+    const g = ctx.createGain(); g.gain.value = 0;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.23;
+    const lg = ctx.createGain(); lg.gain.value = 70; lfo.connect(lg); lg.connect(f.frequency);
+    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = o2.type = 'sawtooth'; o1.frequency.value = 52; o2.frequency.value = 55.5;
+    const og = ctx.createGain(); og.gain.value = 0.25; o1.connect(og); o2.connect(og); og.connect(f);
+    src.connect(f); f.connect(g); g.connect(haupt);
+    src.start(); lfo.start(); o1.start(); o2.start();
+    hordeKnoten = { g };
+  }
+  const ziel = an ? Math.min(0.5, 0.12 + (hordeAnzahl - HORDE_AB) / 120 * 0.4) * (drinnenJetzt ? 0.4 : 1) : 0;   // steigt mit der Zahl, gedeckelt
+  hordeKnoten.g.gain.setTargetAtTime(ziel, ctx.currentTime, 1.2);
+}
+setInterval(() => { if (hordeKnoten && performance.now() - hordeStand > 6000) { hordeAnzahl = 0; } if (hordeKnoten) hordeLaut(); }, 2000);
 
 export function ereignis(id, x = null, y = null) { return probe(id, x, y); }
 
@@ -196,6 +263,7 @@ export function stoss(x, y, messer) {
 
 export function zombieWeg(x, y) {
   if (probe('zombieTod', x, y)) return;
+  if (!abstandOk('zombieTod')) return; abstandMerken('zombieTod');
   const z = ort(x, y, 0.8); if (!z) return;
   rauschen(z, 0.3, { freq: 600, freqEnde: 120, laut: 0.7 });
   ton(z, 0.45, { typ: 'sawtooth', freq: 160, freqEnde: 55, laut: 0.18 });
@@ -203,8 +271,11 @@ export function zombieWeg(x, y) {
 
 // Stöhnen: tiefe Sägezahnstimme mit Formantfilter und Zittern
 export function stoehnen(x, y, laut = 0.5, kriecht = false) {
+  if (hordeAktiv() && Math.random() < 0.6) return;   // in der Horde: Einzellaute noch seltener
   if (probe(kriecht ? 'kriecher' : 'stoehnen', x, y, laut * 1.6)) return;
+  if (!abstandOk('stoehnen')) return;
   const z = ort(x, y, laut); if (!z) return;
+  abstandMerken('stoehnen');
   const t = ctx.currentTime, dauer = 0.9 + Math.random() * 0.9, f0 = 75 + Math.random() * 45;
   const o = ctx.createOscillator(); o.type = 'sawtooth';
   o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * (0.7 + Math.random() * 0.25), t + dauer);
@@ -220,6 +291,7 @@ export function stoehnen(x, y, laut = 0.5, kriecht = false) {
 
 export function entdeckt(x, y) {
   if (probe('entdeckt', x, y)) return;
+  if (!abstandOk('entdeckt')) return; abstandMerken('entdeckt');
   stoehnen(x, y, 0.9);
   const z = ort(x, y, 0.4); if (z) rauschen(z, 0.5, { typ: 'bandpass', freq: 1200, q: 2, laut: 0.4 });   // Fauchen
 }

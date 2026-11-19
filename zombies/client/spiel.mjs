@@ -677,6 +677,13 @@ class Ort extends Phaser.Scene {
       if (e.key === '+' || e.key === '=') this.zoomen(1.25);
       else if (e.key === '-') this.zoomen(0.8);
     });
+    // Messhilfe: mit ?debug oben FPS und sichtbare/gesamte Zombies
+    if (new URLSearchParams(location.search).has('debug')) {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:fixed;top:2px;left:50%;transform:translateX(-50%);z-index:99;font:12px monospace;color:#0f0;background:#000a;padding:2px 6px;pointer-events:none';
+      document.body.appendChild(el);
+      this.messZeit = setInterval(() => { const m = this.messZombies ?? [0, 0]; el.textContent = `FPS ${Math.round(this.game.loop.actualFps)} | Zombies ${m[0]}/${m[1]}`; }, 500);
+    }
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
     if (new URLSearchParams(location.search).has('debug')) { window.szene = this; window.raum = raum; window.meineId = meineId; }
   }
@@ -1404,14 +1411,20 @@ class Ort extends Phaser.Scene {
     this.kegel.clear();
     const cam = this.cameras.main.worldView;
     const zf = (s.zombieGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100;   // Einstellung: Zombiegröße in %
+    const RAND = 150, rx0 = cam.x - RAND, rx1 = cam.right + RAND, ry0 = cam.y - RAND, ry1 = cam.bottom + RAND;   // Ausschnitt + Rand: nur dort wird gezeichnet
+    let gesamtZ = 0, sichtbarZ = 0;
     for (const [id, z] of s.zombies) {
       let f = this.zombies.get(id);
       if (!f) { f = this.neuerZombie(z); this.zombies.set(id, f); }
       const vx = f.x, vy = f.y;
       f.x += (z.x - f.x) * glatt; f.y += (z.y - f.y) * glatt;
       f.r = Phaser.Math.Angle.RotateTo(f.r, z.richtung, dt * 6);
+      gesamtZ++;
+      // außerhalb des Ausschnitts (+ Rand): nur Position mitführen, nichts zeichnen oder animieren
+      if (f.x < rx0 || f.x > rx1 || f.y < ry0 || f.y > ry1) { if (f.box.visible) f.box.setVisible(false); continue; }
       f.box.setPosition(f.x, f.y).setRotation(f.r);
       const zeigen = this.sichtbar(z);
+      if (zeigen) sichtbarZ++;
       f.box.setVisible(zeigen);
       const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
       const typ = ZOMBIE_TYPEN[(z.variante ?? 0) % ZOMBIE_TYPEN.length];
@@ -1454,6 +1467,7 @@ class Ort extends Phaser.Scene {
       }
     }
     for (const [id, f] of this.zombies) if (!s.zombies.has(id)) { f.box.destroy(); this.zombies.delete(id); }
+    this.messZombies = [sichtbarZ, gesamtZ];
     // Leichen: liegen flach, leere sind blasser, die letzten 20 s blenden sie aus
     for (const [id, l] of s.leichen) {
       let o = this.leichen.get(id);
@@ -1468,6 +1482,7 @@ class Ort extends Phaser.Scene {
         o.gf = tot3 ? groesse('figuren3', 'leiche_' + typ) : groesse('figuren', altName);   // Größenausgleich (groessen.mjs)
         this.leichen.set(id, o);
       }
+      if (l.x < rx0 || l.x > rx1 || l.y < ry0 || l.y > ry1) { if (o.visible) o.setVisible(false); continue; }
       o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * (s.leichenGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100);   // Einstellung: Leichengröße in %
       o.setVisible((l.ebene ?? '') === this.aktEbene);
       const ausblenden = Math.min(1, (LEICHE_DAUER - l.alter) / 20);
@@ -1488,6 +1503,7 @@ class Ort extends Phaser.Scene {
       o.x += (m.x - o.x) * glatt; o.y += (m.y - o.y) * glatt;
       if (Math.hypot(m.x - o.x, m.y - o.y) > 200) { o.x = m.x; o.y = m.y; }   // aus Haus oder Bus aufgetaucht
       o.r = Phaser.Math.Angle.RotateTo(o.r, m.richtung, dt * 8);
+      if (o.x < rx0 || o.x > rx1 || o.y < ry0 || o.y > ry1) { if (o.box.visible) o.box.setVisible(false); continue; }
       const weg = Math.hypot(o.x - vx, o.y - vy);
       o.lauf = (o.lauf ?? 0) + weg;
       o.box.setPosition(o.x, o.y).setRotation(o.r);
@@ -2134,8 +2150,17 @@ class Ort extends Phaser.Scene {
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {
       this.stoehnZeit = 1.5 + Math.random() * 3;
-      const nahe = [...raum.state.zombies.values()].filter(z => (z.ebene ?? "") === this.aktEbene && Math.hypot(z.x - this.lokal.x, z.y - this.lokal.y) < 700);
-      if (nahe.length) { const z = nahe[Math.floor(Math.random() * nahe.length)]; ton.stoehnen(z.x, z.y, z.kriecht ? 0.35 : 0.55, z.kriecht); }
+      // nur die nächsten ~6 Zombies kommen als Einzellaut in Frage; die Zahl in Hörweite steuert das Horden-Grollen
+      const nahe = [];
+      let hoerbar = 0;
+      for (const z of raum.state.zombies.values()) {
+        if ((z.ebene ?? '') !== this.aktEbene) continue;
+        const d = Math.hypot(z.x - this.lokal.x, z.y - this.lokal.y);
+        if (d < 700) { hoerbar++; nahe.push({ z, d }); }
+      }
+      nahe.sort((p, q) => p.d - q.d); nahe.length = Math.min(nahe.length, 6);
+      ton.horde(hoerbar);
+      if (nahe.length) { const z = nahe[Math.floor(Math.random() * nahe.length)].z; ton.stoehnen(z.x, z.y, z.kriecht ? 0.35 : 0.55, z.kriecht); }
     }
   }
 

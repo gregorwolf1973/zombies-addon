@@ -5,6 +5,7 @@
 - Einheitliche Figurgrößen: jedes Bild bekommt einen eigenen Ausgleich (client/groessen.mjs, gemessen mit tools/groessen_messen.py); Bewohner so breit wie der Survivor, alle Zombie-Typen etwa 10 % breiter, Leichen passend lang. Die Größenregler wirken auf diese Grundgröße, Vorschau und Spiel rechnen gleich.
 - Verbindung beendet: Hinweis antippen lädt neu (in der installierten App geht Herunterziehen nicht); kommt die App aus dem Hintergrund zurück, lädt sie von selbst neu.
 - Drei Türarten für verschlossene Zimmertüren: frei, nur per Rätsel (❓), nur mit Schlüsselbund (🔑); Anteile in der Verwaltung (Vorgabe 50/25/25 %); Brechstange öffnet keine verschlossenen Zimmertüren mehr.
+- Viele Zombies: höchstens 8 Geräusche gleichzeitig (4 Zombie-Laute), Mindestabstand je Geräusch, nur die 6 nächsten Zombies stöhnen; ab 25 Zombies in Hörweite ein Horden-Grollen. Zombies, Leichen und Menschen außerhalb des Bildes werden nicht gezeichnet. Mit ?debug: FPS und sichtbare Zombies.
 
 ## 0.41.0 – 19.11.2026
 
