@@ -756,7 +756,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label for="rwMg">🔥 Maschinengewehr (Bundeswehr)</label>
   <div class="tn-zeile"><input type="range" id="rwMg" min="5" max="80" step="1"><span id="rwMgWert">45 m</span></div>
   <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
-  <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.2" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
+  <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.1" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
   <p class="tn-leise" id="bwInfoPuma"></p>
   <p class="tn-leise" id="bwInfoMg"></p>
   <label class="tn-schalter"><input type="checkbox" id="tnBwAktiv"> Stützpunkt aktiv (schießt, handelt, kann fallen)</label>
@@ -1139,7 +1139,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label class="ag-schalter"><input type="checkbox" id="agAn"> Aufgaben und Evakuierungsbus aktiv</label>
   <label for="agStunde">Der Bus kommt um</label>
   <div class="ag-zeile"><input type="range" id="agStunde" min="6" max="23" step="1"><span id="agStundeWert">18:00</span></div>
-  <label for="agWarte">Der Bus wartet</label>
+  <label for="agWarteEcht">Der Bus wartet höchstens (echte Minuten; fährt früher los, sobald alle Lebenden an Bord sind)</label>
+  <div class="ag-zeile"><input type="range" id="agWarteEcht" min="1" max="60" step="1"><span id="agWarteEchtWert">10 min</span></div>
+  <label for="agWarte">Ankunftsfenster (Spielminuten ab Ankunftszeit, in denen er noch erscheint)</label>
   <div class="ag-zeile"><input type="range" id="agWarte" min="10" max="180" step="5"><span id="agWarteWert">60 min</span></div>
   <label for="agAnzahl">Aufgaben je Level</label>
   <div class="ag-zeile"><input type="range" id="agAnzahl" min="3" max="6" step="1"><span id="agAnzahlWert">4</span></div>
@@ -1160,6 +1162,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   var aktiv = null;
   var REGLER = [
     ['agStunde', 'stunde', 18, function (v) { return (v < 10 ? '0' : '') + v + ':00'; }],
+    ['agWarteEcht', 'wartenEchtMin', 10, function (v) { return v + ' min'; }],
     ['agWarte', 'wartezeit', 60, function (v) { return v + ' min'; }],
     ['agAnzahl', 'anzahl', 4, function (v) { return String(v); }]
   ];
@@ -2825,6 +2828,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       ['tnVerkehrPhase', 'echte Minuten seit Weltbeginn'],
       ['welle', 'echte Minuten'],
       ['agStunde', 'Uhrzeit der Spieluhr · ein Spieltag = ' + tm + ' echte min'],
+      ['agWarteEcht', 'echte Minuten ab dem Halt'],
       ['agWarte', 'Spielminuten · ' + wert('agWarte', 60) + ' Spielminuten ≈ ' + dauer(wert('agWarte', 60) * pro) + ' echt bei ' + tm + ' min/Spieltag'],
       ['tnBwTage', 'Spieltage ab Weltbeginn · ' + (wert('tnBwTage', 3) ? wert('tnBwTage', 3) + ' Spieltage = ' + dauer(wert('tnBwTage', 3) * tm) + ' echt bei ' + tm + ' min/Spieltag' : 'nie')],
       ['tnPumaPause', 'echte Sekunden']

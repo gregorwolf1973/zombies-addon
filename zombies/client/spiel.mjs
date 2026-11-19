@@ -211,6 +211,72 @@ figurWahlAufbauen();
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 
+// Gepanzerter Schulbus von oben (Front rechts, Länge 124 px): knallgelb-orange, Warnstreifen, Gitter vor den Fenstern, Gewehrläufe, rotes Dachschild
+function zeichneSchulbus(c, breit, hoch) {
+  const L = 124, B = 30, x0 = (breit - L) / 2, y0 = (hoch - B) / 2, mx = breit / 2, my = hoch / 2;
+  c.fillStyle = 'rgba(0,0,0,.3)'; c.beginPath(); c.roundRect(x0 + 3, y0 + 4, L, B, 6); c.fill();
+  // Gewehrläufe seitlich aus den Fenstern (unter dem Aufbau gezeichnet, ragen heraus)
+  c.strokeStyle = '#1c1c1c'; c.lineWidth = 2.2; c.lineCap = 'round';
+  for (const fx of [26, 50, 74, 98]) for (const sg of [-1, 1]) {
+    const px = x0 + fx, py = my + sg * (B / 2 - 3);
+    c.beginPath(); c.moveTo(px, py); c.lineTo(px + 9, py + sg * 7); c.stroke();
+  }
+  c.lineCap = 'butt';
+  // Karosserie
+  c.fillStyle = '#ffb300'; c.beginPath(); c.roundRect(x0, y0, L, B, 6); c.fill();
+  c.fillStyle = '#ff8f00'; c.fillRect(x0 + 3, y0 + 2, L - 6, 3); c.fillRect(x0 + 3, y0 + B - 5, L - 6, 3);
+  // Dach: Stahlplatten mit Nieten
+  c.fillStyle = '#ffca28'; c.fillRect(x0 + 14, y0 + 6, L - 36, B - 12);
+  c.strokeStyle = '#6d4c00'; c.lineWidth = 1;
+  for (let x = x0 + 14; x <= x0 + L - 22; x += 20) { c.beginPath(); c.moveTo(x, y0 + 6); c.lineTo(x, y0 + B - 6); c.stroke(); }
+  c.fillStyle = '#5d4037';
+  for (let x = x0 + 16; x < x0 + L - 24; x += 20) for (const yy of [y0 + 8, y0 + B - 8]) c.fillRect(x, yy - 0.7, 1.6, 1.6);
+  // Fenster mit Gitter und Stahlklappen
+  for (const sg of [0, 1]) {
+    const yy = sg ? y0 + B - 5.5 : y0 + 1.5;
+    for (let x = x0 + 18; x < x0 + L - 26; x += 24) {
+      c.fillStyle = '#1b1b1b'; c.fillRect(x, yy, 18, 4);
+      c.strokeStyle = '#9e9e9e'; c.lineWidth = 0.8;
+      for (let g = x + 2; g < x + 18; g += 3) { c.beginPath(); c.moveTo(g, yy); c.lineTo(g, yy + 4); c.stroke(); }
+      c.fillStyle = '#78909c'; c.fillRect(x + 19, yy, 4, 4);
+    }
+  }
+  // Windschutzscheibe (vergittert) und Front
+  c.fillStyle = '#1b1b1b'; c.fillRect(x0 + L - 9, y0 + 4, 5, B - 8);
+  c.strokeStyle = '#9e9e9e'; c.lineWidth = 0.8;
+  for (let y = y0 + 6; y < y0 + B - 4; y += 4) { c.beginPath(); c.moveTo(x0 + L - 9, y); c.lineTo(x0 + L - 4, y); c.stroke(); }
+  // Warnstreifen Front und Heck
+  for (const xs of [x0 + L - 3, x0]) {
+    c.save(); c.beginPath(); c.rect(xs, y0, 3, B); c.clip();
+    c.fillStyle = '#ffd600'; c.fillRect(xs, y0, 3, B); c.fillStyle = '#111';
+    for (let y = y0 - 4; y < y0 + B + 4; y += 6) { c.beginPath(); c.moveTo(xs, y); c.lineTo(xs + 3, y + 3); c.lineTo(xs + 3, y + 6); c.lineTo(xs, y + 3); c.fill(); }
+    c.restore();
+  }
+  for (const [xs, w] of [[x0 + 4, 9], [x0 + L - 18, 9]]) {
+    c.save(); c.beginPath(); c.rect(xs, y0 + 7, w, B - 14); c.clip();
+    c.fillStyle = '#ffd600'; c.fillRect(xs, y0 + 7, w, B - 14); c.fillStyle = '#111';
+    for (let y = y0; y < y0 + B + 10; y += 7) { c.beginPath(); c.moveTo(xs, y); c.lineTo(xs + w, y - 5); c.lineTo(xs + w, y - 2); c.lineTo(xs, y + 3); c.fill(); }
+    c.restore();
+  }
+  c.strokeStyle = '#3e2723'; c.lineWidth = 1.5; c.beginPath(); c.roundRect(x0 + 0.75, y0 + 0.75, L - 1.5, B - 1.5, 6); c.stroke();
+  // großes rotes Dachschild
+  c.font = 'bold 11px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 3; c.strokeStyle = '#fff'; c.strokeText('EVAKUIERUNG', mx - 2, my);
+  c.fillStyle = '#d50000'; c.fillText('EVAKUIERUNG', mx - 2, my + 0.5);
+}
+
+// ---------- Ladebildschirm ----------
+function ladenZeigen(prozent, text, titel = '') {
+  const el = $('laden'); if (!el) return;
+  el.classList.add('an');
+  $('ladentitel').textContent = titel;
+  $('ladentext').textContent = text;
+  $('ladefuell').style.width = Math.max(0, Math.min(100, prozent)) + '%';
+  $('ladeprozent').textContent = `${Math.round(prozent)} %`;
+}
+function ladenAus() { $('laden')?.classList.remove('an'); }
+const einFrame = () => new Promise(ok => requestAnimationFrame(() => setTimeout(ok, 30)));
+
 async function mitspielen() {
   sprache.vorbereiten();   // AudioContext in der Nutzergeste (iOS), auch beim Start mit Enter
   const name = nameFeld.value.trim();
@@ -218,6 +284,7 @@ async function mitspielen() {
   const code = $('code').value.trim();
   try { localStorage.setItem('zob_name', name); localStorage.setItem('zob_code', code); } catch {}
   $('los').disabled = true;
+  ladenZeigen(5, 'Generiere Welt … verbinde mit dem Server');
   $('fehler').textContent = '';
   $('fehler').classList.remove('gut');
   try {
@@ -228,6 +295,7 @@ async function mitspielen() {
     if (token) { try { r = await client.reconnect(token); } catch { r = null; } }
     if (!r) r = await client.joinOrCreate('zombies', { name, code, spielerId: spielerId(), aussehen: aussehenText(meinAussehen) });
     raum = r;
+    ladenZeigen(15, 'Generiere Welt … verbunden');
     ton.musikAusblenden(4);   // Startmusik sanft ausblenden
     meineId = r.sessionId;
     try { sessionStorage.setItem('zob_token', r.reconnectionToken); } catch {}
@@ -277,6 +345,7 @@ async function mitspielen() {
     else if (/anderen Fenster/.test(text)) $('fehler').textContent = 'Du spielst schon in einem anderen Fenster oder Tab.';
     else $('fehler').textContent = 'Verbindung zum Spielserver fehlgeschlagen: ' + text;
     $('los').disabled = false;
+    ladenAus();
   }
 }
 let abgemeldet = false;
@@ -324,10 +393,12 @@ let gestartet = false;
 async function starteSpiel() {
   if (gestartet) return;
   gestartet = true;
+  ladenZeigen(25, 'Generiere Welt … lade Karte');
   if (raum.state.karte) {
     try { KARTE = await (await fetch(`karten/${raum.state.karte}.json`)).json(); }
     catch (e) { console.error('Karte nicht geladen', e); }
   }
+  ladenZeigen(40, 'Generiere Welt … Karte geladen');
   $('start').style.display = 'none';
   $('hud').style.display = 'block';
   $('unten').style.display = 'flex';
@@ -510,6 +581,7 @@ class Ort extends Phaser.Scene {
   constructor() { super('ort'); }
 
   preload() {
+    this.load.on('progress', v => ladenZeigen(40 + 30 * v, 'Generiere Welt … lade Grafiken'));
     for (const g of GRAFIK) this.load.image(g, 'grafik/' + g + '.png');
     // Figuren aus den KI-Bögen (tools/figuren_schneiden.py): 160er-Felder, Drehpunkt in der Feldmitte
     this.load.spritesheet('figuren', 'grafik/figuren.png', { frameWidth: 160, frameHeight: 160 });
@@ -529,11 +601,19 @@ class Ort extends Phaser.Scene {
   }
 
   create() {
+    ladenZeigen(72, 'Generiere Welt … baue Häuser und Straßen');
+    this.bereit = false;
+    // erst einen Frame zeichnen lassen, damit die Anzeige sichtbar ist – das Bauen der Welt blockiert 1–2 s
+    einFrame().then(() => { this.erzeuge(); this.bereit = true; });
+  }
+
+  erzeuge() {
     const s = raum.state;
     if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
     try { setzeAutoBilder(this.textures.get('autos').getSourceImage(), this.cache.json.get('autosliste')); } catch { setzeAutoBilder(null, null); }   // vor den ersten Kartenstücken
     figurenVorzeichnen(this);
+    ladenZeigen(85, 'Generiere Welt … zeichne Karte');
     this.zeichneKarte();
     this.aussenObjekte = this.children.list.slice();   // alles, was zur Außenwelt gehört
     this.uebersichtVorbereiten();
@@ -662,6 +742,8 @@ class Ort extends Phaser.Scene {
     raum.onMessage('aufloesung', m => zeigeAufloesung(m));
     raum.onMessage('neustart', m => {
       abgemeldet = true;
+      if (m?.level) ladenZeigen(30, 'Generiere nächstes Level …', `🎉 Level ${m.level - 1} abgeschlossen!`); else ladenZeigen(30, 'Generiere Welt neu …');
+      setTimeout(() => ladenZeigen(60, m?.level ? 'Generiere nächstes Level … Karte wird vorbereitet' : 'Generiere Welt neu …', m?.level ? `🎉 Level ${m.level - 1} abgeschlossen!` : ''), 1200);
       meldung(m?.level ? `🚌 Level ${m.level} – die Fahrt geht los, gleich geht es weiter …` : '🔄 Die Welt wird neu gestartet – gleich geht es weiter …', true);
       setTimeout(() => location.reload(), 2500);
     });
@@ -796,6 +878,49 @@ class Ort extends Phaser.Scene {
     }
   }
 
+  // Abholstelle am Ortsausgang: sobald alle Pflichtaufgaben erledigt sind (wie im Server: tor + 1 Kachel)
+  abholAktiv() {
+    const a = raum.state.aufgaben;
+    return !!(a && a.size && this.welt?.tor && [...a.values()].every(x => !x.pflicht || x.erledigt) && [...a.values()].some(x => x.pflicht));
+  }
+
+  abholstelleAktualisieren() {
+    const an = this.abholAktiv();
+    if (!an && !this.abholObj) return;
+    if (an && !this.abholObj) {
+      const x = (this.welt.tor.x + 1) * KACHEL, y = (this.welt.tor.y + 1) * KACHEL;
+      if (!this.textures.exists('abholglut')) {
+        const t = this.textures.createCanvas('abholglut', 64, 64), c = t.getContext(), g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+        g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.35, 'rgba(255,255,255,.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = g; c.fillRect(0, 0, 64, 64); t.refresh();
+      }
+      const kreis = this.add.graphics().setDepth(1.4);
+      kreis.fillStyle(0xff1744, 0.035).fillCircle(x, y, 800);
+      kreis.lineStyle(3, 0xff5252, 0.22).strokeCircle(x, y, 800);
+      const glut = this.add.image(x, y, 'abholglut').setTint(0xff1744).setBlendMode('ADD').setDepth(5.7);
+      const rauch = this.add.particles(x, y, 'abholglut', {
+        speed: { min: 14, max: 34 }, angle: { min: 255, max: 285 }, scale: { start: 0.35, end: 1.6 }, alpha: { start: 0.55, end: 0 },
+        lifespan: 2600, frequency: 90, tint: [0xff1744, 0xff5252, 0xd50000], blendMode: 'ADD',
+      }).setDepth(5.7);
+      const stab = this.add.graphics().setDepth(5.75);
+      stab.fillStyle(0x212121, 1).fillRect(x - 2, y - 10, 4, 14);
+      stab.fillStyle(0xff1744, 1).fillRect(x - 3, y - 12, 6, 5);
+      const text = this.add.text(x, y - 48, '📍 Abholung', {
+        fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#b71c1c', strokeThickness: 5,
+      }).setOrigin(0.5).setDepth(6);
+      this.abholObj = { kreis, glut, rauch, stab, text, x, y };
+    }
+    const o = this.abholObj;
+    if (!o) return;
+    const sichtbar = an && this.aktEbene === '';
+    for (const k of [o.kreis, o.glut, o.rauch, o.stab, o.text]) k.setVisible(sichtbar);
+    if (sichtbar) {
+      const p = 0.5 + 0.5 * Math.sin(this.time.now / 260);
+      o.glut.setScale(2.2 + 1.6 * p).setAlpha(0.45 + 0.4 * p);
+      o.text.setScale(1 + 0.06 * p);
+    }
+  }
+
   // ---------- Übersichtskarte (client/uebersicht.mjs) ----------
   uebersichtVorbereiten() {
     this.uebersicht = new Uebersicht(this.welt, $('kartenbox'));
@@ -842,6 +967,7 @@ class Ort extends Phaser.Scene {
   uebersichtZeichnen() {
     if (!this.uebersicht) return;
     const bf = raum.state.busDa ? [...(raum.state.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung') : null;
+    this.uebersicht.abhol = this.abholAktiv() ? { x: this.welt.tor.x + 1, y: this.welt.tor.y + 1 } : null;
     this.uebersicht.bus = bf ? { x: bf.x / KACHEL, y: bf.y / KACHEL } : null;
     const spieler = [...raum.state.spieler.entries()].map(([id, p]) => ({
       x: id === meineId && this.lokal ? this.lokal.x : p.x, y: id === meineId && this.lokal ? this.lokal.y : p.y,
@@ -1009,13 +1135,7 @@ class Ort extends Phaser.Scene {
       const e = art === 'polizei' ? autoAnimEintrag(sp, anim) : sp, soll = art === 'laster' ? 90 : 50, k = soll / e.laenge;
       c.save(); c.translate(breit / 2, hoch / 2); c.scale(k, k); zeichneAutoBild(c, e, 0, 0); c.restore();
     } else if (art === 'bus') busVonOben(c, breit / 2, hoch / 2, false, 0.6);
-    else if (art === 'evakuierung') {
-      // Evakuierungsbus: gelb mit Schild auf dem Dach
-      busVonOben(c, breit / 2, hoch / 2, false, 0.6);
-      c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(255,214,0,.78)'; c.fillRect(0, 0, breit, hoch); c.globalCompositeOperation = 'source-over';
-      c.fillStyle = '#212121'; c.fillRect(30, hoch / 2 - 6, 52, 12);
-      c.fillStyle = '#ffd600'; c.font = 'bold 9px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('EVAKUIERUNG', 56, hoch / 2 + 0.5);
-    }
+    else if (art === 'evakuierung') zeichneSchulbus(c, breit, hoch);
     else if (art === 'feuerwehr') {
       c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(6, 7, 74, 24);
       c.fillStyle = '#c62828'; c.beginPath(); c.roundRect(2, 4, 76, 24, 5); c.fill();
@@ -1598,6 +1718,18 @@ class Ort extends Phaser.Scene {
         }
         o.vorher = d;
       }
+      if (f.art === 'evakuierung') {
+        // blinkende orange Rundumleuchte; im Level 2 (Panzer) zusätzlich Fahne am Heck
+        const pz = s.karte === 'isarauen', lx = pz ? -22 : -8, an = Math.floor(this.time.now / 260) % 2;
+        o.licht.fillStyle(0xff9100, an ? 0.3 : 0.12).fillCircle(lx, 0, an ? 34 : 22);
+        o.licht.fillStyle(an ? 0xffab00 : 0x8d4f00, 1).fillCircle(lx, 0, 4.5);
+        o.licht.lineStyle(1.5, 0x000000, 0.8).strokeCircle(lx, 0, 4.5);
+        if (pz) {
+          const w = Math.sin(this.time.now / 140) * 3;
+          o.licht.lineStyle(1.5, 0x212121, 1).lineBetween(-44, -14, -44, -26);
+          o.licht.fillStyle(0xd50000, 1).fillTriangle(-44, -26, -44, -19, -58, -22.5 + w);
+        }
+      }
       if (f.art === 'polizei' || f.art === 'feuerwehr') {
         // Sirene nur, solange das Fahrzeug fährt und nah ist (bis ca. 45 m = 360 px, draußen; im Haus halb so weit);
         // steht es (Feuerwehr am Brand), ist sie nach 4 s aus
@@ -2175,6 +2307,7 @@ class Ort extends Phaser.Scene {
 
   // ---------- Schleife ----------
   update(_t, ms) {
+    if (!this.bereit) return;
     const dt = Math.min(0.1, ms / 1000);
     // Tag/Nacht-Zeiten vom Server (Einstellung) übernehmen
     if (raum.state.tagAb && (raum.state.tagAb !== this.tagAb || raum.state.nachtAb !== this.nachtAb)) {
@@ -2195,11 +2328,13 @@ class Ort extends Phaser.Scene {
     this.innenAktualisieren(ich);
     if (ich) this.aussenLicht(ich);
     this.chunksAktualisieren();
+    this.abholstelleAktualisieren();
     this.hudZeit -= dt;
     if (this.hudZeit <= 0) { this.hudZeit = 0.15; this.hud(ich); }
     this.geraeusche(ich, dt);
     this.karteZeit = (this.karteZeit ?? 0) - dt;
-    if (this.karteZeit <= 0 || this.uebersicht?.zeichneNeu) { this.karteZeit = this.uebersicht?.gross ? 0.15 : (this.uebersicht?.bus || [...raum.state.spieler.values()].some(q => q.unten)) ? 0.12 : 0.4; this.uebersichtZeichnen(); }
+    if (this.karteZeit <= 0 || this.uebersicht?.zeichneNeu) { this.karteZeit = this.uebersicht?.gross ? 0.15 : (this.uebersicht?.bus || this.uebersicht?.abhol || [...raum.state.spieler.values()].some(q => q.unten)) ? 0.12 : 0.4; this.uebersichtZeichnen(); }
+    if (!this.ladenFertig) { this.ladenFertig = true; ladenZeigen(100, 'Generiere Welt … fertig'); setTimeout(ladenAus, 150); }
   }
 
   // Schritte, Treffer am eigenen Leib, Stöhnen naher Zombies

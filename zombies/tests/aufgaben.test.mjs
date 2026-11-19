@@ -219,7 +219,8 @@ test('Evakuierungsbus: nur mit Funkspruch, wartet, wer nahe steht ist an Bord', 
     raum.state.uhr = 18 * 60 + 0.1;
     assert.ok(await bis(() => busVon(raum)), 'kein Bus erschienen');
     assert.equal(raum.state.busDa, true);
-    assert.equal(raum.state.busAb, 19 * 60);
+    assert.ok(await bis(() => raum.state.busSteht && raum.aufgaben.busRest > 500 && raum.aufgaben.busRest <= 600), 'Wartezeit nicht 10 echte Minuten: ' + raum.aufgaben.busRest);
+    assert.ok(raum.state.busAb >= 0 && raum.state.busAb < 1440);
     const [, bus] = busVon(raum);
     assert.equal(bus.haelt, true);
     const tor = raum.welt.tor;
@@ -337,10 +338,11 @@ test('Levelwechsel: mit erfüllten Aufgaben fährt der Bus los, die Karte wechse
 
 test('Einstellungen: Aufgaben und Evakuierung werden begrenzt, Vorgaben stimmen', async () => {
   const { bereinige, vorgaben } = await import('../server/einstellungen.mjs');
-  assert.deepEqual(vorgaben().aufgaben, { an: true, stunde: 18, wartezeit: 60, anzahl: 4 });
-  const e = bereinige({ aufgaben: { an: false, stunde: 3, wartezeit: 999, anzahl: 9 } });
-  assert.deepEqual(e.aufgaben, { an: false, stunde: 6, wartezeit: 180, anzahl: 6 });
-  const f = bereinige({ aufgaben: { stunde: 99, wartezeit: 1, anzahl: 0 } }, e);
-  assert.deepEqual(f.aufgaben, { an: false, stunde: 23, wartezeit: 10, anzahl: 3 });
+  assert.deepEqual(vorgaben().aufgaben, { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4 });
+  const e = bereinige({ aufgaben: { an: false, stunde: 3, wartezeit: 999, wartenEchtMin: 999, anzahl: 9 } });
+  assert.deepEqual(e.aufgaben, { an: false, stunde: 6, wartezeit: 180, wartenEchtMin: 60, anzahl: 6 });
+  const f = bereinige({ aufgaben: { stunde: 99, wartezeit: 1, wartenEchtMin: 0, anzahl: 0 } }, e);
+  assert.deepEqual(f.aufgaben, { an: false, stunde: 23, wartezeit: 10, wartenEchtMin: 1, anzahl: 3 });
+  assert.equal(bereinige({ bundeswehr: { pumaPause: 0.01 } }).bundeswehr.pumaPause, 0.1);
   assert.equal(bereinige({}).aufgaben.stunde, 18);
 });

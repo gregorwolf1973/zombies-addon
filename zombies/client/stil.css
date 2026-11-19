@@ -348,3 +348,25 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
   #start .freigaben { margin-top: 6px; }
   #start .klein { font-size: 12px; line-height: 1.35; }
 }
+
+/* Ladebildschirm (Anmelden und Levelwechsel) */
+#laden {
+  position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+  background: radial-gradient(circle at 50% 30%, #2e4a2e, #0f180f);
+}
+#laden.an { display: flex; }
+#laden .ladekarte { width: min(420px, 100%); text-align: center; }
+#ladentitel { font-size: 22px; font-weight: 800; margin-bottom: 10px; color: #ffd54f; }
+#ladentitel:empty { display: none; }
+#ladentext { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+#laden .ladebalken { height: 12px; background: #ffffff22; border-radius: 6px; overflow: hidden; }
+#ladefuell { height: 100%; width: 0; background: #66bb6a; transition: width .25s; }
+#ladeprozent { margin-top: 8px; font-size: 14px; opacity: .8; }
+
+/* Chat am PC: schmal am rechten Rand, das Spiel bleibt daneben sichtbar; Handy bleibt Vollbild */
+@media (min-width: 900px) and (pointer: fine) {
+  #chat { inset: 56px 0 0 auto; bottom: 0; width: 340px; border-left: 1px solid #fff3; box-shadow: -4px 0 18px #0008; padding-top: 10px; }
+  #chat .kopfzeile b { font-size: 17px; }
+  #chatzu { min-height: 36px; min-width: 40px; font-size: 18px; padding: 2px 10px; }
+  #chatliste .nachricht { font-size: 14px; max-width: 92%; }
+}

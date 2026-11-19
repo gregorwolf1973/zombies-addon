@@ -176,6 +176,17 @@ export class Uebersicht {
     const pos = (kx, ky) => [(kx - x0) * m, (ky - y0) * m];
     const t = this.welt.tor;
     if (t) { const [x, y] = pos(t.x + 0.5, t.y + 1); c.font = `${Math.round(14 * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🚧', x + 8 * dpr, y); }
+    if (this.abhol) {
+      // Abholstelle: zarter 100-m-Wartekreis, auffälliger Pin 📍 mit Beschriftung
+      const [x, y] = pos(this.abhol.x, this.abhol.y), ph = (Date.now() % 1200) / 1200, puls = 0.5 + 0.5 * Math.sin(ph * Math.PI * 2);
+      c.beginPath(); c.arc(x, y, 800 / KACHEL * m, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(255,23,68,.07)'; c.fill(); c.lineWidth = 1.5 * dpr; c.setLineDash([6 * dpr, 5 * dpr]); c.strokeStyle = 'rgba(255,82,82,.55)'; c.stroke(); c.setLineDash([]);
+      c.beginPath(); c.arc(x, y, (this.gross ? 9 : 7) * dpr * (1 + 0.5 * ph), 0, Math.PI * 2); c.strokeStyle = `rgba(255,23,68,${(1 - ph) * 0.9})`; c.lineWidth = 2.5 * dpr; c.stroke();
+      c.font = `${Math.round((this.gross ? 26 : 18) * dpr * (1 + 0.12 * puls))}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
+      c.fillText('📍', x, y + 3 * dpr);
+      c.font = `bold ${Math.round((this.gross ? 12 : 9) * dpr)}px sans-serif`; c.textBaseline = 'middle'; c.lineWidth = 3.5 * dpr; c.strokeStyle = '#000';
+      c.strokeText('Abholung', x, y + 10 * dpr); c.fillStyle = '#ff8a80'; c.fillText('Abholung', x, y + 10 * dpr);
+    }
     if (this.bus) {
       // Evakuierungsbus: großes, pulsierendes gelb-rotes Symbol mit Ring
       const [x, y] = pos(this.bus.x, this.bus.y), ph = (Date.now() % 1000) / 1000, puls = 0.5 + 0.5 * Math.sin(ph * Math.PI * 2);

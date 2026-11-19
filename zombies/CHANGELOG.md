@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.44.0 – 19.11.2026
+
+- Evakuierungsbus/-panzer fährt los, sobald alle Lebenden an Bord sind (Bots und Liegende zählen mit), spätestens nach einer einstellbaren Zeit in echten Minuten (aufgaben.wartenEchtMin, Vorgabe 10); bisher wartete er nur 60 Spielminuten = 2 echte Minuten.
+- Abholstelle sichtbar, sobald die Pflichtaufgaben erledigt sind: 📍 „Abholung“ mit 100-m-Wartekreis auf Karte und Eckkarte, rotes Leuchtsignal mit Rauch in der Welt, Meldung an alle.
+- Gepanzerter Schulbus: gelb-orange mit Warnstreifen, Gittern und Stahlplatten, Gewehrläufe aus den Fenstern, rotes „EVAKUIERUNG“ auf dem Dach, blinkende Rundumleuchte; der Evakuierungspanzer in Level 2 mit Leuchte und Fahne.
+- Ladeanzeige „Generiere Welt … %“ beim Anmelden, beim Levelwechsel „Level abgeschlossen! Generiere nächstes Level …“.
+- Chat am PC schmal am rechten Rand (Handy weiter Vollbild).
+- Panzer-Schussfolge bis 0,1 s; Hilferufe etwa doppelt so oft, Krankenwagen alle 1–2,5 Minuten.
+
 ## 0.43.0 – 19.11.2026
 
 - Held und Heldin (Gemini-Grafik) als zusätzliche Figuren: Haltung je Waffe (leer, Pistole, Gewehr, Messer), jeweils mit oder ohne Taschenlampe, eigene Stiefel-Ebene zum Stehen, Gehen und Laufen; Haar- und Kleidfarbe bleiben wählbar.

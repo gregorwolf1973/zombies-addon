@@ -146,7 +146,7 @@ function streuen() {
 
 // ferner Krankenwagen als Stimmung: selten (alle 2–5 Minuten), nur draußen, weit weg aus wechselnder Richtung
 function krankenwagen() {
-  hintergrund.krankTimer = setTimeout(krankenwagen, 120000 + Math.random() * 180000);
+  hintergrund.krankTimer = setTimeout(krankenwagen, 60000 + Math.random() * 90000);
   if (!ctx || stufe === 0 || document.hidden || drinnenJetzt) return;
   const w = Math.random() * Math.PI * 2, d = 600 + Math.random() * 500;
   probe('krankenwagen', hx + Math.cos(w) * d, hy + Math.sin(w) * d, 1.6);
@@ -173,7 +173,7 @@ export function tonStarten() {
   hintergrundAufbauen();
   vorladen();
   if (!hintergrund.streuTimer) hintergrund.streuTimer = setTimeout(streuen, 6000);
-  if (!hintergrund.krankTimer) hintergrund.krankTimer = setTimeout(krankenwagen, 60000 + Math.random() * 120000);
+  if (!hintergrund.krankTimer) hintergrund.krankTimer = setTimeout(krankenwagen, 30000 + Math.random() * 60000);
 }
 
 // schaltet die Lautstärke durch (100 → 50 → 25 → stumm → 100 %), merkt sie im Browser, liefert die neue Stufe (0–1)

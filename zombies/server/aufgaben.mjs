@@ -79,7 +79,7 @@ export class Aufgaben {
     this.funkSafe = '';        // Safe Room, in dem der Funkspruch abgesetzt wurde
     this.medizin = false;      // Spritze aus der Apotheke gefunden
     this.busId = null;
-    this.busRest = 0;          // Spielminuten bis zur Abfahrt
+    this.busRest = 0;          // ECHTE Sekunden bis zur Abfahrt (ab dem Halt)
     this.busHeute = false;     // der Bus war in diesem Zeitfenster schon da
     this.ankGemeldet = false;
     this.echteDa = 0;
@@ -88,7 +88,7 @@ export class Aufgaben {
     this.takt = 0;
   }
 
-  einst() { return { an: false, stunde: 18, wartezeit: 60, anzahl: 4, ...(this.raum.einstellungen?.()?.aufgaben ?? {}) }; }
+  einst() { return { an: false, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, ...(this.raum.einstellungen?.()?.aufgaben ?? {}) }; }
   an() { return !!this.einst().an; }
   spielerZahl() { return Math.max(1, this.raum.state.spieler.size); }
 
@@ -108,6 +108,7 @@ export class Aufgaben {
       this.medizin = !!g.medizin;
       s.funk = !!g.funk;
     } else this.ziehen();
+    this.abholMeldung = s.funk && [...s.aufgaben.values()].every(x => !x.pflicht || x.erledigt);   // beim Laden nicht erneut melden
     this.aktualisieren(false);
     if (s.funk) s.busAnkunft = this.einst().stunde * 60;
   }
@@ -199,6 +200,10 @@ export class Aufgaben {
     if (!s.aufgaben.size) { this.basis = s.besiegt; this.ziehen(); }   // zur Laufzeit eingeschaltet
     this.takt -= dt;
     if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); }
+    if (!this.abholMeldung && s.funk && [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt)) {
+      this.abholMeldung = true;
+      this.raum.broadcast('meldung', { text: this.raum.state.karte === 'isarauen' ? '📍 Abholstelle am Ortsausgang steht fest – der Panzer holt euch dort ab, sie ist auf der Karte markiert' : '📍 Abholstelle am Ortsausgang steht fest – sie ist auf der Karte markiert', lang: true });
+    }
     if (this.wechselLaeuft) return;
     const { stunde, wartezeit } = this.einst();
     const A = stunde * 60;
@@ -225,13 +230,25 @@ export class Aufgaben {
     }
     if (!s.busSteht) {
       s.busSteht = true;
-      s.busAb = (Math.round(s.uhr) + Math.ceil(this.busRest)) % 1440;
+      this.restSetzen();
       if (!this.busGemeldet) this.stehtMeldung();
     }
-    const zr = this.raum.zeitraffer?.() ?? 1;
-    this.busRest -= dt * zr * 1440 / ((this.raum.einstellungen?.().tagMinuten || 48) * 60);
+    this.busRest -= dt;
+    this.busAbSetzen();
     const alleDa = this.mitfahrer();
     if (alleDa || this.busRest <= 0) this.abfahrt();
+  }
+
+  restSetzen() {
+    this.busRest = Math.max(1, Math.min(60, Number(this.einst().wartenEchtMin) || 10)) * 60;
+    this.busAbSetzen();
+  }
+
+  // Anzeige: Uhrzeit (Spielminuten) der spätesten Abfahrt, nur bei Änderung schreiben
+  busAbSetzen() {
+    const s = this.raum.state;
+    const ab = (Math.round(s.uhr + Math.max(0, this.busRest) * 1440 / ((this.raum.einstellungen?.().tagMinuten || 48) * 60))) % 1440;
+    if (s.busAb !== ab) s.busAb = ab;
   }
 
   // Wartezeit raffen: Funkspruch abgesetzt, Pflichtaufgaben erledigt, Bus/Panzer noch nicht da und ALLE lebenden Spieler
@@ -262,16 +279,15 @@ export class Aufgaben {
   ankunft(rest) {
     const s = this.raum.state, w = this.raum.welt, tor = w.tor, v = this.raum.verkehr;
     if (!v) return;
-    const { stunde, wartezeit } = this.einst();
     const tx = (tor.x + 1) * KACHEL, ty = (tor.y + 1) * KACHEL;
     const links = tor.x === 0;
     let x = links ? tx + 4 * KACHEL : tx, y = links ? ty : ty + 4 * KACHEL;
     const k = v.graph?.knoten?.length ? [...v.graph.knoten].sort((a, b) => Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty))[0] : null;
     if (k && Math.hypot(k.x - tx, k.y - ty) < 400) { x = k.x; y = k.y; }
     this.busId = v.evakuierungBus(x, y, links ? Math.PI : -Math.PI / 2, k);
-    this.busHeute = true; this.busRest = rest; s.busDa = true; s.busAb = (stunde * 60 + wartezeit) % 1440; this.busGemeldet = false;
+    this.busHeute = true; this.busRest = 0; s.busDa = true; this.busAbSetzen(); this.busGemeldet = false;
     s.busSteht = v.evakuierungDa(this.busId);
-    if (s.busSteht) this.stehtMeldung();
+    if (s.busSteht) { this.restSetzen(); this.stehtMeldung(); }
     else this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} fährt zum Ortsausgang vor!`, lang: true });
   }
 
@@ -294,20 +310,21 @@ export class Aufgaben {
     if (this.busId) { this.raum.verkehr?.evakuierungAb(this.busId); this.busId = null; }
   }
 
-  // wer in Busnähe steht, ist an Bord; true, wenn alle echten (verbundenen, lebenden) Spieler an Bord sind
+  // wer in Busnähe steht, ist an Bord; true, wenn alle lebenden verbundenen Spieler (Bots und Liegende zählen mit) an Bord sind
   mitfahrer() {
     const s = this.raum.state, f = s.fahrzeuge.get(this.busId);
     if (!f) { this.busWeg(); return false; }
-    let bord = 0, gesamt = 0, echt = 0, echtDa = 0;
+    let bord = 0, gesamt = 0, echtDa = 0, lebende = 0, lebendeDa = 0;
     for (const [sid, p] of s.spieler) {
       if (p.zombie > 0) continue;
       const bot = !!this.raum.extra.get(sid)?.bot;
       const an = !p.ebene && !p.unten && Math.hypot(p.x - f.x, p.y - f.y) < BUS_ABSTAND;
       gesamt++; if (an) bord++;
-      if (!bot && p.verbunden !== false) { echt++; if (an) echtDa++; }
+      if (p.verbunden !== false) { lebende++; if (an) lebendeDa++; }
+      if (!bot && p.verbunden !== false && an) echtDa++;
     }
     s.busBord = bord; s.busGesamt = gesamt; this.echteDa = echtDa;
-    return echt > 0 && echtDa === echt;
+    return lebende > 0 && lebendeDa === lebende;
   }
 
   abfahrt() {
