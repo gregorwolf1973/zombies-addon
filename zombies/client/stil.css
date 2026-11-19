@@ -111,13 +111,13 @@ button:disabled { opacity: .6; }
 
 /* Meldungen oben unter der Anzeige, klein und halbdurchsichtig – nicht mehr mitten im Bild */
 #meldungen {
-  position: fixed; left: 50%; transform: translateX(-50%); top: 44px; width: min(520px, 70vw);
+  position: fixed; left: 50%; transform: translateX(-50%); top: 4px; width: min(420px, 62vw); opacity: .8;
   display: flex; flex-direction: column; align-items: center; pointer-events: none;
-  font-weight: 700; font-size: 13px;
+  font-weight: 600; font-size: 11px; line-height: 1.25;
 }
 #meldungen div {
-  transition: opacity .5s; margin: 2px 0; padding: 3px 10px; border-radius: 10px;
-  background: #0009; text-shadow: 0 1px 2px #000; text-align: center; max-width: 100%;
+  transition: opacity .5s; margin: 1px 0; padding: 2px 8px; border-radius: 8px;
+  background: #0007; text-shadow: 0 1px 2px #000; text-align: center; max-width: 100%;
 }
 #hinweis {
   position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); display: none;
@@ -222,7 +222,7 @@ button:disabled { opacity: .6; }
   background: #e53935; color: #fff; font-size: 11px; font-weight: 700; line-height: 16px; display: none;
 }
 #chat {
-  position: fixed; right: 10px; top: max(70px, calc(env(safe-area-inset-top) + 62px)); bottom: 16px; width: min(360px, calc(100vw - 32px));
+  position: fixed; right: 10px; top: max(70px, calc(env(safe-area-inset-top) + 62px)); bottom: calc(16px + var(--kb, 0px)); width: min(360px, calc(100vw - 32px));
   display: none; flex-direction: column; z-index: 26; box-sizing: border-box;
   background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 10px; box-shadow: 0 6px 20px #000a;
 }
@@ -247,6 +247,8 @@ button:disabled { opacity: .6; }
 @media (max-width: 600px) {
   #chat { left: 16px; right: 16px; width: auto; }
 }
+/* Bildschirmtastatur offen (visualViewport): Chat bleibt darüber, Kopfzeile bleibt sichtbar */
+body.tastatur #chat { top: calc(var(--vvtop, 0px) + 8px); }
 
 /* Startseite: Freigaben und App-Installation */
 .freigaben { margin-top: 10px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }

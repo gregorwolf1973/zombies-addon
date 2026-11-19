@@ -63,7 +63,7 @@ function hintergrundPruefen() {
 
 function streuen() {
   hintergrund.streuTimer = setTimeout(streuen, 9000 + Math.random() * 16000);
-  if (!ctx || !an) return;
+  if (!ctx || !an || document.hidden) return;
   const id = nachtJetzt ? 'zombielandNacht' : 'zombielandTag';
   const w = Math.random() * Math.PI * 2, d = 350 + Math.random() * 450;
   probe(id, hx + Math.cos(w) * d, hy + Math.sin(w) * d, drinnenJetzt ? 0.6 : 1.8);
@@ -78,7 +78,7 @@ export function tageszeit(nacht) {
 
 // erst nach einer Berührung/einem Klick erlaubt der Browser Ton
 export function tonStarten() {
-  if (ctx) { ctx.resume?.(); return; }
+  if (ctx) { if (!document.hidden) ctx.resume?.(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
@@ -370,3 +370,12 @@ export function musikAusblenden(sek = 4) {
   m.g.gain.setTargetAtTime(0, ctx.currentTime, sek / 3);
   setTimeout(() => { try { m.src.stop(); } catch { /* schon aus */ } }, sek * 1500);
 }
+
+// Handy aus / Browser im Hintergrund: Ton anhalten (AudioContext schlafen legen), beim Zurückkehren weiter
+document.addEventListener('visibilitychange', () => {
+  if (!ctx) return;
+  try {
+    if (document.hidden) ctx.suspend?.();
+    else ctx.resume?.();
+  } catch { /* egal */ }
+});

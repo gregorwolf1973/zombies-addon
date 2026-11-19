@@ -93,6 +93,7 @@ export const Zustand = schema({
   uhr: t.number(),          // Tageszeit in Spielminuten (0–1439)
   tagAb: t.number(),        // ab hier ganz hell (Einstellung, für die Clients)
   nachtAb: t.number(),      // ab hier ganz dunkel
+  nachtDunkel: t.number(),  // Nachtdunkelheit in % (Einstellung, für die Clients)
   autos: t.uint8(),         // Autodichte der Welt (10 = normal), gilt bis zum Neustart der Welt
   spieler: t.map(Spieler),
   zombies: t.map(Zombie),
@@ -119,6 +120,8 @@ const BRETT_STAERKE = 35;
 const TICK = 50; // ms → 20 Updates pro Sekunde
 const ZOMBIE_HP = 100;
 const STOSS_WEG = 34;   // Schläger und Faust stoßen den Zombie zurück (Waffenwerte: WAFFEN in client/welt.mjs)
+const ANKUNFT_ZOMBIEFREI = 144;   // Pixel (4,5 Kacheln): so weit um den Ankunftspunkt entstehen beim ersten Betreten keine Zombies
+const SCHONZEIT_EBENE = 1;   // Sekunden nach einem Ebenenwechsel, in denen Zombies nicht beißen
 const BISS_PRO_SEK = 14;
 const KRIECHER_CHANCE = 0.25, KRIECHER_HP = 35, KRIECHER_TEMPO = 0.28, KRIECHER_SPUERT = 110;
 const BISS_CHANCE = 0.12;   // pro Sekunde Kontakt: Wahrscheinlichkeit für einen infizierenden Biss
@@ -696,7 +699,7 @@ export class SpielRaum extends Room {
   tageszeitenUebernehmen() {
     const e = SpielRaum.einstellungen ?? {};
     setzeTageszeiten(e.tagAb ?? 420, e.nachtAb ?? 1290);
-    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; }
+    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; this.state.nachtDunkel = e.nachtDunkel ?? 92; }
   }
 
   einstellungenGeaendert() {
@@ -837,12 +840,13 @@ export class SpielRaum extends Room {
 
   // ---------- Ebenen (Innenräume) ----------
 
-  wv(ebene) {
+  // von: Ebene, aus der man kommt (nur beim ersten Bauen wichtig: Zombies entstehen nicht am Ankunftspunkt)
+  wv(ebene, von) {
     if (!ebene) return this.welt;
-    return this.ebenen.get(ebene) ?? this.baueEbene(ebene);
+    return this.ebenen.get(ebene) ?? this.baueEbene(ebene, von);
   }
 
-  baueEbene(ebene) {
+  baueEbene(ebene, von) {
     const w = innenraumFuer(this.state.seed, this.welt, ebene);
     if (!w) return this.welt;
     w.safeRooms = [];
@@ -860,7 +864,13 @@ export class SpielRaum extends Room {
     // schlafende Zombies hinter den Türen
     // Menge über die Einstellung „Zombies in Häusern“ (10 = normal): Plätze ausdünnen oder verdoppeln
     const hf = SpielRaum.einstellungen.haeuserFaktor ?? 1;
-    for (const zp of w.zombiePlaetze ?? []) {
+    // Ankunftspunkt: von draußen der Start, sonst neben der Treppe zur Herkunftsebene – dort bleibt ein Umkreis zombiefrei
+    let meiden = null;
+    if (von !== undefined) {
+      const zurueck = von ? w.treppen?.find(z => z.ziel === von) : null;
+      meiden = zurueck ? this.nebenKachel(w, zurueck) : w.start;
+    }
+    for (const zp of (w.zombiePlaetze ?? []).filter(zp => !meiden || Math.hypot(zp.x - meiden.x, zp.y - meiden.y) >= ANKUNFT_ZOMBIEFREI)) {
       for (let n = Math.floor(hf) + (this.rnd() < hf % 1 ? 1 : 0), i = 0; i < n; i++) {
         const dx = i ? (this.rnd() - 0.5) * KACHEL : 0, dy = i ? (this.rnd() - 0.5) * KACHEL : 0;
         if (!i || frei(w, zp.x + dx, zp.y + dy, W.zombieRadius)) this.setzeZombie(zp.x + dx, zp.y + dy, ebene, true);
@@ -883,15 +893,16 @@ export class SpielRaum extends Room {
   // Betreten, Verlassen, Treppen: wer auf die Kachel tritt, wechselt die Ebene
   uebergang(id, p, x, dt) {
     if (!x) return;
+    x.schonT = Math.max(0, (x.schonT ?? 0) - dt);
     x.wechselSperre = Math.max(0, (x.wechselSperre ?? 0) - dt);
     if (x.wechselSperre > 0) return;
     // nach einem Wechsel erst wieder, wenn man sich vom Ankunftsort entfernt hat
     // (sonst läuft man mit gehaltener Taste sofort zurück durch Tür oder Treppe)
     x.ankunftT = (x.ankunftT ?? 0) + dt;
     // (Bots stehen nach dem Wechsel oft nur einen Schritt von der Tür entfernt und müssen sofort zurück können – nach 1 s darf es)
-    if (x.ankunft && x.bot && x.ankunftT > 1) x.ankunft = null;
+    if (x.ankunft && x.ankunftT > (x.bot ? 1 : 1.5)) x.ankunft = null;
     if (x.ankunft) {
-      if (Math.hypot(p.x - x.ankunft.x, p.y - x.ankunft.y) < 44) return;
+      if (Math.hypot(p.x - x.ankunft.x, p.y - x.ankunft.y) < 36) return;
       x.ankunft = null;
     }
     // Bots wechseln nur, wenn sie genau diesen Übergang ansteuern (nicht beim Vorbeilaufen)
@@ -909,7 +920,7 @@ export class SpielRaum extends Room {
         bewege(welt, p, h.raus.dx * 20, h.raus.dy * 20, W.spielerRadius); return;
       }
       this.haustuerOeffnen(h.nr);   // Menschen gehen durch geschlossene Haustüren hindurch (Barrikaden halten nur Zombies auf)
-      ziel = `h${h.nr}eg`; pos = this.wv(ziel).start;
+      ziel = `h${h.nr}eg`; pos = this.wv(ziel, '').start;
     } else if (p.ebene && t === T.AUSGANG) {
       const h = this.welt.haeuser[welt.nr];
       this.haustuerOeffnen(h.nr);
@@ -919,13 +930,13 @@ export class SpielRaum extends Room {
       const tr = welt.treppen.find(tr => tr.x === kx && tr.y === ky);
       if (!tr) return;
       ziel = `h${welt.nr}${tr.ziel}`;
-      const zw = this.wv(ziel);
+      const zw = this.wv(ziel, welt.stock);
       const zurueck = zw.treppen.find(z => z.ziel === welt.stock);
       pos = zurueck ? this.nebenKachel(zw, zurueck) : zw.start;
     } else return;
     const platz = this.freierPlatz(pos, 0, ziel);
     p.ebene = ziel; p.x = platz.x; p.y = platz.y; p.aktion = ''; p.fortschritt = 0;
-    x.wechselSperre = 0.3; x.ankunft = { x: platz.x, y: platz.y }; x.ankunftT = 0;
+    x.wechselSperre = 0.2; x.ankunft = { x: platz.x, y: platz.y }; x.ankunftT = 0; x.schonT = SCHONZEIT_EBENE;
     if (x.bot) { x.bot.weg = null; x.bot.uebergangZiel = null; }
   }
 
@@ -1961,7 +1972,7 @@ export class SpielRaum extends Room {
         z.richtung = w;
         const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
         if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt, info);
-        if (d < W.spielerRadius + W.zombieRadius + 6) {
+        if (d < W.spielerRadius + W.zombieRadius + 6 && !(this.extra.get(info.ziel)?.schonT > 0)) {
           const schutz = ziel.kleidung > 0;
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1));
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);

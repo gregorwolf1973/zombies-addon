@@ -126,13 +126,13 @@ test('Fundhäufigkeit: 0 = nie, 20 = etwa doppelt so oft, 10 = wie bisher', asyn
 test('Tag/Nacht-Zeiten einstellbar: Helligkeit folgt tagAb/nachtAb, Vorgabe 7:00/21:30', async () => {
   const { helligkeit, istNacht, setzeTageszeiten } = await import('../client/welt.mjs');
   try {
-    assert.equal(helligkeit(12 * 60), 1); assert.equal(helligkeit(23 * 60), 0); assert.equal(helligkeit(6 * 60), 0.5);
+    assert.equal(helligkeit(12 * 60), 1); assert.equal(helligkeit(23 * 60), 0); assert.equal(helligkeit(6.5 * 60), 0.5);
     setzeTageszeiten(9 * 60, 20 * 60);                    // Tag ab 9:00, Nacht ab 20:00
-    assert.equal(helligkeit(8 * 60), 0.5);                // Morgendämmerung 7–9
-    assert.equal(helligkeit(19 * 60), 0.5);               // Abenddämmerung 18–20
+    assert.equal(helligkeit(8.5 * 60), 0.5);              // Morgendämmerung 8–9
+    assert.equal(helligkeit(19.5 * 60), 0.5);             // Abenddämmerung 19–20
     assert.ok(istNacht(20 * 60 + 1) && !istNacht(12 * 60));
-    setzeTageszeiten(600, 700);                           // zu kurz für zwei Dämmerungen: wird ignoriert
-    assert.equal(helligkeit(8 * 60), 0.5);
+    setzeTageszeiten(600, 690);                           // zu kurz für zwei Dämmerungen: wird ignoriert
+    assert.equal(helligkeit(8.5 * 60), 0.5);
   } finally { setzeTageszeiten(420, 1290); }
   const { bereinige } = await import('../server/einstellungen.mjs');
   const w = bereinige({ tagAb: 9999, nachtAb: 1300 }, {});

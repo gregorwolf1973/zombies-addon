@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.31.0 – 19.11.2026
+
+- Evakuierungsbus auf Karte und Eckkarte auffällig (pulsierendes Bussymbol mit Ring); Mitspieler am Boden als blinkendes rotes Kreuz.
+- Meldungen kleiner, halbtransparent, ganz oben und kürzer sichtbar.
+- Bildschirmtastatur verdeckt Chat und Eingaben nicht mehr (visualViewport).
+- Rätsel: richtige Antwort nur kurz bestätigt, dann schließt sich das Fenster bzw. die nächste Frage folgt.
+- Ton pausiert, wenn der Tab im Hintergrund oder das Handy gesperrt ist (Sprachchat läuft weiter).
+- Dämmerung: weicher, neutraler Übergang über eine Spielstunde; Nachtdunkelheit draußen einstellbar (Vorgabe 92 %).
+- Treppen: Ebenenwechsel löst schneller aus; nach jedem Wechsel 1 s Schutz vor Bissen, und in ca. 18 m um den Ankunftspunkt entstehen keine Zombies.
+
 ## 0.30.0 – 18.11.2026
 
 - Bundeswehr verteidigt den Stützpunkt: MG-Nester feuern Salven, der Puma dreht den Turm und schießt, jeder Soldat

@@ -231,7 +231,7 @@ test('Taschenlampe: schaltet drinnen ein, verbraucht sich, nächste aus dem Ruck
 
 test('Tag und Nacht: Dämmerung, helle Häuser, Lampe draußen nur nachts', async () => {
   assert.equal(helligkeit(12 * 60), 1); assert.equal(helligkeit(0), 0);
-  assert.ok(helligkeit(20 * 60) > 0 && helligkeit(20 * 60) < 1, 'Abenddämmerung');
+  assert.ok(helligkeit(21 * 60) > 0 && helligkeit(21 * 60) < 1, 'Abenddämmerung');
   assert.ok(istNacht(23 * 60) && !istNacht(10 * 60));
   const hell = Array.from({ length: 400 }, (_, i) => hausHell(i, 'eg', 720)).filter(Boolean).length;
   assert.ok(hell > 240 && hell < 320, `tagsüber hell: ${hell} von 400`);
@@ -338,4 +338,29 @@ test('Schussreichweite je Waffe einstellbar', async () => {
       assert.ok(await bis(() => z.hp < 100 || !raum.state.zombies.has(zid), 2000), 'schießt nicht trotz Reichweite');
     } finally { clearInterval(halten); }
   } finally { SpielRaum.einstellungen = vorher; await c.leave(); }
+});
+
+test('Ebenenwechsel: Schonzeit gegen Bisse, keine neuen Zombies am Ankunftspunkt', async () => {
+  const { c, raum, p } = await beitreten('Schonzeit');
+  try {
+    const h = hausMitKeller(raum);
+    const eg = raum.wv(`h${h.nr}eg`);
+    // frisch gebaute Ebene: kein Zombie im Umkreis des Ankunftspunkts (Start beim Betreten)
+    const neu = raum.baueEbene(`h${h.nr}keller`, 'eg');
+    const an = raum.nebenKachel(neu, neu.treppen.find(t => t.ziel === 'eg'));
+    for (const [, z] of raum.state.zombies) {
+      if (z.ebene === `h${h.nr}keller`) assert.ok(Math.hypot(z.x - an.x, z.y - an.y) >= 144, 'Zombie am Ankunftspunkt');
+    }
+    // Schonzeit: Zombie direkt neben dem Spieler beißt in der ersten Sekunde nicht
+    const x = raum.extra.get(c.sessionId);
+    p.ebene = eg.nr !== undefined ? `h${h.nr}eg` : ''; p.x = eg.start.x; p.y = eg.start.y; p.hp = 100;
+    const zid = raum.setzeZombie(p.x + 14, p.y, p.ebene), z = raum.state.zombies.get(zid);
+    raum.zombieInfo.get(zid).ziel = c.sessionId;
+    x.schonT = 1;
+    raum.zombieSchritt(zid, z, 0.1);
+    assert.equal(p.hp, 100, 'Biss trotz Schonzeit');
+    x.schonT = 0; z.x = p.x + 14; z.y = p.y;
+    raum.zombieSchritt(zid, z, 0.1);
+    assert.ok(p.hp < 100, 'kein Biss nach der Schonzeit');
+  } finally { await c.leave(); }
 });

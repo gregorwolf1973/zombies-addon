@@ -83,7 +83,7 @@ export async function starte({
       nachtFaktor: w.zombies.nacht / 10,
       autoFaktor: w.autos / 10,
       tagMinuten: w.tagMinuten,
-      tagAb: w.tagAb, nachtAb: w.nachtAb,
+      tagAb: w.tagAb, nachtAb: w.nachtAb, nachtDunkel: w.nachtDunkel,
       menschen: w.menschen,
       ansteckungMin: w.ansteckung,
       bissChance: w.biss / 100,

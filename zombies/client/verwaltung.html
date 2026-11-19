@@ -601,10 +601,12 @@
   <p class="tn-leise">Uhrzeit setzen geht nur, solange jemand spielt. Dämmerung 5–7 Uhr und 19:30–21:30 Uhr.</p>
   <label for="tnTag">Ein Spieltag dauert</label>
   <div class="tn-zeile"><input type="range" id="tnTag" min="10" max="240" step="2"><span id="tnTagWert">48 min</span></div>
-  <label for="tnTagAb">Tag beginnt (ganz hell, 2 h Dämmerung davor)</label>
+  <label for="tnTagAb">Tag beginnt (ganz hell, 1 h Übergang davor)</label>
   <div class="tn-zeile"><input type="range" id="tnTagAb" min="240" max="660" step="15"><span id="tnTagAbWert">07:00</span></div>
-  <label for="tnNachtAb">Nacht beginnt (ganz dunkel, 2 h Dämmerung davor)</label>
+  <label for="tnNachtAb">Nacht beginnt (ganz dunkel, 1 h Übergang davor)</label>
   <div class="tn-zeile"><input type="range" id="tnNachtAb" min="1080" max="1425" step="15"><span id="tnNachtAbWert">21:30</span></div>
+  <label for="tnNachtDunkel">Nachtdunkelheit (100 % = fast schwarz, Lichtquellen bleiben sichtbar)</label>
+  <div class="tn-zeile"><input type="range" id="tnNachtDunkel" min="30" max="100" step="1"><span id="tnNachtDunkelWert">92 %</span></div>
   <label for="tnNacht">Zombies nachts draußen</label>
   <div class="tn-zeile"><input type="range" id="tnNacht" min="10" max="30" step="1"><span id="tnNachtWert">×1,5</span></div>
   <label for="tnAutos">Geparkte Autos</label>
@@ -682,7 +684,7 @@
   var komma = function (v) { return '×' + (v / 10).toFixed(1).replace('.', ','); };
   var uhrText = function (u) { u = Math.floor(u); return String(Math.floor(u / 60)).padStart(2, '0') + ':' + String(u % 60).padStart(2, '0'); };
   var tagAb = 420, nachtAb = 1290;
-  var phase = function (u) { return (u >= nachtAb || u < tagAb - 120) ? 'Nacht' : (u >= nachtAb - 120 || u < tagAb) ? 'Dämmerung' : 'Tag'; };
+  var phase = function (u) { return (u >= nachtAb || u < tagAb - 60) ? 'Nacht' : (u >= nachtAb - 60 || u < tagAb) ? 'Dämmerung' : 'Tag'; };
   var aktiv = null;
   function status(text, fehler) {
     var s = $('tnStatus'); s.textContent = text; s.style.color = fehler ? 'var(--gefahr)' : 'var(--akzent)';
@@ -695,6 +697,7 @@
     if (aktiv !== 'tnTag') { $('tnTag').value = e.tagMinuten || 48; $('tnTagWert').textContent = $('tnTag').value + ' min'; }
     tagAb = e.tagAb || 420; nachtAb = e.nachtAb || 1290;
     if (aktiv !== 'tnTagAb') { $('tnTagAb').value = tagAb; $('tnTagAbWert').textContent = uhrText(tagAb); }
+    if (aktiv !== 'tnNachtDunkel') { $('tnNachtDunkel').value = e.nachtDunkel === undefined ? 92 : e.nachtDunkel; $('tnNachtDunkelWert').textContent = $('tnNachtDunkel').value + ' %'; }
     if (aktiv !== 'tnNachtAb') { $('tnNachtAb').value = nachtAb; $('tnNachtAbWert').textContent = uhrText(nachtAb); }
     if (aktiv !== 'tnNacht') { $('tnNacht').value = (e.zombies && e.zombies.nacht) || 15; $('tnNachtWert').textContent = komma($('tnNacht').value); }
     if (aktiv !== 'tnAutos') { $('tnAutos').value = e.autos === undefined ? 10 : e.autos; $('tnAutosWert').textContent = komma($('tnAutos').value); }
@@ -741,6 +744,7 @@
   }
   regler('tnTag', function (v) { return v + ' min'; }, function (v) { return { tagMinuten: v }; });
   regler('tnTagAb', uhrText, function (v) { return { tagAb: v }; });
+  regler('tnNachtDunkel', function (v) { return v + ' %'; }, function (v) { return { nachtDunkel: v }; });
   regler('tnNachtAb', uhrText, function (v) { return { nachtAb: v }; });
   regler('tnNacht', komma, function (v) { return { zombies: { nacht: v } }; });
   regler('tnAutos', komma, function (v) { return { autos: v }; });
@@ -2288,8 +2292,8 @@
     [tn.querySelector('.tn-uhr'), tn.querySelector('.tn-knoepfe')].forEach(function (el) { if (el) zeit.appendChild(el); });
     var knoepfeHinweis = zeit.querySelector('.tn-knoepfe');
     var hinweis = tn.querySelector('.tn-knoepfe + p.tn-leise') || [].filter.call(tn.querySelectorAll('p.tn-leise'), function (p) { return /Uhrzeit setzen/.test(p.textContent); })[0];
-    if (hinweis) { hinweis.textContent = 'Uhrzeit setzen geht nur, solange jemand spielt. Dämmerung je 2 Stunden vor Tag- und Nachtbeginn.'; zeit.appendChild(hinweis); }
-    ['tnTag', 'tnTagAb', 'tnNachtAb'].forEach(function (id) { zeile(zeit, id); });
+    if (hinweis) { hinweis.textContent = 'Uhrzeit setzen geht nur, solange jemand spielt. Sanfter Übergang über eine Spielstunde vor Tag- und Nachtbeginn.'; zeit.appendChild(hinweis); }
+    ['tnTag', 'tnTagAb', 'tnNachtAb', 'tnNachtDunkel'].forEach(function (id) { zeile(zeit, id); });
     var ausbruch = neueKarte(P.welt, '🦠 Ausbruch');
     ['tnMenschen', 'tnAnst', 'tnBiss'].forEach(function (id) { zeile(ausbruch, id); });
     rein(ausbruch, $('tnBewohner'));

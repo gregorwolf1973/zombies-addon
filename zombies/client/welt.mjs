@@ -687,7 +687,7 @@ function findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, zaunOk) 
 // uhr = Spielminute 0–1439. Abenddämmerung 19:30–21:30, Morgendämmerung 5:00–7:00.
 // Tageszeiten (Spielminuten): ab tagAb ganz hell, ab nachtAb ganz dunkel, davor je 2 Stunden Dämmerung.
 // Einstellbar (Verwaltung „Tag beginnt“/„Nacht beginnt“); der Server schickt die Werte im Zustand an die Clients.
-const DAEMMERUNG = 120;
+const DAEMMERUNG = 60;   // eine volle Spielstunde Übergang
 let TAG_AB = 420, NACHT_AB = 1290;
 export function setzeTageszeiten(tagAb, nachtAb) {
   const t = Number(tagAb), n = Number(nachtAb);

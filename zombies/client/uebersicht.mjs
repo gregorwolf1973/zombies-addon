@@ -176,7 +176,15 @@ export class Uebersicht {
     const pos = (kx, ky) => [(kx - x0) * m, (ky - y0) * m];
     const t = this.welt.tor;
     if (t) { const [x, y] = pos(t.x + 0.5, t.y + 1); c.font = `${Math.round(14 * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🚧', x + 8 * dpr, y); }
-    if (this.bus) { const [x, y] = pos(this.bus.x, this.bus.y); c.font = `${Math.round((this.gross ? 18 : 13) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🚌', x, y); }
+    if (this.bus) {
+      // Evakuierungsbus: großes, pulsierendes gelb-rotes Symbol mit Ring
+      const [x, y] = pos(this.bus.x, this.bus.y), ph = (Date.now() % 1000) / 1000, puls = 0.5 + 0.5 * Math.sin(ph * Math.PI * 2);
+      const R = (this.gross ? 17 : 13) * dpr * (1 + 0.25 * puls);
+      c.beginPath(); c.arc(x, y, R + 6 * dpr * ph, 0, Math.PI * 2); c.strokeStyle = `rgba(255,214,0,${(1 - ph) * 0.9})`; c.lineWidth = 3 * dpr; c.stroke();
+      c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fillStyle = puls > 0.5 ? '#ffd600' : '#ff6d00'; c.fill();
+      c.lineWidth = 2.5 * dpr; c.strokeStyle = '#000'; c.stroke();
+      c.font = `${Math.round((this.gross ? 20 : 15) * dpr * (1 + 0.15 * puls))}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#000'; c.fillText('🚌', x, y + dpr);
+    }
     for (const sr of this.welt.safeRooms) {
       const [x, y] = pos(sr.haus.x + sr.haus.b / 2, sr.haus.y + sr.haus.h / 2);
       c.font = `${Math.round((this.gross ? 16 : 11) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🛡', x, y);
@@ -191,8 +199,18 @@ export class Uebersicht {
     for (const p of [...punkte].sort((a, b) => a.ich - b.ich)) {
       const [x, y] = pos(p.kx, p.ky), rad = (p.ich ? 5.5 : 4) * dpr;
       c.beginPath(); c.arc(x, y, rad, 0, Math.PI * 2);
-      c.fillStyle = p.farbe; c.fill();
-      c.lineWidth = (p.ich ? 2.5 : 1.2) * dpr; c.strokeStyle = p.ich ? '#fff' : '#000'; c.stroke();
+      if (p.unten) {
+        // am Boden: blinkendes rotes Kreuz statt Punkt
+        const an = Math.floor(Date.now() / 350) % 2 === 0, k = (this.gross ? 8 : 6.5) * dpr;
+        c.lineCap = 'round';
+        c.beginPath(); c.moveTo(x - k, y); c.lineTo(x + k, y); c.moveTo(x, y - k); c.lineTo(x, y + k);
+        c.lineWidth = 6.5 * dpr; c.strokeStyle = '#fff'; c.stroke();
+        c.lineWidth = 3.5 * dpr; c.strokeStyle = an ? '#ff1744' : '#7f0000'; c.stroke();
+        c.lineCap = 'butt';
+      } else {
+        c.fillStyle = p.farbe; c.fill();
+        c.lineWidth = (p.ich ? 2.5 : 1.2) * dpr; c.strokeStyle = p.ich ? '#fff' : '#000'; c.stroke();
+      }
       if (this.gross || this.zoom >= 3) {
         c.font = `bold ${Math.round(12 * dpr)}px sans-serif`; c.textAlign = 'left'; c.textBaseline = 'middle';
         c.lineWidth = 3 * dpr; c.strokeStyle = 'rgba(0,0,0,.7)'; c.strokeText(p.name, x + rad + 4, y);

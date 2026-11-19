@@ -278,14 +278,34 @@ function autoFlaeche(g, b, a, e, halb) {
   g.fillPoints([p(a, -halb), p(e, -halb), p(e, halb), p(a, halb)], true);
 }
 
+// ---------- Bildschirmtastatur: Oberfläche über der Tastatur halten (visualViewport) ----------
+(() => {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const an = () => {
+    const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    const root = document.documentElement.style;
+    root.setProperty('--kb', kb + 'px');
+    root.setProperty('--vvtop', Math.round(vv.offsetTop) + 'px');
+    document.body.classList.toggle('tastatur', kb > 80);
+    if (kb > 80) { const l = $('chatliste'); if (l) l.scrollTop = l.scrollHeight; }
+  };
+  vv.addEventListener('resize', an); vv.addEventListener('scroll', an);
+  document.addEventListener('focusin', e => {
+    if (e.target?.matches?.('input, textarea')) setTimeout(() => { an(); try { e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { /* egal */ } }, 300);
+  });
+  document.addEventListener('focusout', () => setTimeout(() => { an(); window.scrollTo(0, 0); }, 100));
+  an();
+})();
+
 // ---------- Meldungen und Anzeige ----------
 function meldung(text, lang = false) {
   const d = document.createElement('div'), box = $('meldungen');
   d.textContent = text;
   box.appendChild(d);
   while (box.children.length > 3) box.firstElementChild.remove();   // höchstens drei auf einmal
-  setTimeout(() => { d.style.opacity = '0'; }, lang ? 3500 : 2200);
-  setTimeout(() => d.remove(), lang ? 4100 : 2800);
+  setTimeout(() => { d.style.opacity = '0'; }, lang ? 2800 : 1600);
+  setTimeout(() => d.remove(), lang ? 3300 : 2100);
 }
 
 // ---------- Chat (Nachrichten 'chat' / 'chatVerlauf' vom Server) ----------
@@ -709,7 +729,7 @@ class Ort extends Phaser.Scene {
     this.uebersicht.bus = bf ? { x: bf.x / KACHEL, y: bf.y / KACHEL } : null;
     const spieler = [...raum.state.spieler.entries()].map(([id, p]) => ({
       x: id === meineId && this.lokal ? this.lokal.x : p.x, y: id === meineId && this.lokal ? this.lokal.y : p.y,
-      ebene: p.ebene ?? '', name: p.name, ich: id === meineId, farbe: css(FARBEN[p.farbe % FARBEN.length]),
+      ebene: p.ebene ?? '', name: p.name, ich: id === meineId, unten: !!p.unten, farbe: css(FARBEN[p.farbe % FARBEN.length]),
     }));
     this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });
   }
@@ -1211,7 +1231,9 @@ class Ort extends Phaser.Scene {
     rt.setPosition(ox, oy);
     const mische = (a, b, t) => { const k = (s) => [(a >> s) & 255, (b >> s) & 255]; return [16, 8, 0].reduce((f, s) => { const [x, y] = k(s); return f | (Math.round(x + (y - x) * t) << s); }, 0); };
     rt.clear();
-    rt.fill(mische(0xff8a3d, 0x0b1430, Math.min(1, dunkel * 1.5)), 0.18 + dunkel * 0.66);
+    // nur dunkler/heller: neutrale, leicht bläuliche Nacht ohne Farbwechsel; Stärke = Einstellung „Nachtdunkelheit“
+    const sanft = dunkel * dunkel * (3 - 2 * dunkel);
+    rt.fill(0x060a14, Math.min(1, sanft * (raum.state.nachtDunkel ?? 92) / 100));
     if (dunkel < 0.3) return;
     const sicht = (x, y, r) => x > v.x - r && x < v.right + r && y > v.y - r && y < v.bottom + r;
     const P = this.weichPinsel;
@@ -1925,7 +1947,7 @@ class Ort extends Phaser.Scene {
     if (this.hudZeit <= 0) { this.hudZeit = 0.15; this.hud(ich); }
     this.geraeusche(ich, dt);
     this.karteZeit = (this.karteZeit ?? 0) - dt;
-    if (this.karteZeit <= 0 || this.uebersicht?.zeichneNeu) { this.karteZeit = this.uebersicht?.gross ? 0.15 : 0.4; this.uebersichtZeichnen(); }
+    if (this.karteZeit <= 0 || this.uebersicht?.zeichneNeu) { this.karteZeit = this.uebersicht?.gross ? 0.15 : (this.uebersicht?.bus || [...raum.state.spieler.values()].some(q => q.unten)) ? 0.12 : 0.4; this.uebersichtZeichnen(); }
   }
 
   // Schritte, Treffer am eigenen Leib, Stöhnen naher Zombies
@@ -2200,9 +2222,10 @@ function tauschRucksack() {
 function tauschZu() { tauschOffen = null; $('tausch').style.display = 'none'; $('tauschrucksack').dataset.k = ''; }
 
 // ---------- Rätsel am Tor ----------
-let raetselId = null;
+let raetselId = null, raetselTuer = false, raetselNoetig = 0, raetselTimer = null;
 function zeigeRaetsel(m) {
-  raetselId = m.id;
+  clearTimeout(raetselTimer);
+  raetselId = m.id; raetselTuer = !!m.tuer; raetselNoetig = m.noetig;
   $('raetseltitel').textContent = (m.tuer ? '🔐 Verschlossene Tür' : `🔐 Schloss ${m.geloest + 1} von ${m.noetig}`) + (m.thema ? ` · ${m.thema}` : '');
   $('raetselfrage').textContent = m.frage;
   const box = $('raetselantworten');
@@ -2230,8 +2253,19 @@ function zeigeAufloesung(m) {
   const link = m.seite && wikiAdresse
     ? ` <a href="${escapeHtml(wikiAdresse.replace(/\/$/, ''))}/doku.php?id=${encodeURIComponent(m.seite)}" target="_blank" rel="noopener">Mehr dazu im Wiki ↗</a>` : '';
   $('raetselergebnis').innerHTML = (m.richtig ? '✅ Richtig! Das Schloss springt auf.' : `❌ Falsch – richtig ist: <b>${escapeHtml(m.loesung)}</b>. Die Zombies haben es gehört!`) + link;
+  if (m.richtig) {
+    // kurze Bestätigung, dann von selbst weiter: nächste Frage am Tor (falls noch Schlösser offen) oder Fenster zu
+    const id = raetselId;
+    clearTimeout(raetselTimer);
+    raetselTimer = setTimeout(() => {
+      if (raetselId !== id || $('raetsel').style.display === 'none') return;
+      const weiter = !raetselTuer && (raum.state.torGeloest ?? 0) < raetselNoetig;
+      raetselZu();
+      if (weiter) raum.send('aktion');
+    }, 1000);
+  }
 }
-function raetselZu() { raetselId = null; $('raetsel').style.display = 'none'; }
+function raetselZu() { clearTimeout(raetselTimer); raetselId = null; $('raetsel').style.display = 'none'; }
 
 function balkenSetzen(id, wert) {
   const el = $(id).firstElementChild;
