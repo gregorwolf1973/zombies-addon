@@ -67,8 +67,11 @@ test('Betreten, Treppe in den Keller, wieder hinauf und hinaus', async () => {
 test('Türen: öffnen/schließen, Schlüssel, Brechstange, Rätsel; schlafender Zombie wacht erst bei offener Tür auf', async () => {
   const { c, raum, p } = await beitreten('Türöffner');
   try {
-    const fragen = [];
+    const fragen = [], meld = [];
     c.onMessage('raetsel', m => fragen.push(m));
+    c.onMessage('meldung', m => meld.push(m.text));
+    const art = (frei, raetsel, schluessel) => Object.assign(raum.state, { tuerFrei: frei, tuerRaetsel: raetsel, tuerSchluessel: schluessel });
+    art(0, 0, 100);   // alle verschlossenen Türen: nur mit Schlüssel
     // Haus mit verschlossener Tür und Zombieplatz suchen
     let w = null;
     for (const h of raum.welt.haeuser) {
@@ -95,6 +98,17 @@ test('Türen: öffnen/schließen, Schlüssel, Brechstange, Rätsel; schlafender 
     c.send('aktion');
     assert.ok(await bis(() => raum.state.tueren.get(k1).offen, 3000), 'Schlüssel wirkt nicht');
     assert.ok(p.rucksack.includes('schluessel'), 'Schlüsselbund verbraucht');
+    // Schlüssel-Tür ohne Schlüssel: Meldung, Brechstange hilft nicht
+    const tS = zu[2] ?? zu[0], kS = `${w.ebene}:${tS.x},${tS.y}`;
+    raum.setzeTuer(kS, false); raum.state.tueren.get(kS).verschlossen = true;
+    Object.assign(p, nebenTuer(tS)); p.rucksack.clear(); p.rucksack.push('brechstange');
+    c.send('aktion');
+    assert.ok(await bis(() => meld.some(t => t.includes('braucht einen Schlüssel'))), 'keine Schlüssel-Meldung');
+    await warte(3000);
+    assert.ok(!raum.state.tueren.get(kS).offen, 'Brechstange öffnet Schlüssel-Tür');
+    // Rätsel-Tür: weder Schlüssel noch Brechstange, nur Rätsel
+    art(0, 100, 0);
+    p.rucksack.clear(); p.rucksack.push('schluessel', 'brechstange');
     // ohne Werkzeug: Rätsel (an einer anderen verschlossenen Tür, notfalls derselben nach Zurücksetzen)
     const t2 = zu[1] ?? zu[0], k2 = `${w.ebene}:${t2.x},${t2.y}`;
     raum.state.tueren.get(k2).verschlossen = true; raum.setzeTuer(k2, false); raum.state.tueren.get(k2).verschlossen = true;
@@ -104,11 +118,18 @@ test('Türen: öffnen/schließen, Schlüssel, Brechstange, Rätsel; schlafender 
     const offenR = raum.offeneRaetsel.get(c.sessionId);
     c.send('antwort', { id: fragen[0].id, index: offenR.richtigIndex });
     assert.ok(await bis(() => raum.state.tueren.get(k2).offen), 'Rätsel öffnet nicht');
-    // Brechstange
+    // Rätsel-Tür mit Schlüssel und Brechstange im Rucksack: weiterhin nur Rätsel
     raum.setzeTuer(k2, false); raum.state.tueren.get(k2).verschlossen = true;
-    p.rucksack.push('brechstange');
+    p.rucksack.push('schluessel', 'brechstange');
+    fragen.length = 0;
     c.send('aktion');
-    assert.ok(await bis(() => raum.state.tueren.get(k2).offen, 4000), 'Brechstange wirkt nicht');
+    assert.ok(await bis(() => fragen.length === 1 && fragen[0].tuer), 'Rätsel-Tür fragt trotz Werkzeug nicht');
+    assert.ok(!raum.state.tueren.get(k2).offen);
+    // freie Tür: geht auch verschlossen einfach auf
+    raum.offeneRaetsel.delete(c.sessionId);
+    art(100, 0, 0);
+    c.send('aktion');
+    assert.ok(await bis(() => raum.state.tueren.get(k2).offen, 3000), 'freie Tür geht nicht auf');
   } finally { await c.leave(); }
 });
 

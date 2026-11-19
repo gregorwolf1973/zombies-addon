@@ -87,6 +87,7 @@ export function bereinige(e = {}, alt = {}) {
   const ag = { ...a.aufgaben, ...(e.aufgaben ?? {}) };
   const bw = { ...a.bundeswehr, ...(e.bundeswehr ?? {}) };
   const fk = { ...a.faehigkeiten, ...(e.faehigkeiten ?? {}) };
+  const tu = { ...a.tueren, ...(e.tueren ?? {}) };
   const typen = Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, typeof z.typen?.[k] === 'boolean' ? z.typen[k] : (typeof a.zombies?.typen?.[k] === 'boolean' ? a.zombies.typen[k] : true)]));
   if (!Object.values(typen).some(Boolean)) typen[ZOMBIE_TYPEN[0]] = true;
   const funde = { ...a.funde };
@@ -157,6 +158,11 @@ export function bereinige(e = {}, alt = {}) {
       wartezeit: Math.round(zahl(ag.wartezeit, 10, 180, 60)),                 // Spielminuten, die der Bus wartet
       anzahl: Math.round(zahl(ag.anzahl, 3, 6, 4)),                           // Aufgaben je Level
     },
+    tueren: (() => {                                                          // Anteile verschlossener Zimmertüren in %: frei / nur Rätsel / nur Schlüssel
+      const r = { frei: Math.round(zahl(tu.frei, 0, 100, 50)), raetsel: Math.round(zahl(tu.raetsel, 0, 100, 25)), schluessel: Math.round(zahl(tu.schluessel, 0, 100, 25)) };
+      if (r.frei + r.raetsel + r.schluessel <= 0) r.frei = 100;
+      return r;
+    })(),
     faehigkeiten: {
       an: typeof fk.an === 'boolean' ? fk.an : true,                          // Erfahrung, Level und Fähigkeiten
       xpFaktor: Math.round(zahl(fk.xpFaktor, 10, 500, 100)),                  // Erfahrungspunkte in Prozent (100 = normal)
@@ -182,6 +188,7 @@ export function vorgaben() {
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, anzahl: 4 },
     faehigkeiten: { an: true, xpFaktor: 100 },
+    tueren: { frei: 50, raetsel: 25, schluessel: 25 },
     bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },

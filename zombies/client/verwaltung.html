@@ -1234,6 +1234,58 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
 })();
 </script>
 
+<section class="karte" id="tuerKarte" aria-labelledby="titelTuer">
+  <h2 id="titelTuer">🚪 Verschlossene Türen</h2>
+  <p class="ag-leise">Wie sich verschlossene Zimmertüren in Häusern öffnen lassen: „Frei“ geht einfach auf, „Rätsel“ nur über ein Rätsel (❓), „Schlüssel“ nur mit Schlüsselbund (🔑). Die Brechstange öffnet keine dieser Türen. Die Anteile werden in Prozent gewichtet (Summe egal) und gelten sofort; Haustüren und Safe Rooms bleiben unverändert.</p>
+  <label for="tuFrei">Frei (geht einfach auf)</label>
+  <div class="tu-zeile"><input type="range" id="tuFrei" min="0" max="100" step="5"><span id="tuFreiWert">50 %</span></div>
+  <label for="tuRaetsel">Nur mit Rätsel ❓</label>
+  <div class="tu-zeile"><input type="range" id="tuRaetsel" min="0" max="100" step="5"><span id="tuRaetselWert">25 %</span></div>
+  <label for="tuSchluessel">Nur mit Schlüssel 🔑</label>
+  <div class="tu-zeile"><input type="range" id="tuSchluessel" min="0" max="100" step="5"><span id="tuSchluesselWert">25 %</span></div>
+  <p class="tu-status" id="tuStatus" aria-live="polite"></p>
+</section>
+<style>
+  #tuerKarte .ag-leise { color: var(--text-soft); font-size: .85rem; font-weight: 400; }
+  #tuerKarte .tu-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #tuerKarte .tu-zeile input { flex: 1; }
+  #tuerKarte .tu-zeile span { min-width: 64px; text-align: right; }
+  #tuerKarte .tu-status { min-height: 1.2em; font-size: .85rem; }
+</style>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var REGLER = [['tuFrei', 'frei', 50], ['tuRaetsel', 'raetsel', 25], ['tuSchluessel', 'schluessel', 25]];
+  var aktiv = null;
+  function status(text, fehler) {
+    var s = $('tuStatus'); s.textContent = text; s.style.color = fehler ? 'var(--gefahr)' : 'var(--akzent)';
+    clearTimeout(status.t); status.t = setTimeout(function () { s.textContent = ''; }, 2500);
+  }
+  function zeige(d) {
+    var t = (d.einstellungen && d.einstellungen.tueren) || {};
+    REGLER.forEach(function (r) {
+      if (aktiv === r[0]) return;
+      $(r[0]).value = t[r[1]] === undefined ? r[2] : t[r[1]];
+      $(r[0] + 'Wert').textContent = $(r[0]).value + ' %';
+    });
+  }
+  function senden(teil) {
+    return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tueren: teil }) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { aktiv = null; zeige(d); status('✓ Gespeichert'); })
+      .catch(function (e) { aktiv = null; status('Fehler: ' + e.message, true); });
+  }
+  REGLER.forEach(function (r) {
+    var el = $(r[0]);
+    el.addEventListener('input', function () { aktiv = r[0]; $(r[0] + 'Wert').textContent = el.value + ' %'; });
+    el.addEventListener('change', function () { var t = {}; t[r[1]] = Number(el.value); senden(t); });
+  });
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  laden();
+  setInterval(laden, 5000);
+})();
+</script>
+
 <section class="karte" id="toeneKarte" aria-labelledby="titelToene">
   <h2 id="titelToene">🔊 Geräusche</h2>
   <p class="tk-hinweis">Ordne jedem Ereignis eine oder mehrere Tondateien zu – bei mehreren wird zufällig gewählt. Ohne Zuordnung erzeugt das Spiel einen eigenen Ton.</p>
@@ -2709,6 +2761,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
   rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
   rein(P.aufgaben, $('aufgabenKarte'));
+  rein(P.spiel, $('tuerKarte'));
   rein(P.admin, karteVon('titelTest')); rein(P.admin, karteVon('titelNeustart'));
   // Rest der alten Sammelkarte: Statusanzeige behalten (schwebt unten rechts), Karte entfernen
   if (tn) { var st = $('tnStatus'); if (st) document.body.appendChild(st); tn.parentNode.removeChild(tn); }

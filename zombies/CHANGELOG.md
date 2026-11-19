@@ -4,6 +4,7 @@
 
 - Einheitliche Figurgrößen: jedes Bild bekommt einen eigenen Ausgleich (client/groessen.mjs, gemessen mit tools/groessen_messen.py); Bewohner so breit wie der Survivor, alle Zombie-Typen etwa 10 % breiter, Leichen passend lang. Die Größenregler wirken auf diese Grundgröße, Vorschau und Spiel rechnen gleich.
 - Verbindung beendet: Hinweis antippen lädt neu (in der installierten App geht Herunterziehen nicht); kommt die App aus dem Hintergrund zurück, lädt sie von selbst neu.
+- Drei Türarten für verschlossene Zimmertüren: frei, nur per Rätsel (❓), nur mit Schlüsselbund (🔑); Anteile in der Verwaltung (Vorgabe 50/25/25 %); Brechstange öffnet keine verschlossenen Zimmertüren mehr.
 
 ## 0.41.0 – 19.11.2026
 

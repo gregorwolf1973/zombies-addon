@@ -8,7 +8,8 @@ import path from 'node:path';
 import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
-import { KACHEL, T, frei } from '../client/welt.mjs';
+import { SpielRaum } from '../server/raum.mjs';
+import { KACHEL, T, frei, schlossArt } from '../client/welt.mjs';
 
 const PORT = 27300 + Math.floor(Math.random() * 200);
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -288,4 +289,50 @@ test('Speichern: Haustür und Zimmertür mit Barrikade, Haltbarkeit und Bruch bl
     assert.equal(st.offen, true);
     assert.equal(neu.raum.wv(ebeneVon(h)).hole(t.x, t.y), T.TUER_OFFEN);
   } finally { await neu.c.leave(); }
+});
+
+test('Schlossart: deterministisch, Anteile wirken, 0 % kommt nie vor', () => {
+  const zaehle = (a, seed = 1234) => {
+    const n = { frei: 0, raetsel: 0, schluessel: 0 };
+    for (let i = 0; i < 3000; i++) n[schlossArt(`h${i % 40}eg:${i},${i * 7 % 50}`, seed, a)]++;
+    return n;
+  };
+  assert.equal(schlossArt('h1eg:3,4', 99, { frei: 1, raetsel: 1, schluessel: 1 }), schlossArt('h1eg:3,4', 99, { frei: 1, raetsel: 1, schluessel: 1 }));
+  const v = zaehle({ frei: 50, raetsel: 25, schluessel: 25 });
+  assert.ok(Math.abs(v.frei / 3000 - 0.5) < 0.05 && Math.abs(v.raetsel / 3000 - 0.25) < 0.05 && Math.abs(v.schluessel / 3000 - 0.25) < 0.05, JSON.stringify(v));
+  assert.deepEqual(zaehle({ frei: 0, raetsel: 100, schluessel: 0 }), { frei: 0, raetsel: 3000, schluessel: 0 });
+  assert.deepEqual(zaehle({ frei: 0, raetsel: 0, schluessel: 100 }), { frei: 0, raetsel: 0, schluessel: 3000 });
+  assert.deepEqual(zaehle({ frei: 100, raetsel: 0, schluessel: 0 }), { frei: 3000, raetsel: 0, schluessel: 0 });
+  assert.notDeepEqual(zaehle({ frei: 1, raetsel: 1, schluessel: 1 }, 1), zaehle({ frei: 1, raetsel: 1, schluessel: 1 }, 2), 'Seed ohne Wirkung');
+});
+
+test('Schlossart auf dem Server: Anteile aus den Einstellungen, Kontext je Art, Brechstange öffnet nichts', async () => {
+  const { c, raum, p } = await beitreten('Schlosser');
+  try {
+    const h = normalesHaus(raum, 0), w = hinein(raum, p, h);
+    w.behaelter = [];
+    const t = w.tueren[0], key = `${w.ebene}:${t.x},${t.y}`;
+    const st = raum.state.tueren.get(key);
+    const nebenTuer = [[0, 1], [0, -1], [1, 0], [-1, 0]].map(([dx, dy]) => ({ x: (t.x + dx + 0.5) * KACHEL, y: (t.y + dy + 0.5) * KACHEL, k: w.hole(t.x + dx, t.y + dy) })).find(o => o.k === T.BODEN);
+    Object.assign(p, { x: nebenTuer.x, y: nebenTuer.y });
+    st.offen = false; st.verschlossen = true;
+    const art = (f, r, s) => Object.assign(raum.state, { tuerFrei: f, tuerRaetsel: r, tuerSchluessel: s });
+    p.rucksack.clear(); p.rucksack.push('brechstange');
+    art(100, 0, 0);
+    assert.equal(raum.tuerKontext(p).art, 'tuer_auf');
+    art(0, 100, 0);
+    assert.equal(raum.tuerKontext(p).art, 'schlossraetsel');
+    p.rucksack.push('schluessel');
+    assert.equal(raum.tuerKontext(p).art, 'schlossraetsel', 'Schlüssel öffnet Rätsel-Tür');
+    art(0, 0, 100);
+    assert.equal(raum.tuerKontext(p).art, 'aufschliessen');
+    p.rucksack.clear(); p.rucksack.push('brechstange');
+    assert.equal(raum.tuerKontext(p).art, 'schluessel_noetig', 'Brechstange öffnet Schlüssel-Tür');
+    // Haustüren sind nie betroffen
+    assert.equal(raum.tuerArt('haus:3'), 'frei');
+    // Einstellung -> Spielstand
+    SpielRaum.einstellungen = { ...SpielRaum.einstellungen, tueren: { frei: 10, raetsel: 20, schluessel: 70 } };
+    raum.tuerAnteileUebernehmen();
+    assert.deepEqual([raum.state.tuerFrei, raum.state.tuerRaetsel, raum.state.tuerSchluessel], [10, 20, 70]);
+  } finally { SpielRaum.einstellungen = { ...SpielRaum.einstellungen, tueren: { frei: 50, raetsel: 25, schluessel: 25 } }; await c.leave(); }
 });

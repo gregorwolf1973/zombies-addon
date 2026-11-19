@@ -19,7 +19,7 @@ import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
-  bewaffnetSoll, zombieSoll, zufall, safeRoomVon, WELT_VERSION, setzeTageszeiten,
+  bewaffnetSoll, zombieSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, MUNITION_MAX, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
 } from '../client/welt.mjs';
@@ -112,6 +112,7 @@ export const Zustand = schema({
   feuer: t.map(Feuer),
   verbrannt: t.map('boolean'),  // 'haus:nr', 'auto:bID', 'bus:ID', 'fz:ID'
   kegel: t.boolean(),           // Sichtkegel der Zombies anzeigen (Einstellung)
+  tuerFrei: t.uint8(), tuerRaetsel: t.uint8(), tuerSchluessel: t.uint8(),   // Anteile der Schlossarten verschlossener Zimmertüren in % (Einstellung, der Client berechnet damit schlossArt)
   stuetzpunkt: t.string(),      // Bundeswehr-Stützpunkt: '' = keiner, 'steht', 'gefallen' oder 'aus' (server/stuetzpunkt.mjs)
   bwTurm: t.number(),           // Drehwinkel des Puma-Turms (Bogenmaß), der Turm dreht sich zum Ziel
   bwX: t.number(), bwY: t.number(), bwW: t.number(),   // Puma: Position (Turmmitte) und Fahrtrichtung der Wanne, er patrouilliert an der Front
@@ -281,6 +282,7 @@ export class SpielRaum extends Room {
     this.stuetzpunkt.start(stand, !!passt);
     this.granaten = new Granaten(this);
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
+    this.tuerAnteileUebernehmen();
     if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === WELT_VERSION) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
 
     this.onMessage('eingabe', (client, m) => {
@@ -762,6 +764,7 @@ export class SpielRaum extends Room {
     if (!sprache.an) for (const p of this.state.spieler.values()) p.spricht = false;
     this.broadcast('spracheEinst', { einst: sprache });
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
+    this.tuerAnteileUebernehmen();
     const soll = this.zombieSollJetzt();
     // zu viele Zombies draußen: die am weitesten entfernten, nicht jagenden verschwinden
     const draussen = [...this.state.zombies.entries()].filter(([id, z]) => !z.ebene && !z.jagt && !this.zombieInfo.get(id)?.welle);
@@ -942,7 +945,7 @@ export class SpielRaum extends Room {
       let st = this.state.tueren.get(key);
       if (!st) {
         const g = (this.gespeicherteTuerenStand ?? {})[key];
-        st = g ? this.tuerAusStand(g) : neueTuer(t.offen, t.verschlossen);
+        st = g ? this.tuerAusStand(g) : neueTuer(t.offen, t.verschlossen && this.tuerArt(key) !== 'frei');
         this.state.tueren.set(key, st);
       }
       if (st.offen) w.kacheln[t.y * BREITE + t.x] = T.TUER_OFFEN;
@@ -1056,6 +1059,18 @@ export class SpielRaum extends Room {
   }
 
   // ---------- Türen: Zimmertüren und Haustüren ----------
+
+  tuerAnteileUebernehmen() {
+    const a = SpielRaum.einstellungen.tueren ?? { frei: 50, raetsel: 25, schluessel: 25 };
+    this.state.tuerFrei = a.frei; this.state.tuerRaetsel = a.raetsel; this.state.tuerSchluessel = a.schluessel;
+  }
+
+  // Schlossart einer Zimmertür: 'frei' | 'raetsel' | 'schluessel' (Haustüren sind nie verschlossen → 'frei')
+  tuerArt(key) {
+    if (this.hausNr(key) !== null) return 'frei';
+    const s = this.state;
+    return schlossArt(key, s.seed, { frei: s.tuerFrei, raetsel: s.tuerRaetsel, schluessel: s.tuerSchluessel });
+  }
 
   tuerAusStand(g, haus = false) {
     const st = neueTuer(haus ? g[0] ?? true : g[0], g[1]);
@@ -1171,10 +1186,12 @@ export class SpielRaum extends Room {
       return belegt ? null : { ...basis, art: 'tuer_zu', dauer: 0.25 };
     };
     const oeffnen = () => {
-      if (!st?.verschlossen) return { ...basis, art: 'tuer_auf', dauer: 0.25 };
+      const art = st?.verschlossen ? this.tuerArt(wahl.key) : 'frei';
+      if (art === 'frei') return { ...basis, art: 'tuer_auf', dauer: 0.25 };
+      if (art === 'raetsel') return { ...basis, art: 'schlossraetsel' };
+      // nur mit Schlüsselbund; die Brechstange hilft hier nicht
       if (p.rucksack.includes('schluessel')) return { ...basis, art: 'aufschliessen', dauer: 1 };
-      if (p.rucksack.includes('brechstange')) return { ...basis, art: 'aufbrechen', dauer: 2.5 };
-      return { ...basis, art: 'schlossraetsel' };
+      return { ...basis, art: 'schluessel_noetig' };
     };
     const brett = () => p.rucksack.includes('bretter') && bar < 100 ? { ...basis, art: 'barrikade', dauer: 3 } : null;
     const umschalten = () => offen ? schliessen() : oeffnen();
@@ -1369,6 +1386,7 @@ export class SpielRaum extends Room {
     if (!k) return;
     if (k.art === 'raetsel') return this.stelleRaetsel(client);
     if (k.art === 'schlossraetsel') return this.stelleRaetsel(client, { art: 'tuer', key: k.key, tuer: k.tuer, ebene: k.ebene });
+    if (k.art === 'schluessel_noetig') return client.send('meldung', { text: '🔑 Diese Tür braucht einen Schlüssel' });
     // Kofferräume gehen nur mit Brechstange auf
     if (k.art === 'durchsuchen' && k.behaelter?.art === 'auto' && !p.rucksack.includes('brechstange')) {
       return client.send('meldung', { text: '🔒 Der Kofferraum ist zu – dafür brauchst du eine ⚒️ Brechstange' });

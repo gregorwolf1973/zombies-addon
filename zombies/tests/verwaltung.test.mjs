@@ -128,3 +128,10 @@ test('Töne: jedes Ereignis hat Gruppe und Kategorien, Dateien werden nach Stich
   assert.deepEqual(tonKategorien('chill-hip-hop.mp3'), ['musik']);
   assert.deepEqual(tonKategorien('irgendwas.mp3'), ['sonstiges']);
 });
+
+test('Einstellungen bereinigen: Türanteile (0–100 %, Vorgabe 50/25/25, nie alles 0)', async () => {
+  const { bereinige, vorgaben } = await import('../server/einstellungen.mjs');
+  assert.deepEqual(vorgaben().tueren, { frei: 50, raetsel: 25, schluessel: 25 });
+  assert.deepEqual(bereinige({ tueren: { frei: 500, raetsel: -3, schluessel: 'x' } }).tueren, { frei: 100, raetsel: 0, schluessel: 25 });
+  assert.deepEqual(bereinige({ tueren: { frei: 0, raetsel: 0, schluessel: 0 } }).tueren, { frei: 100, raetsel: 0, schluessel: 0 });
+});

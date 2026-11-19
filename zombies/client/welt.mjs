@@ -54,6 +54,19 @@ export function zufall(seed) {
   };
 }
 
+// Art einer verschlossenen Zimmertür, deterministisch aus Tür-Schlüssel und Welt-Seed (Server und Client gleich):
+// 'frei' (geht einfach auf), 'raetsel' (nur per Rätsel), 'schluessel' (nur mit Schlüsselbund). a = Anteile { frei, raetsel, schluessel } in %
+export const TUER_ANTEILE = { frei: 50, raetsel: 25, schluessel: 25 };
+export function schlossArt(key, seed, a = TUER_ANTEILE) {
+  let h = 2166136261 ^ (seed >>> 0);
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
+  const r = zufall(h)();
+  const f = Math.max(0, +a.frei || 0), q = Math.max(0, +a.raetsel || 0), s = Math.max(0, +a.schluessel || 0), summe = f + q + s;
+  if (summe <= 0) return 'frei';
+  const x = r * summe;
+  return x < f ? 'frei' : x < f + q ? 'raetsel' : 'schluessel';
+}
+
 export function baueWelt(seed) {
   const r = zufall(seed);
   const k = new Uint8Array(BREITE * HOEHE);

@@ -3,7 +3,7 @@ import { groesse } from './groessen.mjs';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten,
+  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt,
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
@@ -1173,6 +1173,7 @@ class Ort extends Phaser.Scene {
     zeichneInnen(tex.getContext(), w); tex.refresh();
     const bild = this.add.image(X, Y, 'innen-' + ebene).setOrigin(0).setDepth(0.2);
     const tueren = this.add.graphics().setDepth(0.4);
+    const symbole = this.add.container(0, 0).setDepth(0.5);   // ❓/🔑 an verschlossenen Türen
     const dunkel = this.add.renderTexture(X, Y, B, H).setOrigin(0).setDepth(9);
     const nebel = this.add.graphics().setDepth(9.5);   // Räume hinter nie geöffneten Türen: ganz schwarz
     // Safe Room: Vorratskiste (Kistenbild) und Bretter an der Eingangstür
@@ -1181,7 +1182,7 @@ class Ort extends Phaser.Scene {
     const schild = w.safe ? this.add.text(X + B / 2, Y - 14, '🛡 ' + (w.safeName ?? 'Safe Room'), {
       fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(9.6) : null;
-    a = { w, bild, tueren, dunkel, nebel, safe, bretter, schild, X, Y, B, H, stand: '', bekannt: new Set(), nebelStand: -1, bretterWert: -1 };
+    a = { w, bild, tueren, symbole, dunkel, nebel, safe, bretter, schild, X, Y, B, H, stand: '', bekannt: new Set(), nebelStand: -1, bretterWert: -1 };
     this.innenAnsichten.set(ebene, a);
     return a;
   }
@@ -1190,7 +1191,7 @@ class Ort extends Phaser.Scene {
     this.aktEbene = ebene;
     for (const o of this.aussenObjekte) o.setVisible(!ebene);
     for (const st of this.stuecke.values()) { st.boden.setVisible(!ebene); st.oben?.setVisible(!ebene); st.baum?.setVisible(!ebene); }
-    const teile = a => [a.bild, a.tueren, a.dunkel, a.nebel, a.safe, a.bretter, a.schild].filter(Boolean);
+    const teile = a => [a.bild, a.tueren, a.symbole, a.dunkel, a.nebel, a.safe, a.bretter, a.schild].filter(Boolean);
     for (const [e, a] of this.innenAnsichten) for (const o of teile(a)) o.setVisible(e === ebene);
     const cam = this.cameras.main;
     if (ebene) {
@@ -1229,7 +1230,8 @@ class Ort extends Phaser.Scene {
       const st = raum.state.tueren.get(`${ebene}:${t.x},${t.y}`);
       const offen = !!st?.offen, zu = st ? st.verschlossen : t.verschlossen;
       w.kacheln[t.y * BREITE + t.x] = offen ? T.TUER_OFFEN : T.INNENTUER;
-      stand += offen ? 'o' : zu ? 'v' : 'z';
+      const sa = zu && !offen ? this.schlossArtVon(`${ebene}:${t.x},${t.y}`) : 'frei';   // frei: geht einfach auf, kein Schloss zu sehen
+      stand += offen ? 'o' : sa === 'raetsel' ? 'r' : sa === 'schluessel' ? 's' : 'z';
       zus += `${Math.ceil((st?.barrikade ?? 0) / 34)}${st?.kaputt ? 'k' : ''},`;   // Bretter und Bruch
     }
     if (stand !== a.stand || zus !== a.zus) {
@@ -1238,6 +1240,7 @@ class Ort extends Phaser.Scene {
       a.stand = stand;
       const zusListe = zus.split(',');
       const g = a.tueren.clear();
+      a.symbole.removeAll(true);
       w.tueren.forEach((t, i) => {
         const x = t.x * KACHEL, y = t.y * KACHEL, z = stand[i];
         const senkrecht = w.hole(t.x, t.y - 1) === T.WAND;   // Wand oben/unten → Tür in senkrechter Wand
@@ -1245,10 +1248,11 @@ class Ort extends Phaser.Scene {
           g.fillStyle(0x6d4c41, 1);
           if (senkrecht) g.fillRect(x + 2, y + 1, 26, 5); else g.fillRect(x + 1, y + 2, 5, 26);
         } else {
-          g.fillStyle(z === 'v' ? 0x5d4037 : 0x8d6e63, 1).fillRect(x + 2, y + 2, KACHEL - 4, KACHEL - 4);
+          g.fillStyle(z === 'r' || z === 's' ? 0x5d4037 : 0x8d6e63, 1).fillRect(x + 2, y + 2, KACHEL - 4, KACHEL - 4);
           g.lineStyle(2, 0x3e2723, 1).strokeRect(x + 2, y + 2, KACHEL - 4, KACHEL - 4);
           g.fillStyle(0xffd54f, 1).fillCircle(x + KACHEL - 9, y + KACHEL / 2, 2.5);
-          if (z === 'v') { g.fillStyle(0xb0bec5, 1).fillRect(x + KACHEL / 2 - 4, y + KACHEL / 2 - 2, 8, 7); g.lineStyle(2, 0xb0bec5, 1).strokeCircle(x + KACHEL / 2, y + KACHEL / 2 - 3, 3); }
+          if (z === 'r' || z === 's') {
+            a.symbole.add(this.add.text(x + KACHEL / 2, y + KACHEL / 2 - 9, z === 'r' ? '❓' : '🔑', { fontSize: '12px' }).setOrigin(0.5)); g.fillStyle(0xb0bec5, 1).fillRect(x + KACHEL / 2 - 4, y + KACHEL / 2 - 2, 8, 7); g.lineStyle(2, 0xb0bec5, 1).strokeCircle(x + KACHEL / 2, y + KACHEL / 2 - 3, 3); }
         }
         const brett = parseInt(zusListe[i]) || 0;
         if (zusListe[i].includes('k')) {   // zerbrochen: Splitter am Rahmen
@@ -1880,6 +1884,12 @@ class Ort extends Phaser.Scene {
     return best;
   }
 
+  // Schlossart einer Zimmertür aus den Anteilen im Spielstand (gleiche Funktion wie auf dem Server)
+  schlossArtVon(key) {
+    const s = raum.state;
+    return schlossArt(key, s.seed, { frei: s.tuerFrei ?? 50, raetsel: s.tuerRaetsel ?? 25, schluessel: s.tuerSchluessel ?? 25 });
+  }
+
   // wie auf dem Server: 'auf' = geschlossene Tür bedienen, 'zu' = offene Tür verbarrikadieren (mit Brettern) oder schließen, 'zweit' = die jeweils andere Möglichkeit
   tuerKontext(ich, modus = 'auf') {
     if (modus === true) modus = 'zu';
@@ -1892,10 +1902,11 @@ class Ort extends Phaser.Scene {
     const bar = (wahl.safe ? raum.state.safes.get(wahl.safe)?.barrikade : st?.barrikade) ?? 0;
     const schliessen = () => kaputt ? null : { art: 'tuer_zu', text: `🚪 ${name} schließen` };
     const oeffnen = () => {
-      if (!st?.verschlossen) return { art: 'tuer_auf', text: `🚪 ${name} öffnen` };
+      const sa = st?.verschlossen && !haus ? this.schlossArtVon(wahl.key) : 'frei';
+      if (sa === 'frei') return { art: 'tuer_auf', text: `🚪 ${name} öffnen` };
+      if (sa === 'raetsel') return { art: 'schlossraetsel', text: '❓ Rätsel lösen' };
       if (ich.rucksack.includes('schluessel')) return { art: 'aufschliessen', text: '🔑 Aufschließen' };
-      if (ich.rucksack.includes('brechstange')) return { art: 'aufbrechen', text: '⚒️ Aufbrechen (laut!)' };
-      return { art: 'schlossraetsel', text: '🔐 Schloss knacken (Rätsel)' };
+      return { art: 'schluessel_noetig', text: '🔑 Schlüssel nötig', aus: true };
     };
     const brett = () => ich.rucksack.includes('bretter') && bar < 100 ? { art: 'barrikade', text: `🔨 ${name} verbarrikadieren` } : null;
     if (modus === 'auf') return offen ? null : oeffnen();
@@ -2181,6 +2192,7 @@ class Ort extends Phaser.Scene {
     const knopf = $('aktion'), knopf2 = $('aktion2');
     knopf.style.display = this.kontext ? 'block' : 'none';
     if (this.kontext && knopf.textContent !== this.kontext.text) knopf.textContent = this.kontext.text;
+    knopf.style.opacity = this.kontext?.aus ? '0.5' : '';   // ausgegraut (Schlüssel nötig), Klick zeigt nur den Hinweis
     knopf2.style.display = zweit ? 'block' : 'none';
     if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
