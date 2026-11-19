@@ -36,3 +36,5 @@ freigestellt (Blutlache bleibt), gedreht, skaliert und angeordnet mit tools/gemi
 Möbel (grafik/moebel.webp, moebel.json): mit Google Gemini für dieses Spiel erzeugt (zwei Bildbögen „Wohnen“ und
 „Laden/Safe Room“, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben); freigestellt, auf Kachelgröße
 (64 px je Kachel) skaliert und angeordnet mit tools/gemini_moebel_schneiden.py.
+
+App-Icons und Favicon (client/icon-*.png, favicon*, apple-touch-icon.png): aus einem von Gregor bereitgestellten Zombie-Bild, Hintergrund mit Google Gemini entfernt (19.11.2026).

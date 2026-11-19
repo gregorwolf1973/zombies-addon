@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.46.1 – 19.11.2026
+
+- Neues Favicon und App-Icon: freigestellter Zombie (Hintergrund entfernt), Favicon 16/32/48, App-Icons 192/512, Maskable-Icon und Apple-Touch-Icon mit dunklem Hintergrund.
+
 ## 0.46.0 – 19.11.2026
 
 - Möbel echter: alle 28 Möbelarten als Gemini-Bilder von oben (Wohnung, Küche, Bad, Laden, Keller, Safe Room, Bundeswehr), mit der Rückseite zur Wand gedreht; Werkzeug tools/gemini_moebel_schneiden.py.
