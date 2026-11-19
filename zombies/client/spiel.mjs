@@ -409,7 +409,8 @@ function chatOeffnen() {
   $('chat').classList.add('offen');
   chatUngelesen = 0; chatZaehler();
   $('chatliste').scrollTop = $('chatliste').scrollHeight;
-  $('chattext').focus();
+  // Tastatur erst auf Tipp ins Eingabefeld; am PC mit Maus/Tastatur gleich fokussieren
+  if (window.matchMedia?.('(pointer: fine)').matches) $('chattext').focus();
 }
 function chatSchliessen() {
   if (!chatOffen()) return;
@@ -454,7 +455,9 @@ function chatAnschliessen(raum) {
   raum.onMessage('chat', n => {
     const ich = vonMir(n);
     chatAnhaengen({ ...n, ich });
-    if (ich || chatOffen()) return;
+    if (ich) return;
+    ton.nachricht();
+    if (chatOffen()) return;
     chatUngelesen++; chatZaehler();
     const kurz = n.text.length > 60 ? n.text.slice(0, 59) + '…' : n.text;
     meldung(`💬 ${n.name}: ${kurz}`);

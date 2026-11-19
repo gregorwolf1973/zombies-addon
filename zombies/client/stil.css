@@ -1,4 +1,4 @@
-:root { --oben: max(34px, calc(env(safe-area-inset-top) + 26px)); }
+:root { --oben: max(6px, env(safe-area-inset-top)); }
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: #1b2a1b; color: #fff;
   font-family: system-ui, -apple-system, sans-serif; touch-action: none;
@@ -202,6 +202,11 @@ button:disabled { opacity: .6; }
 #leiste > #fkknopf.neu::after {
   content: ''; position: absolute; top: -4px; right: -4px; width: 11px; height: 11px; border-radius: 50%; background: #e53935; border: 1px solid #fff;
 }
+#rechts #sicher {
+  margin: 0; width: 100%; box-sizing: border-box; flex-direction: column; align-items: stretch; gap: 4px; padding: 4px 6px;
+  font-size: 11px; line-height: 1.25; background: #263238b0; text-shadow: 0 1px 2px #000;
+}
+#rechts #ausruhen { font-size: 11px; padding: 4px 6px; }
 #zeit {
   pointer-events: none; font-weight: 700; font-size: 13px; padding: 2px 9px; border-radius: 10px; background: #000a; text-shadow: 0 1px 2px #000;
 }
@@ -260,33 +265,34 @@ button:disabled { opacity: .6; }
   background: #e53935; color: #fff; font-size: 11px; font-weight: 700; line-height: 16px; display: none;
 }
 #chat {
-  position: fixed; right: 10px; top: max(70px, calc(env(safe-area-inset-top) + 62px)); bottom: calc(16px + var(--kb, 0px)); width: min(360px, calc(100vw - 32px));
+  position: fixed; inset: 0; bottom: var(--kb, 0px); width: auto;
   display: none; flex-direction: column; z-index: 26; box-sizing: border-box;
-  background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 10px; box-shadow: 0 6px 20px #000a;
+  background: #1e2a1e; padding: 10px; padding-top: max(10px, env(safe-area-inset-top));
+  padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right));
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
 }
+body.tastatur #chat { padding-bottom: 10px; }
 #chat.offen { display: flex; }
 #chat .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-#chatzu { background: #ffffff22; color: #fff; width: auto; margin: 0; padding: 4px 10px; font-size: 16px; }
+#chatzu { background: #ffffff22; color: #fff; width: auto; min-width: 52px; min-height: 48px; margin: 0; padding: 6px 16px; font-size: 24px; border-radius: 12px; }
+#chat .kopfzeile b { font-size: 20px; }
 #chatliste {
   flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 6px;
   padding: 6px; border-radius: 10px; background: #0f180f;
 }
 #chatliste .nachricht {
-  max-width: 85%; padding: 6px 9px; border-radius: 10px; background: #2c3a2c; align-self: flex-start;
-  overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.35;
+  max-width: min(85%, 560px); padding: 6px 9px; border-radius: 10px; background: #2c3a2c; align-self: flex-start;
+  overflow-wrap: anywhere; word-break: break-word; font-size: 16px; line-height: 1.35;
 }
 #chatliste .nachricht.ich { align-self: flex-end; background: #2e7d32; }
 #chatliste .nachricht .absender { font-weight: 700; font-size: 12px; margin-bottom: 2px; }
 #chatliste .nachricht .fuss { font-size: 10px; opacity: .65; margin-top: 3px; text-align: right; }
 #chatliste .leer { opacity: .6; font-size: 13px; text-align: center; margin: auto; }
 #chatform { display: flex; gap: 6px; margin-top: 8px; }
-#chattext { flex: 1; min-width: 0; margin: 0; font-size: 16px; padding: 9px 10px; border-radius: 10px; }
+#chattext { flex: 1; min-width: 0; margin: 0; font-size: 16px; padding: 12px 12px; border-radius: 10px; }
 #chatsenden { width: auto; margin: 0; padding: 0 14px; border-radius: 10px; }
-@media (max-width: 600px) {
-  #chat { left: 16px; right: 16px; width: auto; }
-}
 /* Bildschirmtastatur offen (visualViewport): Chat bleibt darüber, Kopfzeile bleibt sichtbar */
-body.tastatur #chat { top: calc(var(--vvtop, 0px) + 8px); }
+body.tastatur #chat { top: var(--vvtop, 0px); }
 
 /* Startseite: Freigaben und App-Installation */
 .freigaben { margin-top: 10px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }

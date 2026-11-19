@@ -284,6 +284,20 @@ export function falsch() {
   rauschen(z, 0.25, { typ: 'bandpass', freq: 2500, q: 4, start: 0.05, laut: 0.3 });   // Schloss klappert
 }
 
+// Chat-Benachrichtigung: kurzes, weiches „Ding-Dong“ (höchstens alle 1,5 s, nicht im Hintergrund, stumm = nichts)
+let nachrichtZuletzt = 0;
+export function nachricht() {
+  if (document.hidden) return;
+  const jetzt = performance.now();
+  if (jetzt - nachrichtZuletzt < 1500) return;
+  const z = ort(null, null, 0.35); if (!z) return;
+  nachrichtZuletzt = jetzt;
+  ton(z, 0.35, { typ: 'sine', freq: 988, start: 0, a: 0.01, laut: 0.5 });
+  ton(z, 0.2, { typ: 'sine', freq: 1976, start: 0, a: 0.01, laut: 0.06 });
+  ton(z, 0.5, { typ: 'sine', freq: 784, start: 0.16, a: 0.01, laut: 0.5 });
+  ton(z, 0.3, { typ: 'sine', freq: 1568, start: 0.16, a: 0.01, laut: 0.06 });
+}
+
 export function biss() {
   const z = ort(null, null, 0.8); if (!z) return;
   rauschen(z, 0.12, { typ: 'bandpass', freq: 1800, q: 1, a: 0.002, laut: 0.8 });

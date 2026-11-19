@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.41.0 – 19.11.2026
+
+- Neue Chat-Nachrichten mit Handy-Benachrichtigungston; Chat über den ganzen Bildschirm; Tastatur auf dem Handy erst beim Antippen des Eingabefelds.
+- Eckkarte, Symbolleiste und Uhrzeit ganz oben; Safe-Room-Infofeld (Barrikade, Ausruhen) unter der Uhrzeit.
+- Verwaltung: Größenvorschau zeigt Survivor, Bewohner, Zombie und Leiche im Spielmaßstab mit sichtbarer Größe in Spielpixeln.
+
 ## 0.40.1 – 19.11.2026
 
 - Safe Rooms auf der Karte deutlicher: grünes Haus, grüner Kreis mit Schild, auf der großen Karte „SAFE“.

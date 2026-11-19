@@ -665,8 +665,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     <div id="grVorschau" class="gr-vorschau">
       <label for="grTyp">Vorschau: Zombietyp</label>
       <div class="tn-zeile"><select id="grTyp"></select></div>
-      <canvas id="grCanvas" width="640" height="260" aria-label="Vorschau: Spielerfigur, Zombie und Leiche im gleichen Maßstab"></canvas>
-      <span class="hilfe" id="grMassstab">Alle drei im selben Maßstab: links Spielerfigur (Normalgröße), Mitte Zombie, rechts Leiche.</span>
+      <canvas id="grCanvas" width="640" height="260" aria-label="Vorschau: Survivor, Mann/Frau, Zombie und Leiche im gleichen Maßstab"></canvas>
+      <span class="hilfe" id="grMassstab">Alle im selben Maßstab wie im Spiel: Survivor, Mann/Frau, Zombie, Leiche. Unter jeder Figur steht die sichtbare Größe in Spielpixeln (die Bilder füllen ihr Feld unterschiedlich stark).</span>
     </div>
   </div>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="ztTitel">Zombietypen (mindestens einer bleibt an)</div>
@@ -960,10 +960,13 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       fetch(BOEGEN[b].replace(/\.\w+$/, '.json')).then(function (r) { return r.json(); }).then(function (j) { liste[b] = j; fertig(); }).catch(function () {});
     });
   })();
-  // Größenvorschau: Spielerfigur, Zombie und Leiche in Spielgröße (spiel.mjs: Feld 160 px; Zombie 0,42, Bogen 2 0,476, Spieler 0,476) mal Faktor
+  // Größenvorschau: Spielerfiguren, Zombie und Leiche in Spielgröße. Formeln wie spiel.mjs (alle Bögen haben 160-px-Felder):
+  //   Survivor = 0,476 · Mann/Frau = 0,42 · Zombie (figuren/figuren3, Kriecher) = 0,42 · z6/z7 = 0,476 (z6 zusätzlich ·1,05)
+  //   Zombie = Grundmaßstab · zombieGroesse/100 · groesseGesamt/100;  Leiche = 0,42 · leichenGroesse/100 · groesseGesamt/100 (Zombiegröße zählt nicht)
+  //   Die Bilder füllen ihr Feld unterschiedlich stark – darum steht unter jeder Figur die sichtbare Größe in Spielpixeln.
   (function () {
     var BG = { figuren: 'grafik/figuren.png', figuren2: 'grafik/figuren2.webp', figuren3: 'grafik/figuren3.webp' };
-    var ZG = 0.42, BG2 = 0.476, VERGR = 2.5, LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];
+    var ZG = 0.42, MG = 0.42, BG2 = 0.476, VERGR = 2.5, LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];
     var bild = {}, liste = {}, cv = $('grCanvas'), sel = $('grTyp');
     if (!cv || !sel) return;
     ZTYPEN.forEach(function (k) {
@@ -977,8 +980,21 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       var feld = l.feld || 160, sp = Math.floor(img.naturalWidth / feld), nr = l.bilder[name][0], g = feld * skala;
       ctx.save(); ctx.translate(mx, my); ctx.rotate(drehung || 0);
       ctx.drawImage(img, (nr % sp) * feld, Math.floor(nr / sp) * feld, feld, feld, -g / 2, -g / 2, g, g);
-      ctx.restore(); return true;
+      ctx.restore();
+      return sichtbar(img, (nr % sp) * feld, Math.floor(nr / sp) * feld, feld, skala / SK);
     }
+    var SK = 1;
+    // sichtbarer Bildinhalt (Alpha > 40) in Spielpixeln: Breite x Höhe; skala ist hier schon der Spielmaßstab
+    function sichtbar(img, sx, sy, feld, spiel) {
+      try {
+        var c = document.createElement('canvas'); c.width = c.height = feld; var g = c.getContext('2d');
+        g.drawImage(img, sx, sy, feld, feld, 0, 0, feld, feld);
+        var d = g.getImageData(0, 0, feld, feld).data, x0 = feld, y0 = feld, x1 = -1, y1 = -1;
+        for (var y = 0; y < feld; y++) for (var x = 0; x < feld; x++) if (d[(y * feld + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        return x1 < 0 ? true : { b: Math.round((x1 - x0 + 1) * spiel), h: Math.round((y1 - y0 + 1) * spiel) };
+      } catch (e) { return true; }
+    }
+    function groesse(r) { return r && r.b ? ' · ' + r.b + '×' + r.h + ' px' : ''; }
     function neuZeichnen() {
       var gg = Number($('tnGGroesse').value) / 100, zf = Number($('tnZGroesse').value) / 100 * gg, lf = Number($('tnLGroesse').value) / 100 * gg;
       var erg = $('grErgebnis');
@@ -989,20 +1005,25 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
       ctx.fillStyle = '#6a994e'; ctx.fillRect(0, 0, bw, bh);
       // gleicher Maßstab für alle drei; bei sehr großen Faktoren etwas kleiner, damit nichts abgeschnitten wird
-      var S = Math.min(VERGR, 230 / (160 * Math.max(BG2, ZG * zf, BG2 * zf * 1.05, ZG * lf)));
-      var k = sel.value, idx = ZTYPEN.indexOf(k), y = bh / 2 - 8, x1 = bw * 0.18, x2 = bw * 0.5, x3 = bw * 0.82;
-      zeichne(ctx, 'figuren2', 'sv_pistole_idle', x1, y, BG2 * S, 0);
-      if (k === 'kriecher') zeichne(ctx, 'figuren', 'kriecher_a', x2, y, ZG * zf * S, 0);
-      else if (k === 'z6' || k === 'z7') zeichne(ctx, 'figuren2', k + '_stehen', x2, y, BG2 * zf * S * (k === 'z6' ? 1.05 : 1), 0);
-      else if (idx >= 7) zeichne(ctx, 'figuren3', k, x2, y, ZG * zf * S, 0);
-      else zeichne(ctx, 'figuren', 'zombie_' + k, x2, y, ZG * zf * S, 0);
+      var S = Math.min(VERGR, 230 / (160 * Math.max(BG2, MG, ZG * zf, BG2 * zf * 1.05, ZG * lf)));
+      SK = S;
+      var k = sel.value, idx = ZTYPEN.indexOf(k), y = bh / 2 - 8, xs = [bw * 0.125, bw * 0.375, bw * 0.625, bw * 0.875];
+      var r1 = zeichne(ctx, 'figuren2', 'sv_pistole_idle', xs[0], y, BG2 * S, 0);
+      var r2 = zeichne(ctx, 'figuren', 'mann_hand', xs[1], y, MG * S, 0);
+      var r3, r4;
+      if (k === 'kriecher') r3 = zeichne(ctx, 'figuren', 'kriecher_a', xs[2], y, ZG * zf * S, 0);
+      else if (k === 'z6' || k === 'z7') r3 = zeichne(ctx, 'figuren2', k + '_stehen', xs[2], y, BG2 * zf * S * (k === 'z6' ? 1.05 : 1), 0);
+      else if (idx >= 7) r3 = zeichne(ctx, 'figuren3', k, xs[2], y, ZG * zf * S, 0);
+      else r3 = zeichne(ctx, 'figuren', 'zombie_' + k, xs[2], y, ZG * zf * S, 0);
       var typ = k === 'kriecher' ? 'hemd' : k;
-      if (!(liste.figuren3 && liste.figuren3.bilder && liste.figuren3.bilder['leiche_' + typ] && zeichne(ctx, 'figuren3', 'leiche_' + typ, x3, y, ZG * lf * S, 0))) {
+      if (liste.figuren3 && liste.figuren3.bilder && liste.figuren3.bilder['leiche_' + typ]) r4 = zeichne(ctx, 'figuren3', 'leiche_' + typ, xs[3], y, ZG * lf * S, 0);
+      if (!r4) {
         var alt = typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : idx >= 7 ? LEICHEN[idx % LEICHEN.length] : typ;
-        zeichne(ctx, 'figuren', 'leiche_' + alt, x3, y, ZG * lf * S, 0);
+        r4 = zeichne(ctx, 'figuren', 'leiche_' + alt, xs[3], y, ZG * lf * S, 0);
       }
-      ctx.font = '600 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 3;
-      ctx.fillText('Spieler (zum Vergleich)', x1, bh - 10); ctx.fillText('Zombie ' + Math.round(zf * 100) + ' %', x2, bh - 10); ctx.fillText('Leiche ' + Math.round(lf * 100) + ' %', x3, bh - 10);
+      ctx.font = '600 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 3;
+      var namen = ['Survivor', 'Mann/Frau', 'Zombie ' + Math.round(zf * 100) + ' %', 'Leiche ' + Math.round(lf * 100) + ' %'], rs = [r1, r2, r3, r4];
+      for (var i = 0; i < 4; i++) { ctx.fillText(namen[i], xs[i], bh - 24); ctx.fillText(groesse(rs[i]).replace(' · ', ''), xs[i], bh - 8); }
       ctx.shadowBlur = 0;
     }
     window.groessenVorschau = neuZeichnen;
