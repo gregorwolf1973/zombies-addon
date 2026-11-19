@@ -659,6 +659,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     <label for="tnLGroesse">Leichen</label>
     <span class="hilfe">Größe der Leichen, unabhängig von den lebenden Zombies. 100 % = Originalgröße.</span>
     <div class="tn-zeile"><input type="range" id="tnLGroesse" min="50" max="200" step="5"><span id="tnLGroesseWert">100 %</span></div>
+    <label for="tnHGroesse">Helden (Aussehen Held/Heldin)</label>
+    <span class="hilfe">Größe der Helden, gleiche Bezugsgröße wie die Zombies. Vorgabe 85 % (etwa 15 % kleiner als früher).</span>
+    <div class="tn-zeile"><input type="range" id="tnHGroesse" min="50" max="200" step="5"><span id="tnHGroesseWert">85 %</span></div>
     <label for="tnGGroesse">Global – alle Zombies und Leichen</label>
     <span class="hilfe">Vergrößert oder verkleinert beides zusammen um diesen Prozentsatz, zusätzlich zu den zwei Reglern oben.</span>
     <div class="tn-zeile"><input type="range" id="tnGGroesse" min="50" max="150" step="5"><span id="tnGGroesseWert">±0 %</span></div>
@@ -826,6 +829,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     var feld = function (id, wert, text) { if (aktiv !== id) { $(id).value = wert; $(id + 'Wert').textContent = text(Number($(id).value)); } };
     feld('tnZGroesse', e.zombieGroesse === undefined ? 100 : e.zombieGroesse, function (v) { return v + ' %'; });
     feld('tnLGroesse', e.leichenGroesse === undefined ? 100 : e.leichenGroesse, function (v) { return v + ' %'; });
+    feld('tnHGroesse', e.heldenGroesse === undefined ? 85 : e.heldenGroesse, function (v) { return v + ' %'; });
     feld('tnGGroesse', e.groesseGesamt === undefined ? 100 : e.groesseGesamt, relProzent);
     feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
     if (window.groessenVorschau) window.groessenVorschau();
@@ -910,6 +914,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { verwandlung: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
   regler('tnLGroesse', function (v) { return v + ' %'; }, function (v) { return { leichenGroesse: v }; });
+  regler('tnHGroesse', function (v) { return v + ' %'; }, function (v) { return { heldenGroesse: v }; });
   regler('tnGGroesse', relProzent, function (v) { return { groesseGesamt: v }; });
   function globalSetzen(f) {
     var el = $('tnGGroesse'), v = f === 0 ? 100 : Math.max(50, Math.min(150, Number(el.value) + f));

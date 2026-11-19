@@ -19,6 +19,11 @@ export class Speicher {
         daten TEXT NOT NULL,
         geaendert INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS einstellungen (
+        id TEXT PRIMARY KEY,
+        daten TEXT NOT NULL,
+        geaendert INTEGER NOT NULL
+      );
     `);
     this._weltLesen = this.db.prepare('SELECT wert FROM welt WHERE schluessel = ?');
     this._weltSchreiben = this.db.prepare(
@@ -27,6 +32,20 @@ export class Speicher {
     this._spielerSchreiben = this.db.prepare(
       `INSERT INTO spieler (id, name, daten, geaendert) VALUES (?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, daten = excluded.daten, geaendert = excluded.geaendert`);
+    this._einstLesen = this.db.prepare('SELECT daten FROM einstellungen WHERE id = ?');
+    this._einstSchreiben = this.db.prepare(
+      `INSERT INTO einstellungen (id, daten, geaendert) VALUES (?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET daten = excluded.daten, geaendert = excluded.geaendert`);
+  }
+
+  // Spieler-Einstellungen (Aussehen, Ton, Zoom …) je Spieler-ID, getrennt vom Spielstand (überleben auch dessen Löschen)
+  ladeEinstellungen(id) {
+    const z = this._einstLesen.get(id);
+    try { return z ? JSON.parse(z.daten) : {}; } catch { return {}; }
+  }
+
+  speichereEinstellungen(id, werte) {
+    this._einstSchreiben.run(id, JSON.stringify(werte), Date.now());
   }
 
   ladeWelt() {

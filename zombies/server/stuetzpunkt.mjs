@@ -24,7 +24,8 @@ const SCAN_TAKT = 0.25;
 const TAU = Math.PI * 2;
 // Soldaten: sterben durch Zombies im Nahkampf, laufen bei Angriffen zum Hotspot (mindestens die Hälfte, mindestens 2 bleiben auf Wache)
 const SOLDAT_HP = 100, SOLDAT_BISS = 26, SOLDAT_NAHSCHADEN = 18;   // Leben, Abstand (px) und Schaden je Zombie und Sekunde
-const SOLDAT_TEMPO = 1.7, HOT_MIN = 3, HOT_RUHE = 5, WACHE_MIN = 2;   // Kacheln/s; Zombies im Hotspot; Sekunden Ruhe bis zum Rückweg
+const SOLDAT_TEMPO = 1.7, HOT_MIN = 3, HOT_RUHE = 12, WACHE_MIN = 2;   // Kacheln/s; Zombies im Hotspot; Sekunden ohne Hotspot bis zum Rückweg
+const KAMPF_RUHE = 8, KAMPF_RUHE_STREU = 7, DECKUNG_WEITE = 44, DECKUNG_TAKT = 3.5;   // Sekunden ohne Ziel (+ 0..7 je Soldat) bis zum Rückweg; Ausweichweite (px) und Takt im Kampf
 
 const diffWinkel = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
 
@@ -54,7 +55,7 @@ export class Stuetzpunkt {
       if (t.art === 'mgnest') this.nester.push({ n, x: t.x, y: t.y, blick: t.blick, kuehl: 0, salve: 0, takt: 0, scan: 0, ziel: null });
       else if (t.art === 'puma') this.puma = { n, x: t.turm.x, y: t.turm.y, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null, u: planKoord(sp, t.x, t.y).u, v: planKoord(sp, t.x, t.y).v, weg: [], hot: null, hotZelle: null, scanU: 0, rueckwaerts: false };
       // jeder Soldat an seinem Posten schießt mit (er bleibt dabei stehen)
-      else if (t.art === 'posten' && t.rolle === 'soldat') this.schuetzen.push({ n, x: t.x, y: t.y, hx: t.x, hy: t.y, blick: t.blick ?? 0, w0: t.blick ?? 0, hp: SOLDAT_HP, tot: false, modus: 'post', weg: [], kuehl: 0.5 + (n % 5) * 0.2, scan: 0, ziel: null });
+      else if (t.art === 'posten' && t.rolle === 'soldat') this.schuetzen.push({ n, x: t.x, y: t.y, hx: t.x, hy: t.y, blick: t.blick ?? 0, w0: t.blick ?? 0, hp: SOLDAT_HP, tot: false, modus: 'post', weg: [], kuehl: 0.5 + (n % 5) * 0.2, scan: 0, ziel: null, kampfT: 99, deckT: DECKUNG_TAKT + (n % 4) });
     });
     if (this.puma) { const pt = sp.teile[this.puma.n]; s.bwTurm = pt.turm.winkel; s.bwX = pt.x; s.bwY = pt.y; s.bwW = pt.winkel; }
     s.stuetzpunkt = passt && stand?.stuetzpunkt === 'gefallen' ? 'gefallen' : 'steht';
@@ -142,18 +143,25 @@ export class Stuetzpunkt {
   // Soldat am Posten: Einzelschüsse mit dem Gewehr auf Zombies in der Nähe
   soldatSchritt(sch, dt) {
     const r = this.raum;
-    if (sch.tot || sch.weg.length) return;   // Tote und Laufende schießen nicht
+    if (sch.tot) return;
+    sch.kampfT += dt;
+    if (sch.weg.length) return;   // Laufende schießen nicht
     sch.kuehl = Math.max(0, sch.kuehl - dt);
-    if (sch.kuehl > 0) return;
     let z = this.gueltig(sch.ziel, sch.x, sch.y, SOLDAT_REICHWEITE);
     if (!z) {
       sch.scan -= dt;
-      if (sch.scan > 0) return;
+      if (sch.scan > 0) { this.deckungSuchen(sch, dt); return; }
       sch.scan = SCAN_TAKT;
       sch.ziel = this.waehleZiel(sch.x, sch.y, SOLDAT_REICHWEITE);
       z = this.gueltig(sch.ziel, sch.x, sch.y, SOLDAT_REICHWEITE);
-      if (!z) return;
+      if (!z) { this.deckungSuchen(sch, dt); return; }
     }
+    // im Kampf: in Stellung bleiben, zum Ziel ausrichten und gelegentlich einen Schritt zur Seite (Deckung) machen
+    sch.kampfT = 0;
+    sch.blick = Math.atan2(z.y - sch.y, z.x - sch.x);
+    this.sendT = Math.min(this.sendT, 0.2);
+    if (this.deckungSuchen(sch, dt)) return;
+    if (sch.kuehl > 0) return;
     sch.kuehl = SOLDAT_PAUSE * (0.85 + r.rnd() * 0.3);
     const treffer = r.rnd() < SOLDAT_TREFFER;
     const w = Math.atan2(z.y - sch.y, z.x - sch.x) + (treffer ? 0 : (r.rnd() < 0.5 ? -1 : 1) * (0.06 + r.rnd() * 0.08));
@@ -161,6 +169,23 @@ export class Stuetzpunkt {
     r.broadcast('bwschuss', { art: 'gewehr', n: sch.n, x1: sch.x, y1: sch.y, x2: sch.x + Math.cos(w) * d, y2: sch.y + Math.sin(w) * d, w, t: treffer ? 1 : 0 });
     if (treffer) this.treffen(sch.ziel, z, SOLDAT_SCHADEN, sch);
     r.laerm(sch.x, sch.y, SOLDAT_LAERM, true, '');
+  }
+
+  // kurz im Kampf (Ziel gesehen in den letzten Sekunden): alle paar Sekunden einen kleinen Schritt in der Nähe des Postens, true = läuft los
+  deckungSuchen(sch, dt) {
+    if (sch.kampfT > 4 || sch.modus === 'zurueck') return false;
+    sch.deckT -= dt;
+    if (sch.deckT > 0) return false;
+    sch.deckT = DECKUNG_TAKT * (0.8 + this.raum.rnd() * 0.8);
+    const w = this.raum.rnd() * TAU, ab = DECKUNG_WEITE * (0.4 + this.raum.rnd() * 0.6);
+    const px = sch.hx + Math.cos(w) * ab, py = sch.hy + Math.sin(w) * ab;
+    if (!imLager(this.sp, px, py)) return false;
+    const { u, v } = planKoord(this.sp, px, py);
+    const weg = this.laufWeg(sch, u, v, 0);
+    const e = weg[weg.length - 1];
+    if (!e || Math.hypot(e.x - sch.hx, e.y - sch.hy) > DECKUNG_WEITE * 1.6 || Math.hypot(e.x - sch.x, e.y - sch.y) < 4) return false;
+    sch.weg = weg.slice(1, 6);   // höchstens ein paar Knoten, bleibt nah am Posten
+    return sch.weg.length > 0;
   }
 
   // ---------- Soldaten: Nahkampf, Tod, Hotspot-Einsatz ----------
@@ -211,7 +236,11 @@ export class Stuetzpunkt {
     const hot = this.hotspot(this.sHot);
     if (!hot || hot.n < HOT_MIN) {
       this.ruheT += 1;
-      if (this.ruheT >= HOT_RUHE) for (const q of lebend) if (q.modus === 'hot') this.heimschicken(q);
+      // erst heim, wenn lange kein Hotspot war UND der Soldat selbst eine Weile kein Ziel mehr hatte
+      if (this.ruheT >= HOT_RUHE) for (const q of lebend) {
+        const abseits = q.modus === 'hot' || (q.modus === 'post' && Math.hypot(q.x - q.hx, q.y - q.hy) > 2);
+        if (abseits && !(q.modus === 'post' && q.weg.length) && q.kampfT >= KAMPF_RUHE + (q.n % 8) * KAMPF_RUHE_STREU / 7) this.heimschicken(q);
+      }
       return;
     }
     this.ruheT = 0;

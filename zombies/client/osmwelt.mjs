@@ -30,6 +30,11 @@ const RICHTUNGEN = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 // 22 px + Zaundicke bis 18 px + Reserve; die Ausgangswahrscheinlichkeiten sind daher niedriger.
 const LUECKE_BASIS = 0.01, LUECKE_ENG = 0.05;
 const posHash = (x, y) => { let h = (Math.round(x * 8) * 73856093) ^ (Math.round(y * 8) * 19349663); h = Math.imul(h ^ (h >>> 13), 0x5bd1e995); return ((h ^ (h >>> 15)) >>> 0) / 4294967296; };
+// Fisher-Yates mit dem Welt-Zufall: auf jeder JS-Engine gleich (anders als sort mit Zufallsvergleich)
+function mischen(liste, r) {
+  for (let i = liste.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [liste[i], liste[j]] = [liste[j], liste[i]]; }
+  return liste;
+}
 export function zaeuneAusduennen(karte) {
   if (!karte.zaeune?.length) return karte;
   const geb = karte.gebaeude.map(g => ({ x0: g.x, y0: g.y, x1: g.x + g.b, y1: g.y + g.h }));
@@ -433,9 +438,9 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
         if (tuerVorn.some(([a, b]) => (a !== fx || b !== fy) && Math.abs(a - tx) <= 1 && Math.abs(b - ty) <= 1)) continue;   // nicht vor fremden Türen
         const n = wohnblock ? 3 + Math.floor(r() * 2) : 2 + Math.floor(r() * 2);
         const farben = ['grau'];
-        const rest = TONNEN.slice().sort(() => r() - 0.5);
+        const rest = mischen(TONNEN.slice(), r);
         while (farben.length < n) farben.push(rest.pop() ?? 'grau');
-        farben.sort((a, b) => (r() < 0.5 ? -1 : 1));
+        mischen(farben, r);
         muell.tonnen.push({ x: (tx + 0.5) * KACHEL + h.raus.dx * 3, y: (ty + 0.5) * KACHEL + h.raus.dy * 3, winkel: Math.atan2(h.raus.dy, h.raus.dx), farben, rund: r() < 0.25, haus: h.nr });
         behaelter.push({ id: 't' + muell.tonnen.length, art: 'muelltonne', x: (tx + 0.5) * KACHEL + h.raus.dx * 3, y: (ty + 0.5) * KACHEL + h.raus.dy * 3 });   // Tonnengruppe ist durchsuchbar
         break;
@@ -537,8 +542,9 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
       if (!quer.length) continue;
       kandidaten.push({ e, mx, my, ux, uy, fb, quer, breit: quer.length >= 3 });
     }
-    // deterministisch mischen, breitere Straßen zuerst
-    kandidaten.sort((a, b) => (b.breit - a.breit) || (r() - 0.5));
+    // deterministisch mischen, breitere Straßen zuerst (stabile Sortierung nach dem Mischen – kein Zufall im Vergleich,
+    // sonst hängt das Ergebnis von der Sortier-Umsetzung der JS-Engine ab und Server/Geräte bauen verschiedene Welten)
+    mischen(kandidaten, r).sort((a, b) => b.breit - a.breit);
     for (const c of kandidaten) {
       if (sperren.length >= 2) break;
       const px = c.mx * KACHEL, py = c.my * KACHEL;

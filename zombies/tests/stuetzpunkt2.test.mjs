@@ -187,9 +187,10 @@ test('Soldaten an ihren Posten schießen mit dem Gewehr auf Zombies in der Nähe
   const id = raum.setzeZombie(ziel.x, ziel.y, ''); ruhig(raum, id);
   assert.ok(await bis(() => !stehtDa(raum, id), 6000), 'Soldaten schießen nicht');
   assert.ok(nachrichten.bwschuss.some(m => m.art === 'gewehr' && Number.isInteger(m.n)), 'keine Gewehrschüsse gemeldet');
-  // die Posten bleiben, wo sie sind
+  // im Kampf bleiben sie in Stellung (höchstens ein paar Schritte Ausweichen um den Posten, nie aus dem Lager)
   const posten = sp.teile.filter(t => t.art === 'posten' && t.rolle === 'soldat');
-  assert.ok(sch.every(q => posten.some(t => t.x === q.x && t.y === q.y)), 'ein Soldat hat seinen Posten verlassen');
+  assert.ok(sch.every(q => posten.some(t => Math.hypot(t.x - q.x, t.y - q.y) < 90)), 'ein Soldat hat seinen Posten verlassen');
+  assert.ok(sch.every(q => imLager(sp, q.x, q.y)), 'ein Soldat hat das Lager verlassen');
   await beenden(c);
 });
 

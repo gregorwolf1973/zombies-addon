@@ -233,8 +233,11 @@ test('Evakuierungsbus: nur mit Funkspruch, wartet, wer nahe steht ist an Bord', 
     assert.ok(await bis(() => raum.state.busBord === 1 && raum.state.busGesamt === 2), `Bord ${raum.state.busBord}/${raum.state.busGesamt}`);
     await warte(300);
     assert.equal(raum.state.busDa, true, 'Bus fuhr los, obwohl Zwei fehlt');
-    // jetzt steigt auch Zwei zu: alle an Bord → Abfahrt (Aufgaben fehlen → ohne die Gruppe)
+    // jetzt steigt auch Zwei zu: alle an Bord, aber die Aufgaben fehlen → er fährt nicht sofort, sondern erst nach Ablauf der Wartezeit
     b.p.x = bus.x - 20;
+    await warte(500);
+    assert.equal(raum.state.busDa, true, 'Bus fuhr ohne geschaffte Aufgaben sofort los');
+    raum.aufgaben.busRest = 0;
     assert.ok(await bis(() => raum.state.busDa === false), 'Bus fährt nicht, obwohl alle an Bord sind');
     assert.ok(meldungen.some(t => t.includes('ohne euch abgefahren')), 'keine Meldung: ' + meldungen.join(' | '));
     assert.equal(busVon(raum), undefined, 'Bus bleibt stehen');
@@ -248,6 +251,11 @@ test('Evakuierungsbus: nur mit Funkspruch, wartet, wer nahe steht ist an Bord', 
     raum.state.uhr = 20 * 60; await warte(200);
     raum.state.uhr = 18 * 60 + 0.1;
     assert.ok(await bis(() => busVon(raum)), 'am nächsten Tag kommt kein neuer Bus');
+    // Aufgaben geschafft: wer nah genug ist, steigt dauerhaft ein und fährt mit (auch wenn er sich wegbewegen will)
+    for (const x of raum.state.aufgaben.values()) x.erledigt = true;
+    const [, bus2] = busVon(raum);
+    a.p.ebene = ''; a.p.x = bus2.x + 100; a.p.y = bus2.y;
+    assert.ok(await bis(() => raum.aufgaben.eingestiegen.size >= 1 || raum.state.busDa === false), 'Einsteigen auf Abstand 100 klappt nicht');
     // Wartezeit um, niemand an Bord: Bus fährt ohne die Gruppe
     a.p.x = bus.x + 900; b.p.x = bus.x + 900;
     raum.aufgaben.busRest = 0;

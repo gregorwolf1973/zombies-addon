@@ -17,6 +17,7 @@ import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
+import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zombieSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
@@ -98,6 +99,7 @@ export const Zustand = schema({
   nachtDunkel: t.number(),  // Nachtdunkelheit in % (Einstellung, für die Clients)
   zombieGroesse: t.number(),   // Zombiegröße in % (Einstellung, für die Clients)
   leichenGroesse: t.number(), // Leichengröße in %
+  heldenGroesse: t.number(),  // Heldengröße in %
   groesseGesamt: t.number(),  // Gesamtgröße (Zombies + Leichen) in %
   autos: t.uint8(),         // Autodichte der Welt (10 = normal), gilt bis zum Neustart der Welt
   spieler: t.map(Spieler),
@@ -209,11 +211,11 @@ export class SpielRaum extends Room {
       setzeKartengroesse(karte.breite, karte.hoehe);
       const passtStand = stand && (stand.karte ?? '') === karte.name && stand.seed === this.state.seed;
       this.state.autos = Math.max(0, Math.min(50, Math.round(passtStand && Number.isFinite(stand.autos) ? stand.autos : (SpielRaum.einstellungen.autoFaktor ?? 1) * 10)));
-      this.welt = baueWeltAusKarte(karte, this.state.seed, { autos: this.state.autos / 10 }); this.weltFp = null;
+      this.welt = baueWeltAusKarte(karte, this.state.seed, { autos: this.state.autos / 10 }); this.weltFp = weltFingerabdruck(this.welt);   // sofort, bevor Spielstand/Spiel die Welt verändern
       this.state.karte = karte.name;
     } else {
       setzeKartengroesse(64, 48);
-      this.welt = baueWelt(this.state.seed); this.weltFp = null;
+      this.welt = baueWelt(this.state.seed); this.weltFp = weltFingerabdruck(this.welt);
       this.state.karte = '';
     }
     this.rnd = zufall((this.state.seed ^ 0x5bd1e995) + Date.now() % 100000);
@@ -318,6 +320,7 @@ export class SpielRaum extends Room {
       console.warn(`Welt weicht ab: ${p?.name ?? client.sessionId} hat ${k(m?.fp)} statt ${soll} | Gerät: Karte ${k(m?.karte)} ${k(m?.b)}×${k(m?.h)} (Datei ${k(m?.kartenB)}×${k(m?.kartenH)}), Seed ${k(m?.seed)}, Autos ${k(m?.autos)} | Server: Karte ${this.state.karte} ${BREITE}×${HOEHE}, Seed ${this.state.seed}, Autos ${this.state.autos} | ${String(m?.ua ?? '').slice(0, 140)}`);
       client.send('weltFalsch', { soll });
     });
+    this.onMessage('einstellungen_spieler', (client, m) => this.einstellungenMerken(client, m));
     this.onMessage('kuehlschrank', client => this.kuehlschrank(client));
     this.onMessage('ausruhen', client => this.ausruhen(client));
     this.onMessage('antwort', (client, m) => this.antwort(client, m));
@@ -336,6 +339,7 @@ export class SpielRaum extends Room {
     this.onMessage('_$bsprachDaten', (client, m) => this.sprachDaten(client, m));   // Binärnachrichten (sendBytes) kommen mit Vorsatz _$b
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
+    // weltFp wird direkt nach dem Aufbau der Welt festgehalten (oben)
     this.setSimulationInterval(dt => {
       const t0 = performance.now();
       this.schritt(dt / 1000);
@@ -370,10 +374,11 @@ export class SpielRaum extends Room {
       this.state.spieler.delete(sid);
       this.extra.delete(sid);
       alt.name = name; alt.verbunden = true;
-      if (AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
+      if (optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
       this.state.spieler.set(client.sessionId, alt);
       this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, afkBot: null, letzteEingabe: Date.now() }); alt.afk = false;
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
+      this.einstellungenSenden(client, spielerId, alt.aussehen, optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? '')));
       this.sprachStart(client); this.sprachPartner();
       return;
     }
@@ -381,8 +386,10 @@ export class SpielRaum extends Room {
     const p = new Spieler();
     p.name = name;
     p.farbe = this.freieFarbe();
-    const gewaehlt = AUSSEHEN.test(String(optionen.aussehen ?? ''));
-    p.aussehen = gewaehlt ? optionen.aussehen : this.zufallsAussehen();
+    const vorschau = AUSSEHEN.test(String(optionen.aussehen ?? ''));
+    const gewaehlt = vorschau && optionen.aussehenGewaehlt !== false;   // false: Spieler hat in der Anmeldung nichts gewählt, nur die Vorschau
+    const gemerkt = this.speicher?.ladeEinstellungen(spielerId)?.zob_aussehen;   // von einem anderen Gerät
+    p.aussehen = gewaehlt ? optionen.aussehen : AUSSEHEN.test(String(gemerkt ?? '')) ? gemerkt : vorschau ? optionen.aussehen : this.zufallsAussehen();
     p.verbunden = true; p.unten = false; p.afk = false; p.hilfe = 0; p.richtung = 0;
     p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0; p.spricht = false;
     const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null, letzteEingabe: Date.now() };
@@ -394,7 +401,7 @@ export class SpielRaum extends Room {
       p.waffe = DINGE[gespeichert.waffe]?.waffe ? gespeichert.waffe : '';
       p.munition = Math.max(0, Math.min(MUNITION_MAX, Number(gespeichert.munition) || 0));
       p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
-      if (!gewaehlt && AUSSEHEN.test(String(gespeichert.aussehen ?? ''))) p.aussehen = gespeichert.aussehen;
+      if (!gewaehlt && !AUSSEHEN.test(String(gemerkt ?? '')) && AUSSEHEN.test(String(gespeichert.aussehen ?? ''))) p.aussehen = gespeichert.aussehen;
       p.infektion = Math.max(0, Math.min(INFEKTION_DAUER, Number(gespeichert.infektion) || 0));
       p.kleidung = Math.max(0, Math.min(100, Number(gespeichert.kleidung) || 0));
       p.lampe = Math.max(0, Math.min(LAMPE_DAUER, Number(gespeichert.lampe) || 0));
@@ -423,9 +430,33 @@ export class SpielRaum extends Room {
     this.speichereSpieler(client.sessionId);
     this.fkSenden(client.sessionId);
     client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
+    this.einstellungenSenden(client, spielerId, p.aussehen, gewaehlt);
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
     this.botsAnpassen();
     this.sprachStart(client); this.sprachPartner();
+  }
+
+  // ---------- Spieler-Einstellungen (je Spieler-ID in der Datenbank, gelten auf jedem Gerät) ----------
+  // Beim Beitritt: gemerkte Werte schicken; das gewählte/aktuelle Aussehen gilt dabei als Einstellung
+  einstellungenSenden(client, spielerId, aussehen, gewaehlt) {
+    const werte = einstellungenBereinigen(this.speicher?.ladeEinstellungen(spielerId));
+    if (AUSSEHEN.test(String(aussehen ?? '')) && (gewaehlt || !werte.zob_aussehen) && werte.zob_aussehen !== aussehen) {
+      werte.zob_aussehen = aussehen;
+      try { this.speicher?.speichereEinstellungen(spielerId, werte); } catch { /* egal */ }
+    }
+    client.send('einstellungen_spieler', { werte });
+  }
+
+  einstellungenMerken(client, m) {
+    const x = this.extra.get(client.sessionId);
+    if (!x?.spielerId || !this.speicher) return;
+    const jetzt = Date.now();
+    if (x.einstSeit && jetzt - x.einstSeit < 150) return;   // nicht öfter als nötig
+    x.einstSeit = jetzt;
+    const neu = einstellungenBereinigen(m?.werte);
+    if (!Object.keys(neu).length) return;
+    this.speicher.speichereEinstellungen(x.spielerId, { ...einstellungenBereinigen(this.speicher.ladeEinstellungen(x.spielerId)), ...neu });
+    // Aussehen gilt erst beim nächsten Beitritt (während des Spiels ändert es der Spieler nicht)
   }
 
   // ---------- Sprachübertragung (WebRTC-Signalisierung; die Sprache selbst läuft direkt zwischen den Browsern) ----------
@@ -764,7 +795,7 @@ export class SpielRaum extends Room {
   tageszeitenUebernehmen() {
     const e = SpielRaum.einstellungen ?? {};
     setzeTageszeiten(e.tagAb ?? 420, e.nachtAb ?? 1290);
-    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.leichenGroesse = e.leichenGroesse ?? 100; this.state.groesseGesamt = e.groesseGesamt ?? 100; }
+    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.leichenGroesse = e.leichenGroesse ?? 100; this.state.heldenGroesse = e.heldenGroesse ?? 85; this.state.groesseGesamt = e.groesseGesamt ?? 100; }
   }
 
   einstellungenGeaendert() {

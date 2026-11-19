@@ -18,6 +18,7 @@ import { innenraumFuer } from './innen.mjs';
 import * as ton from './ton.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlZu } from './aufheben.mjs';
 import * as sprache from './sprache.mjs';
+import { merkzettelAnschliessen, merkzettelErwarten } from './merkzettel.mjs';
 import { fkStart } from './faehigkeiten.mjs';
 import { Uebersicht } from './uebersicht.mjs';
 
@@ -141,7 +142,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWor
 ton.musikSofort(() => $('start').style.display !== 'none');
 
 // ---------- Figurenwahl ----------
-let meinAussehen = aussehenLesen(null);
+let meinAussehen = aussehenLesen(null), aussehenAngefasst = false;   // angefasst: in der Anmeldung selbst gewählt
 try { meinAussehen = aussehenLesen(localStorage.getItem('zob_aussehen')); } catch {}
 const figurVorlage = { bild: new Image(), liste: null, bild2: new Image(), liste2: null, bild3: new Image(), liste3: null };
 figurVorlage.bild3.src = 'grafik/helden160.webp';
@@ -187,28 +188,35 @@ function vorschauZeichnen() {
   ctx.restore();
 }
 function figurWahlAufbauen() {
-  const markieren = () => {
+  const markieren = (speichern = true) => {
     document.querySelectorAll('.geschlecht button').forEach(b => b.classList.toggle('an', b.dataset.g === meinAussehen.g));
     [...$('haarwahl').children].forEach((b, i) => b.classList.toggle('an', i === meinAussehen.haar));
     [...$('kleidwahl').children].forEach((b, i) => b.classList.toggle('an', i === meinAussehen.kleid));
-    try { localStorage.setItem('zob_aussehen', aussehenText(meinAussehen)); } catch {}
+    if (speichern) { aussehenAngefasst = true; try { localStorage.setItem('zob_aussehen', aussehenText(meinAussehen)); } catch {} }   // nur nach echter Wahl, nicht beim Aufbau
     vorschauZeichnen();
   };
-  document.querySelectorAll('.geschlecht button').forEach(b => { b.onclick = () => { meinAussehen.g = b.dataset.g; markieren(); }; });
+  document.querySelectorAll('.geschlecht button').forEach(b => { b.onclick = () => { meinAussehen.g = b.dataset.g; markieren(true); }; });
   for (const [box, farben, feld] of [[$('haarwahl'), HAARFARBEN, 'haar'], [$('kleidwahl'), KLEIDFARBEN, 'kleid']]) {
     farben.forEach((f, i) => {
       const b = document.createElement('button');
       b.type = 'button'; b.title = f.name; b.setAttribute('aria-label', f.name);
       b.style.background = `rgb(${f.rgb.join(',')})`;
-      b.onclick = () => { meinAussehen[feld] = i; markieren(); };
+      b.onclick = () => { meinAussehen[feld] = i; markieren(true); };
       box.appendChild(b);
     });
   }
-  markieren();
+  markieren(false);
 }
 figurWahlAufbauen();
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
 nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen(); });
+// Nach dem automatischen Neuladen (Welt wich ab) gleich wieder beitreten, statt auf der Anmeldung zu landen
+try {
+  if (sessionStorage.getItem('zob_autostart') === '1') {
+    sessionStorage.removeItem('zob_autostart');
+    if (nameFeld.value.trim()) setTimeout(() => { ton.tonStarten(); mitspielen(); }, 0);
+  }
+} catch {}
 
 // Gepanzerter Schulbus von oben (Front rechts, Länge 124 px): knallgelb-orange, Warnstreifen, Gitter vor den Fenstern, Gewehrläufe, rotes Dachschild
 function zeichneSchulbus(c, breit, hoch) {
@@ -292,7 +300,7 @@ async function mitspielen() {
     let token = null;
     try { token = sessionStorage.getItem('zob_token'); } catch {}
     if (token) { try { r = await client.reconnect(token); } catch { r = null; } }
-    if (!r) r = await client.joinOrCreate('zombies', { name, code, spielerId: spielerId(), aussehen: aussehenText(meinAussehen) });
+    if (!r) r = await client.joinOrCreate('zombies', { name, code, spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst });
     raum = r;
     ladenZeigen(15, 'Generiere Welt … verbunden');
     ton.musikAusblenden(4);   // Startmusik sanft ausblenden
@@ -314,6 +322,7 @@ async function mitspielen() {
       v.onclick = () => location.reload();
       document.addEventListener('visibilitychange', () => { if (!document.hidden) location.reload(); }, { once: true });
     });
+    merkzettelAnschliessen(raum, { zombies_lautstaerke: v => ton.lautstaerkeSetzen(Number(v)) });   // Einstellungen je Spieler vom Server
     chatAnschliessen(raum);
     // Pi entlasten: Tab länger als 5 min im Hintergrund → abmelden (Fortschritt ist gespeichert), beim Zurückkommen neu laden
     let versteckTimer = null, autoGetrennt = false;
@@ -335,6 +344,7 @@ async function mitspielen() {
       await raum.leave(true).catch(() => {});
       location.reload();
     });
+    await merkzettelErwarten(1500);   // gemerkte Einstellungen (Zoom, Liste, Karte …) vor dem Aufbau des Spiels übernehmen
     if (raum.state && raum.state.seed) starteSpiel();
     else raum.onStateChange.once(() => starteSpiel());
   } catch (e) {
@@ -547,6 +557,7 @@ function chatAnschliessen(raum) {
     chatAnhaengen({ ...n, ich });
     if (ich) return;
     ton.nachricht();
+    try { navigator.vibrate?.([120, 60, 120]); } catch { /* nicht verfügbar */ }
     if (chatOffen()) return;
     chatUngelesen++; chatZaehler();
     const kurz = n.text.length > 60 ? n.text.slice(0, 59) + '…' : n.text;
@@ -606,7 +617,7 @@ class Ort extends Phaser.Scene {
     einFrame().then(() => {
       this.erzeuge(); this.bereit = true;
       // Welt mit dem Server abgleichen (weicht sie ab, stehen Kisten und Wände woanders)
-      try { raum.send('weltpruefung', { fp: weltFingerabdruck(this.welt), ua: navigator.userAgent, karte: raum.state.karte, seed: raum.state.seed, autos: raum.state.autos, b: BREITE, h: HOEHE, kartenB: KARTE?.breite, kartenH: KARTE?.hoehe }); } catch {}
+      try { raum.send('weltpruefung', { fp: this.weltFp, ua: navigator.userAgent, karte: raum.state.karte, seed: raum.state.seed, autos: raum.state.autos, b: BREITE, h: HOEHE, kartenB: KARTE?.breite, kartenH: KARTE?.hoehe }); } catch {}
     });
   }
 
@@ -614,6 +625,7 @@ class Ort extends Phaser.Scene {
     const s = raum.state;
     if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
+    this.weltFp = weltFingerabdruck(this.welt);   // sofort nach dem Aufbau – später kommen Haufen, Leichen usw. aus dem Spielstand dazu
     try { setzeAutoBilder(this.textures.get('autos').getSourceImage(), this.cache.json.get('autosliste')); } catch { setzeAutoBilder(null, null); }   // vor den ersten Kartenstücken
     figurenVorzeichnen(this);
     ladenZeigen(85, 'Generiere Welt … zeichne Karte');
@@ -729,7 +741,7 @@ class Ort extends Phaser.Scene {
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
     raum.onMessage('weltFalsch', m => {
       let schon = null; try { schon = sessionStorage.getItem('zob_weltneu'); sessionStorage.setItem('zob_weltneu', m.soll); } catch {}
-      if (schon !== m.soll) { location.reload(); return; }
+      if (schon !== m.soll) { try { sessionStorage.setItem('zob_autostart', '1'); } catch {} location.reload(); return; }
       meldung('⚠️ Deine Karte weicht vom Server ab – Kisten und Türen stehen evtl. woanders. Bitte App ganz schließen und neu öffnen.', true);
     });
     fkStart(raum, meldung);
@@ -754,6 +766,7 @@ class Ort extends Phaser.Scene {
       if (m?.level) ladenZeigen(30, 'Generiere nächstes Level …', `🎉 Level ${m.level - 1} abgeschlossen!`); else ladenZeigen(30, 'Generiere Welt neu …');
       setTimeout(() => ladenZeigen(60, m?.level ? 'Generiere nächstes Level … Karte wird vorbereitet' : 'Generiere Welt neu …', m?.level ? `🎉 Level ${m.level - 1} abgeschlossen!` : ''), 1200);
       meldung(m?.level ? `🚌 Level ${m.level} – die Fahrt geht los, gleich geht es weiter …` : '🔄 Die Welt wird neu gestartet – gleich geht es weiter …', true);
+      try { sessionStorage.setItem('zob_autostart', '1'); } catch {}
       setTimeout(() => location.reload(), 2500);
     });
     raum.onMessage('tor', () => meldung(raum.state.aufgaben?.size
@@ -1104,7 +1117,14 @@ class Ort extends Phaser.Scene {
     const box = this.add.container(p.x, p.y).setDepth(ich ? 6 : 4);
     const n = p.farbe % FARBEN.length;
     // eigener Spieler: heller Ring am Boden
-    const ring = this.add.ellipse(0, 0, 34, 34).setStrokeStyle(2, 0xffffff, ich ? 0.7 : 0).setFillStyle(0x000000, 0);
+    // eigener Spieler: sehr dezenter, weicher Lichtschein statt Ring (ADD-Blend, geringe Deckkraft)
+    if (ich && !this.textures.exists('eigenschein')) {
+      const t = this.textures.createCanvas('eigenschein', 96, 96), c = t.getContext(), gr = c.createRadialGradient(48, 48, 0, 48, 48, 48);
+      gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.18)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = gr; c.fillRect(0, 0, 96, 96); t.refresh();
+    }
+    const ring = ich ? this.add.image(0, 0, 'eigenschein').setDisplaySize(64, 64).setAlpha(0.22).setBlendMode(Phaser.BlendModes.ADD)
+      : this.add.ellipse(0, 0, 34, 34).setVisible(false);
     const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand'));
     const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE).setVisible(false);
     const name = this.add.text(0, -28, p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
@@ -1274,7 +1294,14 @@ class Ort extends Phaser.Scene {
       } else if (b.art !== 'bus') {
         g.lineStyle(2, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokeRect(b.x - 12, b.y - 12, 24, 24);
         g.fillStyle(0x111111, 0.55).fillRect(b.x - 9, b.y - 9, 18, 18);                    // geöffnete Türen
-        if (leer) { g.lineStyle(2, 0xbdbdbd, 0.9).lineBetween(b.x - 6, b.y - 6, b.x + 6, b.y + 6).lineBetween(b.x + 6, b.y - 6, b.x - 6, b.y + 6); }
+        if (leer) {
+          // Kreuz über das ganze Möbelstück (alle Kacheln), sonst nur über die Behälter-Kachel
+          const kx = Math.floor(b.x / KACHEL), ky = Math.floor(b.y / KACHEL);
+          const m = (w.moebel ?? []).find(q => kx >= q.x && kx < q.x + q.b && ky >= q.y && ky < q.y + q.h);
+          const x0 = m ? m.x * KACHEL + 4 : b.x - 6, y0 = m ? m.y * KACHEL + 4 : b.y - 6;
+          const x1 = m ? (m.x + m.b) * KACHEL - 4 : b.x + 6, y1 = m ? (m.y + m.h) * KACHEL - 4 : b.y + 6;
+          g.lineStyle(2, 0xbdbdbd, 0.9).lineBetween(x0, y0, x1, y1).lineBetween(x1, y0, x0, y1);
+        }
       }
     }
     g.setDepth(this.aktEbene ? 0.45 : 1.08);
@@ -2019,7 +2046,7 @@ class Ort extends Phaser.Scene {
       const fb = !geht ? this.heldBild(`held_${gg}_stiefel_stehen`)
         : this.heldBild(`held_${gg}_stiefel_${tempo > W.tempoGehen * 1.25 ? 'laufen' : 'gehen'}`, Math.floor(f.lauf / 6));
       if (f.fuesse.texture.key !== 'helden160' || f.fuesse.frame.name != fb) f.fuesse.setTexture('helden160', fb);   // eslint-disable-line eqeqeq
-      f.fuesse.setRotation(p.richtung).setScale(ZOMBIE_GROESSE * (p.schleicht ? 0.92 : 1));
+      f.fuesse.setRotation(p.richtung).setScale(ZOMBIE_GROESSE * ((raum.state?.heldenGroesse || 85) / 100) * (p.schleicht ? 0.92 : 1));
     }
     else {
       textur = this.menschTextur(p.aussehen);
@@ -2031,7 +2058,7 @@ class Ort extends Phaser.Scene {
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
-    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * ((raum.state?.zombieGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 100) / 100) : survivor ? BOGEN2_GROESSE : held ? ZOMBIE_GROESSE : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand');
+    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * ((raum.state?.zombieGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 100) / 100) : survivor ? BOGEN2_GROESSE : held ? ZOMBIE_GROESSE * ((raum.state?.heldenGroesse || 85) / 100) : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand');
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
@@ -2426,7 +2453,7 @@ class Ort extends Phaser.Scene {
         : `${d.zeichen} ${d.name}${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}`;
       textSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
         + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
-      textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${s.besiegt} gesamt`);
+      textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gemeinsam`);
       const safe = ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
       if (safe) {

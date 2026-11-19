@@ -73,8 +73,11 @@ test('Soldaten sterben im Nahkampf; sind alle tot, fällt das Lager', async () =
   assert.ok(st.schuetzen.length >= 4, 'zu wenig Soldaten: ' + st.schuetzen.length);
   assert.equal(raum.state.stuetzpunkt, 'steht');
   const erster = st.schuetzen[0];
-  zombieBei(raum, sp, ...Object.values(planKoord(sp, erster.x, erster.y)));
-  assert.ok(await bis(() => erster.tot, 8000), 'Soldat stirbt nicht ' + JSON.stringify({ hp: erster.hp, z: [...raum.state.zombies.values()].map(z => [z.x, z.y, z.hp, z.ebene]), s: [erster.x, erster.y], f: st.einst(), stz: raum.state.stuetzpunkt }));
+  // Zombie beim ersten Soldaten halten (geprüft wird das Sterben im Nahkampf, nicht das Umherwandern der Zombies)
+  const amErsten = () => { if (!erster.tot && ![...raum.state.zombies.values()].some(z => Math.hypot(z.x - erster.x, z.y - erster.y) < 20)) zombieBei(raum, sp, ...Object.values(planKoord(sp, erster.x, erster.y))); };
+  amErsten(); const halten = setInterval(amErsten, 200);
+  const gestorben = await bis(() => erster.tot, 8000); clearInterval(halten);
+  assert.ok(gestorben, 'Soldat stirbt nicht ' + JSON.stringify({ hp: erster.hp, z: [...raum.state.zombies.values()].map(z => [z.x, z.y, z.hp, z.ebene]), s: [erster.x, erster.y], f: st.einst(), stz: raum.state.stuetzpunkt }));
   assert.ok(nachrichten.soldatTot.some(m => m.n === erster.n), 'keine Todesmeldung');
   assert.equal(raum.state.stuetzpunkt, 'steht', 'ein Toter lässt das Lager nicht fallen');
   const nachlegen = setInterval(() => { for (const q of st.schuetzen) if (!q.tot && ![...raum.state.zombies.values()].some(z => Math.hypot(z.x - q.x, z.y - q.y) < 20)) zombieBei(raum, sp, ...Object.values(planKoord(sp, q.x, q.y))); }, 200);

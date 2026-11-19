@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.45.0 – 19.11.2026
+
+- Welt auf Server und Geräten wieder gleich: Drei Sortierungen mit Zufallsvergleich (Straßensperren, Mülltonnen) hingen von der JS-Engine ab – der Server (Node 22) baute Sperren, Müll und Kisten woanders als die Geräte (Chrome). Jetzt festes Mischen; WELT_VERSION 15. Dadurch auch kein Zurückspringen auf die Anmeldung mehr; nach einem nötigen Neuladen tritt das Spiel automatisch wieder bei.
+- Heldenwahl gilt schon beim ersten Login; alle Spieler-Einstellungen werden je Spieler auf dem Server gespeichert und gelten auf jedem Gerät.
+- Evakuierungsbus: unterwegs überall einsteigen, Mitfahrer fahren mit; Abfahrt, sobald alle echten stehenden Spieler an Bord sind (Bots und Liegende kommen ohnehin mit), sonst nach der Wartezeit.
+- Soldaten kämpfen wie Bots: bleiben in Stellung, richten sich aus, weichen aus, gehen erst nach einer ruhigen Weile auf ihren Posten zurück.
+- Zählung unter der Eckkarte („N von dir · M gemeinsam“), weißer Ring um die eigene Figur ersetzt durch dezenten Lichtschein, Heldengröße einstellbar (Vorgabe 85 %), Durchsucht-Kreuz über das ganze Möbelstück, Chat-Klingelton lauter mit Vibration.
+
 ## 0.44.1 – 19.11.2026
 
 - Weltprüfung: Jedes Gerät meldet nach dem Aufbau einen Fingerabdruck seiner Welt (Häuser, Behälter, Stützpunkt-Kisten, Tor, Start). Weicht er vom Server ab (Kisten/Wände stünden woanders), lädt das Gerät einmal neu; hilft das nicht, kommt ein Hinweis. Der Server schreibt Gerät, Karte, Größe, Seed und Autos ins Protokoll.

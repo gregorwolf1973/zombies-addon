@@ -83,6 +83,7 @@ export class Aufgaben {
     this.busHeute = false;     // der Bus war in diesem Zeitfenster schon da
     this.ankGemeldet = false;
     this.echteDa = 0;
+    this.eingestiegen = new Set();   // Spieler, die Bus/Panzer unterwegs eingesammelt hat (fahren mit)
     this.wechselLaeuft = false;
     this.wechselVerzoegerung = 5000;   // ms zwischen „Geschafft!“ und dem Weltwechsel
     this.takt = 0;
@@ -224,8 +225,9 @@ export class Aufgaben {
     }
     // Anfahrt: er rollt noch zur Haltestelle – kein Einsteigen, die Wartezeit läuft erst ab dem Halt
     if (!this.raum.verkehr?.evakuierungDa(this.busId)) {
-      if (!s.fahrzeuge.get(this.busId)) this.busWeg();
-      s.busBord = 0; s.busSteht = false;
+      s.busSteht = false;
+      if (!s.fahrzeuge.get(this.busId)) { this.busWeg(); s.busBord = 0; }
+      else this.mitfahrer();   // auf dem ganzen Weg einsteigen: wer nah vorbeifahrenden Bus erreicht, fährt mit
       return;
     }
     if (!s.busSteht) {
@@ -236,7 +238,8 @@ export class Aufgaben {
     this.busRest -= dt;
     this.busAbSetzen();
     const alleDa = this.mitfahrer();
-    if (alleDa || this.busRest <= 0) this.abfahrt();
+    // sofortige Abfahrt nur, wenn die Fahrt auch gelingt – sonst wartet er bis zum Ablauf der Zeit
+    if ((alleDa && this.fahrtGelingt()) || this.busRest <= 0) this.abfahrt();
   }
 
   restSetzen() {
@@ -306,7 +309,7 @@ export class Aufgaben {
 
   busWeg() {
     const s = this.raum.state;
-    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0;
+    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.eingestiegen.clear();
     if (this.busId) { this.raum.verkehr?.evakuierungAb(this.busId); this.busId = null; }
   }
 
@@ -315,16 +318,27 @@ export class Aufgaben {
     const s = this.raum.state, f = s.fahrzeuge.get(this.busId);
     if (!f) { this.busWeg(); return false; }
     let bord = 0, gesamt = 0, echtDa = 0, lebende = 0, lebendeDa = 0;
+    const klebt = this.fahrtGelingt();   // Einsteigen gilt dauerhaft, sobald die Fahrt geschafft werden kann
     for (const [sid, p] of s.spieler) {
-      if (p.zombie > 0) continue;
+      if (p.zombie > 0) { this.eingestiegen.delete(sid); continue; }
       const bot = !!this.raum.extra.get(sid)?.bot;
-      const an = !p.ebene && !p.unten && Math.hypot(p.x - f.x, p.y - f.y) < BUS_ABSTAND;
+      let an = this.eingestiegen.has(sid);
+      if (!an && !p.ebene && !p.unten && Math.hypot(p.x - f.x, p.y - f.y) < BUS_ABSTAND + (klebt ? 20 : 0)) {
+        an = true; if (klebt) this.eingestiegen.add(sid);
+      }
+      if (an && this.eingestiegen.has(sid)) { p.x = f.x; p.y = f.y; }   // fährt mit
       gesamt++; if (an) bord++;
-      if (p.verbunden !== false) { lebende++; if (an) lebendeDa++; }
+      // Abfahrt wartet nur auf echte, verbundene, stehende Spieler – Bots und Liegende kommen beim Levelwechsel ohnehin mit
+      if (!bot && p.verbunden !== false && !p.unten) { lebende++; if (an) lebendeDa++; }
       if (!bot && p.verbunden !== false && an) echtDa++;
     }
     s.busBord = bord; s.busGesamt = gesamt; this.echteDa = echtDa;
     return lebende > 0 && lebendeDa === lebende;
+  }
+
+  // Pflichtaufgaben und Mindestzahl erledigt: wer einsteigt, kann tatsächlich mitfahren
+  fahrtGelingt() {
+    return [...this.raum.state.aufgaben.values()].every(a => !a.pflicht || a.erledigt) && this.erledigtZahl() >= this.noetig();
   }
 
   abfahrt() {
