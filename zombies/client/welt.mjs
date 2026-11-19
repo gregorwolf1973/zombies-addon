@@ -793,3 +793,18 @@ export function zaunUeberstieg(welt, x, y, richtung, rad, streng = false) {
   return null;
 }
 export const ZAUN_NAME = { h: 'die Hecke', z: 'den Zaun', m: 'den Zaun', w: 'die Mauer' };
+
+// Fingerabdruck der festen Welt (Häuser, Behälter, Stützpunkt-Kisten, Tor, Start): Client und Server bauen die Welt
+// getrennt aus Karte + Seed; weicht ein Gerät ab (alter Code im Speicher, andere Rechengenauigkeit), stehen Kisten
+// und Wände dort woanders. Der Client schickt den Wert nach dem Aufbau, der Server vergleicht (raum.mjs 'weltpruefung').
+export function weltFingerabdruck(w) {
+  let h = 0x811c9dc5;
+  const mische = v => { h = Math.imul(h ^ (Math.round(Number(v) || 0) | 0), 0x01000193) >>> 0; };
+  const text = s => { for (const ch of String(s ?? '')) mische(ch.charCodeAt(0)); };
+  mische(WELT_VERSION);
+  for (const g of w.haeuser ?? []) { mische(g.x); mische(g.y); mische(g.b); mische(g.h); }
+  for (const b of w.behaelter ?? []) { mische(b.x); mische(b.y); text(b.art); }
+  for (const b of w.stuetzpunkt?.behaelter ?? []) { mische(b.x); mische(b.y); text(b.art); }
+  mische(w.tor?.x); mische(w.tor?.y); mische(w.start?.x); mische(w.start?.y);
+  return h.toString(36);
+}

@@ -21,8 +21,7 @@ import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zombieSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
-  BLOCKIERT, ziehe, MUNITION_MAX, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND,
-} from '../client/welt.mjs';
+  BLOCKIERT, ziehe, MUNITION_MAX, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
 
 export const Spieler = schema({
   name: t.string(),
@@ -210,11 +209,11 @@ export class SpielRaum extends Room {
       setzeKartengroesse(karte.breite, karte.hoehe);
       const passtStand = stand && (stand.karte ?? '') === karte.name && stand.seed === this.state.seed;
       this.state.autos = Math.max(0, Math.min(50, Math.round(passtStand && Number.isFinite(stand.autos) ? stand.autos : (SpielRaum.einstellungen.autoFaktor ?? 1) * 10)));
-      this.welt = baueWeltAusKarte(karte, this.state.seed, { autos: this.state.autos / 10 });
+      this.welt = baueWeltAusKarte(karte, this.state.seed, { autos: this.state.autos / 10 }); this.weltFp = null;
       this.state.karte = karte.name;
     } else {
       setzeKartengroesse(64, 48);
-      this.welt = baueWelt(this.state.seed);
+      this.welt = baueWelt(this.state.seed); this.weltFp = null;
       this.state.karte = '';
     }
     this.rnd = zufall((this.state.seed ^ 0x5bd1e995) + Date.now() % 100000);
@@ -310,6 +309,15 @@ export class SpielRaum extends Room {
     this.onMessage('wegwerfen', (client, m) => this.wegwerfen(client, m));
     this.onMessage('aufheben_wahl', (client, m) => this.aufhebenWahl(client, m));
     this.onMessage('kiste', (client, m) => this.kiste(client, m));
+    // Client meldet den Fingerabdruck seiner Welt; weicht er ab, soll er neu laden (sonst stehen Kisten/Wände woanders)
+    this.onMessage('weltpruefung', (client, m) => {
+      const soll = this.weltFp ??= weltFingerabdruck(this.welt);
+      if (String(m?.fp ?? '') === soll) return;
+      const p = this.state.spieler.get(client.sessionId);
+      const k = v => String(v ?? '?').slice(0, 24);
+      console.warn(`Welt weicht ab: ${p?.name ?? client.sessionId} hat ${k(m?.fp)} statt ${soll} | Gerät: Karte ${k(m?.karte)} ${k(m?.b)}×${k(m?.h)} (Datei ${k(m?.kartenB)}×${k(m?.kartenH)}), Seed ${k(m?.seed)}, Autos ${k(m?.autos)} | Server: Karte ${this.state.karte} ${BREITE}×${HOEHE}, Seed ${this.state.seed}, Autos ${this.state.autos} | ${String(m?.ua ?? '').slice(0, 140)}`);
+      client.send('weltFalsch', { soll });
+    });
     this.onMessage('kuehlschrank', client => this.kuehlschrank(client));
     this.onMessage('ausruhen', client => this.ausruhen(client));
     this.onMessage('antwort', (client, m) => this.antwort(client, m));

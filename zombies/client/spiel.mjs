@@ -3,8 +3,7 @@ import { groesse } from './groessen.mjs';
 import {
   KACHEL, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt,
-} from './welt.mjs';
+  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
@@ -604,7 +603,11 @@ class Ort extends Phaser.Scene {
     ladenZeigen(72, 'Generiere Welt … baue Häuser und Straßen');
     this.bereit = false;
     // erst einen Frame zeichnen lassen, damit die Anzeige sichtbar ist – das Bauen der Welt blockiert 1–2 s
-    einFrame().then(() => { this.erzeuge(); this.bereit = true; });
+    einFrame().then(() => {
+      this.erzeuge(); this.bereit = true;
+      // Welt mit dem Server abgleichen (weicht sie ab, stehen Kisten und Wände woanders)
+      try { raum.send('weltpruefung', { fp: weltFingerabdruck(this.welt), ua: navigator.userAgent, karte: raum.state.karte, seed: raum.state.seed, autos: raum.state.autos, b: BREITE, h: HOEHE, kartenB: KARTE?.breite, kartenH: KARTE?.hoehe }); } catch {}
+    });
   }
 
   erzeuge() {
@@ -723,6 +726,12 @@ class Ort extends Phaser.Scene {
     raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
     raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
+    // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
+    raum.onMessage('weltFalsch', m => {
+      let schon = null; try { schon = sessionStorage.getItem('zob_weltneu'); sessionStorage.setItem('zob_weltneu', m.soll); } catch {}
+      if (schon !== m.soll) { location.reload(); return; }
+      meldung('⚠️ Deine Karte weicht vom Server ab – Kisten und Türen stehen evtl. woanders. Bitte App ganz schließen und neu öffnen.', true);
+    });
     fkStart(raum, meldung);
     { const fk = document.getElementById('fkknopf'); if (fk) $('leiste').prepend(fk); }   // Symbolleiste über der Eckkarte
     raum.onMessage('gefunden', m => {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.1 – 19.11.2026
+
+- Weltprüfung: Jedes Gerät meldet nach dem Aufbau einen Fingerabdruck seiner Welt (Häuser, Behälter, Stützpunkt-Kisten, Tor, Start). Weicht er vom Server ab (Kisten/Wände stünden woanders), lädt das Gerät einmal neu; hilft das nicht, kommt ein Hinweis. Der Server schreibt Gerät, Karte, Größe, Seed und Autos ins Protokoll.
+
 ## 0.44.0 – 19.11.2026
 
 - Evakuierungsbus/-panzer fährt los, sobald alle Lebenden an Bord sind (Bots und Liegende zählen mit), spätestens nach einer einstellbaren Zeit in echten Minuten (aufgaben.wartenEchtMin, Vorgabe 10); bisher wartete er nur 60 Spielminuten = 2 echte Minuten.
