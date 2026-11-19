@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.40.1 – 19.11.2026
+
+- Safe Rooms auf der Karte deutlicher: grünes Haus, grüner Kreis mit Schild, auf der großen Karte „SAFE“.
+
 ## 0.40.0 – 19.11.2026
 
 - Großer Aktionsknopf wieder entfernt: normale Aktionsknöpfe rechts über dem Inventar.

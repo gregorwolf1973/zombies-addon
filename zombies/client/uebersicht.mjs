@@ -39,8 +39,8 @@ function grundbild(welt) {
   for (const s of v.strassen) if (!WEG.has(s.t)) { pfad(s.p); g.strokeStyle = s.t === 'service' ? '#c9c9c9' : '#f2f2ee'; g.lineWidth = s.b * S; g.stroke(); }
   for (const h of v.gebaeude) {
     pfad(h.p, true);
-    g.fillStyle = h.safe ? '#64b5f6' : '#c9775c'; g.fill();
-    g.strokeStyle = h.safe ? '#0d47a1' : '#5d2c1d'; g.lineWidth = 1.2; g.stroke();
+    g.fillStyle = h.safe ? '#66bb6a' : '#c9775c'; g.fill();
+    g.strokeStyle = h.safe ? '#1b5e20' : '#5d2c1d'; g.lineWidth = h.safe ? 2.2 : 1.2; g.stroke();
   }
   return c;
 }
@@ -186,8 +186,15 @@ export class Uebersicht {
       c.font = `${Math.round((this.gross ? 20 : 15) * dpr * (1 + 0.15 * puls))}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#000'; c.fillText('🚌', x, y + dpr);
     }
     for (const sr of this.welt.safeRooms) {
-      const [x, y] = pos(sr.haus.x + sr.haus.b / 2, sr.haus.y + sr.haus.h / 2);
-      c.font = `${Math.round((this.gross ? 16 : 11) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🛡', x, y);
+      // Safe Room deutlich: grüner Kreis mit weißem Rand und Schild, darunter „SAFE“ (nur große Karte)
+      const [x, y] = pos(sr.haus.x + sr.haus.b / 2, sr.haus.y + sr.haus.h / 2), R = (this.gross ? 12 : 9) * dpr;
+      c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fillStyle = '#2e7d32'; c.fill();
+      c.lineWidth = 2.5 * dpr; c.strokeStyle = '#fff'; c.stroke();
+      c.font = `${Math.round((this.gross ? 14 : 11) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText('🛡', x, y + 0.5 * dpr);
+      if (this.gross) {
+        c.font = `bold ${Math.round(10 * dpr)}px sans-serif`; c.lineWidth = 3 * dpr; c.strokeStyle = '#000';
+        c.strokeText('SAFE', x, y + R + 8 * dpr); c.fillStyle = '#a5ff9e'; c.fillText('SAFE', x, y + R + 8 * dpr);
+      }
     }
     // Bundeswehr-Stützpunkt
     const sp = this.welt.stuetzpunkt;
