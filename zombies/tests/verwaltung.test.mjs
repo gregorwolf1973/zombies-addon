@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { bereinige } from '../server/einstellungen.mjs';
+import { bereinige, EREIGNISSE, TON_GRUPPEN, tonKategorien } from '../server/einstellungen.mjs';
 
 const PORT = 25790;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-verwaltung-'));
@@ -89,4 +89,16 @@ test('ICE-Server aus den Add-on-Optionen', async () => {
   assert.deepEqual(iceServer({ stun_server: 'aus' }), []);
   assert.deepEqual(iceServer({ stun_server: 'aus', turn_server: 'turn:t.example:3478', turn_username: 'u', turn_password: 'p' }),
     [{ urls: 'turn:t.example:3478', username: 'u', credential: 'p' }]);
+});
+
+test('Töne: jedes Ereignis hat Gruppe und Kategorien, Dateien werden nach Stichwörtern einsortiert', () => {
+  const gruppen = new Set(TON_GRUPPEN.map(g => g.id));
+  for (const ev of EREIGNISSE) {
+    assert.ok(gruppen.has(ev.gruppe), `${ev.id}: Gruppe`);
+    assert.ok(ev.kategorien?.length, `${ev.id}: Kategorien`);
+  }
+  assert.deepEqual(tonKategorien('zombie_scream_01.mp3'), ['zombies']);
+  assert.deepEqual(tonKategorien('Pistol-Shot.ogg'), ['waffen']);
+  assert.deepEqual(tonKategorien('chill-hip-hop.mp3'), ['musik']);
+  assert.deepEqual(tonKategorien('irgendwas.mp3'), ['sonstiges']);
 });

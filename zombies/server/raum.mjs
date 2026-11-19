@@ -1433,17 +1433,16 @@ export class SpielRaum extends Room {
     // Munitionskisten der Bundeswehr: für jeden Mitspieler ein eigener Inhalt (nie leer), der Haufen für die anderen bleibt unberührt
     if (b.art === 'bw_kiste') {
       const schluessel = b.id + '@' + (this.extra.get(client?.sessionId)?.spielerId ?? client?.sessionId ?? 'x');
+      // je Mitspieler: 100 Schuss (sofort), 1 Schusswaffe und 1 Taschenlampe
+      let extraGenommen = [];
       if (!this.inhalte.has(schluessel)) {
-        const funde = [];
-        for (let v = 0; v < 8 && funde.length < 2; v++) {
-          const d = ziehe(BEUTE.bw_kiste, SpielRaum.einstellungen.funde, this.rnd, BEUTE_BONUS.bw_kiste);
-          if (d) funde.push(d);
-        }
-        if (!funde.length) funde.push('munition');
-        this.inhalte.set(schluessel, funde);
+        const waffen = ['pistole', 'gewehr', 'schrotflinte', 'mp'];
+        this.inhalte.set(schluessel, [waffen[Math.floor(this.rnd() * waffen.length)], 'taschenlampe']);
+        p.munition = Math.min(MUNITION_MAX, p.munition + 100);
+        extraGenommen = ['munition'];
       }
       const inhalt = this.inhalte.get(schluessel);
-      const genommen = this.einpacken(p, inhalt);
+      const genommen = [...extraGenommen, ...this.einpacken(p, inhalt)];
       this.aufgaben?.gefunden(b, genommen);
       return client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
     }
@@ -1896,7 +1895,7 @@ export class SpielRaum extends Room {
             }
             treffer([ziel], wf.schaden); treffer(alle, wf.nebenSchaden);
           } else {
-            this.broadcast('schuss', { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name });
+            this.broadcast('schuss', { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name, z: zid });
             treffer([ziel], wf.schaden);
           }
         } else if (wf.bogen) {

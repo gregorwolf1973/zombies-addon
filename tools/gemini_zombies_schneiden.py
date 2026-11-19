@@ -5,14 +5,14 @@ client/grafik/figuren3.webp (Felder 160 px, Drehpunkt = Körpermitte) plus figur
 Freistellen: Flutfüllung von den Bildrändern über helle, ungesättigte Pixel (Weiß, Hellgrau); weiße Kleidung
 innerhalb der schwarzen Umrisse bleibt dadurch erhalten. Danach JPEG-Saum entfernen, Rand weich.
 Aufruf: PYTHONPATH=~/code/ahnen-werkzeuge/pil python3 tools/gemini_zombies_schneiden.py [Ordner] [Kontaktbogen.png]"""
-import json, pathlib, sys
-from PIL import Image, ImageFilter
+import json, math, pathlib, statistics, sys
+from PIL import Image, ImageDraw, ImageFilter
 
 QUELLE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "~/Downloads/weitere Zombies von Gemini").expanduser()
 KONTAKT = sys.argv[2] if len(sys.argv) > 2 else None
 ZIEL = pathlib.Path(__file__).resolve().parent.parent / "zombies" / "client" / "grafik"
 FELD = 160
-GROESSE = 112       # Zielgröße (längste Seite inkl. Hände) im Feld, wie die vorhandenen Zombies (~105 px)
+GROESSE = 76        # Zielgröße (längste Seite inkl. Hände) im Feld; Rumpfbreite ~70 px = etwas unter den alten Zombies (~82), über z6 (~55)
 
 # Reihenfolge je Bogen: Zeile für Zeile, links nach rechts (Dateiname-Teil → Typnamen)
 BOEGEN = [
@@ -100,21 +100,70 @@ def figuren(datei):
             rgb = Image.composite(im, Image.new("RGB", im.size, (20, 20, 20)), m)
             weich = m.filter(ImageFilter.GaussianBlur(0.8)).point(lambda v: 0 if v < 70 else min(255, int((v - 70) * 255 / 130)))
             rgba = rgb.convert("RGBA"); rgba.putalpha(weich)
-            aus.append((rgba.crop(sb), (kern[2] - sb[0], kern[3] - sb[1])))
+            kb = kern[1]
+            haende = [(t[2] - sb[0], t[3] - sb[1], (t[1][0] - sb[0], t[1][1] - sb[1], t[1][2] - sb[0], t[1][3] - sb[1]))
+                      for t in teile if t is not kern and not (kb[0] <= t[2] <= kb[2] and kb[1] <= t[3] <= kb[3])]
+            aus.append((rgba.crop(sb), (kern[2] - sb[0], kern[3] - sb[1]), ((kb[0] - sb[0], kb[1] - sb[1], kb[2] - sb[0], kb[3] - sb[1]), (kern[2] - sb[0], kern[3] - sb[1]), haende)))
     return aus
+
+def median_farbe(px, punkte):
+    if not punkte: return (90, 90, 90)
+    return tuple(int(statistics.median(p[i] for p in punkte)) for i in range(3))
+
+def arme_ergaenzen(bild, info, mass):
+    """Zeichnet für jede abgetrennte Hand einen Arm (Ärmel, dann Haut) unter die Figur. bild/info im skalierten Maßstab."""
+    kb, (cx, cy), haende = info
+    if not haende: return bild
+    S = 4                                    # Überabtastung
+    px = bild.load(); w, h = bild.size
+    ebene = Image.new("RGBA", (w * S, h * S), (0, 0, 0, 0)); d = ImageDraw.Draw(ebene)
+    arme = []
+    for hx, hy, hb in haende:
+        hbreit = min(hb[2] - hb[0], hb[3] - hb[1])
+        vz = 1 if hy > cy else -1
+        # Schulter: Rumpfrand (oben/unten) in einer Spalte etwas hinter der Mitte, einige px nach innen
+        sx = int(cx - 0.04 * (kb[2] - kb[0]))
+        ys = [y for y in range(max(0, kb[1]), min(h, kb[3])) if px[sx, y][3] > 128]
+        if not ys: continue
+        rand = max(ys) if vz > 0 else min(ys)
+        sy = rand - vz * 4
+        ha = [px[x, y][:3] for x in range(hb[0], hb[2]) for y in range(hb[1], hb[3]) if 0 <= x < w and 0 <= y < h and px[x, y][3] > 200 and sum(px[x, y][:3]) > 150]
+        haut = median_farbe(px, ha)
+        sl = [px[x, y][:3] for x in range(sx - 5, sx + 6) for y in range(sy - 5, sy + 6) if 0 <= x < w and 0 <= y < h and px[x, y][3] > 200 and sum(px[x, y][:3]) > 60]
+        aermel = median_farbe(px, sl)
+        arme.append((sx, sy, hx, hy, hbreit, vz, haut, aermel))
+    for passe in ("umriss", "fuell"):
+        for sx, sy, hx, hy, hbreit, vz, haut, aermel in arme:
+            L = math.hypot(hx - sx, hy - sy)
+            nx, ny = -(hy - sy) / L, (hx - sx) / L           # Senkrechte, nach außen (weg von der Körperachse)
+            if ny * vz < 0: nx, ny = -nx, -ny
+            ex, ey = (sx + hx) / 2 + nx * 0.18 * L, (sy + hy) / 2 + ny * 0.18 * L
+            br = max(3.0, hbreit * 0.5) / 2
+            for i in range(61):
+                t = i / 60
+                x = (1 - t) ** 2 * sx + 2 * t * (1 - t) * ex + t * t * hx
+                y = (1 - t) ** 2 * sy + 2 * t * (1 - t) * ey + t * t * hy
+                r = br + 1.3 if passe == "umriss" else br - 0.6
+                f = (14, 14, 14, 255) if passe == "umriss" else (*(aermel if t < 0.5 else haut), 255)
+                d.ellipse(((x - r) * S, (y - r) * S, (x + r) * S, (y + r) * S), fill=f)
+    ebene = ebene.resize((w, h), Image.LANCZOS)
+    ebene.alpha_composite(bild)
+    return ebene
 
 alle = []
 for kennung, namen in BOEGEN:
     datei = next(QUELLE.glob(f"*{kennung}*.jpeg"))
-    for name, (bild, mitte) in zip(namen, figuren(datei)): alle.append((name, bild, mitte))
+    for name, (bild, mitte, info) in zip(namen, figuren(datei)): alle.append((name, bild, mitte, info))
 
-mass = GROESSE / sorted(max(b.size) for _, b, _ in alle)[len(alle) // 2]     # ein gemeinsamer Maßstab (Median)
+mass = GROESSE / sorted(max(b.size) for _, b, _, _ in alle)[len(alle) // 2]     # ein gemeinsamer Maßstab (Median)
 SPALTEN = 6
 zeilen = (len(alle) + SPALTEN - 1) // SPALTEN
 bogen = Image.new("RGBA", (SPALTEN * FELD, zeilen * FELD), (0, 0, 0, 0))
 liste = {}
-for i, (name, bild, (mx, my)) in enumerate(alle):
+for i, (name, bild, (mx, my), info) in enumerate(alle):
     st = bild.resize((round(bild.width * mass), round(bild.height * mass)), Image.LANCZOS)
+    sk = lambda v: tuple(round(a * mass) for a in v)
+    st = arme_ergaenzen(st, (sk(info[0]), sk(info[1]), [(hx * mass, hy * mass, sk(hb)) for hx, hy, hb in info[2]]), mass)
     ox, oy = round(FELD / 2 - mx * mass), round(FELD / 2 - my * mass)
     feld = Image.new("RGBA", (FELD, FELD), (0, 0, 0, 0))
     feld.alpha_composite(st, (ox, oy)) if ox >= 0 and oy >= 0 and ox + st.width <= FELD and oy + st.height <= FELD else feld.paste(st, (ox, oy))

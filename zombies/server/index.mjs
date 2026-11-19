@@ -9,7 +9,7 @@ import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { SpielRaum } from './raum.mjs';
 import { Speicher } from './speicher.mjs';
-import { EinstellungsDatei, KARTEN, ZEITRAFFER, EREIGNISSE, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
+import { EinstellungsDatei, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
@@ -132,7 +132,7 @@ export async function starte({
       try { namen = fs.readdirSync(o.pfad); } catch { continue; }
       for (const n of namen) {
         if (!TON_DATEI.test(n) || liste.has(n)) continue;
-        try { liste.set(n, { datei: n, groesse: fs.statSync(path.join(o.pfad, n)).size, quelle: o.quelle }); } catch { /* weg */ }
+        try { liste.set(n, { datei: n, groesse: fs.statSync(path.join(o.pfad, n)).size, quelle: o.quelle, kategorien: tonKategorien(n) }); } catch { /* weg */ }
       }
     }
     return [...liste.values()].sort((a, b) => a.datei.localeCompare(b.datei, 'de'));
@@ -167,7 +167,7 @@ export async function starte({
       })) : [],
       spielzeit: raum ? Math.round(raum.state.zeit) : 0,
       leistung: raum?.leistung ?? null, takt: 50,
-      toene: toeneListe(), ereignisse: EREIGNISSE,
+      toene: toeneListe(), ereignisse: EREIGNISSE, tonGruppen: TON_GRUPPEN,
       uhr: raum ? Math.floor(raum.state.uhr) : null, autosWelt: raum ? raum.state.autos : null,
       bewohner: raum ? { gesund: [...raum.state.menschen.values()].filter(m => !m.infiziert).length, gebissen: [...raum.state.menschen.values()].filter(m => m.infiziert).length, zombies: raum.state.zombies.size } : null,
       version: paketVersion,

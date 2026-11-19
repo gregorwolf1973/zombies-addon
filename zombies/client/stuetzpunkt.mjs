@@ -124,8 +124,8 @@ export function baueStuetzpunkt(welt, seed, setze) {
     teile.push({ art: 'durchfahrt', x, y, w, d: K, winkel: th, b: c ? w : K, h: c ? K : w, aussen: ort((DU0 + DU1) / 2, -0.5), innen: ort((DU0 + DU1) / 2, 4.5) });
   }
   {   // Puma: Wanne 72 × 34 px, Bug zur Stadt (−v); der Turm ist ein eigenes Teil (Mittelpunkt, Ausrichtung, Rohrlänge)
-    // Startplatz in der Durchfahrt; danach fährt er (server/stuetzpunkt.mjs) auf der Bahn v = 2,6 hin und her, deshalb keine Sperre im Feinraster
-    const L = 72, Bw = 34, [x, y] = ort(15.5, 2.6);
+    // Ruheplatz in der Lagermitte; danach fährt er frei im Innenbereich (server/stuetzpunkt.mjs, fahrFlaeche), deshalb keine Sperre im Feinraster
+    const L = 72, Bw = 34, [x, y] = ort(...PUMA_PARK);
     teile.push({ art: 'puma', x, y, winkel: blickVorn, laenge: L, breite: Bw, b: c ? Bw : L, h: c ? L : Bw, turm: { x, y, winkel: blickVorn, rohr: 44 } });
   }
   // ---- (b) Sandsackstellungen (U) und MG-Nester hinter der Sperrlinie ----
@@ -134,7 +134,7 @@ export function baueStuetzpunkt(welt, seed, setze) {
     for (const rc of sandsackWaende(t.w, t.d)) sperre(t.x, t.y, ...rc);
     posten('soldat', u, v - 0.1);
   }
-  for (const [u, v] of [[4.5, 4.3], [25.5, 4.3], [23.5, 8.0]]) {
+  for (const [u, v] of [[4.5, 4.3], [25.5, 4.3], [27.2, 7.0]]) {
     const [x, y] = ort(u, v);
     teile.push({ art: 'mgnest', x, y, r: 23, blick: blickVorn, winkel: th });
     sperren.push({ x, y, r: 22 });
@@ -154,10 +154,12 @@ export function baueStuetzpunkt(welt, seed, setze) {
     return t;
   };
   // ---- (c) Sanitätsstation: Zelt mit Feldbetten, Verwundeten, Ärzten, Sanikisten ----
+  // (um DV nach hinten gerückt: zwischen Sandsäcken und Zelten bleibt eine breite Fahrgasse für den Puma, v ≈ 6–8)
+  const DV = 1.5;
   {
-    const z = zelt('sanizelt', 'sani', 3, 8, 12, 14, 'u1', 10, 12);
+    const z = zelt('sanizelt', 'sani', 3, 8 + DV, 12, 14 + DV, 'u1', 10 + DV, 12 + DV);
     const betten = [];
-    for (const bv of [8.4, 11.6]) for (const bu of [3.5, 5, 6.5]) {
+    for (const bv of [8.4 + DV, 11.6 + DV]) for (const bu of [3.5, 5, 6.5]) {
       const t = teil('feldbett', bu, bv, bu + 1, bv + 2);
       sperre(t.x, t.y, -t.w / 2, -t.d / 2, t.w / 2, t.d / 2);
       betten.push(t);
@@ -167,30 +169,30 @@ export function baueStuetzpunkt(welt, seed, setze) {
       const [x, y] = fw(betten[i].x, betten[i].y)(0, -19);
       teile.push({ art: 'posten', rolle: 'verwundet', x, y, blick: blickVorn, variante: i });
     }
-    posten('arzt', 9.2, 9.7, th + Math.PI); posten('arzt', 9.2, 12.9, th + Math.PI);
-    for (const [u, v] of [[10.5, 9.0], [10.5, 13.0]]) {
+    posten('arzt', 9.2, 9.7 + DV, th + Math.PI); posten('arzt', 9.2, 12.9 + DV, th + Math.PI);
+    for (const [u, v] of [[10.5, 9.0 + DV], [10.5, 13.0 + DV]]) {
       const [x, y] = behaelterNeu('sanikiste', u, v);
       sperren.push({ x0: x - 10, y0: y - 10, x1: x + 10, y1: y + 10 });
     }
-    z.kreuz = ort(9.8, 11);   // weißes Feld mit rotem Kreuz auf dem Zeltboden
-    const [fx, fy] = ort(12.9, 9.3);
+    z.kreuz = ort(9.8, 11 + DV);   // weißes Feld mit rotem Kreuz auf dem Zeltboden
+    const [fx, fy] = ort(12.9, 9.3 + DV);
     teile.push({ art: 'flagge', x: fx, y: fy, winkel: th });
   }
   // ---- Funkzelt mit Antenne ----
   {
-    const z = zelt('funkzelt', 'funk', 19, 8, 25, 12, 'u0', 9, 11);
-    const [tx, ty] = ort(23.5, 11.0);
+    const z = zelt('funkzelt', 'funk', 19, 8 + DV, 25, 12 + DV, 'u0', 9 + DV, 11 + DV);
+    const [tx, ty] = ort(23.5, 11.0 + DV);
     teile.push({ art: 'funktisch', x: tx, y: ty, w: 2 * K, d: K, winkel: th, b: c ? 2 * K : K, h: c ? K : 2 * K });
     sperre(tx, ty, -K, -K / 2, K, K / 2);
-    z.funkpunkt = ort(23.5, 9.8);       // hier steht man zum Funken (Teil 2)
-    const [ax, ay] = ort(25.9, 8.6);
+    z.funkpunkt = ort(23.5, 9.8 + DV);       // hier steht man zum Funken (Teil 2)
+    const [ax, ay] = ort(25.9, 8.6 + DV);
     teile.push({ art: 'antenne', x: ax, y: ay });
     sperren.push({ x: ax, y: ay, r: 5 });
-    posten('soldat', 21.5, 9.6, th);
+    posten('soldat', 21.5, 9.6 + DV, th);
   }
   // ---- (d) Lager: zwei Zelte, Munitionskisten, Container, LKW ----
-  zelt('zelt', 'lager', 3, 17, 9, 21, 'v0', 5, 7);
-  zelt('zelt', 'lager', 22, 17, 28, 21, 'v0', 24, 26);
+  zelt('zelt', 'lager', 3, 17.5, 9, 21.5, 'v0', 5, 7);
+  zelt('zelt', 'lager', 22, 17.5, 28, 21.5, 'v0', 24, 26);
   {
     const [x, y] = ort(13.9, 19.4), L = 84, Bw = 36;   // LKW parkt quer, Bug nach „links“ (−u)
     teile.push({ art: 'lkw', x, y, winkel: th + Math.PI, laenge: L, breite: Bw, b: c ? L : Bw, h: c ? Bw : L });
@@ -206,7 +208,7 @@ export function baueStuetzpunkt(welt, seed, setze) {
     teile.push({ art: 'kiste', x, y, w: 22, d: 15, winkel: th, b: c ? 22 : 15, h: c ? 15 : 22 });
     sperre(x, y, -11, -7.5, 11, 7.5);
   }
-  for (const [u, v] of [[12.0, 15.0], [20.5, 14.3], [15.8, 16.0], [9.8, 19.0], [21.0, 20.2]]) posten('soldat', u, v);
+  for (const [u, v] of [[12.7, 16.1], [20.5, 14.9], [15.8, 16.0], [9.8, 19.0], [21.0, 20.2]]) posten('soldat', u, v);
 
   // ---- Feinraster: alle Hindernisse eintragen ----
   const fb = BREITE * FEIN, fh = HOEHE * FEIN, f = welt.fein, m = 1;   // Zellmitte darf 1 px daneben liegen (dünne Dinge)
@@ -283,6 +285,53 @@ export function planKoord(sp, x, y) {
 export function imLager(sp, x, y) {
   const { u, v } = planKoord(sp, x, y);
   return u >= 0 && u <= SP_BREITE && v >= 2 && v <= SP_TIEFE;
+}
+
+// ---------- Fahrfläche des Puma ----------
+// Der Puma fährt frei im Innenbereich des Lagers. Seine Mitte darf nur dort stehen, wo ein Kreis vom Radius PUMA_R (deckt die
+// Wanne in jeder Drehung ab: 115 × 54 px) kein festes Teil berührt: Draht, Sandsäcke, MG-Nester, Zelte (auch innen), Betten, Kisten,
+// Container, LKW, Antenne, Posten sowie die Einfahrt (Durchfahrt bis v 4,5 und 3 Kacheln seitlich: dort treten Spieler ein).
+// Raster in Bauplan-Koordinaten (u, v in Kacheln), Knoten alle 0,5 Kacheln; frei[j * nu + i] = 1: Knoten darf befahren werden.
+export const PUMA_R = 62;                 // Pixel
+export const FAHR_SCHRITT = 0.5;          // Kacheln
+export const PUMA_PARK = [15.5, 9.0];     // Ruheplatz: Lagermitte hinter der Einfahrt
+const fahrCache = new WeakMap();
+export function fahrFlaeche(sp) {
+  let f = fahrCache.get(sp);
+  if (f) return f;
+  const r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung), [ox, oy] = r.ort(0, 0);
+  const plan = (x, y) => { const dx = (x - ox) / K, dy = (y - oy) / K; return [dx * r.c + dy * r.s, -dx * r.s + dy * r.c]; };
+  const rects = [], kreise = [];   // Rechteck [u0, v0, u1, v1], Kreis [u, v, Radius] in Kacheln
+  for (const q of sp.sperren) {
+    if (q.r) { const [u, v] = plan(q.x, q.y); kreise.push([u, v, q.r / K]); continue; }
+    const [a, b] = plan(q.x0, q.y0), [c, d] = plan(q.x1, q.y1);
+    rects.push([Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)]);
+  }
+  for (const t of sp.teile) {
+    if (t.art === 'sanizelt' || t.art === 'zelt' || t.art === 'funkzelt') {   // Zeltinneres und Wände
+      const [u, v] = plan(t.x, t.y); rects.push([u - t.w / K / 2 - 0.17, v - t.d / K / 2 - 0.17, u + t.w / K / 2 + 0.17, v + t.d / K / 2 + 0.17]);
+    } else if (t.art === 'posten') { const [u, v] = plan(t.x, t.y); kreise.push([u, v, 14 / K]); }
+  }
+  rects.push([12.5, 0, 18.5, 4.5]);   // Einfahrt
+  const nu = Math.round(SP_BREITE / FAHR_SCHRITT) + 1, nv = Math.round(SP_TIEFE / FAHR_SCHRITT) + 1, rk = PUMA_R / K;
+  const abstand = (u, v) => {   // Abstand (Kacheln) zum nächsten Hindernis, negativ nicht nötig
+    let m = Infinity;
+    for (const [u0, v0, u1, v1] of rects) m = Math.min(m, Math.hypot(Math.max(u0 - u, 0, u - u1), Math.max(v0 - v, 0, v - v1)));
+    for (const [cu, cv, cr] of kreise) m = Math.min(m, Math.hypot(u - cu, v - cv) - cr);
+    return m;
+  };
+  const ok = (u, v) => u >= rk && u <= SP_BREITE - rk && v >= rk && v <= SP_TIEFE - rk && abstand(u, v) > rk;
+  const frei = new Uint8Array(nu * nv);
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) frei[j * nu + i] = ok(i * FAHR_SCHRITT, j * FAHR_SCHRITT) ? 1 : 0;
+  // Strecke frei befahrbar? (abgetastet alle 0,2 Kacheln)
+  const strecke = (u0, v0, u1, v1) => {
+    const n = Math.max(1, Math.ceil(Math.hypot(u1 - u0, v1 - v0) / 0.2));
+    for (let k = 0; k <= n; k++) if (!ok(u0 + (u1 - u0) * k / n, v0 + (v1 - v0) * k / n)) return false;
+    return true;
+  };
+  f = { frei, nu, nv, ok, strecke, r };
+  fahrCache.set(sp, f);
+  return f;
 }
 
 // Händler: die beiden Ärzte und die Soldaten im Lager (v ≥ 8: nicht die Wachen an Draht und Sandsäcken, nicht die MG-Nester)

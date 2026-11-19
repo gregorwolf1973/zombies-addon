@@ -856,6 +856,42 @@
       anfrage('verwaltung/api', { zombies: { typen: t } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
     });
   });
+  // Vorschaubilder der Zombietypen: aus denselben Bögen wie im Spiel ausgeschnitten (relative Pfade, wie verwaltung/api)
+  (function () {
+    var BOEGEN = { figuren: 'grafik/figuren.png', figuren2: 'grafik/figuren2.webp', figuren3: 'grafik/figuren3.webp' };
+    var bild = {}, liste = {};
+    function fertig() {
+      ZTYPEN.forEach(function (k, idx) {
+        var cv = document.getElementById('ztv_' + k);
+        if (!cv) return;
+        var bogen, name;
+        if (k === 'z6' || k === 'z7') { bogen = 'figuren2'; name = k + '_stehen'; }
+        else if (idx >= 7) { bogen = 'figuren3'; name = k; }
+        else { bogen = 'figuren'; name = 'zombie_' + k; }
+        var img = bild[bogen], l = liste[bogen];
+        if (!img || !l || !l.bilder || !l.bilder[name] || !img.naturalWidth) return;
+        var feld = l.feld || 160, spalten = Math.floor(img.naturalWidth / feld), nr = l.bilder[name][0];
+        var ctx = cv.getContext('2d');
+        ctx.clearRect(0, 0, 48, 48);
+        ctx.save(); ctx.translate(24, 24); ctx.rotate(Math.PI / 2);   // Blick nach unten, wie von vorn gesehen
+        ctx.drawImage(img, (nr % spalten) * feld, Math.floor(nr / spalten) * feld, feld, feld, -24, -24, 48, 48);
+        ctx.restore();
+      });
+    }
+    ZTYPEN.forEach(function (k) {
+      var cb = $('zt_' + k), lab = cb && cb.closest('label');
+      if (!lab) return;
+      var cv = document.createElement('canvas');
+      cv.id = 'ztv_' + k; cv.width = 48; cv.height = 48; cv.className = 'zt-vorschau';
+      lab.insertBefore(cv, cb.nextSibling);
+    });
+    Object.keys(BOEGEN).forEach(function (b) {
+      var img = new Image();
+      img.onload = function () { bild[b] = img; fertig(); };
+      img.src = BOEGEN[b];
+      fetch(BOEGEN[b].replace(/\.\w+$/, '.json')).then(function (r) { return r.json(); }).then(function (j) { liste[b] = j; fertig(); }).catch(function () {});
+    });
+  })();
   Object.keys(WFVORGABE).forEach(function (k) {
     regler('wfS_' + k, function (v) { return String(v); }, function (v) { var w = {}; w[k] = { schaden: v }; return { waffen: w }; });
     regler('wfP_' + k, function (v) { return String(v).replace('.', ',') + ' s (' + String(Math.round(10 / v) / 10).replace('.', ',') + '/s)'; }, function (v) { var w = {}; w[k] = { pause: v }; return { waffen: w }; });
@@ -1071,6 +1107,15 @@
   #toeneKarte .tk-status.tk-ok { color: var(--akzent); }
   #toeneKarte .tk-status.tk-fehler { color: var(--gefahr); }
 
+  #toeneKarte .tk-gruppe { margin: 0 0 0.6rem; }
+  #toeneKarte .tk-gruppe > summary { cursor: pointer; font-weight: 700; padding: 0.4rem 0; border-bottom: 1px solid var(--chip); }
+  #toeneKarte .tk-dd { margin: 0.2rem 0 0.5rem; }
+  #toeneKarte .tk-dd > summary { cursor: pointer; font-size: 0.9rem; padding: 0.35rem 0.5rem; border: 1px solid var(--chip); border-radius: 6px; list-style-position: inside; }
+  #toeneKarte .tk-dd[open] > summary { border-color: var(--akzent); }
+  #toeneKarte .tk-dd-inhalt { padding-top: 0.4rem; }
+  #toeneKarte .tk-alle { display: block; font-size: 0.85rem; color: var(--text-soft); margin-bottom: 0.3rem; }
+  .zt-vorschau { width: 48px; height: 48px; vertical-align: middle; margin: 0 6px; background: var(--chip, #0001); border-radius: 6px; }
+  label.tn-schalter .zt-vorschau + * { vertical-align: middle; }
   #toeneKarte .tk-block {
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -1409,6 +1454,96 @@
     });
   }
 
+  var offen = {};        // aufgeklappte Dropdowns/Gruppen überstehen das Neuaufbauen
+  var alleZeigen = {};   // je Ereignis: „alle Dateien zeigen“
+
+  function passt(eintrag, ev) {
+    var ks = ev.kategorien || [];
+    if (!ks.length) return true;
+    var dk = eintrag.kategorien || ['sonstiges'];
+    for (var i = 0; i < dk.length; i++) if (ks.indexOf(dk[i]) !== -1 || dk[i] === 'sonstiges') return true;
+    return false;
+  }
+
+  function baueDropdown(ev, einst, dateienLaut) {
+    var dd = document.createElement('details');
+    dd.className = 'tk-dd';
+    dd.open = !!offen['dd-' + ev.id];
+    dd.addEventListener('toggle', function () { offen['dd-' + ev.id] = dd.open; });
+    var sum = document.createElement('summary');
+    var n = einst.dateien.length;
+    sum.textContent = n === 0 ? 'Keine Datei gewählt (Spiel erzeugt eigenen Ton)' : n === 1 ? kuerzen(einst.dateien[0], 40) : n + ' Dateien gewählt (zufällig)';
+    dd.appendChild(sum);
+    var inhalt = document.createElement('div');
+    inhalt.className = 'tk-dd-inhalt';
+    dd.appendChild(inhalt);
+
+    if (!daten.toene || daten.toene.length === 0) {
+      var leer = document.createElement('div');
+      leer.className = 'tk-dateiliste tk-leer';
+      leer.textContent = 'Noch keine Tondateien vorhanden.';
+      inhalt.appendChild(leer);
+      return dd;
+    }
+    var alle = !!alleZeigen[ev.id];
+    var sichtbar = [];
+    for (var i = 0; i < daten.toene.length; i++) {
+      var e = daten.toene[i];
+      // schon gewählte Dateien bleiben immer sichtbar
+      if (alle || passt(e, ev) || einst.dateien.indexOf(e.datei) !== -1) sichtbar.push(e);
+    }
+    var kopf = document.createElement('label');
+    kopf.className = 'tk-alle';
+    var cbAlle = document.createElement('input');
+    cbAlle.type = 'checkbox';
+    cbAlle.checked = alle;
+    cbAlle.addEventListener('change', function () {
+      alleZeigen[ev.id] = cbAlle.checked;
+      offen['dd-' + ev.id] = true;
+      neuAufbauen();
+    });
+    kopf.appendChild(cbAlle);
+    kopf.appendChild(document.createTextNode(' alle Dateien zeigen (' + daten.toene.length + ')'));
+    inhalt.appendChild(kopf);
+
+    var box = document.createElement('div');
+    box.className = 'tk-dateiliste';
+    if (!sichtbar.length) {
+      box.className += ' tk-leer';
+      box.textContent = 'Keine passende Datei – „alle Dateien zeigen“ einschalten oder eine hochladen.';
+    }
+    for (var j = 0; j < sichtbar.length; j++) {
+      var datei = sichtbar[j].datei;
+      var zeile = document.createElement('div');
+      zeile.className = 'tk-datei-zeile';
+      var label = document.createElement('label');
+      label.className = 'tk-datei-label';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = einst.dateien.indexOf(datei) !== -1;
+      cb.value = datei;
+      cb.addEventListener('change', function (dateiname, ev2) {
+        var istAktiv = ev2.target.checked;
+        var idx = einst.dateien.indexOf(dateiname);
+        if (istAktiv && idx === -1) einst.dateien.push(dateiname);
+        else if (!istAktiv && idx !== -1) einst.dateien.splice(idx, 1);
+        offen['dd-' + ev.id] = true;
+        speichereEreignis(ev.id, einst);
+      }.bind(null, datei));
+      var txt = document.createElement('span');
+      txt.className = 'tk-datei-text';
+      txt.textContent = kuerzen(datei, 40);
+      txt.title = datei + ((sichtbar[j].kategorien || []).length ? ' – ' + sichtbar[j].kategorien.join(', ') : '');
+      label.appendChild(cb);
+      label.appendChild(txt);
+      zeile.appendChild(label);
+      zeile.appendChild(machePlayKnopf(datei, dateienLaut));
+      box.appendChild(zeile);
+    }
+    inhalt.appendChild(box);
+    return dd;
+  }
+
   function baueEreignisBlock(ev) {
     var einst = findeEinstellung(ev.id);
     var block = document.createElement('div');
@@ -1439,47 +1574,8 @@
       block.appendChild(beschr);
     }
 
-    var liste = dokumentListe();
     var dateienLaut = function () { return einst.laut; };
-    if (!daten.toene || daten.toene.length === 0) {
-      var leer = document.createElement('div');
-      leer.className = 'tk-dateiliste tk-leer';
-      leer.textContent = 'Noch keine Tondateien vorhanden.';
-      block.appendChild(leer);
-    } else {
-      var box = document.createElement('div');
-      box.className = 'tk-dateiliste';
-      for (var i = 0; i < daten.toene.length; i++) {
-        var datei = daten.toene[i].datei;
-        var zeile = document.createElement('div');
-        zeile.className = 'tk-datei-zeile';
-
-        var label = document.createElement('label');
-        label.className = 'tk-datei-label';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = einst.dateien.indexOf(datei) !== -1;
-        cb.value = datei;
-        cb.addEventListener('change', function (dateiname, e) {
-          var istAktiv = e.target.checked;   // neuer Zustand des Häkchens (nicht der beim Aufbau)
-          var idx = einst.dateien.indexOf(dateiname);
-          if (istAktiv && idx === -1) einst.dateien.push(dateiname);
-          else if (!istAktiv && idx !== -1) einst.dateien.splice(idx, 1);
-          speichereEreignis(ev.id, einst);
-        }.bind(null, datei));
-        var txt = document.createElement('span');
-        txt.className = 'tk-datei-text';
-        txt.textContent = kuerzen(datei, 40);
-        txt.title = datei;
-        label.appendChild(cb);
-        label.appendChild(txt);
-
-        zeile.appendChild(label);
-        zeile.appendChild(machePlayKnopf(datei, dateienLaut));
-        box.appendChild(zeile);
-      }
-      block.appendChild(box);
-    }
+    block.appendChild(baueDropdown(ev, einst, dateienLaut));
 
     var laut = document.createElement('div');
     laut.className = 'tk-laut';
@@ -1516,8 +1612,6 @@
 
     return block;
   }
-
-  function dokumentListe() { return null; }
 
   function baueDateienBereich() {
     elDateien.textContent = '';
@@ -1596,9 +1690,23 @@
     stoppeAudio();
     elEreignisse.textContent = '';
     if (daten && Array.isArray(daten.ereignisse)) {
-      for (var i = 0; i < daten.ereignisse.length; i++) {
-        elEreignisse.appendChild(baueEreignisBlock(daten.ereignisse[i]));
-      }
+      var gruppen = Array.isArray(daten.tonGruppen) ? daten.tonGruppen.slice() : [];
+      var bekannt = {};
+      gruppen.forEach(function (g) { bekannt[g.id] = true; });
+      gruppen.push({ id: '_rest', name: 'Weitere', symbol: '🔈' });
+      gruppen.forEach(function (g) {
+        var evs = daten.ereignisse.filter(function (ev) { return g.id === '_rest' ? !bekannt[ev.gruppe] : ev.gruppe === g.id; });
+        if (!evs.length) return;
+        var det = document.createElement('details');
+        det.className = 'tk-gruppe';
+        det.open = offen['g-' + g.id] !== false;
+        det.addEventListener('toggle', function () { offen['g-' + g.id] = det.open; });
+        var sm = document.createElement('summary');
+        sm.textContent = (g.symbol || '') + ' ' + g.name + ' (' + evs.length + ')';
+        det.appendChild(sm);
+        evs.forEach(function (ev) { det.appendChild(baueEreignisBlock(ev)); });
+        elEreignisse.appendChild(det);
+      });
     }
     baueDateienBereich();
   }

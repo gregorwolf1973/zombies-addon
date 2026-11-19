@@ -16,32 +16,62 @@ export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 
 // Spielereignisse, denen auf der Einstellungsseite Tondateien zugeordnet werden
 export const EREIGNISSE = [
-  { id: 'zombieTod', name: 'Zombie stirbt', beschreibung: 'Wenn ein Zombie erledigt wird', art: 'einmal' },
-  { id: 'kriecher', name: 'Kriecher', beschreibung: 'Stöhnen kriechender Zombies in der Nähe', art: 'einmal' },
-  { id: 'stoehnen', name: 'Zombie stöhnt', beschreibung: 'Stöhnen gehender Zombies in der Nähe', art: 'einmal' },
-  { id: 'entdeckt', name: 'Zombie entdeckt dich', beschreibung: 'Schrei, wenn ein Zombie zu jagen beginnt', art: 'einmal' },
-  { id: 'stadt', name: 'Stadtgeräusche', beschreibung: 'Hintergrund draußen (Verkehr in der Ferne)', art: 'schleife' },
-  { id: 'zombielandTag', name: 'Zombieland (Tag)', beschreibung: 'Ferne Zombies tagsüber – kurze Töne kommen ab und zu aus wechselnder Richtung', art: 'schleife' },
-  { id: 'zombielandNacht', name: 'Zombieland (Nacht)', beschreibung: 'Ferne Zombies und Schreie in der Nacht', art: 'schleife' },
-  { id: 'nachteinbruch', name: 'Nachteinbruch', beschreibung: 'Einmal, wenn es dunkel wird', art: 'einmal' },
-  { id: 'menschGebissen', name: 'Mensch wird gebissen', beschreibung: 'Schrei, wenn ein Bewohner gebissen wird', art: 'einmal' },
-  { id: 'sirene', name: 'Sirene', beschreibung: 'Polizei und Feuerwehr auf der Durchfahrt (aus ihrer Richtung)', art: 'einmal' },
-  { id: 'feuer', name: 'Feuer bricht aus', beschreibung: 'Wenn ein Haus, Auto oder Bus zu brennen beginnt', art: 'einmal' },
-  { id: 'schussPistole', name: 'Schuss: Pistole', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal' },
-  { id: 'schussGewehr', name: 'Schuss: Jagdgewehr', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal' },
-  { id: 'schussSchrot', name: 'Schuss: Schrotflinte', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal' },
-  { id: 'tuerAuf', name: 'Tür geht auf', beschreibung: 'Zimmertüren in Häusern', art: 'einmal' },
-  { id: 'tuerZu', name: 'Tür fällt zu', beschreibung: 'Zimmertüren in Häusern', art: 'einmal' },
-  { id: 'autoVorbei', name: 'Auto fährt vorbei', beschreibung: 'Wenn ein fahrendes Auto oder der Bus dicht vorbeifährt', art: 'einmal' },
-  { id: 'autoradio', name: 'Autoradio', beschreibung: 'Läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren', art: 'schleife' },
-  { id: 'startmusik', name: 'Startmusik', beschreibung: 'Auf der Startseite (nach dem ersten Antippen), blendet beim Spielbeginn aus', art: 'schleife' },
-  { id: 'funk', name: 'Funkgerät', beschreibung: 'Kurzer Klick bei wichtigen Meldungen', art: 'einmal' },
-  { id: 'wasser', name: 'Wasser', beschreibung: 'Rauschen in der Nähe von Bach und Fluss', art: 'schleife' },
-  { id: 'durstMann', name: 'Durst (Männerstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal' },
-  { id: 'durstFrau', name: 'Durst (Frauenstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal' },
-  { id: 'panzerFaehrt', name: 'Panzer fährt', beschreibung: 'Kettenrasseln des Puma, solange er fährt', art: 'schleife' },
-  { id: 'huelse', name: 'Hülse fällt', beschreibung: 'In Räumen kurz nach einem Schuss', art: 'einmal' },
+  { id: 'zombieTod', name: 'Zombie stirbt', beschreibung: 'Wenn ein Zombie erledigt wird', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies'] },
+  { id: 'kriecher', name: 'Kriecher', beschreibung: 'Stöhnen kriechender Zombies in der Nähe', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies'] },
+  { id: 'stoehnen', name: 'Zombie stöhnt', beschreibung: 'Stöhnen gehender Zombies in der Nähe', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies'] },
+  { id: 'entdeckt', name: 'Zombie entdeckt dich', beschreibung: 'Schrei, wenn ein Zombie zu jagen beginnt', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies'] },
+  { id: 'stadt', name: 'Stadtgeräusche', beschreibung: 'Hintergrund draußen (Verkehr in der Ferne)', art: 'schleife', gruppe: 'umgebung', kategorien: ['umgebung', 'fahrzeuge'] },
+  { id: 'zombielandTag', name: 'Zombieland (Tag)', beschreibung: 'Ferne Zombies tagsüber – kurze Töne kommen ab und zu aus wechselnder Richtung', art: 'schleife', gruppe: 'zombies', kategorien: ['zombies', 'umgebung'] },
+  { id: 'zombielandNacht', name: 'Zombieland (Nacht)', beschreibung: 'Ferne Zombies und Schreie in der Nacht', art: 'schleife', gruppe: 'zombies', kategorien: ['zombies', 'umgebung'] },
+  { id: 'nachteinbruch', name: 'Nachteinbruch', beschreibung: 'Einmal, wenn es dunkel wird', art: 'einmal', gruppe: 'umgebung', kategorien: ['umgebung', 'sirene', 'zombies'] },
+  { id: 'menschGebissen', name: 'Mensch wird gebissen', beschreibung: 'Schrei, wenn ein Bewohner gebissen wird', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies', 'spieler'] },
+  { id: 'sirene', name: 'Sirene', beschreibung: 'Polizei und Feuerwehr auf der Durchfahrt (aus ihrer Richtung)', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['sirene', 'fahrzeuge'] },
+  { id: 'feuer', name: 'Feuer bricht aus', beschreibung: 'Wenn ein Haus, Auto oder Bus zu brennen beginnt', art: 'einmal', gruppe: 'umgebung', kategorien: ['umgebung'] },
+  { id: 'schussPistole', name: 'Schuss: Pistole', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
+  { id: 'schussGewehr', name: 'Schuss: Jagdgewehr', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
+  { id: 'schussSchrot', name: 'Schuss: Schrotflinte', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
+  { id: 'tuerAuf', name: 'Tür geht auf', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
+  { id: 'tuerZu', name: 'Tür fällt zu', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
+  { id: 'autoVorbei', name: 'Auto fährt vorbei', beschreibung: 'Wenn ein fahrendes Auto oder der Bus dicht vorbeifährt', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
+  { id: 'autoradio', name: 'Autoradio', beschreibung: 'Läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
+  { id: 'startmusik', name: 'Startmusik', beschreibung: 'Auf der Startseite (nach dem ersten Antippen), blendet beim Spielbeginn aus', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
+  { id: 'funk', name: 'Funkgerät', beschreibung: 'Kurzer Klick bei wichtigen Meldungen', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler', 'bundeswehr'] },
+  { id: 'wasser', name: 'Wasser', beschreibung: 'Rauschen in der Nähe von Bach und Fluss', art: 'schleife', gruppe: 'umgebung', kategorien: ['umgebung'] },
+  { id: 'durstMann', name: 'Durst (Männerstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler'] },
+  { id: 'durstFrau', name: 'Durst (Frauenstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler'] },
+  { id: 'panzerFaehrt', name: 'Panzer fährt', beschreibung: 'Kettenrasseln des Puma, solange er fährt', art: 'schleife', gruppe: 'bundeswehr', kategorien: ['bundeswehr', 'fahrzeuge'] },
+  { id: 'huelse', name: 'Hülse fällt', beschreibung: 'In Räumen kurz nach einem Schuss', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
 ];
+
+// Gruppen der Ton-Übersicht (Reihenfolge = Anzeige) und Kategorien der Tondateien
+export const TON_GRUPPEN = [
+  { id: 'musik', name: 'Musik', symbol: '🎵' },
+  { id: 'zombies', name: 'Zombies', symbol: '🧟' },
+  { id: 'waffen', name: 'Waffen', symbol: '🔫' },
+  { id: 'fahrzeuge', name: 'Fahrzeuge & Sirenen', symbol: '🚗' },
+  { id: 'bundeswehr', name: 'Bundeswehr', symbol: '🎖' },
+  { id: 'tueren', name: 'Türen', symbol: '🚪' },
+  { id: 'umgebung', name: 'Umgebung', symbol: '🌲' },
+  { id: 'spieler', name: 'Spieler', symbol: '🧍' },
+];
+// Stichwörter im Dateinamen → Kategorie (Wortanfang, ab 5 Buchstaben auch mitten im Wort); eine Datei kann mehrere haben
+const TON_STICHWORTE = {
+  musik: ['music', 'musik', 'chill', 'hip', 'hop', 'song', 'beat', 'jazz', 'rock', 'piano', 'melod', 'theme', 'soundtrack', 'lied'],
+  zombies: ['zombie', 'scream', 'growl', 'groan', 'moan', 'stoehn', 'stöhn', 'schrei', 'kriech', 'undead', 'monster', 'biss', 'bite', 'untot', 'crawl'],
+  waffen: ['gun', 'shot', 'pistol', 'pistole', 'schuss', 'shell', 'rifle', 'gewehr', 'schrot', 'bullet', 'reload', 'huelse', 'hülse', 'knall', 'bang', 'revolver', 'ammo'],
+  fahrzeuge: ['car', 'tank', 'auto', 'motor', 'engine', 'bus', 'truck', 'lkw', 'reifen', 'traffic', 'verkehr', 'vehicle'],
+  sirene: ['alarm', 'siren', 'sirene', 'blaulicht', 'martinshorn'],
+  bundeswehr: ['puma', 'panzer', 'bundeswehr', 'soldat', 'army', 'militar', 'militär', 'funk', 'radio'],
+  tueren: ['door', 'tuer', 'tür', 'creak', 'knarr'],
+  umgebung: ['wasser', 'bach', 'water', 'river', 'rain', 'regen', 'wind', 'bird', 'vogel', 'city', 'stadt', 'ambient', 'crow', 'cricket', 'fire', 'feuer', 'burn', 'brand', 'wald', 'forest', 'night', 'nacht'],
+  spieler: ['durst', 'thirst', 'cough', 'husten', 'breath', 'atem', 'heartbeat', 'herz', 'hurt', 'pain', 'schmerz'],
+};
+export function tonKategorien(dateiname) {
+  const woerter = String(dateiname).toLowerCase().replace(/\.[a-z0-9]+$/, '').split(/[^a-zäöüß0-9]+/).filter(Boolean);
+  const treffer = Object.entries(TON_STICHWORTE).filter(([, ws]) =>
+    ws.some(w => woerter.some(t => w.length >= 5 ? t.includes(w) : t.startsWith(w)))).map(([k]) => k);
+  return treffer.length ? treffer : ['sonstiges'];
+}
 
 const zahl = (v, min, max, vorgabe) => {
   const n = Number(v);

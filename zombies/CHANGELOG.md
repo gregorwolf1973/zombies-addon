@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.34.0 – 19.11.2026
+
+- Keine lauten Schüsse und Schreie mehr direkt nach dem Beitritt (Ortstöne erst, wenn die eigene Position bekannt ist).
+- Blutspritzer bei Spielertreffern auf Zombies, auch in Gebäuden.
+- Innenräume: Möbel auf alle Zimmer verteilt, meist mit der Längsseite an der Wand, mit Abstand zueinander (Welt wird neu gebaut).
+- Neue Zombies kleiner und mit Armen.
+- Puma fährt frei im Lagerinneren zum Hotspot mit den meisten Zombies (alle Seiten), fährt rückwärts statt zu wenden; Lager mit breiter Fahrgasse umgebaut.
+- Munitionskisten der Bundeswehr: für jeden Mitspieler 100 Schuss, eine Schusswaffe und eine Taschenlampe.
+- Verwaltung: Töne nach Bereichen gruppiert, Mehrfachauswahl je Ereignis mit nur passenden Dateien und Probehören; Vorschaubilder bei den Zombietypen.
+
 ## 0.33.0 – 19.11.2026
 
 - Zombiewellen bis 300; der Server rechnet Zombies und Menschen fern aller Spieler nur jeden 4. Takt, nutzt ein Raster für Nähe-Suchen und baut das Wegefeld nur bei Bedarf neu (auf dem PC etwa 2,5× weniger Rechenzeit je Takt).

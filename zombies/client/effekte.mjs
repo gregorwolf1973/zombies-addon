@@ -53,11 +53,10 @@ export function fetzen(scene, x, y, w = null, menge = 1, ebene = '') {
 // Schuss eines Spielers: trifft die Linie (x2, y2) einen Zombie, fliegen Fetzen (nur Fernwaffen; Schrot kommt als mehrere Linien)
 export function fetzenBeiSchuss(scene, zombies, m) {
   if (m.art === 'schlaeger' || m.art === 'messer') return;
-  for (const z of zombies) {
-    if ((z.ebene ?? '') !== '' || Math.hypot(z.x - m.x2, z.y - m.y2) > 16) continue;
-    fetzen(scene, z.x, z.y, Math.atan2(m.y2 - m.y1, m.x2 - m.x1), m.art === 'schrotflinte' ? 0.6 : 0.8, '');
-    return;
-  }
+  // Zombie-Anzeige läuft dem Server hinterher → großzügiger Radius; Ebene egal (die Ebene des Schützen gilt)
+  let best = null, bd = 40;
+  for (const z of zombies) { const d = Math.hypot(z.x - m.x2, z.y - m.y2); if (d < bd) { bd = d; best = z; } }
+  if (best) fetzen(scene, best.x, best.y, Math.atan2(m.y2 - m.y1, m.x2 - m.x1), m.art === 'schrotflinte' ? 0.6 : 0.8, best.ebene ?? '');
 }
 
 // Explosion (Granate, Kanone): jeder Zombie im Radius verliert Fetzen, höchstens 4 Stellen

@@ -1358,9 +1358,9 @@ class Ort extends Phaser.Scene {
         f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
         f.bild.setRotation(0).setScale(ZOMBIE_GROESSE);
       } else if (gem) {
-        // Einzelbild (Gemini): beim Gehen leicht wanken, beim Zubeißen etwas größer
+        // Einzelbild (Gemini): beim Gehen leicht wanken, Maßstab wie die übrigen Zombies
         const l3 = this.figurListe3[typ];
-        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * 1.1);
+        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE);
       } else if (neu) {
         // flüssig animierte Zombies (Riley Gombart): Laufen, Angriff, Stehen
         let nah = false;

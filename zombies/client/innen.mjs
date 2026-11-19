@@ -200,35 +200,46 @@ function platziereMoebel(kacheln, moebelListe, behaelterListe, art, x, y, b, h, 
 // (Claude) Position für ein Möbelstück: bündig an einer Wand (ganze Seite liegt an), davor ein freier
 // Streifen Boden. Tische stehen frei im Raum, aber mit einem Ring freien Bodens rundherum.
 const FREISTEHEND = new Set(['esstisch', 'couchtisch', 'regal_lang']);
-function findeMoebelPosition(kacheln, raum, moebelB, moebelH, ox, oy, hausB, hausH, rng, art) {
+function findeMoebelPosition(kacheln, raum, moebelB, moebelH, ox, oy, hausB, hausH, rng, art, opt = null) {
+  // opt (nur normale Zimmer, nicht Safe Room): { luft: true } = rundherum 1 Feld Abstand zu anderem Möbel;
+  // Wandmöbel stehen bevorzugt mit der Längsseite an der Wand, nur ohne Wandplatz quer oder frei im Raum.
   const { x: rx, y: ry, b: rb, h: rh } = raum;
   const istWand = (x, y) => kacheln[idx(x, y)] === T.WAND;
   const istBoden = (x, y) => kacheln[idx(x, y)] === T.BODEN;
-  const kandidaten = [];
+  const reihe = (x0, y0, n, ddx, ddy, f) => { for (let i = 0; i < n; i++) if (!f(x0 + i * ddx, y0 + i * ddy)) return false; return true; };
+  const luftFrei = (x, y, b, h) => {
+    for (let dy = -1; dy <= h; dy++) for (let dx = -1; dx <= b; dx++) {
+      if (dx >= 0 && dx < b && dy >= 0 && dy < h) continue;
+      if (kacheln[idx(x + dx, y + dy)] === T.MOEBEL) return false;
+    }
+    return true;
+  };
+  const stufen = [[], [], []];   // 0: Längsseite an der Wand, 1: nur Schmalseite an der Wand, 2: frei im Raum
+  const wand = [];               // alle Wandplätze in Suchreihenfolge (Safe Room, unverändert)
   for (const [b, h] of moebelB === moebelH ? [[moebelB, moebelH]] : [[moebelB, moebelH], [moebelH, moebelB]]) {
     for (let y = ry; y <= ry + rh - h; y++) {
       for (let x = rx; x <= rx + rb - b; x++) {
         if (!moebelPlatzFrei(kacheln, x, y, b, h, ox, oy, hausB, hausH)) continue;
-        if (FREISTEHEND.has(art)) {
-          let ring = true;
-          for (let dy = -1; dy <= h && ring; dy++) for (let dx = -1; dx <= b; dx++) {
-            if ((dy === -1 || dy === h || dx === -1 || dx === b) && !istBoden(x + dx, y + dy)) { ring = false; break; }
-          }
-          if (ring) kandidaten.push({ x, y, b, h });
-          continue;
+        if (opt?.luft && !luftFrei(x, y, b, h)) continue;
+        let ring = true;
+        for (let dy = -1; dy <= h && ring; dy++) for (let dx = -1; dx <= b; dx++) {
+          if ((dy === -1 || dy === h || dx === -1 || dx === b) && !istBoden(x + dx, y + dy)) { ring = false; break; }
         }
+        if (FREISTEHEND.has(art)) { if (ring) { stufen[0].push({ x, y, b, h }); wand.push({ x, y, b, h }); } continue; }
         // eine ganze Seite an der Wand, gegenüber frei
-        const reihe = (x0, y0, n, ddx, ddy, f) => { for (let i = 0; i < n; i++) if (!f(x0 + i * ddx, y0 + i * ddy)) return false; return true; };
-        const seiten = [
-          reihe(x, y - 1, b, 1, 0, istWand) && reihe(x, y + h, b, 1, 0, istBoden),
-          reihe(x, y + h, b, 1, 0, istWand) && reihe(x, y - 1, b, 1, 0, istBoden),
-          reihe(x - 1, y, h, 0, 1, istWand) && reihe(x + b, y, h, 0, 1, istBoden),
-          reihe(x + b, y, h, 0, 1, istWand) && reihe(x - 1, y, h, 0, 1, istBoden),
-        ];
-        if (seiten.some(Boolean)) kandidaten.push({ x, y, b, h });
+        const oben = reihe(x, y - 1, b, 1, 0, istWand) && reihe(x, y + h, b, 1, 0, istBoden);
+        const unten = reihe(x, y + h, b, 1, 0, istWand) && reihe(x, y - 1, b, 1, 0, istBoden);
+        const links = reihe(x - 1, y, h, 0, 1, istWand) && reihe(x + b, y, h, 0, 1, istBoden);
+        const rechts = reihe(x + b, y, h, 0, 1, istWand) && reihe(x - 1, y, h, 0, 1, istBoden);
+        const lang = b === h ? (oben || unten || links || rechts) : b > h ? (oben || unten) : (links || rechts);
+        if (oben || unten || links || rechts) wand.push({ x, y, b, h });
+        if (lang) stufen[0].push({ x, y, b, h });
+        else if (oben || unten || links || rechts) stufen[1].push({ x, y, b, h });
+        else if (opt && ring) stufen[2].push({ x, y, b, h });
       }
     }
   }
+  const kandidaten = opt ? (stufen.find(l => l.length) ?? []) : wand;
   if (kandidaten.length === 0) return null;
   return kandidaten[Math.floor(rng() * kandidaten.length)];
 }
@@ -704,23 +715,22 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten', laden = false) {
         moebelArten.push({ art: 'kiste', b: 1, h: 1 });
         moebelArten.push({ art: 'kiste', b: 1, h: 1 });
         break;
-      case 'dachboden':
-        moebelArten.push({ art: 'kiste', b: 1, h: 1 });
-        moebelArten.push({ art: 'kiste', b: 1, h: 1 });
-        moebelArten.push({ art: 'kiste', b: 1, h: 1 });
-        moebelArten.push({ art: 'kiste', b: 1, h: 1 });
-        moebelArten.push({ art: 'kiste', b: 1, h: 1 });
-        moebelArten.push({ art: 'alter_schrank', b: 2, h: 1 });
+      case 'dachboden': {
+        // Dachbodenkram auf alle Dachräume verteilen
+        const kram = [['alter_schrank', 2, 1], ...Array(8).fill(['kiste', 1, 1])];
+        kram.forEach(([art, mb, mh], k) => { if (k % raeume.length === i) moebelArten.push({ art, b: mb, h: mh }); });
         break;
+      }
     }
 
-    // Möbel platzieren
+    // Möbel platzieren: erst mit 1 Feld Luft, nur wenn das nicht geht dichter; Zimmer höchstens ~35 % (Behälter bis ~45 %) belegt (Läden ausgenommen)
+    const grenze = laden ? Infinity : Math.max(4, Math.round(raum.b * raum.h * 0.35));
+    let belegt = 0;
     for (const m of moebelArten) {
-      // Versuche, eine Position zu finden
-      const pos = findeMoebelPosition(kacheln, raum, m.b, m.h, ox, oy, b, h, rng, m.art);
-      if (pos) {
-        platziereMoebel(kacheln, moebel, behaelter, m.art, pos.x, pos.y, pos.b, pos.h, ox, oy, b, h, behaelterZaehler);
-      }
+      if (belegt + m.b * m.h > (BEHAELTER_ARTEN.has(m.art) ? grenze * 1.3 : grenze) && belegt > 0) continue;
+      const pos = findeMoebelPosition(kacheln, raum, m.b, m.h, ox, oy, b, h, rng, m.art, { luft: true })
+        ?? (BEHAELTER_ARTEN.has(m.art) ? findeMoebelPosition(kacheln, raum, m.b, m.h, ox, oy, b, h, rng, m.art, { luft: false }) : null);
+      if (pos && platziereMoebel(kacheln, moebel, behaelter, m.art, pos.x, pos.y, pos.b, pos.h, ox, oy, b, h, behaelterZaehler)) belegt += m.b * m.h;
     }
   }
 

@@ -3,7 +3,7 @@
 // Zustand in state.stuetzpunkt: '' = kein Stützpunkt auf der Karte, 'steht', 'gefallen' (wird mit der Welt gespeichert) oder
 // 'aus' (Schalter „Stützpunkt aktiv“ aus: Figuren weg, nichts schießt, kein Handel – ohne Zombies und ohne Fall).
 import { KACHEL, WAFFEN, sichtfrei, HANDEL, HANDEL_ABSTAND, HANDEL_RAETSEL, bezahlung, MUNITION_MAX, DINGE } from '../client/welt.mjs';
-import { imLager, planKoord, handelPartner, zeltWandImWeg, rahmen, SP_BREITE } from '../client/stuetzpunkt.mjs';
+import { imLager, planKoord, handelPartner, zeltWandImWeg, rahmen, fahrFlaeche, FAHR_SCHRITT, PUMA_PARK, SP_BREITE, SP_TIEFE } from '../client/stuetzpunkt.mjs';
 
 export const MG_REICHWEITE = 45 * 8;       // 45 m (8 px je Meter)
 export const PUMA_REICHWEITE = 60 * 8;     // 60 m
@@ -12,11 +12,11 @@ const SOLDAT_PAUSE = 1.3, SOLDAT_SCHADEN = 100, SOLDAT_TREFFER = 0.75, SOLDAT_LA
 export const MG_SCHADEN = WAFFEN.gewehr.schaden;   // MG-Nester treffen wie bisher mit Gewehrschaden; wirksam ist die Einstellung waffen.gewehr.schaden
 const SALVE = 3, SALVE_TAKT = 0.15, SALVE_PAUSE = 1.1;   // kurze Feuerstöße: 3 Schuss, dann gut eine Sekunde Pause
 const PUMA_PAUSE = 3.5, PUMA_DREH = 2.4;        // alle 3,5 s ein Schuss; Turm dreht 2,4 rad/s
-// Puma fährt auf einer Bahn hinter dem Draht (Bauplan-Rahmen: v = 2,6, u von Rand zu Rand, Kacheln): ohne Angreifer hin und her mit
-// Pausen an den Enden, bei Zombies vor dem Lager zur Höhe der Angreifer. Die Bahn liegt frei von festen Hindernissen (Draht endet bei
-// v 1,75, Sandsäcke und MG-Nester beginnen bei v ≥ 3,25), darum braucht der Puma selbst keine Sperre im Feinraster.
-const PUMA_V = 2.6, PUMA_U0 = 2.5, PUMA_U1 = SP_BREITE - 2.5;
-const PUMA_STREIFE = 0.7, PUMA_JAGD = 1.5, PUMA_WENDE = 1.4;   // Kacheln/s Streife, Kacheln/s Angriff, rad/s Wannendrehung
+// Puma fährt frei im Innenbereich des Lagers (Fahrfläche: fahrFlaeche in client/stuetzpunkt.mjs, Mitte mit Abstand zu Draht, Sandsäcken,
+// Zelten, Fahrzeugen, MG-Nestern und der Einfahrt). Ziel ist der Hotspot: die Zelle (96 px) mit den meisten Zombies im Umkreis von
+// 600 px um das Lager, auf allen Seiten. Ohne Zombies parkt er in der Lagermitte. Liegt das Ziel hinter ihm, fährt er rückwärts.
+const HOT_ZELLE = 96, HOT_RADIUS = 600, HOT_NAH = 4;   // px, px, Kacheln (näher als das muss er nicht heran)
+const PUMA_STREIFE = 0.8, PUMA_JAGD = 1.5, PUMA_RUECK = 1.0, PUMA_WENDE = 1.4;   // Kacheln/s Parken, Angriff, Rückwärts; rad/s Wannendrehung
 const KANONE_SCHADEN = 100, KANONE_FLAECHE = 60, KANONE_RADIUS = 30;
 const MG_LAERM = 520, PUMA_LAERM = 760;
 const HEILEN_PRO_SEK = 2;
@@ -49,7 +49,7 @@ export class Stuetzpunkt {
     if (!sp) return;
     sp.teile.forEach((t, n) => {
       if (t.art === 'mgnest') this.nester.push({ n, x: t.x, y: t.y, blick: t.blick, kuehl: 0, salve: 0, takt: 0, scan: 0, ziel: null });
-      else if (t.art === 'puma') this.puma = { n, x: t.turm.x, y: t.turm.y, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null, u: planKoord(sp, t.x, t.y).u, richtung: 1, warte: 2, sollU: null, scanU: 0 };
+      else if (t.art === 'puma') this.puma = { n, x: t.turm.x, y: t.turm.y, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null, u: planKoord(sp, t.x, t.y).u, v: planKoord(sp, t.x, t.y).v, weg: [], hot: null, hotZelle: null, scanU: 0, rueckwaerts: false };
       // jeder Soldat an seinem Posten schießt mit (er bleibt dabei stehen)
       else if (t.art === 'posten' && t.rolle === 'soldat') this.schuetzen.push({ n, x: t.x, y: t.y, kuehl: 0.5 + (n % 5) * 0.2, scan: 0, ziel: null });
     });
@@ -198,43 +198,98 @@ export class Stuetzpunkt {
     r.state.besiegt = vorher;
   }
 
-  // Angreifer vor dem Lager: Mittel von u der (bis zu) 6 Zombies, die der Front am nächsten sind (v von −14 bis 7, Kacheln); sonst null
-  angriffsU() {
-    const sp = this.sp, r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung), [ox, oy] = r.ort(0, 0), liste = [];
+  // Hotspot: Zelle (96-px-Raster) mit den meisten Zombies im Umkreis von 600 px um das Lager (alle Seiten); Ergebnis: Mittelpunkt der
+  // Zombies dieser Zelle als Bauplan-Punkt { u, v, n } oder null. Die bisherige Zelle bleibt, solange sie fast so voll ist wie die beste.
+  hotspot(p) {
+    const sp = this.sp, r = HOT_RADIUS / KACHEL, zellen = new Map();
     for (const z of this.raum.state.zombies.values()) {
-      if (z.ebene) continue;
-      const dx = (z.x - ox) / KACHEL, dy = (z.y - oy) / KACHEL, u = dx * r.c + dy * r.s, v = -dx * r.s + dy * r.c;
-      if (v < -14 || v > 7 || u < -6 || u > SP_BREITE + 6) continue;
-      liste.push([Math.abs(v - 1.5), u]);
+      if (z.ebene || !(z.hp > 0)) continue;
+      const { u, v } = planKoord(sp, z.x, z.y);
+      if (u < -r || u > SP_BREITE + r || v < -r || v > SP_TIEFE + r) continue;
+      const k = Math.floor(z.x / HOT_ZELLE) + ',' + Math.floor(z.y / HOT_ZELLE);
+      let c = zellen.get(k);
+      if (!c) zellen.set(k, c = { n: 0, u: 0, v: 0 });
+      c.n++; c.u += u; c.v += v;
     }
-    if (!liste.length) return null;
-    liste.sort((a, b) => a[0] - b[0]);
-    const n = liste.slice(0, 6);
-    return Math.min(PUMA_U1, Math.max(PUMA_U0, n.reduce((a, q) => a + q[1], 0) / n.length));
+    let best = null, bk = null;
+    for (const [k, c] of zellen) if (!best || c.n > best.n) { best = c; bk = k; }
+    if (!best) { p.hotZelle = null; return null; }
+    const alt = p.hotZelle && zellen.get(p.hotZelle);
+    if (alt && alt.n >= best.n * 0.7) { best = alt; bk = p.hotZelle; }
+    p.hotZelle = bk;
+    return { u: best.u / best.n, v: best.v / best.n, n: best.n };
   }
 
-  // Fahren: Wanne dreht in Fahrtrichtung (±u), rollt erst bei passender Richtung; Turmmitte = Wannenmitte
+  // Fahrziel auf der Fahrfläche wählen und Weg dorthin suchen (Breitensuche über die freien Knoten, 8 Nachbarn)
+  pumaPlanen(p) {
+    const fl = fahrFlaeche(this.sp), { frei, nu, nv } = fl, S = FAHR_SCHRITT;
+    const hot = this.hotspot(p);
+    p.hot = hot;
+    const kn = (u, v) => [Math.min(nu - 1, Math.max(0, Math.round(u / S))), Math.min(nv - 1, Math.max(0, Math.round(v / S)))];
+    let [si, sj] = kn(p.u, p.v);
+    if (!frei[sj * nu + si]) {   // steht zwischen den Knoten oder (Tests) irgendwo: nächster freier Knoten
+      let bd = Infinity;
+      for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) if (frei[j * nu + i]) { const d = Math.hypot(i * S - p.u, j * S - p.v); if (d < bd) { bd = d; si = i; sj = j; } }
+      if (bd === Infinity) { p.weg = []; return; }
+    }
+    const vor = new Int32Array(nu * nv).fill(-2), ordnung = [];
+    vor[sj * nu + si] = -1; ordnung.push(sj * nu + si);
+    for (let q = 0; q < ordnung.length; q++) {
+      const k = ordnung[q], i = k % nu, j = (k - i) / nu;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || b < 0 || a >= nu || b >= nv || !frei[b * nu + a] || vor[b * nu + a] !== -2) continue;
+        if (di && dj && !(frei[j * nu + a] && frei[b * nu + i])) continue;
+        vor[b * nu + a] = k; ordnung.push(b * nu + a);
+      }
+    }
+    let ziel;
+    const zielU = hot ? hot.u : PUMA_PARK[0], zielV = hot ? hot.v : PUMA_PARK[1];
+    if (hot) {   // erreichbarer Knoten, der dem Hotspot am nächsten kommt (näher als HOT_NAH Kacheln ist nicht nötig: dann der nächste zu mir)
+      let bd = Infinity;
+      for (const k of ordnung) { const i = k % nu, j = (k - i) / nu, d = Math.hypot(i * S - zielU, j * S - zielV); if (d < bd) bd = d; }
+      const grenze = Math.max(bd, HOT_NAH) + 0.01;
+      let bm = Infinity;
+      for (const k of ordnung) {
+        const i = k % nu, j = (k - i) / nu;
+        if (Math.hypot(i * S - zielU, j * S - zielV) > grenze) continue;
+        const m = Math.hypot(i * S - p.u, j * S - p.v);
+        if (m < bm) { bm = m; ziel = k; }
+      }
+    } else {
+      let bd = Infinity;
+      for (const k of ordnung) { const i = k % nu, j = (k - i) / nu, d = Math.hypot(i * S - zielU, j * S - zielV); if (d < bd) { bd = d; ziel = k; } }
+    }
+    const weg = [];
+    for (let k = ziel; k >= 0; k = vor[k]) { const i = k % nu; weg.push([i * S, (k - i) / nu * S]); }
+    weg.reverse();
+    // von der echten Lage aus Knoten überspringen, solange die Strecke zum übernächsten frei ist
+    while (weg.length > 1 && fl.strecke(p.u, p.v, weg[1][0], weg[1][1])) weg.shift();
+    p.weg = weg;
+  }
+
+  // Fahren: Wanne dreht nur so weit, dass der Wegpunkt vorn (≤ 90°) oder hinten liegt – liegt er hinten, rollt der Puma rückwärts statt
+  // zu wenden. Erst bei passender Richtung (Rest ≤ 0,35 rad) rollt er. Turmmitte = Wannenmitte.
   pumaFahren(p, dt) {
     if (p.fest) return;   // Tests: Puma steht
-    const s = this.raum.state, sp = this.sp, r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung);
+    const s = this.raum.state, sp = this.sp, fl = fahrFlaeche(sp), r = fl.r;
     p.scanU -= dt;
-    if (p.scanU <= 0) { p.scanU = 0.5; p.sollU = this.angriffsU(); }
-    let ziel = p.u, tempo = 0;
-    if (p.sollU !== null) { ziel = p.sollU; tempo = PUMA_JAGD; p.warte = 0; }
-    else if (p.warte > 0) p.warte -= dt;
-    else {
-      const ende = p.richtung > 0 ? PUMA_U1 : PUMA_U0;
-      if (Math.abs(p.u - ende) < 0.05) { p.richtung = -p.richtung; p.warte = 3 + this.raum.rnd() * 3; } else { ziel = ende; tempo = PUMA_STREIFE; }
-    }
-    const du = ziel - p.u;
-    if (tempo === 0 || Math.abs(du) < 0.15) return;
-    const soll = du > 0 ? r.th : r.th + Math.PI, diff = diffWinkel(soll, s.bwW), dreh = Math.min(Math.abs(diff), PUMA_WENDE * dt);
+    if (p.scanU <= 0) { p.scanU = 0.5 + this.raum.rnd() * 0.3; this.pumaPlanen(p); }
+    if (!p.weg.length) return;
+    let [wu, wv] = p.weg[0];
+    let du = wu - p.u, dv = wv - p.v, rest = Math.hypot(du, dv);
+    if (rest < 0.08) { p.weg.shift(); return; }
+    const [px, py] = r.ort(p.u, p.v), [qx, qy] = r.ort(wu, wv);
+    const richtung = Math.atan2(qy - py, qx - px), hinten = Math.abs(diffWinkel(richtung, s.bwW)) > Math.PI / 2;
+    p.rueckwaerts = hinten;
+    const soll = hinten ? richtung + Math.PI : richtung, diff = diffWinkel(soll, s.bwW), dreh = Math.min(Math.abs(diff), PUMA_WENDE * dt);
     let w = s.bwW + Math.sign(diff) * dreh; if (w > Math.PI) w -= TAU; if (w < -Math.PI) w += TAU;
     const rund = (a) => Math.round(a * 1000) / 1000;
     if (dreh > 0) s.bwW = rund(w);
     if (Math.abs(diff) - dreh > 0.35) return;
-    p.u += Math.sign(du) * Math.min(Math.abs(du), tempo * dt);
-    const [x, y] = r.ort(p.u, PUMA_V);
+    const tempo = hinten ? PUMA_RUECK : p.hot ? PUMA_JAGD : PUMA_STREIFE, schritt = Math.min(rest, tempo * dt);
+    p.u += du / rest * schritt; p.v += dv / rest * schritt;
+    const [x, y] = r.ort(p.u, p.v);
     p.x = x; p.y = y;
     s.bwX = Math.round(x * 10) / 10; s.bwY = Math.round(y * 10) / 10;
   }

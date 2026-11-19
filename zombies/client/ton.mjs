@@ -100,7 +100,8 @@ export function tonUmschalten() {
 }
 
 // Hörerposition; ungültige Werte (Figur noch nicht da) ignorieren – sonst rechnet jedes Geräusch mit NaN
-export function hoerer(x, y) { if (Number.isFinite(x) && Number.isFinite(y)) { hx = x; hy = y; } }
+let hoerBekanntSeit = 0;   // Zeitpunkt, ab dem die Hörerposition bekannt ist; Ortstöne erst ~2 s danach (Beitritt: Nachrichten/Erstabgleich)
+export function hoerer(x, y) { if (Number.isFinite(x) && Number.isFinite(y)) { hx = x; hy = y; if (!hoerBekanntSeit) hoerBekanntSeit = performance.now(); } }
 const endlich = (v, ersatz = 0) => Number.isFinite(v) ? v : ersatz;
 
 // Ausgang für ein Geräusch an Position (x, y); null = zu weit weg
@@ -108,8 +109,9 @@ function ort(x, y, laut = 1) {
   if (!ctx || !an) return null;
   let v = laut, pan = 0;
   if (x != null) {
+    if (!hoerBekanntSeit || performance.now() - hoerBekanntSeit < 2000) return null;   // Hörer unbekannt (0/0) → sonst volle Lautstärke aus dem Nichts
     const d = Math.hypot(x - hx, y - hy);
-    if (d > HOERWEITE) return null;
+    if (!Number.isFinite(d) || d > HOERWEITE) return null;
     v *= Math.max(0, 1 - d / HOERWEITE) ** 1.6;
     pan = Math.max(-1, Math.min(1, (x - hx) / 400));
   }

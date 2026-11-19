@@ -9,7 +9,7 @@ import { SpielRaum } from '../server/raum.mjs';
 import { bereinige } from '../server/einstellungen.mjs';
 import { WAFFEN_RANG, GRENZE } from '../server/bots.mjs';
 import { KACHEL, BREITE, HOEHE, T, DINGE, WAFFEN, BEUTE, LEICHE_SELTEN, LEICHE_OFT, GRANATE, HANDEL, MUNITION_MAX, TEMPO_MG, bezahlung, setzeKartengroesse, frei, linieFrei, sichtfrei } from '../client/welt.mjs';
-import { rahmen, handelsleute, zeltWandImWeg, planKoord, imLager } from '../client/stuetzpunkt.mjs';
+import { rahmen, handelsleute, zeltWandImWeg, planKoord, imLager, fahrFlaeche, PUMA_PARK } from '../client/stuetzpunkt.mjs';
 
 const PORT = 27990 + Math.floor(Math.random() * 9);
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -202,7 +202,9 @@ test('Puma: Turm dreht zum Ziel, schießt alle paar Sekunden, kleiner Flächensc
   raum.stuetzpunkt.puma.fest = true;   // dieser Test prüft Turm und Schuss; Fahren siehe nächsten Test
   assert.ok(Math.abs(raum.state.bwTurm - puma.turm.winkel) < 1e-9, 'Turm beginnt in Fahrtrichtung');
   const anfang = raum.state.bwTurm;
-  const pt = sichtPunkt(raum, puma.turm, 150, 440, true);   // weit seitlich vom Rohr
+  const [px, py] = planOrt(sp, 15.5, 7.0), pst = raum.stuetzpunkt.puma;   // Puma etwas weiter vorn: Ziel seitlich im Innenbereich
+  pst.x = px; pst.y = py; puma.turm.x = px; puma.turm.y = py;
+  const [zx0, zy0] = planOrt(sp, 24, 7.0), pt = { x: zx0, y: zy0 };   // weit seitlich vom Rohr (Bug zeigt zur Front)
   const dicht = (dx) => { const id = raum.setzeZombie(pt.x + dx, pt.y, ''); ruhig(raum, id); return id; };
   const a = dicht(0), b = dicht(11);   // dicht nebeneinander
   const za = raum.state.zombies.get(a), zb = raum.state.zombies.get(b);
@@ -221,22 +223,89 @@ test('Puma: Turm dreht zum Ziel, schießt alle paar Sekunden, kleiner Flächensc
   await beenden(c);
 });
 
-test('Puma fährt: streift die Front entlang, bei Zombies vor dem Lager zur Höhe der Angreifer, Position im State', async () => {
+// Zombies, die nach dem Aufbau der Welt schon herumstehen, entfernen (die Fahrtests brauchen einen leeren Raum)
+const leeren = raum => { for (const id of [...raum.state.zombies.keys()]) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); } };
+// Puma auf einen Bauplan-Punkt (u, v) setzen
+function pumaSetzen(raum, u, v) {
+  const sp = raum.welt.stuetzpunkt, p = raum.stuetzpunkt.puma, [x, y] = planOrt(sp, u, v);
+  p.u = u; p.v = v; p.x = x; p.y = y; p.weg = []; p.scanU = 0;
+  raum.state.bwX = x; raum.state.bwY = y;
+}
+// Fahrt beobachten: prüft laufend, dass die Mitte des Puma nie in einem Hindernis steht (Fahrfläche), und merkt Höchstwerte
+function beobachten(raum) {
+  const sp = raum.welt.stuetzpunkt, fl = fahrFlaeche(sp), b = { fehler: 0, minU: 99, maxU: -99, minV: 99, maxV: -99, drehMax: 0, w0: raum.state.bwW, rueck: 0 };
+  const t = setInterval(() => {
+    const k = planKoord(sp, raum.state.bwX, raum.state.bwY);
+    if (!fl.ok(k.u, k.v)) b.fehler++;
+    b.minU = Math.min(b.minU, k.u); b.maxU = Math.max(b.maxU, k.u); b.minV = Math.min(b.minV, k.v); b.maxV = Math.max(b.maxV, k.v);
+    b.drehMax = Math.max(b.drehMax, diffWinkel(raum.state.bwW, b.w0));
+    if (raum.stuetzpunkt.puma.rueckwaerts) b.rueck++;
+  }, 50);
+  b.ende = () => clearInterval(t);
+  return b;
+}
+
+test('Puma fährt frei im Innenbereich: parkt in der Lagermitte, Fahrfläche frei von Hindernissen und von der Einfahrt', async () => {
   await frisch();
   const { c, raum, p } = await beitreten('Fahrer');
   const sp = raum.welt.stuetzpunkt, st = raum.stuetzpunkt;
-  imLagerSetzen(raum, p);
+  imLagerSetzen(raum, p); leeren(raum);
   st.nester = []; st.schuetzen = [];
-  const start = { x: raum.state.bwX, y: raum.state.bwY };
-  assert.ok(start.x > 0, 'Startposition im State');
-  st.puma.warte = 0; st.puma.richtung = 1;
-  assert.ok(await bis(() => Math.hypot(raum.state.bwX - start.x, raum.state.bwY - start.y) > 40, 8000), 'Puma fährt nicht von selbst');
-  // Angreifer vor der Front, weit links: der Puma fährt dorthin
-  const r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung), [zx, zy] = r.ort(4, -6);
-  const id = raum.setzeZombie(zx, zy, ''); ruhig(raum, id);
-  assert.ok(await bis(() => planKoord(sp, raum.state.bwX, raum.state.bwY).u < 7, 20000), 'Puma fährt nicht zur Höhe der Angreifer');
+  const k0 = planKoord(sp, raum.state.bwX, raum.state.bwY);
+  assert.ok(Math.abs(k0.u - PUMA_PARK[0]) < 0.05 && Math.abs(k0.v - PUMA_PARK[1]) < 0.05, 'Start im Ruheplatz');
+  const fl = fahrFlaeche(sp);
+  assert.ok(fl.ok(...PUMA_PARK), 'Ruheplatz auf der Fahrfläche');
+  // Draht, Sandsäcke, MG-Nester, Zelte, Fahrzeuge und Einfahrt sind nicht befahrbar; die Fahrfläche ist groß und zusammenhängend
+  for (const [u, v] of [[15.5, 1.5], [15.5, 3.5], [15.5, 5.0], [10.5, 4.0], [4.5, 4.3], [7, 11], [22, 10.5], [14, 19.4], [6, 19]]) assert.ok(!fl.ok(u, v), `befahrbar bei ${u}/${v}`);
+  assert.ok(fl.frei.reduce((a, q) => a + q, 0) >= 100, 'Fahrfläche zu klein');
+  st.puma.scanU = 0;
+  const b = beobachten(raum);
+  await warte(3000);
+  b.ende();
+  assert.equal(b.fehler, 0);
+  assert.ok(Math.hypot(raum.state.bwX - sp.teile.find(t => t.art === 'puma').x, raum.state.bwY - sp.teile.find(t => t.art === 'puma').y) < 30, 'ohne Zombies bleibt er in der Lagermitte');
+  await beenden(c);
+});
+
+test('Puma fährt zum Hotspot: stärkste Häufung, auch rechts und seitlich des Lagers, nie durch Hindernisse', async () => {
+  await frisch();
+  const { c, raum, p } = await beitreten('Hotspot');
+  const sp = raum.welt.stuetzpunkt, st = raum.stuetzpunkt;
+  imLagerSetzen(raum, p); leeren(raum);
+  st.nester = []; st.schuetzen = [];
+  const b = beobachten(raum);
+  // ein einzelner Zombie vor der Front links, dicht daneben die große Gruppe rechts außerhalb des Lagers
+  zombieBei(raum, sp, 4, -6);
+  for (const [u, v] of [[34, 10], [34.4, 10.3], [34.2, 9.6], [33.8, 10.5]]) zombieBei(raum, sp, u, v);
+  assert.ok(await bis(() => planKoord(sp, raum.state.bwX, raum.state.bwY).u > 21, 30000), 'Puma fährt nicht nach rechts zur Gruppe');
+  await warte(1500);
+  assert.ok(st.puma.hot && st.puma.hot.u > 30, 'Hotspot ist die Gruppe rechts');
+  // Gruppe weg, neue Häufung links vor der Front
+  leeren(raum);
+  for (const [u, v] of [[4, -5], [4.4, -5.3], [3.8, -4.6]]) zombieBei(raum, sp, u, v);
+  assert.ok(await bis(() => planKoord(sp, raum.state.bwX, raum.state.bwY).u < 8, 30000), 'Puma fährt nicht nach links');
   const pk = planKoord(sp, raum.state.bwX, raum.state.bwY);
-  assert.ok(Math.abs(pk.v - 2.6) < 0.2, 'bleibt auf seiner Bahn: v = ' + pk.v);
+  assert.ok(pk.v >= 5.5, 'bleibt hinter dem Draht und den Sandsäcken: v = ' + pk.v);
+  b.ende();
+  assert.equal(b.fehler, 0, 'Puma stand in einem Hindernis');
+  assert.ok(b.maxU > 20 && b.minU < 9, `u von ${b.minU} bis ${b.maxU}`);
+  await beenden(c);
+});
+
+test('Puma fährt rückwärts statt zu wenden, wenn das Ziel hinter ihm liegt', async () => {
+  await frisch();
+  const { c, raum, p } = await beitreten('Rueck');
+  const sp = raum.welt.stuetzpunkt, st = raum.stuetzpunkt;
+  imLagerSetzen(raum, p); leeren(raum);
+  st.nester = []; st.schuetzen = [];
+  pumaSetzen(raum, 15.5, 7.0);   // Bug zur Front (−v); Hotspot weiter hinten im Lager (+v)
+  const b = beobachten(raum);
+  zombieBei(raum, sp, 15.5, 28); zombieBei(raum, sp, 15.9, 28.3);
+  assert.ok(await bis(() => planKoord(sp, raum.state.bwX, raum.state.bwY).v > 11, 30000), 'Puma fährt nicht nach hinten');
+  b.ende();
+  assert.ok(b.rueck > 5, 'fährt nicht rückwärts');
+  assert.ok(b.drehMax < 0.4, 'hat gewendet statt rückwärts zu fahren: ' + b.drehMax.toFixed(2) + ' rad');
+  assert.equal(b.fehler, 0);
   await beenden(c);
 });
 
