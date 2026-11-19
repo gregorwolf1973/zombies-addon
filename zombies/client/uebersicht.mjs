@@ -196,6 +196,17 @@ export class Uebersicht {
       c.lineWidth = 2.5 * dpr; c.strokeStyle = '#000'; c.stroke();
       c.font = `${Math.round((this.gross ? 20 : 15) * dpr * (1 + 0.15 * puls))}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#000'; c.fillText('🚌', x, y + dpr);
     }
+    if (this.horde) {
+      // Prüfhilfe: Ziel der Horde (Fahne + gestrichelte Linie von der Hordenmitte)
+      const [mx, my] = pos(this.horde.mitte.x, this.horde.mitte.y), [x, y] = pos(this.horde.ziel.x, this.horde.ziel.y);
+      c.beginPath(); c.setLineDash([6 * dpr, 5 * dpr]); c.moveTo(mx, my); c.lineTo(x, y); c.lineWidth = 2 * dpr; c.strokeStyle = 'rgba(255,64,129,.9)'; c.stroke(); c.setLineDash([]);
+      c.beginPath(); c.arc(mx, my, 4 * dpr, 0, Math.PI * 2); c.fillStyle = '#ff1744'; c.fill();
+      c.font = `${Math.round((this.gross ? 20 : 14) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillStyle = '#fff'; c.fillText('🎯', x, y + 4 * dpr);
+      if (this.gross) {
+        c.font = `bold ${Math.round(11 * dpr)}px sans-serif`; c.textBaseline = 'top'; c.lineWidth = 3 * dpr; c.strokeStyle = '#000';
+        c.strokeText(this.horde.name, x, y + 6 * dpr); c.fillStyle = '#ff80ab'; c.fillText(this.horde.name, x, y + 6 * dpr);
+      }
+    }
     for (const sr of this.welt.safeRooms) {
       // Safe Room deutlich: grüner Kreis mit weißem Rand und Schild, darunter „SAFE“ (nur große Karte)
       const [x, y] = pos(sr.haus.x + sr.haus.b / 2, sr.haus.y + sr.haus.h / 2), R = (this.gross ? 12 : 9) * dpr;

@@ -94,7 +94,7 @@ export async function starte({
       bissSpielerLevel: Object.fromEntries(Object.entries(w.bissSpielerLevel ?? {}).map(([k, v]) => [k, v / 100])),   // je Karte/Level
       waffen: w.waffen,                            // je Waffe { schaden, pause }
       zombieTypen: ZOMBIE_TYPEN.filter(k => w.zombies.typen[k]).map(k => ZOMBIE_TYPEN.indexOf(k)),
-      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, welleMinuten: w.zombies.welle, welleMin: w.zombies.welleMin, welleMax: w.zombies.welleMax, hordeZielMin: w.zombies.hordeZielMin, hordeZielMax: w.zombies.hordeZielMax, hordeTruppMin: w.zombies.hordeTruppMin, hordeTruppMax: w.zombies.hordeTruppMax, hordeReichweite: w.zombies.hordeReichweite, sichtkegel: w.sichtkegel,
+      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, welleMinuten: w.zombies.welle, welleMin: w.zombies.welleMin, welleMax: w.zombies.welleMax, hordeZielMin: w.zombies.hordeZielMin, hordeZielMax: w.zombies.hordeZielMax, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTruppMin: w.zombies.hordeTruppMin, hordeTruppMax: w.zombies.hordeTruppMax, hordeReichweite: w.zombies.hordeReichweite, sichtkegel: w.sichtkegel,
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,

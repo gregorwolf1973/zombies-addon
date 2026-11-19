@@ -302,6 +302,8 @@ export class SpielRaum extends Room {
       const om = this.onMessage.bind(this);
       this.onMessage = (typ, cb) => om(typ, aktiv.has(typ) ? (c, m) => { this.ruehrt(c.sessionId); return cb(c, m); } : cb);
     }
+    this.hordeDebug = new Set();   // Clients mit ?debug: bekommen 'hordeInfo' auch ohne Einstellung
+    this.onMessage('hordeDebug', (client, m) => { if (m?.an) this.hordeDebug.add(client.sessionId); else this.hordeDebug.delete(client.sessionId); });
     this.onMessage('aktion', client => this.starteAktion(client));
     this.onMessage('aktion2', client => this.starteAktion(client, true));
     this.onMessage('wurf', client => this.granaten.werfen(client));

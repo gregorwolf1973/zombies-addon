@@ -826,6 +826,14 @@ class Ort extends Phaser.Scene {
       document.body.appendChild(el);
       this.messZeit = setInterval(() => { const m = this.messZombies ?? [0, 0]; el.textContent = `FPS ${Math.round(this.game.loop.actualFps)} | Zombies ${m[0]}/${m[1]}`; }, 500);
     }
+    // Prüfhilfe Horde: Server schickt 'hordeInfo' nur, wenn die Einstellung hordeZieleZeigen an ist oder wir uns mit ?debug melden
+    this.hordeGfx = this.add.graphics().setDepth(900);
+    this.hordeFahne = this.add.text(0, 0, '', { fontSize: '15px', fontStyle: 'bold', color: '#ffd1e0', stroke: '#000', strokeThickness: 4, align: 'center' }).setOrigin(0.5, 1).setDepth(901).setVisible(false);
+    this.hordeListe = document.createElement('div');
+    this.hordeListe.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:60;font:11px monospace;color:#ffd1e0;background:#0008;padding:2px 6px;border-radius:4px;pointer-events:none;display:none;white-space:pre';
+    document.body.appendChild(this.hordeListe);
+    raum.onMessage('hordeInfo', m => this.hordeInfoEmpfangen(m));
+    if (new URLSearchParams(location.search).has('debug')) raum.send('hordeDebug', { an: true });
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
     if (new URLSearchParams(location.search).has('debug')) { window.szene = this; window.raum = raum; window.meineId = meineId; }
   }
@@ -954,6 +962,30 @@ class Ort extends Phaser.Scene {
       o.glut.setScale(2.2 + 1.6 * p).setAlpha(0.45 + 0.4 * p);
       o.text.setScale(1 + 0.06 * p);
     }
+  }
+
+  hordeInfoEmpfangen(m) {
+    this.hordeInfo = m?.aktiv ? { ...m, ab: performance.now() } : null;
+    if (this.uebersicht) this.uebersicht.horde = this.hordeInfo ? { mitte: { x: m.mitte.x / KACHEL, y: m.mitte.y / KACHEL }, ziel: { x: m.ziel.x / KACHEL, y: m.ziel.y / KACHEL }, name: `🎯 ${m.name}` } : null;
+    if (!this.hordeInfo) { this.hordeGfx.clear(); this.hordeFahne.setVisible(false); this.hordeListe.style.display = 'none'; return; }
+    const GRUND = { zeit: 'Zeit', angekommen: 'angekommen', festgefahren: 'festgefahren', laerm: 'Lärm', start: 'Start' };
+    this.hordeListe.textContent = `Horde (${m.n}) – letzte Ziele\n` + [...m.wechsel].reverse().map(w => `${uhrText(w.zeit)} ${w.name} (${GRUND[w.grund] ?? w.grund})`).join('\n');
+    this.hordeListe.style.display = 'block';
+  }
+
+  // Zielfahne, gestrichelte Linie und Countdown (jedes Bild, nur wenn Infos da sind)
+  hordeZeichnen() {
+    const h = this.hordeInfo, g = this.hordeGfx;
+    g.clear();
+    if (!h || this.aktEbene) { this.hordeFahne.setVisible(false); return; }
+    const rest = Math.max(0, h.rest - (performance.now() - h.ab) / 1000), min = Math.floor(rest / 60), sek = String(Math.floor(rest % 60)).padStart(2, '0');
+    const dx = h.ziel.x - h.mitte.x, dy = h.ziel.y - h.mitte.y, d = Math.hypot(dx, dy) || 1;
+    g.lineStyle(3, 0xff4081, 0.85);
+    for (let t = 0; t < d; t += 28) g.lineBetween(h.mitte.x + dx / d * t, h.mitte.y + dy / d * t, h.mitte.x + dx / d * Math.min(d, t + 14), h.mitte.y + dy / d * Math.min(d, t + 14));
+    g.fillStyle(0xff1744, 0.9).fillCircle(h.mitte.x, h.mitte.y, 8);
+    g.lineStyle(3, 0xffffff, 1).lineBetween(h.ziel.x, h.ziel.y, h.ziel.x, h.ziel.y - 34);
+    g.fillStyle(0xff1744, 1).fillTriangle(h.ziel.x, h.ziel.y - 34, h.ziel.x + 22, h.ziel.y - 27, h.ziel.x, h.ziel.y - 20);
+    this.hordeFahne.setText(`🎯 ${h.name}\nZielwechsel in ${min}:${sek}`).setPosition(h.ziel.x, h.ziel.y - 38).setVisible(true);
   }
 
   // ---------- Übersichtskarte (client/uebersicht.mjs) ----------
@@ -2358,6 +2390,7 @@ class Ort extends Phaser.Scene {
   update(_t, ms) {
     if (!this.bereit) return;
     const dt = Math.min(0.1, ms / 1000);
+    if (this.hordeInfo) this.hordeZeichnen();
     // Tag/Nacht-Zeiten vom Server (Einstellung) übernehmen
     if (raum.state.tagAb && (raum.state.tagAb !== this.tagAb || raum.state.nachtAb !== this.nachtAb)) {
       this.tagAb = raum.state.tagAb; this.nachtAb = raum.state.nachtAb; setzeTageszeiten(this.tagAb, this.nachtAb);

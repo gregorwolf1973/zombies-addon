@@ -318,11 +318,13 @@ test('Horde: Trupp kehrt zurück oder streunt, wenn das Ziel 20–30 s außer Si
     const a = raum.welle.aktiv, gesamt = a.ids.size;
     assert.ok(spielerNebenHorde(raum, p));
     raum.welle.schritt(0.6);
-    assert.equal(a.trupps.length, 1);
-    const t = a.trupps[0], ids = [...t.ids];
+    // nur den Trupp gegen den Testspieler zählen (in der Zufallswelt können Menschen/Bots weitere Trupps auslösen)
+    const meine = () => a.trupps.filter(t => t.sid === c.sessionId);
+    assert.equal(meine().length, 1);
+    const t = meine()[0], ids = [...t.ids];
     p.x = 2 * KACHEL; p.y = 2 * KACHEL; p.ebene = 'h0eg';   // Spieler im Haus: nicht mehr angreifbar
     raum.welle.schritt(0.6);
-    assert.equal(a.trupps.length, 0);
+    assert.equal(meine().length, 0);
     const zurueck = ids.filter(id => a.ids.has(id)).length;
     const streunt = ids.filter(id => raum.zombieInfo.get(id) && !raum.zombieInfo.get(id).welle).length;
     assert.equal(zurueck + streunt, ids.length);
@@ -358,4 +360,66 @@ test('Horde: kein Gleichschritt – Tempi, Richtungen und Wege streuen', async (
     assert.ok(rs.some(r => r > 0.01), 'Blickrichtungen laufen im Gleichschritt');
     raum.welle.aufloesen();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+// ---- Horde: klare Ziele (Lärm-Schwelle, Festfahren, hordeInfo) ----
+
+test('Horde: Dauerlärm (20 Schüsse in 60 s) lenkt höchstens einmal um', async () => {
+  const { c, raum, p } = await beitreten('Dauerlaerm');
+  try {
+    einst({ welleMinuten: 20, welleMin: 30, welleMax: 30, hordeZielMin: 0.5, hordeZielMax: 0.5 });
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;
+    raum.welle.erzeugen('west');
+    const w = raum.welle, a = w.aktiv;
+    a.seitZiel = 999; a.zielUhr = 9999;
+    const lx = a.mitte.x + 650, ly = a.mitte.y;   // mehr als LAERM_NAH entfernt
+    let wechsel = 0; const alt = w.setzeZiel.bind(w);
+    w.setzeZiel = (...x) => { wechsel++; return alt(...x); };
+    for (let i = 0; i < 20; i++) { raum.laerm(lx, ly, 520, true, ''); a.laermPause -= 3; a.seitZiel = 999; }   // MG-Dauerfeuer: nie laut genug
+    assert.equal(wechsel, 0, 'MG-Dauerfeuer lenkt um');
+    for (let i = 0; i < 20; i++) { raum.laerm(lx, ly, 600, true, ''); a.laermPause -= 3; a.seitZiel = 999; a.alter += 3; }   // laut (Explosion): 60 s
+    assert.ok(wechsel <= 1, 'mehr als eine Umlenkung in 60 s: ' + wechsel);
+    w.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Horde: festgefahren wechselt nicht vor 30 s (erst Umweg), hordeInfo mit Ziel/Grund, Liste höchstens 5', async () => {
+  const { c, raum, p } = await beitreten('Klemm');
+  try {
+    einst({ welleMinuten: 20, welleMin: 30, welleMax: 30, hordeZielMin: 5, hordeZielMax: 5 });
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;
+    raum.welle.erzeugen('west');
+    const w = raum.welle, a = w.aktiv;
+    let wechsel = 0; const alt = w.neuesZiel.bind(w); const gruende = [];
+    w.neuesZiel = g => { wechsel++; gruende.push(g); return alt(g); };
+    a.ziel = { x: a.mitte.x + 5000, y: a.mitte.y }; a.zielUhr = 9999;   // weit weg, nicht angekommen
+    w.verfolgen(0.01); a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y };
+    for (let t = 0; t < 29; t++) w.verfolgen(1);   // Zombies bewegen sich nicht: kein Fortschritt
+    assert.equal(wechsel, 0, 'Wechsel vor 30 s');
+    assert.ok(a.klemmStufe >= 1, 'kein Umweg versucht ' + JSON.stringify([a.pruef.t, a.ids.size, wechsel, a.klemmStufe]));
+    for (let t = 0; t < 3; t++) w.verfolgen(1);
+    assert.equal(gruende[0], 'festgefahren');
+    // hordeInfo: Ziel, Name, Grund
+    const info = []; raum.clients[0].send = (typ, m) => { if (typ === 'hordeInfo') info.push(m); };
+    SpielRaum.einstellungen = { ...SpielRaum.einstellungen, hordeZieleZeigen: true };
+    w.infoSenden(0, true);
+    const m = info.at(-1);
+    assert.ok(m?.aktiv && m.ziel && m.mitte && typeof m.name === 'string' && m.name && typeof m.rest === 'number', 'hordeInfo unvollständig');
+    assert.ok(m.wechsel.length >= 1 && m.wechsel.every(x => x.grund && x.name && x.art));
+    for (let i = 0; i < 10; i++) { a.zielName = 'X' + i; w.wechselMerken('laden', 'zeit'); }
+    assert.equal(a.wechsel.length, 5);
+    w.infoSenden(0, true);
+    assert.ok(info.at(-1).wechsel.length <= 5);
+    // ohne Schalter und ohne ?debug nichts senden
+    SpielRaum.einstellungen = { ...SpielRaum.einstellungen, hordeZieleZeigen: false };
+    const n = info.length; w.infoSenden(0, true);
+    assert.equal(info.length, n, 'sendet trotz ausgeschaltetem Schalter');
+    w.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Einstellungen: hordeZieleZeigen Vorgabe aus, bool bleibt', () => {
+  assert.equal(vorgaben().zombies.hordeZieleZeigen, false);
+  assert.equal(bereinige({ zombies: { hordeZieleZeigen: true } }).zombies.hordeZieleZeigen, true);
+  assert.equal(bereinige({ zombies: { hordeZieleZeigen: 'ja' } }).zombies.hordeZieleZeigen, false);
 });

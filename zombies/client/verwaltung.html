@@ -576,6 +576,15 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     </div>
 
     <div class="feld">
+      <label class="schalter" for="hordeZieleZeigen">
+        <input type="checkbox" id="hordeZieleZeigen">
+        <span class="anzeige" aria-hidden="true"></span>
+        <span>Ziel der Horde im Spiel anzeigen (Prüfhilfe)</span>
+      </label>
+      <p class="hinweis">Zeigt allen eine Zielfahne mit Name, eine Linie von der Horde zum Ziel, den Countdown bis zum Zielwechsel und die letzten Wechsel mit Grund. Mit <code>?debug</code> in der Adresse sieht es nur dieses Gerät.</p>
+    </div>
+
+    <div class="feld">
       <label for="hordeTruppMin">Angriffstrupp: mindestens</label>
       <div class="wertzeile">
         <input type="range" id="hordeTruppMin" min="1" max="100" step="1">
@@ -2449,6 +2458,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
 
     var frisch = $("frischerStart");
     if (!istFokussiert(frisch)) frisch.checked = !!e.frischerStart;
+    var hz = $("hordeZieleZeigen");
+    if (!istFokussiert(hz)) hz.checked = !!wz.hordeZieleZeigen;
 
     var code = $("zugangscode");
     if (!zeitGeber["zugangscode"] && !istFokussiert(code)) {
@@ -2638,6 +2649,11 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       clearTimeout(zeitGeber["bots"]);
       zeitGeber["bots"] = null;
       setzeBots();
+    });
+
+    var hzs = $("hordeZieleZeigen");
+    hzs.addEventListener("change", function () {
+      sendenTeil("zombies", "hordeZieleZeigen", !!hzs.checked);
     });
 
     var frisch = $("frischerStart");

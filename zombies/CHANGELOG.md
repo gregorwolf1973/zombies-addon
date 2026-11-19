@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.47.1 – 19.11.2026
+
+- Horde-Ziele sichtbar (Verwaltung „Horde-Ziele anzeigen“ oder ?debug): Zielfahne mit Namen, Linie von der Hordenmitte, Countdown bis zum Zielwechsel, letzte 5 Zielwechsel mit Grund; jeder Zielwechsel steht im Add-on-Protokoll.
+- Klarere Ziele: Lärm lenkt nur bei lautem Lärm (Granate, Puma) oder aus der Nähe um, höchstens alle 2–3 Minuten; festgefahren erst Umweg (15 s), neues Ziel nach 30 s.
+
 ## 0.47.0 – 19.11.2026
 
 - Zombiehorde mit Zielen: Safe Rooms, Läden, Stützpunkt, Lärm, Menschengruppen, Nähe von Spielern, Kreuzungen; neues Ziel alle 2–5 Minuten oder bei Ankunft, Lärm lenkt um.

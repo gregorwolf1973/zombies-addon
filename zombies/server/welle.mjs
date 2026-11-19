@@ -20,8 +20,14 @@ const TEMPO = 0.5;                    // Anteil von W.zombieTempoJagen (ca. 52 p
 const MAX_DAUER = 600;                // spätestens dann löst sich die Welle auf (Sekunden); bis dahin zieht sie von Ziel zu Ziel
 const RAND = 7;                       // Wegziele mindestens so viele Kacheln vom Kartenrand (Ortsausfahrt meiden)
 const ABSPALT = 0.06;                 // Anteil der Gruppe, der sich bei jedem neuen Ziel abspaltet und als normaler Zombie streunt
-const KLEMM_PRUEFUNG = 25;            // alle so viele Sekunden: kommt die Gruppenmitte kaum voran, gibt es ein neues Ziel
-const KLEMM_WEG = 90;                 // ... weniger als so viele px Fortschritt
+const KLEMM_PRUEFUNG = 15;            // alle so viele Sekunden: kommt die Gruppenmitte kaum voran? Erst Umweg, beim zweiten Mal (30 s) neues Ziel
+const KLEMM_WEG = 55;                 // ... weniger als so viele px Fortschritt je Prüfung
+const UMWEG_DAUER = 12;               // Sekunden, die die Horde einen Umweg-Punkt ansteuert, bevor sie wieder zum Ziel läuft
+export const LAERM_LAUT = 600;        // ab dieser Hörweite (Granate/Explosion, Puma) lenkt Lärm die Horde um; leiser nur, wenn die Mitte nah ist
+export const LAERM_NAH = 500;         // ... oder die Hordenmitte ist so nah (px) am Lärm
+const LAERM_PAUSE_MIN = 120, LAERM_PAUSE_MAX = 180;   // Sekunden zwischen zwei Lärm-Umlenkungen (2–3 Minuten)
+const INFO_TAKT = 1;                  // Sekunden zwischen 'hordeInfo'-Nachrichten
+const WECHSEL_MAX = 5;                // so viele letzte Zielwechsel werden gemeldet
 const TRUPP_TAKT = 0.5;               // Sekunden zwischen Trupp-Prüfungen
 const TRUPP_SPERRE = 25;              // Sekunden, bis dasselbe Ziel wieder einen Trupp bekommt
 const SEP = 34;                       // Schwarm: Abstand, ab dem Nachbarn sich abstoßen (px)
@@ -51,6 +57,7 @@ export class Zombiewelle {
     } else this.uhr = null;
     if (this.ansage && (this.ansage.t -= dt) <= 0) { const seite = this.ansage.seite; this.ansage = null; this.erzeugen(seite); }
     if (this.aktiv) this.verfolgen(dt);
+    else if (this.infoOffen) this.infoSenden(0, true);
   }
 
   // Meldung 10 s vorher; seite 'west' = sie kommen von links, 'ost' = von rechts
@@ -141,6 +148,8 @@ export class Zombiewelle {
       ids.add(id);
     }
     this.aktiv = { ids, ziel, mitte: { x: cx, y: cy0 }, alter: 0, seite, feld: this.baueFeld(ziel), pruef: { t: 0, x: cx, y: cy0 }, ziele: 1, ...this.neuerZustand() };
+    this.aktiv.zielName = this.zielName('start', ziel);
+    this.wechselMerken('start', 'start');
     return [...ids];
   }
 
@@ -184,7 +193,7 @@ export class Zombiewelle {
 
   // Zeitgeber, Trupps und Lärmsperre einer neuen Horde
   neuerZustand() {
-    return { zielUhr: this.zielDauer(), trupps: [], cool: new Map(), truppT: 0, laermPause: 0, seitZiel: 0, radius: 100, zielArt: 'start' };
+    return { zielUhr: this.zielDauer(), trupps: [], cool: new Map(), truppT: 0, laermPause: 0, seitZiel: 0, radius: 100, zielArt: 'start', klemmStufe: 0, umwegBis: 0, feldHaupt: null, wechsel: [], infoT: 0 };
   }
 
   // Sekunden (echte Zeit) bis zum nächsten Zielwechsel: zufällig zwischen hordeZielMin und hordeZielMax Minuten
@@ -220,11 +229,78 @@ export class Zombiewelle {
     if (a.pruef.t >= KLEMM_PRUEFUNG) {
       klemmt = Math.hypot(a.mitte.x - a.pruef.x, a.mitte.y - a.pruef.y) < KLEMM_WEG;
       a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y };
+      if (!klemmt) a.klemmStufe = 0;
+      else if (a.klemmStufe === 0) { a.klemmStufe = 1; klemmt = false; this.umweg(); }   // erstes Mal (15 s): ausweichen
+      // zweites Mal in Folge (30 s ohne Fortschritt): klemmt bleibt true → neues Ziel
     }
+    if (a.umwegBis && a.alter >= a.umwegBis) { a.umwegBis = 0; if (a.feldHaupt) { a.feld = a.feldHaupt; a.feldHaupt = null; } }
     a.zielUhr -= dt;
     // Ziel wechseln: Zeit abgelaufen, am Ziel (Mitte nah oder die Hälfte angekommen) oder festgefahren
     const angekommen = Math.hypot(a.mitte.x - a.ziel.x, a.mitte.y - a.ziel.y) < 160 + Math.sqrt(n) * 6 || amZiel >= n / 2;
-    if (klemmt || angekommen || a.zielUhr <= 0) this.neuesZiel();
+    if (klemmt || angekommen || a.zielUhr <= 0) this.neuesZiel(klemmt ? 'festgefahren' : angekommen ? 'angekommen' : 'zeit');
+    this.infoSenden(dt);
+  }
+
+  // Umweg: kurz einen Punkt seitlich der Gruppenmitte ansteuern (Wegefeld dorthin), danach wieder zum eigentlichen Ziel
+  umweg() {
+    const a = this.aktiv;
+    for (let v = 0; v < 6; v++) {
+      const p = this.punktNahe(a.mitte.x, a.mitte.y, 250, 500);
+      if (!p) continue;
+      const feld = this.baueFeld(p);
+      if (!feld) continue;
+      a.feldHaupt ??= a.feld; a.feld = feld; a.umwegBis = a.alter + UMWEG_DAUER;
+      return true;
+    }
+    return false;
+  }
+
+  // ---- Prüfwerkzeug: lesbarer Zielname, Zielwechsel-Liste, Log, 'hordeInfo' an Clients ----
+
+  zielName(art, ziel) {
+    const welt = this.raum.welt, K = KACHEL;
+    const haus = () => {
+      let best = null, bd = 40;
+      for (const h of welt.haeuser ?? []) { const d = Math.hypot((h.tuer.x + 0.5) * K - ziel.x, (h.tuer.y + 1.5) * K - ziel.y); if (d < bd) { bd = d; best = h; } }
+      return best;
+    };
+    switch (art) {
+      case 'safe': { const q = (welt.safeRooms ?? []).find(q => Math.hypot(q.vorTuer.x - ziel.x, q.vorTuer.y - ziel.y) < 40); return q?.name ? `Safe Room ${q.name}` : 'Safe Room'; }
+      case 'laden': { const h = haus(); return h?.name ? `Laden ${h.name}` : `Laden${h?.art ? ' (' + h.art + ')' : ''}`; }
+      case 'haus': { const h = haus(); return h?.name ? `Haus ${h.name}` : 'Haus'; }
+      case 'stuetzpunkt': return 'Stützpunkt';
+      case 'laerm': return 'Lärm';
+      case 'kreuzung': return 'Kreuzung';
+      case 'spieler': return 'Spieler-Nähe';
+      case 'menschen': return 'Menschen';
+      case 'zufall': return 'Zufallspunkt';
+      case 'start': return 'Gegenseite';
+    }
+    return art;
+  }
+
+  wechselMerken(art, grund) {
+    const a = this.aktiv, name = a.zielName;
+    a.wechsel.push({ zeit: Math.round(this.raum.state?.uhr ?? 0), art, name, grund });
+    if (a.wechsel.length > WECHSEL_MAX) a.wechsel.splice(0, a.wechsel.length - WECHSEL_MAX);
+    const GRUND = { zeit: 'Zeit', angekommen: 'angekommen', festgefahren: 'festgefahren', laerm: 'Lärm', start: 'Start' };
+    console.log(`Horde (${a.ids.size}): neues Ziel ${name} – Grund: ${GRUND[grund] ?? grund}`);
+  }
+
+  // Zustand der Horde an Clients, die ihn sehen wollen (Einstellung hordeZieleZeigen oder Client mit ?debug); sonst nichts senden
+  infoSenden(dt = INFO_TAKT, erzwingen = false) {
+    const a = this.aktiv, r = this.raum;
+    if (a) { a.infoT -= dt; if (a.infoT > 0 && !erzwingen) return; a.infoT = INFO_TAKT; }
+    const alle = !!this.einst().hordeZieleZeigen;
+    const debug = r.hordeDebug;
+    if (!alle && !debug?.size) { this.infoOffen = false; return; }
+    const m = a ? {
+      aktiv: true, n: a.ids.size, mitte: { x: Math.round(a.mitte.x), y: Math.round(a.mitte.y) }, ziel: { x: Math.round(a.ziel.x), y: Math.round(a.ziel.y) },
+      art: a.zielArt, name: a.zielName, rest: Math.max(0, Math.round(a.zielUhr)), wechsel: a.wechsel.slice(-WECHSEL_MAX),
+    } : { aktiv: false };
+    if (!a && !this.infoOffen) return;
+    this.infoOffen = !!a;
+    for (const c of r.clients ?? []) if (alle || debug.has(c.sessionId)) { try { c.send('hordeInfo', m); } catch { /* Client weg */ } }
   }
 
   // ---- Zielwahl ----
@@ -316,12 +392,12 @@ export class Zombiewelle {
   }
 
   // Neues Wegziel; dabei spalten sich einzelne Zombies ab und streunen als normale Zombies weiter
-  neuesZiel() {
+  neuesZiel(grund = 'zeit') {
     const a = this.aktiv, r = this.raum;
     if (!a) return;
     const w = this.waehleZiel();
     if (!w) return;   // Ziel unerreichbar: das alte behalten, beim nächsten Takt neuer Versuch
-    this.setzeZiel(w.ziel, w.feld, w.art);
+    this.setzeZiel(w.ziel, w.feld, w.art, grund);
     for (const id of [...a.ids]) {
       if (a.ids.size <= 3 || r.rnd() >= ABSPALT) continue;
       const info = r.zombieInfo.get(id);
@@ -330,24 +406,31 @@ export class Zombiewelle {
     }
   }
 
-  setzeZiel(ziel, feld, art) {
+  setzeZiel(ziel, feld, art, grund = 'zeit') {
     const a = this.aktiv;
     a.ziel = ziel; a.feld = feld; a.ziele++; a.zielArt = art; a.seitZiel = 0; a.zielUhr = this.zielDauer();
-    a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y };
+    a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y }; a.klemmStufe = 0; a.umwegBis = 0; a.feldHaupt = null;
+    a.zielName = this.zielName(art, ziel);
+    this.wechselMerken(art, grund);
+    this.infoSenden(0, true);
   }
 
-  // Lärm (aus SpielRaum.laerm): ist die Horde in der Nähe und nicht gerade erst umgelenkt, zieht sie kurz dorthin
+  // Lärm (aus SpielRaum.laerm): lenkt die Horde höchstens alle 2–3 Minuten um, nur bei lautem Lärm (weite >= LAERM_LAUT)
+  // oder wenn die Hordenmitte ohnehin nah dran ist (LAERM_NAH); das Ziel bleibt wie jedes andere hordeZielMin–Max Minuten.
   laermHoeren(x, y, weite) {
     this.laermOrt = { x, y, t: this.aktiv?.alter ?? 0 };
     const a = this.aktiv;
-    if (!a || a.laermPause > 0 || a.seitZiel < 12 || weite < 200) return;
-    if (Math.hypot(a.mitte.x - x, a.mitte.y - y) > Math.max(700, a.radius + weite)) return;
+    if (!a || a.laermPause > 0 || weite < 200) return;
+    if (a.seitZiel < Math.max(0.2, this.einst().hordeZielMin ?? 2) * 60) return;   // Ziel bleibt mindestens hordeZielMin Minuten
+    const dist = Math.hypot(a.mitte.x - x, a.mitte.y - y);
+    if (!(weite >= LAERM_LAUT ? dist <= Math.max(700, a.radius + weite) : dist < LAERM_NAH)) return;
     const kl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const ziel = { x: kl(x, RAND * KACHEL, (BREITE - RAND) * KACHEL), y: kl(y, RAND * KACHEL, (HOEHE - RAND) * KACHEL) };
     if (Math.hypot(ziel.x - a.mitte.x, ziel.y - a.mitte.y) < 200) return;
     const feld = this.baueFeld(ziel);
-    a.laermPause = 30;
-    if (feld) { this.setzeZiel(ziel, feld, 'laerm'); a.zielUhr = Math.min(a.zielUhr, 40 + this.raum.rnd() * 30); }
+    if (!feld) return;
+    a.laermPause = LAERM_PAUSE_MIN + this.raum.rnd() * (LAERM_PAUSE_MAX - LAERM_PAUSE_MIN);
+    this.setzeZiel(ziel, feld, 'laerm', 'laerm');
   }
 
   // ---- Angriffstrupps ----
