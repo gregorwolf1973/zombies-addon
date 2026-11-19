@@ -11,7 +11,11 @@ const ANSAGE = 10;                    // Sekunden zwischen Meldung und Auftauche
 const ABSTAND = 800;                  // so weit außerhalb des Bildes tauchen sie auf (700–900 px)
 const ZIEL_ABSTAND = 900;             // Gruppenziel: so weit auf der Gegenseite des Spielers
 const TEMPO = 0.5;                    // Anteil von W.zombieTempoJagen (ca. 52 px/s)
-const MAX_DAUER = 240;                // spätestens dann löst sich die Welle auf (Sekunden)
+const MAX_DAUER = 600;                // spätestens dann löst sich die Welle auf (Sekunden); bis dahin zieht sie von Ziel zu Ziel
+const RAND = 7;                       // Wegziele mindestens so viele Kacheln vom Kartenrand (Ortsausfahrt meiden)
+const ABSPALT = 0.06;                 // Anteil der Gruppe, der sich bei jedem neuen Ziel abspaltet und als normaler Zombie streunt
+const KLEMM_PRUEFUNG = 25;            // alle so viele Sekunden: kommt die Gruppenmitte kaum voran, gibt es ein neues Ziel
+const KLEMM_WEG = 90;                 // ... weniger als so viele px Fortschritt
 const GESPERRT = new Set([...BLOCKIERT].filter(t => t !== T.INNENTUER));
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 
@@ -78,9 +82,10 @@ export class Zombiewelle {
     const ref = this.bezug();
     const kl = (v, a, b) => Math.max(a, Math.min(b, v));
     const grenzeX = [2 * KACHEL, (BREITE - 2) * KACHEL], grenzeY = [2 * KACHEL, (HOEHE - 2) * KACHEL];
+    const zielX = [RAND * KACHEL, (BREITE - RAND) * KACHEL], zielY = [RAND * KACHEL, (HOEHE - RAND) * KACHEL];   // Ziele bleiben im Ort
     const cx = kl(ref.draussen ? ref.x - richtung * (700 + r.rnd() * 200) : (seite === 'west' ? 2.5 : BREITE - 2.5) * KACHEL, ...grenzeX);
     const cy0 = kl(ref.y + (r.rnd() - 0.5) * 160, ...grenzeY);
-    const ziel = { x: kl(ref.x + richtung * ZIEL_ABSTAND, ...grenzeX), y: kl(ref.y, ...grenzeY) };
+    const ziel = { x: kl(ref.x + richtung * ZIEL_ABSTAND, ...zielX), y: kl(ref.y, ...zielY) };
     // Streuradius so, dass n Zombies dicht stehen (ca. 26 px Platz je Zombie)
     const radius = 22 + Math.sqrt(n) * 14;
     const plaetze = cy => {
@@ -115,7 +120,7 @@ export class Zombiewelle {
       r.state.zombies.get(id).richtung = w0;
       ids.add(id);
     }
-    this.aktiv = { ids, ziel, mitte: { x: cx, y: cy0 }, alter: 0, seite, feld: this.baueFeld(ziel) };
+    this.aktiv = { ids, ziel, mitte: { x: cx, y: cy0 }, alter: 0, seite, feld: this.baueFeld(ziel), pruef: { t: 0, x: cx, y: cy0 }, ziele: 1 };
     return [...ids];
   }
 
@@ -170,8 +175,45 @@ export class Zombiewelle {
     }
     if (!n) { this.aktiv = null; return; }
     a.mitte = { x: sx / n, y: sy / n };
-    // am Ziel: die Mitte ist nah oder mindestens die Hälfte der Gruppe ist angekommen
-    if (Math.hypot(a.mitte.x - a.ziel.x, a.mitte.y - a.ziel.y) < 160 || amZiel >= n / 2 || a.alter > MAX_DAUER) this.aufloesen();
+    if (a.alter > MAX_DAUER) return this.aufloesen();
+    // Kommt die Mitte kaum voran (klemmt an Häusern/Wasser), gibt es ein neues Ziel
+    a.pruef.t += dt;
+    let klemmt = false;
+    if (a.pruef.t >= KLEMM_PRUEFUNG) {
+      klemmt = Math.hypot(a.mitte.x - a.pruef.x, a.mitte.y - a.pruef.y) < KLEMM_WEG;
+      a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y };
+    }
+    // am Ziel (Mitte nah oder die Hälfte angekommen): nicht stehen bleiben, sondern weiterziehen
+    if (klemmt || Math.hypot(a.mitte.x - a.ziel.x, a.mitte.y - a.ziel.y) < 160 || amZiel >= n / 2) this.neuesZiel();
+  }
+
+  // Neues Wegziel im bebauten Gebiet (Haustür eines Hauses, weg von den Kartenrändern, 500–1600 px entfernt);
+  // dabei spalten sich einzelne Zombies ab und streunen als normale Zombies weiter
+  neuesZiel() {
+    const a = this.aktiv, r = this.raum, welt = r.welt;
+    if (!a) return;
+    const kl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const kandidaten = [];
+    for (const h of welt.haeuser ?? []) {
+      const x = kl((h.tuer.x + 0.5) * KACHEL, RAND * KACHEL, (BREITE - RAND) * KACHEL), y = kl((h.tuer.y + 1.5) * KACHEL, RAND * KACHEL, (HOEHE - RAND) * KACHEL);
+      const d = Math.hypot(x - a.mitte.x, y - a.mitte.y);
+      if (d >= 500 && d <= 1600 && Math.hypot(x - a.ziel.x, y - a.ziel.y) > 300) kandidaten.push({ x, y });
+    }
+    let ziel;
+    if (kandidaten.length) ziel = kandidaten[Math.floor(r.rnd() * kandidaten.length)];
+    else {   // kein Haus in Reichweite: zufälliger Punkt im Innenbereich der Karte
+      ziel = { x: (RAND + r.rnd() * (BREITE - 2 * RAND)) * KACHEL, y: (RAND + r.rnd() * (HOEHE - 2 * RAND)) * KACHEL };
+    }
+    const feld = this.baueFeld(ziel);
+    if (!feld) return;   // Ziel unerreichbar: das alte behalten, beim nächsten Takt neuer Versuch
+    a.ziel = ziel; a.feld = feld; a.ziele++;
+    a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y };
+    for (const id of [...a.ids]) {
+      if (a.ids.size <= 3 || r.rnd() >= ABSPALT) continue;
+      const info = r.zombieInfo.get(id);
+      if (info) { info.welle = false; info.bleibt = false; }
+      a.ids.delete(id);
+    }
   }
 
   // Zombies weit weg von allen Spielern draußen verschwinden (außerhalb des Bildes), die übrigen werden normale Zombies

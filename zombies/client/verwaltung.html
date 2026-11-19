@@ -631,8 +631,10 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="tn-zeile"><input type="range" id="tnMenschen" min="0" max="200" step="5"><span id="tnMenschenWert">50</span></div>
   <label for="tnAnst">Verwandlungszeit Menschen (vom Biss bis zum Zombie)</label>
   <div class="tn-zeile"><input type="range" id="tnAnst" min="1" max="240" step="1"><span id="tnAnstWert">30 min</span></div>
-  <label for="tnBissSp">Ansteckung der Spieler: Chance je Sekunde Biss eines lebenden Zombies</label>
-  <div class="tn-zeile"><input type="range" id="tnBissSp" min="0" max="100" step="1"><span id="tnBissSpWert">12 %</span></div>
+  <label for="tnBissSpGeretsried">Ansteckung der Spieler in Geretsried: Chance je Sekunde Biss eines lebenden Zombies</label>
+  <div class="tn-zeile"><input type="range" id="tnBissSpGeretsried" min="0" max="100" step="1"><span id="tnBissSpGeretsriedWert">12 %</span></div>
+  <label for="tnBissSpIsarauen">Ansteckung der Spieler in den Isarauen: Chance je Sekunde Biss eines lebenden Zombies</label>
+  <div class="tn-zeile"><input type="range" id="tnBissSpIsarauen" min="0" max="100" step="1"><span id="tnBissSpIsarauenWert">12 %</span></div>
   <label for="tnBiss">Biss-Chance bei Stadtbewohnern (je Sekunde Berührung)</label>
   <div class="tn-zeile"><input type="range" id="tnBiss" min="0" max="100" step="5"><span id="tnBissWert">100 %</span></div>
   <label for="tnFeuer">Brände am Anfang: etwa alle</label>
@@ -754,7 +756,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label for="rwMg">🔥 Maschinengewehr (Bundeswehr)</label>
   <div class="tn-zeile"><input type="range" id="rwMg" min="5" max="80" step="1"><span id="rwMgWert">45 m</span></div>
   <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
-  <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.5" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
+  <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.2" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
   <p class="tn-leise" id="bwInfoPuma"></p>
   <p class="tn-leise" id="bwInfoMg"></p>
   <label class="tn-schalter"><input type="checkbox" id="tnBwAktiv"> Stützpunkt aktiv (schießt, handelt, kann fallen)</label>
@@ -827,7 +829,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     feld('tnGGroesse', e.groesseGesamt === undefined ? 100 : e.groesseGesamt, relProzent);
     feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
     if (window.groessenVorschau) window.groessenVorschau();
-    feld('tnBissSp', e.bissSpieler === undefined ? 12 : e.bissSpieler, function (v) { return v ? v + ' %' : 'nie'; });
+    var bsl = e.bissSpielerLevel || {}, bsf = function (v) { return v ? v + ' %' : 'nie'; };
+    feld('tnBissSpGeretsried', bsl.geretsried === undefined ? (e.bissSpieler === undefined ? 12 : e.bissSpieler) : bsl.geretsried, bsf);
+    feld('tnBissSpIsarauen', bsl.isarauen === undefined ? (e.bissSpieler === undefined ? 12 : e.bissSpieler) : bsl.isarauen, bsf);
     var typenE = (e.zombies && e.zombies.typen) || {};
     ZTYPEN.forEach(function (k) { if (document.activeElement !== $('zt_' + k)) $('zt_' + k).checked = typenE[k] !== false; });
     var wfE = e.waffen || {};
@@ -916,7 +920,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   $('grGPlus').addEventListener('click', function () { globalSetzen(10); });
   $('grGNull').addEventListener('click', function () { globalSetzen(0); });
   regler('tnZLeben', function (v) { return String(v); }, function (v) { return { zombieLeben: v }; });
-  regler('tnBissSp', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpieler: v }; });
+  regler('tnBissSpGeretsried', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { geretsried: v } }; });
+  regler('tnBissSpIsarauen', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { isarauen: v } }; });
   regler('tnPumaPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { pumaPause: v } }; });
   ZTYPEN.forEach(function (k) {
     $('zt_' + k).addEventListener('change', function () {
@@ -2745,7 +2750,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     if (hinweis) { hinweis.textContent = 'Uhrzeit setzen geht nur, solange jemand spielt. Sanfter Übergang über eine Spielstunde vor Tag- und Nachtbeginn.'; zeit.appendChild(hinweis); }
     ['tnTag', 'tnTagAb', 'tnNachtAb', 'tnNachtDunkel'].forEach(function (id) { zeile(zeit, id); });
     var ausbruch = neueKarte(P.welt, '🦠 Ausbruch');
-    ['tnMenschen', 'tnAnst', 'tnBissSp', 'tnBiss'].forEach(function (id) { zeile(ausbruch, id); });
+    ['tnMenschen', 'tnAnst', 'tnBissSpGeretsried', 'tnBissSpIsarauen', 'tnBiss'].forEach(function (id) { zeile(ausbruch, id); });
     rein(ausbruch, $('tnBewohner'));
     var bundeswehr = neueKarte(P.welt, '🎖 Bundeswehr');
     var bwAktiv = $('tnBwAktiv'); if (bwAktiv) bundeswehr.appendChild(bwAktiv.closest('label'));

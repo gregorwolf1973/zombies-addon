@@ -22,6 +22,9 @@ const MG_LAERM = 520, PUMA_LAERM = 760;
 const HEILEN_PRO_SEK = 2;
 const SCAN_TAKT = 0.25;
 const TAU = Math.PI * 2;
+// Soldaten: sterben durch Zombies im Nahkampf, laufen bei Angriffen zum Hotspot (mindestens die Hälfte, mindestens 2 bleiben auf Wache)
+const SOLDAT_HP = 100, SOLDAT_BISS = 26, SOLDAT_NAHSCHADEN = 18;   // Leben, Abstand (px) und Schaden je Zombie und Sekunde
+const SOLDAT_TEMPO = 1.7, HOT_MIN = 3, HOT_RUHE = 5, WACHE_MIN = 2;   // Kacheln/s; Zombies im Hotspot; Sekunden Ruhe bis zum Rückweg
 
 const diffWinkel = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
 
@@ -45,13 +48,13 @@ export class Stuetzpunkt {
   start(stand, passt) {
     const s = this.raum.state, sp = this.sp;
     s.stuetzpunkt = ''; s.bwTurm = 0;
-    this.nester = []; this.puma = null; this.schuetzen = [];
+    this.nester = []; this.puma = null; this.schuetzen = []; this.sHot = { hotZelle: null }; this.hotT = 0; this.ruheT = 0; this.sendT = 0; this.nahT = 0;
     if (!sp) return;
     sp.teile.forEach((t, n) => {
       if (t.art === 'mgnest') this.nester.push({ n, x: t.x, y: t.y, blick: t.blick, kuehl: 0, salve: 0, takt: 0, scan: 0, ziel: null });
       else if (t.art === 'puma') this.puma = { n, x: t.turm.x, y: t.turm.y, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null, u: planKoord(sp, t.x, t.y).u, v: planKoord(sp, t.x, t.y).v, weg: [], hot: null, hotZelle: null, scanU: 0, rueckwaerts: false };
       // jeder Soldat an seinem Posten schießt mit (er bleibt dabei stehen)
-      else if (t.art === 'posten' && t.rolle === 'soldat') this.schuetzen.push({ n, x: t.x, y: t.y, kuehl: 0.5 + (n % 5) * 0.2, scan: 0, ziel: null });
+      else if (t.art === 'posten' && t.rolle === 'soldat') this.schuetzen.push({ n, x: t.x, y: t.y, hx: t.x, hy: t.y, blick: t.blick ?? 0, w0: t.blick ?? 0, hp: SOLDAT_HP, tot: false, modus: 'post', weg: [], kuehl: 0.5 + (n % 5) * 0.2, scan: 0, ziel: null });
     });
     if (this.puma) { const pt = sp.teile[this.puma.n]; s.bwTurm = pt.turm.winkel; s.bwX = pt.x; s.bwY = pt.y; s.bwW = pt.winkel; }
     s.stuetzpunkt = passt && stand?.stuetzpunkt === 'gefallen' ? 'gefallen' : 'steht';
@@ -71,15 +74,18 @@ export class Stuetzpunkt {
     const tage = this.einst().falltage;
     if (tage > 0 && this.spieltage() >= tage) return this.faellt();
     this.verteidigen(dt);
+    this.soldatenLeben(dt);
+    // alle Soldaten tot: das Lager ist verloren (gleicher Fall wie nach N Tagen, nur früher)
+    if (s.stuetzpunkt === 'steht' && this.schuetzen.length && this.schuetzen.every(q => q.tot)) return this.faellt('Alle Soldaten sind gefallen');
     this.heilen(dt);
   }
 
   // ---------- Fall ----------
-  faellt() {
+  faellt(grund = '') {
     const r = this.raum;
     r.state.stuetzpunkt = 'gefallen';
     this.zombiesErzeugen();
-    r.broadcast('meldung', { text: '📻 Der Bundeswehr-Stützpunkt ist gefallen! Soldaten, Ärzte und Verwundete sind verloren – in den Zelten und hinter dem Draht lauern jetzt Zombies. Die Kisten sind noch voll.', lang: true });
+    r.broadcast('meldung', { text: `📻 ${grund ? grund + ' – d' : 'D'}er Bundeswehr-Stützpunkt ist gefallen! Soldaten, Ärzte und Verwundete sind verloren – in den Zelten und hinter dem Draht lauern jetzt Zombies. Die Kisten sind noch voll.`, lang: true });
     r.speichereWelt?.();
   }
 
@@ -136,6 +142,7 @@ export class Stuetzpunkt {
   // Soldat am Posten: Einzelschüsse mit dem Gewehr auf Zombies in der Nähe
   soldatSchritt(sch, dt) {
     const r = this.raum;
+    if (sch.tot || sch.weg.length) return;   // Tote und Laufende schießen nicht
     sch.kuehl = Math.max(0, sch.kuehl - dt);
     if (sch.kuehl > 0) return;
     let z = this.gueltig(sch.ziel, sch.x, sch.y, SOLDAT_REICHWEITE);
@@ -154,6 +161,138 @@ export class Stuetzpunkt {
     r.broadcast('bwschuss', { art: 'gewehr', n: sch.n, x1: sch.x, y1: sch.y, x2: sch.x + Math.cos(w) * d, y2: sch.y + Math.sin(w) * d, w, t: treffer ? 1 : 0 });
     if (treffer) this.treffen(sch.ziel, z, SOLDAT_SCHADEN, sch);
     r.laerm(sch.x, sch.y, SOLDAT_LAERM, true, '');
+  }
+
+  // ---------- Soldaten: Nahkampf, Tod, Hotspot-Einsatz ----------
+  // Positionen aller Soldaten an die Clients (Figuren laufen und sterben dort); bewegt sich jemand, alle 0,2 s, sonst jede Sekunde
+  soldatenSenden(dt, bewegt) {
+    this.sendT -= dt;
+    if (this.sendT > 0) return;
+    this.sendT = bewegt ? 0.2 : 1;
+    const rund = a => Math.round(a * 10) / 10;
+    this.raum.broadcast('bwSoldaten', { s: this.schuetzen.map(q => [q.n, rund(q.x), rund(q.y), Math.round(q.blick * 100) / 100, q.tot ? 1 : 0]) });
+  }
+
+  soldatenLeben(dt) {
+    if (!this.schuetzen.length) return;
+    const unverwundbar = !(this.einst().falltage > 0);   // „nie fallen“: auch die Soldaten sind dann unverwundbar (wie der Puma)
+    this.nahT += dt;
+    if (this.nahT >= 0.25) {
+      const d = this.nahT; this.nahT = 0;
+      const lebend = this.schuetzen.filter(q => !q.tot);
+      if (lebend.length && !unverwundbar) {
+        for (const z of this.raum.state.zombies.values()) {
+          if (z.ebene || !(z.hp > 0)) continue;
+          for (const q of lebend) if (!q.tot && Math.hypot(z.x - q.x, z.y - q.y) < SOLDAT_BISS) q.hp -= SOLDAT_NAHSCHADEN * d;
+        }
+        for (const q of lebend) if (q.hp <= 0) this.soldatTot(q);
+      }
+    }
+    this.hotT -= dt;
+    if (this.hotT <= 0) { this.hotT = 1; this.einsatzPlanen(); }
+    let bewegt = false;
+    for (const q of this.schuetzen) if (!q.tot && q.weg.length && this.soldatLaufen(q, dt)) bewegt = true;
+    this.soldatenSenden(dt, bewegt);
+  }
+
+  soldatTot(q) {
+    const r = this.raum;
+    q.tot = true; q.hp = 0; q.weg = []; q.modus = 'tot';
+    r.broadcast('soldatTot', { n: q.n, x: q.x, y: q.y, w: q.blick });
+    r.laerm(q.x, q.y, 300, true, '');
+    this.sendT = 0;
+  }
+
+  // alle 1 s: gibt es einen Angriffs-Hotspot, schickt der Stützpunkt die Hälfte der Soldaten (nie mehr als alle außer 2 Wachen) dorthin;
+  // nach HOT_RUHE s ohne Hotspot kehren alle auf ihre Posten zurück
+  einsatzPlanen() {
+    const lebend = this.schuetzen.filter(q => !q.tot);
+    if (!lebend.length) return;
+    const hot = this.hotspot(this.sHot);
+    if (!hot || hot.n < HOT_MIN) {
+      this.ruheT += 1;
+      if (this.ruheT >= HOT_RUHE) for (const q of lebend) if (q.modus === 'hot') this.heimschicken(q);
+      return;
+    }
+    this.ruheT = 0;
+    const fl = fahrFlaeche(this.sp), { r } = fl;
+    const zu = Math.min(SP_BREITE - 2, Math.max(2, hot.u)), zv = Math.min(SP_TIEFE - 2, Math.max(1.8, hot.v));
+    const [hx, hy] = r.ort(zu, zv);
+    const stay = Math.max(WACHE_MIN, Math.ceil(lebend.length / 2)), gehen = Math.max(0, lebend.length - stay);
+    // schon Ausgerückte bleiben im Einsatz, sonst die dem Hotspot nächsten Posten
+    const reihe = lebend.slice().sort((a, b) => (b.modus === 'hot') - (a.modus === 'hot') || Math.hypot(a.hx - hx, a.hy - hy) - Math.hypot(b.hx - hx, b.hy - hy));
+    reihe.forEach((q, i) => {
+      if (i >= gehen) { if (q.modus === 'hot') this.heimschicken(q); return; }
+      if (q.modus === 'hot' && q.hotU !== undefined && Math.hypot(q.hotU - zu, q.hotV - zv) < 3) return;   // Hotspot kaum gewandert
+      this.hinschicken(q, zu, zv, i);
+    });
+  }
+
+  // Weg (Knotenliste in Pixeln) von der aktuellen Lage zu einem Bauplan-Punkt auf der Fahrfläche (Breitensuche wie beim Puma);
+  // k = wie viele Knoten vom Ziel entfernt (damit sich die Soldaten verteilen)
+  laufWeg(q, u1, v1, k = 0, genau = null) {
+    const fl = fahrFlaeche(this.sp), { frei, nu, nv, r } = fl, S = FAHR_SCHRITT;
+    const { u: u0, v: v0 } = planKoord(this.sp, q.x, q.y);
+    const knoten = (u, v) => [Math.min(nu - 1, Math.max(0, Math.round(u / S))), Math.min(nv - 1, Math.max(0, Math.round(v / S)))];
+    const naechster = (u, v) => {
+      let [i, j] = knoten(u, v);
+      if (frei[j * nu + i]) return j * nu + i;
+      let bd = Infinity, best = -1;
+      for (let b = 0; b < nv; b++) for (let a = 0; a < nu; a++) if (frei[b * nu + a]) { const d = Math.hypot(a * S - u, b * S - v); if (d < bd) { bd = d; best = b * nu + a; } }
+      return best;
+    };
+    const start = naechster(u0, v0);
+    if (start < 0) return [];
+    const vor = new Int32Array(nu * nv).fill(-2), ordnung = [start];
+    vor[start] = -1;
+    for (let n = 0; n < ordnung.length; n++) {
+      const c = ordnung[n], i = c % nu, j = (c - i) / nu;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || b < 0 || a >= nu || b >= nv || !frei[b * nu + a] || vor[b * nu + a] !== -2) continue;
+        if (di && dj && !(frei[j * nu + a] && frei[b * nu + i])) continue;
+        vor[b * nu + a] = c; ordnung.push(b * nu + a);
+      }
+    }
+    const nahe = ordnung.slice().sort((a, b) => Math.hypot((a % nu) * S - u1, Math.floor(a / nu) * S - v1) - Math.hypot((b % nu) * S - u1, Math.floor(b / nu) * S - v1));
+    const ziel = nahe[Math.min(nahe.length - 1, k * 2)];
+    const weg = [];
+    for (let c = ziel; c >= 0; c = vor[c]) { const i = c % nu; weg.push(r.ort(i * S, (c - i) / nu * S)); }
+    weg.reverse();
+    if (genau) weg.push([genau.x, genau.y]);
+    return weg.map(([x, y]) => ({ x, y }));
+  }
+
+  hinschicken(q, u, v, k) {
+    q.modus = 'hot'; q.hotU = u; q.hotV = v;
+    q.weg = this.laufWeg(q, u, v, k);
+    q.ziel = null;
+  }
+
+  heimschicken(q) {
+    q.modus = 'zurueck'; q.hotU = undefined;
+    const { u, v } = planKoord(this.sp, q.hx, q.hy);
+    q.weg = this.laufWeg(q, u, v, 0, { x: q.hx, y: q.hy });
+    q.ziel = null;
+  }
+
+  // ein Schritt auf dem Weg; true, solange er läuft. Am Ziel: im Einsatz zum Hotspot gucken, zu Hause wieder Wache halten
+  soldatLaufen(q, dt) {
+    let rest = SOLDAT_TEMPO * KACHEL * dt;
+    while (rest > 0 && q.weg.length) {
+      const z = q.weg[0], d = Math.hypot(z.x - q.x, z.y - q.y);
+      if (d < 0.5) { q.weg.shift(); continue; }
+      q.blick = Math.atan2(z.y - q.y, z.x - q.x);
+      const st = Math.min(rest, d);
+      q.x += (z.x - q.x) / d * st; q.y += (z.y - q.y) / d * st; rest -= st;
+      if (st >= d) q.weg.shift();
+    }
+    if (!q.weg.length) {
+      if (q.modus === 'zurueck') { q.modus = 'post'; q.blick = q.w0; q.x = q.hx; q.y = q.hy; }
+      else if (q.modus === 'hot' && q.hotU !== undefined) { const [hx, hy] = fahrFlaeche(this.sp).r.ort(q.hotU, q.hotV); q.blick = Math.atan2(hy - q.y, hx - q.x) + 0; }
+      return false;
+    }
+    return true;
   }
 
   nestSchritt(nest, dt) {

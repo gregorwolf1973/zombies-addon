@@ -192,13 +192,28 @@ export class Verkehr {
     this.raum.broadcast('sirene', { id });
   }
 
-  // Evakuierungsbus (Aufgaben): steht ab sofort an dieser Stelle und wartet, bis er losfährt
-  evakuierungBus(x, y, richtung = 0) {
-    const id = this.neu('evakuierung', { x, y }, { halt: 1e12, evakuierung: true });
+  // Evakuierungsbus (Aufgaben): fährt von einem Rand der Karte sichtbar zur Haltestelle (Knoten `halt`) und wartet dort, bis er losfährt.
+  // Gibt es keinen Straßenweg (oder keinen Knoten), steht er sofort an (x, y).
+  evakuierungBus(x, y, richtung = 0, halt = null) {
+    if (halt && this.graph.knoten.length) {
+      const fern = this.randKnoten().filter(n => Math.hypot(n.x - halt.x, n.y - halt.y) > 300)
+        .sort((a, b) => Math.hypot(a.x - halt.x, a.y - halt.y) - Math.hypot(b.x - halt.x, b.y - halt.y));
+      for (const start of fern) {
+        const id = this.neu('evakuierung', start, { evakuierung: true, angekommen: false });
+        const f = this.raum.state.fahrzeuge.get(id);
+        f.farbe = 0;
+        if (this.fahreNach(id, halt)) { f.richtung = Math.atan2(this.info.get(id).weg[1].y - f.y, this.info.get(id).weg[1].x - f.x); return id; }
+        this.raum.state.fahrzeuge.delete(id); this.info.delete(id);
+      }
+    }
+    const id = this.neu('evakuierung', { x, y }, { halt: 1e12, evakuierung: true, angekommen: true });
     const f = this.raum.state.fahrzeuge.get(id);
     f.richtung = richtung; f.haelt = true; f.farbe = 0;
     return id;
   }
+
+  // steht der Evakuierungsbus an der Haltestelle (Einsteigen ist nur dann möglich)?
+  evakuierungDa(id) { return !!this.info.get(id)?.angekommen && !this.info.get(id)?.abfahrt; }
 
   // der Evakuierungsbus fährt zum am weitesten entfernten Rand und verschwindet dort
   evakuierungAb(id) {
@@ -261,7 +276,7 @@ export class Verkehr {
   angekommen(id, f, inf, zeitMin, e) {
     const s = this.raum.state;
     if (inf.evakuierung) {   // Evakuierungsbus: steht am Tor, nach der Abfahrt verschwindet er am Rand
-      if (inf.abfahrt) { s.fahrzeuge.delete(id); this.info.delete(id); } else { inf.halt = 1e12; f.haelt = true; }
+      if (inf.abfahrt) { s.fahrzeuge.delete(id); this.info.delete(id); } else { inf.halt = 1e12; f.haelt = true; inf.angekommen = true; }
       return;
     }
     if (f.art === 'bus') { inf.halt = 8; this.raum.stadt?.busHalt(inf, inf.linie[inf.stopp]); return; }

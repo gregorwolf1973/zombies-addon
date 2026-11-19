@@ -13,9 +13,11 @@ export const KLEIDFARBEN = [
 export const WAFFEN_BILD = ['hand', 'pistole', 'schlaeger', 'messer'];
 
 export function aussehenLesen(text) {
-  const m = /^([mws]),([0-5]),([0-7])$/.exec(String(text ?? ''));
+  const m = /^([mwshf]),([0-5]),([0-7])$/.exec(String(text ?? ''));
   return m ? { g: m[1], haar: Number(m[2]), kleid: Number(m[3]) } : { g: 'm', haar: 1, kleid: 0 };
 }
+// h/f = Held/Heldin (Gemini-Bogen grafik/helden160)
+export const istHeld = g => g === 'h' || g === 'f';
 export const aussehenText = a => `${a.g},${a.haar},${a.kleid}`;
 
 // Farbton (0–360) und Sättigung (0–1) eines Pixels

@@ -105,10 +105,13 @@ test('Zombiewelle: Meldung, Gruppe außerhalb des Bildes, zieht zur Gegenseite, 
     p.unten = true;
     const x0 = mx, y0 = zs.reduce((a, z) => a + z.y, 0) / zs.length;
     const j = raum.state.zombies.size;
-    for (let i = 0; i < 1600 && raum.welle.aktiv; i++) {
+    for (let i = 0; i < 1600 && raum.welle.aktiv && raum.welle.aktiv.ziele < 2; i++) {
       raum.welle.schritt(0.05);
       for (const [id, z] of raum.state.zombies) raum.zombieSchritt(id, z, 0.05);
     }
+    // am Ziel angekommen: die Welle zieht weiter (neues Ziel) statt stehen zu bleiben
+    assert.ok(raum.welle.aktiv && raum.welle.aktiv.ziele >= 2, 'Welle ist am Ziel stehen geblieben');
+    raum.welle.aufloesen();
     const lebend = ids.filter(id => raum.state.zombies.has(id));
     const rest = lebend.map(id => raum.state.zombies.get(id));
     // Welle ist am Ziel angekommen und aufgelöst (verschwunden oder normale Zombies)
@@ -200,5 +203,36 @@ test('Blaulicht: Abstände selten 8–15 min, normal 2,5–6,5 min; aus = keine 
     assert.equal(n, 0, 'Durchfahrt vor 8 Minuten');
     for (let i = 0; i < 500; i++) v.schritt(1);
     assert.ok(n >= 1, 'keine Durchfahrt nach 15 Minuten');
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Zombiewelle: zieht am Ziel weiter (neues Ziel) statt sich aufzulösen, Ziele bleiben im Ort', async () => {
+  const { c, raum, p } = await beitreten('Weiter');
+  try {
+    einst({ welleMinuten: 20, welleMin: 30, welleMax: 30 });
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;
+    raum.welle.erzeugen('west');
+    const a = raum.welle.aktiv, ziel0 = { ...a.ziel };
+    a.mitte = { x: ziel0.x, y: ziel0.y };
+    raum.welle.neuesZiel();
+    assert.ok(raum.welle.aktiv, 'Welle löst sich auf statt weiterzuziehen');
+    const z = raum.welle.aktiv.ziel;
+    assert.ok(z.x >= 6 * KACHEL && z.x <= (BREITE - 6) * KACHEL && z.y >= 6 * KACHEL && z.y <= (HOEHE - 6) * KACHEL, 'Ziel zu nah am Rand');
+    raum.welle.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Zombies lassen am Boden liegende Spieler in Ruhe', async () => {
+  const { c, raum, p } = await beitreten('Unten');
+  try {
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.unten = true; p.hp = 0;
+    const id = raum.setzeZombie(p.x + 20, p.y, '');
+    const zz = raum.state.zombies.get(id), info = raum.zombieInfo.get(id);
+    info.ziel = [...raum.state.spieler.keys()][0]; info.schlaeft = false;
+    const d0 = Math.hypot(zz.x - p.x, zz.y - p.y);
+    for (let i = 0; i < 40; i++) raum.zombieSchritt(id, zz, 0.1);
+    assert.equal(info.ziel, null, 'Zombie jagt weiter');
+    assert.ok(Math.hypot(zz.x - p.x, zz.y - p.y) > d0 + 5, 'Zombie zieht nicht ab');
+    assert.ok(p.hp === 0);
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });

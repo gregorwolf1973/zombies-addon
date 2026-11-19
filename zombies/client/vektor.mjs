@@ -61,6 +61,24 @@ function vorbereiten(welt) {
       // Zeichnen auf das Rastergebäude + 1 Kachel begrenzen (manche OSM-Umrisse ragen über Straßen)
       clip: [(g.x - 1) * K, (g.y - 1) * K, (g.b + 2) * K, (g.h + 2) * K], farbe: flach ? FLACHDACH[Math.floor(hash(i * 7 + 3) * FLACHDACH.length)] : ZIEGEL[Math.floor(hash(i * 13 + 1) * ZIEGEL.length)] };
   }).filter(g => g.pts.length >= 3);
+  // Gehweg-Abschnitte: nur dort, wo bebaut ist (Haus im Umkreis von 6 Kacheln der Segmentmitte) – nicht an freier Landstraße
+  const GITTER = 8, rost = new Map();
+  for (const g of v.gebaeude) { const k = Math.floor((g.x + g.b / 2) / GITTER) + ',' + Math.floor((g.y + g.h / 2) / GITTER); (rost.get(k) ?? rost.set(k, []).get(k)).push([g.x + g.b / 2, g.y + g.h / 2]); }
+  const bebaut = (px, py) => {
+    const cx = Math.floor(px / K / GITTER), cy = Math.floor(py / K / GITTER);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) for (const [hx, hy] of rost.get((cx + dx) + ',' + (cy + dy)) ?? []) if (Math.hypot(hx - px / K, hy - py / K) <= 6) return true;
+    return false;
+  };
+  for (const l of linien) {
+    if (!AUTO.has(l.t)) continue;
+    l.gehTeile = []; let teil = null;
+    for (let i = 0; i + 1 < l.pts.length; i++) {
+      const [ax, ay] = l.pts[i], [bx, by] = l.pts[i + 1];
+      if (!bebaut((ax + bx) / 2, (ay + by) / 2)) { teil = null; continue; }
+      if (!teil) { teil = [l.pts[i]]; l.gehTeile.push(teil); }
+      teil.push(l.pts[i + 1]);
+    }
+  }
   welt._vek = { linien, flaechen, gebaeude };
   return welt._vek;
 }
@@ -368,8 +386,10 @@ export function zeichneStrassen(ctx, welt, rect) {
     gehwegClip(ctx, welt, r);
     for (const l of gehwege) {
       const fb = fahrbahn(l);
-      pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = fb + 2 * GEHWEG + 2; ctx.stroke();
-      pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(208,206,198,.88)'; ctx.lineWidth = fb + 2 * GEHWEG; ctx.stroke();
+      for (const t of l.gehTeile ?? []) {
+        pfad(ctx, t); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = fb + 2 * GEHWEG + 2; ctx.stroke();
+        pfad(ctx, t); ctx.strokeStyle = 'rgba(208,206,198,.88)'; ctx.lineWidth = fb + 2 * GEHWEG; ctx.stroke();
+      }
     }
     ctx.restore();
   }

@@ -22,6 +22,7 @@ export const KARTEN_NAMEN = { geretsried: 'Geretsried', isarauen: 'die Isarauen'
 export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
 const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
 const WARNUNG_MIN = 30;     // so viele Spielminuten vor der Ankunft kommt die Funkmeldung
+const WARTE_RADIUS = 800;   // 100 m um den Abholpunkt: stehen dort alle Lebenden, läuft die Uhr schneller (warteRaffer)
 
 const kisten = raum => [...raum.state.safes.values()].flatMap(s => [...s.kiste]);
 const anzahl = (liste, ding) => liste.filter(d => d === ding).length;
@@ -95,7 +96,7 @@ export class Aufgaben {
   start(stand, passt) {
     const s = this.raum.state;
     s.level = Math.max(1, Math.min(250, Math.round(Number(stand?.level) || 1)));
-    s.funk = false; s.busDa = false; s.busAnkunft = -1; s.busAb = -1; s.busBord = 0; s.busGesamt = 0;
+    s.funk = false; s.busDa = false; s.busSteht = false; s.busAnkunft = -1; s.busAb = -1; s.busBord = 0; s.busGesamt = 0;
     this.basis = s.besiegt;
     if (!this.an()) return;
     const g = passt ? stand?.aufgaben : null;
@@ -171,7 +172,7 @@ export class Aufgaben {
     s.busAnkunft = this.einst().stunde * 60;
     this.aktualisieren(false);
     const a = s.aufgaben.get('funk'); if (a) { a.erledigt = true; a.fortschritt = a.ziel; this.raum.xpAlle?.('aufgabe'); }
-    this.raum.broadcast('meldung', { text: `📻 ${p.name} hat den Funkspruch abgesetzt – der Evakuierungsbus kommt um ${hhmm(s.busAnkunft)} zum Ortsausgang!`, lang: true });
+    this.raum.broadcast('meldung', { text: `📻 ${p.name} hat den Funkspruch abgesetzt – ${this.fz().der} kommt um ${hhmm(s.busAnkunft)} zum Ortsausgang!`, lang: true });
     this.aktualisieren();
   }
 
@@ -211,15 +212,50 @@ export class Aufgaben {
         this.busHeute = false;                          // Zeitfenster vorbei: morgen kommt ein neuer Bus
         if (bis > 0 && bis <= WARNUNG_MIN && !this.ankGemeldet) {
           this.ankGemeldet = true;
-          this.raum.broadcast('meldung', { text: `🚌 Der Evakuierungsbus kommt um ${hhmm(A)} zum Ortsausgang!`, lang: true });
+          this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} kommt um ${hhmm(A)} zum Ortsausgang!`, lang: true });
         } else if (bis > WARNUNG_MIN) this.ankGemeldet = false;
       }
       return;
+    }
+    // Anfahrt: er rollt noch zur Haltestelle – kein Einsteigen, die Wartezeit läuft erst ab dem Halt
+    if (!this.raum.verkehr?.evakuierungDa(this.busId)) {
+      if (!s.fahrzeuge.get(this.busId)) this.busWeg();
+      s.busBord = 0; s.busSteht = false;
+      return;
+    }
+    if (!s.busSteht) {
+      s.busSteht = true;
+      s.busAb = (Math.round(s.uhr) + Math.ceil(this.busRest)) % 1440;
+      if (!this.busGemeldet) this.stehtMeldung();
     }
     const zr = this.raum.zeitraffer?.() ?? 1;
     this.busRest -= dt * zr * 1440 / ((this.raum.einstellungen?.().tagMinuten || 48) * 60);
     const alleDa = this.mitfahrer();
     if (alleDa || this.busRest <= 0) this.abfahrt();
+  }
+
+  // Wartezeit raffen: Funkspruch abgesetzt, Pflichtaufgaben erledigt, Bus/Panzer noch nicht da und ALLE lebenden Spieler
+  // (auch Bots und Liegende, nicht getrennte) stehen draußen im Umkreis von 100 m um den Abholpunkt → Uhr läuft schneller.
+  // Faktor: Einstellung aufgaben.warteRaffer (Vorgabe 6). Meldet Beginn und Ende einmal.
+  warteRaffer() {
+    const s = this.raum.state, tor = this.raum.welt?.tor;
+    let an = this.an() && s.funk && !s.busDa && !this.wechselLaeuft && !!tor
+      && [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt);
+    if (an) {
+      const ax = (tor.x + 1) * KACHEL, ay = (tor.y + 1) * KACHEL;
+      let lebende = 0;
+      for (const p of s.spieler.values()) {
+        if (p.zombie > 0 || p.verbunden === false) continue;
+        lebende++;
+        if (p.ebene || Math.hypot(p.x - ax, p.y - ay) > WARTE_RADIUS) { an = false; break; }
+      }
+      if (!lebende) an = false;
+    }
+    if (an !== !!this.raffAn) {
+      this.raffAn = an;
+      this.raum.broadcast('meldung', { text: an ? `⏩ Alle warten am Abholpunkt – die Zeit vergeht schneller, bis ${this.fz().der} kommt` : '⏸️ Nicht mehr alle am Abholpunkt – die Zeit läuft wieder normal' });
+    }
+    return an ? Math.max(1, Number(this.einst().warteRaffer) || 6) : 1;
   }
 
   // Bus erscheint am Ortsausgang (auf der nächsten Straße, sonst dahinter im Ort) und wartet
@@ -232,14 +268,29 @@ export class Aufgaben {
     let x = links ? tx + 4 * KACHEL : tx, y = links ? ty : ty + 4 * KACHEL;
     const k = v.graph?.knoten?.length ? [...v.graph.knoten].sort((a, b) => Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty))[0] : null;
     if (k && Math.hypot(k.x - tx, k.y - ty) < 400) { x = k.x; y = k.y; }
-    this.busId = v.evakuierungBus(x, y, links ? Math.PI : -Math.PI / 2);
-    this.busHeute = true; this.busRest = rest; s.busDa = true; s.busAb = (stunde * 60 + wartezeit) % 1440;
-    this.raum.broadcast('meldung', { text: `🚌 Der Evakuierungsbus steht am Ortsausgang! Abfahrt um ${hhmm(s.busAb)}`, lang: true });
+    this.busId = v.evakuierungBus(x, y, links ? Math.PI : -Math.PI / 2, k);
+    this.busHeute = true; this.busRest = rest; s.busDa = true; s.busAb = (stunde * 60 + wartezeit) % 1440; this.busGemeldet = false;
+    s.busSteht = v.evakuierungDa(this.busId);
+    if (s.busSteht) this.stehtMeldung();
+    else this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} fährt zum Ortsausgang vor!`, lang: true });
+  }
+
+  // Level 2 (Isarauen): statt des Busses kommt ein Panzer (gleiche Logik)
+  fz() {
+    return this.raum.state.karte === 'isarauen'
+      ? { zeichen: '🪖', Der: 'Der Evakuierungspanzer', der: 'der Evakuierungspanzer', name: 'Evakuierungspanzer' }
+      : { zeichen: '🚌', Der: 'Der Evakuierungsbus', der: 'der Evakuierungsbus', name: 'Evakuierungsbus' };
+  }
+
+  stehtMeldung() {
+    const s = this.raum.state;
+    this.busGemeldet = true;
+    this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} steht am Ortsausgang! Abfahrt um ${hhmm(s.busAb)}`, lang: true });
   }
 
   busWeg() {
     const s = this.raum.state;
-    s.busDa = false; s.busBord = 0; s.busGesamt = 0;
+    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0;
     if (this.busId) { this.raum.verkehr?.evakuierungAb(this.busId); this.busId = null; }
   }
 
@@ -267,13 +318,13 @@ export class Aufgaben {
     this.busWeg();
     this.busHeute = true;
     if (!geschafft) {
-      this.raum.broadcast('meldung', { text: '🚌 Der Bus ist ohne euch abgefahren – morgen gibt es einen neuen', lang: true });
+      this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} ist ohne euch abgefahren – morgen gibt es ${this.raum.state.karte === 'isarauen' ? 'einen neuen Panzer' : 'einen neuen Bus'}`, lang: true });
       return;
     }
     const karte = this.naechsteKarte();
     this.raum.xpAlle?.('evakuierung');
     this.raum.broadcast('meldung', { text: `🎉 Geschafft! Weiter nach Level ${s.level + 1} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
-    if (nichtDa) this.raum.broadcast('meldung', { text: '🚌 Wer nicht an Bord war, kommt trotzdem mit – ihr seid eine Gruppe' });
+    if (nichtDa) this.raum.broadcast('meldung', { text: `${this.fz().zeichen} Wer nicht an Bord war, kommt trotzdem mit – ihr seid eine Gruppe` });
     this.wechselLaeuft = true;
     this.raum.clock.setTimeout(() => this.levelWechsel(), this.wechselVerzoegerung);
   }

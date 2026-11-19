@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.43.0 – 19.11.2026
+
+- Held und Heldin (Gemini-Grafik) als zusätzliche Figuren: Haltung je Waffe (leer, Pistole, Gewehr, Messer), jeweils mit oder ohne Taschenlampe, eigene Stiefel-Ebene zum Stehen, Gehen und Laufen; Haar- und Kleidfarbe bleiben wählbar.
+- Zielorte offener Aufgaben (Apotheke, Lebensmittel, Kaufhaus) als Symbole auf der großen Karte und als Punkt auf der Eckkarte.
+- Zombies lassen Spieler am Boden in Ruhe und ziehen weiter, damit Mitspieler sie retten können.
+- Horden ziehen dauerhaft weiter (neue Ziele im Ort, nicht am Kartenrand); einzelne Zombies spalten sich ab.
+- Ansteckung bei Berührung je Level einstellbar.
+- Neue Töne: Hilferufe, ferner Krankenwagen, leere Truhe.
+- Panzer-Schussfolge bis 0,2 s; Soldaten können sterben (sind alle tot, fällt das Lager), der Puma bleibt bis zum Fall unverwundbar; bei Angriffen rückt höchstens die Hälfte der Soldaten aus, mindestens 2 halten Wache.
+- Evakuierungsbus fährt sichtbar ein, wartet (Wartezeit einstellbar) und fährt wieder aus; in Level 2 kommt ein Evakuierungspanzer.
+- Warten am Abholpunkt: Ist der Funkspruch abgesetzt, sind die Pflichtaufgaben erledigt und stehen alle Lebenden im Umkreis von 100 m um den Ortsausgang, vergeht die Zeit schneller (Faktor 6, Einstellung aufgaben.warteRaffer).
+- Zaunlücken breit genug zum Durchgehen (mindestens 72 px); Bürgersteige nur im bebauten Gebiet. WELT_VERSION 14.
+- Safe Rooms: Möbel und Kisten werden auf alle Räume verteilt statt in einen gestopft.
+- Weltaufbau: Zugangssuche ohne Array.shift (gleiches Ergebnis).
+
 ## 0.42.0 – 19.11.2026
 
 - Einheitliche Figurgrößen: jedes Bild bekommt einen eigenen Ausgleich (client/groessen.mjs, gemessen mit tools/groessen_messen.py); Bewohner so breit wie der Survivor, alle Zombie-Typen etwa 10 % breiter, Leichen passend lang. Die Größenregler wirken auf diese Grundgröße, Vorschau und Spiel rechnen gleich.

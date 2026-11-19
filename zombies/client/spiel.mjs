@@ -1,12 +1,12 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
 import { groesse } from './groessen.mjs';
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
+  KACHEL, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt,
 } from './welt.mjs';
 import { laternen } from './vektor.mjs';
-import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
+import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_TURM, PUMA_SKALA, zeichnePumaTurm, zeichnePumaWanne, handelPartner } from './stuetzpunkt.mjs';
@@ -144,7 +144,10 @@ ton.musikSofort(() => $('start').style.display !== 'none');
 // ---------- Figurenwahl ----------
 let meinAussehen = aussehenLesen(null);
 try { meinAussehen = aussehenLesen(localStorage.getItem('zob_aussehen')); } catch {}
-const figurVorlage = { bild: new Image(), liste: null, bild2: new Image(), liste2: null };
+const figurVorlage = { bild: new Image(), liste: null, bild2: new Image(), liste2: null, bild3: new Image(), liste3: null };
+figurVorlage.bild3.src = 'grafik/helden160.webp';
+fetch('grafik/helden160.json').then(r => r.json()).then(j => { figurVorlage.liste3 = j; vorschauZeichnen(); }).catch(() => {});
+figurVorlage.bild3.onload = () => vorschauZeichnen();
 figurVorlage.bild.src = 'grafik/figuren.png';
 fetch('grafik/figuren.json').then(r => r.json()).then(j => { figurVorlage.liste = j; vorschauZeichnen(); }).catch(() => {});
 figurVorlage.bild.onload = () => vorschauZeichnen();
@@ -156,7 +159,7 @@ function vorschauZeichnen() {
   if (!l || !figurVorlage.bild.complete) return;
   const c = $('figurvorschau'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
-  document.querySelector('.figurknoepfe')?.classList.toggle('fest', meinAussehen.g === 's');
+  document.querySelector('.figurknoepfe')?.classList.toggle('fest', meinAussehen.g === 's');   // Farbwahl nur bei Survivor gesperrt
   if (meinAussehen.g === 's') {
     // Survivor: feste Figur aus dem zweiten Bogen (160er Felder)
     const l2 = figurVorlage.liste2;
@@ -166,6 +169,17 @@ function vorschauZeichnen() {
     ctx.save(); ctx.translate(80, 112); ctx.rotate(-Math.PI / 2); ctx.scale(1.12, 1.12);
     ctx.drawImage(figurVorlage.bild2, fx, fy, F, F, -F / 2, -F / 2, F, F);
     ctx.drawImage(figurVorlage.bild2, sx, sy, F, F, -F / 2, -F / 2, F, F);
+    ctx.restore();
+    return;
+  }
+  if (istHeld(meinAussehen.g)) {
+    // Held/Heldin: Füße (Stiefel, ungefärbt) + umgefärbter Körper aus dem Gemini-Bogen
+    const l3 = figurVorlage.liste3;
+    if (!l3 || !figurVorlage.bild3.complete) return;
+    const gg = meinAussehen.g === 'f' ? 'w' : 'm', F = l3.feld, fn = l3.bilder[`held_${gg}_stiefel_stehen`][0];
+    ctx.save(); ctx.translate(80, 112); ctx.rotate(-Math.PI / 2); ctx.scale(1.2, 1.2); ctx.translate(-80, -80);
+    ctx.drawImage(figurVorlage.bild3, (fn % l3.spalten) * F, Math.floor(fn / l3.spalten) * F, F, F, 0, 0, F, F);
+    umgefaerbt(ctx, figurVorlage.bild3, F, l3.bilder[`held_${gg}_leer`][0], l3.spalten, 0, 0, meinAussehen);
     ctx.restore();
     return;
   }
@@ -485,6 +499,11 @@ const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // z6/z7 aus figuren2 (Riley Gombart), ab 'kaminkehrer' aus figuren3 (Gemini)
 const GEMINI_TYPEN = new Set(ZOMBIE_TYPEN.slice(7));
 const GEMINI_LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];   // Sterbebilder: vorhandene Leichen, nach Typ gewählt
+const ZIEL_NAMEN = { pharmacy: 'Apotheke', chemist: 'Drogerie', doctors: 'Arzt', dentist: 'Zahnarzt', medical_supply: 'Sanitätshaus', supermarket: 'Supermarkt', convenience: 'Laden', bakery: 'Bäcker', butcher: 'Metzger', kiosk: 'Kiosk', beverages: 'Getränke', greengrocer: 'Gemüse', department_store: 'Kaufhaus', hardware: 'Baumarkt', doityourself: 'Baumarkt', sports: 'Sport', outdoor: 'Outdoor',
+  apotheke: 'Apotheke', lebensmittel: 'Lebensmittel', kaufhaus: 'Kaufhaus' };
+const ZIEL_SYMBOL = { apotheke: '💊', lebensmittel: '🛒', kaufhaus: '🔦' };
+const HELD_HALTUNGEN = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe'];
+const HELD_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'gewehr', mp: 'gewehr', mg: 'gewehr', schlaeger: 'messer', sense: 'messer', messer: 'messer', brechstange: 'messer' };   // sonst keine Waffe in der Hand
 const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer', mp: 'pistole', mg: 'gewehr' };   // sonst Taschenlampe
 
 class Ort extends Phaser.Scene {
@@ -501,6 +520,9 @@ class Ort extends Phaser.Scene {
     // dritter Bogen: 18 weitere Zombies (mit Google Gemini erzeugt, tools/gemini_zombies_schneiden.py)
     this.load.spritesheet('figuren3', 'grafik/figuren3.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('figurenliste3', 'grafik/figuren3.json');
+    // Helden (Gemini): Körper mit roten Haaren/blauer Jacke zum Umfärben + Stiefel als eigene Ebene
+    this.load.spritesheet('helden160', 'grafik/helden160.webp', { frameWidth: 160, frameHeight: 160 });
+    this.load.json('heldenliste', 'grafik/helden160.json');
     // Auto-Bogen (CC0, tools/autos_schneiden.py); fehlt er, bleiben die Autos gezeichnet
     this.load.image('autos', 'grafik/autos.webp');
     this.load.json('autosliste', 'grafik/autos.json');
@@ -599,12 +621,15 @@ class Ort extends Phaser.Scene {
       if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp') ton.huelse(m.x1, m.y1); }
     });
     raum.onMessage('bwschuss', m => this.bwSchuss(m));
+    raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
+    raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => this.granateFliegt(m));
     raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, raum.state.zombies.values(), m.x, m.y, m.r ?? 40); });
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
     raum.onMessage('stoss', m => { const fs = naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
+    raum.onMessage('hilferufe', m => { ton.ereignis('hilferufe', m.x, m.y); });
     raum.onMessage('klettern', m => {
       // eigene Figur: in einem kurzen Sprung hinübergleiten statt springen
       if (m.id === meineId && this.lokal) this.sprung = { vx: this.lokal.x, vy: this.lokal.y, nx: m.x, ny: m.y, t: 0 };
@@ -621,7 +646,7 @@ class Ort extends Phaser.Scene {
     fkStart(raum, meldung);
     { const fk = document.getElementById('fkknopf'); if (fk) $('leiste').prepend(fk); }   // Symbolleiste über der Eckkarte
     raum.onMessage('gefunden', m => {
-      if (m.dinge.length) ton.aufheben(); else ton.suchen();
+      if (m.dinge.length) ton.aufheben(); else if (m.rest || !ton.ereignis('truheLeer')) ton.suchen();
       if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : dingText(d)).join(', '));
       else if (m.rest) meldung('Rucksack voll – der Rest bleibt hier');
       else meldung('Nichts Brauchbares gefunden');
@@ -710,6 +735,7 @@ class Ort extends Phaser.Scene {
     this.figurListe = this.cache.json.get('figurenliste')?.bilder ?? {};
     this.figurListe2 = this.cache.json.get('figurenliste2')?.bilder ?? {};
     this.figurListe3 = this.cache.json.get('figurenliste3')?.bilder ?? {};
+    this.heldenListe = this.cache.json.get('heldenliste')?.bilder ?? {};
     this.stuecke = new Map();
     this.torGrafik = this.add.graphics().setDepth(1.5);
     this.torStand = -1;
@@ -804,10 +830,12 @@ class Ort extends Phaser.Scene {
     if (s.busDa) {
       const f = [...(s.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung');
       const px = ich && this.lokal ? this.lokal.x : ich?.x, py = ich && this.lokal ? this.lokal.y : ich?.y;
-      const an = f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND;
-      bus = `🚌 Bus wartet am Ortsausgang bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ' · 🚌 du bist an Bord' : ''}`;
-    } else if (s.funk && s.busAnkunft >= 0) bus = `🚌 Der Bus kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang`;
-    else bus = '📻 Funkspruch fehlt – ohne ihn kommt kein Bus';
+      const an = s.busSteht && f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND;
+      const pz = s.karte === 'isarauen', sym = pz ? '🪖' : '🚌', fzg = pz ? 'Evakuierungspanzer' : 'Bus';
+      bus = s.busSteht ? `${sym} ${fzg} wartet am Ortsausgang bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ` · ${sym} du bist an Bord` : ''}`
+        : `${sym} ${fzg} fährt zum Ortsausgang vor – einsteigen geht, sobald er steht`;
+    } else if (s.funk && s.busAnkunft >= 0) bus = s.karte === 'isarauen' ? `🪖 Der Evakuierungspanzer kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang` : `🚌 Der Bus kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang`;
+    else bus = `📻 Funkspruch fehlt – ohne ihn kommt kein ${s.karte === 'isarauen' ? 'Panzer' : 'Bus'}`;
     textSetzen('busanzeige', bus);
   }
 
@@ -819,6 +847,13 @@ class Ort extends Phaser.Scene {
       x: id === meineId && this.lokal ? this.lokal.x : p.x, y: id === meineId && this.lokal ? this.lokal.y : p.y,
       ebene: p.ebene ?? '', name: p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name, ich: id === meineId, unten: !!p.unten, farbe: css(FARBEN[p.farbe % FARBEN.length]),
     }));
+    // Zielorte offener Aufgaben (Apotheke, Supermarkt, Kaufhaus); erledigte fallen weg
+    const offen = new Set([...(raum.state.aufgaben?.values() ?? [])].filter(a => !a.erledigt).map(a => a.id));
+    const KAT = { medizin: 'apotheke', vorraete: 'lebensmittel', lampen: 'kaufhaus' };
+    const kats = new Set(Object.entries(KAT).filter(([id]) => offen.has(id)).map(([, k]) => k));
+    this.uebersicht.ziele = kats.size ? this.welt.haeuser.filter(h => !h.safe && kats.has(ladenArt(h))).map(h => ({
+      x: h.x + h.b / 2, y: h.y + h.h / 2, name: ZIEL_NAMEN[h.art] ?? ZIEL_NAMEN[ladenArt(h)] ?? 'Laden', symbol: ZIEL_SYMBOL[ladenArt(h)] ?? '⭐',
+    })) : [];
     this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });
   }
 
@@ -958,13 +993,18 @@ class Ort extends Phaser.Scene {
     // Bild-Sprites (autos.webp): Laster je nach Farbe truck/Mini_truck, Polizei mit wechselnden Blaulichtbildern
     const sprite = art === 'laster' ? autoEintraege('laster') : art === 'polizei' ? autoEintraege('polizei') : [];
     const sp = sprite.length ? sprite[farbe % sprite.length] : null;
-    const key = art === 'auto' ? 'fz-auto-' + (farbe % 8) : art === 'laster' ? (sp ? 'fz-laster-s' + (farbe % sprite.length) : 'fz-laster-' + (farbe % 4))
+    const panzer = art === 'evakuierung' && raum.state.karte === 'isarauen';   // Level 2: Evakuierungspanzer (Puma) statt Bus
+    const key = panzer ? 'fz-evakuierung-panzer' : art === 'auto' ? 'fz-auto-' + (farbe % 8) : art === 'laster' ? (sp ? 'fz-laster-s' + (farbe % sprite.length) : 'fz-laster-' + (farbe % 4))
       : art === 'polizei' && sp ? 'fz-polizei-s' + anim : 'fz-' + art;
     if (this.textures.exists(key)) return key;
     const breit = art === 'bus' || art === 'evakuierung' ? 136 : art === 'laster' ? 92 : art === 'feuerwehr' ? 84 : 60;
-    const hoch = art === 'bus' || art === 'evakuierung' ? 40 : sp && art === 'laster' ? 46 : 34;
+    const hoch = panzer ? 56 : art === 'bus' || art === 'evakuierung' ? 40 : sp && art === 'laster' ? 46 : 34;
     const t = this.textures.createCanvas(key, breit, hoch), c = t.getContext();
-    if (sp) {
+    if (panzer) {
+      const k = 1.35;   // Puma-Wanne und -Turm (client/stuetzpunkt.mjs), Bug nach rechts wie bei allen Fahrzeugen
+      c.save(); c.translate(breit / 2, hoch / 2); c.scale(k, k); zeichnePumaWanne(c, 84, 34); c.restore();
+      c.save(); c.translate(breit / 2 - 6 * k - PUMA_TURM.mx * k, hoch / 2 - PUMA_TURM.my * k); c.scale(k, k); zeichnePumaTurm(c); c.restore();
+    } else if (sp) {
       // Fahrzeuglänge im Verkehr: Laster 90 px, Polizei 50 px (LAENGE in server/verkehr.mjs); Sprite auf diese Länge strecken
       const e = art === 'polizei' ? autoAnimEintrag(sp, anim) : sp, soll = art === 'laster' ? 90 : 50, k = soll / e.laenge;
       c.save(); c.translate(breit / 2, hoch / 2); c.scale(k, k); zeichneAutoBild(c, e, 0, 0); c.restore();
@@ -1134,6 +1174,25 @@ class Ort extends Phaser.Scene {
     });
     tex.refresh();
     return key;
+  }
+
+  // umgefärbter Held/Heldin: acht Körperbilder (Haltungen) nebeneinander; Stiefel bleiben im Bogen 'helden160'
+  heldenTextur(aussehenTextWert) {
+    const a = aussehenLesen(aussehenTextWert), key = 'held_' + aussehenText(a);
+    if (this.textures.exists(key)) return key;
+    const quelle = this.textures.get('helden160').getSourceImage(), FELD = 160, gg = a.g === 'f' ? 'w' : 'm';
+    const tex = this.textures.createCanvas(key, FELD * HELD_HALTUNGEN.length, FELD), ctx = tex.getContext();
+    HELD_HALTUNGEN.forEach((h, k) => {
+      const nr = this.heldenListe[`held_${gg}_${h}`]?.[0] ?? 0;
+      umgefaerbt(ctx, quelle, FELD, nr, 25, k * FELD, 0, a);
+      tex.add(k, 0, k * FELD, 0, FELD, FELD);
+    });
+    tex.refresh();
+    return key;
+  }
+  heldBild(name, i = 0) {
+    const l = this.heldenListe[name];
+    return l?.length ? l[((i % l.length) + l.length) % l.length] : 0;
   }
 
   // ---------- Ebenen: Innenräume ----------
@@ -1610,7 +1669,7 @@ class Ort extends Phaser.Scene {
       const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle'));
       const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle'));
       const box = this.add.container(x, y, [fuesse, bild]).setDepth(3.5).setRotation(blick);
-      const e = { box, bild, phase, blick, schussBis: 0, n };
+      const e = { box, bild, fuesse, phase, blick, schussBis: 0, n };
       o.soldaten.push(e);
     };
     sp.teile.forEach((t, i) => {
@@ -1632,9 +1691,20 @@ class Ort extends Phaser.Scene {
     const o = this.stuetzpunktObj;
     if (!o || this.aktEbene) return;
     const jetzt = this.time.now, steht = raum.state.stuetzpunkt === 'steht';
+    const dtS = this.game.loop.delta / 1000;
+    for (const l of o.leichen ?? []) l.setVisible(steht);
     for (const s of o.soldaten) {
-      s.box.setVisible(steht);
-      if (!steht) continue;
+      s.box.setVisible(steht && !s.tot);
+      if (!steht || s.tot) continue;
+      let geht = false;
+      if (s.ziel) {   // Server-Position (Soldaten laufen bei Angriffen zum Hotspot und zurück), weich nachgezogen
+        const dx = s.ziel.x - s.box.x, dy = s.ziel.y - s.box.y;
+        geht = Math.hypot(dx, dy) > 2;
+        const k = Math.min(1, dtS * 8);
+        s.box.x += dx * k; s.box.y += dy * k;
+        let db = s.ziel.w - s.blick; db = Math.atan2(Math.sin(db), Math.cos(db)); s.blick += db * Math.min(1, dtS * 8);
+      }
+      s.fuesse?.setFrame(geht ? this.figurBild2('sv_fuesse_walk', Math.floor(jetzt / 110)) : this.figurBild2('sv_fuesse_idle'));
       const schiesst = s.schussBis > jetzt;
       s.bild.setFrame(schiesst ? this.figurBild2('soldat_schuss', Math.floor(jetzt / 70)) : this.figurBild2('soldat_idle', Math.floor(jetzt / 220 + s.phase * 3)));
       if (s.n >= 0) s.box.setRotation(schiesst && s.w !== undefined ? s.w : s.blick);
@@ -1660,6 +1730,29 @@ class Ort extends Phaser.Scene {
       d = Math.atan2(Math.sin(d), Math.cos(d));
       o.turm.setRotation(o.turm.rotation + d * Math.min(1, this.game.loop.delta / 1000 * 8));
     }
+  }
+
+  // Positionen der beweglichen Soldaten vom Server: [n, x, y, Blickwinkel, tot]
+  soldatenSync(m) {
+    const o = this.stuetzpunktObj;
+    if (!o) return;
+    for (const [n, x, y, w, tot] of m.s ?? []) {
+      const e = o.soldaten.find(q => q.n === n);
+      if (!e) continue;
+      if (!e.ziel) { e.box.setPosition(x, y); e.blick = w; }
+      e.ziel = { x, y, w };
+      if (tot && !e.tot) this.soldatStirbt({ n, x, y, w }, false);
+    }
+  }
+
+  // ein Soldat ist gefallen: Figur weg, Leiche bleibt liegen (laut = gerade passiert: Schrei und Blut)
+  soldatStirbt(m, laut) {
+    const o = this.stuetzpunktObj, e = o?.soldaten.find(q => q.n === m.n);
+    if (!e || e.tot) return;
+    e.tot = true;
+    const bild = this.add.image(m.x, m.y, 'figuren2', this.figurBild2('verwundet', m.n)).setScale(BOGEN2_GROESSE * 1.26).setRotation(m.w ?? 0).setDepth(0.6).setTint(0xb0a0a0);
+    (o.leichen ??= []).push(bild);
+    if (laut) { ton.ereignis('menschGebissen', m.x, m.y); fetzen(this, m.x, m.y, m.w ?? 0, 1.4); }
   }
 
   // Schuss der Bundeswehr: 'mg' aus einem Nest (Leuchtspur, Mündungsblitz, Schütze zeigt soldat_schuss) oder 'kanone' vom Puma (Turm, Einschlag)
@@ -1761,6 +1854,8 @@ class Ort extends Phaser.Scene {
     // Haltung nach Ausrüstung: Pistole, Nahkampf/Lampe in der Hand, sonst ohne
     let textur, bild = 0;
     const survivor = !p.unten && !zombie && String(p.aussehen ?? '').startsWith('s');
+    const held = !p.unten && !zombie && istHeld(String(p.aussehen ?? '')[0]);
+    const tempo = weg / Math.max(dt, 0.001);
     if (p.unten) textur = 'liegend-' + f.n;
     else if (zombie) { textur = 'figuren'; bild = this.figurBild('zombie_hemd', geht ? Math.floor(f.lauf / 11) : 0); }
     else if (survivor) {
@@ -1775,16 +1870,27 @@ class Ort extends Phaser.Scene {
       if (f.fuesse.frame.name != fb) f.fuesse.setFrame(fb);   // eslint-disable-line eqeqeq
       f.fuesse.setRotation(p.richtung).setScale(BOGEN2_GROESSE * (p.schleicht ? 0.92 : 1));
     }
+    else if (held) {
+      // Held/Heldin (Gemini): Haltung nach Waffe und Taschenlampe, Stiefel als eigene Ebene
+      const a = aussehenLesen(p.aussehen), gg = a.g === 'f' ? 'w' : 'm', wf = HELD_WAFFE[aktiveWaffe(p)[0]] ?? '', lampe = p.lampe > 0;
+      const haltung = wf ? (lampe ? wf + '_lampe' : wf) : (lampe ? 'lampe' : 'leer');
+      textur = this.heldenTextur(p.aussehen); bild = Math.max(0, HELD_HALTUNGEN.indexOf(haltung));
+      const fb = !geht ? this.heldBild(`held_${gg}_stiefel_stehen`)
+        : this.heldBild(`held_${gg}_stiefel_${tempo > W.tempoGehen * 1.25 ? 'laufen' : 'gehen'}`, Math.floor(f.lauf / 6));
+      if (f.fuesse.texture.key !== 'helden160' || f.fuesse.frame.name != fb) f.fuesse.setTexture('helden160', fb);   // eslint-disable-line eqeqeq
+      f.fuesse.setRotation(p.richtung).setScale(ZOMBIE_GROESSE * (p.schleicht ? 0.92 : 1));
+    }
     else {
       textur = this.menschTextur(p.aussehen);
       bild = aktiveWaffe(p)[1].bild;
     }
-    f.fuesse.setVisible(survivor);
+    if (!survivor && !held && f.fuesse.texture.key !== 'figuren2') f.fuesse.setTexture('figuren2', this.figurBild2('sv_fuesse_idle'));
+    f.fuesse.setVisible(survivor || held);
     if (f.bild.texture.key !== textur || f.bild.frame.name != bild) f.bild.setTexture(textur, bild);   // eslint-disable-line eqeqeq
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
-    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * ((raum.state?.zombieGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 100) / 100) : survivor ? BOGEN2_GROESSE : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand');
+    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * ((raum.state?.zombieGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 100) / 100) : survivor ? BOGEN2_GROESSE : held ? ZOMBIE_GROESSE : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand');
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);

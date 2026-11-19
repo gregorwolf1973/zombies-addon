@@ -22,7 +22,7 @@ const pegel = () => BASIS * stufe;
 let zuordnung = {};                 // Ereignis → { dateien, laut }
 const puffer = new Map();           // Datei → AudioBuffer | Promise | null (fehlt)
 let drinnenJetzt = false, nachtJetzt = null;   // null = Tageszeit noch unbekannt
-const hintergrund = { stadt: null, streuTimer: 0 };
+const hintergrund = { stadt: null, streuTimer: 0, krankTimer: 0 };
 
 export function toeneZuordnen(z) { zuordnung = z && typeof z === 'object' ? z : {}; if (ctx) vorladen(); }
 
@@ -42,7 +42,7 @@ const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer 
 // ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------
 const MAX_STIMMEN = 8, MAX_ZOMBIE_STIMMEN = 4;
 const ZOMBIE_IDS = new Set(['entdeckt', 'kriecher', 'stoehnen', 'zombieTod', 'zombielandTag', 'zombielandNacht']);
-const MIN_ABSTAND = { entdeckt: 400, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 150, stoehnen: 300, kriecher: 400, menschGebissen: 300 };   // ms je Ereignis-ID
+const MIN_ABSTAND = { entdeckt: 400, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 150, stoehnen: 300, kriecher: 400, menschGebissen: 300, hilferufe: 5000, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
 const stimmen = [];            // laufende Einzel-Geräusche aus Dateien: { ende (s), v, zombie, g, src }
 const zuletzt = new Map();     // Ereignis-ID → Zeitpunkt (ms) des letzten Abspielens
 
@@ -144,6 +144,14 @@ function streuen() {
   probe(id, hx + Math.cos(w) * d, hy + Math.sin(w) * d, drinnenJetzt ? 0.6 : 1.8);
 }
 
+// ferner Krankenwagen als Stimmung: selten (alle 2–5 Minuten), nur draußen, weit weg aus wechselnder Richtung
+function krankenwagen() {
+  hintergrund.krankTimer = setTimeout(krankenwagen, 120000 + Math.random() * 180000);
+  if (!ctx || stufe === 0 || document.hidden || drinnenJetzt) return;
+  const w = Math.random() * Math.PI * 2, d = 600 + Math.random() * 500;
+  probe('krankenwagen', hx + Math.cos(w) * d, hy + Math.sin(w) * d, 1.6);
+}
+
 export function tageszeit(nacht) {
   if (nacht === nachtJetzt) return;
   const erstes = nachtJetzt === null;
@@ -165,6 +173,7 @@ export function tonStarten() {
   hintergrundAufbauen();
   vorladen();
   if (!hintergrund.streuTimer) hintergrund.streuTimer = setTimeout(streuen, 6000);
+  if (!hintergrund.krankTimer) hintergrund.krankTimer = setTimeout(krankenwagen, 60000 + Math.random() * 120000);
 }
 
 // schaltet die Lautstärke durch (100 → 50 → 25 → stumm → 100 %), merkt sie im Browser, liefert die neue Stufe (0–1)

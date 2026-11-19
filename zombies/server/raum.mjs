@@ -89,6 +89,7 @@ export const Zustand = schema({
   busAnkunft: t.number(),   // Ankunftszeit des Busses (Spielminuten am Tag), -1 = noch kein Funkspruch
   busAb: t.number(),        // Abfahrtszeit des wartenden Busses (Spielminuten am Tag)
   busDa: t.boolean(),       // der Bus steht am Ortsausgang
+  busSteht: t.boolean(),    // ... und steht (Einsteigen nur dann); false = er fährt noch ein (Level 2: Evakuierungspanzer)
   busBord: t.uint8(),       // so viele sind an Bord ...
   busGesamt: t.uint8(),     // ... von so vielen lebenden Spielern (mit Bots)
   aufgaben: t.map(Aufgabe), // gemeinsame Aufgaben dieses Levels
@@ -131,6 +132,7 @@ const ANKUNFT_ZOMBIEFREI = 144;   // Pixel (4,5 Kacheln): so weit um den Ankunft
 const SCHONZEIT_EBENE = 1;   // Sekunden nach einem Ebenenwechsel, in denen Zombies nicht beißen
 const BISS_PRO_SEK = 14;
 const KRIECHER_CHANCE = 0.25, KRIECHER_HP = 35, KRIECHER_TEMPO = 0.28, KRIECHER_SPUERT = 110;
+const UNTEN_ABSTAND = 110;   // so nah an einem am Boden liegenden Spieler halten sich Zombies nicht auf
 const BISS_CHANCE = 0.12;   // pro Sekunde Kontakt: Wahrscheinlichkeit für einen infizierenden Biss
 const SPRITZE_ABSTAND = 50;
 const LAMPE_DAUER = 3600;   // eine Taschenlampe leuchtet etwa eine Stunde
@@ -146,7 +148,7 @@ const FERN_TAKT = 4;
 const AFK_SEKUNDEN = 60;    // so lange ohne Eingabe, dann übernimmt die Bot-Steuerung die Figur
 const RASTER = 96;          // Zellgröße des Zombie-Rasters (px), je Takt neu befüllt
 const WEGEFELD_TIEFE = 60;  // Wegefeld nur so viele Kacheln weit um die Spieler (2000 px) berechnen
-const AUSSEHEN = /^[mws],[0-5],[0-7]$/;   // m/w = eigene Figur mit Farben, s = Survivor (feste Figur)
+const AUSSEHEN = /^[mwshf],[0-5],[0-7]$/;   // m/w = eigene Figur mit Farben, s = Survivor (feste Figur), h/f = Held/Heldin (Gemini, mit Farben)
 export const TOR_RAETSEL = 3;
 const TOR_ABSTAND = 70;
 
@@ -1779,7 +1781,8 @@ export class SpielRaum extends Room {
     s.zeit += dt * zr;
     // Tageszeit: ein Spieltag dauert tagMinuten echte Minuten
     const vorher = istNacht(s.uhr);
-    s.uhr = (s.uhr + dt * zr * 1440 / ((SpielRaum.einstellungen.tagMinuten || 48) * 60)) % 1440;
+    const raffer = this.aufgaben?.warteRaffer?.() ?? 1;   // Warten am Abholpunkt: nur die Uhr läuft schneller
+    s.uhr = (s.uhr + dt * zr * raffer * 1440 / ((SpielRaum.einstellungen.tagMinuten || 48) * 60)) % 1440;
     if (istNacht(s.uhr) !== vorher) this.broadcast('meldung', { text: istNacht(s.uhr) ? '🌙 Die Nacht bricht herein – Zombies werden mehr. Taschenlampe bereit?' : '🌅 Es wird Tag', lang: true });
     this.feldZeit -= dt; this.feldAlter = (this.feldAlter ?? 0) + dt;
     if (this.feldZeit <= 0) {
@@ -2182,6 +2185,15 @@ export class SpielRaum extends Room {
     return out;
   }
 
+  // Ein am Boden liegender (rettbarer) Spieler auf derselben Ebene innerhalb von r px, sonst null
+  liegenderNahe(x, y, ebene, r) {
+    for (const p of this.state.spieler.values()) {
+      if (!p.unten || p.zombie > 0 || (p.ebene ?? '') !== ebene) continue;
+      if (Math.hypot(p.x - x, p.y - y) < r) return p;
+    }
+    return null;
+  }
+
   zombieSchritt(id, z, dt) {
     const info = this.zombieInfo.get(id);
     const welt = this.wv(z.ebene);
@@ -2218,6 +2230,18 @@ export class SpielRaum extends Room {
     }
     z.jagt = !!ziel;
 
+    // Wer am Boden liegt, wird in Ruhe gelassen: Zombies in seiner Nähe ziehen ab (Mitspieler können ihn retten)
+    if (!ziel && !info.mensch) {
+      const u = this.liegenderNahe(z.x, z.y, ebene, UNTEN_ABSTAND);
+      if (u) {
+        if (info.punkt && Math.hypot(info.punkt.x - u.x, info.punkt.y - u.y) < UNTEN_ABSTAND + 40) info.punkt = null;
+        const w = Math.atan2(z.y - u.y, z.x - u.x) + (info.versatz ?? (info.versatz = (this.rnd() - 0.5) * 1.2));
+        z.richtung = w; info.steht = false;
+        this.zombieGehen(z, w, W.zombieTempoJagen * 0.6 * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt, info);
+        return;
+      }
+    }
+
     if (ziel) {
       const d = Math.hypot(ziel.x - z.x, ziel.y - z.y);
       const sieht = d < W.sichtWeite * 1.6 && sichtfrei(welt, z.x, z.y, ziel.x, ziel.y);
@@ -2233,7 +2257,7 @@ export class SpielRaum extends Room {
           const schutz = ziel.kleidung > 0;
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1) * this.fkWert(ziel, 'schadenFaktor'));
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);
-          if (!(ziel.infektion > 0) && this.rnd() < (SpielRaum.einstellungen.bissSpieler ?? BISS_CHANCE) * dt * (schutz ? 0.5 : 1)) {
+          if (!(ziel.infektion > 0) && this.rnd() < (SpielRaum.einstellungen.bissSpielerLevel?.[this.state.karte] ?? SpielRaum.einstellungen.bissSpieler ?? BISS_CHANCE) * dt * (schutz ? 0.5 : 1)) {
             ziel.infektion = INFEKTION_DAUER;
             this.broadcast('meldung', { text: `🦠 ${ziel.name} wurde gebissen! Eine Rettungsspritze hilft.`, lang: true });
           }

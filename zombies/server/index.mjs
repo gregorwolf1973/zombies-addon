@@ -87,7 +87,8 @@ export async function starte({
       menschen: w.menschen,
       verwandlungMin: w.verwandlung,               // Spielminuten Biss → Zombie (Menschen)
       bissChance: w.biss / 100,
-      bissSpieler: w.bissSpieler / 100,            // je Sekunde Biss eines lebenden Zombies
+      bissSpieler: w.bissSpieler / 100,            // je Sekunde Biss eines lebenden Zombies (global)
+      bissSpielerLevel: Object.fromEntries(Object.entries(w.bissSpielerLevel ?? {}).map(([k, v]) => [k, v / 100])),   // je Karte/Level
       waffen: w.waffen,                            // je Waffe { schaden, pause }
       zombieTypen: ZOMBIE_TYPEN.filter(k => w.zombies.typen[k]).map(k => ZOMBIE_TYPEN.indexOf(k)),
       feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, welleMinuten: w.zombies.welle, welleMin: w.zombies.welleMin, welleMax: w.zombies.welleMax, sichtkegel: w.sichtkegel,

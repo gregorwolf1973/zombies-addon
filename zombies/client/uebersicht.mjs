@@ -196,6 +196,21 @@ export class Uebersicht {
         c.strokeText('SAFE', x, y + R + 8 * dpr); c.fillStyle = '#a5ff9e'; c.fillText('SAFE', x, y + R + 8 * dpr);
       }
     }
+    // Zielorte der offenen Aufgaben: orangefarbene Raute mit Symbol; auf der großen Karte mit Namen, in der Ecke nur als Punkt
+    for (const z of this.ziele ?? []) {
+      const [x, y] = pos(z.x, z.y);
+      if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+      if (!this.gross && this.zoom < 3) {
+        c.beginPath(); c.arc(x, y, 3.5 * dpr, 0, Math.PI * 2); c.fillStyle = '#ff9100'; c.fill(); c.lineWidth = 1.5 * dpr; c.strokeStyle = '#fff'; c.stroke();
+        continue;
+      }
+      const R = 12 * dpr;
+      c.beginPath(); c.moveTo(x, y - R - 3 * dpr); c.lineTo(x + R + 3 * dpr, y); c.lineTo(x, y + R + 3 * dpr); c.lineTo(x - R - 3 * dpr, y); c.closePath();
+      c.fillStyle = '#ff9100'; c.fill(); c.lineWidth = 2.5 * dpr; c.strokeStyle = '#fff'; c.stroke();
+      c.font = `${Math.round(14 * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#000'; c.fillText(z.symbol, x, y + dpr);
+      c.font = `bold ${Math.round(11 * dpr)}px sans-serif`; c.lineWidth = 3.5 * dpr; c.strokeStyle = '#000';
+      c.strokeText(z.name, x, y + R + 12 * dpr); c.fillStyle = '#ffcc80'; c.fillText(z.name, x, y + R + 12 * dpr);
+    }
     // Bundeswehr-Stützpunkt
     const sp = this.welt.stuetzpunkt;
     if (sp) {

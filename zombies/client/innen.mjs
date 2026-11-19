@@ -899,15 +899,31 @@ function safeMoeblieren(w) {
   const zaehler = { count: 0 };
   const raeume = [...w.raeume].sort((a, b) => b.b * b.h - a.b * a.h);
   const ganz = { x: w.ox, y: w.oy, b: w.b, h: w.h };
-  const setze = (art, b, h) => {
-    for (const raum of [...raeume, ganz]) {
-      for (let versuch = 0; versuch < 3; versuch++) {
-        const pos = findeMoebelPosition(kacheln, raum, b, h, w.ox, w.oy, w.b, w.h, rng, art);
-        if (!pos) break;
-        if (platziereMoebel(kacheln, w.moebel, w.behaelter, art, pos.x, pos.y, pos.b, pos.h, w.ox, w.oy, w.b, w.h, zaehler)) return true;
+  // reihum auf die Räume verteilen: jedes Stück beginnt im nächsten Raum (statt alles in den größten zu stopfen);
+  // ein Raum nimmt höchstens ~30 % seiner Fläche auf, erst wenn kein Raum mehr Platz hat, wird es enger
+  let reihum = 0;
+  const belegtIn = new Map();
+  const versuche = (raum, art, b, h) => {
+    for (let versuch = 0; versuch < 3; versuch++) {
+      const pos = findeMoebelPosition(kacheln, raum, b, h, w.ox, w.oy, w.b, w.h, rng, art);
+      if (!pos) return false;
+      if (platziereMoebel(kacheln, w.moebel, w.behaelter, art, pos.x, pos.y, pos.b, pos.h, w.ox, w.oy, w.b, w.h, zaehler)) {
+        belegtIn.set(raum, (belegtIn.get(raum) ?? 0) + pos.b * pos.h);
+        return true;
       }
     }
     return false;
+  };
+  const setze = (art, b, h) => {
+    const n = raeume.length;
+    for (const eng of [false, true]) {
+      for (let k = 0; k < n; k++) {
+        const raum = raeume[(reihum + k) % n];
+        if (!eng && (belegtIn.get(raum) ?? 0) + b * h > raum.b * raum.h * 0.3) continue;
+        if (versuche(raum, art, b, h)) { reihum = (reihum + k + 1) % n; return true; }
+      }
+    }
+    return versuche(ganz, art, b, h);
   };
   setze('funktisch', 2, 1);
   setze('vorratsregal', 2, 1);

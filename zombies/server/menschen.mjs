@@ -225,6 +225,12 @@ export class Stadtleben {
       if (!best) continue;
       const [mid, m] = best;
       info.punkt = { x: m.x, y: m.y }; info.mensch = mid;   // aktiv verfolgen (raum.mjs, zombieSchritt)
+      // Hilferuf, wenn der Angreifer nah ist (je Mensch höchstens alle 12–25 s)
+      const mi = this.info.get(mid);
+      if (mi && bd < 90 && !m.infiziert && (mi.hilfeBis ?? 0) < Date.now()) {
+        mi.hilfeBis = Date.now() + 12000 + this.raum.rnd() * 13000;
+        this.raum.broadcast('hilferufe', { x: m.x, y: m.y });
+      }
       if (bd < BISS_ABSTAND && !m.infiziert) {
         // einmal pro Sekunde ein Bissversuch; die Einstellung „Biss-Chance“ entscheidet, ob er trifft
         if ((info.bissVersuch ?? -1) > this.takt) continue;

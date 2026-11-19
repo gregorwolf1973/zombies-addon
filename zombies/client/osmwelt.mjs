@@ -26,7 +26,9 @@ const RICHTUNGEN = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 // Zäune/Hecken ausdünnen (deterministisch, nach Position): rund 15 % der Linienstücke fallen weg, bevorzugt zwischen eng
 // stehenden Gebäuden; zwischen zwei benachbarten Häusern bleibt mindestens eine Lücke. Die JSON-Karte bleibt unverändert,
 // es entsteht eine Kopie mit gelichteten Zaunlinien, Zaunart und groben Zaunkacheln.
-const LUECKE_BASIS = 0.025, LUECKE_ENG = 0.14;
+// Jede Lücke wird nachträglich um je ein Nachbarstück verbreitert (3 Stücke = 2,25 Kacheln = 72 px): Spieler/Zombie-Durchmesser
+// 22 px + Zaundicke bis 18 px + Reserve; die Ausgangswahrscheinlichkeiten sind daher niedriger.
+const LUECKE_BASIS = 0.01, LUECKE_ENG = 0.05;
 const posHash = (x, y) => { let h = (Math.round(x * 8) * 73856093) ^ (Math.round(y * 8) * 19349663); h = Math.imul(h ^ (h >>> 13), 0x5bd1e995); return ((h ^ (h >>> 15)) >>> 0) / 4294967296; };
 export function zaeuneAusduennen(karte) {
   if (!karte.zaeune?.length) return karte;
@@ -60,12 +62,13 @@ export function zaeuneAusduennen(karte) {
     for (const liste of nachLinie.values()) {
       if (liste.some(sg => sg.weg)) continue;
       liste.sort((p, q) => Math.hypot(p.mx - cx, p.my - cy) - Math.hypot(q.mx - cx, q.my - cy));
-      const sg = liste[0]; sg.weg = true;
-      // Nachbarstück (das näher am Zentrum) mit entfernen: Lücke ≈ 1,5 Kacheln
-      const nb = segs.filter(n => n.li === sg.li && Math.abs(n.i - sg.i) === 1).sort((p, q) => Math.hypot(p.mx - cx, p.my - cy) - Math.hypot(q.mx - cx, q.my - cy))[0];
-      if (nb) nb.weg = true;
+      liste[0].weg = true;
     }
   }
+  // jede Lücke um je ein Nachbarstück verbreitern (mind. 3 Stücke ≈ 72 px, Figur passt sicher durch)
+  const nachLi = new Map();
+  for (const n of segs) (nachLi.get(n.li) ?? nachLi.set(n.li, new Map()).get(n.li)).set(n.i, n);
+  for (const sg of segs.filter(s => s.weg)) for (const d of [-1, 1]) { const n = nachLi.get(sg.li).get(sg.i + d); if (n) n.weg = true; }
   const zaeune = [];
   karte.zaeune.forEach((z, li) => {
     let teil = null;
@@ -716,6 +719,11 @@ function zugaengeOeffnen(f, fb, fh, welt) {
   const erreicht = new Uint8Array(fb * fh), q = [start]; erreicht[start] = 1;
   const nach = c => { const x = c % fb, y = (c - x) / fb, r = []; if (x > 0) r.push(c - 1); if (x < fb - 1) r.push(c + 1); if (y > 0) r.push(c - fb); if (y < fh - 1) r.push(c + fb); return r; };
   for (let i = 0; i < q.length; i++) for (const n of nach(q[i])) if (!erreicht[n] && !belegt[n]) { erreicht[n] = 1; q.push(n); }
+  // Suchspeicher einmal anlegen; „marke“ zeigt, ob ein Eintrag zur aktuellen Suche gehört (statt Map je Haus).
+  // Warteschlange ohne Array.shift/unshift (bei großen Karten quadratisch, früher ~20 s im Hauptthread):
+  // vorn = Stapel für Felder ohne Kosten (wie unshift+shift), hinten = Schlange mit Lesezeiger (wie push+shift) – gleiche Reihenfolge.
+  const kostenA = new Int32Array(fb * fh), vorA = new Int32Array(fb * fh), marke = new Uint32Array(fb * fh);
+  let lauf = 0;
   for (const h of welt.haeuser) {
     if (!h.tuer || !h.betretbar) continue;
     // Vorplatz (gut eine Kachel vor der Tür, freigehalten) muss erreichbar sein
@@ -723,19 +731,22 @@ function zugaengeOeffnen(f, fb, fh, welt) {
     const ziel = vy * fb + vx;
     if ([0, -1, -fb, -fb - 1, 1, fb].some(d => erreicht[ziel + d])) continue;
     // Suche: freie Felder kosten 0, Zaun 1, Hausumriss 6 (notfalls ein Stück freigeben); grob feste Dinge sind tabu
-    const kosten = new Map([[ziel, 0]]), vor = new Map(), dq = [ziel];
+    lauf++;
+    marke[ziel] = lauf; kostenA[ziel] = 0; vorA[ziel] = -1;
+    const vorn = [ziel], hinten = []; let hk = 0;
     const preis = n => !belegt[n] ? 0 : umriss[n] ? 6 : 1;
     let gefunden = -1;
-    while (dq.length) {
-      const c = dq.shift();
+    while (vorn.length || hk < hinten.length) {
+      const c = vorn.length ? vorn.pop() : hinten[hk++];
       if (erreicht[c]) { gefunden = c; break; }
       for (const n of nach(c)) {
         if (fest[n]) continue;   // zu nah an festen Dingen: dort passt die Figur nicht durch
-        const k = kosten.get(c) + preis(n);
-        if (k < (kosten.get(n) ?? Infinity)) { kosten.set(n, k); vor.set(n, c); if (preis(n)) dq.push(n); else dq.unshift(n); }
+        const k = kostenA[c] + preis(n);
+        if (marke[n] !== lauf || k < kostenA[n]) { marke[n] = lauf; kostenA[n] = k; vorA[n] = c; if (preis(n)) hinten.push(n); else vorn.push(n); }
       }
     }
-    for (let c = gefunden; c !== undefined && c !== ziel; c = vor.get(c)) {
+    if (gefunden < 0) continue;
+    for (let c = gefunden; c >= 0 && c !== ziel; c = vorA[c]) {
       const x = c % fb, y = (c - x) / fb;
       for (let dy = -W2; dy <= W2; dy++) for (let dx = -W2; dx <= W2; dx++) { const i = (y + dy) * fb + x + dx; if (f[i] === 2 || f[i] === 3) f[i] = 0; }
     }

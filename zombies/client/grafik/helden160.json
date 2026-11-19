@@ -1,0 +1,100 @@
+{
+ "feld": 160,
+ "spalten": 25,
+ "bilder": {
+  "held_m_leer": [
+   0
+  ],
+  "held_m_pistole": [
+   1
+  ],
+  "held_m_gewehr": [
+   2
+  ],
+  "held_m_messer": [
+   3
+  ],
+  "held_m_lampe": [
+   4
+  ],
+  "held_m_pistole_lampe": [
+   5
+  ],
+  "held_m_gewehr_lampe": [
+   6
+  ],
+  "held_m_messer_lampe": [
+   7
+  ],
+  "held_m_stiefel_stehen": [
+   8
+  ],
+  "held_m_stiefel_gehen": [
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16
+  ],
+  "held_m_stiefel_laufen": [
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24
+  ],
+  "held_w_leer": [
+   25
+  ],
+  "held_w_pistole": [
+   26
+  ],
+  "held_w_gewehr": [
+   27
+  ],
+  "held_w_messer": [
+   28
+  ],
+  "held_w_lampe": [
+   29
+  ],
+  "held_w_pistole_lampe": [
+   30
+  ],
+  "held_w_gewehr_lampe": [
+   31
+  ],
+  "held_w_messer_lampe": [
+   32
+  ],
+  "held_w_stiefel_stehen": [
+   33
+  ],
+  "held_w_stiefel_gehen": [
+   34,
+   35,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41
+  ],
+  "held_w_stiefel_laufen": [
+   42,
+   43,
+   44,
+   45,
+   46,
+   47,
+   48,
+   49
+  ]
+ }
+}
