@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.42.0 – 19.11.2026
+
+- Einheitliche Figurgrößen: jedes Bild bekommt einen eigenen Ausgleich (client/groessen.mjs, gemessen mit tools/groessen_messen.py); Bewohner so breit wie der Survivor, alle Zombie-Typen etwa 10 % breiter, Leichen passend lang. Die Größenregler wirken auf diese Grundgröße, Vorschau und Spiel rechnen gleich.
+
 ## 0.41.0 – 19.11.2026
 
 - Neue Chat-Nachrichten mit Handy-Benachrichtigungston; Chat über den ganzen Bildschirm; Tastatur auf dem Handy erst beim Antippen des Eingabefelds.

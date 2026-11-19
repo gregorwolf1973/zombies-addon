@@ -1,4 +1,5 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
+import { groesse } from './groessen.mjs';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
@@ -922,7 +923,7 @@ class Ort extends Phaser.Scene {
     const n = p.farbe % FARBEN.length;
     // eigener Spieler: heller Ring am Boden
     const ring = this.add.ellipse(0, 0, 34, 34).setStrokeStyle(2, 0xffffff, ich ? 0.7 : 0).setFillStyle(0x000000, 0);
-    const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE);
+    const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand'));
     const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE).setVisible(false);
     const name = this.add.text(0, -28, p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
@@ -934,7 +935,7 @@ class Ort extends Phaser.Scene {
 
   neuerZombie(z) {
     const box = this.add.container(z.x, z.y).setDepth(3);
-    const bild = this.add.image(0, 0, 'figuren', this.figurBild('zombie_hemd', 0)).setScale(ZOMBIE_GROESSE);
+    const bild = this.add.image(0, 0, 'figuren', this.figurBild('zombie_hemd', 0)).setScale(ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd'));
     box.add([bild]);
     return { box, bild, x: z.x, y: z.y, r: z.richtung };
   }
@@ -1411,18 +1412,18 @@ class Ort extends Phaser.Scene {
       if (f.bild.texture.key !== tex) f.bild.setTexture(tex, 0);
       if (z.kriecht) {
         f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
-        f.bild.setRotation(0).setScale(ZOMBIE_GROESSE * zf);
+        f.bild.setRotation(0).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'kriecher_' + 'abcd'[(z.variante ?? 0) % 4]));
       } else if (gem) {
         // Einzelbild (Gemini): beim Gehen leicht wanken, Maßstab wie die übrigen Zombies
         const l3 = this.figurListe3[typ];
-        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf);
+        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren3', typ));
       } else if (neu) {
         // flüssig animierte Zombies (Riley Gombart): Laufen, Angriff, Stehen
         let nah = false;
         if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < W.spielerRadius + W.zombieRadius + 16) { nah = true; break; }
         const art = nah ? 'angriff' : bildNr < 0 ? 'stehen' : 'laufen';
         const i = art === 'laufen' ? Math.floor((f.lauf ?? 0) / 6) : Math.floor(this.time.now / (art === 'angriff' ? 70 : 140));
-        f.bild.setFrame(this.figurBild2(`${typ}_${art}`, i)).setRotation(0).setScale(BOGEN2_GROESSE * zf * (typ === 'z6' ? 1.05 : 1));
+        f.bild.setFrame(this.figurBild2(`${typ}_${art}`, i)).setRotation(0).setScale(BOGEN2_GROESSE * zf * groesse('figuren2', typ + '_laufen'));
       } else {
         // Angriff: beim Zubeißen das Bild mit offenem Mund (wo vorhanden)
         let nah = false;
@@ -1430,7 +1431,7 @@ class Ort extends Phaser.Scene {
         const angriff = nah && this.figurListe['zombie_' + typ + '_angriff'];
         f.bild.setFrame(angriff ? angriff[0] : this.figurBild('zombie_' + typ, bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 11)));
         // schlurfen: leicht wanken
-        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * (angriff ? 1.06 : 1));
+        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'zombie_' + typ) * (angriff ? 1.06 : 1));
       }
       f.bild.setTint(z.jagt ? 0xffd2c8 : 0xffffff);
       if (s.kegel && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
@@ -1452,11 +1453,13 @@ class Ort extends Phaser.Scene {
         const typ = ZOMBIE_TYPEN[(l.variante ?? 0) % ZOMBIE_TYPEN.length], zweite = this.figurListe['leiche_' + typ + '2'] && (Math.round(l.x) + Math.round(l.y)) % 2;
         // beide neuen Arten mit den bisherigen Leichenbildern (die Sterbebilder von z7 gefielen nicht)
         const tot3 = this.figurListe3['leiche_' + typ];   // Gemini-Totenbild (figuren3), Kopf nach links wie die alten Leichen
+        const altName = 'leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : GEMINI_TYPEN.has(typ) ? GEMINI_LEICHEN[ZOMBIE_TYPEN.indexOf(typ) % GEMINI_LEICHEN.length] : typ) + (zweite ? '2' : '');
         o = tot3 ? this.add.image(l.x, l.y, 'figuren3', tot3[0]).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung)
-          : this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : GEMINI_TYPEN.has(typ) ? GEMINI_LEICHEN[ZOMBIE_TYPEN.indexOf(typ) % GEMINI_LEICHEN.length] : typ) + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
+          : this.add.image(l.x, l.y, 'figuren', this.figurBild(altName)).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
+        o.gf = tot3 ? groesse('figuren3', 'leiche_' + typ) : groesse('figuren', altName);   // Größenausgleich (groessen.mjs)
         this.leichen.set(id, o);
       }
-      o.setScale(ZOMBIE_GROESSE * (s.leichenGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100);   // Einstellung: Leichengröße in %
+      o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * (s.leichenGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100);   // Einstellung: Leichengröße in %
       o.setVisible((l.ebene ?? '') === this.aktEbene);
       const ausblenden = Math.min(1, (LEICHE_DAUER - l.alter) / 20);
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
@@ -1468,7 +1471,7 @@ class Ort extends Phaser.Scene {
       if (!o) {
         // Bürger (KonitaTutorials) mit Laufanimation, Sorte nach Kennung
         const sorte = String(m.aussehen ?? '').startsWith('p') ? 'polizist' : 'buerger' + (1 + (id.charCodeAt(id.length - 1) % 3));
-        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2(sorte)).setScale(BOGEN2_GROESSE * 0.95);
+        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2(sorte)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', sorte));
         o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, sorte, x: m.x, y: m.y, r: m.richtung };
         this.menschenObj.set(id, o);
       }
@@ -1579,8 +1582,8 @@ class Ort extends Phaser.Scene {
     }
     this.bwLicht = new BwLicht(this, sp);
     const soldat = (x, y, blick, phase, n = -1) => {
-      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE);
-      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE);
+      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle'));
+      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle'));
       const box = this.add.container(x, y, [fuesse, bild]).setDepth(3.5).setRotation(blick);
       const e = { box, bild, phase, blick, schussBis: 0, n };
       o.soldaten.push(e);
@@ -1589,7 +1592,7 @@ class Ort extends Phaser.Scene {
       if (t.art === 'mgnest') soldat(t.x - Math.cos(t.blick) * 5, t.y - Math.sin(t.blick) * 5, t.blick, i, i);   // hinter dem MG
       else if (t.art === 'posten' && t.rolle === 'soldat') soldat(t.x, t.y, t.blick, i, i);   // n = Teil-Nummer: Schüsse vom Server zeigen den Soldaten feuernd
       else if (t.art === 'posten' && t.rolle === 'arzt') {
-        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(BOGEN2_GROESSE * 0.95);
+        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', 'arzt'));
         o.aerzte.push({ box: this.add.container(t.x, t.y, [bild]).setDepth(3.5).setRotation(t.blick), bild });
       } else if (t.art === 'posten' && t.rolle === 'verwundet') {
         const bild = this.add.image(t.x, t.y, 'figuren2', this.figurBild2('verwundet', t.variante)).setScale(BOGEN2_GROESSE * 1.26).setRotation(t.blick).setDepth(0.6);
@@ -1756,7 +1759,7 @@ class Ort extends Phaser.Scene {
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
-    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * ((raum.state?.zombieGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 100) / 100) : survivor ? BOGEN2_GROESSE : MENSCH_GROESSE;
+    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * ((raum.state?.zombieGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 100) / 100) : survivor ? BOGEN2_GROESSE : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand');
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
