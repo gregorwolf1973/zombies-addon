@@ -1,0 +1,11 @@
+Draufsicht aus einem GLB-Modell rendern (three.js im Headless-Chrome); genutzt für den Puma (19.11.2026)
+0. three.js 0.160.0 nach lib/three holen (nicht im Repo):
+   lib/three/three.module.js, lib/three/addons/loaders/GLTFLoader.js, lib/three/addons/utils/BufferGeometryUtils.js
+   (je https://cdn.jsdelivr.net/npm/three@0.160.0/build/… bzw. …/examples/jsm/…)
+1. Modell als spz_puma.glb hier ablegen (oder Namen in seite.html anpassen); TURM in seite.html = Knotennamen des Turms
+2. python3 -m http.server 8817 --bind 127.0.0.1   (in diesem Ordner)
+3. google-chrome --headless=new --enable-unsafe-swiftshader --use-angle=swiftshader --remote-debugging-port=9333 --user-data-dir=<scratch> about:blank
+4. node cdp.mjs 'http://127.0.0.1:8817/seite.html?nur=info' info.txt        (Teile, Maße, URSPRUNG = Turm-Drehpunkt)
+   node cdp.mjs 'http://127.0.0.1:8817/seite.html?teil=wanne&px=4' wanne.txt  (teil = alles|wanne|turm)
+   Zeile 2 der Ausgabe ist eine PNG-data-URL. Bild: Bug nach rechts (+x), rechte Seite unten – wie im Spiel.
+5. PNGs speichern, dann tools/puma_bilder.py (WebP nach client/grafik); Maße in PUMA_BILD (client/stuetzpunkt.mjs)

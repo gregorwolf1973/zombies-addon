@@ -4,3 +4,7 @@ tools/osm/roh_*.json
 tools/osm/*_test.json
 tools/kenney_roh/
 toene-lokal/
+tools/glb_draufsicht/lib/
+tools/glb_draufsicht/*.png
+tools/glb_draufsicht/*.glb
+tools/glb_draufsicht/info.txt

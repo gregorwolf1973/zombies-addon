@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.48.1 – 19.11.2026
+
+- Schützenpanzer Puma (Stützpunkt und Evakuierungspanzer in den Isarauen) als Draufsicht aus einem 3D-Modell statt gezeichnet: Wanne und drehbarer Turm getrennt, Turm sitzt wie im Original links hinter der Mitte, Mündungsfeuer an der echten Rohrspitze.
+
 ## 0.48.0 – 19.11.2026
 
 - Startdialog vor Level 1: 5 Fähigkeitspunkte verteilen und einen Startgegenstand wählen (Pistole mit 12 Schuss, Taschenlampe, Brecheisen oder +1 Wasser); nur einmal je Runde, Bots wählen selbst.
