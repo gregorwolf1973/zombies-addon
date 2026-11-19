@@ -4,6 +4,8 @@
 import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
 import { erzeugeZeichner } from './proto_grafik.mjs';
 import { zeichneSafeMoebel } from './safe_moebel.mjs';
+import { zeichneWasser } from './wasser.mjs';
+import { zeichneMoebelBild } from './moebel_bilder.mjs';
 import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
 import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach } from './vektor.mjs';
 
@@ -98,7 +100,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
   for (let ky = y0; ky < y1; ky++) for (let kx = x0; kx < x1; kx++) {
     const t = welt.hole(kx, ky), px = kx * KACHEL, py = ky * KACHEL;
     const nb = (dx, dy) => welt.hole(kx + dx, ky + dy);
-    if (vek && (t === T.STRASSE || t === T.PLATZ)) continue;   // kommen als glatte Linien/Flächen
+    if (vek && (t === T.STRASSE || t === T.PLATZ || t === T.WASSER)) continue;   // Wasser kommt als glatte Fläche (wasser.mjs)   // kommen als glatte Linien/Flächen
     // Gebäude zeigt das Dach nach dem echten Umriss (auch Safe Rooms: ihr Inneres ist ein eigener Innenraum)
     if (vek && (t === T.LEER || t === T.WAND || t === T.BODEN || t === T.TUER)) continue;
     if (t === T.LEER) { ctx.fillStyle = '#5d4a40'; ctx.fillRect(px, py, KACHEL, KACHEL); continue; }
@@ -182,6 +184,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
   }
   ctx.strokeStyle = 'rgba(30,70,25,.55)'; ctx.lineWidth = 1; ctx.stroke(gras);
   ['#fff59d', '#f8bbd0', '#ffffff', '#ce93d8'].forEach((f, i) => { ctx.fillStyle = f; ctx.fill(blumen[i]); });
+  if (vek) zeichneWasser(ctx, welt, { x0, y0, x1, y1 });
   if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details?.zaeune) zaunLinien(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
@@ -644,7 +647,8 @@ const BODEN_FARBEN = {
   vorratskeller: ['#80786c', 'beton'], dachboden: ['#8a6a48', 'diele'],
 };
 
-function zeichneMoebel(ctx, m) {
+function zeichneMoebel(ctx, m, opt = {}) {
+  if (zeichneMoebelBild(ctx, m, KACHEL, opt)) return;   // Bild (Gemini), falls Bogen geladen und Größe passt
   if (zeichneSafeMoebel(ctx, m, KACHEL)) return;   // Notlager-Möbel der Safe Rooms
   const x = m.x * KACHEL, y = m.y * KACHEL, b = m.b * KACHEL, h = m.h * KACHEL;
   const k = (f, rx, ry, rb, rh, r = 3) => { ctx.fillStyle = f; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(rx, ry, rb, rh, r) : ctx.rect(rx, ry, rb, rh); ctx.fill(); };
@@ -706,7 +710,13 @@ export function zeichneInnen(ctx, w) {
       ctx.fillText(t === T.TREPPE_RUNTER ? '▼' : '▲', px + 16, py + 21);
     }
   }
-  for (const m of w.moebel) zeichneMoebel(ctx, m);
+  const istWand = (x, y) => { const t = w.hole(x, y); return t === T.WAND || t === undefined; };
+  for (const m of w.moebel) {
+    const wand = { oben: false, rechts: false, unten: false, links: false };
+    for (let i = 0; i < m.b; i++) { wand.oben ||= istWand(m.x + i, m.y - 1); wand.unten ||= istWand(m.x + i, m.y + m.h); }
+    for (let j = 0; j < m.h; j++) { wand.links ||= istWand(m.x - 1, m.y + j); wand.rechts ||= istWand(m.x + m.b, m.y + j); }
+    zeichneMoebel(ctx, m, { raumTyp: raumAn(m.x, m.y)?.typ, wand });
+  }
   ctx.restore();
 }
 

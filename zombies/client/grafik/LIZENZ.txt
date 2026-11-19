@@ -32,3 +32,7 @@ angeordnet mit tools/gemini_zombies_schneiden.py.
 Tote Zombies (grafik/figuren3.webp, Felder 18–26, Schlüssel „leiche_<typ>“): ebenfalls mit Google Gemini für dieses Spiel
 erzeugt (zwei Bildbögen mit liegenden Toten, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben);
 freigestellt (Blutlache bleibt), gedreht, skaliert und angeordnet mit tools/gemini_zombies_schneiden.py.
+
+Möbel (grafik/moebel.webp, moebel.json): mit Google Gemini für dieses Spiel erzeugt (zwei Bildbögen „Wohnen“ und
+„Laden/Safe Room“, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben); freigestellt, auf Kachelgröße
+(64 px je Kachel) skaliert und angeordnet mit tools/gemini_moebel_schneiden.py.

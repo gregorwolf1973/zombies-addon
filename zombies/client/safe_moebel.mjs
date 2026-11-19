@@ -1,3 +1,4 @@
+import { zeichneMoebelBild } from './moebel_bilder.mjs';
 // Notlager-Möbel für Safe Rooms (Canvas 2D, von oben) und Sandsäcke vor der Haustür
 export const SAFE_ARTEN = new Set(['feldbett', 'vorratsregal', 'funktisch', 'generator', 'kanister', 'erstehilfe']);
 
@@ -18,6 +19,7 @@ function gedreht(ctx, x, y, bw, bh, fn) {
 // Rückgabe true, wenn die Art hier gezeichnet wurde. m: { art, x, y, b, h } in Kacheln
 export function zeichneSafeMoebel(ctx, m, KACHEL) {
   if (!SAFE_ARTEN.has(m.art)) return false;
+  if (zeichneMoebelBild(ctx, m, KACHEL)) return true;   // Bild (Gemini) statt gezeichnet
   const x = m.x * KACHEL, y = m.y * KACHEL, bw = m.b * KACHEL, bh = m.h * KACHEL;
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + 5, y + 6, bw - 6, bh - 6);
   switch (m.art) {

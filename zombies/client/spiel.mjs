@@ -7,6 +7,7 @@ import {
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
+import { setzeMoebelBilder } from './moebel_bilder.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_TURM, PUMA_SKALA, zeichnePumaTurm, zeichnePumaWanne, handelPartner } from './stuetzpunkt.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
@@ -608,6 +609,8 @@ class Ort extends Phaser.Scene {
     // Auto-Bogen (CC0, tools/autos_schneiden.py); fehlt er, bleiben die Autos gezeichnet
     this.load.image('autos', 'grafik/autos.webp');
     this.load.json('autosliste', 'grafik/autos.json');
+    this.load.image('moebel', 'grafik/moebel.webp');
+    this.load.json('moebelliste', 'grafik/moebel.json');
   }
 
   create() {
@@ -627,6 +630,7 @@ class Ort extends Phaser.Scene {
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
     this.weltFp = weltFingerabdruck(this.welt);   // sofort nach dem Aufbau – später kommen Haufen, Leichen usw. aus dem Spielstand dazu
     try { setzeAutoBilder(this.textures.get('autos').getSourceImage(), this.cache.json.get('autosliste')); } catch { setzeAutoBilder(null, null); }   // vor den ersten Kartenstücken
+    try { setzeMoebelBilder(this.textures.get('moebel').getSourceImage(), this.cache.json.get('moebelliste')); } catch { setzeMoebelBilder(null, null); }
     figurenVorzeichnen(this);
     ladenZeigen(85, 'Generiere Welt … zeichne Karte');
     this.zeichneKarte();

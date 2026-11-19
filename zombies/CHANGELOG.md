@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.46.0 – 19.11.2026
+
+- Möbel echter: alle 28 Möbelarten als Gemini-Bilder von oben (Wohnung, Küche, Bad, Laden, Keller, Safe Room, Bundeswehr), mit der Rückseite zur Wand gedreht; Werkzeug tools/gemini_moebel_schneiden.py.
+- Flussufer glatt: geglättete Uferlinie mit Kiesrand und Wellen statt Kachelstufen (nur Darstellung, Kollision unverändert).
+
 ## 0.45.0 – 19.11.2026
 
 - Welt auf Server und Geräten wieder gleich: Drei Sortierungen mit Zufallsvergleich (Straßensperren, Mülltonnen) hingen von der JS-Engine ab – der Server (Node 22) baute Sperren, Müll und Kisten woanders als die Geräte (Chrome). Jetzt festes Mischen; WELT_VERSION 15. Dadurch auch kein Zurückspringen auf die Anmeldung mehr; nach einem nötigen Neuladen tritt das Spiel automatisch wieder bei.
