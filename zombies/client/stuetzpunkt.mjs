@@ -10,6 +10,7 @@ import { KACHEL, BREITE, HOEHE, T, FEIN, FEIN_PX, zufall, findeWeg } from './wel
 import { zeichneSafeMoebel } from './safe_moebel.mjs';
 
 const K = KACHEL, TAU = Math.PI * 2;
+export const PUMA_SKALA = 1.6;   // Puma (Wanne und Turm) wird so viel größer gezeichnet als die Bauplan-Maße
 export const SP_BREITE = 30, SP_TIEFE = 22;   // Kacheln im Bauplan (quer zur Front, von der Front nach hinten)
 const WINKEL = { n: 0, o: Math.PI / 2, s: Math.PI, w: -Math.PI / 2 };
 const hash = (a, b) => { let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -123,9 +124,9 @@ export function baueStuetzpunkt(welt, seed, setze) {
     teile.push({ art: 'durchfahrt', x, y, w, d: K, winkel: th, b: c ? w : K, h: c ? K : w, aussen: ort((DU0 + DU1) / 2, -0.5), innen: ort((DU0 + DU1) / 2, 4.5) });
   }
   {   // Puma: Wanne 72 × 34 px, Bug zur Stadt (−v); der Turm ist ein eigenes Teil (Mittelpunkt, Ausrichtung, Rohrlänge)
-    const L = 72, Bw = 34, [x, y] = ort(14.6, 3.3);
+    // Startplatz in der Durchfahrt; danach fährt er (server/stuetzpunkt.mjs) auf der Bahn v = 2,6 hin und her, deshalb keine Sperre im Feinraster
+    const L = 72, Bw = 34, [x, y] = ort(15.5, 2.6);
     teile.push({ art: 'puma', x, y, winkel: blickVorn, laenge: L, breite: Bw, b: c ? Bw : L, h: c ? L : Bw, turm: { x, y, winkel: blickVorn, rohr: 44 } });
-    sperre(x, y, -Bw / 2, -L / 2, Bw / 2, L / 2);   // im Plan-Rahmen: quer Bw, tief L
   }
   // ---- (b) Sandsackstellungen (U) und MG-Nester hinter der Sperrlinie ----
   for (const [u, v] of [[10.5, 4.0], [19.5, 4.0]]) {
@@ -138,7 +139,7 @@ export function baueStuetzpunkt(welt, seed, setze) {
     teile.push({ art: 'mgnest', x, y, r: 23, blick: blickVorn, winkel: th });
     sperren.push({ x, y, r: 22 });
   }
-  posten('soldat', 13.4, 2.7); posten('soldat', 17.6, 2.7);
+  posten('soldat', 13.4, 4.4); posten('soldat', 17.6, 4.4);   // hinter der Pumabahn (v 1,75–3,45)
 
   // ---- Zelte: Rechteck in Rahmenkoordinaten (Kacheln), Wände außen ums Innere, Eingang in einer Wand ----
   const zelt = (art, nutzung, u0, v0, u1, v1, seite, von, bis) => {
@@ -423,7 +424,7 @@ export function zeichneStuetzpunktOben(ctx, welt, rect) {
     const f = {
       sanizelt: () => zeltWaende(ctx, t), zelt: () => zeltWaende(ctx, t), funkzelt: () => zeltWaende(ctx, t),
       sdraht: () => sDraht(ctx, t), sandsack: () => sandsackStellung(ctx, t), mgnest: () => mgNest(ctx, t),
-      puma: () => pumaWanne(ctx, t), lkw: () => lkw(ctx, t), container: () => bwContainer(ctx, t), kiste: () => munKiste(ctx, t),
+      lkw: () => lkw(ctx, t), container: () => bwContainer(ctx, t), kiste: () => munKiste(ctx, t),
       antenne: () => antenne(ctx, t), flagge: () => flagge(ctx, t),
     }[t.art];
     if (f) dinge.push([t.art === 'sdraht' ? t.y - 4000 : t.y, f]);
@@ -553,7 +554,6 @@ export function zeichnePumaWanne(ctx, L = 72, B = 34) {
   ctx.fillStyle = '#e8e8dc'; ctx.fillRect(-hl + 22, hb - 12, 5, 1.8); ctx.fillRect(-hl + 23.6, hb - 13.6, 1.8, 5);   // Eisernes Kreuz (klein)
   ctx.fillStyle = '#111'; ctx.fillRect(-hl + 22.6, hb - 11.5, 3.8, 0.8); ctx.fillRect(-hl + 24.1, hb - 13, 0.8, 3.8);
 }
-function pumaWanne(ctx, t) { ctx.translate(t.x, t.y); ctx.rotate(t.winkel); zeichnePumaWanne(ctx, t.laenge, t.breite); }
 
 // Puma-Turm: unbemannt, 30-mm-Maschinenkanone nach vorn (+x); Drehpunkt = (PUMA_TURM.mx, PUMA_TURM.my) im Bild
 export const PUMA_TURM = { b: 96, h: 48, mx: 30, my: 24 };

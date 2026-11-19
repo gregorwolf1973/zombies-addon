@@ -17,7 +17,6 @@ export const POLIZIST_ANTEIL = 0.06;
 const RAD = 10;
 const TEMPO = W.tempoGehen * 0.55, FLUCHT = W.tempoGehen * 0.62;   // Flucht langsamer als ein jagender Zombie (105 px/s), sonst holt er sie nie ein
 const BISS_ABSTAND = 30;
-const FERN = 1400;   // weiter von allen Spielern weg: seltener rechnen
 
 const winkelDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
@@ -88,9 +87,8 @@ export class Stadtleben {
     const s = this.raum.state, welt = this.raum.welt;
     const zr = this.raum.zeitraffer?.() ?? 1;
     this.takt += dt;
-    const spieler = [...s.spieler.values()].filter(p => !p.ebene);
     const zombies = [...s.zombies.entries()].filter(([, z]) => !z.ebene);
-    const fern = m => spieler.every(p => Math.hypot(p.x - m.x, p.y - m.y) > FERN);
+    const fern = m => this.raum.istFern ? this.raum.istFern(m.x, m.y, '') : true;   // weit von allen Spielern (auch Haustüren, Stützpunkt)
     const tick = Math.round(this.takt * 20);
     let suchen = 1;
     for (const [id, m] of s.menschen) {
@@ -101,9 +99,9 @@ export class Stadtleben {
         inf.inf -= dt * zr;
         if (inf.inf <= 0) { this.verwandeln(id, m, inf); continue; }
       }
-      // weit weg: nur jedes fünfte Mal, dafür mit größerem Schritt
+      // weit weg: nur jedes vierte Mal, dafür mit gesammeltem Schritt
       let d = dt;
-      if (fern(m)) { if ((tick + inf.heim.nr) % 5) continue; d = dt * 5; }
+      if (fern(m)) { inf.stau = (inf.stau ?? 0) + dt; if ((tick + inf.heim.nr) % 4) continue; d = inf.stau; inf.stau = 0; } else inf.stau = 0;
       if (!m.sichtbar) {
         if (inf.imBus) continue;
         inf.warte -= d;
@@ -112,7 +110,7 @@ export class Stadtleben {
       }
       // Zombie oder Feuer in der Nähe? Weglaufen (gebissene laufen auch, aber langsamer)
       let gefahr = null, gd = 170;
-      for (const [, z] of zombies) {
+      for (const z of this.raum.zRaster ? this.raum.zombiesNahe(m.x, m.y, '', 2) : zombies.map(e => e[1])) {
         const dd = Math.hypot(z.x - m.x, z.y - m.y);
         if (dd < gd && sichtfrei(welt, m.x, m.y, z.x, z.y)) { gd = dd; gefahr = z; }
       }
@@ -204,11 +202,20 @@ export class Stadtleben {
     const spielMin = this.raum.einstellungen?.()?.verwandlungMin ?? 30;
     const sekunden = spielMin * ((this.raum.einstellungen?.()?.tagMinuten || 48) * 60 / 1440);
     const chance = this.raum.einstellungen?.()?.bissChance ?? 1;
+    // Raster der sichtbaren Menschen (Zelle 96 px): jeder Zombie prüft nur die Nachbarzellen (Sichtweite 170 < 2 Zellen)
+    const Z = 96, raster = new Map();
+    for (const e of menschen) {
+      const k = Math.floor(e[1].y / Z) * 4096 + Math.floor(e[1].x / Z);
+      const l = raster.get(k); if (l) l.push(e); else raster.set(k, [e]);
+    }
     for (const [zid, z] of zombies) {
       const info = this.raum.zombieInfo.get(zid);
-      if (!info || info.ziel || info.schlaeft) continue;
+      if (!info || info.ziel || info.schlaeft || info.dran === false) continue;   // ferne Zombies nur in „ihrem“ Takt
       let best = null, bd = W.sichtWeite;
-      for (const [mid, m] of menschen) {
+      const cx = Math.floor(z.x / Z), cy = Math.floor(z.y / Z);
+      const kandidaten = [];
+      for (let j = cy - 2; j <= cy + 2; j++) for (let i = cx - 2; i <= cx + 2; i++) { const l = raster.get(j * 4096 + i); if (l) for (const e of l) kandidaten.push(e); }
+      for (const [mid, m] of kandidaten) {
         if (m.infiziert) continue;   // schon gebissen: nicht noch einmal jagen
         const d = Math.hypot(m.x - z.x, m.y - z.y);
         if (d > bd) continue;

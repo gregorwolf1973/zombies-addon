@@ -529,7 +529,7 @@
     <div class="feld">
       <label for="welleMin">Größe der Welle: mindestens</label>
       <div class="wertzeile">
-        <input type="range" id="welleMin" min="5" max="50" step="1">
+        <input type="range" id="welleMin" min="5" max="300" step="1">
         <span class="wert" id="welleMinWert">20</span>
       </div>
     </div>
@@ -537,7 +537,7 @@
     <div class="feld">
       <label for="welleMax">… höchstens</label>
       <div class="wertzeile">
-        <input type="range" id="welleMax" min="5" max="50" step="1">
+        <input type="range" id="welleMax" min="5" max="300" step="1">
         <span class="wert" id="welleMaxWert">50</span>
       </div>
     </div>
@@ -639,6 +639,24 @@
   <label class="tn-schalter"><input type="checkbox" id="zt_lederhose"> Lederhose</label>
   <label class="tn-schalter"><input type="checkbox" id="zt_z6"> Grünhemd</label>
   <label class="tn-schalter"><input type="checkbox" id="zt_z7"> Schlurfer</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_kaminkehrer"> Kaminkehrer</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_bauarbeiter"> Bauarbeiter</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_koch"> Koch</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_holzfaeller"> Holzfäller</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_mechaniker"> Mechaniker</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_brandmeister"> Brandmeister</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_kehrer"> Schornsteinfeger</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_strassenarbeiter"> Straßenarbeiter</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_baecker"> Bäcker</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_flanell"> Flanellhemd</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_werkstatt"> Werkstatt</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_vogelscheuche"> Vogelscheuche</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_postbote"> Postbote</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_streife"> Streifenpolizist</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_wachtmeister"> Wachtmeister</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_landstreicher"> Landstreicher</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_mantel"> Mantelträger</label>
+  <label class="tn-schalter"><input type="checkbox" id="zt_langhaar"> Langhaar</label>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="wfTitel">Waffen: Schaden und Schussfolge</div>
   <label for="wfS_pistole">🔫 Pistole: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_pistole" min="1" max="300" step="1"><span id="wfS_pistoleWert"></span></div>
@@ -792,7 +810,7 @@
     return fetch(url, koerper ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(koerper) } : {})
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
-  var ZTYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7'];
+  var ZTYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7', 'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];
   var WFVORGABE = { pistole: { schaden: 34, pause: 0.45 }, gewehr: { schaden: 100, pause: 1.2 }, schrotflinte: { schaden: 70, pause: 0.95 }, mp: { schaden: 28, pause: 0.14 }, mg: { schaden: 30, pause: 0.09 }, schlaeger: { schaden: 40, pause: 0.6 }, sense: { schaden: 55, pause: 0.85 }, messer: { schaden: 30, pause: 0.45 }, faust: { schaden: 20, pause: 0.7 } };
   function laden() { anfrage('verwaltung/api').then(zeige).catch(function () {}); }
   function regler(id, wert, teil) {
@@ -977,6 +995,51 @@
     el.addEventListener('change', function () { var t = {}; t[r[1]] = Number(el.value); senden(t); });
   });
   $('agAn').addEventListener('change', function () { senden({ an: $('agAn').checked }); });
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  laden();
+  setInterval(laden, 5000);
+})();
+</script>
+
+<style>
+  #fkKarte .ag-leise { color: var(--text-soft); font-size: .85rem; font-weight: 400; }
+  #fkKarte .ag-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #fkKarte .ag-zeile input { flex: 1; }
+  #fkKarte .ag-zeile span { min-width: 64px; text-align: right; }
+  #fkKarte .ag-schalter { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; font-weight: 600; }
+  #fkKarte .ag-schalter input { width: 22px; height: 22px; }
+  #fkKarte .ag-status { min-height: 1.2em; font-size: .85rem; }
+</style>
+<section class="karte" id="fkKarte" aria-labelledby="titelFk">
+  <h2 id="titelFk">⭐ Fähigkeiten</h2>
+  <p class="ag-leise">Spieler sammeln Erfahrung (Zombies, Aufgaben, Rätsel, Wiederbeleben, Evakuierung); jedes Level gibt einen Punkt für Fähigkeiten (Taste K im Spiel). Ausgeschaltet gelten alle Fähigkeiten nicht, die Punkte bleiben gespeichert.</p>
+  <label class="ag-schalter"><input type="checkbox" id="fkAn"> Fähigkeiten aktiv</label>
+  <label for="fkFaktor">Erfahrung (Prozent)</label>
+  <div class="ag-zeile"><input type="range" id="fkFaktor" min="10" max="500" step="10"><span id="fkFaktorWert">100 %</span></div>
+  <p class="ag-status" id="fkStatus" aria-live="polite"></p>
+</section>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var aktiv = false;
+  function status(text, fehler) {
+    var s = $('fkStatus'); s.textContent = text; s.style.color = fehler ? 'var(--gefahr)' : 'var(--akzent)';
+    clearTimeout(status.t); status.t = setTimeout(function () { s.textContent = ''; }, 2500);
+  }
+  function zeige(d) {
+    var f = (d.einstellungen && d.einstellungen.faehigkeiten) || {};
+    if (!aktiv) { $('fkFaktor').value = f.xpFaktor === undefined ? 100 : f.xpFaktor; $('fkFaktorWert').textContent = $('fkFaktor').value + ' %'; }
+    if (document.activeElement !== $('fkAn')) $('fkAn').checked = f.an !== false;
+  }
+  function senden(teil) {
+    return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ faehigkeiten: teil }) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { aktiv = false; zeige(d); status('✓ Gespeichert'); })
+      .catch(function (e) { aktiv = false; status('Fehler: ' + e.message, true); });
+  }
+  $('fkFaktor').addEventListener('input', function () { aktiv = true; $('fkFaktorWert').textContent = $('fkFaktor').value + ' %'; });
+  $('fkFaktor').addEventListener('change', function () { senden({ xpFaktor: Number($('fkFaktor').value) }); });
+  $('fkAn').addEventListener('change', function () { senden({ an: $('fkAn').checked }); });
   function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
   laden();
   setInterval(laden, 5000);

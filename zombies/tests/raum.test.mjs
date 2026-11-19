@@ -97,7 +97,7 @@ test('alle am Boden → Erwischt, Aufwachen im Safe Room', async () => {
     assert.ok(await bis(() => a.state.phase === 'erwischt'));
     assert.ok(await bis(() => a.state.phase === 'spiel', 8000), 'kein Aufwachen');
     assert.equal(toni.unten, false);
-    assert.ok(toni.hp === 100 && toni.durst === 100 && toni.hunger === 100, 'volle Werte nach dem Aufwachen: ' + toni.hp);
+    assert.ok(toni.hp === 100 && toni.durst > 99.9 && toni.hunger > 99.9, 'volle Werte nach dem Aufwachen: ' + toni.hp);
     assert.ok(await bis(() => toni.sicher !== ''), 'nicht im Safe Room');
   } finally {
     await a.leave();

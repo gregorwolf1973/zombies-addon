@@ -101,6 +101,7 @@ export async function starte({
         drinnenDraussen: w.sprache.drinnenDraussen / 100, funk: w.sprache.funk / 100, redenLockt: w.sprache.redenLockt,
       },
       aufgaben: w.aufgaben,                         // { an, stunde, wartezeit, anzahl }
+      faehigkeiten: w.faehigkeiten,                 // { an, xpFaktor }
       bundeswehr: w.bundeswehr,                     // { aktiv, falltage }
       ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,

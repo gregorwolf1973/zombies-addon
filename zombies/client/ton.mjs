@@ -222,6 +222,37 @@ export function aufheben() {
   ton(z, 0.08, { typ: 'triangle', freq: 660, laut: 0.4 }); ton(z, 0.12, { typ: 'triangle', freq: 990, start: 0.07, laut: 0.4 });
 }
 
+// Wassermangel: trockenes Husten/Keuchen (gefiltertes Rauschen + rauer Ton) und leises Tropfen, komplett synthetisiert
+// Stimme für den Durst-Ton: je Gerät einmal zufällig festgelegt (das Aussehen kennt kein Geschlecht)
+let stimme = null;
+function durstStimme() {
+  if (stimme) return stimme;
+  try { stimme = localStorage.getItem('zob_stimme'); } catch {}
+  if (stimme !== 'durstMann' && stimme !== 'durstFrau') { stimme = Math.random() < 0.5 ? 'durstMann' : 'durstFrau'; try { localStorage.setItem('zob_stimme', stimme); } catch {} }
+  return stimme;
+}
+// Hülse fällt zu Boden (nur in Räumen, kurz nach dem Schuss)
+export function huelse(x, y) {
+  if (document.hidden) return;
+  setTimeout(() => probe('huelse', x, y), 300 + Math.random() * 200);
+}
+export function durst() {
+  if (document.hidden) return;
+  if (probe(durstStimme(), null, null)) return;
+  const z = ort(null, null, 0.5); if (!z) return;
+  // zwei trockene Huster
+  for (let i = 0; i < 2; i++) {
+    const t0 = i * 0.22;
+    rauschen(z, 0.14, { typ: 'bandpass', freq: 900 + Math.random() * 300, q: 1.2, start: t0, a: 0.01, laut: 0.55 });
+    ton(z, 0.12, { typ: 'sawtooth', freq: 190 - i * 20, freqEnde: 110, start: t0, laut: 0.12 });
+  }
+  // raues Einatmen
+  rauschen(z, 0.45, { typ: 'highpass', freq: 2200, q: 0.7, start: 0.6, a: 0.2, laut: 0.18 });
+  // Tropfen: kurzer, fallender Sinus mit leisem Nachhall
+  ton(z, 0.09, { typ: 'sine', freq: 1500, freqEnde: 650, start: 1.25, a: 0.004, laut: 0.28 });
+  ton(z, 0.12, { typ: 'sine', freq: 1500, freqEnde: 650, start: 1.47, a: 0.004, laut: 0.1 });
+}
+
 export function richtig() {
   const z = ort(null, null, 0.4); if (!z) return;
   [523, 659, 784].forEach((f, i) => ton(z, 0.25, { typ: 'triangle', freq: f, start: i * 0.1, laut: 0.4 }));

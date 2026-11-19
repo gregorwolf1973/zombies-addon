@@ -39,7 +39,7 @@ function zustand(raum) {
   return bp;
 }
 const istBot = (raum, sid) => !!raum.extra.get(sid)?.bot;
-const menschenListe = raum => [...raum.state.spieler.entries()].filter(([s, o]) => !istBot(raum, s) && !o.unten && !(o.zombie > 0) && o.verbunden !== false).map(([, o]) => o);
+const menschenListe = raum => [...raum.state.spieler.entries()].filter(([s, o]) => !istBot(raum, s) && !raum.extra.get(s)?.afkBot && !o.unten && !(o.zombie > 0) && o.verbunden !== false).map(([, o]) => o);
 function botListe(raum) {
   const r = [];
   for (const [sid, p] of raum.state.spieler) { const x = raum.extra.get(sid); if (x?.bot) { x.bot.plan ??= { rolle: 'begleiter', auftrag: null, pause: 0 }; r.push([sid, p, x]); } }

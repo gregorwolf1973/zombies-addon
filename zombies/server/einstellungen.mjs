@@ -8,7 +8,8 @@ export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
 export const ZEITRAFFER = [1, 5, 10, 60];
 export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20, mp: 30, mg: 45 };   // Meter
 // Zombietypen (Reihenfolge = Nummer der Variante, siehe ZOMBIE_TYPEN im Client)
-export const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7'];
+export const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
+  'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // ab 'kaminkehrer': Gemini-Bogen figuren3
 // je Waffe einstellbar: Schaden und Abklingzeit (Sekunden zwischen zwei Schlägen/Schüssen); Vorgabe = Werte aus WAFFEN
 export const WAFFEN_VORGABE = Object.fromEntries(Object.entries(WAFFEN).map(([w, v]) => [w, { schaden: v.schaden, pause: v.pause }]));
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
@@ -36,6 +37,10 @@ export const EREIGNISSE = [
   { id: 'startmusik', name: 'Startmusik', beschreibung: 'Auf der Startseite (nach dem ersten Antippen), blendet beim Spielbeginn aus', art: 'schleife' },
   { id: 'funk', name: 'Funkgerät', beschreibung: 'Kurzer Klick bei wichtigen Meldungen', art: 'einmal' },
   { id: 'wasser', name: 'Wasser', beschreibung: 'Rauschen in der Nähe von Bach und Fluss', art: 'schleife' },
+  { id: 'durstMann', name: 'Durst (Männerstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal' },
+  { id: 'durstFrau', name: 'Durst (Frauenstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal' },
+  { id: 'panzerFaehrt', name: 'Panzer fährt', beschreibung: 'Kettenrasseln des Puma, solange er fährt', art: 'schleife' },
+  { id: 'huelse', name: 'Hülse fällt', beschreibung: 'In Räumen kurz nach einem Schuss', art: 'einmal' },
 ];
 
 const zahl = (v, min, max, vorgabe) => {
@@ -51,6 +56,7 @@ export function bereinige(e = {}, alt = {}) {
   const sp = { ...a.sprache, ...(e.sprache ?? {}) };
   const ag = { ...a.aufgaben, ...(e.aufgaben ?? {}) };
   const bw = { ...a.bundeswehr, ...(e.bundeswehr ?? {}) };
+  const fk = { ...a.faehigkeiten, ...(e.faehigkeiten ?? {}) };
   const typen = Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, typeof z.typen?.[k] === 'boolean' ? z.typen[k] : (typeof a.zombies?.typen?.[k] === 'boolean' ? a.zombies.typen[k] : true)]));
   if (!Object.values(typen).some(Boolean)) typen[ZOMBIE_TYPEN[0]] = true;
   const funde = { ...a.funde };
@@ -66,7 +72,7 @@ export function bereinige(e = {}, alt = {}) {
   }
   // Wellen: 0 = aus, sonst mindestens alle 5 Minuten; Maximum nie kleiner als Minimum
   if (z.welle > 0 && z.welle < 5) z.welle = 5;
-  z.welleMin = Math.round(zahl(z.welleMin, 5, 50, 20)); z.welleMax = Math.max(z.welleMin, Math.round(zahl(z.welleMax, 5, 50, 50)));
+  z.welleMin = Math.round(zahl(z.welleMin, 5, 300, 20)); z.welleMax = Math.max(z.welleMin, Math.round(zahl(z.welleMax, 5, 300, 50)));
   return {
     zugangscode: String(e.zugangscode ?? a.zugangscode ?? '').trim().slice(0, 40),
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
@@ -99,8 +105,8 @@ export function bereinige(e = {}, alt = {}) {
       tempo: Math.round(zahl(z.tempo, 50, 150, 100)),    // Laufgeschwindigkeit in Prozent
       nacht: Math.round(zahl(z.nacht, 10, 30, 15)),      // nachts so viel mehr draußen (15 = ×1,5)
       welle: Math.round(zahl(z.welle, 0, 120, 20)),      // alle so viele Spielminuten kommt eine Zombiewelle (0 = aus; sonst mindestens 5)
-      welleMin: Math.round(zahl(z.welleMin, 5, 50, 20)), // Größe der Welle: kleinste Zahl
-      welleMax: Math.round(zahl(z.welleMax, 5, 50, 50)), // … größte Zahl (höchstens 50)
+      welleMin: Math.round(zahl(z.welleMin, 5, 300, 20)), // Größe der Welle: kleinste Zahl
+      welleMax: Math.round(zahl(z.welleMax, 5, 300, 50)), // … größte Zahl (höchstens 300)
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
     sprache: {
@@ -116,6 +122,10 @@ export function bereinige(e = {}, alt = {}) {
       stunde: Math.round(zahl(ag.stunde, 6, 23, 18)),                         // Uhrzeit (Spieluhr), zu der der Bus am Ortsausgang ankommt
       wartezeit: Math.round(zahl(ag.wartezeit, 10, 180, 60)),                 // Spielminuten, die der Bus wartet
       anzahl: Math.round(zahl(ag.anzahl, 3, 6, 4)),                           // Aufgaben je Level
+    },
+    faehigkeiten: {
+      an: typeof fk.an === 'boolean' ? fk.an : true,                          // Erfahrung, Level und Fähigkeiten
+      xpFaktor: Math.round(zahl(fk.xpFaktor, 10, 500, 100)),                  // Erfahrungspunkte in Prozent (100 = normal)
     },
     bundeswehr: {
       aktiv: typeof bw.aktiv === 'boolean' ? bw.aktiv : true,                 // Stützpunkt schießt, handelt und kann fallen
@@ -137,6 +147,7 @@ export function vorgaben() {
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, anzahl: 4 },
+    faehigkeiten: { an: true, xpFaktor: 100 },
     bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },

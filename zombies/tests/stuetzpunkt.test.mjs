@@ -72,7 +72,7 @@ for (const name of ['geretsried', 'isarauen']) {
     assert.ok(frei(w, d.x, d.y, 11), 'Durchfahrt blockiert');
     const draht = sp.teile.find(t => t.art === 'sdraht');
     assert.equal(feinWert(w, draht.x, draht.y), 1);
-    for (const t of sp.teile.filter(t => ['puma', 'lkw', 'container', 'kiste', 'funktisch'].includes(t.art))) assert.equal(feinWert(w, t.x, t.y), 1, `${t.art} nicht fest`);
+    for (const t of sp.teile.filter(t => ['lkw', 'container', 'kiste', 'funktisch'].includes(t.art))) assert.equal(feinWert(w, t.x, t.y), 1, `${t.art} nicht fest`);
     for (const n of sp.teile.filter(t => t.art === 'mgnest')) assert.equal(feinWert(w, n.x, n.y), 1);
     for (const z of sp.teile.filter(t => ['sanizelt', 'funkzelt', 'zelt'].includes(t.art))) {
       assert.ok(frei(w, z.eingang.mitte[0], z.eingang.mitte[1], 11), `Eingang ${z.art} blockiert`);

@@ -8,14 +8,17 @@ import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
-import { PUMA_TURM, zeichnePumaTurm, handelPartner } from './stuetzpunkt.mjs';
+import { PUMA_TURM, PUMA_SKALA, zeichnePumaTurm, zeichnePumaWanne, handelPartner } from './stuetzpunkt.mjs';
+import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
 import * as ton from './ton.mjs';
+import { naheBodenDinge, auswahlAuf, auswahlZu } from './aufheben.mjs';
 import * as sprache from './sprache.mjs';
+import { fkStart } from './faehigkeiten.mjs';
 import { Uebersicht } from './uebersicht.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
@@ -429,7 +432,10 @@ const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
 const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   // figuren2: 160er Felder
-const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7'];   // z6/z7 aus figuren2 (Riley Gombart)
+const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
+  'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // z6/z7 aus figuren2 (Riley Gombart), ab 'kaminkehrer' aus figuren3 (Gemini)
+const GEMINI_TYPEN = new Set(ZOMBIE_TYPEN.slice(7));
+const GEMINI_LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];   // Sterbebilder: vorhandene Leichen, nach Typ gewählt
 const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer', mp: 'pistole', mg: 'gewehr' };   // sonst Taschenlampe
 
 class Ort extends Phaser.Scene {
@@ -443,6 +449,9 @@ class Ort extends Phaser.Scene {
     // zweiter Bogen: Survivor, Zombies und Bürger von OpenGameArt (siehe grafik/LIZENZ.txt)
     this.load.spritesheet('figuren2', 'grafik/figuren2.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('figurenliste2', 'grafik/figuren2.json');
+    // dritter Bogen: 18 weitere Zombies (mit Google Gemini erzeugt, tools/gemini_zombies_schneiden.py)
+    this.load.spritesheet('figuren3', 'grafik/figuren3.webp', { frameWidth: 160, frameHeight: 160 });
+    this.load.json('figurenliste3', 'grafik/figuren3.json');
     // Auto-Bogen (CC0, tools/autos_schneiden.py); fehlt er, bleiben die Autos gezeichnet
     this.load.image('autos', 'grafik/autos.webp');
     this.load.json('autosliste', 'grafik/autos.json');
@@ -535,13 +544,14 @@ class Ort extends Phaser.Scene {
     raum.onMessage('schuss', m => {
       const fs = naechsteFigur(m.x1, m.y1); if (fs) fs.schussBis = this.time.now + 150;
       this.schuss(m);
+      fetzenBeiSchuss(this, raum.state.zombies.values(), m);
       // Schrot kommt als mehrere Linien – nur ein Knall
       const jetzt = performance.now();
-      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; }
+      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp') ton.huelse(m.x1, m.y1); }
     });
     raum.onMessage('bwschuss', m => this.bwSchuss(m));
     raum.onMessage('granate', m => this.granateFliegt(m));
-    raum.onMessage('explosion', m => this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''));
+    raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, raum.state.zombies.values(), m.x, m.y, m.r ?? 40); });
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
     raum.onMessage('stoss', m => { const fs = naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
@@ -559,6 +569,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
     raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
+    fkStart(raum, meldung);
     raum.onMessage('gefunden', m => {
       if (m.dinge.length) ton.aufheben(); else ton.suchen();
       if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : dingText(d)).join(', '));
@@ -637,6 +648,7 @@ class Ort extends Phaser.Scene {
     this.bilder = Object.fromEntries(GRAFIK.map(g => [g, this.textures.get(g).getSourceImage()]));
     this.figurListe = this.cache.json.get('figurenliste')?.bilder ?? {};
     this.figurListe2 = this.cache.json.get('figurenliste2')?.bilder ?? {};
+    this.figurListe3 = this.cache.json.get('figurenliste3')?.bilder ?? {};
     this.stuecke = new Map();
     this.torGrafik = this.add.graphics().setDepth(1.5);
     this.torStand = -1;
@@ -738,7 +750,7 @@ class Ort extends Phaser.Scene {
     this.uebersicht.bus = bf ? { x: bf.x / KACHEL, y: bf.y / KACHEL } : null;
     const spieler = [...raum.state.spieler.entries()].map(([id, p]) => ({
       x: id === meineId && this.lokal ? this.lokal.x : p.x, y: id === meineId && this.lokal ? this.lokal.y : p.y,
-      ebene: p.ebene ?? '', name: p.name, ich: id === meineId, unten: !!p.unten, farbe: css(FARBEN[p.farbe % FARBEN.length]),
+      ebene: p.ebene ?? '', name: p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name, ich: id === meineId, unten: !!p.unten, farbe: css(FARBEN[p.farbe % FARBEN.length]),
     }));
     this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });
   }
@@ -858,7 +870,7 @@ class Ort extends Phaser.Scene {
     const ring = this.add.ellipse(0, 0, 34, 34).setStrokeStyle(2, 0xffffff, ich ? 0.7 : 0).setFillStyle(0x000000, 0);
     const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE);
     const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE).setVisible(false);
-    const name = this.add.text(0, -28, p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+    const name = this.add.text(0, -28, p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
     const sprechen = this.add.text(-18, -16, '🔊', { fontSize: '11px' }).setOrigin(0.5).setVisible(false);   // spricht gerade (Sprachübertragung)
@@ -1247,6 +1259,7 @@ class Ort extends Phaser.Scene {
     const sicht = (x, y, r) => x > v.x - r && x < v.right + r && y > v.y - r && y < v.bottom + r;
     const P = this.weichPinsel;
     for (const f of raum.state.feuer?.values() ?? []) if (sicht(f.x, f.y, 300)) { P.setScale(f.r / 60 + 0.6).setAlpha(Math.min(1, 0.6 + f.staerke * 0.4) * (0.85 + Math.random() * 0.15)); rt.erase(P, f.x - ox, f.y - oy); }
+    if (this.bwLicht && raum.state.stuetzpunkt === 'steht') this.bwLicht.zeichne(rt, P, this.lampenPinsel, ox, oy, sicht, dunkel, raum.state.zombies.values(), this.game.loop.delta / 1000);
     for (const l of this.laternenListe ?? []) if (sicht(l.x, l.y, 140)) { P.setScale(0.85).setAlpha(0.75 * dunkel); rt.erase(P, l.x + l.nx * 13 - ox, l.y + l.ny * 13 - oy); }
     for (const h of this.welt.haeuser) {
       if (!fensterLicht(h.nr)) continue;
@@ -1313,7 +1326,7 @@ class Ort extends Phaser.Scene {
     for (const [id, p] of s.spieler) {
       let f = this.figuren.get(id);
       if (!f) { f = this.neueFigur(p, id); this.figuren.set(id, f); }
-      if (f.name.text !== p.name) f.name.setText(p.name);
+      { const nm = p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name; if (f.name.text !== nm) f.name.setText(nm); }   // AFK: ein Bot steuert die Figur
       if (id === meineId) continue;
       f.box.setVisible((p.ebene ?? '') === this.aktEbene);
       if ((f.ebene ?? '') !== (p.ebene ?? '')) { f.x = p.x; f.y = p.y; f.ebene = p.ebene; }
@@ -1338,11 +1351,16 @@ class Ort extends Phaser.Scene {
       const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
       const typ = ZOMBIE_TYPEN[(z.variante ?? 0) % ZOMBIE_TYPEN.length];
       const neu = !z.kriecht && (typ === 'z6' || typ === 'z7');
-      const tex = neu ? 'figuren2' : 'figuren';
+      const gem = !z.kriecht && GEMINI_TYPEN.has(typ);
+      const tex = gem ? 'figuren3' : neu ? 'figuren2' : 'figuren';
       if (f.bild.texture.key !== tex) f.bild.setTexture(tex, 0);
       if (z.kriecht) {
         f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
         f.bild.setRotation(0).setScale(ZOMBIE_GROESSE);
+      } else if (gem) {
+        // Einzelbild (Gemini): beim Gehen leicht wanken, beim Zubeißen etwas größer
+        const l3 = this.figurListe3[typ];
+        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * 1.1);
       } else if (neu) {
         // flüssig animierte Zombies (Riley Gombart): Laufen, Angriff, Stehen
         let nah = false;
@@ -1378,7 +1396,7 @@ class Ort extends Phaser.Scene {
         // passend zum Zombietyp; Dirndl, Feuerwehr und Lederhose gibt es in zwei Fassungen
         const typ = ZOMBIE_TYPEN[(l.variante ?? 0) % ZOMBIE_TYPEN.length], zweite = this.figurListe['leiche_' + typ + '2'] && (Math.round(l.x) + Math.round(l.y)) % 2;
         // beide neuen Arten mit den bisherigen Leichenbildern (die Sterbebilder von z7 gefielen nicht)
-        o = this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : typ) + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
+        o = this.add.image(l.x, l.y, 'figuren', this.figurBild('leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : GEMINI_TYPEN.has(typ) ? GEMINI_LEICHEN[ZOMBIE_TYPEN.indexOf(typ) % GEMINI_LEICHEN.length] : typ) + (zweite ? '2' : ''))).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
         this.leichen.set(id, o);
       }
       o.setVisible((l.ebene ?? '') === this.aktEbene);
@@ -1493,8 +1511,15 @@ class Ort extends Phaser.Scene {
     const pumaT = sp.teile.find(t => t.art === 'puma');
     if (pumaT) {
       if (!this.textures.exists('puma-turm')) { const tex = this.textures.createCanvas('puma-turm', PUMA_TURM.b, PUMA_TURM.h); zeichnePumaTurm(tex.getContext()); tex.refresh(); }
-      o.turm = this.add.image(pumaT.turm.x, pumaT.turm.y, 'puma-turm').setOrigin(PUMA_TURM.mx / PUMA_TURM.b, PUMA_TURM.my / PUMA_TURM.h).setRotation(pumaT.turm.winkel).setDepth(5.1);
+      o.turm = this.add.image(pumaT.turm.x, pumaT.turm.y, 'puma-turm').setOrigin(PUMA_TURM.mx / PUMA_TURM.b, PUMA_TURM.my / PUMA_TURM.h).setRotation(pumaT.turm.winkel).setScale(PUMA_SKALA).setDepth(5.1);
+      // Wanne als eigenes Bild (der Puma fährt; Position/Richtung kommen aus dem State: bwX, bwY, bwW)
+      if (!this.textures.exists('puma-wanne')) {
+        const tex = this.textures.createCanvas('puma-wanne', pumaT.laenge + 12, pumaT.breite + 12), c = tex.getContext();
+        c.translate((pumaT.laenge + 12) / 2, (pumaT.breite + 12) / 2); zeichnePumaWanne(c, pumaT.laenge, pumaT.breite); tex.refresh();
+      }
+      o.wanne = this.add.image(pumaT.x, pumaT.y, 'puma-wanne').setRotation(pumaT.winkel).setScale(PUMA_SKALA).setDepth(5);
     }
+    this.bwLicht = new BwLicht(this, sp);
     const soldat = (x, y, blick, phase, n = -1) => {
       const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE);
       const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE);
@@ -1530,6 +1555,20 @@ class Ort extends Phaser.Scene {
     }
     for (const a of o.aerzte) a.box.setVisible(steht);
     for (const v of o.verwundete) { v.bild.setVisible(steht); if (steht) v.bild.setScale(v.s0 * (1 + Math.sin(jetzt / 900 + v.phase) * 0.012)); }
+    if (o.wanne && raum.state.bwX > 0) {   // der Puma fährt: Position und Richtung vom Server, weich nachgezogen
+      const k = Math.min(1, this.game.loop.delta / 1000 * 10), st = raum.state;
+      o.wanne.x += (st.bwX - o.wanne.x) * k; o.wanne.y += (st.bwY - o.wanne.y) * k;
+      let dw = st.bwW - o.wanne.rotation; dw = Math.atan2(Math.sin(dw), Math.cos(dw));
+      o.wanne.setRotation(o.wanne.rotation + dw * k);
+      o.turm.setPosition(o.wanne.x, o.wanne.y);
+      // Kettenrasseln (Ereignis „Panzer fährt“), nur solange er sich bewegt, draußen und in Hörweite
+      const faehrt = o.letztX !== undefined && Math.hypot(st.bwX - o.letztX, st.bwY - o.letztY) > 0.05;
+      o.letztX = st.bwX; o.letztY = st.bwY;
+      o.faehrtT = faehrt ? 0.6 : Math.max(0, (o.faehrtT ?? 0) - this.game.loop.delta / 1000);
+      const hoerbar = this.lokal && !this.aktEbene && Math.hypot(o.wanne.x - this.lokal.x, o.wanne.y - this.lokal.y) < 700;
+      if (hoerbar && o.faehrtT > 0 && !o.kette) o.kette = ton.schleifeStarten('panzerFaehrt');
+      if (o.kette) ton.sireneLage(o.kette, o.wanne.x, o.wanne.y, 0, 700, !(hoerbar && o.faehrtT > 0));
+    } else if (o.kette) { ton.sireneStoppen(o.kette); o.kette = null; }
     if (o.turm && Number.isFinite(raum.state.bwTurm)) {
       let d = raum.state.bwTurm - o.turm.rotation;
       d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -1540,7 +1579,7 @@ class Ort extends Phaser.Scene {
   // Schuss der Bundeswehr: 'mg' aus einem Nest (Leuchtspur, Mündungsblitz, Schütze zeigt soldat_schuss) oder 'kanone' vom Puma (Turm, Einschlag)
   bwSchuss(m) {
     const o = this.stuetzpunktObj, w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), c = Math.cos(w), sn = Math.sin(w);
-    const kanone = m.art === 'kanone', vorn = kanone ? 58 : 30;
+    const kanone = m.art === 'kanone', vorn = kanone ? 58 * PUMA_SKALA : 30;
     const mx = m.x1 + c * vorn, my = m.y1 + sn * vorn;
     if (!kanone) {
       const sold = o?.soldaten.find(q => q.n === m.n);
@@ -1563,6 +1602,7 @@ class Ort extends Phaser.Scene {
       }
       this.explosion(m.x2, m.y2, 24, 0.45);
     }
+    if (m.t) fetzen(this, m.x2, m.y2, w, kanone ? 2 : 0.8);   // Treffer: Fetzen fliegen
     const jetzt = performance.now();
     if (jetzt - (this.letzterBwKnall ?? 0) > (kanone ? 0 : 70)) { this.letzterBwKnall = jetzt; if (kanone) ton.kanone(m.x1, m.y1); else ton.schuss(m.x1, m.y1, 1.4, 'gewehr'); }
   }
@@ -1832,11 +1872,10 @@ class Ort extends Phaser.Scene {
     // Funkzelt des Bundeswehr-Stützpunkts: Funkspruch wie am Funktisch
     const funkPunkt = !ich.ebene && raum.state.aufgaben?.size && !raum.state.funk ? this.welt.stuetzpunkt?.teile.find(q => q.art === 'funkzelt')?.funkpunkt : null;
     if (funkPunkt && Math.hypot(x - funkPunkt[0], y - funkPunkt[1]) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
-    if (ich.rucksack.length < ich.plaetze) {
-      for (const b of raum.state.boden.values()) {
-        if ((b.ebene ?? '') !== (ich.ebene ?? '')) continue;
-        if (Math.hypot(b.x - x, b.y - y) < AKTION_ABSTAND) return { art: 'aufheben', text: `✋ ${DINGE[b.ding]?.zeichen ?? ''} aufheben` };
-      }
+    {
+      const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene });
+      if (nah.length === 1 && ich.rucksack.length < ich.plaetze) return { art: 'aufheben', text: `✋ ${DINGE[nah[0].ding]?.zeichen ?? ''} aufheben` };
+      if (nah.length) return { art: 'aufheben_wahl', text: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => DINGE[n.ding]?.zeichen ?? '').join('')}`, nah };
     }
     const tor = this.welt.tor;
     if (!ich.ebene && (raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
@@ -1881,6 +1920,7 @@ class Ort extends Phaser.Scene {
     else if (k.art === 'kuehlschrank') raum.send('kuehlschrank');
     else if (k.art === 'tausch') raum.send('tausch_start', { mit: k.mit });
     else if (k.art === 'handel') handelAuf(k.wer);
+    else if (k.art === 'aufheben_wahl') auswahlAuf(raum, raum.state.spieler.get(meineId), k.nah);
     else raum.send('aktion');
     if (k.art === 'raetsel') $('aktion').style.display = 'none';
   }
@@ -1972,6 +2012,11 @@ class Ort extends Phaser.Scene {
     this.letzterOrt = { x: this.lokal.x, y: this.lokal.y };
     if (this.schrittWeg > 46) { this.schrittWeg = 0; ton.schritt(!!this.aktEbene); }
     if (this.altHp != null && ich.hp < this.altHp - 2) ton.biss();
+    // Wassermangel: alle ~25 s ein trockenes Husten mit Tropfen, solange Durst unter der Schwelle (nicht im Hintergrund)
+    if (ich.durst < 20 && ich.hp > 0 && !document.hidden) {
+      this.durstUhr = (this.durstUhr ?? 6) - dt;
+      if (this.durstUhr <= 0) { ton.durst(); this.durstUhr = 22 + Math.random() * 8; }
+    } else this.durstUhr = 6;
     this.altHp = ich.hp;
     // Brände in der Nähe knistern
     this.knisterZeit = (this.knisterZeit ?? 0) - dt;
@@ -2048,7 +2093,7 @@ class Ort extends Phaser.Scene {
     const liste = [...s.spieler.entries()].map(([id, p]) => {
       const zusatz = p.unten ? ' – am Boden' : !p.verbunden ? ' – Verbindung weg' : p.sicher ? ' 🛡' : '';
       const klasse = p.unten ? 'unten' : !p.verbunden ? 'weg' : '';
-      return `<li class="${klasse}"><span class="punkt" style="background:${css(FARBEN[p.farbe % FARBEN.length])}"></span>${escapeHtml(p.name)}${id === meineId ? ' (du)' : ''}${zusatz}</li>`;
+      return `<li class="${klasse}"><span class="punkt" style="background:${css(FARBEN[p.farbe % FARBEN.length])}"></span>${escapeHtml(p.name)}${p.afk && !p.name.includes('🤖') ? ' 🤖' : ''}${id === meineId ? ' (du)' : ''}${zusatz}</li>`;
     }).join('');
     if ($('liste').innerHTML !== liste) $('liste').innerHTML = liste;
 
@@ -2067,6 +2112,7 @@ class Ort extends Phaser.Scene {
     knopf2.style.display = zweit ? 'block' : 'none';
     if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
+    if (!this.kontext || this.kontext.art !== 'aufheben_wahl') auswahlZu();
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
     tauschRucksack();
     if (handelOffen) handelZeigen(ich, this.welt.stuetzpunkt);

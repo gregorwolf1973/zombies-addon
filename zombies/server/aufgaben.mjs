@@ -148,7 +148,7 @@ export class Aufgaben {
       a.fortschritt = Math.min(f, a.ziel);
       if (f >= a.ziel) {
         a.erledigt = true; a.fortschritt = a.ziel;
-        if (melden) this.raum.broadcast('meldung', { text: `✅ Aufgabe erledigt: ${a.symbol} ${a.text}`, lang: true });
+        if (melden) { this.raum.broadcast('meldung', { text: `✅ Aufgabe erledigt: ${a.symbol} ${a.text}`, lang: true }); this.raum.xpAlle?.('aufgabe'); }
       }
     }
   }
@@ -170,7 +170,7 @@ export class Aufgaben {
     s.funk = true; this.funkSafe = safe?.id ?? STUETZPUNKT;
     s.busAnkunft = this.einst().stunde * 60;
     this.aktualisieren(false);
-    const a = s.aufgaben.get('funk'); if (a) { a.erledigt = true; a.fortschritt = a.ziel; }
+    const a = s.aufgaben.get('funk'); if (a) { a.erledigt = true; a.fortschritt = a.ziel; this.raum.xpAlle?.('aufgabe'); }
     this.raum.broadcast('meldung', { text: `📻 ${p.name} hat den Funkspruch abgesetzt – der Evakuierungsbus kommt um ${hhmm(s.busAnkunft)} zum Ortsausgang!`, lang: true });
     this.aktualisieren();
   }
@@ -271,6 +271,7 @@ export class Aufgaben {
       return;
     }
     const karte = this.naechsteKarte();
+    this.raum.xpAlle?.('evakuierung');
     this.raum.broadcast('meldung', { text: `🎉 Geschafft! Weiter nach Level ${s.level + 1} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
     if (nichtDa) this.raum.broadcast('meldung', { text: '🚌 Wer nicht an Bord war, kommt trotzdem mit – ihr seid eine Gruppe' });
     this.wechselLaeuft = true;

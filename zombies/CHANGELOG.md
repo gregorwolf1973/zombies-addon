@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.33.0 – 19.11.2026
+
+- Zombiewellen bis 300; der Server rechnet Zombies und Menschen fern aller Spieler nur jeden 4. Takt, nutzt ein Raster für Nähe-Suchen und baut das Wegefeld nur bei Bedarf neu (auf dem PC etwa 2,5× weniger Rechenzeit je Takt).
+- Untätige Spieler: nach 60 s ohne Eingabe steuert die Bot-Logik die Figur (folgt, wehrt sich, versorgt sich), 🤖 am Namen; die nächste Eingabe gibt die Kontrolle zurück.
+- Fähigkeiten: Erfahrung und Level, je Aufstieg ein Punkt für Zielen, Tempo, Leben, Ausdauer, Leise, Sanitäter, Tragen (je 5 Stufen, ⭐ bzw. Taste K); in der Verwaltung abschaltbar, mit XP-Faktor.
+- Bundeswehr: größerer Puma, der hinter dem Draht patrouilliert und zu den Angreifern fährt; Fetzen bei Treffern; nachts Scheinwerfer auf die Angriffsstellen und Lampen im Lager.
+- Aufheben mit Auswahl, wenn mehrere Dinge beieinander liegen; bei vollem Rucksack wählbar, was abgelegt wird.
+- 18 neue Zombie-Typen (mit Google Gemini erzeugt), in der Verwaltung einzeln schaltbar.
+- Neue Töne: Durst (Männer- bzw. Frauenstimme), Schrotflinte, Kettenrasseln des Puma, Hülse fällt in Räumen.
+
 ## 0.32.0 – 19.11.2026
 
 - Verwaltung: Schaden und Schussfolge je Waffe, Schussfolge des Puma (Vorgabe 2,5 s), Zombietypen einzeln an/aus, Ansteckung der Spieler in %, Verwandlungszeit der Menschen in Spielminuten.

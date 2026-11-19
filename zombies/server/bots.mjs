@@ -296,7 +296,9 @@ function naechster(liste, p, max, bedingung = () => true, ort = e => e) {
 
 export function botSchritt(raum, sid, p, x, dt) {
   raum.dt = dt; raum.uhr = (raum.state.zeit ?? 0);
-  const b = x.bot;
+  const b = x.bot, afk = !!b.afk;   // afk: untätiger Mensch, den der Bot spielt (raum.mjs, afkPruefen): folgt, wehrt sich, versorgt sich – kein Planer, kein Erkunden
+  // „Mensch“, dem Bots folgen: kein Bot und nicht selbst AFK; ein AFK-Spieler folgt jedem anderen Mitspieler (auch Bots)
+  const echt = s => { const o = raum.extra.get(s); return s !== sid && !o?.afkBot && (afk || !o?.bot); };
   x.eingabe = { dx: 0, dy: 0, s: false };
   b.uebergangZiel = null;
   if (p.unten || p.zombie > 0) { b.weg = null; return; }
@@ -341,23 +343,23 @@ export function botSchritt(raum, sid, p, x, dt) {
   }
 
   // 2a. Team-Planer (botplan.mjs): Auftrag ausführen (holen, funken, barrikadieren, jagen, Bus …), sonst weiter unten wie bisher
-  if ((!gefahr || (!gefahr.jagt && abstand(p, gefahr) > 90)) && planSchritt(raum, sid, p, x, { geheZu })) return;
+  if (!afk && (!gefahr || (!gefahr.jagt && abstand(p, gefahr) > 90)) && planSchritt(raum, sid, p, x, { geheZu })) return;
 
   // 2b. Gelegenheit: Überzähliges ablegen, Brauchbares aufheben, in der Nähe durchsuchen – solange der Mensch nicht weit weg ist
   // sind alle Menschen auf einer anderen Ebene (z. B. schon draußen), hat Folgen Vorrang vor Kiste und Ablegen
-  const menschWoanders = [...raum.state.spieler.entries()].some(([s, o]) => !raum.extra.get(s)?.bot && !o.unten && !(o.zombie > 0))
-    && ![...raum.state.spieler.entries()].some(([s, o]) => !raum.extra.get(s)?.bot && !o.unten && !(o.zombie > 0) && o.ebene === p.ebene);
-  if (!gefahr && !menschWoanders && (vorratskiste(raum, sid, p, x, welt) || ueberzaehligesAblegen(raum, p, b))) return;
-  const mensch = naechster(spieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten).map(([, o]) => o), p, Infinity);
-  if (!gefahr && mensch && abstand(p, mensch) < 260 && (aufheben(raum, sid, p, x, welt) || durchsuchen(raum, sid, p, x, welt))) return;
+  const menschWoanders = [...raum.state.spieler.entries()].some(([s, o]) => echt(s) && !o.unten && !(o.zombie > 0))
+    && ![...raum.state.spieler.entries()].some(([s, o]) => echt(s) && !o.unten && !(o.zombie > 0) && o.ebene === p.ebene);
+  if (!afk && !gefahr && !menschWoanders && (vorratskiste(raum, sid, p, x, welt) || ueberzaehligesAblegen(raum, p, b))) return;
+  const mensch = naechster(spieler.filter(([s, o]) => echt(s) && !o.unten).map(([, o]) => o), p, Infinity);
+  if (!afk && !gefahr && mensch && abstand(p, mensch) < 260 && (aufheben(raum, sid, p, x, welt) || durchsuchen(raum, sid, p, x, welt))) return;
 
   // 3. Dem nächsten Menschen folgen – auf festem Platz hinter ihm (ist er auf einer anderen Ebene: zum Übergang)
-  const ueberall = alleSpieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
+  const ueberall = alleSpieler.filter(([s, o]) => echt(s) && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
   if (ueberall.length && !ueberall.some(o => o.ebene === p.ebene)) {
     const punkt = raum.uebergangsPunkt(p.ebene, ueberall[0].ebene);
     if (punkt) { b.uebergangZiel = punkt; geheZu(raum, sid, p, x, punkt, 1, 2); return; }
   }
-  const menschen = spieler.filter(([s, o]) => !raum.extra.get(s)?.bot && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
+  const menschen = spieler.filter(([s, o]) => echt(s) && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
   const anfuehrer = naechster(menschen, p, Infinity);
   if (anfuehrer) {
     const bots = alleSpieler.filter(([s]) => raum.extra.get(s)?.bot).map(([s]) => s).sort();

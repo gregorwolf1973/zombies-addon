@@ -1,0 +1,59 @@
+{
+ "feld": 160,
+ "bilder": {
+  "kaminkehrer": [
+   0
+  ],
+  "bauarbeiter": [
+   1
+  ],
+  "koch": [
+   2
+  ],
+  "holzfaeller": [
+   3
+  ],
+  "mechaniker": [
+   4
+  ],
+  "brandmeister": [
+   5
+  ],
+  "kehrer": [
+   6
+  ],
+  "strassenarbeiter": [
+   7
+  ],
+  "baecker": [
+   8
+  ],
+  "flanell": [
+   9
+  ],
+  "werkstatt": [
+   10
+  ],
+  "vogelscheuche": [
+   11
+  ],
+  "postbote": [
+   12
+  ],
+  "streife": [
+   13
+  ],
+  "wachtmeister": [
+   14
+  ],
+  "landstreicher": [
+   15
+  ],
+  "mantel": [
+   16
+  ],
+  "langhaar": [
+   17
+  ]
+ }
+}

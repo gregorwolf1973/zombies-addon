@@ -24,3 +24,7 @@ autos.webp / autos.json (mit tools/autos_schneiden.py aus OpenGameArt-Bildern zu
 - „Top Down Car Sprite“ von Cliipso, https://opengameart.org/content/top-down-car-sprite – CC-BY 3.0 (nur das gerade Bild)
 
 Die Bilder wurden zugeschnitten, skaliert, gedreht und neu angeordnet.
+
+Zombies „kaminkehrer“ bis „langhaar“ (grafik/figuren3.webp, 18 Figuren): mit Google Gemini für dieses Spiel erzeugt
+(drei Bildbögen, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben); freigestellt, skaliert und
+angeordnet mit tools/gemini_zombies_schneiden.py.

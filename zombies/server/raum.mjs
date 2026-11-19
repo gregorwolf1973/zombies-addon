@@ -11,6 +11,7 @@ import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben } from './aufgaben.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
+import * as FK from './faehigkeiten.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
@@ -32,6 +33,7 @@ export const Spieler = schema({
   durst: t.number(),        // 100 = satt, 0 = verdurstet
   hunger: t.number(),
   unten: t.boolean(),
+  afk: t.boolean(),         // true = untätig, ein Bot steuert die Figur (Client: 🤖 hinter dem Namen)
   hilfe: t.number(),        // Fortschritt beim Aufhelfen 0..1
   waffe: t.string(),        // Name aus WAFFEN (pistole, gewehr, schrotflinte, schlaeger, sense, messer) oder ""
   munition: t.uint8(),
@@ -60,7 +62,7 @@ export const Zombie = schema({
   hp: t.uint8(),
   kriecht: t.boolean(),     // „nicht ganz tot“: robbt am Boden
   ebene: t.string(),
-  variante: t.uint8(),      // Zombietyp 0–6 (Tarnjacke, Dirndl, Feuerwehr, Hemd, Lederhose, Grünhemd, Schlurfer)
+  variante: t.uint8(),      // Zombietyp 0–24 (Reihenfolge ZOMBIE_TYPEN in einstellungen.mjs)
 }, 'Zombie');
 
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
@@ -109,6 +111,7 @@ export const Zustand = schema({
   kegel: t.boolean(),           // Sichtkegel der Zombies anzeigen (Einstellung)
   stuetzpunkt: t.string(),      // Bundeswehr-Stützpunkt: '' = keiner, 'steht', 'gefallen' oder 'aus' (server/stuetzpunkt.mjs)
   bwTurm: t.number(),           // Drehwinkel des Puma-Turms (Bogenmaß), der Turm dreht sich zum Ziel
+  bwX: t.number(), bwY: t.number(), bwW: t.number(),   // Puma: Position (Turmmitte) und Fahrtrichtung der Wanne, er patrouilliert an der Front
 }, 'Zustand');
 
 const TUER_HP = 100;          // Haltbarkeit einer Tür (nach der Barrikade)
@@ -134,6 +137,11 @@ const ID_MUSTER = /^[a-f0-9]{32}$/;
 // Wegfeld der Zombies: geschlossene Zimmertüren zählen als Weg (sie hämmern sie auf), alles andere Blockierte nicht
 const BLOCKIERT_FELD = new Set([...BLOCKIERT].filter(t => t !== T.INNENTUER));
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
+const FERN_WEITE = 900;     // weiter als so viele px von allen Spielern weg: nur jeden FERN_TAKT-ten Takt rechnen
+const FERN_TAKT = 4;
+const AFK_SEKUNDEN = 60;    // so lange ohne Eingabe, dann übernimmt die Bot-Steuerung die Figur
+const RASTER = 96;          // Zellgröße des Zombie-Rasters (px), je Takt neu befüllt
+const WEGEFELD_TIEFE = 60;  // Wegefeld nur so viele Kacheln weit um die Spieler (2000 px) berechnen
 const AUSSEHEN = /^[mws],[0-5],[0-7]$/;   // m/w = eigene Figur mit Farben, s = Survivor (feste Figur)
 export const TOR_RAETSEL = 3;
 const TOR_ABSTAND = 70;
@@ -222,6 +230,7 @@ export class SpielRaum extends Room {
     this.chatVerlauf = Array.isArray(stand?.chat) ? stand.chat.slice(-CHAT_VERLAUF) : [];   // letzte Nachrichten, mit der Welt gespeichert
     this.naechsteChatId = (this.chatVerlauf.at(-1)?.id ?? 0) + 1;
     this.chatZeiten = new Map();  // sessionId → Zeitstempel der letzten Nachrichten (Flutbremse)
+    this.fkVon = new WeakMap();   // Spieler → Fähigkeiten-Stand (Bots haben keinen)
     this.tausche = new Map();     // sessionId → laufender Tausch (beide Seiten zeigen auf dasselbe Objekt)
     for (const s of this.welt.safeRooms) {
       const safe = new Safe(); safe.barrikade = 0;
@@ -277,8 +286,14 @@ export class SpielRaum extends Room {
       const l = Math.hypot(dx, dy);
       if (l > 1) { dx /= l; dy /= l; }
       const x = this.extra.get(client.sessionId);
-      if (x) x.eingabe = { dx, dy, s: !!m.s };
+      if (x) { x.eingabe = { dx, dy, s: !!m.s }; if (Math.hypot(dx, dy) > 0.05) this.ruehrt(client.sessionId); }   // der Client sendet auch im Stand alle 250 ms: nur Bewegung zählt
     });
+    // jede dieser Nachrichten zeigt, dass jemand am Gerät ist (Rückkehr aus der AFK-Steuerung)
+    {
+      const aktiv = new Set(['aktion', 'aktion2', 'wurf', 'handel', 'handel_raetsel', 'benutze', 'wegwerfen', 'aufheben_wahl', 'kiste', 'kuehlschrank', 'ausruhen', 'antwort', 'fk_punkt', 'tausch_start', 'tausch_anbieten', 'tausch_zurueck', 'tausch_ok', 'chat', 'spricht']);
+      const om = this.onMessage.bind(this);
+      this.onMessage = (typ, cb) => om(typ, aktiv.has(typ) ? (c, m) => { this.ruehrt(c.sessionId); return cb(c, m); } : cb);
+    }
     this.onMessage('aktion', client => this.starteAktion(client));
     this.onMessage('aktion2', client => this.starteAktion(client, true));
     this.onMessage('wurf', client => this.granaten.werfen(client));
@@ -286,10 +301,12 @@ export class SpielRaum extends Room {
     this.onMessage('handel_raetsel', (client, m) => this.stuetzpunkt.handelRaetsel(client, m));
     this.onMessage('benutze', (client, m) => this.benutze(client, m));
     this.onMessage('wegwerfen', (client, m) => this.wegwerfen(client, m));
+    this.onMessage('aufheben_wahl', (client, m) => this.aufhebenWahl(client, m));
     this.onMessage('kiste', (client, m) => this.kiste(client, m));
     this.onMessage('kuehlschrank', client => this.kuehlschrank(client));
     this.onMessage('ausruhen', client => this.ausruhen(client));
     this.onMessage('antwort', (client, m) => this.antwort(client, m));
+    this.onMessage('fk_punkt', (client, m) => this.fkPunkt(client, m));
     this.onMessage('tausch_start', (client, m) => this.tauschStart(client, m));
     this.onMessage('tausch_anbieten', (client, m) => this.tauschAnbieten(client, m));
     this.onMessage('tausch_zurueck', (client, m) => this.tauschZurueck(client, m));
@@ -340,7 +357,7 @@ export class SpielRaum extends Room {
       alt.name = name; alt.verbunden = true;
       if (AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
       this.state.spieler.set(client.sessionId, alt);
-      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false } });
+      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, afkBot: null, letzteEingabe: Date.now() }); alt.afk = false;
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
       this.sprachStart(client); this.sprachPartner();
       return;
@@ -351,9 +368,9 @@ export class SpielRaum extends Room {
     p.farbe = this.freieFarbe();
     const gewaehlt = AUSSEHEN.test(String(optionen.aussehen ?? ''));
     p.aussehen = gewaehlt ? optionen.aussehen : this.zufallsAussehen();
-    p.verbunden = true; p.unten = false; p.hilfe = 0; p.richtung = 0;
+    p.verbunden = true; p.unten = false; p.afk = false; p.hilfe = 0; p.richtung = 0;
     p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0; p.spricht = false;
-    const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null };
+    const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null, letzteEingabe: Date.now() };
     const gespeichert = this.speicher?.ladeSpieler(spielerId);
     if (gespeichert) {
       p.hp = Math.max(25, Math.min(100, Number(gespeichert.hp) || 100));
@@ -367,6 +384,8 @@ export class SpielRaum extends Room {
       p.kleidung = Math.max(0, Math.min(100, Number(gespeichert.kleidung) || 0));
       p.lampe = Math.max(0, Math.min(LAMPE_DAUER, Number(gespeichert.lampe) || 0));
       p.plaetze = [8, 12, 16].includes(Number(gespeichert.plaetze)) ? Number(gespeichert.plaetze) : RUCKSACK_PLAETZE;
+      extra.fk = FK.normiere(gespeichert.fk);
+      p.plaetze += FK.wirkung.rucksack(extra.fk);
       for (const d of (gespeichert.rucksack ?? []).slice(0, p.plaetze)) if (DINGE[d]) p.rucksack.push(d);
       extra.letzterSafe = gespeichert.letzterSafe ?? '';
       // gespeichert wird nur im Safe Room: dort (im Innenraum) geht es weiter; sonst im letzten Safe Room
@@ -382,9 +401,12 @@ export class SpielRaum extends Room {
       else { p.waffe = ''; p.munition = 0; }
       p.rucksack.push('wasser');
     }
+    if (!extra.fk) { extra.fk = FK.neuerStand(); }
+    this.fkVon.set(p, extra.fk);
     this.state.spieler.set(client.sessionId, p);
     this.extra.set(client.sessionId, extra);
     this.speichereSpieler(client.sessionId);
+    this.fkSenden(client.sessionId);
     client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
     this.botsAnpassen();
@@ -561,6 +583,31 @@ export class SpielRaum extends Room {
     botBefehl(this, client.sessionId, text);   // Befehle an die Bots („Resi, hol wasser“), siehe botplan.mjs
   }
 
+  // AFK: Wer AFK_SEKUNDEN lang nichts getan hat, wird von der Bot-Steuerung gespielt (x.afkBot, p.afk) – bis zur nächsten Eingabe
+  ruehrt(sid) {
+    const x = this.extra.get(sid);
+    if (!x || x.bot) return;
+    x.letzteEingabe = Date.now();
+    if (x.afkBot) {
+      x.afkBot = null; x.eingabe = { dx: 0, dy: 0, s: false };
+      const p = this.state.spieler.get(sid);
+      if (p) { p.afk = false; this.broadcast('meldung', { text: `${p.name} ist wieder da` }); }
+    }
+  }
+
+  afkPruefen(sid, p, x) {
+    if (p.verbunden === false) {   // Verbindung weg: die Figur steht still und wartet (siehe onDrop)
+      if (x.afkBot) { x.afkBot = null; p.afk = false; x.eingabe = { dx: 0, dy: 0, s: false }; }
+      return;
+    }
+    if (x.afkBot) return;
+    x.letzteEingabe ??= Date.now();
+    if (Date.now() - x.letzteEingabe < (this.afkSekunden ?? AFK_SEKUNDEN) * 1000) return;
+    x.afkBot = { nr: 0, afk: true, plan: { rolle: 'begleiter', auftrag: null, pause: 0 } };
+    p.afk = true; p.spricht = false;
+    this.broadcast('meldung', { text: `🤖 ${p.name} ist untätig – ein Bot übernimmt die Figur` });
+  }
+
   // Simulierte Mitspieler: bei einem Menschen so viele wie eingestellt, jeder weitere Mensch ersetzt einen
   botsAnpassen() {
     const menschen = [...this.extra.values()].filter(x => !x.bot).length;
@@ -654,6 +701,7 @@ export class SpielRaum extends Room {
     this.wiederkehr.delete(client.sessionId);
     const p = this.state.spieler.get(client.sessionId);
     if (p) p.verbunden = true;
+    this.ruehrt(client.sessionId);
     this.sprachStart(client); this.sprachPartner();
   }
 
@@ -745,12 +793,46 @@ export class SpielRaum extends Room {
     this.clock.setTimeout(() => this.disconnect(), 400);
   }
 
+  // ---------- Erfahrung und Fähigkeiten (Logik in faehigkeiten.mjs) ----------
+  fkEinst() { return { an: true, xpFaktor: 100, ...(SpielRaum.einstellungen.faehigkeiten ?? {}) }; }
+  fkWert(p, was, standard = 1) {
+    const st = this.fkVon.get(p);
+    return st && this.fkEinst().an ? FK.wirkung[was](st) : standard;
+  }
+  fkRucksack(p) { return this.fkWert(p, 'rucksack', 0); }
+  fkSenden(sid) {
+    const x = this.extra.get(sid), c = this.clients.find(k => k.sessionId === sid);
+    if (x?.fk && c) c.send('fk', FK.fuerClient(x.fk, this.fkEinst().an));
+  }
+  xpGeben(sid, art, menge = FK.XP[art]) {
+    const x = this.extra.get(sid), p = this.state.spieler.get(sid), e = this.fkEinst();
+    if (!x?.fk || !p || x.bot || !e.an) return;
+    const neu = FK.gebeXp(x.fk, menge, e.xpFaktor / 100);
+    if (neu > 0) {
+      const c = this.clients.find(k => k.sessionId === sid);
+      c?.send('meldung', { text: `⭐ Level ${FK.levelAus(x.fk.xp)} – ${FK.freiePunkte(x.fk)} Punkt${FK.freiePunkte(x.fk) === 1 ? '' : 'e'} frei (Taste K)`, lang: true });
+      this.speichereSpieler(sid);
+    }
+    this.fkSenden(sid);
+  }
+  // Evakuierung geschafft: alle echten Spieler bekommen Erfahrung (Haken aus aufgaben.mjs)
+  xpAlle(art) { for (const [sid, x] of this.extra) if (!x.bot) this.xpGeben(sid, art); }
+  fkPunkt(client, m) {
+    const x = this.extra.get(client.sessionId), p = this.state.spieler.get(client.sessionId);
+    if (!x?.fk || !p || x.bot || !this.fkEinst().an) return;
+    const vorher = this.fkRucksack(p);
+    if (!FK.investiere(x.fk, String(m?.id))) return this.fkSenden(client.sessionId);
+    p.plaetze += this.fkRucksack(p) - vorher;
+    this.speichereSpieler(client.sessionId);
+    this.fkSenden(client.sessionId);
+  }
+
   speichereSpieler(sid) {
     const p = this.state.spieler.get(sid), x = this.extra.get(sid);
     if (!p || !x || x.bot || !this.speicher) return;
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
-      waffe: p.waffe, munition: p.munition, rucksack: [...p.rucksack], plaetze: p.plaetze, besiegt: p.besiegt,
+      waffe: p.waffe, munition: p.munition, rucksack: [...p.rucksack], plaetze: p.plaetze - this.fkRucksack(p), besiegt: p.besiegt, fk: x.fk,
       aussehen: p.aussehen, letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
     });
   }
@@ -886,7 +968,7 @@ export class SpielRaum extends Room {
     z.x = x; z.y = y; z.hp = ZOMBIE_HP; z.richtung = this.rnd() * Math.PI * 2; z.jagt = false;
     z.kriecht = false; {
       const erlaubt = SpielRaum.einstellungen.zombieTypen;   // Verwaltung: erlaubte Zombietypen (Nummern), sonst alle
-      z.variante = erlaubt?.length ? erlaubt[Math.floor(this.rnd() * erlaubt.length)] : Math.floor(this.rnd() * 7);
+      z.variante = erlaubt?.length ? erlaubt[Math.floor(this.rnd() * erlaubt.length)] : Math.floor(this.rnd() * 25);
     } z.ebene = ebene;
     const id = 'z' + (this.naechsteZombieId++);
     this.state.zombies.set(id, z);
@@ -1323,14 +1405,7 @@ export class SpielRaum extends Room {
     else if (k.art === 'aufheben') {
       const b = this.state.boden.get(k.id);
       if (!b || p.rucksack.length >= p.plaetze) return;
-      const d = b.ding;
-      if (DINGE[d]?.waffe && !p.waffe) p.waffe = d;
-      else if (d === 'munition') p.munition = Math.min(MUNITION_MAX, p.munition + MUNITION_PRO_FUND);
-      else if (d === 'taschenlampe' && !(p.lampe > 0)) p.lampe = LAMPE_DAUER;
-      else if (d === 'kleidung' && !(p.kleidung > 0)) p.kleidung = 100;
-      else p.rucksack.push(d);
-      this.state.boden.delete(k.id);
-      client?.send('meldung', { text: `Aufgehoben: ${DINGE[b.ding]?.zeichen ?? ''} ${DINGE[b.ding]?.name ?? b.ding}` });
+      this.nimmAuf(client, p, k.id, b);
     }
     else if (k.art === 'wegziehen') {
       const l = this.state.leichen.get(k.leiche);
@@ -1457,8 +1532,9 @@ export class SpielRaum extends Room {
     else if (d === 'essen') { p.hunger = Math.min(100, p.hunger + 45); p.rucksack.splice(i, 1); }
     else if (d === 'schokoriegel') { p.hunger = Math.min(100, p.hunger + 20); p.rucksack.splice(i, 1); }
     else if (DINGE[d]?.plaetze) {
-      if (DINGE[d].plaetze <= p.plaetze) return client.send('meldung', { text: 'Dein Rucksack ist schon so groß' });
-      p.plaetze = DINGE[d].plaetze; p.rucksack.splice(i, 1);
+      const bonus = this.fkRucksack(p);
+      if (DINGE[d].plaetze <= p.plaetze - bonus) return client.send('meldung', { text: 'Dein Rucksack ist schon so groß' });
+      p.plaetze = DINGE[d].plaetze + bonus; p.rucksack.splice(i, 1);
       client.send('meldung', { text: `${DINGE[d].zeichen} Umgepackt – jetzt ${p.plaetze} Plätze` });
     }
     else if (d === 'kleidung') {
@@ -1471,7 +1547,7 @@ export class SpielRaum extends Room {
     else if (d === 'funkgeraet') { client.send('meldung', { text: '📻 Mit einem zweiten Funkgerät im Rucksack hörst du die Mitspieler überall' }); }
     else if (d === 'verband') {
       if (p.hp >= 100) return client.send('meldung', { text: 'Du bist nicht verletzt' });
-      p.hp = Math.min(100, p.hp + 45); p.rucksack.splice(i, 1);
+      p.hp = Math.min(100, p.hp + 45 * this.fkWert(p, 'heilen')); p.rucksack.splice(i, 1);
     } else if (DINGE[d]?.waffe) {
       const alt = p.waffe;
       p.waffe = d;
@@ -1499,6 +1575,36 @@ export class SpielRaum extends Room {
     this.broadcast('meldung', {
       text: ziel === p ? `💉 ${p.name} hat sich die Rettungsspritze gesetzt` : `💉 ${p.name} hat ${ziel.name} die Rettungsspritze gesetzt`,
     });
+  }
+
+  // Bodengegenstand einsammeln (Rucksack muss Platz haben, wenn er dort landet)
+  nimmAuf(client, p, id, b) {
+    const d = b.ding;
+    if (DINGE[d]?.waffe && !p.waffe) p.waffe = d;
+    else if (d === 'munition') p.munition = Math.min(MUNITION_MAX, p.munition + MUNITION_PRO_FUND);
+    else if (d === 'taschenlampe' && !(p.lampe > 0)) p.lampe = LAMPE_DAUER;
+    else if (d === 'kleidung' && !(p.kleidung > 0)) p.kleidung = 100;
+    else p.rucksack.push(d);
+    this.state.boden.delete(id);
+    client?.send('meldung', { text: `Aufgehoben: ${DINGE[d]?.zeichen ?? ''} ${DINGE[d]?.name ?? d}` });
+  }
+
+  // Aufheben mit Auswahl: { id, platz? } – bei vollem Rucksack räumt "platz" den Platz frei (Gegenstand fällt zu Boden)
+  aufhebenWahl(client, m) {
+    const p = this.state.spieler.get(client.sessionId);
+    if (!p || p.unten || p.zombie > 0 || this.state.phase !== 'spiel' || typeof m?.id !== 'string') return;
+    const b = this.state.boden.get(m.id);
+    if (!b || (b.ebene ?? '') !== p.ebene || Math.hypot(b.x - p.x, b.y - p.y) >= AKTION_ABSTAND) return;
+    const d = b.ding;
+    // wandert der Gegenstand nicht in den Rucksack (Waffe/Munition/Lampe/Kleidung), braucht er keinen Platz
+    const direkt = (DINGE[d]?.waffe && !p.waffe) || d === 'munition' || (d === 'taschenlampe' && !(p.lampe > 0)) || (d === 'kleidung' && !(p.kleidung > 0));
+    if (!direkt && p.rucksack.length >= p.plaetze) {
+      const i = Number(m.platz);
+      if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return client.send('meldung', { text: '🎒 Rucksack voll – wähle, was du ablegst' });
+      const [alt] = p.rucksack.splice(i, 1);
+      this.legeHin(alt, p.x, p.y, p.ebene);
+    }
+    this.nimmAuf(client, p, m.id, b);
   }
 
   wegwerfen(client, m) {
@@ -1584,12 +1690,13 @@ export class SpielRaum extends Room {
     if (offen.zweck?.art === 'handel') return this.stuetzpunkt.raetselAntwort(client, p, offen, richtig);
     if (offen.zweck?.art === 'tuer') {
       const z = offen.zweck;
-      if (richtig) { this.setzeTuer(z.key, true); client.send('meldung', { text: '🔓 Das Schloss springt auf' }); }
+      if (richtig) { this.setzeTuer(z.key, true); this.xpGeben(client.sessionId, 'raetsel'); client.send('meldung', { text: '🔓 Das Schloss springt auf' }); }
       else this.laerm((z.tuer.x + 0.5) * KACHEL, (z.tuer.y + 0.5) * KACHEL, 300, true, z.ebene);
       client.send('aufloesung', { richtig, loesung: offen.richtig, seite: offen.seite });
       return;
     }
     const tor = this.welt.tor;
+    if (richtig) this.xpGeben(client.sessionId, 'raetsel');
     if (richtig && this.state.torGeloest < TOR_RAETSEL) {
       this.state.torGeloest++;
       const offenJetzt = this.state.torGeloest >= TOR_RAETSEL;
@@ -1654,22 +1761,31 @@ export class SpielRaum extends Room {
     const vorher = istNacht(s.uhr);
     s.uhr = (s.uhr + dt * zr * 1440 / ((SpielRaum.einstellungen.tagMinuten || 48) * 60)) % 1440;
     if (istNacht(s.uhr) !== vorher) this.broadcast('meldung', { text: istNacht(s.uhr) ? '🌙 Die Nacht bricht herein – Zombies werden mehr. Taschenlampe bereit?' : '🌅 Es wird Tag', lang: true });
-    this.feldZeit -= dt;
+    this.feldZeit -= dt; this.feldAlter = (this.feldAlter ?? 0) + dt;
     if (this.feldZeit <= 0) {
-      const tf = performance.now();
-      for (const e of new Set([...s.spieler.values()].map(p => p.ebene ?? ''))) this.baueFeld(e);
-      this.messen('wegefeld', tf);
       this.feldZeit = 0.4;
+      // nur neu rechnen, wenn ein Spieler die Kachel gewechselt hat (oder alle 5 s zur Sicherheit)
+      const sig = [...s.spieler.values()].filter(p => !p.unten && !(p.zombie > 0)).map(p => `${p.ebene ?? ''}:${Math.floor(p.x / KACHEL)},${Math.floor(p.y / KACHEL)}`).sort().join('|')
+        + '#' + [...s.spieler.values()].map(p => p.ebene ?? '').sort().join(',');
+      if (sig !== this.feldSig || this.feldAlter > 5) {
+        const tf = performance.now();
+        this.feldSig = sig; this.feldAlter = 0;
+        for (const e of new Set([...s.spieler.values()].map(p => p.ebene ?? ''))) this.baueFeld(e);
+        this.messen('wegefeld', tf);
+      }
     }
 
     let t0 = performance.now();
     for (const [id, p] of s.spieler) {
       const x = this.extra.get(id);
       if (!x) continue;
-      if (x.bot) {
-        try { botSchritt(this, id, p, x, dt); } catch (e) { x.eingabe = { dx: 0, dy: 0, s: false }; if (!x.fehlerGemeldet) { console.error('Bot-Fehler:', e.message); x.fehlerGemeldet = true; } }
+      // untätiger Mensch: die Bot-Steuerung übernimmt (Sicht „x.bot“ = x.afkBot, Schreibzugriffe gehen auf x)
+      let xs = x;
+      if (!x.bot) { this.afkPruefen(id, p, x); if (x.afkBot) xs = new Proxy(x, { get: (t, k) => k === 'bot' ? t.afkBot : t[k] }); }
+      if (xs.bot) {
+        try { botSchritt(this, id, p, xs, dt); } catch (e) { x.eingabe = { dx: 0, dy: 0, s: false }; if (!x.fehlerGemeldet) { console.error('Bot-Fehler:', e.message); x.fehlerGemeldet = true; } }
       }
-      this.spielerSchritt(id, p, x, dt);
+      this.spielerSchritt(id, p, xs, dt);
       this.beduerfnisse(p, x, dt * zr);
       if (this.unsterblich(p)) { p.hp = 100; p.unten = false; p.infektion = 0; p.durst = Math.max(p.durst, 30); p.hunger = Math.max(p.hunger, 30); }
       this.aktionSchritt(id, p, x, dt);
@@ -1677,11 +1793,28 @@ export class SpielRaum extends Room {
     this.messen('spieler', t0); t0 = performance.now();
     this.spiegleSafeTueren();
     this.welle?.schritt(dt);
-    for (const [id, z] of s.zombies) this.zombieSchritt(id, z, dt);
+    // Entlastung: weit von allen Spielern (und vom Stützpunkt) entfernte Zombies nur jeden FERN_TAKT-ten Takt mit gesammeltem dt
+    this.takteGezaehlt = (this.takteGezaehlt ?? 0) + 1;
+    this.berechneNah();
+    this.baueZombieRaster();
+    for (const [id, z] of s.zombies) {
+      const info = this.zombieInfo.get(id);
+      if (!info) continue;
+      let d = dt;
+      if (this.istFern(z.x, z.y, z.ebene)) {
+        info.stau = (info.stau ?? 0) + dt;
+        info.nr ??= Number(id.slice(1)) || 0;
+        info.dran = (this.takteGezaehlt + info.nr) % FERN_TAKT === 0;
+        if (!info.dran) continue;
+        d = info.stau; info.stau = 0;
+      } else { info.stau = 0; info.dran = true; }
+      this.zombieSchritt(id, z, d);
+    }
     this.messen('zombies', t0); t0 = performance.now();
     this.stadt?.schritt(dt);
     this.messen('menschen', t0); t0 = performance.now();
     this.verkehr?.schritt(dt);
+    this.zRaster = null;
     this.messen('verkehr', t0); t0 = performance.now();
     this.brand?.schritt(dt);
     this.aufgaben?.schritt(dt);
@@ -1715,7 +1848,7 @@ export class SpielRaum extends Room {
     if (p.zombie > 0) return this.zombieSpielerSchritt(p, x, e, laenge, dt);
     p.schleicht = e.s || (laenge > 0 && laenge < 0.55);
     // infiziert: langsamer
-    const tempo = (p.schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
+    const tempo = (p.schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1) * this.fkWert(p, 'tempo');
     if (laenge > 0.05) {
       let f = Math.min(1, laenge / (p.schleicht ? 0.55 : 1)) * tempo * dt;
       const x0 = p.x, y0 = p.y;
@@ -1725,7 +1858,7 @@ export class SpielRaum extends Room {
         bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius, freiTier);
       } else bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
       p.richtung = Math.atan2(e.dy, e.dx);
-      if (!p.schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen, false, p.ebene);
+      if (!p.schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen * this.fkWert(p, 'hoerweite'), false, p.ebene);
       if (!x.bot) this.klettern(id, p, x, e, laenge, ((p.x - x0) * e.dx + (p.y - y0) * e.dy) / laenge < f * 0.35, dt);
     } else x.kletter = 0;
     this.uebergang(id, p, x, dt);
@@ -1753,8 +1886,8 @@ export class SpielRaum extends Room {
           && Math.hypot(q.x - p.x, q.y - p.y) <= wf.reichweite && winkelDiff(Math.atan2(q.y - p.y, q.x - p.x), w) <= winkel
           && sichtfrei(welt, p.x, p.y, q.x, q.y));
         if (wf.fern) {
-          p.munition--;
-          this.laerm(p.x, p.y, W.hoerweiteSchuss * (wf.laut ?? 1), true, p.ebene);
+          if (!(this.rnd() < this.fkWert(p, 'schussFrei', 0))) p.munition--;
+          this.laerm(p.x, p.y, W.hoerweiteSchuss * (wf.laut ?? 1) * this.fkWert(p, 'hoerweite'), true, p.ebene);
           if (wf.kegel) {
             const alle = imWinkel(wf.kegel).filter(t => t[0] !== zid);
             for (let i = -2; i <= 2; i++) {   // Schrotgarbe
@@ -1805,7 +1938,7 @@ export class SpielRaum extends Room {
     for (const o of this.state.spieler.values()) {
       if (o === p || o.unten || o.zombie > 0 || o.ebene !== p.ebene) continue;
       if (Math.hypot(o.x - p.x, o.y - p.y) < W.spielerRadius * 2 + 6) {
-        o.hp = Math.max(0, o.hp - BISS_PRO_SEK * dt);
+        o.hp = Math.max(0, o.hp - BISS_PRO_SEK * dt * this.fkWert(o, 'schadenFaktor'));
         if (o.hp <= 0) this.liegtAmBoden(o);
       }
     }
@@ -1846,8 +1979,9 @@ export class SpielRaum extends Room {
     const ruht = this.ruhtAmBett(p, x, dt);
     if (p.ruht !== ruht) p.ruht = ruht;
     const rate = ruht ? 0.5 : 1;
-    p.durst = Math.max(0, p.durst - dt * rate * 100 / DURST_DAUER);
-    p.hunger = Math.max(0, p.hunger - dt * rate * 100 / HUNGER_DAUER);
+    const fkV = rate * this.fkWert(p, 'verbrauch');
+    p.durst = Math.max(0, p.durst - dt * fkV * 100 / DURST_DAUER);
+    p.hunger = Math.max(0, p.hunger - dt * fkV * 100 / HUNGER_DAUER);
     if (p.unten) return;
     if (p.durst === 0 || p.hunger === 0) {
       p.hp = Math.max(0, p.hp - dt * 0.25);
@@ -1920,6 +2054,7 @@ export class SpielRaum extends Room {
       this.zombieInfo.delete(id);
       this.state.besiegt++;
       von.besiegt++;
+      if (vonSid) this.xpGeben(vonSid, 'zombie');
       this.neueLeiche(z);
       this.broadcast('weg', { x: z.x, y: z.y });
     }
@@ -1955,7 +2090,7 @@ export class SpielRaum extends Room {
         if (feld[j] !== -1) continue;
         if (BLOCKIERT_FELD.has(welt.hole(nx, ny))) continue;
         feld[j] = feld[i] + 1;
-        q.push(j);
+        if (feld[j] < WEGEFELD_TIEFE) q.push(j);   // weiter weg ist das Feld nicht nötig (Zombies sehen/hören höchstens ~500 px)
       }
     }
     this.felder.set(ebene, feld);
@@ -1975,6 +2110,56 @@ export class SpielRaum extends Room {
     }
     if (!best) return null;
     return Math.atan2((best[1] + 0.5) * KACHEL - y, (best[0] + 0.5) * KACHEL - x);
+  }
+
+  // „Nah“-Punkte je Ebene: alle Spieler, dazu für draußen die Haustüren der Häuser mit Spielern darin und die Posten des Stützpunkts
+  berechneNah() {
+    const m = new Map();
+    const add = (e, x, y) => { let l = m.get(e); if (!l) m.set(e, l = []); l.push(x, y); };
+    for (const p of this.state.spieler.values()) {
+      const e = p.ebene ?? '';
+      add(e, p.x, p.y);
+      if (e) {
+        const mm = EBENE_MUSTER.exec(e), h = mm ? this.welt.haeuser[Number(mm[1])] : null;
+        if (h) add('', (h.tuer.x + 0.5) * KACHEL, (h.tuer.y + 0.5) * KACHEL);
+      }
+    }
+    const sp = this.stuetzpunkt;
+    if (sp) {
+      for (const q of sp.schuetzen ?? []) add('', q.x, q.y);
+      for (const q of sp.nester ?? []) add('', q.x, q.y);
+      if (sp.puma) add('', sp.puma.x, sp.puma.y);
+    }
+    this.nahPunkte = m;
+  }
+
+  istFern(x, y, ebene = '') {
+    const l = this.nahPunkte?.get(ebene ?? '');
+    if (!l) return true;
+    const r2 = FERN_WEITE * FERN_WEITE;
+    for (let i = 0; i < l.length; i += 2) { const dx = l[i] - x, dy = l[i + 1] - y; if (dx * dx + dy * dy < r2) return false; }
+    return true;
+  }
+
+  // Raster aller Zombies je Ebene (Zelle → Liste), gilt für den laufenden Takt
+  baueZombieRaster() {
+    const r = new Map();
+    for (const z of this.state.zombies.values()) {
+      const e = z.ebene ?? '';
+      let g = r.get(e); if (!g) r.set(e, g = new Map());
+      const k = Math.floor(z.y / RASTER) * 4096 + Math.floor(z.x / RASTER);
+      const l = g.get(k); if (l) l.push(z); else g.set(k, [z]);
+    }
+    this.zRaster = r;
+  }
+
+  // Zombies nahe (x, y) (Radius ≤ 1 Zelle ⇒ Zellen ±zellen); ohne Raster: alle auf der Ebene
+  zombiesNahe(x, y, ebene, zellen = 1) {
+    const g = this.zRaster?.get(ebene ?? '');
+    if (!g) return this.zRaster ? [] : [...this.state.zombies.values()].filter(z => (z.ebene ?? '') === (ebene ?? ''));
+    const cx = Math.floor(x / RASTER), cy = Math.floor(y / RASTER), out = [];
+    for (let j = cy - zellen; j <= cy + zellen; j++) for (let i = cx - zellen; i <= cx + zellen; i++) { const l = g.get(j * 4096 + i); if (l) for (const z of l) out.push(z); }
+    return out;
   }
 
   zombieSchritt(id, z, dt) {
@@ -2026,7 +2211,7 @@ export class SpielRaum extends Room {
         if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt, info);
         if (d < W.spielerRadius + W.zombieRadius + 6 && !(this.extra.get(info.ziel)?.schonT > 0)) {
           const schutz = ziel.kleidung > 0;
-          ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1));
+          ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1) * this.fkWert(ziel, 'schadenFaktor'));
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);
           if (!(ziel.infektion > 0) && this.rnd() < (SpielRaum.einstellungen.bissSpieler ?? BISS_CHANCE) * dt * (schutz ? 0.5 : 1)) {
             ziel.infektion = INFEKTION_DAUER;
@@ -2137,7 +2322,7 @@ export class SpielRaum extends Room {
     }
     if (!z.ebene && this.hausEindringen(z)) return true;
     // Abstand zu anderen Zombies halten
-    for (const o of this.state.zombies.values()) {
+    for (const o of this.zRaster ? this.zombiesNahe(z.x, z.y, z.ebene) : this.state.zombies.values()) {
       if (o === z || o.ebene !== z.ebene) continue;
       const d = Math.hypot(o.x - z.x, o.y - z.y);
       if (d > 0 && d < W.zombieRadius * 2) {
@@ -2161,10 +2346,11 @@ export class SpielRaum extends Room {
       if (helfer) {
         const h = helfer[1];
         const mitVerband = h.rucksack.includes('verband');
-        p.hilfe = Math.min(1, p.hilfe + dt / (mitVerband ? W.aufhelfenDauer : 8));
+        p.hilfe = Math.min(1, p.hilfe + dt * this.fkWert(h, 'heilen') / (mitVerband ? W.aufhelfenDauer : 8));
         if (p.hilfe >= 1) {
           if (mitVerband) h.rucksack.splice(h.rucksack.indexOf('verband'), 1);
           p.unten = false; p.hp = mitVerband ? 70 : 25; p.hilfe = 0;
+          this.xpGeben(helfer[0], 'wiederbelebt');
           this.broadcast('meldung', {
             text: mitVerband ? `${h.name} hat ${p.name} verbunden und aufgeholfen` : `${h.name} hat ${p.name} notdürftig aufgeholfen`,
           });
@@ -2221,7 +2407,8 @@ export class SpielRaum extends Room {
     if (p.munition > 0) for (let i = 0; i < Math.min(3, Math.ceil(p.munition / MUNITION_PRO_FUND)); i++) dinge.push('munition');
     if (p.kleidung > 0) dinge.push('kleidung');
     if (p.lampe > 0) dinge.push('taschenlampe');
-    if (p.plaetze > RUCKSACK_PLAETZE) dinge.push(p.plaetze >= 16 ? 'trekking' : 'tasche');
+    const fkB = this.fkRucksack(p);
+    if (p.plaetze - fkB > RUCKSACK_PLAETZE) dinge.push(p.plaetze - fkB >= 16 ? 'trekking' : 'tasche');
     const tag = ((SpielRaum.einstellungen.tagMinuten || 48) * 60);
     for (const d of dinge) {
       if (!DINGE[d]) continue;
@@ -2229,7 +2416,7 @@ export class SpielRaum extends Room {
       this.state.boden.get(id).alter = BODEN_DAUER - tag;   // BODEN_DAUER + (Spieltag) Sekunden bis zum Verschwinden
     }
     p.rucksack.splice(0, p.rucksack.length);
-    p.waffe = ''; p.munition = 0; p.kleidung = 0; p.lampe = 0; p.plaetze = RUCKSACK_PLAETZE;
+    p.waffe = ''; p.munition = 0; p.kleidung = 0; p.lampe = 0; p.plaetze = RUCKSACK_PLAETZE + fkB;
   }
 
   // alle am Boden: jeder wacht in seinem letzten Safe Room auf, die Welt bleibt erhalten

@@ -199,6 +199,7 @@ test('Puma: Turm dreht zum Ziel, schießt alle paar Sekunden, kleiner Flächensc
   const sp = raum.welt.stuetzpunkt, puma = sp.teile.find(t => t.art === 'puma');
   imLagerSetzen(raum, p);
   raum.stuetzpunkt.nester = []; raum.stuetzpunkt.schuetzen = [];   // nur der Puma
+  raum.stuetzpunkt.puma.fest = true;   // dieser Test prüft Turm und Schuss; Fahren siehe nächsten Test
   assert.ok(Math.abs(raum.state.bwTurm - puma.turm.winkel) < 1e-9, 'Turm beginnt in Fahrtrichtung');
   const anfang = raum.state.bwTurm;
   const pt = sichtPunkt(raum, puma.turm, 150, 440, true);   // weit seitlich vom Rohr
@@ -217,6 +218,25 @@ test('Puma: Turm dreht zum Ziel, schießt alle paar Sekunden, kleiner Flächensc
   const lebend = [a, b].filter(id => stehtDa(raum, id));
   assert.equal(lebend.length, 1, 'ein Zombie müsste tot sein, der andere noch stehen');
   assert.equal(raum.state.zombies.get(lebend[0]).hp, 40, 'Flächenschaden fehlt');
+  await beenden(c);
+});
+
+test('Puma fährt: streift die Front entlang, bei Zombies vor dem Lager zur Höhe der Angreifer, Position im State', async () => {
+  await frisch();
+  const { c, raum, p } = await beitreten('Fahrer');
+  const sp = raum.welt.stuetzpunkt, st = raum.stuetzpunkt;
+  imLagerSetzen(raum, p);
+  st.nester = []; st.schuetzen = [];
+  const start = { x: raum.state.bwX, y: raum.state.bwY };
+  assert.ok(start.x > 0, 'Startposition im State');
+  st.puma.warte = 0; st.puma.richtung = 1;
+  assert.ok(await bis(() => Math.hypot(raum.state.bwX - start.x, raum.state.bwY - start.y) > 40, 8000), 'Puma fährt nicht von selbst');
+  // Angreifer vor der Front, weit links: der Puma fährt dorthin
+  const r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung), [zx, zy] = r.ort(4, -6);
+  const id = raum.setzeZombie(zx, zy, ''); ruhig(raum, id);
+  assert.ok(await bis(() => planKoord(sp, raum.state.bwX, raum.state.bwY).u < 7, 20000), 'Puma fährt nicht zur Höhe der Angreifer');
+  const pk = planKoord(sp, raum.state.bwX, raum.state.bwY);
+  assert.ok(Math.abs(pk.v - 2.6) < 0.2, 'bleibt auf seiner Bahn: v = ' + pk.v);
   await beenden(c);
 });
 

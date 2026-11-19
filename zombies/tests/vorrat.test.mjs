@@ -491,6 +491,35 @@ test('Weggeworfenes bleibt liegen, andere heben es auf; großer Rucksack', async
   } finally { await a.c.leave(); await b.c.leave(); }
 });
 
+test('Aufheben mit Auswahl: gewählter Gegenstand, voller Rucksack tauscht Platz, Abstand wird geprüft', async () => {
+  const a = await beitreten('Wähler');
+  try {
+    const { raum } = a;
+    a.p.x = raum.welt.start.x; a.p.y = raum.welt.start.y; a.p.ebene = '';
+    raum.state.boden.clear();
+    a.p.rucksack.clear();
+    const i1 = raum.legeHin('seil', a.p.x, a.p.y), i2 = raum.legeHin('bretter', a.p.x, a.p.y);
+    const weit = raum.legeHin('seil', a.p.x + 300, a.p.y);
+    a.c.send('aufheben_wahl', { id: weit });
+    a.c.send('aufheben_wahl', { id: i2 });
+    assert.ok(await bis(() => a.p.rucksack.includes('bretter')), 'gewählter nicht aufgehoben');
+    assert.ok(!a.p.rucksack.includes('seil'));
+    assert.ok(raum.state.boden.has(i1) && raum.state.boden.has(weit) && !raum.state.boden.has(i2));
+    // voller Rucksack: ohne Platz nichts, mit Platz Tausch
+    while (a.p.rucksack.length < a.p.plaetze) a.p.rucksack.push('bretter');
+    a.p.rucksack[1] = 'seil';
+    const vorher = raum.state.boden.size;
+    a.c.send('aufheben_wahl', { id: i1 });
+    await new Promise(r => setTimeout(r, 150));
+    assert.equal(raum.state.boden.size, vorher, 'ohne Platzwahl darf nichts passieren');
+    a.c.send('aufheben_wahl', { id: i1, platz: 3 });
+    assert.ok(await bis(() => !raum.state.boden.has(i1)), 'Tausch fehlt');
+    assert.equal(a.p.rucksack.length, a.p.plaetze);
+    assert.ok(!raum.state.boden.has(i1));
+    assert.equal([...raum.state.boden.values()].filter(b => b.ding === 'bretter').length, 1, 'verdrängter Gegenstand liegt am Boden');
+  } finally { await a.c.leave(); }
+});
+
 test('Tauschen: anbieten, beide bestätigen, Entfernen bricht ab', async () => {
   const a = await beitreten('Anna'), b = await beitreten('Bert');
   try {
