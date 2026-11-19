@@ -14,7 +14,6 @@ const LISTE = [
 const CSS = `
 #fkknopf { position: fixed; right: 396px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px; height: 30px; margin: 0; padding: 0;
   font-size: 16px; line-height: 1; border-radius: 8px; background: #0007; color: #fff; border: 0; display: none; z-index: 6; }
-@media (max-width: 600px) { #fkknopf { right: 196px; top: max(70px, calc(env(safe-area-inset-top) + 62px)); } }
 #fkknopf.neu { background: #f9a825cc; }
 #fkfenster { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(380px, calc(100vw - 24px)); max-height: calc(100vh - 24px);
   overflow: auto; background: #1b1f23f2; color: #fff; border-radius: 12px; padding: 12px; z-index: 30; display: none; box-sizing: border-box; font-size: 14px; }

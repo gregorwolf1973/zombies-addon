@@ -54,13 +54,19 @@
 
 <div id="gruen"></div>
 <div id="hud">
+  <div id="aufgaben" style="display:none">
+    <button id="aufgabenknopf" type="button" aria-expanded="true" aria-controls="aufgabenkoerper">📋 <span id="aufgabenkopf"></span></button>
+    <div id="aufgabenkoerper">
+      <ul id="aufgabenliste"></ul>
+      <div id="busanzeige"></div>
+    </div>
+  </div>
   <div class="zeile">
     <div class="anzeigen">
       <div class="anzeige" title="Gesundheit"><span>❤️</span><div id="hp" class="bar rot"><div></div></div></div>
       <div class="anzeige" title="Durst"><span>💧</span><div id="durst" class="bar blau"><div></div></div></div>
       <div class="anzeige" title="Hunger"><span>🍖</span><div id="hunger" class="bar orange"><div></div></div></div>
     </div>
-    <span id="zeit">00:00</span>
   </div>
   <div class="zeile klein">
     <span id="waffe"></span>
@@ -72,25 +78,20 @@
   </div>
   <button id="listeknopf" type="button" aria-expanded="false" aria-controls="liste" title="Spielerliste ein-/ausklappen"><span id="punkte"></span></button>
   <ul id="liste"></ul>
-  <div id="aufgaben" style="display:none">
-    <button id="aufgabenknopf" type="button" aria-expanded="true" aria-controls="aufgabenkoerper">📋 <span id="aufgabenkopf"></span></button>
-    <div id="aufgabenkoerper">
-      <ul id="aufgabenliste"></ul>
-      <div id="busanzeige"></div>
-    </div>
-  </div>
+</div>
+<div id="rechts">
+<div id="leiste">
+<button id="chatknopf" title="Chat" aria-label="Chat">💬<span id="chatzaehler"></span></button>
+<button id="sprachknopf" title="Mikrofon" aria-label="Mikrofon an/aus">🎤</button>
+<button id="zoomraus" class="zoomknopf" title="Herauszoomen (−)" aria-label="Herauszoomen">−</button>
+<button id="zoomrein" class="zoomknopf" title="Hineinzoomen (+)" aria-label="Hineinzoomen">+</button>
+<button id="einstellknopf" title="Spieler-Einstellungen" aria-label="Spieler-Einstellungen">⚙️</button>
 </div>
 <div id="kartenbox" title="Übersicht (M)">
   <canvas id="karte"></canvas>
   <div class="kartenknoepfe"><button class="plus" aria-label="Hineinzoomen">+</button><button class="minus" aria-label="Herauszoomen">−</button><button class="mich" aria-label="Auf mich zentrieren">⌖</button></div>
 </div>
-<button id="menueknopf" type="button" title="Menü" aria-label="Menü" aria-expanded="false" aria-controls="menue">☰<span id="menuepunkt"></span></button>
-<div id="menue">
-<button id="einstellknopf" title="Spieler-Einstellungen" aria-label="Spieler-Einstellungen">⚙️</button>
-<button id="zoomraus" class="zoomknopf" title="Herauszoomen (−)" aria-label="Herauszoomen">−</button>
-<button id="zoomrein" class="zoomknopf" title="Hineinzoomen (+)" aria-label="Hineinzoomen">+</button>
-<button id="chatknopf" title="Chat" aria-label="Chat">💬<span id="chatzaehler"></span></button>
-<button id="sprachknopf" title="Mikrofon" aria-label="Mikrofon an/aus">🎤</button>
+<span id="zeit">00:00</span>
 </div>
 <div id="chat" role="dialog" aria-label="Chat">
   <div class="kopfzeile"><b>💬 Chat</b><button id="chatzu" aria-label="Chat schließen">✕</button></div>
@@ -100,13 +101,9 @@
     <button id="chatsenden" type="submit" aria-label="Senden">➤</button>
   </form>
 </div>
-<div id="kontextbox">
+<div id="unten">
   <button id="aktion2" type="button"></button>
   <button id="aktion" type="button"></button>
-  <div id="kontextprobe">↔ Ziehen<br><small>Aktionsknopf</small></div>
-  <button id="kontextfertig" type="button">✔ Fertig</button>
-</div>
-<div id="unten">
   <div id="rucksack"></div>
 </div>
 <div id="einstellungen" role="dialog" aria-label="Spieler-Einstellungen">
@@ -116,11 +113,6 @@
     <div class="eg-reihe" id="eg-ton">
       <button type="button" data-v="1">🔊 100 %</button><button type="button" data-v="0.5">🔉 50 %</button><button type="button" data-v="0.25">🔈 25 %</button><button type="button" data-v="0">🔇 Aus</button>
     </div>
-    <div class="eg-titel">🎯 Aktionsknopf (Aufheben, Tür, Durchsuchen …)</div>
-    <div class="eg-reihe">
-      <button type="button" id="eg-schieben">↔ Verschieben</button><button type="button" id="eg-reset">↺ Zurücksetzen</button>
-    </div>
-    <div class="eg-hinweis">Kurz tippen = Aktion · lange drücken (halbe Sekunde) = weitere Aktionen.</div>
     <div class="eg-titel">🗺 Eckkarte</div>
     <div class="eg-reihe" id="eg-karte">
       <button type="button" data-v="0.35">Sehr blass</button><button type="button" data-v="0.6">Blass</button><button type="button" data-v="1">Deckend</button>

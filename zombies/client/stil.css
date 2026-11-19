@@ -35,7 +35,7 @@ button:disabled { opacity: .6; }
 #hud {
   position: fixed; top: 0; left: 0; right: 0; padding: 10px 14px; pointer-events: none;
   font-weight: 600; font-size: 14px; text-shadow: 0 1px 2px #000; display: none;
-  padding-top: max(10px, env(safe-area-inset-top));
+  padding-top: max(10px, env(safe-area-inset-top)); z-index: 9;
 }
 #hud .zeile { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 #hud .anzeigen { display: flex; flex-direction: column; gap: 4px; flex: 1; }
@@ -60,27 +60,15 @@ button:disabled { opacity: .6; }
   position: fixed; left: 0; right: 0; bottom: 0; display: none; flex-direction: column; align-items: stretch;
   gap: 8px; padding: 0; pointer-events: none; z-index: 5;
 }
-/* Aktionsknopf: schwebt mittig-rechts (Position verschiebbar), lange drücken öffnet weitere Aktionen */
-#kontextbox { position: fixed; left: 82%; top: 58%; transform: translate(-50%, -50%); z-index: 6; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
-#kontextbox button { width: auto; margin: 0; pointer-events: auto; touch-action: none; }
+#aktion, #aktion2 { margin-right: max(10px, env(safe-area-inset-right)) !important; }
 #aktion {
-  display: none; position: relative; min-width: 88px; max-width: 150px; min-height: 64px; font-size: 16px; line-height: 1.2; padding: 10px 14px; border-radius: 18px;
-  background: #ffd54f; color: #2b1d00; box-shadow: 0 3px 12px #000a; border: 2px solid #fff8;
+  display: none; align-self: flex-end; font-size: 16px; padding: 12px 16px; border-radius: 14px;
+  background: #ffd54f; color: #2b1d00; box-shadow: 0 3px 10px #0008;
 }
-#aktion.mehr::after { content: '⋯'; position: absolute; top: -9px; right: -6px; background: #263238; color: #fff; border-radius: 10px; padding: 0 6px; font-size: 16px; line-height: 16px; }
 #aktion2 {
-  display: none; position: absolute; bottom: calc(100% + 8px); white-space: nowrap; font-size: 15px; padding: 12px 16px; border-radius: 14px;
-  background: #263238; color: #fff; border: 1px solid #fff5; box-shadow: 0 3px 10px #000a;
+  display: none; align-self: flex-end; font-size: 14px; padding: 9px 14px; border-radius: 14px;
+  background: #ffffff33; color: #fff; box-shadow: 0 3px 10px #0008; pointer-events: auto;
 }
-#kontextbox.menue2 #aktion2 { display: block; }
-#kontextprobe, #kontextfertig { display: none; }
-body.kverschieben #kontextbox { pointer-events: auto; z-index: 28; }
-body.kverschieben #aktion, body.kverschieben #aktion2 { display: none !important; }
-body.kverschieben #kontextprobe {
-  display: block; min-width: 96px; padding: 14px 16px; border-radius: 18px; text-align: center; font-weight: 700; font-size: 16px; line-height: 1.2;
-  background: #ffd54fcc; color: #2b1d00; border: 3px dashed #fff; box-shadow: 0 3px 12px #000a; cursor: grab; touch-action: none; pointer-events: auto;
-}
-body.kverschieben #kontextfertig { display: block; margin-top: 8px; padding: 10px 16px; font-size: 16px; background: #2e7d32; color: #fff; border-radius: 12px; }
 /* Inventar: schmale Leiste ganz unten über die volle Breite (scrollbar, wenn die Plätze nicht passen) */
 #rucksack {
   display: flex; flex-wrap: nowrap; gap: 5px; pointer-events: auto; background: #000a; box-sizing: border-box; width: 100%;
@@ -130,9 +118,12 @@ body.kverschieben #kontextfertig { display: block; margin-top: 8px; padding: 10p
 #liste .weg { opacity: .5; }
 
 /* Gemeinsame Aufgaben (links oben unter den Anzeigen), einklappbar */
-#aufgaben { margin-top: 6px; max-width: min(300px, calc(100vw - 150px)); font-size: 12px; font-weight: 500; }
+#aufgaben { position: relative; margin: 0 0 6px; width: fit-content; font-size: 12px; font-weight: 500; }
 #aufgabenknopf { pointer-events: auto; width: auto; margin: 0; padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #000a; color: #fff; border: 1px solid #fff3; cursor: pointer; }
-#aufgabenkoerper { background: #000a; border-radius: 10px; padding: 6px 9px; margin-top: 4px; overflow-wrap: anywhere; }
+#aufgabenkoerper {
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 40; width: min(320px, calc(100vw - 20px)); max-height: 70vh; overflow-y: auto; pointer-events: auto;
+  background: #1e2a1e; border: 1px solid #fff4; border-radius: 10px; padding: 8px 10px; box-shadow: 0 6px 20px #000c; overflow-wrap: anywhere;
+}
 #aufgaben.zu #aufgabenkoerper { display: none; }
 #aufgaben.puls #aufgabenknopf { animation: ag-puls .9s ease-in-out 5; background: #f9a825e6; color: #2b1d00; }
 @keyframes ag-puls { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
@@ -143,8 +134,8 @@ body.kverschieben #kontextfertig { display: block; margin-top: 8px; padding: 10p
 #aufgabenliste .ag-zahl { opacity: .8; font-variant-numeric: tabular-nums; }
 #busanzeige { margin-top: 5px; padding-top: 4px; border-top: 1px solid #fff3; font-weight: 700; }
 @media (max-width: 600px) {
-  #aufgaben { max-width: calc(100vw - 130px); font-size: 11px; }
-  #aufgabenkoerper { padding: 4px 7px; }
+  #aufgaben { font-size: 11px; }
+  #aufgabenkoerper { padding: 6px 8px; }
 }
 
 /* Meldungen unten direkt über dem Inventar, klein und halbdurchsichtig, höchstens zwei */
@@ -198,8 +189,24 @@ body.kverschieben #kontextfertig { display: block; margin-top: 8px; padding: 10p
 #tauschstatus { font-size: 13px; color: #a5d6a7; margin-top: 8px; min-height: 1em; }
 
 /* Übersichtskarte: klein oben rechts, angetippt groß */
+#rechts {
+  position: fixed; right: 10px; top: var(--oben); z-index: 6; width: 180px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none;
+}
+#rechts:has(#kartenbox.gross) { z-index: 24; }
+#leiste { display: flex; gap: 4px; justify-content: flex-end; pointer-events: auto; }
+#leiste > button {
+  position: relative !important; right: auto !important; top: auto !important; flex: none; width: 36px !important; height: 32px !important; margin: 0 !important; padding: 0 !important;
+  font-size: 18px !important; line-height: 1; border-radius: 8px; background: #000a !important; color: #fff; border: 1px solid #fff3 !important; display: none;
+}
+#leiste > #sprachknopf.aus { background: #7f1d1d99 !important; }
+#leiste > #fkknopf.neu::after {
+  content: ''; position: absolute; top: -4px; right: -4px; width: 11px; height: 11px; border-radius: 50%; background: #e53935; border: 1px solid #fff;
+}
+#zeit {
+  pointer-events: none; font-weight: 700; font-size: 13px; padding: 2px 9px; border-radius: 10px; background: #000a; text-shadow: 0 1px 2px #000;
+}
 #kartenbox {
-  position: fixed; right: 10px; top: max(36px, calc(env(safe-area-inset-top) + 28px)); width: 180px; display: none; z-index: 6;
+  position: relative; width: 180px; display: none; pointer-events: auto;
   opacity: var(--kartealpha, .6); transition: opacity .2s;
 }
 #kartenbox:hover, #kartenbox:active, #kartenbox.gross { opacity: 1; }
@@ -208,7 +215,7 @@ body.kverschieben #kontextfertig { display: block; margin-top: 8px; padding: 10p
   cursor: pointer; touch-action: none;
 }
 /* groß: so breit wie möglich, aber ganz im Bild (Höhe ergibt sich aus dem Seitenverhältnis der Karte, --seiten) */
-#kartenbox.gross { width: min(94vw, 1000px, calc((100vh - 76px) * var(--seiten, 1.35))); right: 50%; transform: translateX(50%); top: 56px; z-index: 24; }
+#kartenbox.gross { position: fixed; width: min(94vw, 1000px, calc((100vh - 76px) * var(--seiten, 1.35))); right: 50%; transform: translateX(50%); top: 56px; z-index: 24; }
 #kartenbox.gross canvas { cursor: grab; }
 .kartenknoepfe { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
 .kartenknoepfe button {
@@ -216,10 +223,6 @@ body.kverschieben #kontextfertig { display: block; margin-top: 8px; padding: 10p
   border-radius: 7px; background: #000a; color: #fff; border: 1px solid #fff4;
 }
 #kartenbox.gross .kartenknoepfe button { width: 40px !important; height: 40px; font-size: 22px; }
-#einstellknopf {
-  position: fixed; right: 196px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
-  margin: 0 !important; padding: 0 !important; font-size: 16px; border-radius: 8px; background: #0007; color: #fff; display: none; z-index: 6;
-}
 /* Spieler-Einstellungen */
 #einstellungen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #0008; z-index: 27; padding: 16px; }
 #einstellungen.offen { display: flex; }
@@ -244,30 +247,14 @@ body.kverschieben #kontextfertig { display: block; margin-top: 8px; padding: 10p
 .farben button { width: 26px !important; height: 26px; margin: 0 !important; padding: 0 !important; border-radius: 50%; border: 2px solid #ffffff55; }
 .farben button.an { border: 3px solid #fff; box-shadow: 0 0 0 2px #ffd54f; }
 
-/* Zoomknöpfe neben dem Lautsprecher */
-.zoomknopf {
-  position: fixed; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
-  margin: 0 !important; padding: 0 !important; font-size: 20px; line-height: 1; border-radius: 8px; background: #0007; color: #fff;
-  display: none; z-index: 6;
-}
-#zoomrein { right: 236px; }
-#zoomraus { right: 276px; }
+/* Zoomknöpfe nur mit Maus – am Touch-Gerät zoomt man mit zwei Fingern */
+@media (pointer: coarse) { .zoomknopf { display: none !important; } }
 
 .figurknoepfe.fest .farben, .figurknoepfe.fest .farbtitel { opacity: .35; pointer-events: none; }
 .grafiknachweis { font-size: 10px; opacity: .6; margin-top: 8px; }
 
 /* Text-Chat „wie WhatsApp“ */
-#chatknopf {
-  position: fixed; right: 316px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
-  margin: 0 !important; padding: 0 !important; font-size: 16px; line-height: 1; border-radius: 8px; background: #0007; color: #fff;
-  display: none; z-index: 6;
-}
-#sprachknopf {
-  position: fixed; right: 356px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px !important; height: 30px;
-  margin: 0 !important; padding: 0 !important; font-size: 16px; line-height: 1; border-radius: 8px; background: #0007; color: #fff;
-  display: none; z-index: 6;
-}
-#sprachknopf.aus { opacity: .5; background: #7f1d1d99; }
+#sprachknopf.aus { opacity: .5; }
 #chatzaehler {
   position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; box-sizing: border-box;
   background: #e53935; color: #fff; font-size: 11px; font-weight: 700; line-height: 16px; display: none;
@@ -328,37 +315,15 @@ body.tastatur #chat { top: calc(var(--vvtop, 0px) + 8px); }
 #aufheben-wahl .aufh-knopf .t { font-size: 12px; }
 #aufheben-wahl .aufh-knopf.zweit { background: #ffffff22; color: #fff; }
 
-/* ☰-Menü: breit (PC) bleiben alle Knöpfe einzeln oben; schmal oder niedrig (Handy) liegen sie im Menü */
-#menue { display: contents; }
-#menueknopf { display: none; }
-#menuepunkt { display: none; position: absolute; top: -4px; right: -4px; width: 11px; height: 11px; border-radius: 50%; background: #e53935; }
-/* Zoomknöpfe nur mit Maus – am Touch-Gerät zoomt man mit zwei Fingern */
-@media (pointer: coarse) { .zoomknopf { display: none !important; } }
-
 @media (max-width: 700px), (max-height: 520px) {
-  #menueknopf {
-    display: block; position: fixed; right: 138px; top: var(--oben); width: 40px !important; height: 34px; margin: 0 !important; padding: 0 !important;
-    font-size: 20px; line-height: 1; border-radius: 8px; background: #000a; color: #fff; z-index: 7; pointer-events: auto;
-  }
-  #menue { display: none; }
-  body.menue #menue {
-    display: flex; flex-direction: column; gap: 6px; position: fixed; right: 138px; top: calc(var(--oben) + 40px); z-index: 7;
-    background: #000d; padding: 6px; border-radius: 10px; box-shadow: 0 4px 14px #000a;
-  }
-  #menue > button {
-    position: static !important; right: auto !important; top: auto !important; width: 46px !important; height: 40px !important;
-    font-size: 20px !important; margin: 0 !important; padding: 0 !important; background: #ffffff1c !important; border-radius: 9px !important;
-  }
-  #menue > #sprachknopf.aus { background: #7f1d1d99 !important; }
-  #menue > #fkknopf.neu { background: #f9a825cc !important; }
-  #kartenbox { top: var(--oben); }
   #hud { padding: max(6px, env(safe-area-inset-top)) 10px 6px; }
   #hud .zeile { margin-bottom: 3px; gap: 8px; }
   .bar { width: 78px; }
   #liste { font-size: 11px; }
   #meldungen { font-size: 11px; }
   .platz { width: 38px !important; height: 38px; font-size: 21px; }
-  #aktion { font-size: 15px; }
+  #aktion { font-size: 15px; padding: 10px 14px; }
+  #leiste > button { width: 34px !important; }
 }
 
 /* Startseite auf kleinen Höhen: kompakter, oben beginnen */

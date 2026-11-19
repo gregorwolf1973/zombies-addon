@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.40.0 – 19.11.2026
+
+- Großer Aktionsknopf wieder entfernt: normale Aktionsknöpfe rechts über dem Inventar.
+- Symbolleiste (⭐ 💬 🎤 Zoom ⚙️) rechts oben über der Eckkarte statt ☰-Menü, Uhrzeit unter der Eckkarte.
+- Aufgaben ganz oben links über den Balken; die aufgeklappte Liste liegt deckend über allem.
+
 ## 0.39.0 – 19.11.2026
 
 - Gesundheit, Wasser und Hunger als drei Balken oben links (blinken unter 20 %).

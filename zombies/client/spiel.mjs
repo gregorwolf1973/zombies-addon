@@ -261,24 +261,8 @@ async function mitspielen() {
 }
 let abgemeldet = false;
 
-// ☰-Menü (schmale Bildschirme) und einklappbare Spielerliste; am PC (breit) ändert sich nichts
+// einklappbare Spielerliste
 function oberflaecheEinrichten() {
-  const kompakt = window.matchMedia('(max-width: 700px), (max-height: 520px)');
-  const menueZu = () => { document.body.classList.remove('menue'); $('menueknopf').setAttribute('aria-expanded', 'false'); };
-  $('menueknopf').onclick = e => {
-    e.stopPropagation();
-    const auf = document.body.classList.toggle('menue');
-    $('menueknopf').setAttribute('aria-expanded', String(auf));
-  };
-  // jeder Tipp außerhalb bzw. auf einen Menüeintrag schließt das Menü wieder
-  document.addEventListener('click', e => { if (e.target !== $('menueknopf')) menueZu(); });
-  kompakt.addEventListener?.('change', menueZu);
-  // Punkt am ☰, wenn drin etwas Neues wartet (ungelesener Chat, freie Fähigkeitspunkte)
-  setInterval(() => {
-    const chat = $('chatzaehler'), fk = document.getElementById('fkknopf');
-    const neu = (chat && chat.style.display !== 'none' && chat.textContent) || fk?.classList.contains('neu');
-    $('menuepunkt').style.display = neu ? 'block' : 'none';
-  }, 700);
   // Spielerliste: auf schmalen Bildschirmen standardmäßig zu, Wahl bleibt im Browser
   let zu = true;
   try { const v = localStorage.getItem('zob_liste'); if (v === '0') zu = false; else if (v === '1') zu = true; } catch { /* egal */ }
@@ -291,18 +275,7 @@ function oberflaecheEinrichten() {
   einstellungenEinrichten();
 }
 
-// ---------- Spieler-Einstellungen, Aktionsknopf (Position, langer Druck) ----------
-const KNOPF_STANDARD = { x: 0.82, y: 0.58 };
-function knopfPosition() {
-  try { const p = JSON.parse(localStorage.getItem('zob_kontextpos')); if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return p; } catch { /* egal */ }
-  return KNOPF_STANDARD;
-}
-function knopfSetzen(p) {
-  const box = $('kontextbox');
-  const x = Math.min(0.95, Math.max(0.05, p.x)), y = Math.min(0.8, Math.max(0.12, p.y));
-  box.style.left = (x * 100).toFixed(1) + '%'; box.style.top = (y * 100).toFixed(1) + '%';
-  return { x, y };
-}
+// ---------- Spieler-Einstellungen ----------
 function einstellungenEinrichten() {
   const fenster = $('einstellungen');
   const auf = () => { markieren(); fenster.classList.add('offen'); };
@@ -325,45 +298,6 @@ function einstellungenEinrichten() {
   for (const b of document.querySelectorAll('#eg-karte button')) b.onclick = () => {
     alpha(b.dataset.v); try { localStorage.setItem('zob_kartealpha', b.dataset.v); } catch { /* egal */ } markieren();
   };
-  // Aktionsknopf verschieben
-  knopfSetzen(knopfPosition());
-  window.addEventListener('resize', () => knopfSetzen(knopfPosition()));
-  const probe = $('kontextprobe');
-  $('eg-schieben').onclick = () => { zu(); document.body.classList.add('kverschieben'); };
-  $('kontextfertig').onclick = () => document.body.classList.remove('kverschieben');
-  $('eg-reset').onclick = () => {
-    try { localStorage.removeItem('zob_kontextpos'); } catch { /* egal */ }
-    knopfSetzen(KNOPF_STANDARD); meldung('↺ Aktionsknopf zurückgesetzt');
-  };
-  let zieht = null;
-  probe.addEventListener('pointerdown', e => { zieht = e.pointerId; probe.setPointerCapture(e.pointerId); e.preventDefault(); });
-  probe.addEventListener('pointermove', e => {
-    if (zieht !== e.pointerId) return;
-    knopfSetzen({ x: e.clientX / window.innerWidth, y: (e.clientY + 30) / window.innerHeight });   // Knopfmitte etwas über dem Finger
-  });
-  const loslassen = e => {
-    if (zieht !== e.pointerId) return;
-    zieht = null;
-    const p = knopfSetzen({ x: e.clientX / window.innerWidth, y: (e.clientY + 30) / window.innerHeight });
-    try { localStorage.setItem('zob_kontextpos', JSON.stringify(p)); } catch { /* egal */ }
-  };
-  probe.addEventListener('pointerup', loslassen); probe.addEventListener('pointercancel', loslassen);
-}
-
-// Aktionsknopf: kurz = Hauptaktion, lang (≈ 0,5 s) = Auswahl der weiteren Aktion
-function aktionsknopfEinrichten(szene) {
-  const box = $('kontextbox'), knopf = $('aktion');
-  let timer = null, lang = false;
-  const menueZu = () => box.classList.remove('menue2');
-  knopf.addEventListener('pointerdown', () => {
-    lang = false; clearTimeout(timer);
-    timer = setTimeout(() => { if (szene.zweit && szene.kontext) { lang = true; box.classList.add('menue2'); } }, 500);
-  });
-  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) knopf.addEventListener(ev, () => clearTimeout(timer));
-  knopf.addEventListener('contextmenu', e => e.preventDefault());
-  knopf.onclick = () => { if (lang) { lang = false; return; } menueZu(); szene.aktion(); };
-  $('aktion2').onclick = () => { menueZu(); szene.aktion2(); };
-  document.addEventListener('pointerdown', e => { if (!box.contains(e.target)) menueZu(); });
 }
 
 let gestartet = false;
@@ -676,7 +610,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     fkStart(raum, meldung);
-    { const fk = document.getElementById('fkknopf'); if (fk) $('menue').prepend(fk); }   // auf schmalen Bildschirmen im ☰-Menü
+    { const fk = document.getElementById('fkknopf'); if (fk) $('leiste').prepend(fk); }   // Symbolleiste über der Eckkarte
     raum.onMessage('gefunden', m => {
       if (m.dinge.length) ton.aufheben(); else ton.suchen();
       if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : dingText(d)).join(', '));
@@ -701,7 +635,8 @@ class Ort extends Phaser.Scene {
       ? (raum.state.funk ? '🔓 Das Tor ist offen! Der Evakuierungsbus holt euch dort ab.' : '🔓 Das Tor ist offen! Setzt am Funktisch im Safe Room einen 📻 Funkspruch ab – dann kommt der Evakuierungsbus.')
       : '🔓 Das Tor ist offen!', true));
 
-    aktionsknopfEinrichten(this);
+    $('aktion').onclick = () => this.aktion();
+    $('aktion2').onclick = () => this.aktion2();
     $('handelzu').onclick = () => handelZu();
     $('ausruhen').onclick = () => raum.send('ausruhen');
     $('kistezu').onclick = () => kisteZu();
@@ -2035,7 +1970,7 @@ class Ort extends Phaser.Scene {
 
   aktion() {
     const k = this.kontext;
-    if (!k) { if (this.zweit) this.aktion2(); return; }
+    if (!k) return;
     if (k.art === 'kiste') kisteAuf(k.safe);
     else if (k.art === 'kuehlschrank') raum.send('kuehlschrank');
     else if (k.art === 'tausch') raum.send('tausch_start', { mit: k.mit });
@@ -2232,14 +2167,11 @@ class Ort extends Phaser.Scene {
     if (frei2 && !zweit && this.handelKontext && this.kontext !== this.handelKontext && !handelOffen) zweit = this.handelKontext;
     if (frei2 && !zweit && ich.rucksack.includes('granate')) zweit = { art: 'wurf', text: '💣 Granate werfen (Q)' };
     this.zweit = zweit;
-    // ein großer Knopf: Hauptaktion; gibt es nur eine zweite Aktion, übernimmt er diese; sonst steckt sie hinter langem Druck
-    const haupt = this.kontext ?? zweit;
     const knopf = $('aktion'), knopf2 = $('aktion2');
-    knopf.style.display = haupt ? 'block' : 'none';
-    if (haupt && knopf.textContent !== haupt.text) knopf.textContent = haupt.text;
-    knopf.classList.toggle('mehr', !!(this.kontext && zweit));
+    knopf.style.display = this.kontext ? 'block' : 'none';
+    if (this.kontext && knopf.textContent !== this.kontext.text) knopf.textContent = this.kontext.text;
+    knopf2.style.display = zweit ? 'block' : 'none';
     if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
-    if (!(this.kontext && zweit)) $('kontextbox').classList.remove('menue2');
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
     if (!this.kontext || this.kontext.art !== 'aufheben_wahl') auswahlZu();
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
