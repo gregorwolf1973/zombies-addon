@@ -87,7 +87,15 @@ try {
   const m = sessionStorage.getItem('zob_meldung');
   if (m) { $('fehler').textContent = m; $('fehler').classList.add('gut'); sessionStorage.removeItem('zob_meldung'); }
 } catch {}
-fetch('info').then(r => r.json()).then(i => { $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); }).catch(() => {});
+// Versionsabgleich: lief die App über ein Update hinweg im Hintergrund weiter, hat sie noch alten Code (andere Welt!) →
+// vor dem Anmelden und beim Zurückkehren neu laden (danach tritt sie von selbst wieder bei)
+let seitenVersion = null;
+async function veraltet() {
+  try { const v = (await (await fetch('info', { cache: 'no-store' })).json()).version; return !!(seitenVersion && v && v !== seitenVersion); } catch { return false; }
+}
+function frischLaden(wiederBeitreten) { try { if (wiederBeitreten) sessionStorage.setItem('zob_autostart', '1'); } catch {} location.reload(); }
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && await veraltet()) frischLaden(!!window.szene); });
+fetch('info').then(r => r.json()).then(i => { seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 
 // ---------- Startseite: Freigaben (Mikrofon) abfragen, danach Installation als App anbieten ----------
@@ -289,6 +297,7 @@ async function mitspielen() {
   sprache.vorbereiten();   // AudioContext in der Nutzergeste (iOS), auch beim Start mit Enter
   const name = nameFeld.value.trim();
   if (!name) { $('fehler').textContent = 'Bitte gib einen Namen ein.'; nameFeld.focus(); return; }
+  if (await veraltet()) { frischLaden(true); return; }   // Server wurde aktualisiert: erst frischen Code laden
   const code = $('code').value.trim();
   try { localStorage.setItem('zob_name', name); localStorage.setItem('zob_code', code); } catch {}
   $('los').disabled = true;

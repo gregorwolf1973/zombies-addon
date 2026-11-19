@@ -225,6 +225,7 @@ export async function starte({
   // sagt dem Client, ob er nach dem Zugangscode fragen muss
   app.get('/info', (req, res) => res.json({
     code: !!SpielRaum.einstellungen.zugangscode && !req.get('x-ingress-path'),
+    version: paketVersion,                     // Client vergleicht mit der Version beim Laden der Seite (alter Code im Speicher → neu laden)
     wiki: String(optionen.wiki_adresse ?? '').trim(),
     extern: String(optionen.externe_adresse ?? '').trim(),   // https-Adresse, unter der das Mikrofon geht
     toene: datei.werte.toene,

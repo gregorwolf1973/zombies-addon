@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.46.2 – 19.11.2026
+
+- Versionsabgleich: Lief die App über ein Update hinweg im Hintergrund weiter (alter Code im Speicher, dadurch verschobene Welt), lädt sie vor dem Anmelden bzw. beim Zurückkehren selbst neu und tritt wieder bei. /info nennt dafür die Server-Version.
+
 ## 0.46.1 – 19.11.2026
 
 - Neues Favicon und App-Icon: freigestellter Zombie (Hintergrund entfernt), Favicon 16/32/48, App-Icons 192/512, Maskable-Icon und Apple-Touch-Icon mit dunklem Hintergrund.
