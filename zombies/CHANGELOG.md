@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.48.1 – 20.11.2026
+
+- Verwaltung: Fehler „wz is not defined“ beim Laden behoben (Schalter „Horde-Ziele anzeigen“).
+
 ## 0.48.2 – 19.11.2026
 
 - Verwaltung: zwei Skriptfehler behoben („ZTYPEN/WFVORGABE is not defined“ beim Umsortieren der Karten, Akkordeon fand seinen Kopf nicht) – Zombietypen- und Waffenkarten werden wieder richtig einsortiert, Karten klappen sauber auf und zu.
