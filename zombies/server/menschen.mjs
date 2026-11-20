@@ -5,7 +5,8 @@ import { schema, t } from '@colyseus/schema';
 import { KACHEL, BREITE, HOEHE, T, findeWeg, sichtfrei, bewege, frei, ladenArt, WERTE as W } from '../client/welt.mjs';
 
 export const Mensch = schema({
-  x: t.number(), y: t.number(), richtung: t.number(),
+  x: t.int16(), y: t.int16(),   // Position übertragen in ganzen Pixeln (Server rechnet genau)
+  rq: t.uint8(),               // Blickrichtung in 256 Stufen (m.richtung im Bogenmaß bleibt Server-Eigenschaft, siehe SpielRaum.netzAbgleich)
   aussehen: t.string(),
   typ: t.string(),             // Bewohner-Typ (siehe TYPEN), '' = gewöhnlicher Bürger oder Polizist
   infiziert: t.boolean(),

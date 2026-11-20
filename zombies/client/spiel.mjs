@@ -31,6 +31,7 @@ import { Uebersicht } from './uebersicht.mjs';
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
 import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
+import { NetzPuffer, nachSeq, ausStufe } from './netzpuffer.mjs';
 
 const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
 const LAUFBILDER = 8;
@@ -604,6 +605,8 @@ const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   //
 // Größen: ALLE Menschen (Spieler m/w/s/Held/Heldin, Bots, Bewohner, Soldaten, Ärzte, Verwundete) sind bei 100 % gleich
 // breit (Schulterbreite, Ausgleich je Bild in groessen.mjs). Menschengröße × Gesamtgröße = mg(); Zombies zusätzlich × Zombiegröße,
 // Leichen folgen der Zombiegröße. Kollisionsradien bleiben unberührt.
+// Blickrichtung von Zombies und Bewohnern: Server schickt 256 Stufen (rq), ältere Stände das Bogenmaß
+const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
 const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100);
 const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
 const VERWUNDET_GROESSE = 0.42 * 1.26;
@@ -689,9 +692,15 @@ class Ort extends Phaser.Scene {
     this.kegel = this.add.graphics().setDepth(2);
     this.lokal = null;          // vorhergesagte eigene Position
     this.eingabe = { dx: 0, dy: 0, s: false };
-    this.gesendet = { dx: 9, dy: 9, s: false, t: 0 };
+    this.gesendet = { dx: 0, dy: 0, s: false, t: 0 };   // Eingabe, die seit t gilt (wird beim nächsten Senden mit ihrer Dauer gemeldet)
+    this.offen = [];            // gesendete, vom Server noch nicht bestätigte Eingaben { n, dx, dy, s, d }
+    this.eingabeNr = undefined; // laufende Nummer (beginnt bei der zuletzt bestätigten des Servers)
+    this.basis = null; this.korr = { x: 0, y: 0 };   // Serverstand der letzten Vorhersage, Restfehler (klingt sanft ab)
+    this.puffer = new NetzPuffer();   // Glättung fremder Figuren (client/netzpuffer.mjs)
+    this.pufferPos = { x: 0, y: 0 };
     // Eingabe auch bei niedriger Bildrate (viele Zombies, weite Ansicht) alle 50 ms melden, nicht nur je Frame
-    this.eingabeTimer = setInterval(() => { if (this.tasten && this.joystick && this.bereit !== false && !document.hidden) { try { this.leseEingabe(); } catch {} } }, 50);
+    if (window.__eingabeTimer) clearInterval(window.__eingabeTimer);   // Szene neu gestartet: der alte Zeitgeber darf nicht weiter senden
+    this.eingabeTimer = window.__eingabeTimer = setInterval(() => { if (this.tasten && this.joystick && this.bereit !== false && !document.hidden) { try { this.leseEingabe(); } catch {} } }, 50);
     this.kontext = null;
 
     const wb = BREITE * KACHEL, wh = HOEHE * KACHEL;
@@ -1261,7 +1270,7 @@ class Ort extends Phaser.Scene {
     const box = this.add.container(z.x, z.y).setDepth(3);
     const bild = this.add.image(0, 0, 'figuren', this.figurBild('zombie_hemd', 0)).setScale(ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg());
     box.add([bild]);
-    return { box, bild, x: z.x, y: z.y, r: z.richtung };
+    return { box, bild, x: z.x, y: z.y, r: zRichtung(z) };
   }
 
   // Fahrzeugbilder einmalig zeichnen (Front zeigt nach rechts)
@@ -1757,6 +1766,18 @@ class Ort extends Phaser.Scene {
   abgleichen(dt) {
     const s = raum.state;
     const glatt = Math.min(1, dt * 14);
+    // neuer Stand vom Server: Positionen mit Server-Zeitstempel merken (Glättung in client/netzpuffer.mjs)
+    const pf = this.puffer, pp = this.pufferPos;
+    if (!raum.__ankunftHaken) {   // genauer Ankunftszeitpunkt jedes Zustands (nicht erst beim nächsten Bild)
+      raum.__ankunftHaken = true;
+      raum.onStateChange(st => { if (st?.takt !== raum.__ankunftTakt) { raum.__ankunftTakt = st?.takt; raum.__ankunft = performance.now(); } });
+    }
+    if (pf.patch(s.takt, raum.__ankunftTakt === s.takt && raum.__ankunft ? raum.__ankunft : performance.now())) {
+      for (const [id, p] of s.spieler) if (id !== meineId) pf.merke('s' + id, p.x, p.y, s.takt);
+      for (const [id, z] of s.zombies) pf.merke('z' + id, z.x, z.y, s.takt);
+      for (const [id, m] of s.menschen ?? []) pf.merke('m' + id, m.x, m.y, s.takt);
+    }
+    const rt = typeof s.takt === 'number' ? pf.zeit(performance.now()) : null;   // Anzeigezeit (Server-Uhr minus Verzögerung)
     // Spieler
     for (const [id, p] of s.spieler) {
       let f = this.figuren.get(id);
@@ -1764,13 +1785,14 @@ class Ort extends Phaser.Scene {
       { const nm = p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name; if (f.name.text !== nm) f.name.setText(nm); }   // AFK: ein Bot steuert die Figur
       if (id === meineId) continue;
       f.box.setVisible((p.ebene ?? '') === this.aktEbene && !p.anBord);   // an Bord eines Evakuierungsfahrzeugs: Figur ausgeblendet
-      if ((f.ebene ?? '') !== (p.ebene ?? '')) { f.x = p.x; f.y = p.y; f.ebene = p.ebene; }
-      f.x += (p.x - f.x) * glatt; f.y += (p.y - f.y) * glatt;
+      if ((f.ebene ?? '') !== (p.ebene ?? '')) { f.x = p.x; f.y = p.y; f.ebene = p.ebene; pf.vergiss('s' + id); }
+      if (pf.pos('s' + id, rt, pp)) { f.x = pp.x; f.y = pp.y; }
+      else { f.x += (p.x - f.x) * glatt; f.y += (p.y - f.y) * glatt; }
       f.box.setPosition(f.x, f.y);
       f.bild.setAlpha(p.verbunden ? 1 : 0.5);
       this.figurDarstellen(f, p, dt);
     }
-    for (const [id, f] of this.figuren) if (!s.spieler.has(id)) { f.box.destroy(); this.figuren.delete(id); }
+    for (const [id, f] of this.figuren) if (!s.spieler.has(id)) { f.box.destroy(); this.figuren.delete(id); pf.vergiss('s' + id); }
     // Zombies
     this.kegel.clear();
     const cam = this.cameras.main.worldView;
@@ -1781,8 +1803,9 @@ class Ort extends Phaser.Scene {
       let f = this.zombies.get(id);
       if (!f) { f = this.neuerZombie(z); this.zombies.set(id, f); }
       const vx = f.x, vy = f.y;
-      f.x += (z.x - f.x) * glatt; f.y += (z.y - f.y) * glatt;
-      f.r = Phaser.Math.Angle.RotateTo(f.r, z.richtung, dt * 6);
+      if (pf.pos('z' + id, rt, pp)) { f.x = pp.x; f.y = pp.y; }
+      else { f.x += (z.x - f.x) * glatt; f.y += (z.y - f.y) * glatt; }
+      f.r = Phaser.Math.Angle.RotateTo(f.r, zRichtung(z), dt * 6);
       gesamtZ++;
       // außerhalb des Ausschnitts (+ Rand): nur Position mitführen, nichts zeichnen oder animieren
       if (f.x < rx0 || f.x > rx1 || f.y < ry0 || f.y > ry1) { if (f.box.visible) f.box.setVisible(false); continue; }
@@ -1830,7 +1853,7 @@ class Ort extends Phaser.Scene {
         }
       }
     }
-    for (const [id, f] of this.zombies) if (!s.zombies.has(id)) { f.box.destroy(); this.zombies.delete(id); }
+    for (const [id, f] of this.zombies) if (!s.zombies.has(id)) { f.box.destroy(); this.zombies.delete(id); pf.vergiss('z' + id); }
     this.messZombies = [sichtbarZ, gesamtZ];
     // Leichen: liegen flach, leere sind blasser, die letzten 20 s blenden sie aus
     for (const [id, l] of s.leichen) {
@@ -1849,7 +1872,7 @@ class Ort extends Phaser.Scene {
       if (l.x < rx0 || l.x > rx1 || l.y < ry0 || l.y > ry1) { if (o.visible) o.setVisible(false); continue; }
       o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * zg());   // Leichen folgen der Zombiegröße
       o.setVisible((l.ebene ?? '') === this.aktEbene);
-      const ausblenden = l.fest ? 1 : Math.min(1, (LEICHE_DAUER - l.alter) / 20);
+      const ausblenden = l.fest ? 1 : 1 - (l.blass ?? 0) / 10;   // Server: blass 0..10 in den letzten 20 s
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
     }
     for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.destroy(); this.leichen.delete(id); }
@@ -1863,14 +1886,15 @@ class Ort extends Phaser.Scene {
         const sorte = typ || (String(m.aussehen ?? '').startsWith('p') ? 'polizist' : 'buerger' + (1 + (id.charCodeAt(id.length - 1) % 3)));
         const bogen = typ ? 'buerger160' : 'figuren2', gs = typ ? MENSCH_GROESSE : BOGEN2_GROESSE * 0.95;
         const bild = this.add.image(0, 0, bogen, typ ? this.buergerListe[typ][0] : this.figurBild2(sorte)).setScale(gs * groesse(bogen, sorte) * mg());
-        o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, sorte, typ, bogen, gs, x: m.x, y: m.y, r: m.richtung };
+        o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, sorte, typ, bogen, gs, x: m.x, y: m.y, r: zRichtung(m) };
         this.menschenObj.set(id, o);
       }
       const vx = o.x, vy = o.y;
       o.bild.setScale(o.gs * groesse(o.bogen, o.sorte) * mg());
-      o.x += (m.x - o.x) * glatt; o.y += (m.y - o.y) * glatt;
+      if (pf.pos('m' + id, rt, pp)) { o.x = pp.x; o.y = pp.y; }
+      else o.x += (m.x - o.x) * glatt, o.y += (m.y - o.y) * glatt;
       if (Math.hypot(m.x - o.x, m.y - o.y) > 200) { o.x = m.x; o.y = m.y; }   // aus Haus oder Bus aufgetaucht
-      o.r = Phaser.Math.Angle.RotateTo(o.r, m.richtung, dt * 8);
+      o.r = Phaser.Math.Angle.RotateTo(o.r, zRichtung(m), dt * 8);
       if (o.x < rx0 || o.x > rx1 || o.y < ry0 || o.y > ry1) { if (o.box.visible) o.box.setVisible(false); continue; }
       const weg = Math.hypot(o.x - vx, o.y - vy);
       o.lauf = (o.lauf ?? 0) + weg;
@@ -1880,7 +1904,7 @@ class Ort extends Phaser.Scene {
       o.box.setVisible(m.sichtbar && this.aktEbene === '');
       o.bild.setTint(m.infiziert ? 0xb5d99c : 0xffffff);
     }
-    for (const [id, o] of this.menschenObj) if (!s.menschen?.has(id)) { o.box.destroy(); this.menschenObj.delete(id); }
+    for (const [id, o] of this.menschenObj) if (!s.menschen?.has(id)) { o.box.destroy(); this.menschenObj.delete(id); pf.vergiss('m' + id); }
     // Fahrzeuge: Linienbus, Verkehr, Polizei und Feuerwehr (mit Blaulicht), Wracks
     const blink = Math.floor(this.time.now / 180) % 2;
     for (const [id, f] of s.fahrzeuge ?? []) {
@@ -1958,7 +1982,7 @@ class Ort extends Phaser.Scene {
         this.bodenObj.set(id, o);
       }
       o.setVisible((b.ebene ?? '') === this.aktEbene);
-      o.setAlpha(Math.max(0.2, Math.min(1, (BODEN_DAUER - b.alter) / 20)));
+      o.setAlpha(Math.max(0.2, 1 - (b.blass ?? 0) / 10));
     }
     for (const [id, o] of this.bodenObj) if (!s.boden.has(id)) { o.destroy(); this.bodenObj.delete(id); }
     // leere Behälter blasser
@@ -2278,24 +2302,35 @@ class Ort extends Phaser.Scene {
       f.x = this.lokal.x; f.y = this.lokal.y;
       f.box.setPosition(f.x, f.y).setScale(1 + Math.sin(sp.t * Math.PI) * 0.18);   // kleiner Hüpfer
       if (sp.t >= 1) { this.sprung = null; f.box.setScale(1); }
+      this.basis = null; this.korr.x = 0; this.korr.y = 0;   // nach dem Sprung neu vom Serverstand aus vorhersagen
       this.figurDarstellen(f, p, dt);
       return p;
     }
-    const e = this.eingabe;
-    const l = Math.hypot(e.dx, e.dy);
-    if (!p.unten && !p.anBord && raum.state.phase === 'spiel' && l > 0.05) {   // an Bord sitzt man, die Position kommt vom Fahrzeug
-      const schleicht = !(p.zombie > 0) && (e.s || l < 0.55);
-      const tempo = p.zombie > 0 ? W.zombieTempoJagen * 1.15
-        : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
-      const weg = (p.zombie > 0 ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * dt;
-      bewege(this.wv(p.ebene), this.lokal, e.dx / l * weg, e.dy / l * weg, W.spielerRadius);
-    }
-    // sanft zum Server hinziehen, bei großem Abstand springen
-    const d = Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y);
-    if (d > 64 || p.unten || p.anBord) { this.lokal.x = p.x; this.lokal.y = p.y; }
-    else {
-      const k = Math.min(1, dt * (l > 0.05 ? 2.5 : 10));
-      this.lokal.x += (p.x - this.lokal.x) * k; this.lokal.y += (p.y - this.lokal.y) * k;
+    if (typeof p.seq !== 'number') {
+      // Server ohne Eingabe-Bestätigung: wie früher sanft zum Server hinziehen
+      const e = this.eingabe, l = Math.hypot(e.dx, e.dy);
+      if (!p.unten && !p.anBord && raum.state.phase === 'spiel') this.schrittSim(p, this.wv(p.ebene), this.lokal, e.dx, e.dy, e.s, dt);
+      const d = Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y);
+      if (d > 64 || p.unten || p.anBord) { this.lokal.x = p.x; this.lokal.y = p.y; }
+      else { const k = Math.min(1, dt * (l > 0.05 ? 2.5 : 10)); this.lokal.x += (p.x - this.lokal.x) * k; this.lokal.y += (p.y - this.lokal.y) * k; }
+    } else {
+      // Vorhersage vom letzten Serverstand aus; ändert sich der Serverstand, wird der Unterschied zur alten Vorhersage
+      // als Restfehler übernommen und klingt sanft ab (kein Ruck, kein Zurückziehen bei Netz-Hängern)
+      const basis = { x: p.x, y: p.y, seq: p.seq, ebene: p.ebene ?? '' };
+      const pred = this.vorhersage(p, basis);
+      const b0 = this.basis;
+      if (b0 && (b0.x !== basis.x || b0.y !== basis.y || b0.seq !== basis.seq)) {
+        if (b0.ebene === basis.ebene && !p.unten && !p.anBord) {
+          const alt = this.vorhersage(p, b0);
+          this.korr.x += alt.x - pred.x; this.korr.y += alt.y - pred.y;
+        } else { this.korr.x = 0; this.korr.y = 0; }
+        this.offen = this.offen.filter(o => nachSeq(o.n, basis.seq));
+      }
+      this.basis = basis;
+      const abkl = Math.exp(-dt * 6);
+      this.korr.x *= abkl; this.korr.y *= abkl;
+      if (Math.hypot(this.korr.x, this.korr.y) > 96 || p.unten || p.anBord) { this.korr.x = 0; this.korr.y = 0; }
+      this.lokal.x = pred.x + this.korr.x; this.lokal.y = pred.y + this.korr.y;
     }
     f.x = this.lokal.x; f.y = this.lokal.y;
     f.box.setPosition(f.x, f.y);
@@ -2319,11 +2354,57 @@ class Ort extends Phaser.Scene {
     else if (this.joystick.id !== null) { dx = this.joystick.vx; dy = this.joystick.vy; s = false; }
     if (window.__startwahlOffen) { dx = 0; dy = 0; s = false; }   // Startwahl-Dialog offen: Figur steht still
     this.eingabe = { dx, dy, s };
+    // Gemeldet wird immer das abgelaufene Stück: „d Sekunden lang mit (dx, dy, s) gelaufen“, mit laufender Nummer n.
+    // Der Server arbeitet die Stücke in Echtzeit ab und bestätigt die Nummer (p.seq) – so geht nach einem Netz-Hänger
+    // keine Bewegung verloren und die eigene Figur wird nicht zurückgezogen (siehe eigeneFigur / vorhersage).
     const g = this.gesendet, jetzt = performance.now();   // echte Uhr: bei niedriger Bildrate nicht an Frames gebunden
+    if (!g.t) { this.gesendet = { dx, dy, s, t: jetzt }; return; }
     const anders = Math.abs(g.dx - dx) > 0.05 || Math.abs(g.dy - dy) > 0.05 || g.s !== s;
-    if ((anders && jetzt - g.t > 60) || jetzt - g.t > 250) {
-      raum.send('eingabe', { dx: +dx.toFixed(3), dy: +dy.toFixed(3), s });
+    const steht = Math.hypot(g.dx, g.dy) <= 0.05;
+    if ((anders && jetzt - g.t > 15) || jetzt - g.t >= (steht ? 250 : 50)) {
+      if (this.eingabeNr === undefined) this.eingabeNr = raum.state?.spieler?.get(meineId)?.seq ?? 0;
+      const n = this.eingabeNr = (this.eingabeNr + 1) & 0xffff;
+      const stueck = { dx: +g.dx.toFixed(3), dy: +g.dy.toFixed(3), s: g.s, n, d: +Math.min(0.25, (jetzt - g.t) / 1000).toFixed(3) };
+      raum.send('eingabe', stueck);
+      this.offen.push(stueck);
+      if (this.offen.length > 120) this.offen.shift();
       this.gesendet = { dx, dy, s, t: jetzt };
+    }
+  }
+
+  // ein Stück Bewegung wie auf dem Server (raum.mjs spielerSchritt) auf pos anwenden
+  schrittSim(p, welt, pos, dx, dy, s, d) {
+    const l = Math.hypot(dx, dy);
+    if (l <= 0.05 || d <= 0) return;
+    const zombie = p.zombie > 0, schleicht = !zombie && (s || l < 0.55);
+    const tempo = zombie ? W.zombieTempoJagen * 1.15
+      : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
+    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d;
+    const n = Math.max(1, Math.ceil(weg / 4));   // Teilschritte wie auf dem Server (raum.mjs spielerSchritt)
+    for (let i = 0; i < n; i++) bewege(welt, pos, dx / l * weg / n, dy / l * weg / n, W.spielerRadius);
+  }
+
+  // Vorhersage: Serverstand (basis) + alle noch nicht bestätigten Eingaben + das laufende, noch nicht gesendete Stück
+  vorhersage(p, basis) {
+    const pos = { x: basis.x, y: basis.y };
+    if (p.unten || p.anBord || raum.state.phase !== 'spiel') return pos;
+    const welt = this.wv(p.ebene);
+    for (const o of this.offen) if (nachSeq(o.n, basis.seq)) this.schrittSim(p, welt, pos, o.dx, o.dy, o.s, o.d);
+    const g = this.gesendet;
+    if (g.t) this.schrittSim(p, welt, pos, g.dx, g.dy, g.s, Math.min(0.25, (performance.now() - g.t) / 1000));
+    return pos;
+  }
+
+  // halbe Größe des Bildausschnitts in Weltpixeln an den Server: er schickt nur Zombies und Bewohner darin (+ Rand)
+  sichtMelden() {
+    const jetzt = performance.now();
+    if (jetzt - (this.sichtZeit ?? 0) < 500) return;
+    this.sichtZeit = jetzt;
+    const wv = this.cameras.main.worldView, w = Math.round(wv.width / 2), h = Math.round(wv.height / 2);
+    const alt = this.sichtGemeldet;
+    if (w > 0 && h > 0 && (!alt || Math.abs(alt.w - w) > alt.w * 0.08 || Math.abs(alt.h - h) > alt.h * 0.08)) {
+      this.sichtGemeldet = { w, h };
+      raum.send('sicht', { w, h });
     }
   }
 
@@ -2576,6 +2657,7 @@ class Ort extends Phaser.Scene {
       this.cameras.main.centerOn(meine.x, meine.y);   // sofort dort, nicht von der alten Stelle herüberziehen
     }
     const ich = this.eigeneFigur(dt);
+    this.sichtMelden();
     this.innenAktualisieren(ich);
     if (ich) this.aussenLicht(ich);
     this.chunksAktualisieren();
@@ -2692,7 +2774,7 @@ class Ort extends Phaser.Scene {
       const nt = ich.nachladen > 0 ? `🔄 lädt … ${Math.round(ich.nachladen * 100)} %` : '🔄 Nachladen (R)';
       if (nk.textContent !== nt) nk.textContent = nt;
       textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gesamt`);
-      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} verwandelt · 🧟 ${s.zombies.size} unterwegs`);
+      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} verwandelt · 🧟 ${s.zombieZahl || s.zombies.size} unterwegs`);   // der Client kennt nur die Zombies in seiner Nähe
       const safe = ich.sicher === 'lager' ? { id: 'lager', name: 'Bundeswehr-Lager', lager: true } : ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
       if (safe?.lager) textSetzen('sichername', `🛡 ${safe.name} · bewacht`);
