@@ -212,6 +212,16 @@ export class Verkehr {
     return id;
   }
 
+  // Evakuierungspanzer (Leopard): fährt querfeldein auf dem Weg aus server/querfeld.mjs (plan.weg: Einfahrtspunkt → Ziel) und wartet dort;
+  // die Ausfahrt nimmt den Weg zurück (plan.rueck)
+  evakuierungPanzer(plan) {
+    const id = this.neu('evakuierung', plan.weg[0], { evakuierung: true, angekommen: false, querfeld: plan });
+    const f = this.raum.state.fahrzeuge.get(id), inf = this.info.get(id);
+    f.farbe = 0; inf.weg = plan.weg.map(p => ({ x: p.x, y: p.y })); inf.pos = 0;
+    f.richtung = Math.atan2(plan.weg[1].y - plan.weg[0].y, plan.weg[1].x - plan.weg[0].x);
+    return id;
+  }
+
   // A400M (Evakuierungsart 'flugzeug'): steht ohne Straße am Aufsetzpunkt (x, y) in Richtung `richtung`; die Landerolle bewegt server/aufgaben.mjs,
   // `angekommen` wird erst am Ende der Rolle gesetzt (evakuierungDa)
   evakuierungFlugzeug(x, y, richtung) {
@@ -229,6 +239,7 @@ export class Verkehr {
     const f = this.raum.state.fahrzeuge.get(id), inf = this.info.get(id);
     if (!f || !inf) return;
     if (inf.flugzeug) { this.raum.state.fahrzeuge.delete(id); this.info.delete(id); return; }   // hebt ab (kein Straßenweg)
+    if (inf.querfeld) { inf.weg = [{ x: f.x, y: f.y }, ...inf.querfeld.rueck]; inf.pos = 0; inf.halt = 0; inf.abfahrt = true; f.haelt = false; return; }   // Panzer: den Feldweg zurück
     inf.halt = 0; inf.abfahrt = true; f.haelt = false;
     const rand = this.graph.knoten.length ? this.randKnoten() : [];
     const ziel = rand.length ? rand.reduce((a, b) => Math.hypot(b.x - f.x, b.y - f.y) > Math.hypot(a.x - f.x, a.y - f.y) ? b : a) : null;

@@ -5,6 +5,7 @@
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
 import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
+import { querfeldPlan } from './querfeld.mjs';
 import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplatz.mjs';
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
@@ -107,6 +108,7 @@ export class Aufgaben {
     this.wechselLaeuft = false;
     this.wechselVerzoegerung = 5000;   // ms zwischen „Geschafft!“ und dem Weltwechsel
     this.takt = 0;
+    this.einstiegT = new Map();      // wann jemand eingestiegen ist (Aussteigen in den ersten 2,5 s ignoriert: Fehlbedienung)
     this.ausgestiegen = new Set();   // wer freiwillig ausgestiegen ist, steigt nicht sofort wieder ein
     this.crash = null;         // Königsdorf: A400M-Absturz { rest, phase }
     this.flug = null;          // A400M: Landerolle { von, bis, t } | Hubschrauberphase { phase, rest }
@@ -132,6 +134,23 @@ export class Aufgaben {
     if ((art === 'absturz' && !(w && absturzPlan(w, s.seed))) || (art === 'heli' && !(w && heliPlan(w, s.seed)))) return 'bus';
     return art;
   }
+  // Abholpunkt der Straßenfahrzeuge: Ortsausgang (tor + 1 Kachel)
+  torPunkt() { const t = this.raum.welt?.tor; return t ? { x: (t.x + 1) * KACHEL, y: (t.y + 1) * KACHEL } : null; }
+
+  // Leopard (Isarauen): Plan für die Fahrt querfeldein zum Abholpunkt (ggf. auf die nächste befahrbare Stelle verschoben), sonst null
+  panzerPlan() {
+    const w = this.raum.welt, t = this.torPunkt();
+    return w && t ? querfeldPlan(w, t) : null;
+  }
+
+  // Haltepunkt des Busses: nächster Knoten des Straßennetzes; liegt er weit vom Ortsausgang (> 400 px), wandert der Abholpunkt dorthin
+  busHalt() {
+    const v = this.raum.verkehr, t = this.torPunkt();
+    if (!v?.graph?.knoten?.length || !t) return null;
+    const k = [...v.graph.knoten].sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y))[0];
+    return k && Math.hypot(k.x - t.x, k.y - t.y) < 400 ? { knoten: k, punkt: null } : { knoten: k, punkt: k ? { x: k.x, y: k.y } : null };
+  }
+
   flugplan() { const w = this.raum.welt; return w?.fein ? flugplanBerechnen(w, this.raum.state.seed) : null; }
 
   // Art, Anzeige und Abholpunkt in den Zustand schreiben (nur wenn gerade nichts unterwegs ist)
@@ -148,7 +167,10 @@ export class Aufgaben {
     if (s.evakAX !== ax) s.evakAX = ax;
     if (s.evakAY !== ay) s.evakAY = ay;
     if (s.evakW !== aw) s.evakW = aw;
-    const x = p ? Math.round(p.rampe.x) : ap ? Math.round(ap.heli.x) : 0, y = p ? Math.round(p.rampe.y) : ap ? Math.round(ap.heli.y) : 0;
+    // Straßenfahrzeuge: Abholpunkt nur dann abweichend vom Ortsausgang, wenn der Panzer dort nicht hinkommt bzw. der Bus keine Straße dort hat
+    const pp = art === 'panzer' ? this.panzerPlan() : null, bh = art === 'bus' ? this.busHalt() : null;
+    const zielP = pp?.verschoben ? pp.ziel : bh?.punkt ?? null;
+    const x = p ? Math.round(p.rampe.x) : ap ? Math.round(ap.heli.x) : zielP ? Math.round(zielP.x) : 0, y = p ? Math.round(p.rampe.y) : ap ? Math.round(ap.heli.y) : zielP ? Math.round(zielP.y) : 0;
     if (s.evakX !== x) s.evakX = x;
     if (s.evakY !== y) s.evakY = y;
     if (s.evakPhase) s.evakPhase = '';
@@ -440,6 +462,7 @@ export class Aufgaben {
     this.busRest -= dt;
     this.busAbSetzen();
     const alleDa = this.mitfahrer();
+    this.abfahrtWarnung();
     // sofortige Abfahrt nur, wenn die Fahrt auch gelingt – sonst wartet er bis zum Ablauf der Zeit
     if ((alleDa && this.fahrtGelingt()) || this.busRest <= 0) this.abfahrt();
   }
@@ -528,7 +551,7 @@ export class Aufgaben {
     let an = this.an() && s.funk && !s.busDa && !this.wechselLaeuft && !!tor
       && [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt);
     if (an) {
-      const ev = s.evakX > 0 && s.evakY > 0 && this.evakArt() === 'flugzeug';
+      const ev = s.evakX > 0 && s.evakY > 0;   // Abholpunkt weicht vom Ortsausgang ab (A400M, verschobener Punkt)
       const ax = ev ? s.evakX : (tor.x + 1) * KACHEL, ay = ev ? s.evakY : (tor.y + 1) * KACHEL;
       let lebende = 0;
       for (const p of s.spieler.values()) {
@@ -551,11 +574,21 @@ export class Aufgaben {
     if (!v) return;
     if (this.evakArt() === 'absturz') { this.laufendeArt = 'absturz'; this.absturzStart(); return; }
     if (this.evakArt() === 'flugzeug') { this.laufendeArt = 'flugzeug'; this.flugAnkunft(); return; }   // Flug läuft bis zum Ende, auch wenn die Einstellung wechselt
+    if (this.evakArt() === 'panzer') {   // Leopard: querfeldein zum (ggf. verschobenen) Abholpunkt
+      const plan = this.panzerPlan();
+      if (plan) {
+        this.busId = v.evakuierungPanzer(plan);
+        this.busHeute = true; this.busRest = 0; s.busDa = true; this.busAbSetzen(); this.busGemeldet = false;
+        s.busSteht = false;
+        this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} rollt querfeldein zur Abholstelle!`, lang: true });
+        return;
+      }
+    }
     const tx = (tor.x + 1) * KACHEL, ty = (tor.y + 1) * KACHEL;
     const links = tor.x === 0;
     let x = links ? tx + 4 * KACHEL : tx, y = links ? ty : ty + 4 * KACHEL;
     const k = v.graph?.knoten?.length ? [...v.graph.knoten].sort((a, b) => Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty))[0] : null;
-    if (k && Math.hypot(k.x - tx, k.y - ty) < 400) { x = k.x; y = k.y; }
+    if (k) { x = k.x; y = k.y; }   // der Bus hält am nächsten Straßenknoten (liegt er weit vom Ortsausgang, wandert der Abholpunkt dorthin, siehe evakSync)
     this.busId = v.evakuierungBus(x, y, links ? Math.PI : -Math.PI / 2, k);
     this.busHeute = true; this.busRest = 0; s.busDa = true; this.busAbSetzen(); this.busGemeldet = false;
     s.busSteht = v.evakuierungDa(this.busId);
@@ -612,7 +645,7 @@ export class Aufgaben {
       // Fehlt noch etwas für die Abfahrt, sagt die Meldung beim Einsteigen, was – es wirft niemand still wieder raus.
       if (this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) >= abstand) this.ausgestiegen.delete(sid);   // erst wieder einsteigen, wenn er einmal weg war
       if (!an && !p.ebene && !p.unten && !this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) < abstand && this.einsteigenOffen()) {   // Bunkertor bleibt zu, bis die Missionen erledigt sind (server/finale.mjs meldet, was fehlt)
-        an = true; this.eingestiegen.add(sid); p.anBord = true;
+        an = true; this.eingestiegen.add(sid); p.anBord = true; this.einstiegT.set(sid, Date.now());
         if (this.heli?.art === 'bunker') this.raum.bunker?.betreten?.(sid);   // Haken für einen Bunker-Innenraum (falls vorhanden)
         if (!bot) this.einsteigMeldung(sid);
       }
@@ -638,6 +671,7 @@ export class Aufgaben {
   aussteigen(sid) {
     const s = this.raum.state, p = s.spieler.get(sid);
     if (!p || !this.eingestiegen.has(sid)) return false;
+    if (Date.now() - (this.einstiegT.get(sid) ?? 0) < 2500) return false;   // gerade erst eingestiegen: ein versehentlicher Tastendruck wirft niemanden raus
     if (!s.busSteht || this.wechselLaeuft) { this.sendeAn(sid, '🚪 Aussteigen geht erst, wenn das Fahrzeug steht.'); return false; }
     const f = this.einstiegsPunkt() ?? p, fz = s.fahrzeuge.get(this.busId), w = (fz?.richtung ?? 0) + Math.PI / 2;
     const r = (this.heli ? HELI_ABSTAND : BUS_ABSTAND) + 14;
@@ -675,6 +709,16 @@ export class Aufgaben {
 
   // Bunkertor (Finale): öffnet erst, wenn die Fahrt gelingen würde (Missionen erledigt); alle anderen Fahrzeuge: immer offen
   einsteigenOffen() { return this.heli?.art !== 'bunker' || this.fahrtGelingt(); }
+
+  // Wer an Bord sitzt, obwohl die Fahrt noch nicht gelingt: 60 s und 15 s vor Ablauf der Wartezeit eine deutliche Warnung mit dem, was fehlt
+  abfahrtWarnung() {
+    if (!this.eingestiegen.size || this.fahrtGelingt()) { this.warnStufe = 0; return; }
+    const stufe = this.busRest <= 15 ? 2 : this.busRest <= 60 ? 1 : 0;
+    if (stufe <= (this.warnStufe ?? 0)) return;
+    this.warnStufe = stufe;
+    const fz = this.fz();
+    for (const sid of this.eingestiegen) if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, `⏳ ${fz.zeichen} Noch ${stufe === 2 ? 15 : 60} s, dann fährt ${fz.der} OHNE Erfolg ab und setzt alle ab. Es fehlt: ${this.fehlt().join(' · ') || '–'}`);
+  }
 
   // Pflichtaufgaben und Mindestzahl erledigt: wer einsteigt, kann tatsächlich mitfahren
   fahrtGelingt() {
@@ -855,12 +899,13 @@ export class Aufgaben {
     const geschafft = pflichtOk && this.erledigtZahl() >= this.noetig() && this.echteDa >= 1;
     const nichtDa = s.busGesamt > s.busBord;
     if (geschafft && this.fz().art === 'flugzeug') { this.flugFehlschlag(); return; }   // die Maschine schafft es nicht in die Luft
-    if (!geschafft) this.ausladen(`${this.fz().zeichen} ${this.fz().Der} fährt ohne euch ab – ihr steigt aus. Es fehlte: ${this.fehlt().join(' · ') || 'jemand an Bord'}`);
+    const fehltText = this.fehlt().join(' · ');
+    if (!geschafft) this.ausladen(`${this.fz().zeichen} ${this.fz().Der} fährt ohne Erfolg ab – ihr steigt aus. Es fehlte: ${fehltText || 'jemand an Bord'}`);
     else this.folgenId = this.busId;   // wer an Bord ist, fährt bis zum Levelwechsel mit
     this.busWeg(geschafft);
     this.busHeute = true;
     if (!geschafft) {
-      this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} ist ohne euch ${this.fz().art === 'flugzeug' ? 'abgeflogen' : 'abgefahren'} – morgen gibt es ${this.fz().neu}`, lang: true });
+      this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} ist ohne euch ${this.fz().art === 'flugzeug' ? 'abgeflogen' : 'abgefahren'} (es fehlte: ${fehltText || 'jemand an Bord'}) – morgen gibt es ${this.fz().neu}`, lang: true });
       return;
     }
     this.erfolg(nichtDa);
