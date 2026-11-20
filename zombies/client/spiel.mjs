@@ -606,6 +606,9 @@ const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   //
 // breit (Schulterbreite, Ausgleich je Bild in groessen.mjs). Menschengröße × Gesamtgröße = mg(); Zombies zusätzlich × Zombiegröße,
 // Leichen folgen der Zombiegröße. Kollisionsradien bleiben unberührt.
 // Blickrichtung von Zombies und Bewohnern: Server schickt 256 Stufen (rq), ältere Stände das Bogenmaß
+// Zombies in der Nähe: Sieht man keinen (z. B. drinnen), schickt der Server die Liste gar nicht – dann leer
+const LEERE_KARTE = new Map();
+const zombieKarte = () => raum?.state?.zombies ?? LEERE_KARTE;
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
 const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100);
 const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
@@ -776,7 +779,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('schuss', m => {
       const fs = naechsteFigur(m.x1, m.y1); if (fs) fs.schussBis = this.time.now + 150;
       this.schuss(m);
-      fetzenBeiSchuss(this, raum.state.zombies.values(), m);
+      fetzenBeiSchuss(this, zombieKarte().values(), m);
       // Schrot kommt als mehrere Linien – nur ein Knall
       const jetzt = performance.now();
       if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'scharfschuetze' ? 1.8 : m.art === 'armbrust' ? 0.3 : m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp' && m.art !== 'armbrust') ton.huelse(m.x1, m.y1); }
@@ -792,7 +795,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('radio', m => this.radioAnz.setze(m));
     raum.onMessage('radios', m => this.radioAnz.alle(m));
     raum.onMessage('radioWeg', m => this.radioAnz.weg(m));
-    raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, raum.state.zombies.values(), m.x, m.y, m.r ?? 40); });
+    raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, zombieKarte().values(), m.x, m.y, m.r ?? 40); });
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
     raum.onMessage('stoss', m => { const fs = naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
@@ -1702,7 +1705,7 @@ class Ort extends Phaser.Scene {
     const sicht = (x, y, r) => x > v.x - r && x < v.right + r && y > v.y - r && y < v.bottom + r;
     const P = this.weichPinsel;
     for (const f of raum.state.feuer?.values() ?? []) if (sicht(f.x, f.y, 300)) { P.setScale(f.r / 60 + 0.6).setAlpha(Math.min(1, 0.6 + f.staerke * 0.4) * (0.85 + Math.random() * 0.15)); rt.erase(P, f.x - ox, f.y - oy); }
-    if (this.bwLicht && raum.state.stuetzpunkt === 'steht') this.bwLicht.zeichne(rt, P, this.lampenPinsel, ox, oy, sicht, dunkel, raum.state.zombies.values(), this.game.loop.delta / 1000);
+    if (this.bwLicht && raum.state.stuetzpunkt === 'steht') this.bwLicht.zeichne(rt, P, this.lampenPinsel, ox, oy, sicht, dunkel, zombieKarte().values(), this.game.loop.delta / 1000);
     for (const l of this.laternenListe ?? []) if (sicht(l.x, l.y, 140)) { P.setScale(0.85).setAlpha(0.75 * dunkel); rt.erase(P, l.x + l.nx * 13 - ox, l.y + l.ny * 13 - oy); }
     for (const h of this.welt.haeuser) {
       if (!fensterLicht(h.nr)) continue;
@@ -1774,7 +1777,7 @@ class Ort extends Phaser.Scene {
     }
     if (pf.patch(s.takt, raum.__ankunftTakt === s.takt && raum.__ankunft ? raum.__ankunft : performance.now())) {
       for (const [id, p] of s.spieler) if (id !== meineId) pf.merke('s' + id, p.x, p.y, s.takt);
-      for (const [id, z] of s.zombies) pf.merke('z' + id, z.x, z.y, s.takt);
+      for (const [id, z] of zombieKarte()) pf.merke('z' + id, z.x, z.y, s.takt);
       for (const [id, m] of s.menschen ?? []) pf.merke('m' + id, m.x, m.y, s.takt);
     }
     const rt = typeof s.takt === 'number' ? pf.zeit(performance.now()) : null;   // Anzeigezeit (Server-Uhr minus Verzögerung)
@@ -1799,7 +1802,7 @@ class Ort extends Phaser.Scene {
     const zf = zg();   // Menschengröße × Gesamtgröße × Zombiegröße
     const RAND = 150, rx0 = cam.x - RAND, rx1 = cam.right + RAND, ry0 = cam.y - RAND, ry1 = cam.bottom + RAND;   // Ausschnitt + Rand: nur dort wird gezeichnet
     let gesamtZ = 0, sichtbarZ = 0;
-    for (const [id, z] of s.zombies) {
+    for (const [id, z] of zombieKarte()) {
       let f = this.zombies.get(id);
       if (!f) { f = this.neuerZombie(z); this.zombies.set(id, f); }
       const vx = f.x, vy = f.y;
@@ -1853,7 +1856,7 @@ class Ort extends Phaser.Scene {
         }
       }
     }
-    for (const [id, f] of this.zombies) if (!s.zombies.has(id)) { f.box.destroy(); this.zombies.delete(id); pf.vergiss('z' + id); }
+    for (const [id, f] of this.zombies) if (!zombieKarte().has(id)) { f.box.destroy(); this.zombies.delete(id); pf.vergiss('z' + id); }
     this.messZombies = [sichtbarZ, gesamtZ];
     // Leichen: liegen flach, leere sind blasser, die letzten 20 s blenden sie aus
     for (const [id, l] of s.leichen) {
@@ -2728,7 +2731,7 @@ class Ort extends Phaser.Scene {
       // nur die nächsten ~6 Zombies kommen als Einzellaut in Frage; die Zahl in Hörweite steuert das Horden-Grollen
       const nahe = [];
       let hoerbar = 0;
-      for (const z of raum.state.zombies.values()) {
+      for (const z of zombieKarte().values()) {
         if ((z.ebene ?? '') !== this.aktEbene) continue;
         const d = Math.hypot(z.x - this.lokal.x, z.y - this.lokal.y);
         if (d < 700) { hoerbar++; nahe.push({ z, d }); }
@@ -2774,7 +2777,7 @@ class Ort extends Phaser.Scene {
       const nt = ich.nachladen > 0 ? `🔄 lädt … ${Math.round(ich.nachladen * 100)} %` : '🔄 Nachladen (R)';
       if (nk.textContent !== nt) nk.textContent = nt;
       textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gesamt`);
-      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} verwandelt · 🧟 ${s.zombieZahl || s.zombies.size} unterwegs`);   // der Client kennt nur die Zombies in seiner Nähe
+      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} verwandelt · 🧟 ${s.zombieZahl || zombieKarte().size} unterwegs`);   // der Client kennt nur die Zombies in seiner Nähe
       const safe = ich.sicher === 'lager' ? { id: 'lager', name: 'Bundeswehr-Lager', lager: true } : ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
       if (safe?.lager) textSetzen('sichername', `🛡 ${safe.name} · bewacht`);

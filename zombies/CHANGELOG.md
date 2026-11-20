@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.58.1 – 20.11.2026
+
+- Behoben: Laden blieb bei 85 % stehen, wenn man ohne Zombie in Sicht einstieg (z. B. im Safe House). Der Server schickt die Zombie-Liste dann gar nicht, der Client nimmt jetzt eine leere Liste an.
+
 ## 0.58.0 – 20.11.2026
 
 - Netz: viel weniger Daten und weniger Pakete. Jeder Spieler bekommt nur noch die Zombies und Bewohner in seinem Bildausschnitt (+ Rand, je nach Bildschirm und Zoom). Positionen gehen als ganze Pixel, Blickrichtungen in 256 Stufen, Hunger/Durst/Lampe ganzzahlig; Leichen und liegende Gegenstände senden nur noch ihre Ausblendstufe statt alle 50 ms ihr Alter. Zustände gehen 10- statt 20-mal je Sekunde raus, direkt nach dem Simulationsschritt. Bei einer Horde von 600 Zombies sinkt die Datenmenge je Spieler von etwa 93 kB/s auf 13–27 kB/s, die Paketzahl von 23 auf 11 je Sekunde.
