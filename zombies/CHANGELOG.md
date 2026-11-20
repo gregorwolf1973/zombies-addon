@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.64.2 – 20.11.2026
+
+- Geändert: Die Horde klumpt nicht mehr zu einem Haufen und läuft nicht mehr im Gleichschritt. Jeder Zombie hat einen eigenen Zielpunkt um das Hordenziel, hält Abstand zu den Nachbarn (auch vor Türen), schlingert, macht kurze Pausen und hat eine eigene Laufphase; Ankunft am Ziel richtet sich nach der Streuung, danach zieht die Horde zügig weiter.
+
 ## 0.64.1 – 21.11.2026
 
 - Level 2: Der Evakuierungspanzer fuhr nie zum Abholpunkt – der Ortsausgang liegt am Kartenrand, die nächste Straße rund 450 m entfernt, der Panzer rollte nur dorthin bzw. erschien am Rand. Jetzt fährt der Leopard querfeldein (neue Wegsuche server/querfeld.mjs über befahrbaren Boden für die Wannenbreite: Straße, Wiese, Feld, Schotter; nicht durch Häuser, Wasser, Bäume; Zäune und Hecken umfährt er), kommt am Abholpunkt an, wartet dort und fährt den Feldweg wieder hinaus.
