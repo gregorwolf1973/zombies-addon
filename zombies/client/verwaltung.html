@@ -715,6 +715,12 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="tn-zeile"><input type="range" id="tnBissSpGeretsried" min="0" max="100" step="1"><span id="tnBissSpGeretsriedWert">12 %</span></div>
   <label for="tnBissSpIsarauen">Ansteckung der Spieler in den Isarauen: Chance je Sekunde Biss eines lebenden Zombies</label>
   <div class="tn-zeile"><input type="range" id="tnBissSpIsarauen" min="0" max="100" step="1"><span id="tnBissSpIsarauenWert">12 %</span></div>
+  <label for="tnBissSpKoenigsdorf">Ansteckung der Spieler am Flugplatz Königsdorf (Level 3): Chance je Sekunde Biss eines lebenden Zombies</label>
+  <div class="tn-zeile"><input type="range" id="tnBissSpKoenigsdorf" min="0" max="100" step="1"><span id="tnBissSpKoenigsdorfWert">14 %</span></div>
+  <label for="tnBissSpKochel">Ansteckung der Spieler in Kochel am See (Level 4): Chance je Sekunde Biss eines lebenden Zombies</label>
+  <div class="tn-zeile"><input type="range" id="tnBissSpKochel" min="0" max="100" step="1"><span id="tnBissSpKochelWert">16 %</span></div>
+  <label for="tnBissSpAndermatt">Ansteckung der Spieler in Andermatt (Level 5): Chance je Sekunde Biss eines lebenden Zombies</label>
+  <div class="tn-zeile"><input type="range" id="tnBissSpAndermatt" min="0" max="100" step="1"><span id="tnBissSpAndermattWert">18 %</span></div>
   <label for="tnBiss">Biss-Chance bei Stadtbewohnern (je Sekunde Berührung)</label>
   <div class="tn-zeile"><input type="range" id="tnBiss" min="0" max="100" step="5"><span id="tnBissWert">100 %</span></div>
   <label for="tnFeuer">Brände am Anfang: etwa alle</label>
@@ -1006,6 +1012,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     var bsl = e.bissSpielerLevel || {}, bsf = function (v) { return v ? v + ' %' : 'nie'; };
     feld('tnBissSpGeretsried', bsl.geretsried === undefined ? (e.bissSpieler === undefined ? 12 : e.bissSpieler) : bsl.geretsried, bsf);
     feld('tnBissSpIsarauen', bsl.isarauen === undefined ? (e.bissSpieler === undefined ? 12 : e.bissSpieler) : bsl.isarauen, bsf);
+    feld('tnBissSpKoenigsdorf', bsl.koenigsdorf === undefined ? 14 : bsl.koenigsdorf, bsf);
+    feld('tnBissSpKochel', bsl.kochel === undefined ? 16 : bsl.kochel, bsf);
+    feld('tnBissSpAndermatt', bsl.andermatt === undefined ? 18 : bsl.andermatt, bsf);
     var typenE = (e.zombies && e.zombies.typen) || {};
     ZTYPEN.forEach(function (k) { if (document.activeElement !== $('zt_' + k)) $('zt_' + k).checked = typenE[k] !== false; });
     var wfE = e.waffen || {};
@@ -1129,6 +1138,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('tnZLeben', function (v) { return String(v); }, function (v) { return { zombieLeben: v }; });
   regler('tnBissSpGeretsried', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { geretsried: v } }; });
   regler('tnBissSpIsarauen', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { isarauen: v } }; });
+  regler('tnBissSpKoenigsdorf', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { koenigsdorf: v } }; });
+  regler('tnBissSpKochel', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { kochel: v } }; });
+  regler('tnBissSpAndermatt', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { andermatt: v } }; });
   regler('tnPumaPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { pumaPause: v } }; });
   regler('tnMoMin', function (v) { return String(v).replace('.', ',') + ' m'; }, function (v) { return { moerser: { reichweiteMin: v } }; });
   regler('tnMoMax', function (v) { return String(v).replace('.', ',') + ' m'; }, function (v) { return { moerser: { reichweiteMax: v } }; });
@@ -1386,6 +1398,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="ag-zeile"><input type="range" id="agWarte" min="10" max="180" step="5"><span id="agWarteWert">60 min</span></div>
   <label for="agEvakArt">Evakuierungsart für die aktuelle Karte erzwingen (Test; Vorgabe: aus = je Karte Bus bzw. Leopard in den Isarauen)</label>
   <div class="ag-zeile"><select id="agEvakArt"><option value="">aus (je Karte)</option><option value="bus">Bus</option><option value="panzer">Panzer (Leopard 2A7)</option><option value="flugzeug">Flugzeug (A400M, danach Hubschrauber)</option><option value="absturz">Absturz (A400M stürzt ab, danach NH90 nach den Missionen)</option><option value="heli">Hubschrauber (NH90 steht von Anfang an)</option><option value="bunker">Bunker (Tor, Countdown)</option></select></div>
+  <label for="agFinale">Finale in Andermatt: Atomschlag nach (echte Minuten ab Levelbeginn)</label>
+  <div class="ag-zeile"><input type="range" id="agFinale" min="10" max="90" step="5"><span id="agFinaleWert">30 min</span></div>
   <label for="agAnzahl">Aufgaben je Level</label>
   <div class="ag-zeile"><input type="range" id="agAnzahl" min="3" max="6" step="1"><span id="agAnzahlWert">4</span></div>
   <p class="ag-status" id="agStatus" aria-live="polite"></p>
@@ -1407,6 +1421,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     ['agStunde', 'stunde', 18, function (v) { return (v < 10 ? '0' : '') + v + ':00'; }],
     ['agWarteEcht', 'wartenEchtMin', 10, function (v) { return v + ' min'; }],
     ['agWarte', 'wartezeit', 60, function (v) { return v + ' min'; }],
+    ['agFinale', 'finaleMinuten', 30, function (v) { return v + ' min'; }],
     ['agAnzahl', 'anzahl', 4, function (v) { return String(v); }]
   ];
   function status(text, fehler) {
@@ -2321,6 +2336,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   function karteName(s) {
     if (!s) return "";
     if (s === "isarauen") return "Isarauen (Level 2)";
+    if (s === "koenigsdorf") return "Flugplatz Königsdorf (Level 3)";
+    if (s === "kochel") return "Kochel am See (Level 4)";
+    if (s === "andermatt") return "Andermatt (Level 5, Finale)";
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
@@ -3013,7 +3031,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     if (hinweis) { hinweis.textContent = 'Uhrzeit setzen geht nur, solange jemand spielt. Sanfter Übergang über eine Spielstunde vor Tag- und Nachtbeginn.'; zeit.appendChild(hinweis); }
     ['tnTag', 'tnTagAb', 'tnNachtAb', 'tnNachtDunkel'].forEach(function (id) { zeile(zeit, id); });
     var ausbruch = neueKarte(P.welt, '🦠 Ausbruch');
-    ['tnMenschen', 'tnAnst', 'tnBissSpGeretsried', 'tnBissSpIsarauen', 'tnBiss'].forEach(function (id) { zeile(ausbruch, id); });
+    ['tnMenschen', 'tnAnst', 'tnBissSpGeretsried', 'tnBissSpIsarauen', 'tnBissSpKoenigsdorf', 'tnBissSpKochel', 'tnBissSpAndermatt', 'tnBiss'].forEach(function (id) { zeile(ausbruch, id); });
     rein(ausbruch, $('tnBewohner'));
     var bundeswehr = neueKarte(P.welt, '🎖 Bundeswehr');
     var bwAktiv = $('tnBwAktiv'); if (bwAktiv) bundeswehr.appendChild(bwAktiv.closest('label'));

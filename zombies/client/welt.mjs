@@ -394,7 +394,7 @@ export const DINGE = {
   m_batterie: { name: 'Batterie', zeichen: '🔋', mission: true, intern: true },
   m_antenne: { name: 'Antenne', zeichen: '📡', mission: true, intern: true },
   m_schluessel: { name: 'Torschlüssel', zeichen: '🗝️', mission: true, intern: true },
-  m_diesel: { name: 'Diesel für den Bus', zeichen: '🛢️', mission: true, intern: true },
+  m_diesel: { name: 'Dieselkanister', zeichen: '🛢️', mission: true, intern: true },
   m_treibstoff: { name: 'Treibstoffkanister', zeichen: '⛽', mission: true, intern: true },
   m_landefeuer: { name: 'Landefeuer', zeichen: '🚨', mission: true, intern: true },
 };
@@ -504,7 +504,7 @@ export function ziehe(tabelle, faktoren, rnd, bonus = null) {
   return null;
 }
 // Dauer des Durchsuchens (Sekunden) je Behälterart – Spieler und Bots gleich
-export const durchsuchDauer = art => art === 'auto' || art === 'bus' ? 2.2 : art === 'leiche' ? 0.9 : 1.5;
+export const durchsuchDauer = art => art === 'auto' || art === 'bus' ? 1.2 : art === 'leiche' ? 0.6 : 0.8;
 export const AKTION_ABSTAND = 40;
 export const BUS_ABSTAND = 86;   // Abstand zur Mitte des Evakuierungsbusses (Pixel, Busmitte bis Spieler): wer so nah steht, ist an Bord
 export const INFEKTION_DAUER = 5400;   // 90 Minuten bis zur Verwandlung

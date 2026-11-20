@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.64.0 – 20.11.2026
+
+- Neu: Level 3 Flugplatz Königsdorf (A400M stürzt ab, danach NH90), Level 4 Kochel am See (NH90, Ersatzteile suchen), Level 5 Andermatt (Schweiz) als Finale: Countdown bis zum Atomschlag (Vorgabe 30 min, in der Verwaltung 10–90), Bunkertor öffnet erst nach den Pflichtaufgaben; wer bei null im Bunker ist, überlebt – danach beginnt alles wieder bei Level 1, sonst startet Level 5 neu. Karten aus OpenStreetMap (© OpenStreetMap-Mitwirkende, ODbL), Bissrate steigt je Level (12/12/14/16/18 %).
+- Neu: „🔍 Alles durchsuchen“ (Taste C): alle erreichbaren Behälter des Raums am Stück in 60 % der Zeit, danach Fundliste mit „Alles nehmen“. Einzeldurchsuchen schneller (Behälter 0,8 s, Auto 1,2 s, Leiche 0,6 s); aus der Nähe zeigt 📦/∅, ob ein Behälter noch etwas enthält.
+- Neu: Zimmertüren öffnen sich von selbst, wenn man 0,5 s davor steht oder dagegenläuft (nicht beim Vorbeilaufen; verschlossene bleiben zu).
+- Neu: Sind alle Fernwaffen leer, wechselt der Held auf die Nahkampfwaffe (Platz 3 bevorzugt, z. B. Sense oder Messer), sonst auf die Faust.
+- Neu: Testmenü (☰) mit Level 1–5 springen, Countdown auf 60 s (Andermatt) und Zeitraffer 1×/5×/10×/60×.
+- Geändert: Rucksack – nach ◀/▶ bleibt das Fenster offen (schließen mit ✕ oder Esc).
+- Geändert: Töne – Horden-Grollen entfernt, „Entdeckt“ höchstens alle 3 s, Zombie-Tod höchstens alle 0,5 s. Der „Diesel für den Bus“ heißt jetzt „Dieselkanister“.
+- Behoben: Helden liefen beim Schießen seitwärts oder rückwärts – die Füße zeigen jetzt immer in Laufrichtung, der Körper dreht nur kurz zum Schuss.
+
 ## 0.63.1 – 20.11.2026
 
 - Geändert: Landefeuer gibt es jetzt eines je echtem Mitspieler (Bots zählen nicht), mindestens 1, höchstens 5; kommen später Spieler dazu, werden es bis zum Funkspruch mehr. Jedes liegt in einem eigenen Gebäude, die Aufgabe zeigt z. B. „Landefeuer 2/3“.

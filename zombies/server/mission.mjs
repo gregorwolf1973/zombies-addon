@@ -29,6 +29,24 @@ export const MISSIONEN = {
     { ding: 'm_treibstoff', typen: ['fuel', 'car_wash', 'car_repair', 'motorcycle', 'car'] },
     { ding: 'm_landefeuer', typen: ['sports', 'fast_food', 'kitchen', 'furniture', 'gross'] },
   ],
+  // Level 3: Segelflugplatz Königsdorf (keine Tankstelle in der Karte: Hangars/große Gebäude als Rückfall)
+  koenigsdorf: [
+    ...FUNK,
+    { ding: 'm_treibstoff', typen: ['fuel', 'car_wash', 'car_repair', 'car', 'motorcycle', 'gross'] },
+    { ding: 'm_landefeuer', typen: ['events_venue', 'stationery', 'sports', 'gross'] },
+  ],
+  // Level 4: Kochel am See (NH90 steht schon da: Treibstoff und der Schlüssel zum Hubschrauber)
+  kochel: [
+    ...FUNK,
+    { ding: 'm_treibstoff', typen: ['fuel', 'car_wash', 'car_repair', 'car', 'wholesale', 'gross'] },
+    { ding: 'm_schluessel', typen: ['townhall', 'school', 'bank', 'place_of_worship', 'kindergarten', 'gross'] },
+  ],
+  // Level 5: Andermatt, Finale am Bunkertor (Schlüssel + Diesel für den Notstrom, das Tor öffnet erst, wenn alles da ist)
+  andermatt: [
+    ...FUNK,
+    { ding: 'm_schluessel', typen: ['public_building', 'townhall', 'bank', 'school', 'post_office', 'fire_station', 'place_of_worship', 'gross'] },
+    { ding: 'm_diesel', typen: ['fuel', 'car_repair', 'car', 'recycling', 'fire_station', 'sports', 'gross'] },
+  ],
 };
 export const FUNK_TEILE = ['m_funk', 'm_batterie', 'm_antenne'];   // zusammen am Funktisch = Funkspruch
 export const landefeuerId = i => i <= 1 ? 'm_landefeuer' : `m_landefeuer#${i}`;   // eindeutige Missions-Id (Gegenstandsart bleibt m_landefeuer)

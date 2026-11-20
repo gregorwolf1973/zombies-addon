@@ -23,8 +23,8 @@ export const Aufgabe = schema({
 }, 'Aufgabe');
 
 // Reihenfolge der Karten von Level zu Level (jede andere Karte beginnt wieder bei der ersten)
-export const LEVEL_KARTEN = ['geretsried', 'isarauen'];
-export const KARTEN_NAMEN = { geretsried: 'Geretsried', isarauen: 'die Isarauen', dorf: 'das Dorf' };
+export const LEVEL_KARTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
+export const KARTEN_NAMEN = { geretsried: 'Geretsried', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };
 
 export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
 const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
@@ -611,7 +611,7 @@ export class Aufgaben {
       // Einsteigen: wer nah genug steht, sitzt im Fahrzeug (Position folgt ihm, Figur weg, Zombies lassen ihn in Ruhe) bis zum Levelwechsel.
       // Fehlt noch etwas für die Abfahrt, sagt die Meldung beim Einsteigen, was – es wirft niemand still wieder raus.
       if (this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) >= abstand) this.ausgestiegen.delete(sid);   // erst wieder einsteigen, wenn er einmal weg war
-      if (!an && !p.ebene && !p.unten && !this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) < abstand) {
+      if (!an && !p.ebene && !p.unten && !this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) < abstand && this.einsteigenOffen()) {   // Bunkertor bleibt zu, bis die Missionen erledigt sind (server/finale.mjs meldet, was fehlt)
         an = true; this.eingestiegen.add(sid); p.anBord = true;
         if (this.heli?.art === 'bunker') this.raum.bunker?.betreten?.(sid);   // Haken für einen Bunker-Innenraum (falls vorhanden)
         if (!bot) this.einsteigMeldung(sid);
@@ -672,6 +672,9 @@ export class Aufgaben {
     }
     this.eingestiegen.clear();; this.ausgestiegen.clear();
   }
+
+  // Bunkertor (Finale): öffnet erst, wenn die Fahrt gelingen würde (Missionen erledigt); alle anderen Fahrzeuge: immer offen
+  einsteigenOffen() { return this.heli?.art !== 'bunker' || this.fahrtGelingt(); }
 
   // Pflichtaufgaben und Mindestzahl erledigt: wer einsteigt, kann tatsächlich mitfahren
   fahrtGelingt() {
@@ -880,14 +883,16 @@ export class Aufgaben {
   }
 
   // neue Karte einstellen und die Welt mit neuem Level neu starten; Rucksack und Werte der Spieler bleiben
-  levelWechsel() {
-    const r = this.raum, s = r.state, karte = this.naechsteKarte();
+  // ziel (optional): { karte, level, frisch } – Testbefehl und Finale; frisch = ganz neue Runde (Level 1, Fähigkeiten und Startwahl von vorn)
+  levelWechsel(ziel = null) {
+    const r = this.raum, s = r.state, karte = ziel?.karte ?? this.naechsteKarte();
     r.constructor.kartenWechsel?.(karte);
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.folgenId = null;
+    if (ziel?.frisch) return r.weltNeuStarten(false);
     r.weltNeuStarten(false, {
       version: WELT_VERSION, karte, seed: Math.floor(Math.random() * 2 ** 31), zeit: 0, uhr: 8 * 60,
-      besiegt: s.besiegt, level: s.level + 1, chat: [...r.chatVerlauf],
+      besiegt: s.besiegt, level: ziel?.level ?? s.level + 1, chat: [...r.chatVerlauf],
     });
   }
 }
