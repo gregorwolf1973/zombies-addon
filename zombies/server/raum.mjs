@@ -93,6 +93,11 @@ export const Zustand = schema({
   busSteht: t.boolean(),    // ... und steht (Einsteigen nur dann); false = er fährt noch ein (Level 2: Evakuierungspanzer)
   busBord: t.uint8(),       // so viele sind an Bord ...
   busGesamt: t.uint8(),     // ... von so vielen lebenden Spielern (mit Bots)
+  evakArt: t.string(),      // Evakuierungsart dieser Karte: 'bus' | 'panzer' (Leopard 2A7) | 'flugzeug' (A400M, dann Hubschrauber)
+  evakPhase: t.string(),    // Flugzeug: '' | 'landung' | 'einsteigen' | 'heliAnflug' | 'heli' | 'abflug' (server/aufgaben.mjs)
+  evakX: t.number(),        // Abholpunkt (Pixel) abweichend vom Ortsausgang (Flugzeug: Heckrampe, danach Hubschrauberplatz); <= 0 = Ortsausgang
+  evakY: t.number(),
+  evakRest: t.uint16(),     // Sekunden, bis der Hubschrauber landet
   aufgaben: t.map(Aufgabe), // gemeinsame Aufgaben dieses Levels
   tag: t.number(),          // Spieltag seit Start dieser Welt (1 = erster Tag; Maßstab wie spieltage())
   uhr: t.number(),          // Tageszeit in Spielminuten (0–1439)

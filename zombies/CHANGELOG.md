@@ -8,6 +8,16 @@
 - Handgranate: Wurfweite 200 statt 120 px, Explosionsradius 60 statt 40 px, mehr Schaden.
 - Leere Kisten für den Spieler grau mit Kreuz; Kreuz/Rahmen sitzt genau auf dem Möbelbild; Sandsäcke vor dem Safe House in ordentlichen Reihen mit freiem Durchgang; Mündungsfeuer an der Rohrmündung des Puma.
 
+## 0.50.0 – 20.11.2026
+
+- Level 2 (Isarauen): Der Evakuierungspanzer ist jetzt ein Leopard 2A7 (Draufsicht aus einem 3D-Modell, Wanne und Turm getrennt). Der Turm dreht zum Ziel, das Lader-MG schießt selbständig auf Zombies in Reichweite (Leuchtspur, Mündungsfeuer, Kettenrasseln beim Fahren). Der Puma im Bundeswehr-Stützpunkt bleibt unverändert.
+- Der Leopard überrollt Zombies, die er beim Fahren berührt (sofort tot, Blut und Leiche wie üblich); Spieler werden nie überrollt – er hält vor ihnen an.
+- Verwaltung (Reiter Welt, Karte „Bundeswehr“): Leopard-MG-Reichweite, Schussfolge, Schaden und „überrollt Zombies“ einstellbar.
+- Neue Evakuierungsart A400M (Vorbereitung für ein späteres Level, in keiner Karte fest eingestellt): Das Flugzeug landet auf einer langen freien Fläche der Karte, die Spieler steigen an der Heckrampe ein, dann fällt Triebwerk 3 aus (Brand, Rauch, Start abgebrochen). Alle müssen raus und zu Fuß zum markierten Hubschrauber-Landeplatz; dort landet ein Hubschrauber und holt die Gruppe ab (Levelwechsel). Kommt niemand rechtzeitig, fliegt er ab und kehrt nach einer Minute zurück.
+- Verwaltung (Karte „Aufgaben & Evakuierung“): Evakuierungsart für die aktuelle Karte erzwingen (Bus / Panzer / Flugzeug), Vorgabe aus.
+- Evakuierungsart je Karte jetzt als Zustand `evakArt` statt der festen Isarauen-Abfrage (client/evak.mjs); neue Dateien client/evakdarstellung.mjs, server/flugplatz.mjs.
+- Grafik: Leopard 2A7 „Leopard 2A7 Trophy MBT – Bundeswehr (WARNO)“ von rran81 (Sketchfab „Free Standard“, nur Draufsichten im Repo) und A400M „Airbus+A400M“ von CloudHub (CC-BY 4.0); Hubschrauber selbst gezeichnet. Quellen in client/grafik/LIZENZ.txt.
+
 ## 0.48.3 – 20.11.2026
 
 - Verwaltung: Fehler „wz is not defined“ beim Laden behoben (Schalter „Horde-Ziele anzeigen“).

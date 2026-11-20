@@ -830,6 +830,14 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
   <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.1" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
   <p class="tn-leise" id="bwInfoPuma"></p>
+  <label for="tnLeoReich">Evakuierungspanzer (Leopard 2A7, Isarauen): MG-Reichweite</label>
+  <div class="tn-zeile"><input type="range" id="tnLeoReich" min="5" max="80" step="1"><span id="tnLeoReichWert">29 m</span></div>
+  <label for="tnLeoPause">Leopard-MG: Pause zwischen zwei Schüssen</label>
+  <div class="tn-zeile"><input type="range" id="tnLeoPause" min="0.1" max="5" step="0.1"><span id="tnLeoPauseWert">0,4 s</span></div>
+  <label for="tnLeoSchaden">Leopard-MG: Schaden je Treffer</label>
+  <div class="tn-zeile"><input type="range" id="tnLeoSchaden" min="1" max="500" step="1"><span id="tnLeoSchadenWert">100</span></div>
+  <label class="tn-schalter"><input type="checkbox" id="tnLeoUeberroll"> Leopard überrollt Zombies beim Fahren (Spieler nie – er hält vor ihnen an)</label>
+  <p class="tn-leise" id="bwInfoLeo"></p>
   <p class="tn-leise" id="bwInfoMg"></p>
   <label class="tn-schalter"><input type="checkbox" id="tnBwAktiv"> Stützpunkt aktiv (schießt, handelt, kann fallen)</label>
   <label for="tnBwTage">Stützpunkt fällt nach …</label>
@@ -931,6 +939,10 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     feld('rwScharf', rw.scharfschuetze || 75, function (v) { return v + ' m'; });
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
+    feld('tnLeoReich', bwe.leopardReichweite === undefined ? 29 : bwe.leopardReichweite, function (v) { return v + ' m'; });
+    feld('tnLeoPause', bwe.leopardPause === undefined ? 0.4 : bwe.leopardPause, function (v) { return String(v).replace('.', ',') + ' s'; });
+    feld('tnLeoSchaden', bwe.leopardSchaden === undefined ? 100 : bwe.leopardSchaden, function (v) { return String(v); });
+    if (document.activeElement !== $('tnLeoUeberroll')) $('tnLeoUeberroll').checked = bwe.leopardUeberrollen !== false;
     feld('tnBwTage', bwe.falltage === undefined ? 3 : bwe.falltage, function (v) { return v ? v + (v === 1 ? ' Tag' : ' Tage') : 'nie'; });
     if (document.activeElement !== $('tnBwAktiv')) $('tnBwAktiv').checked = bwe.aktiv !== false;
     var spz = d.stuetzpunkt;
@@ -1005,6 +1017,12 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('tnBissSpGeretsried', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { geretsried: v } }; });
   regler('tnBissSpIsarauen', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { isarauen: v } }; });
   regler('tnPumaPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { pumaPause: v } }; });
+  regler('tnLeoReich', function (v) { return v + ' m'; }, function (v) { return { bundeswehr: { leopardReichweite: v } }; });
+  regler('tnLeoPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { leopardPause: v } }; });
+  regler('tnLeoSchaden', function (v) { return String(v); }, function (v) { return { bundeswehr: { leopardSchaden: v } }; });
+  $('tnLeoUeberroll').addEventListener('change', function () {
+    anfrage('verwaltung/api', { bundeswehr: { leopardUeberrollen: $('tnLeoUeberroll').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
   ZTYPEN.forEach(function (k) {
     $('zt_' + k).addEventListener('change', function () {
       var t = {}; t[k] = $('zt_' + k).checked;
@@ -1225,6 +1243,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="ag-zeile"><input type="range" id="agWarteEcht" min="1" max="60" step="1"><span id="agWarteEchtWert">10 min</span></div>
   <label for="agWarte">Ankunftsfenster (Spielminuten ab Ankunftszeit, in denen er noch erscheint)</label>
   <div class="ag-zeile"><input type="range" id="agWarte" min="10" max="180" step="5"><span id="agWarteWert">60 min</span></div>
+  <label for="agEvakArt">Evakuierungsart für die aktuelle Karte erzwingen (Test; Vorgabe: aus = je Karte Bus bzw. Leopard in den Isarauen)</label>
+  <div class="ag-zeile"><select id="agEvakArt"><option value="">aus (je Karte)</option><option value="bus">Bus</option><option value="panzer">Panzer (Leopard 2A7)</option><option value="flugzeug">Flugzeug (A400M, danach Hubschrauber)</option></select></div>
   <label for="agAnzahl">Aufgaben je Level</label>
   <div class="ag-zeile"><input type="range" id="agAnzahl" min="3" max="6" step="1"><span id="agAnzahlWert">4</span></div>
   <p class="ag-status" id="agStatus" aria-live="polite"></p>
@@ -1232,7 +1252,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
 <style>
   #aufgabenKarte .ag-leise { color: var(--text-soft); font-size: .85rem; font-weight: 400; }
   #aufgabenKarte .ag-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  #aufgabenKarte .ag-zeile input { flex: 1; }
+  #aufgabenKarte .ag-zeile input, #aufgabenKarte .ag-zeile select { flex: 1; }
   #aufgabenKarte .ag-zeile span { min-width: 64px; text-align: right; }
   #aufgabenKarte .ag-schalter { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; font-weight: 600; }
   #aufgabenKarte .ag-schalter input { width: 22px; height: 22px; }
@@ -1260,6 +1280,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       $(r[0] + 'Wert').textContent = r[3](Number($(r[0]).value));
     });
     if (document.activeElement !== $('agAn')) $('agAn').checked = ag.an !== false;
+    if (document.activeElement !== $('agEvakArt')) $('agEvakArt').value = ag.evakArt || '';
   }
   function senden(teil) {
     return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aufgaben: teil }) })
@@ -1273,6 +1294,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     el.addEventListener('change', function () { var t = {}; t[r[1]] = Number(el.value); senden(t); });
   });
   $('agAn').addEventListener('change', function () { senden({ an: $('agAn').checked }); });
+  $('agEvakArt').addEventListener('change', function () { senden({ evakArt: $('agEvakArt').value }); });
   function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
   laden();
   setInterval(laden, 5000);
@@ -2847,7 +2869,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     rein(ausbruch, $('tnBewohner'));
     var bundeswehr = neueKarte(P.welt, '🎖 Bundeswehr');
     var bwAktiv = $('tnBwAktiv'); if (bwAktiv) bundeswehr.appendChild(bwAktiv.closest('label'));
-    zeile(bundeswehr, 'tnBwTage'); zeile(bundeswehr, 'tnPumaPause'); rein(bundeswehr, $('bwInfoPuma')); rein(bundeswehr, $('bwInfoMg')); rein(bundeswehr, $('tnBwStatus'));
+    zeile(bundeswehr, 'tnBwTage'); zeile(bundeswehr, 'tnPumaPause'); rein(bundeswehr, $('bwInfoPuma'));
+    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden'].forEach(function (id) { zeile(bundeswehr, id); });
+    var leoU = $('tnLeoUeberroll'); if (leoU) bundeswehr.appendChild(leoU.closest('label')); rein(bundeswehr, $('bwInfoLeo')); rein(bundeswehr, $('bwInfoMg')); rein(bundeswehr, $('tnBwStatus'));
     var stadt = neueKarte(P.welt, '🚗 Stadt & Verkehr');
     zeile(stadt, 'tnAutos'); rein(stadt, $('tnAutosHinweis'));
     ['tnVerkehr', 'tnVerkehrPhase', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt, id); });
@@ -2901,6 +2925,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     if ($('bwInfoMg')) $('bwInfoMg').textContent = 'MG-Nest (Gewehrschaden ' + g + '): tötet einen Zombie mit ' + tDat(treffer(hp, g)) + ' (80 % der Schüsse treffen, Salven à 3 Schuss, im Mittel ca. ' + kommaZahl(g * 0.8 * 3 / 1.4, 0) + ' Schaden/s). Soldaten an den Posten: fest ' + SOLDAT + ' Schaden, ' + tDat(treffer(hp, SOLDAT)) + '.';
     var pp = wert('tnPumaPause', 2.5);
     if ($('bwInfoPuma')) $('bwInfoPuma').textContent = 'Panzer (Puma): Kanone ' + KANONE + ' Schaden, tötet einen Zombie mit ' + treffer(hp, KANONE) + (treffer(hp, KANONE) === 1 ? ' Schuss' : ' Schüssen') + ' (' + kommaZahl(KANONE / pp, 1) + ' Schaden/s); Splitterschaden ' + FLAECHE + ' im Umkreis ca. 4 m, ' + tText(treffer(hp, FLAECHE)) + '. Kanonen- und Soldatenschaden sind fest.';
+    if ($('bwInfoLeo')) { var ls = wert('tnLeoSchaden', 100), lp = wert('tnLeoPause', 0.4); $('bwInfoLeo').textContent = 'Leopard-MG: Schaden ' + ls + ', tötet einen Zombie mit ' + treffer(hp, ls) + (treffer(hp, ls) === 1 ? ' Treffer' : ' Treffern') + ' (80 % der Schüsse treffen, ca. ' + kommaZahl(ls * 0.8 / lp, 0) + ' Schaden/s). Überrollte Zombies sind sofort tot.'; }
     if ($('wfHinweis')) $('wfHinweis').textContent = 'Zombie-Leben: ' + hp + ' (Einstellung im Reiter Zombies). Überrascht = der Zombie hat noch niemanden bemerkt (von hinten anschleichen). Fähigkeiten ändern den Waffenschaden nicht. Schaden/s = Schaden ÷ Abklingzeit (echte Sekunden). Ein Viertel der Zombies kriecht nach dem Tod mit '
       + kh + ' Leben weiter. Granaten (150 Schaden) sind fest.';
   }
@@ -2921,7 +2946,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       ['agWarteEcht', 'echte Minuten ab dem Halt'],
       ['agWarte', 'Spielminuten · ' + wert('agWarte', 60) + ' Spielminuten ≈ ' + dauer(wert('agWarte', 60) * pro) + ' echt bei ' + tm + ' min/Spieltag'],
       ['tnBwTage', 'Spieltage ab Weltbeginn · ' + (wert('tnBwTage', 3) ? wert('tnBwTage', 3) + ' Spieltage = ' + dauer(wert('tnBwTage', 3) * tm) + ' echt bei ' + tm + ' min/Spieltag' : 'nie')],
-      ['tnPumaPause', 'echte Sekunden']
+      ['tnPumaPause', 'echte Sekunden'],
+      ['tnLeoPause', 'echte Sekunden']
     ];
     Object.keys(UEB).forEach(function (k) { liste.push(['wfP_' + k, 'echte Sekunden']); });
     liste.forEach(function (z) {

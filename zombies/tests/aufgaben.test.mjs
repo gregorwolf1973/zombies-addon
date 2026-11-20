@@ -346,11 +346,14 @@ test('Levelwechsel: mit erfüllten Aufgaben fährt der Bus los, die Karte wechse
 
 test('Einstellungen: Aufgaben und Evakuierung werden begrenzt, Vorgaben stimmen', async () => {
   const { bereinige, vorgaben } = await import('../server/einstellungen.mjs');
-  assert.deepEqual(vorgaben().aufgaben, { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4 });
+  assert.deepEqual(vorgaben().aufgaben, { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '' });
   const e = bereinige({ aufgaben: { an: false, stunde: 3, wartezeit: 999, wartenEchtMin: 999, anzahl: 9 } });
-  assert.deepEqual(e.aufgaben, { an: false, stunde: 6, wartezeit: 180, wartenEchtMin: 60, anzahl: 6 });
+  assert.deepEqual(e.aufgaben, { an: false, stunde: 6, wartezeit: 180, wartenEchtMin: 60, anzahl: 6, evakArt: '' });
   const f = bereinige({ aufgaben: { stunde: 99, wartezeit: 1, wartenEchtMin: 0, anzahl: 0 } }, e);
-  assert.deepEqual(f.aufgaben, { an: false, stunde: 23, wartezeit: 10, wartenEchtMin: 1, anzahl: 3 });
+  assert.deepEqual(f.aufgaben, { an: false, stunde: 23, wartezeit: 10, wartenEchtMin: 1, anzahl: 3, evakArt: '' });
+  assert.equal(bereinige({ aufgaben: { evakArt: 'flugzeug' } }).aufgaben.evakArt, 'flugzeug');
+  assert.equal(bereinige({ aufgaben: { evakArt: 'raumschiff' } }).aufgaben.evakArt, '');
+  assert.equal(bereinige({ bundeswehr: { leopardReichweite: 999, leopardPause: 0, leopardSchaden: 0 } }).bundeswehr.leopardReichweite, 80);
   assert.equal(bereinige({ bundeswehr: { pumaPause: 0.01 } }).bundeswehr.pumaPause, 0.1);
   assert.equal(bereinige({}).aufgaben.stunde, 18);
 });
@@ -381,7 +384,7 @@ test('Evakuierungsbus und -panzer schießen auf Zombies in der Nähe, nie auf Sp
     // Panzer in Level 2 (Isarauen): Turm-MG aus der Fahrzeugmitte
     raum.state.karte = 'isarauen'; schuesse.length = 0;
     const z2 = raum.setzeZombie(bus.x - 120, bus.y, ''); raum.zombieInfo.get(z2).steht = true;
-    assert.ok(await bis(() => schuesse.some(m => Math.hypot(m.x1 - bus.x, m.y1 - bus.y) < 1)), 'Panzer schießt nicht aus der Mitte');
+    assert.ok(await bis(() => schuesse.some(m => m.evak === 'panzer' && Math.hypot(m.x1 - bus.x, m.y1 - bus.y) < 30)), 'Leopard schießt nicht aus dem Turm');
     // Abfahrt: Schluss mit Schießen
     raum.aufgaben.busWeg();
     await warte(100); schuesse.length = 0;

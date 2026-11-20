@@ -43,3 +43,16 @@ Schützenpanzer Puma (grafik/puma_wanne.webp, puma_turm.webp): Draufsichten, ger
 von 42manako, https://sketchfab.com/3d-models/spz-puma-8e7d946d4b3d4fdeaf458a3fc4226e1b – dort als CC-BY 4.0 angegeben
 (laut Beschreibung des Hochladers aus dem Spiel „Call to Arms“ übernommen). Gerendert mit tools/glb_draufsicht
 (three.js, Wanne und Turm getrennt), verkleinert mit tools/puma_bilder.py.
+
+Kampfpanzer Leopard 2A7 (grafik/leopard_wanne.webp, leopard_turm.webp): Draufsichten, gerendert aus dem 3D-Modell
+„Leopard 2A7 Trophy MBT – Bundeswehr (WARNO)“ von rran81,
+https://sketchfab.com/3d-models/leopard-2a7-trophy-mbt-bundeswehr-warno-9bea23c6b249438e89e6cc2775f6fdd1 –
+Sketchfab-Lizenz „Free Standard“ (Nutzung in eigenen Projekten erlaubt, das Modell selbst darf nicht weitergegeben werden:
+im Repo liegen nur die gerenderten Draufsichten, nicht das Modell oder seine Texturen). Gerendert mit tools/glb_draufsicht
+(three.js, Wanne und Turm getrennt), verkleinert mit tools/leopard_bilder.py.
+
+Transportflugzeug A400M (grafik/a400m_rumpf.webp, a400m_prop.webp): Draufsichten, gerendert aus dem 3D-Modell „Airbus+A400M“
+von CloudHub, https://sketchfab.com/3d-models/airbusa400m-17792743f04d415a8a22edd2a0fcab0e – CC-BY 4.0.
+Hinweis: Die Materialnamen im Modell deuten auf ein SketchUp-Modell (vermutlich aus dem 3D Warehouse) hin; im Repo liegen
+nur die gerenderten Draufsichten (Rumpf ohne Propeller, ein Propeller einzeln), nicht das Modell. Gerendert mit
+tools/glb_draufsicht, verkleinert mit tools/a400m_bilder.py.

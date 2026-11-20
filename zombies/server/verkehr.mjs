@@ -212,6 +212,15 @@ export class Verkehr {
     return id;
   }
 
+  // A400M (Evakuierungsart 'flugzeug'): steht ohne Straße am Aufsetzpunkt (x, y) in Richtung `richtung`; die Landerolle bewegt server/aufgaben.mjs,
+  // `angekommen` wird erst am Ende der Rolle gesetzt (evakuierungDa)
+  evakuierungFlugzeug(x, y, richtung) {
+    const id = this.neu('evakuierung', { x, y }, { halt: 1e12, evakuierung: true, angekommen: false, flugzeug: true });
+    const f = this.raum.state.fahrzeuge.get(id);
+    f.richtung = richtung; f.haelt = true; f.farbe = 0;
+    return id;
+  }
+
   // steht der Evakuierungsbus an der Haltestelle (Einsteigen ist nur dann möglich)?
   evakuierungDa(id) { return !!this.info.get(id)?.angekommen && !this.info.get(id)?.abfahrt; }
 
@@ -219,6 +228,7 @@ export class Verkehr {
   evakuierungAb(id) {
     const f = this.raum.state.fahrzeuge.get(id), inf = this.info.get(id);
     if (!f || !inf) return;
+    if (inf.flugzeug) { this.raum.state.fahrzeuge.delete(id); this.info.delete(id); return; }   // hebt ab (kein Straßenweg)
     inf.halt = 0; inf.abfahrt = true; f.haelt = false;
     const rand = this.graph.knoten.length ? this.randKnoten() : [];
     const ziel = rand.length ? rand.reduce((a, b) => Math.hypot(b.x - f.x, b.y - f.y) > Math.hypot(a.x - f.x, a.y - f.y) ? b : a) : null;

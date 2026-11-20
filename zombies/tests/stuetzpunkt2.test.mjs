@@ -509,14 +509,14 @@ test('Bundeswehr-Beute: Granate/MP/MG nur in bw_kiste, bw_container und (MP/MG) 
 
 test('Einstellungen: Bundeswehr (aktiv, Falltage) und Reichweiten von MP/MG werden bereinigt', () => {
   const v = bereinige({});
-  assert.deepEqual(v.bundeswehr, { aktiv: true, falltage: 3, pumaPause: 2.5 });
+  assert.deepEqual(v.bundeswehr, { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true });
   assert.equal(v.reichweite.mp, 30); assert.equal(v.reichweite.mg, 45);
   const e = bereinige({ bundeswehr: { aktiv: 'ja', falltage: 99 }, reichweite: { mp: 500, mg: 1 } });
   assert.equal(e.bundeswehr.aktiv, true); assert.equal(e.bundeswehr.falltage, 30);
   assert.equal(e.reichweite.mp, 80); assert.equal(e.reichweite.mg, 5);
   assert.equal(bereinige({ bundeswehr: { aktiv: false, falltage: 0 } }).bundeswehr.aktiv, false);
   assert.equal(bereinige({ bundeswehr: { falltage: -4 } }, e).bundeswehr.falltage, 0);
-  assert.deepEqual(SpielRaum.einstellungen.bundeswehr, { aktiv: true, falltage: 3, pumaPause: 2.5 });
+  assert.deepEqual(SpielRaum.einstellungen.bundeswehr, { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true });
 });
 
 test('Handel: Preise, Bezahlung mit dem, was man am meisten hat', () => {
