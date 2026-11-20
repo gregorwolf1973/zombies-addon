@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.60.0 – 20.11.2026
+
+- Gegenstände als Bilder statt Emojis: 31 neue Icons (mit Google Gemini erzeugt) für Waffen, Munition, Vorräte, Geräte und Taschen, dazu die Faust für die leere Hand. Sie erscheinen in der Waffenanzeige oben, auf den Waffenknöpfen, im Rucksack und seinen Menüs, beim Aufheben, beim Tauschen, beim Händler im Lager, im Schießstand und bei Gegenständen am Boden. Fehlt ein Bild, bleibt das Emoji.
+- Waffenknöpfe etwas breiter, damit Name und Magazin neben dem Bild Platz haben.
+- Werkzeug tools/dinge_bilder.py schneidet die Gemini-Bögen (Magenta-Raster) zu grafik/dinge.webp und dinge.json; neuer Baustein client/dingbild.mjs.
+
 ## 0.59.0 – 20.11.2026
 
 - Superuser-Testmenü: Im Anmeldefenster „Testzugang“ mit Passwort (nur in den Einstellungen des Servers gespeichert, als Hash; in der Verwaltung setzen/löschen). Superuser bekommen ein ☰-Menü: Sprung zur Bundeswehr, zum Evakuierungspunkt und 50 m vor die Horde; alle Bots zu mir (wiederbelebt, voll versorgt); Horde jetzt starten (50/200/500); unsterblich ein/aus; Mittag/Nacht; Ausrüstung auffüllen; Evakuierung sofort rufen; Lager fallen lassen/aufbauen. Jede Nutzung steht im Protokoll, Fehlversuche sind begrenzt.
