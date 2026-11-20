@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.55.0 – 20.11.2026
+
+- Leistung: Die Kamera-Nachbearbeitung (Schwarzweiß in dunklen Räumen) wird beim Verlassen ganz entfernt; vorher blieb nach dem ersten dunklen Haus ein Vollbild-Durchgang je Bild aktiv.
+- Eingaben (Laufrichtung) werden zusätzlich alle 50 ms per Zeitgeber gesendet und nutzen die echte Uhr, damit die Spielerposition bei niedriger Bildrate nicht verzögert beim Server ankommt.
+
 ## 0.54.0 – 20.11.2026
 
 - Schießstand / Tutorial: Lobby-Knopf „🎯 Schießstand“, eigener Übungsplatz je Spieler (unsterblich), alle Waffen, Entfernungsmarken 10/25/50/75 m, Zombies 5/20/50 starten, Panzer ein/aus, Auswertung je Waffe (Schuss, Treffer, Tote, Schuss je Zombie, Munition) mit Erklärung.
