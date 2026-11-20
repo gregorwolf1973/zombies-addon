@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.57.1 – 20.11.2026
+
+- Soldaten rufen „Halt, sofort stehen bleiben!“ bzw. „Keine Bewegung!“ (neues Ton-Ereignis „Soldat ruft“, räumlich, mit Sprechblase), wenn sich ein Spieler dem Lager nähert (je Spieler höchstens alle 45–60 s) und gelegentlich, wenn Zombies den Zaun erreichen.
+
 ## 0.57.0 – 20.11.2026
 
 - Einsteigen in Evakuierungsfahrzeuge (Bus, Leopard, A400M-Rampe, Hubschrauber) neu: Wer am wartenden Fahrzeug steht, sitzt drin – die Position folgt dem Fahrzeug, die Figur ist ausgeblendet, die Kamera fährt mit, Zombies lassen ihn in Ruhe, Eingaben bewegen ihn nicht. Das gilt auch dann, wenn die Abfahrt noch nicht möglich ist (früher blieb man nur im Umkreis „an Bord“ und lief dem losfahrenden Fahrzeug hinterher).

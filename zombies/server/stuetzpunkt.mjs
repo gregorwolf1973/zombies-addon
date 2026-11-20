@@ -33,6 +33,7 @@ const KAMPF_RUHE = 8, KAMPF_RUHE_STREU = 7, DECKUNG_WEITE = 44, DECKUNG_TAKT = 3
 
 const diffWinkel = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
 
+const RUF_WEITE = 120;   // px vor dem Zaun, ab denen ein Spieler angerufen wird
 export class Stuetzpunkt {
   constructor(raum) {
     this.raum = raum;
@@ -54,7 +55,7 @@ export class Stuetzpunkt {
     const s = this.raum.state, sp = this.sp;
     s.stuetzpunkt = ''; s.bwTurm = 0;
     this.nachschub = null;
-    this.nester = []; this.puma = null; this.schuetzen = []; this.sHot = { hotZelle: null }; this.hotT = 0; this.ruheT = 0; this.sendT = 0; this.nahT = 0;
+    this.nester = []; this.puma = null; this.schuetzen = []; this.sHot = { hotZelle: null }; this.hotT = 0; this.ruheT = 0; this.sendT = 0; this.nahT = 0; this.rufUhr = 0; this.rufSp = new Map(); this.rufZombie = 0;
     if (!sp) return;
     sp.teile.forEach((t, n) => {
       if (t.art === 'mgnest') this.nester.push({ n, x: t.x, y: t.y, blick: t.blick, kuehl: 0, salve: 0, takt: 0, scan: 0, ziel: null, muni: this.einst().mgMunition });
@@ -217,12 +218,42 @@ export class Stuetzpunkt {
     this.raum.broadcast('bwSoldaten', { s: this.schuetzen.map(q => [q.n, rund(q.x), rund(q.y), Math.round(q.blick * 100) / 100, q.tot ? 1 : 0]) });
   }
 
+  // Soldaten rufen „Halt, sofort stehen bleiben!“, wenn sich ein Spieler dem Lager nähert (je Spieler alle 45–60 s),
+  // und gelegentlich, wenn Zombies den Zaun erreichen (insgesamt höchstens alle 20–30 s); der nächste lebende Soldat ruft
+  soldatRufen(d) {
+    this.rufUhr += d;
+    if (!this.steht() || !this.sp) return;
+    const lebend = this.schuetzen.filter(q => !q.tot);
+    if (!lebend.length) return;
+    const naechster = (x, y) => lebend.reduce((a, b) => Math.hypot(a.x - x, a.y - y) <= Math.hypot(b.x - x, b.y - y) ? a : b);
+    const rufen = (x, y) => { const q = naechster(x, y); this.raum.broadcast('soldatRuf', { n: q.n, x: q.x, y: q.y, t: this.raum.rnd() < 0.5 ? 0 : 1 }); };
+    const E = RUF_WEITE / KACHEL;
+    for (const [sid, p] of this.raum.state.spieler) {
+      if (this.raum.extra.get(sid)?.bot || !p.verbunden || p.ebene || p.unten || p.zombie > 0) continue;
+      const { u, v } = planKoord(this.sp, p.x, p.y);
+      if (!(u >= -E && u <= SP_BREITE + E && v >= 1.5 - E && v <= SP_TIEFE)) continue;
+      if ((this.rufSp.get(sid) ?? -1e9) > this.rufUhr) continue;
+      this.rufSp.set(sid, this.rufUhr + 45 + this.raum.rnd() * 15);
+      rufen(p.x, p.y);
+      return;
+    }
+    if (this.rufZombie > this.rufUhr) return;
+    for (const z of this.raum.state.zombies.values()) {
+      const { u, v } = planKoord(this.sp, z.x, z.y);
+      if (u < 0 || u > SP_BREITE || v < 0.5 || v > 2.5) continue;
+      this.rufZombie = this.rufUhr + 20 + this.raum.rnd() * 10;
+      rufen(z.x, z.y);
+      return;
+    }
+  }
+
   soldatenLeben(dt) {
     if (!this.schuetzen.length) return;
     const unverwundbar = !(this.einst().falltage > 0);   // „nie fallen“: auch die Soldaten sind dann unverwundbar (wie der Puma)
     this.nahT += dt;
     if (this.nahT >= 0.25) {
       const d = this.nahT; this.nahT = 0;
+      this.soldatRufen(d);
       const lebend = this.schuetzen.filter(q => !q.tot);
       if (lebend.length && !unverwundbar) {
         for (const z of this.raum.state.zombies.values()) {
