@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.56.0 – 20.11.2026
+
+- Waffenplätze verwalten: Knopf gedrückt halten bzw. Rechtsklick → „In den Rucksack“, „Fallen lassen“, „Tauschen mit …“; Knopf „✊ Faust“ (Taste X); im Rucksack „→ Platz 1/2/3“.
+- Handgranate als Waffe: in einen Waffenplatz legen (Magazin 5), Zielbogen 60° in Blickrichtung mit Wurfweite, Tippen/Klick wirft auf den Punkt, Explosion beim Aufschlag; Q bleibt Schnellwurf; Werte in der Verwaltung.
+- Granatwerfer: Gewehr-Haltung, schießt automatisch, Granate etwa 4× schneller, Explosion beim Aufschlag, Reichweite 60 m (bis 100 m einstellbar).
+- MG-Ton ohne Aussetzer: neuer Schuss löst den ältesten eigenen Ton ab, Schusstöne kürzer.
+- Zweiter Tab mit demselben Spieler löst den alten ab (Meldung im alten Fenster).
+- Munitionsvorrat der MG-Nester und des Puma wird gespeichert.
+
 ## 0.55.1 – 20.11.2026
 
 - Ton: Solange der Browser den Ton sperrt (erst nach einer Berührung erlaubt), zeigt die Startseite „🔊 Tippe irgendwo für Ton“; die erste Berührung schaltet den Ton auch im Spiel frei (z. B. nach automatischem Neuladen).

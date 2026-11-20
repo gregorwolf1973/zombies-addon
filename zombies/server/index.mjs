@@ -167,7 +167,7 @@ export async function starte({
     return {
       einstellungen: datei.werte,
       karten: KARTEN, zeitraffer: ZEITRAFFER,
-      dinge: Object.entries(DINGE).map(([id, d]) => ({ id, name: d.name, zeichen: d.zeichen })),
+      dinge: Object.entries(DINGE).filter(([, d]) => !d.intern).map(([id, d]) => ({ id, name: d.name, zeichen: d.zeichen })),
       laufendeKarte: raum ? (raum.state.karte || 'dorf') : null,
       spieler: raum ? [...raum.state.spieler.entries()].map(([sid, p]) => ({
         name: p.name, bot: !!raum.extra.get(sid)?.bot,

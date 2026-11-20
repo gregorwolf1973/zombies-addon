@@ -1,6 +1,7 @@
 // Geräusche – alles im Browser erzeugt (WebAudio), keine Tondateien.
 // Lautstärke und Stereo-Seite richten sich nach der Entfernung zum eigenen Spieler.
 
+import { stimmeZuweisen } from './tonlogik.mjs';
 let ctx = null, haupt = null, rauschPuffer = null, stufe = 1;
 const BASIS = 0.36;                          // Grundpegel (früher 0.8 – war zu laut); die Stufe regelt darunter
 const STUFEN = [1, 0.5, 0.25, 0];            // 100 %, 50 %, 25 %, stumm
@@ -53,20 +54,15 @@ function abstandOk(id) {
 }
 function abstandMerken(id) { if (MIN_ABSTAND[id]) zuletzt.set(id, performance.now()); }
 
-// Platz für eine neue Stimme (Lautstärke v)? Sonst wird die leiseste verdrängt – ist es die neue, false
-function stimmePlatz(zombie, v) {
+// Platz für eine neue Stimme (Lautstärke v)? Dauerfeuer-Quelle: ältester eigener Ton wird abgelöst; sonst leiseste verdrängt – ist es die neue, false
+function stimmePlatz(zombie, v, quelle) {
   const jetzt = ctx.currentTime;
-  for (let i = stimmen.length - 1; i >= 0; i--) if (stimmen[i].ende <= jetzt) stimmen.splice(i, 1);
-  const leisest = liste => liste.reduce((m, q) => !m || q.v < m.v ? q : m, null);
-  for (const [liste, max] of [[stimmen, MAX_STIMMEN], [stimmen.filter(q => q.zombie), MAX_ZOMBIE_STIMMEN]]) {
-    if (!(zombie || liste === stimmen) || liste.length < max) continue;
-    const l = leisest(liste);
-    if (!l || l.v >= v) return false;
-    try { l.g.gain.setTargetAtTime(0, jetzt, 0.03); l.src.stop(jetzt + 0.15); } catch { /* schon zu Ende */ }
-    stimmen.splice(stimmen.indexOf(l), 1);
-  }
-  return true;
+  const r = stimmeZuweisen(stimmen, { jetzt, zombie, v, quelle });
+  for (const l of r.verdraengt) try { l.g.gain.setTargetAtTime(0, jetzt, 0.02); l.src.stop(jetzt + 0.1); } catch { /* schon zu Ende */ }
+  return r.ok;
 }
+const SCHUSS_IDS = new Set(['schussPistole', 'schussGewehr', 'schussSchrot']);
+const SCHUSS_MAX_SEK = 0.45;   // bei hoher Kadenz Schusstöne kürzen (Ausklingen per Gain-Rampe)
 
 // eine zugeordnete Datei abspielen; false = keine da (dann erzeugt das Spiel selbst einen Ton)
 function probe(id, x, y, extra = 1) {
@@ -80,11 +76,18 @@ function probe(id, x, y, extra = 1) {
   if (!z) return true;   // zu weit weg: still, aber auch kein Ersatzton
   const v = z.gain.value, zombie = ZOMBIE_IDS.has(id);
   const buf = bereit[Math.floor(Math.random() * bereit.length)], rate = 0.94 + Math.random() * 0.12;
-  if (!stimmePlatz(zombie, v)) { try { z.disconnect(); } catch { /* egal */ } return true; }
+  const kurz = SCHUSS_IDS.has(id);
+  const quelle = kurz ? id + ':' + (x == null ? 'ich' : Math.round(x / 400) + ',' + Math.round(y / 400)) : null;
+  if (!stimmePlatz(zombie, v, quelle)) { try { z.disconnect(); } catch { /* egal */ } return true; }
   const src = ctx.createBufferSource(); src.buffer = buf;
   src.playbackRate.value = rate;
   src.connect(z); src.start();
-  stimmen.push({ ende: ctx.currentTime + buf.duration / rate, v, zombie, g: z, src });
+  let dauer = buf.duration / rate;
+  if (kurz && dauer > SCHUSS_MAX_SEK) {
+    dauer = SCHUSS_MAX_SEK;
+    try { const t0 = ctx.currentTime; z.gain.setValueAtTime(v, t0 + dauer - 0.15); z.gain.linearRampToValueAtTime(0, t0 + dauer); src.stop(t0 + dauer + 0.02); } catch { /* egal */ }
+  }
+  stimmen.push({ ende: ctx.currentTime + dauer, v, zombie, quelle, g: z, src });
   abstandMerken(id);
   return true;
 }

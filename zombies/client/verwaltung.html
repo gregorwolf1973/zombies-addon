@@ -831,6 +831,15 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="tn-zeile"><input type="range" id="wfM_granatwerfer" min="1" max="150" step="1"><span id="wfM_granatwerferWert"></span></div>
   <label for="wfN_granatwerfer">💥 Granatwerfer (40 mm): Nachladezeit</label>
   <div class="tn-zeile"><input type="range" id="wfN_granatwerfer" min="0.5" max="10" step="0.1"><span id="wfN_granatwerferWert"></span></div>
+  <label for="wfS_handgranate">💣 Handgranaten: Schaden (Explosion, Zombies)</label>
+  <div class="tn-zeile"><input type="range" id="wfS_handgranate" min="1" max="300" step="1"><span id="wfS_handgranateWert"></span></div>
+  <label for="wfP_handgranate">💣 Handgranaten: Abklingzeit (Schussfolge)</label>
+  <div class="tn-zeile"><input type="range" id="wfP_handgranate" min="0.05" max="5" step="0.01"><span id="wfP_handgranateWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_handgranate"></p>
+  <label for="wfM_handgranate">💣 Handgranaten: Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_handgranate" min="1" max="30" step="1"><span id="wfM_handgranateWert"></span></div>
+  <label for="wfN_handgranate">💣 Handgranaten: Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_handgranate" min="0.5" max="10" step="0.1"><span id="wfN_handgranateWert"></span></div>
   <label for="wfS_schlaeger">🏏 Baseballschläger: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_schlaeger" min="1" max="300" step="1"><span id="wfS_schlaegerWert"></span></div>
   <label for="wfP_schlaeger">🏏 Baseballschläger: Abklingzeit (Schussfolge)</label>
@@ -864,10 +873,12 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="tn-zeile"><input type="range" id="rwMg" min="5" max="80" step="1"><span id="rwMgWert">45 m</span></div>
   <label for="rwArmbrust">🏹 Armbrust (leise, Pfeile)</label>
   <div class="tn-zeile"><input type="range" id="rwArmbrust" min="5" max="80" step="1"><span id="rwArmbrustWert">25 m</span></div>
+  <label for="rwHandgranate">💣 Handgranaten im Waffenplatz (Wurfweite, Tippen auf den Zielpunkt)</label>
+  <div class="tn-zeile"><input type="range" id="rwHandgranate" min="5" max="80" step="1"><span id="rwHandgranateWert">25 m</span></div>
   <label for="rwScharf">🔭 Scharfschützengewehr (Bundeswehr, Polizei)</label>
   <div class="tn-zeile"><input type="range" id="rwScharf" min="5" max="80" step="1"><span id="rwScharfWert">75 m</span></div>
   <label for="rwGranat">💥 Granatwerfer (Bundeswehr, Bogenschuss)</label>
-  <div class="tn-zeile"><input type="range" id="rwGranat" min="5" max="80" step="1"><span id="rwGranatWert">45 m</span></div>
+  <div class="tn-zeile"><input type="range" id="rwGranat" min="5" max="100" step="1"><span id="rwGranatWert">60 m</span></div>
   <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
   <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.1" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
   <label for="tnMgMunition">MG-Nest: Munition (0 = unbegrenzt)</label>
@@ -1001,7 +1012,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     feld('rwMp', rw.mp || 30, function (v) { return v + ' m'; });
     feld('rwMg', rw.mg || 45, function (v) { return v + ' m'; });
     feld('rwArmbrust', rw.armbrust || 25, function (v) { return v + ' m'; });
-    feld('rwGranat', rw.granatwerfer || 45, function (v) { return v + ' m'; });
+    feld('rwGranat', rw.granatwerfer || 60, function (v) { return v + ' m'; });
+    feld('rwHandgranate', rw.handgranate || 25, function (v) { return v + ' m'; });
     feld('rwScharf', rw.scharfschuetze || 75, function (v) { return v + ' m'; });
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
@@ -1038,10 +1050,10 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   }
   var ZTYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7', 'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];
   window.ZTYPEN = ZTYPEN;   // auch für den Karten-Umbau weiter unten (eigener Skriptblock)
-  var WFVORGABE = { pistole: { schaden: 34, pause: 0.45 }, gewehr: { schaden: 100, pause: 1.2 }, schrotflinte: { schaden: 70, pause: 0.95 }, mp: { schaden: 28, pause: 0.14 }, mg: { schaden: 30, pause: 0.09 }, armbrust: { schaden: 80, pause: 2.4 }, scharfschuetze: { schaden: 220, pause: 2.8 }, granatwerfer: { schaden: 220, pause: 2.2 }, schlaeger: { schaden: 40, pause: 0.6 }, sense: { schaden: 55, pause: 0.85 }, messer: { schaden: 30, pause: 0.45 }, faust: { schaden: 20, pause: 0.7 } };
+  var WFVORGABE = { pistole: { schaden: 34, pause: 0.45 }, gewehr: { schaden: 100, pause: 1.2 }, schrotflinte: { schaden: 70, pause: 0.95 }, mp: { schaden: 28, pause: 0.14 }, mg: { schaden: 30, pause: 0.09 }, armbrust: { schaden: 80, pause: 2.4 }, scharfschuetze: { schaden: 220, pause: 2.8 }, granatwerfer: { schaden: 220, pause: 2.2 }, handgranate: { schaden: 220, pause: 0.6 }, schlaeger: { schaden: 40, pause: 0.6 }, sense: { schaden: 55, pause: 0.85 }, messer: { schaden: 30, pause: 0.45 }, faust: { schaden: 20, pause: 0.7 } };
   window.WFVORGABE = WFVORGABE;
   // Magazin und Nachladezeit je Fernwaffe: [Schuss, Sekunden] (client/welt.mjs, WAFFEN[..].magazin/nachlade)
-  var WFMAG = { pistole: [15, 4], gewehr: [30, 4], schrotflinte: [6, 4], mp: [30, 4], mg: [100, 4], armbrust: [1, 2], scharfschuetze: [5, 4], granatwerfer: [1, 3] };
+  var WFMAG = { pistole: [15, 4], gewehr: [30, 4], schrotflinte: [6, 4], mp: [30, 4], mg: [100, 4], armbrust: [1, 2], scharfschuetze: [5, 4], granatwerfer: [1, 3], handgranate: [5, 1.5] };
   window.WFMAG = WFMAG;
   function laden() { anfrage('verwaltung/api').then(zeige).catch(function () {}); }
   function regler(id, wert, teil) {
@@ -1070,6 +1082,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('rwMg', function (v) { return v + ' m'; }, function (v) { return { reichweite: { mg: v } }; });
   regler('rwArmbrust', function (v) { return v + ' m'; }, function (v) { return { reichweite: { armbrust: v } }; });
   regler('rwGranat', function (v) { return v + ' m'; }, function (v) { return { reichweite: { granatwerfer: v } }; });
+  regler('rwHandgranate', function (v) { return v + ' m'; }, function (v) { return { reichweite: { handgranate: v } }; });
   regler('rwScharf', function (v) { return v + ' m'; }, function (v) { return { reichweite: { scharfschuetze: v } }; });
   regler('tnBwTage', function (v) { return Number(v) ? v + (Number(v) === 1 ? ' Tag' : ' Tage') : 'nie'; }, function (v) { return { bundeswehr: { falltage: v } }; });
   $('tnBwAktiv').addEventListener('change', function () {
@@ -2989,7 +3002,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   // 🎒 Funde & Waffen
   rein(P.funde, karteVon('titelFunde'));
   if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden, Schussfolge, Magazin'); rein(wk, $('wfHinweis')); Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); rein(wk, $('wfInfo_' + k)); if (window.WFMAG[k]) { zeile(wk, 'wfM_' + k); zeile(wk, 'wfN_' + k); } }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
-  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwGranat', 'rwScharf'].forEach(function (id) { zeile(waffen, id); }); }
+  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwGranat', 'rwHandgranate', 'rwScharf'].forEach(function (id) { zeile(waffen, id); }); }
   // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
   rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
   rein(P.aufgaben, $('aufgabenKarte'));
@@ -3006,7 +3019,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   var wert = function (id, vorgabe) { var e = $(id); var v = e ? Number(e.value) : NaN; return isFinite(v) ? v : vorgabe; };
   var kommaZahl = function (v, st) { return String(Math.round(v * Math.pow(10, st || 0)) / Math.pow(10, st || 0)).replace('.', ','); };
   // Überraschungsfaktor je Waffe (client/welt.mjs, WAFFEN[..].ueberraschung; tests/verwaltung.test.mjs prüft die Übereinstimmung)
-  var UEB = { pistole: 1.5, gewehr: 1.5, schrotflinte: 1.5, mp: 1.5, mg: 1.5, armbrust: 2, scharfschuetze: 1.5, granatwerfer: 1, schlaeger: 3, sense: 3, messer: 4, faust: 2.5 };
+  var UEB = { pistole: 1.5, gewehr: 1.5, schrotflinte: 1.5, mp: 1.5, mg: 1.5, armbrust: 2, scharfschuetze: 1.5, granatwerfer: 1, handgranate: 1, schlaeger: 3, sense: 3, messer: 4, faust: 2.5 };
   var NEBEN = { schrotflinte: 45 / 70 };   // Schrot: Nebenschaden an weiteren Zombies im Kegel, im Verhältnis zum Hauptschaden
   var KRIECHER = 0.35;                      // Kriecher hat 35 % der Zombie-Lebenspunkte (raum.mjs KRIECHER_HP)
   var KANONE = 100, FLAECHE = 60, SOLDAT = 100;   // stuetzpunkt.mjs (feste Werte)

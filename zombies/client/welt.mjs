@@ -375,7 +375,9 @@ export const DINGE = {
   armbrust: { name: 'Armbrust', zeichen: '🏹', waffe: true },
   pfeil: { name: 'Pfeil', zeichen: '➶' },
   // Granatwerfer (selten, nur Bundeswehr) und seine Munition: zählt wie Pfeile als Vorrat (p.granaten), nicht im Rucksack
-  granatwerfer: { name: 'Granatwerfer', zeichen: '💥', waffe: true },
+  granatwerfer: { name: 'Granatwerfer', zeichen: '🔫🧨', waffe: true },   // sieht aus wie ein Gewehr (Haltung gewehr)
+  // Handgranaten im Waffenplatz (nie am Boden/Rucksack zu finden): Magazin 5, Vorrat p.handgranaten; Wurf per Tippen auf den Zielpunkt
+  handgranate: { name: 'Handgranaten', zeichen: '💣', waffe: true, intern: true },
   granate40: { name: 'Granate (40 mm)', zeichen: '🧨' },
   scharfschuetze: { name: 'Scharfschützengewehr', zeichen: '🔭', waffe: true },
   sense: { name: 'Sense', zeichen: '🌾', waffe: true },
@@ -436,6 +438,7 @@ export const PFEILE_PRO_FUND = 6;
 export const PFEILE_MAX = 40;
 export const GRANATEN_PRO_FUND = 2;   // Granaten (40 mm) aus Behältern; vom Boden 1 Stück
 export const GRANATEN_MAX = 20;
+export const HANDGRANATEN_MAX = 20;   // Vorrat an Handgranaten außerhalb des Magazins (Waffenplatz)
 export const MUNITION_MAX = 150;   // so viel Munition trägt man höchstens (Maschinengewehr und Soldaten-Handel brauchen mehr Platz als die alten 99)
 
 // ---------- Handel mit den Ärzten und Soldaten des Bundeswehr-Stützpunkts ----------
@@ -472,7 +475,7 @@ export function bezahlung(rucksack, kostet) {
   return zahl;
 }
 // Bundeswehr-Handgranate: Zünder 2 s ab dem Wurf, fliegt 0,6 s, Radius 5 m (8 px je m), Lärm 600 px
-export const GRANATE = { flug: 0.6, flugWerfer: 0.8, zuender: 2.0, radius: 60, schadenZombie: 220, schadenSpieler: 70, wurfWeite: 200, blickWeite: 136, laerm: 600 };   // Wurfweite +67 %, Radius +50 %, mehr Schaden
+export const GRANATE = { flug: 0.6, flugWerfer: 0.8, tempo: 330, tempoWerfer: 1500, bogen: Math.PI / 3, zuender: 2.0, radius: 60, schadenZombie: 220, schadenSpieler: 70, wurfWeite: 200, blickWeite: 136, laerm: 600 };   // Wurfweite +67 %, Radius +50 %, mehr Schaden
 // Wer ein Maschinengewehr trägt (in der Hand oder im Rucksack), läuft 15 % langsamer
 export const TEMPO_MG = 0.85;
 export const traegtMg = p => p.waffe === 'mg' || (p.rucksack ?? []).includes('mg');
@@ -767,15 +770,17 @@ export const WAFFEN = {
   // Scharfschützengewehr: 75 m, sehr hoher Schaden, langsame Schussfolge, sehr laut; Gewehrmunition
   scharfschuetze: { fern: true, magazin: 5, nachlade: 4, reichweite: 75 * 8, schaden: 220, pause: 2.8, laut: 2.2, ueberraschung: 1.5, bild: 1 },
   schrotflinte: { fern: true, magazin: 6, nachlade: 4, reichweite: 160, schaden: 70, nebenSchaden: 45, kegel: 0.45, pause: 0.95, laut: 1.3, ueberraschung: 1.5, bild: 1 },
-  // Granatwerfer: Bogenschuss auf den Zielpunkt (bis 45 m), Explosion wie Handgranate (Schaden = Zombieschaden), Granaten (40 mm) als Vorrat
-  granatwerfer: { fern: true, granate: true, vorrat: 'granaten', magazin: 1, nachlade: 3, reichweite: 45 * 8, schaden: 220, pause: 2.2, laut: 1.5, ueberraschung: 1, bild: 1 },
+  // Granatwerfer: Bogenschuss auf den Zielpunkt (bis 60 m, in der Verwaltung bis 100 m; Projektil ~4× so schnell wie ein Wurf), Explosion wie Handgranate (Schaden = Zombieschaden), Granaten (40 mm) als Vorrat
+  granatwerfer: { fern: true, granate: true, vorrat: 'granaten', magazin: 1, nachlade: 3, reichweite: 60 * 8, schaden: 220, pause: 2.2, laut: 1.5, ueberraschung: 1, bild: 1 },
+  // Handgranaten als Waffe: kein Auto-Schuss (wurf), Wurf auf den angetippten Punkt (Bogen 60° vor der Figur), Magazin 5, Aufschlagzündung
+  handgranate: { fern: true, wurf: true, vorrat: 'handgranaten', magazin: 5, nachlade: 1.5, reichweite: 200, schaden: 220, pause: 0.6, laut: 1, ueberraschung: 1, bild: 0 },
   schlaeger: { reichweite: 42, schaden: 40, pause: 0.6, stoss: true, ueberraschung: 3, bild: 2 },
   sense: { reichweite: 58, schaden: 55, bogen: 1.4, pause: 0.85, ueberraschung: 3, bild: 2 },
   messer: { reichweite: 36, schaden: 30, pause: 0.45, ueberraschung: 4, bild: 3 },
   faust: { reichweite: WERTE.nahkampfReichweite, schaden: 20, pause: 0.7, stoss: true, ueberraschung: 2.5, bild: 0 },
 };
 // Vorrat für die Fernwaffe (außerhalb des Magazins): Granaten beim Granatwerfer, Pfeile bei der Armbrust, sonst Munition
-export const vorratFeld = w => w?.vorrat === 'granaten' ? 'granaten' : w?.pfeil ? 'pfeile' : 'munition';
+export const vorratFeld = w => w?.vorrat === 'handgranaten' ? 'handgranaten' : w?.vorrat === 'granaten' ? 'granaten' : w?.pfeil ? 'pfeile' : 'munition';
 export const vorratVon = (p, w) => p[vorratFeld(w)] ?? 0;
 // Magazingröße der Waffe (0 = keine Fernwaffe)
 export const magazinGroesse = w => (w?.fern ? (w.magazin ?? 1) : 0);

@@ -67,8 +67,8 @@ export class SchiessstandRaum extends SpielRaum {
       WP.abgleich(p, x, this.einstellungen());
       WP.wechsle(this, client, p, x, m?.weiter ? WP.naechster(p) : Number(m?.platz), this.einstellungen());
     });
-    this.onMessage('wurf', client => {
-      if (this.granaten.werfen(client)) { this.stat[SS_GRANATE].schuesse++; this.stat[SS_GRANATE].munition++; this.statSchmutzig = true; }
+    this.onMessage('wurf', (client, m) => {
+      if (this.granaten.werfen(client, m)) { this.stat[SS_GRANATE].schuesse++; this.stat[SS_GRANATE].munition++; this.statSchmutzig = true; }
     });
     this.onMessage('ss_waffe', (client, m) => this.waffeWaehlen(client.sessionId, String(m?.name ?? '')));
     this.onMessage('ss_zombies', (client, m) => this.zombiesStarten(Number(m?.n)));
