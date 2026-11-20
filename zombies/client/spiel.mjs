@@ -12,7 +12,7 @@ import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, ze
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
-import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
+import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
 import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
@@ -844,6 +844,7 @@ class Ort extends Phaser.Scene {
     });
     raum.onMessage('bwschuss', m => m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
+    raum.onMessage('bunkerEnde', () => this.cameras.main.flash(2500, 255, 255, 255));   // Atomschlag: weißer Blitz
     raum.onMessage('moerser', m => moerserSchuss(this, m, raum.state));   // Panzermörser: Granate im hohen Bogen
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
@@ -1059,14 +1060,14 @@ class Ort extends Phaser.Scene {
   // Abholstelle am Ortsausgang: sobald alle Pflichtaufgaben erledigt sind (wie im Server: tor + 1 Kachel)
   abholAktiv() {
     const a = raum.state.aufgaben;
-    if (['heliAnflug', 'heli'].includes(raum.state.evakPhase)) return true;   // A400M ausgefallen: Hubschrauber-Landeplatz
+    if (['heliAnflug', 'heli', 'bunker'].includes(raum.state.evakPhase) || evakArtVon(raum.state) === 'bunker') return true;   // A400M ausgefallen: Hubschrauber-Landeplatz
     return !!(a && a.size && this.welt?.tor && [...a.values()].every(x => !x.pflicht || x.erledigt) && [...a.values()].some(x => x.pflicht));
   }
 
   // Abholpunkt in Pixeln: Ortsausgang, bei A400M/Hubschrauber der Server-Punkt (Heckrampe bzw. Landeplatz)
   abholPunkt() {
     const st = raum.state;
-    if (st.evakX > 0 && st.evakY > 0) return { x: st.evakX, y: st.evakY, heli: ['heliAnflug', 'heli'].includes(st.evakPhase) };
+    if (st.evakX > 0 && st.evakY > 0) return { x: st.evakX, y: st.evakY, heli: ['heliAnflug', 'heli'].includes(st.evakPhase), bunker: evakArtVon(st) === 'bunker' };
     return this.welt?.tor ? { x: (this.welt.tor.x + 1) * KACHEL, y: (this.welt.tor.y + 1) * KACHEL } : null;
   }
 
@@ -1095,7 +1096,7 @@ class Ort extends Phaser.Scene {
       const stab = this.add.graphics().setDepth(5.75);
       stab.fillStyle(0x212121, 1).fillRect(x - 2, y - 10, 4, 14);
       stab.fillStyle(0xff1744, 1).fillRect(x - 3, y - 12, 6, 5);
-      const text = this.add.text(x, y - 48, pkt.heli ? '📍 Hubschrauber' : '📍 Abholung', {
+      const text = this.add.text(x, y - 48, pkt.bunker ? '📍 Bunker' : pkt.heli ? '📍 Hubschrauber' : '📍 Abholung', {
         fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#b71c1c', strokeThickness: 5,
       }).setOrigin(0.5).setDepth(6);
       this.abholObj = { kreis, glut, rauch, stab, text, x, y };
@@ -1167,7 +1168,7 @@ class Ort extends Phaser.Scene {
     if ($('aufgabenliste').innerHTML !== zeilen) $('aufgabenliste').innerHTML = zeilen;
     let bus = '';
     const flugPos = ich && this.lokal ? this.lokal : ich;
-    const flugText = evakArtVon(s) === 'flugzeug' ? evakHudText(s, !!(ich?.anBord || s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && Math.hypot(flugPos.x - s.evakX, flugPos.y - s.evakY) < (s.evakPhase === 'heli' ? 90 : BUS_ABSTAND)), uhrText) : null;
+    const flugText = ['flugzeug', 'absturz', 'heli', 'bunker'].includes(evakArtVon(s)) ? evakHudText(s, !!(ich?.anBord || s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && Math.hypot(flugPos.x - s.evakX, flugPos.y - s.evakY) < (['heli', 'bunker'].includes(s.evakPhase) ? 90 : BUS_ABSTAND)), uhrText) : null;
     if (flugText) bus = flugText;
     else if (s.busDa) {
       const f = [...(s.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung');
@@ -2756,7 +2757,9 @@ class Ort extends Phaser.Scene {
     if (ich) this.aussenLicht(ich);
     this.chunksAktualisieren();
     this.abholstelleAktualisieren();
-    heliAktualisieren(this, raum.state, dt, this.aktEbene);   // Hubschrauber (A400M-Evakuierung)
+    heliAktualisieren(this, raum.state, dt, this.aktEbene);
+    absturzAktualisieren(this, raum.state, dt, this.aktEbene);   // Königsdorf: A400M-Absturz und Wrack
+    bunkerAktualisieren(this, raum.state, this.aktEbene);        // Finale: Bunkertor   // Hubschrauber (A400M-Evakuierung)
     this.hudZeit -= dt;
     if (this.hudZeit <= 0) { this.hudZeit = 0.15; this.hud(ich); }
     this.geraeusche(ich, dt);
