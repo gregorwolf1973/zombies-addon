@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.64.4 – 20.11.2026
+
+- Neu: Königsdorf hat eine breite befestigte Landebahn (ca. 44 m) mit Rand- und Mittellinien, Zebrastreifen, Aufsetzmarken, Pistennummern 10/28 und Rollweg zum Hangar; der A400M fliegt sie an.
+- Neu: „Alles durchsuchen“ im Haus nur nach 3 richtig beantworteten Fragen – dann öffnen sich alle Türen des Stockwerks (auch verschlossene und Rätseltüren, nicht eigene Barrikaden) und alle Behälter werden durchsucht. Bei einer falschen Antwort 30 s Sperre.
+- Neu (Testmenü): „✅ Alle Aufgaben erledigt“ und „📍 Hierhin springen“ (Rechtsklick oder langer Druck auf die Karte).
+- Behoben: Das Testmenü fehlte nach automatischem Neuladen (Update, Levelwechsel), weil der Testzugang nicht erneut mitgeschickt wurde; Leerzeichen am Ende stören nicht mehr. Im Anmeldedialog steht, wo der Testzugang eingegeben wird.
+- Geändert: Meldungen bleiben je nach Länge länger stehen (bis 15 s), z. B. die Einsteige-Meldung.
+
 ## 0.64.3 – 21.11.2026
 
 - Königsdorf: Statt des A400M-Absturzes kam ein Leopard. Ursache: Die in der Verwaltung erzwungene Evakuierungsart („Test“) blieb über den Levelwechsel gespeichert und galt auch in der nächsten Karte. Jetzt wird sie beim Kartenwechsel zurückgesetzt.

@@ -20,7 +20,7 @@ import { Radios } from './radio.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { Moerser } from './moerser.mjs';
 import * as FK from './faehigkeiten.mjs';
-import { alleKandidaten, NIMM_WEITE } from '../client/durchsuche_alle.mjs';
+import { alleKandidaten, NIMM_WEITE, ALLE_FRAGEN, ALLE_SPERRE } from '../client/durchsuche_alle.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
@@ -464,7 +464,7 @@ export class SpielRaum extends Room {
     this.onMessage('aussteigen', client => this.aufgaben?.aussteigen(client.sessionId));   // aus dem Evakuierungsfahrzeug aussteigen (Knopf/Taste)
     this.onMessage('aktion', client => this.starteAktion(client));
     this.onMessage('aktion2', client => this.starteAktion(client, true));
-    this.onMessage('durchsuche_alle', client => this.starteAlle(client));
+    this.onMessage('durchsuche_alle', (client, m) => this.starteAlle(client, !!m?.weiter));
     this.onMessage('fund_nimm', (client, m) => this.fundNimm(client, m));
     this.onMessage('wurf', (client, m) => this.granaten.werfen(client, m));
     this.onMessage('nachladen', client => { const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId); if (p && x && !p.unten && p.zombie <= 0 && this.state.phase === 'spiel') WP.startNachladen(this, p, x, SpielRaum.einstellungen); });
@@ -1816,14 +1816,54 @@ export class SpielRaum extends Room {
 
   // „Alles durchsuchen“: alle noch nicht durchsuchten Behälter/Leichen in Reichweite (Innenraum: freie Sicht, geschlossene Türen sperren)
   // am Stück, Dauer 60 % der Einzeldauern; danach Fundliste (nichts wird automatisch genommen)
-  starteAlle(client) {
+  // Drinnen erst ein Quiz mit ALLE_FRAGEN Fragen (eine falsche Antwort sperrt 30 s), dann öffnen sich alle Türen des Stockwerks;
+  // draußen (Autos, Leichen) ohne Quiz
+  starteAlle(client, weiter = false) {
     const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
     if (!p || !x || p.aktion || p.anBord || p.unten || p.zombie > 0 || this.state.phase !== 'spiel') return;
+    if (!p.ebene) return this.beginneAlle(client, p, x);
+    if ((x.alleSperre ?? 0) > Date.now()) return void client.send('meldung', { text: `⏳ Alles durchsuchen: noch ${Math.ceil((x.alleSperre - Date.now()) / 1000)} s gesperrt` });
+    if (!weiter) x.alleQuiz = { nr: 0 };
+    else if (!x.alleQuiz) return;
+    this.stelleRaetsel(client, { art: 'alle', nr: x.alleQuiz.nr + 1 });
+  }
+
+  beginneAlle(client, p, x) {
     const { liste, dauer, autoZu } = alleKandidaten(this.wv(p.ebene), this.state.behaelter, this.state.leichen, p, p.rucksack.includes('brechstange'));
     if (!liste.length) return void client.send('meldung', { text: autoZu ? '🔒 Die Kofferräume sind zu – dafür brauchst du eine ⚒️ Brechstange' : 'Hier gibt es nichts mehr zu durchsuchen' });
     p.aktion = 'durchsuchen'; p.fortschritt = 0;
     x.aktionZiel = { art: 'durchsuchen_alle', ids: liste.map(e => e.id), dauer };
     x.laermUhr = 0;
+  }
+
+  // alle Türen des Stockwerks auf (auch verschlossene, Rätsel- und Schlüsseltüren); selbst gebaute Barrikaden bleiben
+  oeffneAlleTueren(p) {
+    const w = this.wv(p.ebene);
+    let n = 0;
+    for (const t of w.tueren ?? []) {
+      const key = `${p.ebene}:${t.x},${t.y}`, st = this.state.tueren.get(key);
+      if (!st || st.offen || st.kaputt || st.barrikade > 0) continue;
+      this.setzeTuer(key, true); n++;
+    }
+    return n;
+  }
+
+  alleAntwort(client, p, offen, richtig) {
+    const x = this.extra.get(client.sessionId), nr = offen.zweck.nr;
+    const basis = { loesung: offen.richtig, seite: offen.seite };
+    if (!richtig || !x) {
+      if (x) { x.alleQuiz = null; x.alleSperre = Date.now() + ALLE_SPERRE * 1000; }
+      client.send('meldung', { text: `❌ Falsch – erst in ${ALLE_SPERRE} s wieder` });
+      client.send('alle_sperre', { sek: ALLE_SPERRE });
+      return client.send('aufloesung', { richtig: false, ...basis, alle: { nr: nr - 1, von: ALLE_FRAGEN, weiter: false } });
+    }
+    const fertig = nr >= ALLE_FRAGEN;
+    x.alleQuiz = fertig ? null : { nr };
+    client.send('aufloesung', { richtig: true, ...basis, alle: { nr, von: ALLE_FRAGEN, fertig, weiter: !fertig } });
+    if (!fertig || p.aktion || p.unten) return;
+    const n = this.oeffneAlleTueren(p);
+    if (n) client.send('meldung', { text: `🔓 ${n} Tür${n === 1 ? '' : 'en'} geöffnet` });
+    this.beginneAlle(client, p, x);
   }
 
   alleDurchsucht(client, p, ids) {
@@ -2258,7 +2298,7 @@ export class SpielRaum extends Room {
     this.gestellt.add(f.id);
     const { antworten, richtigIndex } = mischeAntworten(f, this.rnd);
     this.offeneRaetsel.set(client.sessionId, { id: f.id, richtigIndex, seite: f.seite, richtig: f.richtig, bis: Date.now() + 120000, zweck });
-    client.send('raetsel', { id: f.id, thema: f.thema, frage: f.frage, antworten, geloest: this.state.torGeloest, noetig: TOR_RAETSEL, tuer: zweck?.art === 'tuer', handel: zweck?.art === 'handel' ? { nr: zweck.nr, von: zweck.von } : null });
+    client.send('raetsel', { id: f.id, thema: f.thema, frage: f.frage, antworten, geloest: this.state.torGeloest, noetig: TOR_RAETSEL, tuer: zweck?.art === 'tuer', alle: zweck?.art === 'alle' ? { nr: zweck.nr, von: ALLE_FRAGEN } : null, handel: zweck?.art === 'handel' ? { nr: zweck.nr, von: zweck.von } : null });
   }
 
   antwort(client, m) {
@@ -2268,6 +2308,7 @@ export class SpielRaum extends Room {
     this.offeneRaetsel.delete(client.sessionId);
     const richtig = Number(m.index) === offen.richtigIndex && offen.bis > Date.now();
     if (offen.zweck?.art === 'handel') return this.stuetzpunkt.raetselAntwort(client, p, offen, richtig);
+    if (offen.zweck?.art === 'alle') return this.alleAntwort(client, p, offen, richtig);
     if (offen.zweck?.art === 'tuer') {
       const z = offen.zweck;
       if (richtig) { this.setzeTuer(z.key, true); this.xpGeben(client.sessionId, 'raetsel'); client.send('meldung', { text: '🔓 Das Schloss springt auf' }); }

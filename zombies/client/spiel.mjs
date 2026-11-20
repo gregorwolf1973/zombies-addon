@@ -103,7 +103,9 @@ let seitenVersion = null;
 async function veraltet() {
   try { const v = (await (await fetch('info', { cache: 'no-store' })).json()).version; return !!(seitenVersion && v && v !== seitenVersion); } catch { return false; }
 }
-function frischLaden(wiederBeitreten) { try { if (wiederBeitreten) sessionStorage.setItem('zob_autostart', '1'); } catch {} location.reload(); }
+// Autostart nach Neuladen (Update, Levelwechsel, Weltwechsel): ein eingegebenes Testzugang-Passwort überlebt das Neuladen nur kurz im Tab (sessionStorage) und wird beim Wiederbeitreten sofort gelöscht
+function autostartMerken() { try { sessionStorage.setItem('zob_autostart', '1'); const pw = $('testpw')?.value; if (pw) sessionStorage.setItem('zob_testpwtmp', pw); } catch {} }
+function frischLaden(wiederBeitreten) { if (wiederBeitreten) autostartMerken(); location.reload(); }
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && await veraltet()) frischLaden(!!window.szene); });
 fetch('info').then(r => r.json()).then(i => { seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
@@ -234,6 +236,7 @@ nameFeld.addEventListener('keydown', e => { if (e.key === 'Enter') mitspielen();
 try {
   if (sessionStorage.getItem('zob_autostart') === '1') {
     sessionStorage.removeItem('zob_autostart');
+    { const pw = sessionStorage.getItem('zob_testpwtmp'); sessionStorage.removeItem('zob_testpwtmp'); if (pw && $('testpw')) { $('testpw').value = pw; $('testzugang').open = true; } }
     if (nameFeld.value.trim()) setTimeout(() => { ton.tonStarten(); mitspielen(); }, 0);
   }
 } catch {}
@@ -486,7 +489,7 @@ let suAn = false;
 const anzeigeName = p => (p.su ? '⭐ ' : '') + (p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name);   // ⭐ = Superuser (Testzugang)
 
 // ---------- Superuser-Testmenü (nur sichtbar, wenn der Server die Anmeldung bestätigt hat; der Server prüft jeden Befehl) ----------
-function suMenueEinrichten(r) {
+function suMenueEinrichten(szene) {
   const knopf = $('suknopf');
   let fenster = $('sumenue');
   if (!fenster) {
@@ -505,7 +508,7 @@ function suMenueEinrichten(r) {
       <div class="titel">Zeitraffer</div>
       <div class="zeile">${[1, 5, 10, 60].map(n => b('zeitraffer', `⏩ ${n}×`, { faktor: n })).join('')}</div>
       <div class="titel">Evakuierung und Lager</div>
-      ${b('evakrufen', '🚌 Evakuierung sofort rufen')}
+      ${b('evakrufen', '🚌 Evakuierung sofort rufen')}${b('alleaufgaben', '✅ Alle Aufgaben erledigt')}
       <div class="zeile">${b('lager', '💥 Lager fallen', { zustand: 'gefallen' })}${b('lager', '🎖 Lager aufbauen', { zustand: 'steht' })}</div>
       <div class="titel">Level springen (Test)</div>
       <div class="zeile">${[1, 2, 3, 4, 5].map(n => b('level', `Level ${n}`, { level: n })).join('')}</div>
@@ -523,6 +526,7 @@ function suMenueEinrichten(r) {
     document.addEventListener('keydown', e => { if (e.key === 'Escape') zu(); });
   }
   knopf.style.display = 'block';
+  const ue = szene?.uebersicht; if (ue) ue.hinSpringen = (x, y) => raum?.send('su', { befehl: 'hin', x: Math.round(x), y: Math.round(y) });   // Karte: Rechtsklick/langer Druck → Hierhin springen
   knopf.onclick = () => fenster.classList.add('offen');
 }
 
@@ -531,8 +535,10 @@ function meldung(text, lang = false) {
   d.textContent = text;
   box.appendChild(d);
   while (box.children.length > 2) box.firstElementChild.remove();   // höchstens zwei auf einmal
-  setTimeout(() => { d.style.opacity = '0'; }, lang ? 2800 : 1600);
-  setTimeout(() => d.remove(), lang ? 3300 : 2100);
+  // Lesezeit nach Länge: ~14 Zeichen/s, mindestens wie bisher, höchstens 15 s
+  const zeit = Math.min(15000, Math.max(lang ? 2800 : 1600, 1200 + String(text).length * 70));
+  setTimeout(() => { d.style.opacity = '0'; }, zeit);
+  setTimeout(() => d.remove(), zeit + 500);
 }
 
 // ---------- Chat (Nachrichten 'chat' / 'chatVerlauf' vom Server) ----------
@@ -893,7 +899,7 @@ class Ort extends Phaser.Scene {
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
     raum.onMessage('weltFalsch', m => {
       let schon = null; try { schon = sessionStorage.getItem('zob_weltneu'); sessionStorage.setItem('zob_weltneu', m.soll); } catch {}
-      if (schon !== m.soll) { try { sessionStorage.setItem('zob_autostart', '1'); } catch {} location.reload(); return; }
+      if (schon !== m.soll) { autostartMerken(); location.reload(); return; }
       meldung('⚠️ Deine Karte weicht vom Server ab – Kisten und Türen stehen evtl. woanders. Bitte App ganz schließen und neu öffnen.', true);
     });
     fkStart(raum, meldung);
@@ -908,6 +914,7 @@ class Ort extends Phaser.Scene {
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
     });
     raum.onMessage('fundliste', m => fundZeigen(raum, m, this.lokal, meldung));
+    raum.onMessage('alle_sperre', m => { this.alleSperreBis = Date.now() + (m.sek ?? 30) * 1000; });
     raum.onMessage('pong', () => {});
     raum.onMessage('raetsel', m => zeigeRaetsel(m));
     raum.onMessage('tausch', m => zeigeTausch(m));
@@ -921,7 +928,7 @@ class Ort extends Phaser.Scene {
       if (m?.level) ladenZeigen(30, 'Generiere nächstes Level …', `🎉 Level ${m.level - 1} abgeschlossen!`); else ladenZeigen(30, 'Generiere Welt neu …');
       setTimeout(() => ladenZeigen(60, m?.level ? 'Generiere nächstes Level … Karte wird vorbereitet' : 'Generiere Welt neu …', m?.level ? `🎉 Level ${m.level - 1} abgeschlossen!` : ''), 1200);
       meldung(m?.level ? `🚌 Level ${m.level} – die Fahrt geht los, gleich geht es weiter …` : '🔄 Die Welt wird neu gestartet – gleich geht es weiter …', true);
-      try { sessionStorage.setItem('zob_autostart', '1'); } catch {}
+      autostartMerken();
       setTimeout(() => location.reload(), 2500);
     });
     raum.onMessage('tor', () => meldung(raum.state.aufgaben?.size
@@ -1888,7 +1895,7 @@ class Ort extends Phaser.Scene {
     for (const [id, p] of s.spieler) {
       let f = this.figuren.get(id);
       if (!f) { f = this.neueFigur(p, id); this.figuren.set(id, f); }
-      if (id === meineId && p.su && !suAn) { suAn = true; suMenueEinrichten(); }   // Superuser: Testmenü-Knopf (Server prüft jeden Befehl)
+      if (id === meineId && p.su && !suAn) { suAn = true; suMenueEinrichten(this); }   // Superuser: Testmenü-Knopf (Server prüft jeden Befehl)
       { const nm = anzeigeName(p); if (f.name.text !== nm) f.name.setText(nm); }   // AFK: ein Bot steuert die Figur
       if (id === meineId) continue;
       f.box.setVisible((p.ebene ?? '') === this.aktEbene && !p.anBord);   // an Bord eines Evakuierungsfahrzeugs: Figur ausgeblendet
@@ -2709,7 +2716,8 @@ class Ort extends Phaser.Scene {
 
   // „Alles durchsuchen“ (Taste C / Knopf): nur wenn es mindestens zwei Behälter/Leichen in Reichweite gibt
   alleSuchen() {
-    if (this.alleKand?.liste.length >= 2) raum.send('durchsuche_alle');
+    if ((this.alleSperreBis ?? 0) > Date.now()) return;
+    if (this.alleKand && (this.aktEbene ? this.alleKand.drinnen : this.alleKand.liste.length >= 2)) raum.send('durchsuche_alle');
   }
 
   // zweiter Knopf: andere Türmöglichkeit, Handel (wenn der Hauptknopf etwas anderes tut) oder Granate werfen
@@ -2964,9 +2972,12 @@ class Ort extends Phaser.Scene {
     {   // „Alles durchsuchen“
       const kand = frei2 ? alleKandidaten(this.wv(this.aktEbene), s.behaelter, s.leichen, { x: this.lokal.x, y: this.lokal.y, ebene: ich.ebene ?? '' }, ich.rucksack.includes('brechstange')) : null;
       this.alleKand = kand;
-      const ak = $('alleknopf'), zeige = !!kand && kand.liste.length >= 2;
+      // drinnen: Quiz + alle Türen, daher immer anbieten, solange im Stockwerk noch ein Behälter ungesucht ist
+      if (kand) kand.drinnen = !!ich.ebene && (this.wv(this.aktEbene).behaelter ?? []).some(b => b.art !== 'bw_kiste' && !s.behaelter.get(b.id));
+      const ak = $('alleknopf'), zeige = !!kand && (kand.drinnen || kand.liste.length >= 2);
       ak.style.display = zeige ? 'block' : 'none';
-      if (zeige) { const t = `🔍 Alles durchsuchen (${kand.liste.length}, ${Math.round(kand.dauer * 10) / 10} s) [C]`; if (ak.textContent !== t) ak.textContent = t; }
+      const sperre = Math.ceil(((this.alleSperreBis ?? 0) - Date.now()) / 1000);
+      if (zeige) { const t = sperre > 0 && ich.ebene ? `⏳ Alles durchsuchen in ${sperre} s` : kand.drinnen ? '🔍 Alles durchsuchen (3 Rätsel) [C]' : `🔍 Alles durchsuchen (${kand.liste.length}, ${Math.round(kand.dauer * 10) / 10} s) [C]`; if (ak.textContent !== t) ak.textContent = t; }
       fundPruefen(this.lokal);
     }
     if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
@@ -3332,8 +3343,8 @@ function tauschZu() { tauschOffen = null; $('tausch').style.display = 'none'; $(
 let raetselId = null, raetselTuer = false, raetselNoetig = 0, raetselTimer = null, raetselHandel = null;
 function zeigeRaetsel(m) {
   clearTimeout(raetselTimer);
-  raetselId = m.id; raetselTuer = !!m.tuer; raetselNoetig = m.noetig; raetselHandel = m.handel ? { wer: handelOffen, angebot: handelAngebot } : null;
-  $('raetseltitel').textContent = (m.handel ? `🎓 Rätsel-Tausch ${m.handel.nr + 1} von ${m.handel.von}` : m.tuer ? '🔐 Verschlossene Tür' : `🔐 Schloss ${m.geloest + 1} von ${m.noetig}`) + (m.thema ? ` · ${m.thema}` : '');
+  raetselId = m.id; raetselTuer = !!m.tuer; raetselAlle = !!m.alle; raetselNoetig = m.noetig; raetselHandel = m.handel ? { wer: handelOffen, angebot: handelAngebot } : null;
+  $('raetseltitel').textContent = (m.alle ? `🔍 Alles durchsuchen – Frage ${m.alle.nr} von ${m.alle.von}` : m.handel ? `🎓 Rätsel-Tausch ${m.handel.nr + 1} von ${m.handel.von}` : m.tuer ? '🔐 Verschlossene Tür' : `🔐 Schloss ${m.geloest + 1} von ${m.noetig}`) + (m.thema ? ` · ${m.thema}` : '');
   $('raetselfrage').textContent = m.frage;
   const box = $('raetselantworten');
   box.innerHTML = '';
@@ -3360,13 +3371,15 @@ function zeigeAufloesung(m) {
   const link = m.seite && wikiAdresse
     ? ` <a href="${escapeHtml(wikiAdresse.replace(/\/$/, ''))}/doku.php?id=${encodeURIComponent(m.seite)}" target="_blank" rel="noopener">Mehr dazu im Wiki ↗</a>` : '';
   const hd = m.handel;
-  $('raetselergebnis').innerHTML = (hd ? (m.richtig ? `✅ Richtig! (${hd.nr}/${hd.von})${hd.text ? ' ' + escapeHtml(hd.text) : ''}` : '❌ Falsch – richtig ist: <b>' + escapeHtml(m.loesung) + '</b>. Die Serie beginnt von vorn.') : m.richtig ? '✅ Richtig! Das Schloss springt auf.' : `❌ Falsch – richtig ist: <b>${escapeHtml(m.loesung)}</b>. Die Zombies haben es gehört!`) + link;
+  const al = m.alle;
+  $('raetselergebnis').innerHTML = (al ? (m.richtig ? (al.fertig ? '✅ Alle richtig! Die Türen gehen auf.' : `✅ Richtig! (${al.nr}/${al.von})`) : '❌ Falsch – richtig ist: <b>' + escapeHtml(m.loesung) + '</b>. Erst in 30 s wieder.') : hd ? (m.richtig ? `✅ Richtig! (${hd.nr}/${hd.von})${hd.text ? ' ' + escapeHtml(hd.text) : ''}` : '❌ Falsch – richtig ist: <b>' + escapeHtml(m.loesung) + '</b>. Die Serie beginnt von vorn.') : m.richtig ? '✅ Richtig! Das Schloss springt auf.' : `❌ Falsch – richtig ist: <b>${escapeHtml(m.loesung)}</b>. Die Zombies haben es gehört!`) + link;
   if (m.richtig) {
     // kurze Bestätigung, dann von selbst weiter: nächste Frage am Tor (falls noch Schlösser offen) oder Fenster zu
     const id = raetselId;
     clearTimeout(raetselTimer);
     raetselTimer = setTimeout(() => {
       if (raetselId !== id || $('raetsel').style.display === 'none') return;
+      if (al) { raetselZu(); if (al.weiter) raum.send('durchsuche_alle', { weiter: true }); return; }
       if (raetselHandel) { const rh = raetselHandel; raetselZu(); if (hd?.weiter) raum.send('handel_raetsel', { wer: rh.wer, angebot: rh.angebot, weiter: true }); return; }
       const weiter = !raetselTuer && (raum.state.torGeloest ?? 0) < raetselNoetig;
       raetselZu();
@@ -3374,6 +3387,7 @@ function zeigeAufloesung(m) {
     }, 1000);
   }
 }
+let raetselAlle = false;
 function raetselZu() { clearTimeout(raetselTimer); raetselId = null; $('raetsel').style.display = 'none'; }
 
 function balkenSetzen(id, wert) {
