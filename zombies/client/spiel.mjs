@@ -820,8 +820,21 @@ class Ort extends Phaser.Scene {
     this.input.on('pointerupoutside', loslassen);
 
     const naechsteFigur = (x, y) => { let best = null, bd = 30; for (const f of this.figuren.values()) { const d = Math.hypot(f.x - x, f.y - y); if (d < bd) { bd = d; best = f; } } return best; };
+    // Eigener Schuss/Stoß: Der Server meldet den Ort seines (bestätigten) Stands, die gezeichnete Figur läuft mit der Vorhersage
+    // aber um Laufzeit + Sendetakt (bis ~35 px bei 150 px/s) voraus – mit dem festen 30-px-Umkreis fand sie ihren eigenen Schuss
+    // beim Laufen nicht mehr (keine Schusshaltung, Mündungsblitz hinter dem Helden). Daher zuerst den eigenen Serverstand prüfen.
+    const eigeneTreffer = (x, y) => {
+      const ich = raum.state.spieler.get(meineId), f = this.figuren.get(meineId);
+      if (!ich || !f || !this.lokal || (ich.ebene ?? '') !== (this.aktEbene ?? '')) return null;
+      const dich = Math.hypot(ich.x - x, ich.y - y);
+      if (dich > 64) return null;
+      for (const [id, o] of this.figuren) if (id !== meineId && Math.hypot(o.x - x, o.y - y) < dich) return null;   // ein Mitspieler steht näher
+      return f;
+    };
     raum.onMessage('schuss', m => {
-      const fs = naechsteFigur(m.x1, m.y1); if (fs) fs.schussBis = this.time.now + 150;
+      const eigen = eigeneTreffer(m.x1, m.y1);
+      const fs = eigen ?? naechsteFigur(m.x1, m.y1); if (fs) fs.schussBis = this.time.now + 150;
+      if (eigen) m = { ...m, x1: this.lokal.x, y1: this.lokal.y };   // Mündung an der gezeichneten Figur
       this.schuss(m);
       fetzenBeiSchuss(this, zombieKarte().values(), m);
       // Schrot kommt als mehrere Linien – nur ein Knall
@@ -841,7 +854,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('radioWeg', m => this.radioAnz.weg(m));
     raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, zombieKarte().values(), m.x, m.y, m.r ?? 40); });
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
-    raum.onMessage('stoss', m => { const fs = naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
+    raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
     raum.onMessage('soldatRuf', m => {
