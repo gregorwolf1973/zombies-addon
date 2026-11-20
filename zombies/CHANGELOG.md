@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.62.4 – 20.11.2026
+
+- Geändert: Die Horden-Prüfanzeige (Zielfahne, Linie, letzte Zielwechsel) sehen nur noch Superuser. Sie lässt sich im ☰-Testmenü mit „🎯 Horden-Ziele anzeigen ein/aus“ für sich selbst schalten und steht jetzt direkt unter dem Zählerfenster statt unten links.
+
 ## 0.62.3 – 20.11.2026
 
 - Geändert: Bäume verdecken den Spieler nicht mehr ganz. Unter einem einzelnen Baum oder hinter einer Baumreihe sehen Zombies dich fast wie im Freien; je mehr Bäume zwischen euch stehen, desto kürzer ihre Sichtweite (je Baum −20 %), im dichten Wald nur noch auf etwa ein Drittel – aber nie gar nicht. Schüsse und Granaten zielen unverändert.

@@ -307,16 +307,19 @@ export class Zombiewelle {
   infoSenden(dt = INFO_TAKT, erzwingen = false) {
     const a = this.aktiv, r = this.raum;
     if (a) { a.infoT -= dt; if (a.infoT > 0 && !erzwingen) return; a.infoT = INFO_TAKT; }
+    // nur Superuser: Einstellung hordeZieleZeigen = für Superuser von Anfang an an; im ☰-Menü je Person schaltbar
     const alle = !!this.einst().hordeZieleZeigen;
-    const debug = r.hordeDebug;
-    if (!alle && !debug?.size) { this.infoOffen = false; return; }
+    const debug = r.hordeDebug, aus = r.hordeAus;
+    const sieht = c => !!r.extra?.get(c.sessionId)?.superuser && !aus?.has(c.sessionId) && (alle || !!debug?.has(c.sessionId));
+    const empf = (r.clients ?? []).filter(sieht);
+    if (!empf.length) { this.infoOffen = false; return; }
     const m = a ? {
       aktiv: true, n: a.ids.size, mitte: { x: Math.round(a.mitte.x), y: Math.round(a.mitte.y) }, ziel: { x: Math.round(a.ziel.x), y: Math.round(a.ziel.y) },
       art: a.zielArt, name: a.zielName, rest: Math.max(0, Math.round(a.zielUhr)), wechsel: a.wechsel.slice(-WECHSEL_MAX),
     } : { aktiv: false };
     if (!a && !this.infoOffen) return;
     this.infoOffen = !!a;
-    for (const c of r.clients ?? []) if (alle || debug.has(c.sessionId)) { try { c.send('hordeInfo', m); } catch { /* Client weg */ } }
+    for (const c of empf) { try { c.send('hordeInfo', m); } catch { /* Client weg */ } }
   }
 
   // ---- Zielwahl ----

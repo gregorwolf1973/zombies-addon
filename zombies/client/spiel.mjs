@@ -496,6 +496,7 @@ function suMenueEinrichten(r) {
       ${b('bots', '🤖 Alle Bots zu mir (heilen)')}${b('auffuellen', '🎒 Ausrüstung auffüllen')}${b('unsterblich', '⭐ Unsterblich ein/aus')}
       <div class="titel">Horde jetzt starten</div>
       <div class="zeile">${b('horde', '50', { groesse: 50 })}${b('horde', '200', { groesse: 200 })}${b('horde', '500', { groesse: 500 })}</div>
+      ${b('hordeanzeige', '🎯 Horden-Ziele anzeigen ein/aus')}
       <div class="titel">Tageszeit</div>
       <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
       <div class="titel">Evakuierung und Lager</div>
@@ -956,12 +957,15 @@ class Ort extends Phaser.Scene {
       document.body.appendChild(el);
       this.messZeit = setInterval(() => { const m = this.messZombies ?? [0, 0]; el.textContent = `FPS ${Math.round(this.game.loop.actualFps)} | Zombies ${m[0]}/${m[1]}`; }, 500);
     }
-    // Prüfhilfe Horde: Server schickt 'hordeInfo' nur, wenn die Einstellung hordeZieleZeigen an ist oder wir uns mit ?debug melden
+    // Prüfhilfe Horde (nur Superuser): Server schickt 'hordeInfo', wenn hordeZieleZeigen an ist oder im ☰-Menü/mit ?debug eingeschaltet
     this.hordeGfx = this.add.graphics().setDepth(900);
     this.hordeFahne = this.add.text(0, 0, '', { fontSize: '15px', fontStyle: 'bold', color: '#ffd1e0', stroke: '#000', strokeThickness: 4, align: 'center' }).setOrigin(0.5, 1).setDepth(901).setVisible(false);
     this.hordeListe = document.createElement('div');
-    this.hordeListe.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:60;font:11px monospace;color:#ffd1e0;background:#0008;padding:2px 6px;border-radius:4px;pointer-events:none;display:none;white-space:pre';
-    document.body.appendChild(this.hordeListe);
+    // Prüfhilfe nur für Superuser: steht direkt unter dem Zählerfenster
+    this.hordeListe.id = 'hordeliste';
+    this.hordeListe.style.display = 'none';
+    const zaehler = $('zaehler');
+    if (zaehler) zaehler.after(this.hordeListe); else document.body.appendChild(this.hordeListe);
     raum.onMessage('hordeInfo', m => this.hordeInfoEmpfangen(m));
     if (new URLSearchParams(location.search).has('debug')) raum.send('hordeDebug', { an: true });
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar

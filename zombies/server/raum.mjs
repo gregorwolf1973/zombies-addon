@@ -448,7 +448,8 @@ export class SpielRaum extends Room {
       const om = this.onMessage.bind(this);
       this.onMessage = (typ, cb) => om(typ, aktiv.has(typ) ? (c, m) => { this.ruehrt(c.sessionId); return cb(c, m); } : cb);
     }
-    this.hordeDebug = new Set();   // Clients mit ?debug: bekommen 'hordeInfo' auch ohne Einstellung
+    this.hordeDebug = new Set();   // Superuser mit eingeschalteter Horden-Anzeige (☰-Menü oder ?debug) bekommen 'hordeInfo'
+    this.hordeAus = new Set();     // Superuser, die die Anzeige ausgeschaltet haben (auch wenn die Einstellung sie für alle einschaltet)
     this.onMessage('hordeDebug', (client, m) => { if (m?.an) this.hordeDebug.add(client.sessionId); else this.hordeDebug.delete(client.sessionId); });
     this.onMessage('aussteigen', client => this.aufgaben?.aussteigen(client.sessionId));   // aus dem Evakuierungsfahrzeug aussteigen (Knopf/Taste)
     this.onMessage('aktion', client => this.starteAktion(client));

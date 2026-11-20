@@ -41,7 +41,7 @@ export function anmelden(hash, passwort, schluessel) {
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager'];
 
 function springen(raum, p, x, ziel) {
   p.x = ziel.x; p.y = ziel.y; p.ebene = ziel.ebene ?? ''; p.unten = false; p.anBord = false; p.sicher = ''; p.aktion = ''; p.fortschritt = 0;
@@ -163,6 +163,13 @@ export function befehl(raum, client, m) {
         if (!ids) return 'Kein Platz für die Horde gefunden';
         return `🧟 Horde mit ${ids.length} Zombies gestartet`;
       } finally { delete w.einst; }
+    }
+    case 'hordeanzeige': {
+      const sid = client.sessionId, alle = !!raum.welle?.einst?.().hordeZieleZeigen;
+      const an = !raum.hordeAus.has(sid) && (alle || raum.hordeDebug.has(sid));
+      if (an) { raum.hordeAus.add(sid); raum.hordeDebug.delete(sid); try { client.send('hordeInfo', { aktiv: false }); } catch { /* egal */ } }
+      else { raum.hordeAus.delete(sid); raum.hordeDebug.add(sid); raum.welle?.infoSenden?.(0, true); }
+      return an ? 'Horden-Anzeige: aus' : '🧟 Horden-Anzeige: an';
     }
     case 'unsterblich': {
       x.suUnsterblich = !x.suUnsterblich;
