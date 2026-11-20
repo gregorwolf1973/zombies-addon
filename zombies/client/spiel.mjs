@@ -1452,6 +1452,8 @@ class Ort extends Phaser.Scene {
     for (const [id, o] of this.feuerObj) if (!s.feuer?.has(id)) { o.teile.forEach(t => t.destroy()); o.schein.destroy(); this.feuerObj.delete(id); }
     // Ruinen und ausgebrannte Autos/Busse (nur neu zeichnen, wenn sich etwas ändert)
     const stand = s.verbrannt?.size ?? 0;
+    // Wracks und Ruinen gehören zur Außenwelt: im Innenraum ausblenden (sonst liegt ein dunkles Autowrack mit braunem Quadrat über den Möbeln)
+    this.ruinenGfx?.setVisible(!this.aktEbene); this.wrackGfx?.setVisible(!this.aktEbene);
     if (stand === this.ruinenStand) return;
     this.ruinenStand = stand;
     this.ruinenGfx ??= this.add.graphics().setDepth(5.15);
