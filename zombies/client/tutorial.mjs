@@ -1,6 +1,7 @@
 // Schießstand / Tutorial (Client): Lobby-Knopf, Entfernungsmarken am Boden und Bedienfeld mit Auswertung.
 // Gespielt wird in derselben Szene wie im Spiel (spiel.mjs); der Raum 'schiessstand' (server/schiessstand.mjs) liefert Zustand und Auswertung.
 import { DINGE, WAFFEN } from './welt.mjs';
+import { dingIcon } from './dingbild.mjs';
 import { SS_START, SS_MARKEN, PX_PRO_METER } from './schiessstand_welt.mjs';
 
 export const TUT = { an: false };   // true, sobald der Schießstand gewählt wurde (spiel.mjs baut dann die Übungswelt und tritt dem Raum bei)
@@ -8,7 +9,7 @@ export const TUT = { an: false };   // true, sobald der Schießstand gewählt wu
 const ZEICHEN = { granatwerfer: '🧨', faust: '✊', handgranate: '💣' };
 const NAMEN = { faust: 'Faust', handgranate: 'Handgranate' };
 const KURZ = { pistole: 'Pistole', mp: 'MP', gewehr: 'Gewehr', schrotflinte: 'Schrot', mg: 'MG', scharfschuetze: 'Scharfschütze', armbrust: 'Armbrust', granatwerfer: 'Granatwerfer', messer: 'Messer', schlaeger: 'Schläger', faust: 'Faust', handgranate: 'Handgranate' };
-const zeichen = n => ZEICHEN[n] ?? DINGE[n]?.zeichen ?? '•';
+const zeichen = n => dingIcon(n, 22, ZEICHEN[n] ?? DINGE[n]?.zeichen ?? '•');   // Gegenstands-Icon, sonst Emoji
 const name = n => NAMEN[n] ?? DINGE[n]?.name ?? n;
 const WAFFEN_LISTE = ['pistole', 'mp', 'gewehr', 'schrotflinte', 'mg', 'scharfschuetze', 'armbrust', 'granatwerfer', 'messer', 'schlaeger', 'faust'];
 const ZEILEN = [...WAFFEN_LISTE, 'handgranate'];

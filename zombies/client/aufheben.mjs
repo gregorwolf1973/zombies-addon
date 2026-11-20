@@ -1,5 +1,6 @@
 // Aufheben mit Auswahl: Leiste mit großen Symbol-Knöpfen (Handy), bei vollem Rucksack zweiter Schritt "Was ablegen?"
 import { DINGE, AKTION_ABSTAND } from './welt.mjs';
+import { dingIcon, dingHtml } from './dingbild.mjs';
 
 // Bodengegenstände im Aufhebe-Radius, nächster zuerst: [{ id, ding, d }]
 export function naheBodenDinge(boden, ich) {
@@ -32,7 +33,7 @@ function hinstellen(titel, knoepfe) {
   auswahlZu();
   leiste = document.createElement('div');
   leiste.id = 'aufheben-wahl';
-  const t = document.createElement('div'); t.className = 'aufh-titel'; t.textContent = titel;
+  const t = document.createElement('div'); t.className = 'aufh-titel'; t.innerHTML = titel;   // HTML: Titel mit Gegenstands-Icon
   const reihe = document.createElement('div'); reihe.className = 'aufh-reihe';
   reihe.append(...knoepfe);
   leiste.append(t, reihe);
@@ -45,8 +46,8 @@ export function auswahlAuf(raum, ich, dinge) {
   const abbruch = knopf('✖', 'Abbrechen', auswahlZu, 'zweit');
   const waehle = it => {
     if (!brauchtPlatz(it.ding, ich) || ich.rucksack.length < ich.plaetze) { raum.send('aufheben_wahl', { id: it.id }); auswahlZu(); return; }
-    const plaetze = [...ich.rucksack].map((d, i) => knopf(DINGE[d]?.zeichen ?? '?', DINGE[d]?.name ?? d, () => { raum.send('aufheben_wahl', { id: it.id, platz: i }); auswahlZu(); }));
-    hinstellen(`Rucksack voll – was ablegen für ${DINGE[it.ding]?.zeichen ?? ''} ${DINGE[it.ding]?.name ?? it.ding}?`, [...plaetze, abbruch]);
+    const plaetze = [...ich.rucksack].map((d, i) => knopf(dingIcon(d, 34), DINGE[d]?.name ?? d, () => { raum.send('aufheben_wahl', { id: it.id, platz: i }); auswahlZu(); }));
+    hinstellen(`Rucksack voll – was ablegen für ${dingHtml(it.ding, 22)}?`, [...plaetze, abbruch]);
   };
-  hinstellen('Was aufheben?', [...dinge.map(it => knopf(DINGE[it.ding]?.zeichen ?? '?', DINGE[it.ding]?.name ?? it.ding, () => waehle(it))), abbruch]);
+  hinstellen('Was aufheben?', [...dinge.map(it => knopf(dingIcon(it.ding, 34), DINGE[it.ding]?.name ?? it.ding, () => waehle(it))), abbruch]);
 }

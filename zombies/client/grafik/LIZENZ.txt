@@ -70,3 +70,7 @@ https://sketchfab.com/3d-models/7fe132c071584049b51d3569726021a0 – CC-BY 4.0; 
 Bewohner-Typen (grafik/buerger160.webp, buerger160.json): mit Google Gemini für dieses Spiel erzeugt (ein Bildbogen mit
 acht Typen, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben); freigestellt, skaliert und angeordnet mit
 tools/gemini_buerger_schneiden.py.
+
+Gegenstands-Icons (grafik/dinge.webp, dinge.json): 31 Icons für Waffen, Ausrüstung und Vorräte, mit Google Gemini für dieses
+Spiel erzeugt (vier Bildbögen auf Magenta-Raster, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben);
+freigestellt, zugeschnitten und angeordnet mit tools/dinge_bilder.py.
