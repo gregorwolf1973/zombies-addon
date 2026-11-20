@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DINGE, WAFFEN } from '../client/welt.mjs';
+import { MOERSER } from './moerser.mjs';
 
 export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
 export const LEVEL_WELTEN = ['geretsried', 'isarauen'];   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
@@ -202,10 +203,24 @@ export function bereinige(e = {}, alt = {}) {
       leopardSchaden: Math.round(zahl(bw.leopardSchaden, 1, 500, 100)),       // … Schaden je Treffer
       leopardUeberrollen: typeof bw.leopardUeberrollen === 'boolean' ? bw.leopardUeberrollen : true,   // … überrollt Zombies beim Fahren
     },
+    moerser: (() => {                                                         // Panzermörser: Reichweite/Radius/Sicherheit in Metern, Pause in Sekunden
+      const m = { ...a.moerser, ...(e.moerser ?? {}) }, V = MOERSER;
+      const rmin = Math.round(zahl(m.reichweiteMin, 5, 100, V.reichweiteMin)), rmax = Math.max(rmin + 5, Math.round(zahl(m.reichweiteMax, 10, 150, V.reichweiteMax)));
+      return {
+        reichweiteMin: rmin, reichweiteMax: rmax,
+        pause: Math.round(zahl(m.pause, 1, 60, V.pause) * 10) / 10,
+        schaden: Math.round(zahl(m.schaden, 10, 1000, V.schaden)),
+        radius: Math.round(zahl(m.radius, 2, 15, V.radius) * 2) / 2,
+        mindestZombies: Math.round(zahl(m.mindestZombies, 1, 30, V.mindestZombies)),
+        sicherheit: Math.round(zahl(m.sicherheit, 0, 30, V.sicherheit)),
+        tempo: Math.round(zahl(m.tempo, 10, 80, V.tempo)),
+      };
+    })(),
     funde,
     toene,
     test: {
       zeitraffer: ZEITRAFFER.includes(Number(t.zeitraffer)) ? Number(t.zeitraffer) : 1,
+      moerser: typeof t.moerser === 'boolean' ? t.moerser : false,           // Test: Panzermörser (M113) neben den Start stellen
       unsterblich: [...new Set((Array.isArray(t.unsterblich) ? t.unsterblich : []).map(n => String(n).trim().slice(0, 16)).filter(Boolean))].slice(0, 20),
     },
   };
@@ -221,7 +236,8 @@ export function vorgaben() {
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
     bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, mgMunition: 400, pumaMunition: 200 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
-    test: { zeitraffer: 1, unsterblich: [] },
+    test: { zeitraffer: 1, unsterblich: [], moerser: false },
+    moerser: { ...MOERSER },
     toene: {},
   };
 }

@@ -1,6 +1,6 @@
 // Darstellung der Evakuierungsarten (Phaser): Leopard 2A7 mit drehendem Turm und Lader-MG (Level 2), A400M mit drehenden Propellern
 // und der Hubschrauber (Evakuierung per Flugzeug). Logik und Zahlen kommen vom Server (server/aufgaben.mjs, client/evak.mjs).
-import { LEOPARD, A400M, evakArtFuer } from './evak.mjs';
+import { LEOPARD, A400M, HELI, TANKLASTER, M113, evakArtFuer } from './evak.mjs';
 import { fetzen } from './effekte.mjs';
 import * as ton from './ton.mjs';
 
@@ -12,6 +12,10 @@ export function evakLaden(scene) {
   scene.load.image('leopard-turm', 'grafik/leopard_turm.webp');
   scene.load.image('a400m-rumpf', 'grafik/a400m_rumpf.webp');
   scene.load.image('a400m-prop', 'grafik/a400m_prop.webp');
+  scene.load.image('nh90-rumpf', 'grafik/nh90_rumpf.webp');        // Hubschrauber NH90: Rumpf und Hauptrotor getrennt (Rotor dreht)
+  scene.load.image('nh90-rotor', 'grafik/nh90_rotor.webp');
+  scene.load.image('tanklaster', 'grafik/tanklaster.webp');        // Kulisse neben dem gelandeten A400M
+  scene.load.image('m113-moerser', 'grafik/m113_moerser.webp');    // Panzermörser (M113, Dachluke offen)
 }
 
 // Art der Evakuierung dieser Welt (Server: state.evakArt; ältere Stände: nach Karte)
@@ -32,6 +36,7 @@ export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene) {
   const panzer = art === 'panzer' && scene.textures.exists('leopard-wanne'), flug = art === 'flugzeug' && scene.textures.exists('a400m-rumpf');
   // nicht mehr gebrauchte Teile (Art gewechselt) entfernen
   if (!panzer && o.turm) { o.turm.destroy(); o.turm = null; }
+  if (!flug && o.tank) { o.tank.destroy(); o.tank = null; }
   if (!flug && o.props) { for (const p of o.props) p.destroy(); o.props = null; }
   if (!panzer && !flug) { o.bild.setScale(1); if (o.kette) { ton.sireneStoppen(o.kette); o.kette = null; } return false; }
   o.licht.clear();
@@ -61,6 +66,10 @@ export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene) {
   }
   // A400M: Propeller einzeln, drehen sich (von oben gesehen schmal und breit im Wechsel); nach dem Triebwerksausfall steht alles still
   o.bild.setScale(A400M.skala);
+  if (!o.tank && scene.textures.exists('tanklaster') && s.evakPhase !== 'landung') {   // Kulisse: Tanklaster neben der Nase, erst wenn das Flugzeug steht
+    o.tank = scene.add.image(TANKLASTER.x, TANKLASTER.y, 'tanklaster').setScale(TANKLASTER.skala);
+    o.box.addAt(o.tank, 1);
+  }
   if (!o.props) {
     o.props = A400M.naben.map(([x, y]) => scene.add.image(x, y, 'a400m-prop').setScale(A400M.skala));
     for (const p of o.props) o.box.addAt(p, 2);
@@ -142,12 +151,14 @@ export function heliAktualisieren(scene, s, dt, aktEbene) {
   if (!aktiv || !(s.evakX > 0)) { if (h) { h.box.destroy(); scene.heliObj = null; } return; }
   if (!h) {
     const anflug = (Math.round(s.evakX) * 0.0137 + Math.round(s.evakY) * 0.0071) % TAU;      // Anflugrichtung: fest je Landeplatz
-    const koerper = heliKoerper(scene), rotor = scene.add.graphics();
-    h = scene.heliObj = { box: scene.add.container(s.evakX, s.evakY, [koerper, rotor]).setDepth(7), rotor, wink: 0, anflug, t: 0, phase: ph, ab: 0 };
+    const echt = scene.textures.exists('nh90-rumpf') && scene.textures.exists('nh90-rotor');   // NH90-Bilder, sonst die gezeichnete Ersatzfigur
+    const koerper = echt ? scene.add.image(HELI.rumpfX, HELI.rumpfY, 'nh90-rumpf').setScale(HELI.skala) : heliKoerper(scene);
+    const rotor = scene.add.graphics(), blatt = echt ? scene.add.image(0, 0, 'nh90-rotor').setScale(HELI.skala) : null;
+    h = scene.heliObj = { box: scene.add.container(s.evakX, s.evakY, blatt ? [koerper, rotor, blatt] : [koerper, rotor]).setDepth(7), rotor, blatt, wink: 0, anflug, t: 0, phase: ph, ab: 0 };
   }
   if (h.phase !== ph) { h.phase = ph; h.ab = 0; }
   h.wink += dt * (ph === 'heliAnflug' && s.evakRest > 3 ? 26 : 30);
-  heliRotor(h.rotor, h.wink);
+  if (h.blatt) { h.rotor.clear().fillStyle(0xffffff, 0.1).fillCircle(0, 0, 64); h.blatt.setRotation(h.wink).setAlpha(0.85); } else heliRotor(h.rotor, h.wink);
   const richtung = h.anflug + Math.PI;      // fliegt auf den Landeplatz zu
   let abstand = 0, hoehe = 0;
   if (ph === 'heliAnflug') { const k = Math.max(0, Math.min(1, s.evakRest / 9)); abstand = k * k * 900; hoehe = k; }
@@ -174,4 +185,51 @@ export function evakHudText(s, an, uhrText) {
   if (ph === 'abflug') return '🚁 Der Hubschrauber hebt ab …';
   if (s.funk && s.busAnkunft >= 0) return `✈️ Der A400M landet um ${uhrText(s.busAnkunft)} auf dem markierten Landeplatz`;
   return '📻 Funkspruch fehlt – ohne ihn kommt keine Maschine';
+}
+
+// ---------- Panzermörser (M113, Steilfeuer; Test-Schalter, server/moerser.mjs) ----------
+export function moerserBild(scene) { return scene.textures.exists('m113-moerser') ? 'm113-moerser' : null; }
+
+// Zusatzteile im Fahrzeug-Container: Soldat am Mörser und das 120-mm-Rohr, das zum Ziel zeigt; skalaSoldat = Größe der Soldatenfigur
+export function moerserFahrzeug(scene, o, dt, skalaSoldat) {
+  o.bild.setScale(M113.skala);
+  if (!o.rohr) {
+    o.rohr = scene.add.graphics();
+    o.soldat = scene.add.image(M113.soldatX, 0, 'figuren2', scene.figurBild2('soldat_idle')).setScale(skalaSoldat);
+    o.box.add([o.rohr, o.soldat]);
+    o.rohrW = o.r;
+  }
+  const jetzt = scene.time.now, ziel = jetzt < (o.rohrBis ?? 0) ? o.rohrZiel : o.r - 0.9;   // ohne Ziel steht das Rohr schräg nach hinten-oben
+  o.rohrW += winkelDiff(o.rohrW, ziel) * Math.min(1, dt * 5);
+  const loc = o.rohrW - o.r, c = Math.cos(loc), sn = Math.sin(loc), r0 = M113.lagerX;
+  o.rohr.clear();
+  o.rohr.lineStyle(5, 0x2b2f26, 1).lineBetween(r0, 0, r0 + c * M113.rohr, sn * M113.rohr);        // Rohr
+  o.rohr.lineStyle(2.5, 0x5b6350, 1).lineBetween(r0, 0, r0 + c * M113.rohr, sn * M113.rohr);
+  o.rohr.fillStyle(0x15170f, 1).fillCircle(r0 + c * M113.rohr, sn * M113.rohr, 3);                  // Mündung
+  o.soldat.setRotation(loc + Math.PI);                                                              // Soldat blickt über das Rohr
+  o.soldat.setFrame(scene.figurBild2('soldat_idle', Math.floor(jetzt / 260) % 3));
+}
+
+// Schuss: Rohr zum Ziel, Rauch am Rohr, Granate im hohen Bogen (wird größer und wieder kleiner, Schatten am Boden); der Einschlag kommt als 'explosion'
+export function moerserSchuss(scene, m, s) {
+  const id = [...(s?.fahrzeuge?.entries?.() ?? [])].find(([, v]) => v.art === 'moerser')?.[0];
+  const o = id ? scene.busObj.get(id) : null;
+  if (o) { o.rohrZiel = m.w; o.rohrBis = scene.time.now + 2500; }
+  const mx = m.x1 + Math.cos(m.w) * 20, my = m.y1 + Math.sin(m.w) * 20;
+  for (let i = 0; i < 6; i++) {
+    const r = scene.add.circle(mx + (Math.random() - 0.5) * 8, my + (Math.random() - 0.5) * 8, 4 + Math.random() * 4, 0xbdbdbd, 0.6).setDepth(6.5);
+    scene.tweens.add({ targets: r, x: r.x + (Math.random() - 0.5) * 30, y: r.y - 16 - Math.random() * 20, alpha: 0, scale: 2.4, duration: 900, onComplete: () => r.destroy() });
+  }
+  ton.kanone(m.x1, m.y1);
+  const schatten = scene.add.circle(m.x1, m.y1, 3, 0x000000, 0.35).setDepth(3.9);
+  const granate = scene.add.circle(m.x1, m.y1, 3.5, 0x37402b).setStrokeStyle(1, 0x12140d).setDepth(9);
+  const t0 = scene.time.now, flug = m.flug * 1000, hoch = Math.min(180, 40 + Math.hypot(m.x2 - m.x1, m.y2 - m.y1) * 0.35);
+  const tick = () => {
+    const k = Math.min(1, (scene.time.now - t0) / flug), x = m.x1 + (m.x2 - m.x1) * k, y = m.y1 + (m.y2 - m.y1) * k, h = Math.sin(k * Math.PI);
+    schatten.setPosition(x, y).setScale(1 - 0.4 * h).setAlpha(0.35 - 0.15 * h);
+    granate.setPosition(x, y - h * hoch).setScale(1 + h * 1.4);
+    if (k >= 1) { scene.events.off('update', tick); schatten.destroy(); granate.destroy(); }
+  };
+  scene.events.on('update', tick);
+  scene.time.delayedCall(flug + 200, () => { scene.events.off('update', tick); schatten.destroy(); granate.destroy(); });
 }

@@ -56,3 +56,13 @@ von CloudHub, https://sketchfab.com/3d-models/airbusa400m-17792743f04d415a8a22ed
 Hinweis: Die Materialnamen im Modell deuten auf ein SketchUp-Modell (vermutlich aus dem 3D Warehouse) hin; im Repo liegen
 nur die gerenderten Draufsichten (Rumpf ohne Propeller, ein Propeller einzeln), nicht das Modell. Gerendert mit
 tools/glb_draufsicht, verkleinert mit tools/a400m_bilder.py.
+
+Hubschrauber NH90 (grafik/nh90_rumpf.webp, nh90_rotor.webp): Draufsichten (Rumpf und Hauptrotor getrennt, der Rotor dreht sich im Spiel), gerendert aus dem 3D-Modell
+„NH90 low poly“ von Waroxed, https://sketchfab.com/3d-models/5332ea87e45047debe93a68dd93bb09b – CC-BY 4.0. Im Repo liegen nur die gerenderten Draufsichten.
+
+Tanklaster (grafik/tanklaster.webp): Draufsicht, gerendert aus dem 3D-Modell „Fuel Truck“ von simonthedigger,
+https://sketchfab.com/3d-models/fuel-truck-443da3cd0f4547c980e52168bfbe7b76 – CC-BY 4.0. Im Repo nur die gerenderte Draufsicht.
+
+Panzermörser (grafik/m113_moerser.webp): Draufsicht, gerendert aus dem 3D-Modell „M113“ von arc4de,
+https://sketchfab.com/3d-models/7fe132c071584049b51d3569726021a0 – CC-BY 4.0; die offene Dachluke mit dem Mörserlager im Heck wurde selbst eingezeichnet
+(tools/fahrzeug_bilder.py), das 120-mm-Rohr zeichnet das Spiel. Im Repo nur die gerenderte Draufsicht.
