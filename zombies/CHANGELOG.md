@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.62.2 – 20.11.2026
+
+- Behoben: Beim Laufen an Zombies vorbei schien der Held zu spät oder gar nicht zu schießen. Der Server schoss richtig, aber die eigene Figur läuft durch die Vorhersage dem Serverstand voraus, sodass Schusshaltung und Mündungsblitz (auch beim Nahkampf) nicht mehr am Helden erschienen. Eigene Schüsse und Stöße werden jetzt der eigenen Figur zugeordnet und an ihr gezeichnet.
+
 ## 0.62.1 – 20.11.2026
 
 - Behoben: Häuser ließen sich nach dem Verlassen eines anderen Hauses manchmal nicht betreten (z. B. Intersport Reiser), erst nach längerem Herumlaufen. Die Sperre gegen sofortiges Zurücklaufen durch die Tür rechnete beim Hinausgehen mit der Ausgangskachel des Innenraums statt mit der Haustür draußen und blockierte dadurch alle Haustüren in Richtung linke obere Kartenecke. Jetzt gilt sie nur an der eigenen Haustür, bis man sich ein paar Schritte entfernt hat.
