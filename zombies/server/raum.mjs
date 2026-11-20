@@ -122,6 +122,9 @@ export const Zustand = schema({
   evakPhase: t.string(),    // Flugzeug: '' | 'landung' | 'einsteigen' | 'heliAnflug' | 'heli' | 'abflug' (server/aufgaben.mjs)
   evakX: t.number(),        // Abholpunkt (Pixel) abweichend vom Ortsausgang (Flugzeug: Heckrampe, danach Hubschrauberplatz); <= 0 = Ortsausgang
   evakY: t.number(),
+  evakAX: t.number(),       // Absturzstelle des A400M (Wrack, Pixel; 0 = keine) und Anflugrichtung
+  evakAY: t.number(),
+  evakW: t.number(),
   evakRest: t.uint16(),     // Sekunden, bis der Hubschrauber landet
   aufgaben: t.map(Aufgabe), // gemeinsame Aufgaben dieses Levels
   missionen: t.map(Mission),   // Suchkreise der Missionsgegenstände (Mitte/Radius in px, nie der genaue Ort)

@@ -8,7 +8,7 @@ import { hashe, hashGueltig } from './superuser.mjs';
 
 export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
 export const LEVEL_WELTEN = ['geretsried', 'isarauen'];   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
-export const EVAK_ARTEN = ['bus', 'panzer', 'flugzeug'];   // Evakuierungsarten (server/aufgaben.mjs); '' in den Einstellungen = je Karte
+export const EVAK_ARTEN = ['bus', 'panzer', 'flugzeug', 'absturz', 'heli', 'bunker'];   // Evakuierungsarten (server/aufgaben.mjs); '' in den Einstellungen = je Karte
 export const SCHWIERIGKEITEN = ['leicht', 'normal', 'schwer'];
 export const ZEITRAFFER = [1, 5, 10, 60];
 export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20, mp: 30, mg: 45, armbrust: 25, scharfschuetze: 75, granatwerfer: 60, handgranate: 25 };   // Meter

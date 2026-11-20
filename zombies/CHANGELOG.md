@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.63.0 – 21.11.2026
+
+- Neue Evakuierungsarten für die Level 3–5 (Zuordnung Karte → Art in client/evak.mjs; die Karten selbst kommen separat):
+  - `absturz` (Königsdorf): Der A400M kommt im Landeanflug und stürzt ab (Rauchspur, Einschlag, Wrack mit Brand und Rauch bleibt als Kulisse; Spieler nehmen keinen Schaden). Der NH90 landet erst, wenn die Fahrt gelingt (Missionsteile erledigt), dann Einsteigen/Aussteigen/Abflug wie bisher.
+  - `heli` (Kochel): Der NH90 steht von Anfang an; Einsteigen jederzeit (mit Aussteigen), Abflug nur, wenn die Fahrt gelingt – sonst wartet er weiter.
+  - `bunker` (Finale): Bunkertor als Evakuierungspunkt, „Einsteigen“ = hineingehen (an Bord, Zombies lassen einen in Ruhe), kein Abflug. `aufgaben.bunkerEnde()` (vom Countdown) wertet aus: wer drin ist, überlebt (Sieg), wer draußen ist, nicht; Haken `raum.bunker.betreten/verlassen` für einen Innenraum.
+- Platzwahl aus Kartendaten (`welt.heliplatz`, `welt.bunkertor`), sonst automatisch (freie, erreichbare Stelle; server/flugplatz.mjs).
+- Verwaltung: Test-Schalter „Evakuierungsart erzwingen“ kennt jetzt Absturz, Hubschrauber und Bunker.
+- Wartender Hubschrauber lässt die Aufgaben weiterlaufen (Missionen zählen auch beim stehenden NH90).
+
 ## 0.62.6 – 20.11.2026
 
 - Behoben: In Innenräumen lag manchmal ein dunkler, schräger Kasten mit braunem Fleck über den Möbeln – das Wrack eines ausgebrannten Autos von draußen. Wracks und Brandruinen werden im Innenraum jetzt ausgeblendet.

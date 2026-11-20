@@ -5,6 +5,7 @@ import { fetzen } from './effekte.mjs';
 import * as ton from './ton.mjs';
 
 const TAU = Math.PI * 2;
+const ABSTURZ_MS = 14000;   // wie ABSTURZ_DAUER im Server (Landeanflug bis zum Einschlag)
 const winkelDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 
 export function evakLaden(scene) {
@@ -176,8 +177,17 @@ export function heliAktualisieren(scene, s, dt, aktEbene) {
 
 // Hinweiszeile zur Evakuierung per Flugzeug / Hubschrauber (null = andere Evakuierungsart oder noch nichts los)
 export function evakHudText(s, an, uhrText) {
-  const ph = s.evakPhase;
-  if (evakArtVon(s) !== 'flugzeug') return null;
+  const ph = s.evakPhase, art = evakArtVon(s);
+  if (art === 'bunker') {
+    if (ph === 'sieg') return '☢️ Der Bunker hat gehalten – ihr habt überlebt!';
+    if (ph === 'niederlage') return '☢️ Der Schlag hat euch draußen erwischt …';
+    return `☢️ Bunker offen · ${s.busBord}/${s.busGesamt} drinnen${an ? ' · ☢️ du bist drin' : ''} – wer beim Ende des Countdowns drin ist, überlebt`;
+  }
+  if (art === 'heli') return ph === 'heli' ? `🚁 NH90 steht bereit · ${s.busBord}/${s.busGesamt} an Bord${an ? ' · 🚁 du bist an Bord' : ''} – Abflug, sobald alle Aufgaben erledigt sind` : (ph === 'abflug' ? '🚁 Der Hubschrauber hebt ab …' : null);
+  if (art === 'absturz' && ph === 'absturz') return '✈️ Ein A400M kommt im Landeanflug …';
+  if (art === 'absturz' && ph === 'wrack') return '💥 A400M abgestürzt – ein NH90 kommt, sobald alle Aufgaben erledigt sind';
+  if (art === 'absturz' && !['heliAnflug', 'heli', 'abflug'].includes(ph)) return s.funk && s.busAnkunft >= 0 ? `✈️ Der A400M kommt um ${uhrText(s.busAnkunft)}` : '📻 Funkspruch fehlt – ohne ihn kommt keine Maschine';
+  if (art !== 'flugzeug' && art !== 'absturz') return null;
   if (ph === 'landung') return '✈️ Ein A400M setzt zur Landung an – einsteigen geht an der Heckrampe, sobald er steht';
   if (ph === 'einsteigen') return `✈️ A400M wartet bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ' · ✈️ du bist an Bord' : ''}`;
   if (ph === 'heliAnflug') return `🔥 Triebwerksbrand, Start abgebrochen – zu Fuß zum Hubschrauber-Landeplatz (📍), er landet in ${s.evakRest} s`;
@@ -232,4 +242,88 @@ export function moerserSchuss(scene, m, s) {
   };
   scene.events.on('update', tick);
   scene.time.delayedCall(flug + 200, () => { scene.events.off('update', tick); schatten.destroy(); granate.destroy(); });
+}
+
+// ---------- Königsdorf: A400M-Absturz (Anflug mit Rauchspur, Einschlag, Wrack als bleibende Kulisse) ----------
+export function absturzAktualisieren(scene, s, dt, aktEbene) {
+  const ph = s.evakPhase, aktiv = evakArtVon(s) === 'absturz' && ['absturz', 'wrack', 'heliAnflug', 'heli', 'abflug'].includes(ph) && s.evakAX > 0 && scene.textures.exists('a400m-rumpf');
+  let a = scene.absturzObj;
+  if (!aktiv) { if (a) { a.box.destroy(); scene.absturzObj = null; } return; }
+  const dx = Math.cos(s.evakW), dy = Math.sin(s.evakW), jetzt = scene.time.now;
+  if (!a) {
+    const bild = scene.add.image(0, 0, 'a400m-rumpf').setScale(A400M.skala), licht = scene.add.graphics();
+    const props = A400M.naben.map(([x, y]) => scene.add.image(x, y, 'a400m-prop').setScale(A400M.skala));
+    const boden = scene.add.graphics().setDepth(4.3);
+    a = scene.absturzObj = { box: scene.add.container(s.evakAX, s.evakAY, [bild, ...props, licht]).setDepth(4.6), bild, props, licht, boden, t0: jetzt, wrack: ph !== 'absturz', spin: 0, rauch: 0, schon: false };
+    a.box.on('destroy', () => boden.destroy());
+  }
+  a.box.setVisible(aktEbene === ''); a.boden.setVisible(aktEbene === '');
+  a.licht.clear();
+  if (ph === 'absturz' && !a.wrack) {
+    // Anflug aus der Ferne: wird kleiner und tiefer, ein Triebwerk brennt und qualmt, am Ende Einschlag
+    const k = Math.max(0, Math.min(1, (jetzt - a.t0) / (ABSTURZ_MS)));
+    const d = Math.pow(1 - k, 1.4) * 1400;
+    a.box.setPosition(s.evakAX - dx * d, s.evakAY - dy * d).setRotation(s.evakW + Math.sin(k * 9) * 0.05 * k).setScale(1 + (1 - k) * 0.35);
+    a.spin += dt * 17; a.props.forEach((p, i) => p.setScale(A400M.skala, A400M.skala * (0.35 + 0.65 * Math.abs(Math.cos(a.spin + i * 1.3)))));
+    if (k > 0.4) {
+      const [nx, ny] = A400M.naben[1];
+      a.licht.fillStyle(0xff6d00, 0.5).fillCircle(nx + 14, ny, 20 + 6 * Math.sin(jetzt / 60)).fillStyle(0xffee58, 0.9).fillCircle(nx + 14, ny, 8);
+      a.rauch -= dt;
+      if (a.rauch <= 0) {
+        a.rauch = 0.07;
+        const r = scene.add.circle(a.box.x - dx * 40, a.box.y - dy * 40, 10 + 14 * k, 0x2b2b2b, 0.7).setDepth(6.4);
+        scene.tweens.add({ targets: r, y: r.y - 50, alpha: 0, scale: 2.8, duration: 2600, onComplete: () => r.destroy() });
+      }
+    }
+    return;
+  }
+  // Einschlag einmal: Explosion, danach bleibt das Wrack
+  if (!a.wrack) {
+    a.wrack = true;
+    scene.explosion?.(s.evakAX, s.evakAY, 90, 1.3);
+    if (scene.lokal && Math.hypot(scene.lokal.x - s.evakAX, scene.lokal.y - s.evakAY) < 900) scene.cameras.main.shake(500, 0.012);
+  }
+  a.box.setPosition(s.evakAX, s.evakAY).setRotation(s.evakW + 0.12).setScale(1);
+  a.bild.setTint(0x3d3a38);
+  a.props.forEach((p, i) => p.setTint(0x222222).setScale(A400M.skala).setRotation(i * 0.7));
+  if (!a.fertig) {   // Brandfleck und Trümmer einmal zeichnen
+    a.fertig = true;
+    const g = a.boden, r = Math.random;
+    g.fillStyle(0x1a1713, 0.55).fillEllipse(s.evakAX - dx * 120, s.evakAY - dy * 120, 520, 230);
+    g.fillStyle(0x0d0b09, 0.5).fillEllipse(s.evakAX, s.evakAY, 400, 190);
+    for (let i = 0; i < 26; i++) { const t = (i / 26 - 0.5) * 520, sw = (r() - 0.5) * 120; g.fillStyle(i % 3 ? 0x4a4743 : 0x6b6560, 0.9).fillRect(s.evakAX - dx * (60 + t) - dy * sw, s.evakAY - dy * (60 + t) + dx * sw, 3 + r() * 9, 2 + r() * 6); }
+  }
+  // Wrack brennt und qualmt dauerhaft; Bruchstelle im Rumpf
+  a.licht.fillStyle(0x0b0a09, 0.85).fillRect(-14, -26, 28, 52);
+  a.licht.fillStyle(0x0b0a09, 0.85).fillTriangle(-14, -26, -6, -40, 4, -26).fillTriangle(14, 26, 8, 42, -2, 26);
+  for (const [fx, fy, fr] of [[0, 0, 26], [A400M.naben[1][0] + 14, A400M.naben[1][1], 16], [-60, 14, 14]]) {
+    const f = 0.65 + 0.35 * Math.sin(jetzt / 80 + fx);
+    a.licht.fillStyle(0xff3d00, 0.4 * f).fillCircle(fx, fy, fr * 1.6 * f).fillStyle(0xff9100, 0.85).fillCircle(fx, fy, fr * 0.7 * f).fillStyle(0xffee58, 1).fillCircle(fx, fy, fr * 0.3 * f);
+  }
+  a.rauch -= dt;
+  if (a.rauch <= 0) {
+    a.rauch = 0.18;
+    const px = s.evakAX + (Math.random() - 0.5) * 120, py = s.evakAY + (Math.random() - 0.5) * 40;
+    const r = scene.add.circle(px, py, 12 + Math.random() * 8, 0x262626, 0.6).setDepth(6.4);
+    scene.tweens.add({ targets: r, x: px + 30 + Math.random() * 30, y: py - 90, alpha: 0, scale: 3.2, duration: 3600, onComplete: () => r.destroy() });
+  }
+}
+
+// ---------- Finale: Bunkertor (Evakuierungspunkt, Einsteigen = hineingehen) ----------
+export function bunkerAktualisieren(scene, s, aktEbene) {
+  const aktiv = evakArtVon(s) === 'bunker' && s.evakX > 0;
+  let b = scene.bunkerObj;
+  if (!aktiv) { if (b) { b.box.destroy(); scene.bunkerObj = null; } return; }
+  if (!b) {
+    const g = scene.add.graphics();
+    g.fillStyle(0x000000, 0.3).fillRoundedRect(-52, -30, 112, 70, 8);                          // Schatten
+    g.fillStyle(0x6d6f70, 1).fillRoundedRect(-56, -36, 112, 72, 8).lineStyle(3, 0x3c3e3f, 1).strokeRoundedRect(-56, -36, 112, 72, 8);   // Betonrahmen
+    g.fillStyle(0x4a4c4d, 1).fillRoundedRect(-44, -26, 88, 52, 4);                              // Laibung
+    g.fillStyle(0x1b1d1e, 1).fillRect(-30, -20, 60, 40);                                       // dunkler Gang
+    g.fillStyle(0x78828a, 1).fillRect(-40, -22, 14, 44).fillRect(26, -22, 14, 44);              // aufgeschobene Torflügel (Stahl)
+    for (let i = 0; i < 4; i++) { g.fillStyle(0xffc400, 1).fillRect(-40, -20 + i * 11, 14, 5).fillRect(26, -20 + i * 11, 14, 5); }   // Warnstreifen
+    const zeichen = scene.add.text(0, -48, '☢', { fontSize: '22px', color: '#ffd600', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5);
+    b = scene.bunkerObj = { box: scene.add.container(s.evakX, s.evakY, [g, zeichen]).setDepth(4.4) };
+  }
+  b.box.setVisible(aktEbene === '');
 }

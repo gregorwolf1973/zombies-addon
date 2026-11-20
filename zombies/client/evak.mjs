@@ -1,6 +1,6 @@
 // Evakuierungsarten (Server und Client): Bus, Panzer (Leopard 2A7) und Flugzeug (A400M, danach Hubschrauber).
 // Maße in Spielpixeln (8 px = 1 m). Gemeinsam genutzt von server/aufgaben.mjs und client/evakdarstellung.mjs.
-export const EVAK_KARTEN = { isarauen: 'panzer' };            // Evakuierungsart je Karte (nicht aufgeführt = Bus)
+export const EVAK_KARTEN = { isarauen: 'panzer', koenigsdorf: 'absturz', kochel: 'heli', andermatt: 'bunker' };            // Evakuierungsart je Karte (nicht aufgeführt = Bus)
 export const evakArtFuer = karte => EVAK_KARTEN[karte] ?? 'bus';
 
 // Leopard 2A7: Wanne 113 px lang (Bild: tools/leopard_bilder.py, 14,59 Spielpixel je Modellmeter), Turmdrehpunkt 14,9 px vor der Wannenmitte,

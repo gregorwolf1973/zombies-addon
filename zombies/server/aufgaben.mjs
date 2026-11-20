@@ -5,7 +5,7 @@
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
 import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
-import { flugplanBerechnen } from './flugplatz.mjs';
+import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplatz.mjs';
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
 
@@ -89,6 +89,7 @@ export const hhmm = min => {
 const EVAK_REICHWEITE = 230, EVAK_PAUSE = 0.4, EVAK_TREFFER = 0.8;   // Bus/Panzer: Reichweite (px), Schussfolge (s), Trefferchance
 const HELI_ANFLUG = 30, HELI_NEU = 60, HELI_ABSTAND = 90;            // Hubschrauber: Anflugzeit, Wartezeit bis zum nächsten Anflug (echte Sekunden), Einstiegsradius (px)
 const ROLLEN_TEMPO = 190;                                            // A400M: Aufsetzgeschwindigkeit der Landerolle (px/s), bremst bis zum Stand
+const ABSTURZ_DAUER = 14;   // Königsdorf: so viele Sekunden dauert der Landeanflug bis zum Absturz
 const UEBERROLLEN_PAUSE = 0.1;                                       // Leopard: so oft (s) wird der Fußabdruck auf Zombies geprüft
 
 export class Aufgaben {
@@ -107,6 +108,7 @@ export class Aufgaben {
     this.wechselVerzoegerung = 5000;   // ms zwischen „Geschafft!“ und dem Weltwechsel
     this.takt = 0;
     this.ausgestiegen = new Set();   // wer freiwillig ausgestiegen ist, steigt nicht sofort wieder ein
+    this.crash = null;         // Königsdorf: A400M-Absturz { rest, phase }
     this.flug = null;          // A400M: Landerolle { von, bis, t } | Hubschrauberphase { phase, rest }
     this.heli = null;
     this.mission = [];         // Plan der Missionsorte (server/mission.mjs)
@@ -126,6 +128,7 @@ export class Aufgaben {
     const s = this.raum.state, w = this.raum.welt;
     const art = this.einst().evakArt || evakArtFuer(s.karte);
     if (art === 'flugzeug' && !(w && w.fein && flugplanBerechnen(w, s.seed))) return 'bus';
+    if ((art === 'absturz' && !(w && absturzPlan(w, s.seed))) || (art === 'heli' && !(w && heliPlan(w, s.seed)))) return 'bus';
     return art;
   }
   flugplan() { const w = this.raum.welt; return w?.fein ? flugplanBerechnen(w, this.raum.state.seed) : null; }
@@ -133,11 +136,18 @@ export class Aufgaben {
   // Art, Anzeige und Abholpunkt in den Zustand schreiben (nur wenn gerade nichts unterwegs ist)
   evakSync() {
     const s = this.raum.state;
-    if (s.busDa || this.flug || this.heli) return;
+    if (this.heli?.dauer && this.heli.art !== this.evakArt()) { this.ausladen(); this.heli = null; s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; s.evakPhase = ''; }   // Einstellung gewechselt
+    if (s.busDa || this.flug || this.heli || this.crash) return;
     const art = this.evakArt();
     if (s.evakArt !== art) s.evakArt = art;
+    if (art === 'heli' || art === 'bunker') { this.dauerStart(art); return; }
+    const w = this.raum.welt, ap = art === 'absturz' ? absturzPlan(w, s.seed) : null;
     const p = art === 'flugzeug' ? this.flugplan() : null;
-    const x = p ? Math.round(p.rampe.x) : 0, y = p ? Math.round(p.rampe.y) : 0;
+    const ax = ap ? Math.round(ap.x) : 0, ay = ap ? Math.round(ap.y) : 0, aw = ap ? ap.w : 0;
+    if (s.evakAX !== ax) s.evakAX = ax;
+    if (s.evakAY !== ay) s.evakAY = ay;
+    if (s.evakW !== aw) s.evakW = aw;
+    const x = p ? Math.round(p.rampe.x) : ap ? Math.round(ap.heli.x) : 0, y = p ? Math.round(p.rampe.y) : ap ? Math.round(ap.heli.y) : 0;
     if (s.evakX !== x) s.evakX = x;
     if (s.evakY !== y) s.evakY = y;
     if (s.evakPhase) s.evakPhase = '';
@@ -149,7 +159,7 @@ export class Aufgaben {
     const s = this.raum.state;
     s.level = Math.max(1, Math.min(250, Math.round(Number(stand?.level) || 1)));
     s.funk = false; s.busDa = false; s.busSteht = false; s.busAnkunft = -1; s.busAb = -1; s.busBord = 0; s.busGesamt = 0;
-    this.flug = null; this.heli = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync();
+    this.flug = null; this.heli = null; this.crash = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync();
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.ausgestiegen.clear(); this.folgenId = null;
     this.basis = s.besiegt;
@@ -341,6 +351,7 @@ export class Aufgaben {
     const s = this.raum.state;
     if (!this.an()) { if (s.busDa || this.heli) this.busWeg(); return; }
     if (this.heli) { this.heliSchritt(dt); return; }
+    if (this.crash) { this.absturzSchritt(dt); return; }
     if (s.busDa) { this.evakFeuer(dt); if (this.flug) this.flugRollen(dt); }
     if (!s.aufgaben.size) { this.basis = s.besiegt; this.ziehen(); }   // zur Laufzeit eingeschaltet
     this.takt -= dt;
@@ -493,6 +504,7 @@ export class Aufgaben {
   ankunft(rest) {
     const s = this.raum.state, w = this.raum.welt, tor = w.tor, v = this.raum.verkehr;
     if (!v) return;
+    if (this.evakArt() === 'absturz') { this.laufendeArt = 'absturz'; this.absturzStart(); return; }
     if (this.evakArt() === 'flugzeug') { this.laufendeArt = 'flugzeug'; this.flugAnkunft(); return; }   // Flug läuft bis zum Ende, auch wenn die Einstellung wechselt
     const tx = (tor.x + 1) * KACHEL, ty = (tor.y + 1) * KACHEL;
     const links = tor.x === 0;
@@ -510,7 +522,9 @@ export class Aufgaben {
   fz() {
     const art = this.laufendeArt ?? this.evakArt();
     return art === 'panzer' ? { art, zeichen: '🪖', Der: 'Der Evakuierungspanzer', der: 'der Evakuierungspanzer', name: 'Evakuierungspanzer', neu: 'einen neuen Panzer' }
-      : art === 'flugzeug' ? { art, zeichen: '✈️', Der: 'Der A400M', der: 'der A400M', name: 'A400M', neu: 'eine neue Maschine' }
+      : art === 'flugzeug' || art === 'absturz' ? { art, zeichen: '✈️', Der: 'Der A400M', der: 'der A400M', name: 'A400M', neu: 'eine neue Maschine' }
+      : art === 'heli' ? { art, zeichen: '🚁', Der: 'Der NH90', der: 'der NH90', name: 'NH90', neu: 'einen neuen Hubschrauber' }
+      : art === 'bunker' ? { art, zeichen: '☢️', Der: 'Der Bunker', der: 'der Bunker', name: 'Bunker', neu: 'einen neuen Bunker' }
       : { art, zeichen: '🚌', Der: 'Der Evakuierungsbus', der: 'der Evakuierungsbus', name: 'Evakuierungsbus', neu: 'einen neuen Bus' };
   }
 
@@ -526,7 +540,7 @@ export class Aufgaben {
     s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0;
     if (!behalten) this.ausladen();
     if (this.busId) { this.raum.verkehr?.evakuierungAb(this.busId); this.busId = null; }
-    this.flug = null; this.laufendeArt = null;
+    this.flug = null; this.crash = null; this.laufendeArt = null;
     if (this.heli) { this.heli = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync(); }
     else if (s.evakPhase) { s.evakPhase = ''; }
   }
@@ -554,6 +568,7 @@ export class Aufgaben {
       if (this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) >= abstand) this.ausgestiegen.delete(sid);   // erst wieder einsteigen, wenn er einmal weg war
       if (!an && !p.ebene && !p.unten && !this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) < abstand) {
         an = true; this.eingestiegen.add(sid); p.anBord = true;
+        if (this.heli?.art === 'bunker') this.raum.bunker?.betreten?.(sid);   // Haken für einen Bunker-Innenraum (falls vorhanden)
         if (!bot) this.einsteigMeldung(sid);
       }
       if (an) { p.x = f.x; p.y = f.y; p.anBord = true; }   // fährt mit
@@ -583,6 +598,7 @@ export class Aufgaben {
     const r = (this.heli ? HELI_ABSTAND : BUS_ABSTAND) + 14;
     const q = this.platzNeben(f.x + Math.cos(w) * r, f.y + Math.sin(w) * r);
     p.x = q.x; p.y = q.y; p.anBord = false;
+    if (this.heli?.art === 'bunker') this.raum.bunker?.verlassen?.(sid);
     this.eingestiegen.delete(sid); this.ausgestiegen.add(sid);
     const x = this.raum.extra.get(sid); if (x) x.schonT = 3;   // 3 s lang beißen Zombies nicht
     this.sendeAn(sid, '🚪 Du bist ausgestiegen. Steig wieder ein, indem du erneut zum Fahrzeug gehst.');
@@ -592,6 +608,7 @@ export class Aufgaben {
   sendeAn(sid, text) { this.raum.clients?.find(c => c.sessionId === sid)?.send('meldung', { text, lang: true }); }
 
   einsteigMeldung(sid) {
+    if (this.heli?.art === 'bunker') return this.sendeAn(sid, '☢️ Du bist im Bunker – hier überstehst du den Schlag. Zum Verlassen: Taste E oder Knopf „Aussteigen“.');
     const fz = this.heli ? { zeichen: '🚁', der: 'der Hubschrauber' } : this.fz(), fehlt = this.fehlt();
     this.sendeAn(sid, fehlt.length
       ? `${fz.zeichen} Du bist an Bord. ${fz.der[0].toUpperCase() + fz.der.slice(1)} kann aber noch nicht abfliegen/abfahren – es fehlt: ${fehlt.join(' · ')}. Zum Aussteigen: Taste E oder Knopf „Aussteigen“ (sonst fährt er nach der Wartezeit ohne Erfolg ab und setzt alle ab).`
@@ -678,6 +695,68 @@ export class Aufgaben {
     return { x, y };
   }
 
+  // ---------- Hubschrauber von Anfang an (Kochel, 'heli') und Bunkertor (Finale, 'bunker') ----------
+  // Beide sind „stehende Evakuierungspunkte“: Einsteigen jederzeit (mit Aussteigen), Punkt = state.evakX/evakY.
+  dauerStart(art) {
+    const s = this.raum.state, w = this.raum.welt;
+    const p = art === 'bunker' ? bunkerPlan(w, s.seed)?.tor : heliPlan(w, s.seed)?.heli;
+    if (!p) return;
+    s.evakArt = art; s.evakX = Math.round(p.x); s.evakY = Math.round(p.y); s.evakAX = 0; s.evakAY = 0;
+    this.heli = { phase: art === 'bunker' ? 'bunker' : 'wartet', dauer: true, art };
+    s.busDa = true; s.busSteht = true; s.evakPhase = art === 'bunker' ? 'bunker' : 'heli';
+    this.restSetzen();
+  }
+
+  // Countdown-Ende im Finale (server/finale.mjs ruft das): wer im Bunker (an Bord) ist, überlebt; alle anderen nicht.
+  // Liefert { drinnen, draussen } (Spieler- und Bot-Ids, ohne Zombies); evakPhase 'sieg' wenn mindestens ein echter Spieler drin ist.
+  bunkerEnde() {
+    const r = this.raum, s = r.state, drinnen = [], draussen = [];
+    for (const [sid, p] of s.spieler) {
+      if (p.zombie > 0) continue;
+      (this.eingestiegen.has(sid) && p.anBord ? drinnen : draussen).push(sid);
+    }
+    const echt = sid => !r.extra.get(sid)?.bot && s.spieler.get(sid)?.verbunden !== false;
+    const sieg = drinnen.some(echt);
+    s.evakPhase = sieg ? 'sieg' : 'niederlage';
+    for (const sid of drinnen) if (echt(sid)) this.sendeAn(sid, '☢️ Der Bunker hält – ihr habt den Schlag überlebt!');
+    for (const sid of draussen) if (echt(sid)) this.sendeAn(sid, '☢️ Der Schlag erwischt euch draußen …');
+    r.broadcast('bunkerEnde', { drinnen, draussen, sieg });
+    return { drinnen, draussen, sieg };
+  }
+
+  // ---------- Königsdorf ('absturz'): der A400M kommt zur Evakuierung und stürzt im Landeanflug ab ----------
+  // Ablauf: Anflug (ABSTURZ_DAUER s, Client animiert) → Absturz mit Rauch und Brand, Wrack bleibt als Kulisse → sobald die Fahrt gelingt
+  // (Missionsteile erledigt), kommt der NH90 (Anflug, Landung, Einsteigen/Abflug wie bei der A400M-Evakuierung).
+  absturzStart() {
+    const s = this.raum.state, p = absturzPlan(this.raum.welt, s.seed);
+    if (!p) { this.laufendeArt = null; return this.ankunft(0); }
+    this.busHeute = true;
+    this.crash = { rest: ABSTURZ_DAUER, phase: 'anflug' };
+    s.evakArt = 'absturz'; s.evakPhase = 'absturz'; s.evakRest = ABSTURZ_DAUER;
+    s.evakAX = Math.round(p.x); s.evakAY = Math.round(p.y); s.evakW = p.w;
+    s.evakX = Math.round(p.heli.x); s.evakY = Math.round(p.heli.y);
+    this.raum.broadcast('meldung', { text: '✈️ Ein A400M kommt im Landeanflug über die Berge …', lang: true });
+  }
+
+  absturzSchritt(dt) {
+    const s = this.raum.state, c = this.crash;
+    if (this.wechselLaeuft) return;
+    this.takt -= dt;
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); }
+    if (c.phase === 'anflug') {
+      c.rest -= dt; s.evakRest = Math.max(0, Math.ceil(c.rest));
+      if (c.rest > 0) return;
+      c.phase = 'wrack'; s.evakPhase = 'wrack'; s.evakRest = 0;
+      this.raum.broadcast('meldung', { text: '💥 Der A400M stürzt ab! Keine Rettung aus der Luft – ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
+      return;
+    }
+    if (!this.fahrtGelingt()) return;
+    // die Missionsteile sind erledigt: der NH90 fliegt den Platz an
+    this.crash = null; this.heli = { phase: 'anflug', rest: HELI_ANFLUG, art: 'absturz' };
+    s.evakPhase = 'heliAnflug'; s.evakRest = HELI_ANFLUG;
+    this.raum.broadcast('meldung', { text: `🚁 Funkkontakt steht – ein NH90 landet in ${HELI_ANFLUG} s auf dem markierten Platz`, lang: true });
+  }
+
   // Hubschrauber: Anflug → gelandet und wartet (Einsteigen wie beim Bus) → Abflug und Levelwechsel; ohne alle fliegt er ab und kommt später wieder
   heliSchritt(dt) {
     const s = this.raum.state, h = this.heli;
@@ -690,9 +769,14 @@ export class Aufgaben {
       this.raum.broadcast('meldung', { text: `🚁 Der Hubschrauber ist gelandet! Einsteigen – Abflug um ${hhmm(s.busAb)}`, lang: true });
       return;
     }
-    this.busRest -= dt; this.busAbSetzen();
+    this.takt -= dt;
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); }   // Aufgaben/Missionen laufen auch beim wartenden Hubschrauber weiter
     const alleDa = this.mitfahrer();
     if (!this.heli) return;   // mitfahrer() hat abgebrochen
+    if (h.phase === 'bunker') return;   // Bunkertor: nur hineingehen, kein Abflug – das Ende kommt mit dem Countdown (bunkerEnde)
+    this.busRest -= dt; this.busAbSetzen();
+    // Abflug nur, wenn die Fahrt gelingt (Pflicht-/Missionsaufgaben erledigt); sonst wartet er weiter
+    if (!this.fahrtGelingt()) { if (this.busRest <= 0) this.restSetzen(); return; }
     if (!alleDa && this.busRest > 0) return;
     const nichtDa = s.busGesamt > s.busBord;
     if (this.echteDa >= 1) {
@@ -701,6 +785,7 @@ export class Aufgaben {
       this.erfolg(nichtDa, '🚁');
       return;
     }
+    if (h.dauer) { this.restSetzen(); return; }   // steht dauerhaft (Kochel): wartet weiter
     // niemand da: er fliegt ab und kommt nach einer Weile wieder
     s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.ausladen();
     this.heli = { phase: 'anflug', rest: HELI_NEU }; s.evakPhase = 'heliAnflug'; s.evakRest = HELI_NEU;
