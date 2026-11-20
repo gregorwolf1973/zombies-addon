@@ -53,7 +53,7 @@ test('Suchkreis: enthält das Ziel, wird mit jedem Hinweis kleiner, nie unter da
       assert.ok(Math.hypot(m.kx - m.x, m.ky - m.y) < m.r, 'Ziel nicht im Kreis');
       assert.ok(Math.hypot(m.kx - m.x, m.ky - m.y) > 0, 'Kreismitte liegt genau auf dem Ziel');
       let r = m.r;
-      assert.ok(r >= 1100 && r <= 1300, 'Radius nicht ~150 m: ' + r);
+      assert.ok(r === 800, 'Radius nicht 100 m: ' + r);
       while (kreisSchrumpfen(m)) {
         assert.ok(m.r < r, 'Kreis schrumpft nicht');
         assert.ok(Math.hypot(m.kx - m.x, m.ky - m.y) <= m.r, 'Ziel nach Hinweis nicht mehr im Kreis');

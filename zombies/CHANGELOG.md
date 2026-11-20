@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.63.1 – 20.11.2026
+
+- Geändert: Landefeuer gibt es jetzt eines je echtem Mitspieler (Bots zählen nicht), mindestens 1, höchstens 5; kommen später Spieler dazu, werden es bis zum Funkspruch mehr. Jedes liegt in einem eigenen Gebäude, die Aufgabe zeigt z. B. „Landefeuer 2/3“.
+- Geändert: Kleinere Suchkreise – Landefeuer 70 m, übrige Missionsgegenstände 100 m Radius (vorher 150 m).
+
 ## 0.63.0 – 21.11.2026
 
 - Neue Evakuierungsarten für die Level 3–5 (Zuordnung Karte → Art in client/evak.mjs; die Karten selbst kommen separat):
