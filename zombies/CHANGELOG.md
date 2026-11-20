@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.62.6 – 20.11.2026
+
+- Behoben: In Innenräumen lag manchmal ein dunkler, schräger Kasten mit braunem Fleck über den Möbeln – das Wrack eines ausgebrannten Autos von draußen. Wracks und Brandruinen werden im Innenraum jetzt ausgeblendet.
+
 ## 0.62.5 – 20.11.2026
 
 - Bilder für die sieben Missionsgegenstände (Funkgerät, Batterie, Antenne, Torschlüssel, Diesel, Treibstoffkanister, Landefeuer) im Stil der übrigen Gegenstands-Icons (Gemini, fünfter Bogen in tools/dinge_bilder.py). Sie erscheinen überall, wo Gegenstände als Bild gezeigt werden; auf der Übersichtskarte bleiben die Symbole.
