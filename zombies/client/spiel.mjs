@@ -1202,7 +1202,7 @@ class Ort extends Phaser.Scene {
     })) : [];
     // Suchkreise offener Missionsgegenstände (Server liefert Mitte und Radius in px, nie den genauen Ort)
     this.uebersicht.kreise = [...(raum.state.missionen?.values() ?? [])].filter(q => !q.abgegeben).map(q => ({
-      x: q.x / KACHEL, y: q.y / KACHEL, r: q.r / KACHEL, symbol: DINGE[q.ding]?.zeichen ?? '❓', name: DINGE[q.ding]?.name ?? q.ding,
+      x: q.x / KACHEL, y: q.y / KACHEL, r: q.r / KACHEL, symbol: DINGE[q.ding]?.zeichen ?? '❓', name: (DINGE[q.ding]?.name ?? q.ding) + (q.nummer && q.von > 1 ? ` ${q.nummer}/${q.von}` : ''),
     }));
     this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });
   }
