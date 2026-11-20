@@ -113,7 +113,7 @@ test('Maschinengewehr aus der Kiste: kommt sofort in die Hand (Pistole in den Ru
     x.pause = 0; x.aktion = null; p.aktion = null;
     raum.spielerSchritt(a.sessionId, p, x, 0.05);
     assert.ok(raum.state.zombies.get(id)?.hp < hp0 || !raum.state.zombies.has(id), 'MG verletzt den Zombie nicht');
-    assert.equal(p.munition, mun0 - 1);
+    assert.equal(p.munition + p.magazin, mun0 - 1);   // Magazin + Vorrat
     assert.ok(await bis(() => schuesse.some(m => m.art === 'mg')), 'keine Schussmeldung');
     // MG schlägt Waffe: auch ein zweites MG-Aufnehmen vom Boden ändert nichts, und eine volle Tasche lässt die Waffe liegen
     p.waffe = 'gewehr'; p.rucksack.splice(0, p.rucksack.length, ...Array(p.plaetze).fill('wasser'));

@@ -1,7 +1,7 @@
 // Steuerung der simulierten Mitspieler (zweite Fassung, Claude): Wegsuche über Kacheln, feste Plätze hinter
 // dem Anführer, Abstand zu allen Figuren, bewaffnete Bots kämpfen. Ein Bot steuert sich nur über x.eingabe.
 import { planSchritt, entnahmeFrei } from './botplan.mjs';   // Team-Planer (Aufträge, Rollen, Chat-Befehle)
-import { WERTE as W, frei, sichtfrei, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE, durchsuchDauer, MUNITION_MAX } from '../client/welt.mjs';
+import { WERTE as W, frei, sichtfrei, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE, durchsuchDauer, MUNITION_MAX, munitionGesamt } from '../client/welt.mjs';
 
 export const BOT_NAMEN = ['Resi', 'Vroni', 'Sepp', 'Wastl', 'Kathi', 'Hias', 'Burgi', 'Girgl', 'Loisl', 'Zenzi'];
 
@@ -10,7 +10,7 @@ const abstand = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function bewaffnet(p) {
   const w = WAFFEN[p.waffe];
-  if (w?.fern && p.munition > 0) return 'fern';
+  if (w?.fern && munitionGesamt(p) > 0) return 'fern';   // Magazin + Vorrat
   if (w && !w.fern) return 'nah';
   return null;
 }
@@ -121,7 +121,7 @@ function brauchtDringend(p, d) {
   if (d === 'verband') return p.hp < 50 && !p.rucksack.includes('verband');
   if (d === 'spritze') return p.infektion > 0;
   if (d === 'munition') return WAFFEN[p.waffe]?.fern && p.munition < 10;
-  if (WAFFEN[d]?.pfeil) return false;   // Bots nutzen die Armbrust nicht (Pfeile als eigener Vorrat)
+  if (WAFFEN[d]?.pfeil || WAFFEN[d]?.granate) return false;   // Bots nutzen Armbrust und Granatwerfer nicht (Pfeile/Granaten als eigener Vorrat)
   if (WAFFEN[d]) return !p.waffe || (WAFFEN_RANG.indexOf(d) > WAFFEN_RANG.indexOf(p.waffe) && !(WAFFEN[d]?.fern && !p.munition));
   if (d === 'tasche' || d === 'trekking') return (DINGE[d]?.plaetze ?? 0) > p.plaetze;
   return false;   // Bretter, Lampen, Seile, Schlüssel … bleiben für die Gruppe in der Kiste

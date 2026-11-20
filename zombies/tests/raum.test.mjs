@@ -113,14 +113,15 @@ test('Pistole trifft Zombie in Reichweite und verbraucht Munition', async () => 
     raum.kriecherChance = 0;
     const p = raum.state.spieler.get(a.sessionId);
     assert.equal(p.waffe, 'pistole');
-    const m0 = p.munition;
+    await bis(() => p.magazin > 0);   // Magazin wird beim ersten Schritt aus dem Vorrat gefüllt
+    const m0 = p.munition + p.magazin;
     raum.zombieFaktor = 0;
     raum.neuerZombie(0);
     const [id, z] = [...raum.state.zombies.entries()][0];
     z.x = p.x + 60; z.y = p.y;
     raum.zombieInfo.get(id).steht = true; raum.zombieInfo.get(id).wechsel = 99;
     assert.ok(await bis(() => !raum.state.zombies.has(id), 4000), 'Zombie überlebt');
-    assert.equal(m0 - p.munition, 3, '3 Schuss für einen Zombie');
+    assert.equal(m0 - p.munition - p.magazin, 3, '3 Schuss für einen Zombie');
     assert.ok(await bis(() => a.state.besiegt === 1), 'Zähler kam nicht an');
   } finally {
     await a.leave();

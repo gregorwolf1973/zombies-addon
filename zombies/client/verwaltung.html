@@ -704,29 +704,23 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="tn-zeile"><input type="range" id="tnZLeben" min="20" max="500" step="5"><span id="tnZLebenWert">100</span></div>
   <p class="tn-leise" id="tnZLebenHinweis"></p>
   <div id="grAbschnitt" class="gr-abschnitt">
-    <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="grTitel">Größe der Zombies und Leichen</div>
-    <label for="tnZGroesse">Zombies (lebend)</label>
-    <span class="hilfe">Größe aller lebenden Zombies und Kriecher. 100 % = Originalgröße.</span>
+    <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="grTitel">Größen</div>
+    <label for="tnMGroesse">Menschengröße</label>
+    <span class="hilfe">Alle Menschen (Spieler in jedem Aussehen, Bots, Bewohner, Soldaten, Ärzte, Verwundete). Bei 100 % sind alle gleich breit (Schulterbreite).</span>
+    <div class="tn-zeile"><input type="range" id="tnMGroesse" min="50" max="200" step="5"><span id="tnMGroesseWert">100 %</span></div>
+    <label for="tnZGroesse">Zombiegröße</label>
+    <span class="hilfe">Im Verhältnis zu den Menschen. 100 % = gleich breit wie ein Mensch. Leichen richten sich automatisch danach.</span>
     <div class="tn-zeile"><input type="range" id="tnZGroesse" min="50" max="200" step="5"><span id="tnZGroesseWert">100 %</span></div>
-    <label for="tnLGroesse">Leichen</label>
-    <span class="hilfe">Größe der Leichen, unabhängig von den lebenden Zombies. 100 % = Originalgröße.</span>
-    <div class="tn-zeile"><input type="range" id="tnLGroesse" min="50" max="200" step="5"><span id="tnLGroesseWert">100 %</span></div>
-    <label for="tnHGroesse">Helden (Aussehen Held/Heldin)</label>
-    <span class="hilfe">Größe der Helden, gleiche Bezugsgröße wie die Zombies. Vorgabe 85 % (etwa 15 % kleiner als früher).</span>
-    <div class="tn-zeile"><input type="range" id="tnHGroesse" min="50" max="200" step="5"><span id="tnHGroesseWert">85 %</span></div>
-    <label for="tnSGroesse">Soldaten (Bundeswehr-Lager, Ärzte, Verwundete)</label>
-    <span class="hilfe">Größe der Soldaten im Lager. 100 % = so groß wie ein Held bei 100 %.</span>
-    <div class="tn-zeile"><input type="range" id="tnSGroesse" min="50" max="200" step="5"><span id="tnSGroesseWert">100 %</span></div>
-    <label for="tnGGroesse">Global – alle Zombies und Leichen</label>
-    <span class="hilfe">Vergrößert oder verkleinert beides zusammen um diesen Prozentsatz, zusätzlich zu den zwei Reglern oben.</span>
-    <div class="tn-zeile"><input type="range" id="tnGGroesse" min="50" max="150" step="5"><span id="tnGGroesseWert">±0 %</span></div>
-    <div class="tn-zeile gr-knoepfe"><button type="button" id="grGMinus">−10 %</button><button type="button" id="grGNull">0</button><button type="button" id="grGPlus">+10 %</button></div>
+    <label for="tnGGroesse">Gesamtgröße</label>
+    <span class="hilfe">Wirkt auf alles: Menschen, Zombies, Leichen und Füße, zusätzlich zu den zwei Reglern oben. Vorgabe 70 %.</span>
+    <div class="tn-zeile"><input type="range" id="tnGGroesse" min="50" max="150" step="5"><span id="tnGGroesseWert">70 %</span></div>
+    <div class="tn-zeile gr-knoepfe"><button type="button" id="grGMinus">−10 %</button><button type="button" id="grGNull">70 %</button><button type="button" id="grGPlus">+10 %</button></div>
     <p id="grErgebnis" class="gr-ergebnis"></p>
     <div id="grVorschau" class="gr-vorschau">
       <label for="grTyp">Vorschau: Zombietyp</label>
       <div class="tn-zeile"><select id="grTyp"></select></div>
-      <canvas id="grCanvas" width="640" height="260" aria-label="Vorschau: Survivor, Mann/Frau, Zombie und Leiche im gleichen Maßstab"></canvas>
-      <span class="hilfe" id="grMassstab">Alle im selben Maßstab wie im Spiel: Survivor, Mann/Frau, Zombie, Leiche. Unter jeder Figur steht die sichtbare Größe in Spielpixeln (die Bilder füllen ihr Feld unterschiedlich stark).</span>
+      <canvas id="grCanvas" width="640" height="260" aria-label="Vorschau: Mann, Frau, Survivor, Held, Heldin, Soldat, Zombie und Leiche im gleichen Maßstab"></canvas>
+      <span class="hilfe" id="grMassstab">Alle im selben Maßstab wie im Spiel: Mann, Frau, Survivor, Held, Heldin, Soldat, Zombie, Leiche. Unter jeder Figur steht die sichtbare Breite (Schulterbreite) in Spielpixeln.</span>
     </div>
   </div>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="ztTitel">Zombietypen (mindestens einer bleibt an)</div>
@@ -762,36 +756,73 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <label for="wfP_pistole">🔫 Pistole: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_pistole" min="0.05" max="3" step="0.01"><span id="wfP_pistoleWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_pistole"></p>
+  <label for="wfM_pistole">🔫 Pistole: Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_pistole" min="1" max="150" step="1"><span id="wfM_pistoleWert"></span></div>
+  <label for="wfN_pistole">🔫 Pistole: Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_pistole" min="0.5" max="10" step="0.1"><span id="wfN_pistoleWert"></span></div>
   <label for="wfS_gewehr">🎯 Jagdgewehr: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_gewehr" min="1" max="300" step="1"><span id="wfS_gewehrWert"></span></div>
   <label for="wfP_gewehr">🎯 Jagdgewehr: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_gewehr" min="0.05" max="3" step="0.01"><span id="wfP_gewehrWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_gewehr"></p>
+  <label for="wfM_gewehr">🎯 Jagdgewehr: Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_gewehr" min="1" max="150" step="1"><span id="wfM_gewehrWert"></span></div>
+  <label for="wfN_gewehr">🎯 Jagdgewehr: Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_gewehr" min="0.5" max="10" step="0.1"><span id="wfN_gewehrWert"></span></div>
   <label for="wfS_schrotflinte">💥 Schrotflinte: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_schrotflinte" min="1" max="300" step="1"><span id="wfS_schrotflinteWert"></span></div>
   <label for="wfP_schrotflinte">💥 Schrotflinte: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_schrotflinte" min="0.05" max="3" step="0.01"><span id="wfP_schrotflinteWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_schrotflinte"></p>
+  <label for="wfM_schrotflinte">💥 Schrotflinte: Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_schrotflinte" min="1" max="150" step="1"><span id="wfM_schrotflinteWert"></span></div>
+  <label for="wfN_schrotflinte">💥 Schrotflinte: Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_schrotflinte" min="0.5" max="10" step="0.1"><span id="wfN_schrotflinteWert"></span></div>
   <label for="wfS_mp">🪖 Maschinenpistole: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_mp" min="1" max="300" step="1"><span id="wfS_mpWert"></span></div>
   <label for="wfP_mp">🪖 Maschinenpistole: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_mp" min="0.05" max="3" step="0.01"><span id="wfP_mpWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_mp"></p>
+  <label for="wfM_mp">🪖 Maschinenpistole: Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_mp" min="1" max="150" step="1"><span id="wfM_mpWert"></span></div>
+  <label for="wfN_mp">🪖 Maschinenpistole: Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_mp" min="0.5" max="10" step="0.1"><span id="wfN_mpWert"></span></div>
   <label for="wfS_mg">🔥 Maschinengewehr: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_mg" min="1" max="300" step="1"><span id="wfS_mgWert"></span></div>
   <label for="wfP_mg">🔥 Maschinengewehr: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_mg" min="0.05" max="3" step="0.01"><span id="wfP_mgWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_mg"></p>
+  <label for="wfM_mg">🔥 Maschinengewehr: Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_mg" min="1" max="150" step="1"><span id="wfM_mgWert"></span></div>
+  <label for="wfN_mg">🔥 Maschinengewehr: Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_mg" min="0.5" max="10" step="0.1"><span id="wfN_mgWert"></span></div>
   <label for="wfS_armbrust">🏹 Armbrust: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_armbrust" min="1" max="300" step="1"><span id="wfS_armbrustWert"></span></div>
   <label for="wfP_armbrust">🏹 Armbrust: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_armbrust" min="0.05" max="3" step="0.01"><span id="wfP_armbrustWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_armbrust"></p>
+  <label for="wfM_armbrust">🏹 Armbrust: Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_armbrust" min="1" max="150" step="1"><span id="wfM_armbrustWert"></span></div>
+  <label for="wfN_armbrust">🏹 Armbrust: Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_armbrust" min="0.5" max="10" step="0.1"><span id="wfN_armbrustWert"></span></div>
   <label for="wfS_scharfschuetze">🔭 Scharfschützengewehr: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_scharfschuetze" min="1" max="300" step="1"><span id="wfS_scharfschuetzeWert"></span></div>
   <label for="wfP_scharfschuetze">🔭 Scharfschützengewehr: Abklingzeit (Schussfolge)</label>
   <div class="tn-zeile"><input type="range" id="wfP_scharfschuetze" min="0.05" max="3" step="0.01"><span id="wfP_scharfschuetzeWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_scharfschuetze"></p>
+  <label for="wfM_scharfschuetze">🔭 Scharfschützengewehr: Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_scharfschuetze" min="1" max="150" step="1"><span id="wfM_scharfschuetzeWert"></span></div>
+  <label for="wfN_scharfschuetze">🔭 Scharfschützengewehr: Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_scharfschuetze" min="0.5" max="10" step="0.1"><span id="wfN_scharfschuetzeWert"></span></div>
+  <label for="wfS_granatwerfer">💥 Granatwerfer: Schaden (Explosion, Zombies)</label>
+  <div class="tn-zeile"><input type="range" id="wfS_granatwerfer" min="1" max="300" step="1"><span id="wfS_granatwerferWert"></span></div>
+  <label for="wfP_granatwerfer">💥 Granatwerfer: Abklingzeit (Schussfolge)</label>
+  <div class="tn-zeile"><input type="range" id="wfP_granatwerfer" min="0.05" max="5" step="0.01"><span id="wfP_granatwerferWert"></span></div>
+  <p class="tn-leise wf-info" id="wfInfo_granatwerfer"></p>
+  <label for="wfM_granatwerfer">💥 Granatwerfer (40 mm): Magazin (Schuss)</label>
+  <div class="tn-zeile"><input type="range" id="wfM_granatwerfer" min="1" max="150" step="1"><span id="wfM_granatwerferWert"></span></div>
+  <label for="wfN_granatwerfer">💥 Granatwerfer (40 mm): Nachladezeit</label>
+  <div class="tn-zeile"><input type="range" id="wfN_granatwerfer" min="0.5" max="10" step="0.1"><span id="wfN_granatwerferWert"></span></div>
   <label for="wfS_schlaeger">🏏 Baseballschläger: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_schlaeger" min="1" max="300" step="1"><span id="wfS_schlaegerWert"></span></div>
   <label for="wfP_schlaeger">🏏 Baseballschläger: Abklingzeit (Schussfolge)</label>
@@ -827,8 +858,15 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   <div class="tn-zeile"><input type="range" id="rwArmbrust" min="5" max="80" step="1"><span id="rwArmbrustWert">25 m</span></div>
   <label for="rwScharf">🔭 Scharfschützengewehr (Bundeswehr, Polizei)</label>
   <div class="tn-zeile"><input type="range" id="rwScharf" min="5" max="80" step="1"><span id="rwScharfWert">75 m</span></div>
+  <label for="rwGranat">💥 Granatwerfer (Bundeswehr, Bogenschuss)</label>
+  <div class="tn-zeile"><input type="range" id="rwGranat" min="5" max="80" step="1"><span id="rwGranatWert">45 m</span></div>
   <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
   <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.1" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
+  <label for="tnMgMunition">MG-Nest: Munition (0 = unbegrenzt)</label>
+  <div class="tn-zeile"><input type="range" id="tnMgMunition" min="0" max="2000" step="50"><span id="tnMgMunitionWert">400</span></div>
+  <label for="tnPumaMunition">Panzer (Puma): Munition (0 = unbegrenzt)</label>
+  <div class="tn-zeile"><input type="range" id="tnPumaMunition" min="0" max="1000" step="25"><span id="tnPumaMunitionWert">200</span></div>
+  <p class="tn-leise">Ist die Munition leer, holen zwei Soldaten Nachschub vom Bundeswehr-Container.</p>
   <p class="tn-leise" id="bwInfoPuma"></p>
   <label for="tnLeoReich">Evakuierungspanzer (Leopard 2A7, Isarauen): MG-Reichweite</label>
   <div class="tn-zeile"><input type="range" id="tnLeoReich" min="5" max="80" step="1"><span id="tnLeoReichWert">29 m</span></div>
@@ -882,7 +920,6 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   var $ = function (id) { return document.getElementById(id); };
   var komma = function (v) { return '×' + (v / 10).toFixed(1).replace('.', ','); };
   var uhrText = function (u) { u = Math.floor(u); return String(Math.floor(u / 60)).padStart(2, '0') + ':' + String(u % 60).padStart(2, '0'); };
-  var relProzent = function (v) { var d = Math.round(v) - 100; return d ? (d > 0 ? '+' : '−') + Math.abs(d) + ' %' : '±0 %'; };
   var tagAb = 420, nachtAb = 1290;
   var phase = function (u) { return (u >= nachtAb || u < tagAb - 60) ? 'Nacht' : (u >= nachtAb - 60 || u < tagAb) ? 'Dämmerung' : 'Tag'; };
   var aktiv = null;
@@ -904,11 +941,9 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     if (aktiv !== 'tnMenschen') { $('tnMenschen').value = e.menschen === undefined ? 50 : e.menschen; $('tnMenschenWert').textContent = $('tnMenschen').value; }
     if (aktiv !== 'tnAnst') { $('tnAnst').value = e.verwandlung || 30; $('tnAnstWert').textContent = $('tnAnst').value + ' min'; }
     var feld = function (id, wert, text) { if (aktiv !== id) { $(id).value = wert; $(id + 'Wert').textContent = text(Number($(id).value)); } };
+    feld('tnMGroesse', e.menschenGroesse === undefined ? 100 : e.menschenGroesse, function (v) { return v + ' %'; });
     feld('tnZGroesse', e.zombieGroesse === undefined ? 100 : e.zombieGroesse, function (v) { return v + ' %'; });
-    feld('tnLGroesse', e.leichenGroesse === undefined ? 100 : e.leichenGroesse, function (v) { return v + ' %'; });
-    feld('tnHGroesse', e.heldenGroesse === undefined ? 85 : e.heldenGroesse, function (v) { return v + ' %'; });
-    feld('tnSGroesse', e.soldatenGroesse === undefined ? 100 : e.soldatenGroesse, function (v) { return v + ' %'; });
-    feld('tnGGroesse', e.groesseGesamt === undefined ? 100 : e.groesseGesamt, relProzent);
+    feld('tnGGroesse', e.groesseGesamt === undefined ? 70 : e.groesseGesamt, function (v) { return v + ' %'; });
     feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
     if (window.groessenVorschau) window.groessenVorschau();
     var bsl = e.bissSpielerLevel || {}, bsf = function (v) { return v ? v + ' %' : 'nie'; };
@@ -921,6 +956,10 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       var w = wfE[k] || WFVORGABE[k];
       feld('wfS_' + k, w.schaden, function (v) { return String(v); });
       feld('wfP_' + k, w.pause, function (v) { return String(v).replace('.', ',') + ' s (' + String(Math.round(10 / v) / 10).replace('.', ',') + '/s)'; });
+      if (WFMAG[k]) {
+        feld('wfM_' + k, w.magazin === undefined ? WFMAG[k][0] : w.magazin, function (v) { return String(v); });
+        feld('wfN_' + k, w.nachlade === undefined ? WFMAG[k][1] : w.nachlade, function (v) { return String(v).replace('.', ',') + ' s'; });
+      }
     });
     feld('tnBiss', e.biss === undefined ? 100 : e.biss, function (v) { return v ? v + ' %' : 'nie'; });
     feld('tnFeuer', e.feuer === undefined ? 1 : e.feuer, function (v) { return v ? String(v).replace('.', ',') + ' min' : 'aus'; });
@@ -936,6 +975,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     feld('rwMp', rw.mp || 30, function (v) { return v + ' m'; });
     feld('rwMg', rw.mg || 45, function (v) { return v + ' m'; });
     feld('rwArmbrust', rw.armbrust || 25, function (v) { return v + ' m'; });
+    feld('rwGranat', rw.granatwerfer || 45, function (v) { return v + ' m'; });
     feld('rwScharf', rw.scharfschuetze || 75, function (v) { return v + ' m'; });
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
@@ -943,6 +983,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     feld('tnLeoPause', bwe.leopardPause === undefined ? 0.4 : bwe.leopardPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnLeoSchaden', bwe.leopardSchaden === undefined ? 100 : bwe.leopardSchaden, function (v) { return String(v); });
     if (document.activeElement !== $('tnLeoUeberroll')) $('tnLeoUeberroll').checked = bwe.leopardUeberrollen !== false;
+    feld('tnMgMunition', bwe.mgMunition === undefined ? 400 : bwe.mgMunition, function (v) { return v ? String(v) : 'unbegrenzt'; });
+    feld('tnPumaMunition', bwe.pumaMunition === undefined ? 200 : bwe.pumaMunition, function (v) { return v ? String(v) : 'unbegrenzt'; });
     feld('tnBwTage', bwe.falltage === undefined ? 3 : bwe.falltage, function (v) { return v ? v + (v === 1 ? ' Tag' : ' Tage') : 'nie'; });
     if (document.activeElement !== $('tnBwAktiv')) $('tnBwAktiv').checked = bwe.aktiv !== false;
     var spz = d.stuetzpunkt;
@@ -960,8 +1002,11 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   }
   var ZTYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7', 'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];
   window.ZTYPEN = ZTYPEN;   // auch für den Karten-Umbau weiter unten (eigener Skriptblock)
-  var WFVORGABE = { pistole: { schaden: 34, pause: 0.45 }, gewehr: { schaden: 100, pause: 1.2 }, schrotflinte: { schaden: 70, pause: 0.95 }, mp: { schaden: 28, pause: 0.14 }, mg: { schaden: 30, pause: 0.09 }, armbrust: { schaden: 80, pause: 2.4 }, scharfschuetze: { schaden: 220, pause: 2.8 }, schlaeger: { schaden: 40, pause: 0.6 }, sense: { schaden: 55, pause: 0.85 }, messer: { schaden: 30, pause: 0.45 }, faust: { schaden: 20, pause: 0.7 } };
+  var WFVORGABE = { pistole: { schaden: 34, pause: 0.45 }, gewehr: { schaden: 100, pause: 1.2 }, schrotflinte: { schaden: 70, pause: 0.95 }, mp: { schaden: 28, pause: 0.14 }, mg: { schaden: 30, pause: 0.09 }, armbrust: { schaden: 80, pause: 2.4 }, scharfschuetze: { schaden: 220, pause: 2.8 }, granatwerfer: { schaden: 220, pause: 2.2 }, schlaeger: { schaden: 40, pause: 0.6 }, sense: { schaden: 55, pause: 0.85 }, messer: { schaden: 30, pause: 0.45 }, faust: { schaden: 20, pause: 0.7 } };
   window.WFVORGABE = WFVORGABE;
+  // Magazin und Nachladezeit je Fernwaffe: [Schuss, Sekunden] (client/welt.mjs, WAFFEN[..].magazin/nachlade)
+  var WFMAG = { pistole: [15, 4], gewehr: [30, 4], schrotflinte: [6, 4], mp: [30, 4], mg: [100, 4], armbrust: [1, 2], scharfschuetze: [5, 4], granatwerfer: [1, 3] };
+  window.WFMAG = WFMAG;
   function laden() { anfrage('verwaltung/api').then(zeige).catch(function () {}); }
   function regler(id, wert, teil) {
     var el = $(id);
@@ -988,6 +1033,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   regler('rwMp', function (v) { return v + ' m'; }, function (v) { return { reichweite: { mp: v } }; });
   regler('rwMg', function (v) { return v + ' m'; }, function (v) { return { reichweite: { mg: v } }; });
   regler('rwArmbrust', function (v) { return v + ' m'; }, function (v) { return { reichweite: { armbrust: v } }; });
+  regler('rwGranat', function (v) { return v + ' m'; }, function (v) { return { reichweite: { granatwerfer: v } }; });
   regler('rwScharf', function (v) { return v + ' m'; }, function (v) { return { reichweite: { scharfschuetze: v } }; });
   regler('tnBwTage', function (v) { return Number(v) ? v + (Number(v) === 1 ? ' Tag' : ' Tage') : 'nie'; }, function (v) { return { bundeswehr: { falltage: v } }; });
   $('tnBwAktiv').addEventListener('change', function () {
@@ -1000,14 +1046,12 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     anfrage('verwaltung/api', { sichtkegel: $('tnKegel').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { verwandlung: v }; });
+  regler('tnMGroesse', function (v) { return v + ' %'; }, function (v) { return { menschenGroesse: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
-  regler('tnLGroesse', function (v) { return v + ' %'; }, function (v) { return { leichenGroesse: v }; });
-  regler('tnSGroesse', function (v) { return v + ' %'; }, function (v) { return { soldatenGroesse: v }; });
-  regler('tnHGroesse', function (v) { return v + ' %'; }, function (v) { return { heldenGroesse: v }; });
-  regler('tnGGroesse', relProzent, function (v) { return { groesseGesamt: v }; });
+  regler('tnGGroesse', function (v) { return v + ' %'; }, function (v) { return { groesseGesamt: v }; });
   function globalSetzen(f) {
-    var el = $('tnGGroesse'), v = f === 0 ? 100 : Math.max(50, Math.min(150, Number(el.value) + f));
-    el.value = v; $('tnGGroesseWert').textContent = relProzent(v); if (window.groessenVorschau) window.groessenVorschau();
+    var el = $('tnGGroesse'), v = f === 0 ? 70 : Math.max(50, Math.min(150, Number(el.value) + f));
+    el.value = v; $('tnGGroesseWert').textContent = v + ' %'; if (window.groessenVorschau) window.groessenVorschau();
     anfrage('verwaltung/api', { groesseGesamt: v }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   }
   $('grGMinus').addEventListener('click', function () { globalSetzen(-10); });
@@ -1023,6 +1067,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   $('tnLeoUeberroll').addEventListener('change', function () {
     anfrage('verwaltung/api', { bundeswehr: { leopardUeberrollen: $('tnLeoUeberroll').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
+  regler('tnMgMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { bundeswehr: { mgMunition: v } }; });
+  regler('tnPumaMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { bundeswehr: { pumaMunition: v } }; });
   ZTYPEN.forEach(function (k) {
     $('zt_' + k).addEventListener('change', function () {
       var t = {}; t[k] = $('zt_' + k).checked;
@@ -1065,13 +1111,12 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       fetch(BOEGEN[b].replace(/\.\w+$/, '.json')).then(function (r) { return r.json(); }).then(function (j) { liste[b] = j; fertig(); }).catch(function () {});
     });
   })();
-  // Größenvorschau: Spielerfiguren, Zombie und Leiche in Spielgröße. Formeln wie spiel.mjs (alle Bögen haben 160-px-Felder):
-  //   Survivor = 0,476 · Mann/Frau = 0,42 · Zombie (figuren/figuren3, Kriecher) = 0,42 · z6/z7 = 0,476, jeweils · Ausgleichsfaktor je Bild aus groessen.mjs
-  //   (erzeugt von tools/groessen_messen.py: Menschen = Schulterbreite Survivor, Zombies 1,1 ×, Leichen-Körperlänge 1,9 × Zombie-Schulter)
-  //   Zombie = Grundmaßstab · zombieGroesse/100 · groesseGesamt/100;  Leiche = 0,42 · leichenGroesse/100 · groesseGesamt/100 (Zombiegröße zählt nicht)
-  //   Die Bilder füllen ihr Feld unterschiedlich stark – darum steht unter jeder Figur die sichtbare Größe in Spielpixeln.
+  // Größenvorschau: alle Menschen, Zombie und Leiche in Spielgröße. Formeln wie spiel.mjs (alle Bögen haben 160-px-Felder):
+  //   Maßstab je Bild = Grundmaßstab (Survivor/z6/z7/Soldat 0,476 · Mann/Frau/Held/Zombie/Leiche 0,42) · Ausgleichsfaktor je Bild aus groessen.mjs
+  //   (erzeugt von tools/groessen_messen.py: alle Menschen = Schulterbreite Survivor, Zombies 1,0 ×, Leichen-Körperlänge 1,9 × Zombie-Schulter)
+  //   Mensch = Grundmaßstab · menschenGroesse · gesamt;  Zombie = … · zombieGroesse;  Leiche folgt der Zombiegröße.
   (function () {
-    var BG = { figuren: 'grafik/figuren.png', figuren2: 'grafik/figuren2.webp', figuren3: 'grafik/figuren3.webp' };
+    var BG = { figuren: 'grafik/figuren.png', figuren2: 'grafik/figuren2.webp', figuren3: 'grafik/figuren3.webp', helden160: 'grafik/helden160.webp' };
     var ZG = 0.42, MG = 0.42, BG2 = 0.476, VERGR = 2.5, LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];
     var bild = {}, liste = {}, cv = $('grCanvas'), sel = $('grTyp');
     if (!cv || !sel) return;
@@ -1092,7 +1137,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     var SK = 1, GF = {};
     import('./groessen.mjs').then(function (m) { GF = m.GROESSE || {}; neuZeichnen(); }).catch(function () {});
     function gf(b, n) { var v = GF[b + ':' + n]; return v === undefined ? 1 : v; }
-    // sichtbarer Bildinhalt (Alpha > 40) in Spielpixeln: Breite x Höhe; skala ist hier schon der Spielmaßstab
+    // sichtbarer Bildinhalt (Alpha > 40) in Spielpixeln; skala ist hier schon der Spielmaßstab.
+    // Schulterbreite = Höhe der Rahmenbox (alle Figuren blicken im Bogen nach rechts), Leiche liegt: Länge = Breite
     function sichtbar(img, sx, sy, feld, spiel) {
       try {
         var c = document.createElement('canvas'); c.width = c.height = feld; var g = c.getContext('2d');
@@ -1102,18 +1148,17 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
         return x1 < 0 ? true : { b: Math.round((x1 - x0 + 1) * spiel), h: Math.round((y1 - y0 + 1) * spiel) };
       } catch (e) { return true; }
     }
-    function groesse(r) { return r && r.b ? ' · ' + r.b + '×' + r.h + ' px' : ''; }
     function neuZeichnen() {
-      var gg = Number($('tnGGroesse').value) / 100, zf = Number($('tnZGroesse').value) / 100 * gg, lf = Number($('tnLGroesse').value) / 100 * gg;
+      var gg = Number($('tnGGroesse').value) / 100, mf = Number($('tnMGroesse').value) / 100 * gg, zf = mf * Number($('tnZGroesse').value) / 100;
       var erg = $('grErgebnis');
-      if (erg) erg.textContent = 'Im Spiel: Zombies ' + Math.round(zf * 100) + ' % · Leichen ' + Math.round(lf * 100) + ' % der Originalgröße';
+      if (erg) erg.textContent = 'Im Spiel: Menschen ' + Math.round(mf * 100) + ' % · Zombies und Leichen ' + Math.round(zf * 100) + ' % der Bildgröße (100 % = Menschen gleich breit)';
       var dpr = window.devicePixelRatio || 1, bw = cv.clientWidth || 600, bh = 260;
       if (cv.width !== Math.round(bw * dpr) || cv.height !== Math.round(bh * dpr)) { cv.width = Math.round(bw * dpr); cv.height = Math.round(bh * dpr); }
       var ctx = cv.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
       ctx.fillStyle = '#6a994e'; ctx.fillRect(0, 0, bw, bh);
-      // gleicher Maßstab für alle drei; bei sehr großen Faktoren etwas kleiner, damit nichts abgeschnitten wird
-      var k = sel.value, idx = ZTYPEN.indexOf(k), y = bh / 2 - 8, xs = [bw * 0.125, bw * 0.375, bw * 0.625, bw * 0.875];
+      var k = sel.value, idx = ZTYPEN.indexOf(k), y = bh / 2 - 12, xs = [];
+      for (var q = 0; q < 8; q++) xs.push(bw * (q + 0.5) / 8);
       var typ = k === 'kriecher' ? 'hemd' : k;
       var bz, nz, kz;   // Bogen, Bild und Maßstab des Zombies (wie spiel.mjs)
       if (k === 'kriecher') { bz = 'figuren'; nz = 'kriecher_a'; kz = ZG; }
@@ -1124,23 +1169,35 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       var bl = 'figuren', nl;   // Leiche
       if (liste.figuren3 && liste.figuren3.bilder && liste.figuren3.bilder['leiche_' + typ]) { bl = 'figuren3'; nl = 'leiche_' + typ; }
       else nl = 'leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : idx >= 7 ? LEICHEN[idx % LEICHEN.length] : typ);
-      var gm = gf('figuren', 'mann_hand'), gl = gf(bl, nl);
-      var S = Math.min(VERGR, 230 / (160 * Math.max(BG2, MG * gm, kz * zf * gz, ZG * lf * gl)));
+      // Figuren: Bogen, Bild, Grundmaßstab, Ausgleich, Faktor (Mensch oder Zombie)
+      var f = [
+        ['figuren', 'mann_hand', MG, gf('figuren', 'mann_hand'), mf, 'Mann'],
+        ['figuren', 'frau_hand', MG, gf('figuren', 'frau_hand'), mf, 'Frau'],
+        ['figuren2', 'sv_pistole_idle', BG2, 1, mf, 'Survivor'],
+        ['helden160', 'held_m_leer', MG, gf('helden160', 'held_m_leer'), mf, 'Held'],
+        ['helden160', 'held_w_leer', MG, gf('helden160', 'held_w_leer'), mf, 'Heldin'],
+        ['figuren2', 'soldat_idle', BG2, gf('figuren2', 'soldat_idle'), mf, 'Soldat'],
+        [bz, nz, kz, gz, zf, 'Zombie'],
+        [bl, nl, ZG, gf(bl, nl), zf, 'Leiche']
+      ];
+      var gmax = 0;
+      f.forEach(function (e, i) { gmax = Math.max(gmax, e[2] * e[3] * e[4] * (i === 7 ? 1.7 : 1)); });
+      var S = Math.min(VERGR, Math.min(230, bw / 8 * 0.95) / (160 * gmax * 0.62));
       SK = S;
-      var r1 = zeichne(ctx, 'figuren2', 'sv_pistole_idle', xs[0], y, BG2 * S, 0);
-      var r2 = zeichne(ctx, 'figuren', 'mann_hand', xs[1], y, MG * gm * S, 0);
-      var r3 = zeichne(ctx, bz, nz, xs[2], y, kz * zf * gz * S, 0);
-      var r4 = zeichne(ctx, bl, nl, xs[3], y, ZG * lf * gl * S, 0);
-      ctx.font = '600 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 3;
-      var namen = ['Survivor', 'Mann/Frau', 'Zombie ' + Math.round(zf * 100) + ' %', 'Leiche ' + Math.round(lf * 100) + ' %'], rs = [r1, r2, r3, r4];
-      for (var i = 0; i < 4; i++) { ctx.fillText(namen[i], xs[i], bh - 24); ctx.fillText(groesse(rs[i]).replace(' · ', ''), xs[i], bh - 8); }
+      ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center'; ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 3;
+      f.forEach(function (e, i) {
+        var r = zeichne(ctx, e[0], e[1], xs[i], y, e[2] * e[3] * e[4] * S, 0);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(e[5], xs[i], bh - 26);
+        if (r && r.b) ctx.fillText((i === 7 ? 'Länge ' + r.b : 'Breite ' + r.h) + ' px', xs[i], bh - 10);
+      });
       ctx.shadowBlur = 0;
     }
     window.groessenVorschau = neuZeichnen;
     sel.addEventListener('change', neuZeichnen);
     if (window.ResizeObserver) new ResizeObserver(function () { neuZeichnen(); }).observe(cv); else window.addEventListener('resize', neuZeichnen);
+    $('tnMGroesse').addEventListener('input', neuZeichnen);
     $('tnZGroesse').addEventListener('input', neuZeichnen);
-    $('tnLGroesse').addEventListener('input', neuZeichnen);
     $('tnGGroesse').addEventListener('input', neuZeichnen);
     Object.keys(BG).forEach(function (b) {
       var img = new Image();
@@ -1152,6 +1209,10 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   Object.keys(WFVORGABE).forEach(function (k) {
     regler('wfS_' + k, function (v) { return String(v); }, function (v) { var w = {}; w[k] = { schaden: v }; return { waffen: w }; });
     regler('wfP_' + k, function (v) { return String(v).replace('.', ',') + ' s (' + String(Math.round(10 / v) / 10).replace('.', ',') + '/s)'; }, function (v) { var w = {}; w[k] = { pause: v }; return { waffen: w }; });
+    if (WFMAG[k]) {
+      regler('wfM_' + k, function (v) { return String(v); }, function (v) { var w = {}; w[k] = { magazin: v }; return { waffen: w }; });
+      regler('wfN_' + k, function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { var w = {}; w[k] = { nachlade: v }; return { waffen: w }; });
+    }
   });
   regler('tnBiss', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { biss: v }; });
   Array.prototype.forEach.call(document.querySelectorAll('#tagNachtKarte [data-uhr]'), function (b) {
@@ -2869,7 +2930,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     rein(ausbruch, $('tnBewohner'));
     var bundeswehr = neueKarte(P.welt, '🎖 Bundeswehr');
     var bwAktiv = $('tnBwAktiv'); if (bwAktiv) bundeswehr.appendChild(bwAktiv.closest('label'));
-    zeile(bundeswehr, 'tnBwTage'); zeile(bundeswehr, 'tnPumaPause'); rein(bundeswehr, $('bwInfoPuma'));
+    zeile(bundeswehr, 'tnBwTage'); zeile(bundeswehr, 'tnPumaPause'); zeile(bundeswehr, 'tnMgMunition'); zeile(bundeswehr, 'tnPumaMunition'); rein(bundeswehr, $('bwInfoPuma'));
     ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden'].forEach(function (id) { zeile(bundeswehr, id); });
     var leoU = $('tnLeoUeberroll'); if (leoU) bundeswehr.appendChild(leoU.closest('label')); rein(bundeswehr, $('bwInfoLeo')); rein(bundeswehr, $('bwInfoMg')); rein(bundeswehr, $('tnBwStatus'));
     var stadt = neueKarte(P.welt, '🚗 Stadt & Verkehr');
@@ -2878,8 +2939,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   }
   // 🎒 Funde & Waffen
   rein(P.funde, karteVon('titelFunde'));
-  if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden und Schussfolge'); rein(wk, $('wfHinweis')); Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); rein(wk, $('wfInfo_' + k)); }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
-  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwScharf'].forEach(function (id) { zeile(waffen, id); }); }
+  if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden, Schussfolge, Magazin'); rein(wk, $('wfHinweis')); Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); rein(wk, $('wfInfo_' + k)); if (window.WFMAG[k]) { zeile(wk, 'wfM_' + k); zeile(wk, 'wfN_' + k); } }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
+  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwGranat', 'rwScharf'].forEach(function (id) { zeile(waffen, id); }); }
   // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
   rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
   rein(P.aufgaben, $('aufgabenKarte'));
@@ -2896,7 +2957,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   var wert = function (id, vorgabe) { var e = $(id); var v = e ? Number(e.value) : NaN; return isFinite(v) ? v : vorgabe; };
   var kommaZahl = function (v, st) { return String(Math.round(v * Math.pow(10, st || 0)) / Math.pow(10, st || 0)).replace('.', ','); };
   // Überraschungsfaktor je Waffe (client/welt.mjs, WAFFEN[..].ueberraschung; tests/verwaltung.test.mjs prüft die Übereinstimmung)
-  var UEB = { pistole: 1.5, gewehr: 1.5, schrotflinte: 1.5, mp: 1.5, mg: 1.5, armbrust: 2, scharfschuetze: 1.5, schlaeger: 3, sense: 3, messer: 4, faust: 2.5 };
+  var UEB = { pistole: 1.5, gewehr: 1.5, schrotflinte: 1.5, mp: 1.5, mg: 1.5, armbrust: 2, scharfschuetze: 1.5, granatwerfer: 1, schlaeger: 3, sense: 3, messer: 4, faust: 2.5 };
   var NEBEN = { schrotflinte: 45 / 70 };   // Schrot: Nebenschaden an weiteren Zombies im Kegel, im Verhältnis zum Hauptschaden
   var KRIECHER = 0.35;                      // Kriecher hat 35 % der Zombie-Lebenspunkte (raum.mjs KRIECHER_HP)
   var KANONE = 100, FLAECHE = 60, SOLDAT = 100;   // stuetzpunkt.mjs (feste Werte)

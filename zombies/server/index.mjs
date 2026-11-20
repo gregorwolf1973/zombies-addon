@@ -86,7 +86,7 @@ export async function starte({
       nachtFaktor: w.zombies.nacht / 10,
       autoFaktor: w.autos / 10,
       tagMinuten: w.tagMinuten,
-      tagAb: w.tagAb, nachtAb: w.nachtAb, nachtDunkel: w.nachtDunkel, zombieGroesse: w.zombieGroesse, leichenGroesse: w.leichenGroesse, heldenGroesse: w.heldenGroesse, soldatenGroesse: w.soldatenGroesse, groesseGesamt: w.groesseGesamt, zombieLeben: w.zombieLeben,
+      tagAb: w.tagAb, nachtAb: w.nachtAb, nachtDunkel: w.nachtDunkel, menschenGroesse: w.menschenGroesse, zombieGroesse: w.zombieGroesse, groesseGesamt: w.groesseGesamt, zombieLeben: w.zombieLeben,
       menschen: w.menschen,
       verwandlungMin: w.verwandlung,               // Spielminuten Biss → Zombie (Menschen)
       bissChance: w.biss / 100,

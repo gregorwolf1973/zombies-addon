@@ -208,6 +208,12 @@ export function baueStuetzpunkt(welt, seed, setze) {
     teile.push({ art: 'kiste', x, y, w: 22, d: 15, winkel: th, b: c ? 22 : 15, h: c ? 15 : 22 });
     sperre(x, y, -11, -7.5, 11, 7.5);
   }
+  // vier Vorratskisten des Lagers (Safe House, gemeinsame Kisten wie im Safe Room: state.safes 'lager0'…'lager3'; Munition darf hinein)
+  [[11.0, 21.2], [12.0, 21.2], [13.0, 21.2], [14.0, 21.2]].forEach(([u, v], i) => {
+    const [x, y] = ort(u, v);
+    teile.push({ art: 'vorratskiste', id: 'lager' + i, x, y, w: 26, d: 18, winkel: th, b: c ? 26 : 18, h: c ? 18 : 26 });
+    sperre(x, y, -13, -9, 13, 9);
+  });
   for (const [u, v] of [[12.7, 16.1], [20.5, 14.9], [15.8, 16.0], [9.8, 19.0], [21.0, 20.2]]) posten('soldat', u, v);
 
   // ---- Feinraster: alle Hindernisse eintragen ----
@@ -473,7 +479,7 @@ export function zeichneStuetzpunktOben(ctx, welt, rect) {
     const f = {
       sanizelt: () => zeltWaende(ctx, t), zelt: () => zeltWaende(ctx, t), funkzelt: () => zeltWaende(ctx, t),
       sdraht: () => sDraht(ctx, t), sandsack: () => sandsackStellung(ctx, t), mgnest: () => mgNest(ctx, t),
-      lkw: () => lkw(ctx, t), container: () => bwContainer(ctx, t), kiste: () => munKiste(ctx, t),
+      lkw: () => lkw(ctx, t), container: () => bwContainer(ctx, t), kiste: () => munKiste(ctx, t), vorratskiste: () => vorratsKiste(ctx, t),
       antenne: () => antenne(ctx, t), flagge: () => flagge(ctx, t),
     }[t.art];
     if (f) dinge.push([t.art === 'sdraht' ? t.y - 4000 : t.y, f]);
@@ -673,6 +679,15 @@ function munKiste(ctx, t) {
   ctx.fillStyle = '#d4b530'; ctx.fillRect(-hw + 4, -hd + 1.5, 2.4, t.d - 3);
   ctx.fillStyle = '#c0c4a0'; ctx.fillRect(hw - 4, -hd + 2, 2, 3); ctx.fillRect(hw - 4, hd - 5, 2, 3);   // Verschlüsse
   ctx.fillStyle = 'rgba(240,240,225,.9)'; ctx.fillRect(-hw + 8, -2.5, 8, 1.2); ctx.fillRect(-hw + 8, -0.2, 6, 1.2); ctx.fillRect(-hw + 8, 2, 7, 1.2);
+}
+// Vorratskiste des Lagers: helle Holzkiste mit grünem Deckelband und weißem Kreuz (Safe House)
+function vorratsKiste(ctx, t) {
+  ctx.translate(t.x, t.y); ctx.rotate(t.winkel);
+  const hw = t.w / 2, hd = t.d / 2;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-hw + 2, -hd + 3, t.w, t.d);
+  rundRechteck(ctx, '#5a4326', -hw, -hd, t.w, t.d, 2); rundRechteck(ctx, '#8a6a3c', -hw + 1.5, -hd + 1.5, t.w - 3, t.d - 3, 1.4);
+  ctx.fillStyle = '#4f5d2a'; ctx.fillRect(-hw + 1.5, -2.2, t.w - 3, 4.4);
+  ctx.fillStyle = 'rgba(240,240,225,.92)'; ctx.fillRect(-1, -hd + 3, 2, t.d - 6); ctx.fillRect(-4.5, -1, 9, 2);
 }
 function saniKiste(ctx, b) {
   ctx.translate(b.x, b.y); ctx.rotate(b.winkel ?? 0);

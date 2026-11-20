@@ -5,11 +5,11 @@ Aufruf (aus zombies/):  PYTHONPATH=~/code/ahnen-werkzeuge/pil python3 tools/groe
 
 Alle Figuren blicken im Bogen nach rechts: Höhe der sichtbaren Rahmenbox (Alpha > 40) = Schulterbreite,
 Breite = Länge inkl. Waffe/Arme. Bezug ist der Survivor (bleibt unverändert, Faktor 1):
-  Bewohner/Menschen   = Schulterbreite des Survivors
-  lebende Zombies     = 1,1 × Survivor
+  alle Menschen (Spieler m/w/s/Held/Heldin, Bewohner, Soldaten, Ärzte, Verwundete) = Schulterbreite des Survivors
+  lebende Zombies     = 1,0 × Menschen (Zombiegröße 100 % = gleich breit)
   Leichen             = Körperlänge (Kopf–Fuß, ohne Blutlache) 1,9 × Zombie-Schulterbreite
 Der Faktor wird im Spiel (spiel.mjs) und in der Vorschau (verwaltung.html) zusätzlich zum bisherigen
-Maßstab und zu den Reglern eingerechnet. Kollisionen/Spiellogik bleiben unberührt.
+Maßstab und zu den Reglern (menschenGroesse, zombieGroesse, groesseGesamt) eingerechnet. Kollisionen/Spiellogik bleiben unberührt.
 """
 import json, os, statistics as st, sys
 from PIL import Image
@@ -17,9 +17,9 @@ from PIL import Image
 HIER = os.path.dirname(os.path.abspath(__file__))
 GRAFIK = os.path.join(HIER, '..', 'client', 'grafik')
 AUS = os.path.join(HIER, '..', 'client', 'groessen.mjs')
-BOEGEN = {'figuren': 'figuren.png', 'figuren2': 'figuren2.webp', 'figuren3': 'figuren3.webp'}
+BOEGEN = {'figuren': 'figuren.png', 'figuren2': 'figuren2.webp', 'figuren3': 'figuren3.webp', 'helden160': 'helden160.webp'}
 M_ALT, M_B2 = 0.42, 0.476            # bisherige Grundmaßstäbe (wie spiel.mjs)
-ZOMBIE_FAKTOR, LEICHE_FAKTOR = 1.1, 1.9
+ZOMBIE_FAKTOR, LEICHE_FAKTOR = 1.0, 1.9      # Zombie 100 % = gleich breit wie die Menschen
 
 _cache = {}
 def bogen(b):
@@ -67,11 +67,18 @@ def main():
     gruppen = []
     gruppen.append((['figuren2:' + n for n in ('sv_pistole_idle',)], 'figuren2', ['sv_pistole_idle'], M_B2, None))   # Survivor = Bezug
     for g in ('mann', 'frau'):
+        # Messbild = Grundhaltung ohne Waffe (hand); die Waffenbilder bekommen denselben Faktor
         gruppen.append((['figuren:%s_%s' % (g, w) for w in ('hand', 'pistole', 'schlaeger', 'messer')], 'figuren',
-                        ['%s_%s' % (g, w) for w in ('hand', 'pistole', 'schlaeger', 'messer')], M_ALT, ziel_m))
+                        ['%s_hand' % g], M_ALT, ziel_m))
     gruppen.append((['figuren2:buerger1', 'figuren2:buerger2', 'figuren2:buerger3', 'figuren2:polizist', 'figuren2:arzt'], 'figuren2',
                     ['buerger1', 'buerger2', 'buerger3', 'polizist', 'arzt'], M_B2 * 0.95, ziel_m))
     gruppen.append((['figuren2:soldat_idle', 'figuren2:soldat_schuss'], 'figuren2', ['soldat_idle', 'soldat_schuss'], M_B2, ziel_m))
+    gruppen.append((['figuren2:verwundet'], 'figuren2', ['verwundet'], M_ALT * 1.26, ziel_m))   # Verwundete im Lager (liegend, wie im Spiel 0,42 × 1,26)
+    HALT = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe']
+    for g in ('m', 'w'):   # Held/Heldin (helden160): Stiefel-Ebenen bekommen denselben Faktor wie der Körper
+        koerper = ['held_%s_%s' % (g, h) for h in HALT]
+        stiefel = ['held_%s_stiefel_%s' % (g, a) for a in ('stehen', 'gehen', 'laufen')]
+        gruppen.append((['helden160:' + n for n in koerper + stiefel], 'helden160', koerper[:1], M_ALT, ziel_m))   # Messbild = held_<g>_leer
     for t in ('tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose'):
         namen = ['zombie_' + t]
         schl = ['figuren:zombie_' + t]
