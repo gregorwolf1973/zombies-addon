@@ -9,7 +9,7 @@ const q = new URLSearchParams(location.search);
 const PX = +(q.get('px') || 8);          // Bildpunkte je Modelleinheit
 const TURM = ['turret', 'gun', 'rocket00', 'rocket01', 'spike_lr'];
 try {
-  const g = await new GLTFLoader().loadAsync('spz_puma.glb');
+  const g = await new GLTFLoader().loadAsync(q.get('datei') || 'spz_puma.glb');
   const root = g.scene; root.updateMatrixWorld(true);
   const box = o => new THREE.Box3().setFromObject(o);
   const fmt = b => [b.min, b.max].map(v => [v.x, v.y, v.z].map(n => n.toFixed(2)).join(',')).join(' .. ');

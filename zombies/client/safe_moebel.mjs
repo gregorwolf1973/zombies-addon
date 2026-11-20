@@ -88,18 +88,23 @@ export function zeichneSafeMoebel(ctx, m, KACHEL) {
 
 // Sandsack-Wall links und rechts der Tür. Ursprung = Türmitte an der Hauswand, +y zeigt nach draußen, Türbreite 48 bleibt frei.
 export function zeichneSandsaecke(ctx) {
-  const reihe = (x0, x1, y0, versatz) => {
-    for (let x = x0 + versatz; x < x1; x += 14) {
-      const f = ['#c8b27a', '#bfa86c', '#d2bd88'][Math.abs(Math.round(x * 7 + y0 * 3)) % 3];
-      ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + 7 + 1.5, y0 + 4 + 2, 7, 4.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = f; ctx.beginPath(); ctx.ellipse(x + 7, y0 + 4, 7, 4.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = 'rgba(80,60,20,.55)'; ctx.lineWidth = 1; ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x + 4, y0 + 4); ctx.lineTo(x + 10, y0 + 4); ctx.stroke();
-    }
+  // je Seite drei geschlossene Reihen (unten/innen an der Wand, nach außen schmaler), Säcke gleich breit, jede zweite Reihe um einen halben Sack versetzt;
+  // die Reihen enden bündig 26 px von der Türmitte (Durchgang ±24 bleibt frei)
+  const sack = (cx, cy, rb, rh) => {
+    const f = ['#c8b27a', '#bfa86c', '#d2bd88'][Math.abs(Math.round(cx * 7 + cy * 3)) % 3];
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(cx + 1.2, cy + 1.8, rb, rh, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = f; ctx.beginPath(); ctx.ellipse(cx, cy, rb, rh, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(80,60,20,.55)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - rb * 0.4, cy); ctx.lineTo(cx + rb * 0.4, cy); ctx.stroke();
+  };
+  const reihe = (x0, x1, cy, n, halb) => {
+    const bw = (x1 - x0) / n;
+    if (halb) { for (let i = 0; i < n - 1; i++) sack(x0 + bw * (i + 1), cy, bw / 2 + 0.5, 4.2); }
+    else for (let i = 0; i < n; i++) sack(x0 + bw * (i + 0.5), cy, bw / 2 + 0.5, 4.2);
   };
   for (const [a, b] of [[-62, -26], [26, 62]]) {
-    reihe(a, b, 10, 0);
-    reihe(a, b, 17, 7);
-    reihe(a + 3, b - 3, 24, 0);
+    reihe(a, b, 18, 3, false);
+    reihe(a, b, 24, 3, true);
+    reihe(a, b, 30, 3, false);
   }
 }

@@ -699,3 +699,9 @@ test('Handel per Rätsel: 6 richtige in Folge zahlen, eine falsche setzt zurück
   assert.ok(nachrichten.handel.some(m => m.ok && /Rätsel/.test(m.text)));
   await beenden(c);
 });
+
+test('Handgranate: weiter werfen, größerer Radius, mehr Schaden als zuvor (120 px, 40 px, 150/50)', () => {
+  assert.ok(GRANATE.wurfWeite >= 120 * 1.6 && GRANATE.blickWeite >= 80 * 1.6, 'Wurfweite');
+  assert.ok(GRANATE.radius >= 40 * 1.5, 'Radius');
+  assert.ok(GRANATE.schadenZombie > 150 && GRANATE.schadenSpieler > 50, 'Schaden');
+});

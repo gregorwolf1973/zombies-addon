@@ -362,6 +362,35 @@ test('Horde: kein Gleichschritt – Tempi, Richtungen und Wege streuen', async (
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
+test('Horde: zieht zügig und zusammenhängend – Mitte legt in 60 s Spielzeit mindestens 2000 px zurück, wenig Stillstand', async () => {
+  const { c, raum, p } = await beitreten('Marsch');
+  try {
+    einst({ welleMinuten: 20, welleMin: 40, welleMax: 40, hordeZielMin: 5, hordeZielMax: 5 });
+    p.ebene = ''; p.x = 4 * KACHEL; p.y = 4 * KACHEL; p.unten = true;   // Liegender weit weg in der Ecke: sonst weichen Zombies vor ihm aus
+    raum.welle.erzeugen('west');
+    const a = raum.welle.aktiv, ids = [...a.ids];
+    const start = { ...a.mitte };
+    let weg = 0, letzte = { ...a.mitte }, steht = 0, messungen = 0;
+    for (let i = 0; i < 1200; i++) {   // 60 s in 0,05-s-Schritten
+      raum.welle.schritt(0.05);
+      raum.baueZombieRaster();
+      for (const [id, z] of raum.state.zombies) raum.zombieSchritt(id, z, 0.05);
+      if (i % 20 === 19 && raum.welle.aktiv) {   // jede Sekunde: Mitte, Anteil der Stehenden
+        const m = raum.welle.aktiv.mitte;
+        weg += Math.hypot(m.x - letzte.x, m.y - letzte.y); letzte = { ...m };
+        let st = 0, n = 0;
+        for (const id of raum.welle.aktiv.ids) { const z = raum.state.zombies.get(id); if (!z) continue; n++; if (z._x0 !== undefined && Math.hypot(z.x - z._x0, z.y - z._y0) < 20) st++; z._x0 = z.x; z._y0 = z.y; }
+        if (n && i > 100) { steht += st / n; messungen++; }
+      }
+    }
+    raum.zRaster = null;
+    assert.ok(raum.welle.aktiv && raum.welle.aktiv.ids.size >= ids.length * 0.4, 'Horde zerfallen');
+    assert.ok(weg >= 2000, `Hordenmitte zu langsam: ${Math.round(weg)} px in 60 s`);
+    assert.ok(steht / messungen < 0.2, 'zu viele Zombies stehen oder hängen fest: ' + (steht / messungen));
+    raum.welle.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
 // ---- Horde: klare Ziele (Lärm-Schwelle, Festfahren, hordeInfo) ----
 
 test('Horde: Dauerlärm (20 Schüsse in 60 s) lenkt höchstens einmal um', async () => {
