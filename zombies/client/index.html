@@ -34,6 +34,9 @@
       <label for="code">Zugangscode</label>
       <input id="code" maxlength="40" autocomplete="off" placeholder="vom Gastgeber">
     </div>
+    <details id="testzugang" class="testzugang"><summary>Testzugang</summary>
+      <input id="testpw" type="password" maxlength="200" autocomplete="off" placeholder="Passwort">
+    </details>
     <button id="los">Mitspielen</button>
     <div id="freigaben" class="freigaben">
       <div class="fg-zeile">🎤 Mikrofon: <span id="fgMikro">wird geprüft …</span> <button type="button" id="fgMikroKnopf" class="fg-knopf" hidden>Erlauben</button></div>
@@ -84,6 +87,7 @@
 <button id="zoomraus" class="zoomknopf" title="Herauszoomen (−)" aria-label="Herauszoomen">−</button>
 <button id="zoomrein" class="zoomknopf" title="Hineinzoomen (+)" aria-label="Hineinzoomen">+</button>
 <button id="einstellknopf" title="Spieler-Einstellungen" aria-label="Spieler-Einstellungen">⚙️</button>
+<button id="suknopf" title="Testmenü" aria-label="Testmenü">☰</button>
 </div>
 <div id="kartenbox" title="Übersicht (M)">
   <canvas id="karte"></canvas>

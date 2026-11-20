@@ -654,6 +654,16 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       </div>
       <p class="hinweis">Leer = kein Code nötig.</p>
     </div>
+
+    <div class="feld" id="suFeld">
+      <label for="suPasswort">Superuser-Passwort (Testzugang)</label>
+      <div class="pass-feld">
+        <input type="password" id="suPasswort" autocomplete="new-password" placeholder="neues Passwort eingeben">
+        <button type="button" class="klein" id="suSpeichern">Speichern</button>
+        <button type="button" class="klein" id="suLoeschen">Löschen</button>
+      </div>
+      <p class="hinweis">Status: <b id="suStatus">…</b>. Wer im Anmeldefenster dieses Passwort unter „Testzugang“ eingibt, bekommt ein Testmenü (☰). Gespeichert wird nur ein Hash, das Passwort wird hier nie wieder angezeigt. Nicht gesetzt = Testzugang aus.</p>
+    </div>
   </section>
 
   <!-- Fundhäufigkeit -->
@@ -3192,6 +3202,29 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     if (start >= akk.length) start = 0;
     akk.forEach(function (k, nr) { setze(k, nr === start); });
   });
+})();
+</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function zeige(d) {
+    var an = !!(d && d.einstellungen && d.einstellungen.superuserGesetzt);
+    $('suStatus').textContent = an ? 'gesetzt' : 'nicht gesetzt';
+    $('suLoeschen').disabled = !an;
+  }
+  function senden(teil) {
+    return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(teil) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige)
+      .catch(function (e) { $('suStatus').textContent = 'Fehler: ' + e.message; });
+  }
+  $('suSpeichern').addEventListener('click', function () {
+    var w = $('suPasswort').value;
+    if (w.length < 8) { $('suStatus').textContent = 'Passwort zu kurz (mindestens 8 Zeichen)'; return; }
+    senden({ superuserPasswort: w }).then(function () { $('suPasswort').value = ''; });
+  });
+  $('suLoeschen').addEventListener('click', function () { senden({ superuserLoeschen: true }); });
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  laden();
 })();
 </script>
 </body>

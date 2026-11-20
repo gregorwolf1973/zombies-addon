@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DINGE, WAFFEN } from '../client/welt.mjs';
 import { MOERSER } from './moerser.mjs';
+import { hashe, hashGueltig } from './superuser.mjs';
 
 export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
 export const LEVEL_WELTEN = ['geretsried', 'isarauen'];   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
@@ -116,7 +117,13 @@ export function bereinige(e = {}, alt = {}) {
   z.welleMin = Math.round(zahl(z.welleMin, 5, 1000, 20)); z.welleMax = Math.max(z.welleMin, Math.round(zahl(z.welleMax, 5, 1000, 50)));
   z.hordeZielMin = Math.round(zahl(z.hordeZielMin, 1, 30, 2) * 2) / 2; z.hordeZielMax = Math.max(z.hordeZielMin, Math.round(zahl(z.hordeZielMax, 1, 30, 5) * 2) / 2);
   z.hordeTruppMin = Math.round(zahl(z.hordeTruppMin, 1, 300, 5)); z.hordeTruppMax = Math.max(z.hordeTruppMin, Math.round(zahl(z.hordeTruppMax, 1, 300, 15)));
+  // Superuser-Testzugang: nur der scrypt-Hash wird gespeichert; ein Klartext-Passwort (superuserPasswort) wird sofort gehasht,
+  // superuserLoeschen schaltet den Superuser ab. Leer = Superuser unmöglich.
+  const suHash = e.superuserLoeschen === true ? ''
+    : typeof e.superuserPasswort === 'string' && e.superuserPasswort.length >= 8 ? hashe(e.superuserPasswort)
+    : hashGueltig(e.superuserHash) ? e.superuserHash : hashGueltig(a.superuserHash) ? a.superuserHash : '';
   return {
+    superuserHash: suHash,
     zugangscode: String(e.zugangscode ?? a.zugangscode ?? '').trim().slice(0, 40),
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
     bots: Math.round(zahl(e.bots ?? a.bots, 0, 9, 2)),
@@ -230,7 +237,7 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { geretsried: 12, isarauen: 12 }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { geretsried: 12, isarauen: 12 }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50, hordeZielMin: 2, hordeZielMax: 5, hordeZieleZeigen: false, hordeTruppMin: 5, hordeTruppMax: 15, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '' },
@@ -261,9 +268,11 @@ export class EinstellungsDatei {
     this.werte = gespeichert ? bereinige(gespeichert) : ausOptionen(optionen);
     // Testschalter gelten nie über einen Neustart hinaus
     this.werte.test = { zeitraffer: 1, unsterblich: this.werte.test.unsterblich };
+    if (gespeichert?.superuserPasswort) this.aendern({});   // Klartext aus der Datei: sofort als Hash zurückschreiben
   }
 
   aendern(neu) {
+    if (neu && typeof neu === 'object' && 'superuserHash' in neu) { neu = { ...neu }; delete neu.superuserHash; }   // einen Hash gibt es nur aus der Datei, nie über die Oberfläche
     this.werte = bereinige(neu, this.werte);
     if (this.datei) {
       try {
@@ -274,4 +283,10 @@ export class EinstellungsDatei {
     }
     return this.werte;
   }
+}
+
+// Einstellungen für Browser/Verwaltung: nie Hash oder Passwort, nur „gesetzt“
+export function oeffentlich(werte) {
+  const { superuserHash, superuserPasswort, ...rest } = werte;
+  return { ...rest, superuserGesetzt: hashGueltig(superuserHash) };
 }
