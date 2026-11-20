@@ -22,6 +22,8 @@ BOEGEN = [
     ('ergebnis_2_nahkampf_wurf', 3, ['messer', 'schlaeger', 'brechstange', 'sense', 'granate', 'granate40', 'pfeil', 'bretter', 'seil']),
     ('ergebnis_3_versorgung', 3, ['wasser', 'essen', 'schokoriegel', 'verband', 'spritze', 'kleidung', 'taschenlampe', 'radio', 'funkgeraet']),
     ('ergebnis_4_taschen', 2, ['tasche', 'trekking', 'schluessel', 'faust']),
+    # Missionsgegenstände (Zellen 8 und 9 leer)
+    ('ergebnis_5_mission', 3, ['m_funk', 'm_batterie', 'm_antenne', 'm_schluessel', 'm_diesel', 'm_treibstoff', 'm_landefeuer']),
 ]
 # einzelne Zellen aus einer Nachbesserung (Datei, Raster, Zelle 0-basiert) statt aus dem Bogen
 ERSATZ = {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.62.5 – 20.11.2026
+
+- Bilder für die sieben Missionsgegenstände (Funkgerät, Batterie, Antenne, Torschlüssel, Diesel, Treibstoffkanister, Landefeuer) im Stil der übrigen Gegenstands-Icons (Gemini, fünfter Bogen in tools/dinge_bilder.py). Sie erscheinen überall, wo Gegenstände als Bild gezeigt werden; auf der Übersichtskarte bleiben die Symbole.
+
 ## 0.62.4 – 20.11.2026
 
 - Geändert: Die Horden-Prüfanzeige (Zielfahne, Linie, letzte Zielwechsel) sehen nur noch Superuser. Sie lässt sich im ☰-Testmenü mit „🎯 Horden-Ziele anzeigen ein/aus“ für sich selbst schalten und steht jetzt direkt unter dem Zählerfenster statt unten links.
