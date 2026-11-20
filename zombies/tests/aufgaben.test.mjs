@@ -354,11 +354,11 @@ test('Levelwechsel: mit erfüllten Aufgaben fährt der Bus los, die Karte wechse
 
 test('Einstellungen: Aufgaben und Evakuierung werden begrenzt, Vorgaben stimmen', async () => {
   const { bereinige, vorgaben } = await import('../server/einstellungen.mjs');
-  assert.deepEqual(vorgaben().aufgaben, { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '' });
+  assert.deepEqual(vorgaben().aufgaben, { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 });
   const e = bereinige({ aufgaben: { an: false, stunde: 3, wartezeit: 999, wartenEchtMin: 999, anzahl: 9 } });
-  assert.deepEqual(e.aufgaben, { an: false, stunde: 6, wartezeit: 180, wartenEchtMin: 60, anzahl: 6, evakArt: '' });
+  assert.deepEqual(e.aufgaben, { an: false, stunde: 6, wartezeit: 180, wartenEchtMin: 60, anzahl: 6, evakArt: '', finaleMinuten: 30 });
   const f = bereinige({ aufgaben: { stunde: 99, wartezeit: 1, wartenEchtMin: 0, anzahl: 0 } }, e);
-  assert.deepEqual(f.aufgaben, { an: false, stunde: 23, wartezeit: 10, wartenEchtMin: 1, anzahl: 3, evakArt: '' });
+  assert.deepEqual(f.aufgaben, { an: false, stunde: 23, wartezeit: 10, wartenEchtMin: 1, anzahl: 3, evakArt: '', finaleMinuten: 30 });
   assert.equal(bereinige({ aufgaben: { evakArt: 'flugzeug' } }).aufgaben.evakArt, 'flugzeug');
   assert.equal(bereinige({ aufgaben: { evakArt: 'raumschiff' } }).aufgaben.evakArt, '');
   assert.equal(bereinige({ bundeswehr: { leopardReichweite: 999, leopardPause: 0, leopardSchaden: 0 } }).bundeswehr.leopardReichweite, 80);

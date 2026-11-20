@@ -11,6 +11,8 @@ import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben, Mission } from './aufgaben.mjs';
 import { schwierigkeit } from './schwierigkeit.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
+import { levelorteSetzen } from './levelorte.mjs';
+import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
@@ -18,6 +20,7 @@ import { Radios } from './radio.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { Moerser } from './moerser.mjs';
 import * as FK from './faehigkeiten.mjs';
+import { alleKandidaten, NIMM_WEITE } from '../client/durchsuche_alle.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
@@ -126,6 +129,7 @@ export const Zustand = schema({
   evakAY: t.number(),
   evakW: t.number(),
   evakRest: t.uint16(),     // Sekunden, bis der Hubschrauber landet
+  finaleRest: t.uint16(),   // Finale (Andermatt): Sekunden bis zum Atomschlag, 0 = kein Countdown (server/finale.mjs)
   aufgaben: t.map(Aufgabe), // gemeinsame Aufgaben dieses Levels
   missionen: t.map(Mission),   // Suchkreise der Missionsgegenstände (Mitte/Radius in px, nie der genaue Ort)
   missionOffen: t.uint8(),     // noch nicht abgegebene Missionsgegenstände (0 = alle da oder keine Mission)
@@ -325,6 +329,7 @@ export class SpielRaum extends Room {
   static einstellungen = { zugangscode: '', zombieFaktor: 1, haeuserFaktor: 1, tempoFaktor: 1, bots: 0, funde: {}, zeitraffer: 1, unsterblich: new Set() };
   static speicher = null;
   static aktiv = null;   // laufender Raum (für die Verwaltungsseite)
+  static testSetzen = null;      // vom Server gesetzt: speichert Testschalter (z. B. Zeitraffer) wie die Verwaltung
   static kartenWechsel = null;   // vom Server gesetzt: stellt die Karte für die nächste Welt ein (Levelwechsel)
 
   // läuft bei der Anfrage zum Beitreten: Zugangscode prüfen.
@@ -352,7 +357,7 @@ export class SpielRaum extends Room {
       setzeKartengroesse(karte.breite, karte.hoehe);
       const passtStand = stand && (stand.karte ?? '') === karte.name && stand.seed === this.state.seed;
       this.state.autos = Math.max(0, Math.min(50, Math.round(passtStand && Number.isFinite(stand.autos) ? stand.autos : (SpielRaum.einstellungen.autoFaktor ?? 1) * 10)));
-      this.welt = baueWeltAusKarte(karte, this.state.seed, { autos: this.state.autos / 10 }); this.weltFp = weltFingerabdruck(this.welt);   // sofort, bevor Spielstand/Spiel die Welt verändern
+      this.welt = baueWeltAusKarte(karte, this.state.seed, { autos: this.state.autos / 10 }); this.weltFp = weltFingerabdruck(this.welt); levelorteSetzen(this.welt, karte.name);   // sofort, bevor Spielstand/Spiel die Welt verändern
       this.state.karte = karte.name;
     } else {
       setzeKartengroesse(64, 48);
@@ -426,6 +431,8 @@ export class SpielRaum extends Room {
     this.welle = new Zombiewelle(this);
     this.aufgaben = new Aufgaben(this);
     this.aufgaben.start(stand, !!passt);
+    this.finale = new Finale(this);
+    this.finale.start();
     this.tageszeitenUebernehmen();   // Nachtlänge hängt vom Level ab
     this.stuetzpunkt = new Stuetzpunkt(this);
     this.stuetzpunkt.start(stand, !!passt);
@@ -447,7 +454,7 @@ export class SpielRaum extends Room {
     });
     // jede dieser Nachrichten zeigt, dass jemand am Gerät ist (Rückkehr aus der AFK-Steuerung)
     {
-      const aktiv = new Set(['aktion', 'aktion2', 'wurf', 'handel', 'handel_raetsel', 'benutze', 'nachladen', 'waffenplatz', 'platz_aktion', 'faust', 'wegwerfen', 'aufheben_wahl', 'kiste', 'kuehlschrank', 'ausruhen', 'antwort', 'fk_punkt', 'startwahl', 'tausch_start', 'tausch_anbieten', 'tausch_zurueck', 'tausch_ok', 'chat', 'spricht']);
+      const aktiv = new Set(['aktion', 'aktion2', 'durchsuche_alle', 'fund_nimm', 'wurf', 'handel', 'handel_raetsel', 'benutze', 'nachladen', 'waffenplatz', 'platz_aktion', 'faust', 'wegwerfen', 'aufheben_wahl', 'kiste', 'kuehlschrank', 'ausruhen', 'antwort', 'fk_punkt', 'startwahl', 'tausch_start', 'tausch_anbieten', 'tausch_zurueck', 'tausch_ok', 'chat', 'spricht']);
       const om = this.onMessage.bind(this);
       this.onMessage = (typ, cb) => om(typ, aktiv.has(typ) ? (c, m) => { this.ruehrt(c.sessionId); return cb(c, m); } : cb);
     }
@@ -457,6 +464,8 @@ export class SpielRaum extends Room {
     this.onMessage('aussteigen', client => this.aufgaben?.aussteigen(client.sessionId));   // aus dem Evakuierungsfahrzeug aussteigen (Knopf/Taste)
     this.onMessage('aktion', client => this.starteAktion(client));
     this.onMessage('aktion2', client => this.starteAktion(client, true));
+    this.onMessage('durchsuche_alle', client => this.starteAlle(client));
+    this.onMessage('fund_nimm', (client, m) => this.fundNimm(client, m));
     this.onMessage('wurf', (client, m) => this.granaten.werfen(client, m));
     this.onMessage('nachladen', client => { const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId); if (p && x && !p.unten && p.zombie <= 0 && this.state.phase === 'spiel') WP.startNachladen(this, p, x, SpielRaum.einstellungen); });
     this.onMessage('waffenplatz', (client, m) => {
@@ -1770,6 +1779,7 @@ export class SpielRaum extends Room {
     p.aktion = ''; p.fortschritt = 0; x.aktionZiel = null;
     const client = this.clients.find(c => c.sessionId === sid);
     if (k.art === 'durchsuchen') this.durchsucht(client, p, k.behaelter);
+    else if (k.art === 'durchsuchen_alle') this.alleDurchsucht(client, p, k.ids);
     else if (k.art === 'tuer_auf' || k.art === 'aufschliessen' || k.art === 'aufbrechen') {
       this.setzeTuer(k.key, true);
       if (k.art === 'aufbrechen') client?.send('meldung', { text: '⚒️ Tür aufgebrochen – das war laut!' });
@@ -1804,6 +1814,80 @@ export class SpielRaum extends Room {
     }
   }
 
+  // „Alles durchsuchen“: alle noch nicht durchsuchten Behälter/Leichen in Reichweite (Innenraum: freie Sicht, geschlossene Türen sperren)
+  // am Stück, Dauer 60 % der Einzeldauern; danach Fundliste (nichts wird automatisch genommen)
+  starteAlle(client) {
+    const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
+    if (!p || !x || p.aktion || p.anBord || p.unten || p.zombie > 0 || this.state.phase !== 'spiel') return;
+    const { liste, dauer, autoZu } = alleKandidaten(this.wv(p.ebene), this.state.behaelter, this.state.leichen, p, p.rucksack.includes('brechstange'));
+    if (!liste.length) return void client.send('meldung', { text: autoZu ? '🔒 Die Kofferräume sind zu – dafür brauchst du eine ⚒️ Brechstange' : 'Hier gibt es nichts mehr zu durchsuchen' });
+    p.aktion = 'durchsuchen'; p.fortschritt = 0;
+    x.aktionZiel = { art: 'durchsuchen_alle', ids: liste.map(e => e.id), dauer };
+    x.laermUhr = 0;
+  }
+
+  alleDurchsucht(client, p, ids) {
+    const x = this.extra.get(client?.sessionId);
+    const w = this.wv(p.ebene);
+    for (const id of ids) {
+      const l = this.state.leichen.get(id);
+      const b = l ? { id, art: 'leiche' } : w.behaelter.find(q => q.id === id);
+      if (!b || (l && ((l.ebene ?? '') !== (p.ebene ?? '') || l.rest === 0))) continue;
+      if (!l) {
+        if (this.state.behaelter.get(id)) continue;
+        if (b.art === 'auto' && !p.rucksack.includes('brechstange')) continue;
+        if ((b.art === 'auto') && this.state.verbrannt.has('auto:' + b.id)) this.setzeInhalt(b.id, []);
+        if (!this.inhalte.has(b.id) && this.ueberraschung(client, p, b)) break;   // Zombie springt heraus: Rest bleibt ungesucht
+        this.befuelle(b);
+        this.setzeInhalt(b.id, this.inhalte.get(b.id));
+      } else this.leicheDurchsucht(client, p, id, false);
+    }
+    // Fundliste: alle geöffneten Behälter dieses Raums, die noch etwas enthalten
+    const fund = new Set(x?.fundIds ?? []);
+    for (const id of ids) if (this.state.behaelter.get(id) || this.state.leichen.get(id)) fund.add(id);
+    if (x) x.fundIds = [...fund];
+    this.fundSenden(client, p);
+  }
+
+  fundInhalt(id) { return this.state.leichen.has(id) ? this.leichenInhalt.get(id) : this.inhalte.get(id); }
+
+  fundSenden(client, p, nur = null) {
+    const x = this.extra.get(client?.sessionId);
+    if (!x) return;
+    const w = this.wv(p.ebene);
+    x.fundIds = (x.fundIds ?? []).filter(id => (this.fundInhalt(id)?.length ?? 0) > 0);
+    const eintraege = x.fundIds.map(id => ({ id, art: this.state.leichen.has(id) ? 'leiche' : w.behaelter.find(q => q.id === id)?.art ?? '', dinge: [...this.fundInhalt(id)] }));
+    client.send('fundliste', { eintraege, neu: !nur });
+  }
+
+  // Aus der Fundliste nehmen: { id, i } ein Ding, { alle: true } alles, was in den Rucksack passt
+  fundNimm(client, m) {
+    const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
+    if (!p || !x || p.unten || p.zombie > 0 || this.state.phase !== 'spiel' || !x.fundIds?.length) return;
+    const w = this.wv(p.ebene);
+    const ort = id => this.state.leichen.get(id) ?? w.behaelter.find(q => q.id === id);
+    const ids = m?.alle ? [...x.fundIds] : x.fundIds.includes(m?.id) ? [m.id] : [];
+    const genommenAlle = [];
+    for (const id of ids) {
+      const o = ort(id), inhalt = this.fundInhalt(id);
+      if (!o || !inhalt || (o.ebene ?? p.ebene ?? '') !== (p.ebene ?? '') || Math.hypot(o.x - p.x, o.y - p.y) > NIMM_WEITE) continue;
+      const genommen = [];
+      if (m?.alle) genommen.push(...this.einpacken(p, inhalt));
+      else {
+        const i = Number(m.i);
+        if (!Number.isInteger(i) || i < 0 || i >= inhalt.length) continue;
+        const tmp = [inhalt[i]];
+        genommen.push(...this.einpacken(p, tmp));
+        if (genommen.length) inhalt.splice(i, 1);
+      }
+      if (this.state.leichen.has(id)) this.state.leichen.get(id).rest = inhalt.length;
+      else { this.setzeInhalt(id, inhalt); this.aufgaben?.gefunden(o, genommen); }
+      genommenAlle.push(...genommen);
+    }
+    client.send('gefunden', { dinge: genommenAlle, rest: x.fundIds.reduce((n, id) => n + (this.fundInhalt(id)?.length ?? 0), 0) });
+    this.fundSenden(client, p, true);
+  }
+
   durchsucht(client, p, b) {
     if (b.art === 'leiche') return this.leicheDurchsucht(client, p, b.id);
     // Munitionskisten der Bundeswehr: für jeden Mitspieler ein eigener Inhalt (nie leer), der Haufen für die anderen bleibt unberührt
@@ -1829,26 +1913,30 @@ export class SpielRaum extends Room {
     if ((b.art === 'auto' || b.art === 'bus') && this.state.verbrannt.has((b.art === 'auto' ? 'auto:' : 'bus:') + b.id)) this.setzeInhalt(b.id, []);
     // Überraschungszombie: beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto springt selten einer heraus (nicht in Safe Rooms/Lager)
     if (!this.inhalte.has(b.id) && this.ueberraschung(client, p, b)) return;
-    if (!this.inhalte.has(b.id)) {
-      let art = b.art;
-      // Belohnung: Schrank/Spind in einem Raum hinter einer Tür mit Rätsel-Schloss
-      if ((art === 'schrank' || art === 'spind') && b.tuer && this.tuerArt(`${b.id.slice(0, b.id.lastIndexOf(':'))}:${b.tuer[0]},${b.tuer[1]}`) === 'raetsel') art = 'spind_belohnung';
-      const tabelle = BEUTE[art] ?? [];
-      const funde = [];
-      const n = 1 + (this.rnd() < 0.45 ? 1 : 0);
-      const faktoren = this.fundFaktoren(b);
-      for (let i = 0; i < n; i++) {
-        const d = ziehe(tabelle, faktoren, this.rnd, BEUTE_BONUS[art]);
-        if (d) funde.push(d);
-      }
-      funde.push(...(this.aufgaben?.missionsFunde(b.id) ?? []));   // Missionsgegenstand dieses Behälters
-      this.setzeInhalt(b.id, funde);
-    }
+    this.befuelle(b);
     const inhalt = this.inhalte.get(b.id);
     const genommen = this.einpacken(p, inhalt);
     this.setzeInhalt(b.id, inhalt);
     this.aufgaben?.gefunden(b, genommen);
     client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+  }
+
+  // Inhalt eines Behälters auswürfeln (einmalig, danach liegt er in this.inhalte)
+  befuelle(b) {
+    if (this.inhalte.has(b.id)) return;
+    let art = b.art;
+    // Belohnung: Schrank/Spind in einem Raum hinter einer Tür mit Rätsel-Schloss
+    if ((art === 'schrank' || art === 'spind') && b.tuer && this.tuerArt(`${b.id.slice(0, b.id.lastIndexOf(':'))}:${b.tuer[0]},${b.tuer[1]}`) === 'raetsel') art = 'spind_belohnung';
+    const tabelle = BEUTE[art] ?? [];
+    const funde = [];
+    const n = 1 + (this.rnd() < 0.45 ? 1 : 0);
+    const faktoren = this.fundFaktoren(b);
+    for (let i = 0; i < n; i++) {
+      const d = ziehe(tabelle, faktoren, this.rnd, BEUTE_BONUS[art]);
+      if (d) funde.push(d);
+    }
+    funde.push(...(this.aufgaben?.missionsFunde(b.id) ?? []));   // Missionsgegenstand dieses Behälters
+    this.setzeInhalt(b.id, funde);
   }
 
   // Überraschungszombie (Einstellung zombies.ueberraschung in %): true = Durchsuchen abgebrochen, Zombie steht daneben.
@@ -1899,13 +1987,15 @@ export class SpielRaum extends Room {
     return genommen;
   }
 
-  leicheDurchsucht(client, p, id) {
+  leicheDurchsucht(client, p, id, nimm = true) {
     const l = this.state.leichen.get(id);
     if (!l) return;
     const inhalt = this.leichenInhalt.get(id) ?? [];
-    const genommen = this.einpacken(p, inhalt);
-    l.rest = inhalt.length;
-    client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+    if (nimm) {
+      const genommen = this.einpacken(p, inhalt);
+      l.rest = inhalt.length;
+      client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+    }
     // draußen selten ein Zettel mit einem Hinweis auf einen Missionsgegenstand (Suchkreis wird halbiert)
     if (!l.fest && !l.ebene && !this.zettelBei?.has(id)) {
       (this.zettelBei ??= new Set()).add(id);
@@ -2238,6 +2328,7 @@ export class SpielRaum extends Room {
   schritt(dt) {
     const s = this.state;
     if (s.spieler.size === 0) return;
+    if (this.finale?.schritt(dt)) return;   // Finale: Abspann nach dem Atomschlag, die Welt steht still
     this.speicherUhr -= dt;
     if (this.speicherUhr <= 0) { this.speicherUhr = SPEICHER_TAKT; this.speichereAlles(); }
     if (s.phase === 'erwischt') {
@@ -2333,6 +2424,30 @@ export class SpielRaum extends Room {
     }
   }
 
+  // Türen automatisch öffnen: 0,5 s vor einer (normalen, unverbarrikadierten) Zimmertür stehen oder dagegenlaufen.
+  // Seitlich vorbeilaufen zählt nicht; verschlossene Türen (Rätsel/Schlüssel) öffnen nie von selbst. Nur Spieler.
+  tuerAuto(p, x, dt, e) {
+    const vorher = x.tuerPos; x.tuerPos = { x: p.x, y: p.y };
+    const reset = () => { x.tuerT = 0; x.tuerKey = null; };
+    if (x.bot || p.unten || p.aktion || p.zombie > 0 || this.state.phase !== 'spiel' || x.ankunft || !p.ebene) return reset();
+    const wahl = this.tuerWahl(p);
+    if (!wahl?.tuer) return reset();
+    const k = this.tuerKontext(p, 'auf');
+    if (k?.art !== 'tuer_auf' || this.tuerBarrikade(k.key) > 0) return reset();
+    const l = Math.hypot(e.dx, e.dy);
+    if (l > 0.05) {   // drückt die Eingabe auf die Tür zu (±45°) und kommt nicht voran?
+      const wx = (wahl.tuer.x + 0.5) * KACHEL - p.x, wy = (wahl.tuer.y + 0.5) * KACHEL - p.y, wl = Math.hypot(wx, wy) || 1;
+      if ((e.dx * wx + e.dy * wy) / (l * wl) < Math.SQRT1_2) return reset();
+      if (vorher && Math.hypot(p.x - vorher.x, p.y - vorher.y) > 1.5) return reset();
+    }
+    if (x.tuerKey !== k.key) { x.tuerKey = k.key; x.tuerT = 0; }
+    x.tuerT = (x.tuerT ?? 0) + dt;
+    if (x.tuerT < 0.5) return;
+    reset();
+    this.setzeTuer(k.key, true);
+    this.laerm(p.x, p.y, 60, true, p.ebene);
+  }
+
   spielerSchritt(id, p, x, dt) {
     const welt = this.wv(p.ebene);
     const safe = safeRoomVon(this.welt, p);
@@ -2379,6 +2494,7 @@ export class SpielRaum extends Room {
     const ebeneVorher = p.ebene;
     this.uebergang(id, p, x, dt);
     if (p.ebene !== ebeneVorher) this.eingabeVerwerfen(p, x);   // neue Ebene: alte Eingaben gehören zum alten Ort
+    else this.tuerAuto(p, x, dt, e);
     // automatischer Angriff (nicht während man durchsucht)
     // Magazin, Nachladen und Waffenwechsel bei leerer Waffe (Server ist maßgeblich; Bots wie Spieler)
     WP.schritt(this, x.bot ? null : this.clients.find(c => c.sessionId === id), p, x, dt, SpielRaum.einstellungen);
@@ -2433,7 +2549,7 @@ export class SpielRaum extends Room {
           treffer([ziel], wf.schaden);
         }
         pause = wf.pause;
-        p.richtung = w;
+        if (!bewegt) p.richtung = w;   // nur im Stehen zum Ziel drehen; im Lauf bleibt die Laufrichtung (sonst läuft die Figur seitwärts/rückwärts)
       } else pause = 0;
     }
     x.pause = Math.max(0, pause);

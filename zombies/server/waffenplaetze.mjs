@@ -139,13 +139,19 @@ export function schritt(raum, client, p, x, dt, einst) {
     return;
   }
   if (p.magazin <= 0 && vorratVon(p, w) > 0) { startNachladen(raum, p, x, einst); return; }
-  // Magazin und Vorrat leer: auf einen anderen Platz mit brauchbarer Waffe wechseln
+  // Magazin und Vorrat leer: erst auf eine andere Fernwaffe mit Schuss, sonst auf eine Nahkampfwaffe (Platz 3 bevorzugt),
+  // sonst Faust
   if (p.magazin <= 0) {
-    const ziel = [1, 2].map(k => (p.wplatz + k) % 3).find(i => brauchbar(p, x, i));
+    const nahe = i => i !== p.wplatz && p[PLATZ_FELD[i]] && !WAFFEN[p[PLATZ_FELD[i]]]?.fern;
+    const ziel = [1, 2].map(k => (p.wplatz + k) % 3).find(i => brauchbar(p, x, i) && !nahe(i))
+      ?? (nahe(2) ? 2 : [0, 1, 2].find(nahe));
+    const alt = p.waffe;
     if (ziel !== undefined) {
-      const alt = p.waffe;
       wechsle(raum, client, p, x, ziel, einst, true);
       client?.send('meldung', { text: `${DINGE[alt].zeichen} ${DINGE[alt].name} leer – ${DINGE[p.waffe].zeichen} ${DINGE[p.waffe].name}` });
+    } else if (!x.bot && !p.unten && p.zombie <= 0) {   // Bots behalten ihre Waffe
+      p.faust = true; p.waffe = ''; p.magazin = 0; p.nachladen = 0; x.nRest = 0;
+      client?.send('meldung', { text: `${DINGE[alt].zeichen} ${DINGE[alt].name} leer – ✊ Faust` });
     }
   }
 }

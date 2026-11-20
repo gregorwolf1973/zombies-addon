@@ -419,3 +419,19 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 /* Rucksack umsortieren (Ziehen & Ablegen) */
 #rucksack .platz.zieht { opacity: .35; }
 #rucksack .platz.ziel { outline: 2px solid #ffca28; }
+
+/* Finale Andermatt: Atomschlag-Countdown und Abspann (client/finale.mjs) */
+#finale { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; padding: 4px 14px; border-radius: 10px; background: #000b; color: #ffe082; font: 800 22px/1.2 system-ui, sans-serif; font-variant-numeric: tabular-nums; border: 2px solid #ffb300; pointer-events: none; }
+#finale.dringend { color: #fff; background: #c62828e6; border-color: #ff5252; animation: finale-blink .8s steps(2, jump-none) infinite; }
+@keyframes finale-blink { 0% { opacity: 1; } 50% { opacity: .35; } 100% { opacity: 1; } }
+#abspann { display: none; position: fixed; inset: 0; z-index: 60; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; background: #fff; color: #1b2a1b; pointer-events: none; animation: abspann-ein 3s ease-out; }
+#abspann.an { display: flex; }
+#abspann.verloren { background: #111; color: #ff8a80; }
+.abspann-titel { font: 800 clamp(24px, 6vw, 48px)/1.2 system-ui, sans-serif; }
+.abspann-text { font: 500 clamp(16px, 3vw, 22px)/1.4 system-ui, sans-serif; opacity: .85; }
+@keyframes abspann-ein { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 1; } }
+/* Fundliste nach „Alles durchsuchen“ */
+#aufheben-wahl.fundliste { max-height: 55vh; overflow-y: auto; }
+#aufheben-wahl .fund-zeile { margin-bottom: 6px; }
+#aufheben-wahl .fund-name { font-size: 12px; opacity: .75; margin: 2px 4px; }
+#alleknopf { display: none; align-self: flex-end; font-size: 14px; padding: 9px 14px; border-radius: 14px; background: #ffffff33; color: #fff; box-shadow: 0 3px 10px #0008; pointer-events: auto; margin-right: max(10px, env(safe-area-inset-right)) !important; }

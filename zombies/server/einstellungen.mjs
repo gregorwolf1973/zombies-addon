@@ -6,8 +6,9 @@ import { DINGE, WAFFEN } from '../client/welt.mjs';
 import { MOERSER } from './moerser.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
 
-export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
-export const LEVEL_WELTEN = ['geretsried', 'isarauen'];   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
+export const KARTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt', 'dorf'];
+export const LEVEL_WELTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
+export const BISS_LEVEL_VORGABE = { geretsried: 12, isarauen: 12, koenigsdorf: 14, kochel: 16, andermatt: 18 };   // Ansteckung der Spieler in % je Sekunde Biss, steigend   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
 export const EVAK_ARTEN = ['bus', 'panzer', 'flugzeug', 'absturz', 'heli', 'bunker'];   // Evakuierungsarten (server/aufgaben.mjs); '' in den Einstellungen = je Karte
 export const SCHWIERIGKEITEN = ['leicht', 'normal', 'schwer'];
 export const ZEITRAFFER = [1, 5, 10, 60];
@@ -142,7 +143,7 @@ export function bereinige(e = {}, alt = {}) {
     verwandlung: Math.round(zahl(e.verwandlung ?? a.verwandlung, 1, 240, 30)),   // Menschen: Spielminuten vom Biss bis zur Verwandlung in einen Zombie
     bissSpieler: Math.round(zahl(e.bissSpieler ?? a.bissSpieler, 0, 100, 12)),   // Spieler: Ansteckungschance in % je Sekunde Biss (alter globaler Wert, Vorgabe für die Level)
     // Spieler: Ansteckungschance je Level (Karte); fehlt ein Wert, gilt der alte globale Wert
-    bissSpielerLevel: Object.fromEntries(LEVEL_WELTEN.map(k => [k, Math.round(zahl(e.bissSpielerLevel?.[k] ?? alt.bissSpielerLevel?.[k] ?? e.bissSpieler ?? alt.bissSpieler, 0, 100, 12))])),
+    bissSpielerLevel: Object.fromEntries(LEVEL_WELTEN.map(k => [k, Math.round(zahl(e.bissSpielerLevel?.[k] ?? alt.bissSpielerLevel?.[k] ?? (BISS_LEVEL_VORGABE[k] > 12 ? BISS_LEVEL_VORGABE[k] : (e.bissSpieler ?? alt.bissSpieler)), 0, 100, BISS_LEVEL_VORGABE[k] ?? 12))])),
     biss: Math.round(zahl(e.biss ?? a.biss, 0, 100, 100)),                   // Stadtbewohner: Chance in % je Bissversuch (einmal pro Sekunde bei Berührung)
     feuer: zahl(e.feuer ?? a.feuer, 0, 30, 1),                                 // Minuten zwischen zwei Bränden (0 = keine)
     feuerPhase: Math.round(zahl(e.feuerPhase ?? a.feuerPhase, 0, 240, 20)),  // so lange (Spielminuten ab Weltbeginn) brennt es immer wieder
@@ -192,6 +193,7 @@ export function bereinige(e = {}, alt = {}) {
       wartezeit: Math.round(zahl(ag.wartezeit, 10, 180, 60)),                 // Spielminuten: Ankunftsfenster, in dem der Bus noch erscheint
       wartenEchtMin: Math.round(zahl(ag.wartenEchtMin, 1, 60, 10)),           // echte Minuten, die der Bus ab dem Halt höchstens wartet
       anzahl: Math.round(zahl(ag.anzahl, 3, 6, 4)),                           // Aufgaben je Level
+      finaleMinuten: Math.round(zahl(ag.finaleMinuten, 10, 90, 30)),          // Andermatt: echte Minuten bis zum Atomschlag (server/finale.mjs)
       evakArt: EVAK_ARTEN.includes(ag.evakArt) ? ag.evakArt : '',             // Test: Evakuierungsart für die aktuelle Karte erzwingen ('' = aus, je Karte: Bus / Leopard / A400M)
     },
     tueren: (() => {                                                          // Anteile verschlossener Zimmertüren in %: frei / nur Rätsel / nur Schlüssel
@@ -239,10 +241,10 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    superuserHash: '', zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { geretsried: 12, isarauen: 12 }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50, hordeZielMin: 2, hordeZielMax: 5, hordeZieleZeigen: false, hordeTruppMin: 5, hordeTruppMax: 15, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
-    aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '' },
+    aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
     bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, mgMunition: 400, pumaMunition: 200 },

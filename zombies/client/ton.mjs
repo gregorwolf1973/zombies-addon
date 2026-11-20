@@ -43,7 +43,7 @@ const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer 
 // ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------
 const MAX_STIMMEN = 10, MAX_ZOMBIE_STIMMEN = 5;
 const ZOMBIE_IDS = new Set(['entdeckt', 'kriecher', 'stoehnen', 'zombieTod', 'zombielandTag', 'zombielandNacht']);
-const MIN_ABSTAND = { entdeckt: 400, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 150, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, wimmern: 4000, soldatRuf: 8000, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
+const MIN_ABSTAND = { entdeckt: 3000, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 500, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, wimmern: 4000, soldatRuf: 8000, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
 const stimmen = [];            // laufende Einzel-Geräusche aus Dateien: { ende (s), v, zombie, g, src }
 const zuletzt = new Map();     // Ereignis-ID → Zeitpunkt (ms) des letzten Abspielens
 
@@ -97,9 +97,8 @@ const HORDE_AB = 35;            // ab so vielen Zombies in Hörweite
 let hordeKnoten = null, hordeAnzahl = 0, hordeStand = 0;
 export const hordeAktiv = () => hordeAnzahl > HORDE_AB;
 // n = Zahl der Zombies in Hörweite; wird vom Spiel regelmäßig gemeldet (bleibt es aus, verklingt das Grollen)
-export function horde(n) {
-  hordeAnzahl = endlich(n); hordeStand = performance.now();
-  hordeLaut();
+// Grollen abgeschaltet (Gregor, 20.11.2026): Zahl wird nicht mehr übernommen, es bleibt still
+export function horde(n) {   // eslint-disable-line no-unused-vars
 }
 function hordeLaut() {
   if (!ctx) return;

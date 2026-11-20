@@ -102,7 +102,8 @@ test('richtiges Passwort: Superuser mit ⭐, normaler Spieler daneben kann nicht
   // normaler Spieler: alle Befehle wirkungslos
   const hp0 = ich(normal).x;
   raum().state.uhr = 500;
-  for (const befehl of ['zeit', 'auffuellen', 'bw', 'evak', 'bots', 'horde', 'lager', 'unsterblich', 'evakrufen']) await su(normal, { befehl, stunde: 12, groesse: 50, zustand: 'gefallen' });
+  for (const befehl of ['zeit', 'auffuellen', 'bw', 'evak', 'bots', 'horde', 'lager', 'unsterblich', 'evakrufen', 'zeitraffer']) await su(normal, { befehl, stunde: 12, groesse: 50, zustand: 'gefallen', faktor: 10 });
+  assert.equal(SpielRaum.einstellungen.zeitraffer, 1, 'normaler Spieler stellt Zeitraffer um');
   assert.ok(Math.abs(raum().state.uhr - 500) < 5);
   assert.equal(ich(normal).x, hp0);
   assert.ok(!raum().welle.aktiv); assert.equal(raum().state.stuetzpunkt, 'steht'); assert.ok(!ex(normal).suUnsterblich);
@@ -110,6 +111,14 @@ test('richtiges Passwort: Superuser mit ⭐, normaler Spieler daneben kann nicht
   // Zeit
   await su(boss, { befehl: 'zeit', stunde: 12 }); assert.ok(Math.abs(raum().state.uhr - 720) < 5);
   await su(boss, { befehl: 'zeit', stunde: 23 }); assert.ok(Math.abs(raum().state.uhr - 1380) < 5);
+
+  // Zeitraffer: wird wie in der Verwaltung gespeichert (Verwaltung zeigt ihn, Räume übernehmen ihn); ungültige Werte → 1×
+  await su(boss, { befehl: 'zeitraffer', faktor: 10 });
+  assert.equal(SpielRaum.einstellungen.zeitraffer, 10);
+  assert.equal((await (await verwaltung(null, 'GET')).json()).einstellungen.test.zeitraffer, 10, 'Verwaltung zeigt den Wert nicht');
+  assert.equal(raum().zeitraffer(), 10);
+  await su(boss, { befehl: 'zeitraffer', faktor: 7 });
+  assert.equal(SpielRaum.einstellungen.zeitraffer, 1);
 
   // Sprung zur Bundeswehr
   const sp = raum().welt.stuetzpunkt; assert.ok(sp, 'Karte hat Lager');

@@ -14,6 +14,7 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
+import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
 import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
 
@@ -22,6 +23,8 @@ const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum 
 import { innenraumFuer } from './innen.mjs';
 import * as ton from './ton.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlZu } from './aufheben.mjs';
+import { fundZeigen, fundZu, fundPruefen } from './fundliste.mjs';
+import { alleKandidaten } from './durchsuche_alle.mjs';
 import * as sprache from './sprache.mjs';
 import { merkzettelAnschliessen, merkzettelErwarten } from './merkzettel.mjs';
 import { fkStart } from './faehigkeiten.mjs';
@@ -499,9 +502,14 @@ function suMenueEinrichten(r) {
       ${b('hordeanzeige', '🎯 Horden-Ziele anzeigen ein/aus')}
       <div class="titel">Tageszeit</div>
       <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
+      <div class="titel">Zeitraffer</div>
+      <div class="zeile">${[1, 5, 10, 60].map(n => b('zeitraffer', `⏩ ${n}×`, { faktor: n })).join('')}</div>
       <div class="titel">Evakuierung und Lager</div>
       ${b('evakrufen', '🚌 Evakuierung sofort rufen')}
-      <div class="zeile">${b('lager', '💥 Lager fallen', { zustand: 'gefallen' })}${b('lager', '🎖 Lager aufbauen', { zustand: 'steht' })}</div></div>`;
+      <div class="zeile">${b('lager', '💥 Lager fallen', { zustand: 'gefallen' })}${b('lager', '🎖 Lager aufbauen', { zustand: 'steht' })}</div>
+      <div class="titel">Level springen (Test)</div>
+      <div class="zeile">${[1, 2, 3, 4, 5].map(n => b('level', `Level ${n}`, { level: n })).join('')}</div>
+      ${b('countdown', '☢️ Countdown auf 60 s (nur Andermatt)', { sekunden: 60 })}</div>`;
     document.body.appendChild(fenster);
     const zu = () => fenster.classList.remove('offen');
     fenster.querySelector('#suzu').onclick = zu;
@@ -756,9 +764,10 @@ class Ort extends Phaser.Scene {
     this.passeZoomAn();
     this.scale.on('resize', () => this.passeZoomAn());
 
-    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,R,F,X,SPACE,ESC');
+    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,R,F,X,C,SPACE,ESC');
     this.tasten.E.on('down', () => this.aktion());
     this.tasten.Q.on('down', () => this.aktion2());
+    this.tasten.C.on('down', () => this.alleSuchen());
     this.tasten.R.on('down', () => raum.send('nachladen'));            // Nachladen von Hand
     this.tasten.F.on('down', () => raum.send('waffenplatz', { weiter: true }));   // nächster Waffenplatz
     this.tasten.X.on('down', () => raum.send('faust'));   // Faust: nichts in der Hand (nochmal = zurück)
@@ -834,7 +843,7 @@ class Ort extends Phaser.Scene {
     };
     raum.onMessage('schuss', m => {
       const eigen = eigeneTreffer(m.x1, m.y1);
-      const fs = eigen ?? naechsteFigur(m.x1, m.y1); if (fs) fs.schussBis = this.time.now + 150;
+      const fs = eigen ?? naechsteFigur(m.x1, m.y1); if (fs) { fs.schussBis = this.time.now + 150; fs.zielW = Math.atan2(m.y2 - m.y1, m.x2 - m.x1); fs.zielBis = this.time.now + 300; }   // Körper dreht nur kurz zum Ziel
       if (eigen) m = { ...m, x1: this.lokal.x, y1: this.lokal.y };   // Mündung an der gezeichneten Figur
       this.schuss(m);
       fetzenBeiSchuss(this, zombieKarte().values(), m);
@@ -844,7 +853,7 @@ class Ort extends Phaser.Scene {
     });
     raum.onMessage('bwschuss', m => m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
-    raum.onMessage('bunkerEnde', () => this.cameras.main.flash(2500, 255, 255, 255));   // Atomschlag: weißer Blitz
+    raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
     raum.onMessage('moerser', m => moerserSchuss(this, m, raum.state));   // Panzermörser: Granate im hohen Bogen
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
@@ -856,7 +865,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('radioWeg', m => this.radioAnz.weg(m));
     raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, zombieKarte().values(), m.x, m.y, m.r ?? 40); });
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
-    raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
+    raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) { fs.schlagBis = this.time.now + 400; if (typeof m.w === 'number') { fs.zielW = m.w; fs.zielBis = this.time.now + 400; } } if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
     raum.onMessage('soldatRuf', m => {
@@ -898,6 +907,7 @@ class Ort extends Phaser.Scene {
       else meldung('Nichts Brauchbares gefunden');
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
     });
+    raum.onMessage('fundliste', m => fundZeigen(raum, m, this.lokal, meldung));
     raum.onMessage('pong', () => {});
     raum.onMessage('raetsel', m => zeigeRaetsel(m));
     raum.onMessage('tausch', m => zeigeTausch(m));
@@ -920,6 +930,7 @@ class Ort extends Phaser.Scene {
 
     $('aktion').onclick = () => this.aktion();
     $('aktion2').onclick = () => this.aktion2();
+    $('alleknopf').onclick = () => this.alleSuchen();
     $('handelzu').onclick = () => handelZu();
     $('ausruhen').onclick = () => raum.send('ausruhen');
     $('kistezu').onclick = () => kisteZu();
@@ -1147,6 +1158,7 @@ class Ort extends Phaser.Scene {
   // Aufgabenliste im HUD (einklappbar), Level, Evakuierungsbus mit Abfahrtszeit und „an Bord“
   aufgabenZeigen(ich) {
     const s = raum.state, box = $('aufgaben'), n = s.aufgaben?.size ?? 0;
+    finaleHud(s);
     box.style.display = n ? 'block' : 'none';
     if (!n) return;
     const liste = [...s.aufgaben.values()];
@@ -1535,6 +1547,27 @@ class Ort extends Phaser.Scene {
       }
     }
     g.setDepth(this.aktEbene ? 0.45 : 1.08);
+  }
+
+  // kleines Symbol über Behältern in der Nähe (< 2 Kacheln): 📦 = noch etwas drin bzw. noch nicht durchsucht, ∅ = leer.
+  // Nutzt nur den Zustand, den alle Clients ohnehin haben (state.behaelter: rest nur für durchsuchte).
+  behaelterSymbole(s) {
+    const pool = this.behSymbole ??= [];
+    const lok = this.lokal, w = this.wv(this.aktEbene);
+    let n = 0;
+    if (lok && w) {
+      for (const b of w.behaelter ?? []) {
+        if (n >= 6) break;
+        if (b.art === 'bw_kiste' || b.art === 'bus') continue;
+        if (Math.hypot(b.x - lok.x, b.y - lok.y) > 2 * KACHEL) continue;
+        if (b.art === 'auto' && s.verbrannt?.has('auto:' + b.id)) continue;
+        const leer = b.art === 'bw_kiste' ? this.leereKisten?.has(b.id) : s.behaelter.get(b.id)?.rest === 0;
+        const t = pool[n] ??= this.add.text(0, 0, '', { fontSize: '13px', fontFamily: 'sans-serif', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6);
+        t.setText(leer ? '∅' : '📦').setAlpha(leer ? 0.6 : 0.95).setPosition(b.x, b.y - 14).setVisible(true);
+        n++;
+      }
+    }
+    for (let i = n; i < pool.length; i++) pool[i].setVisible(false);
   }
 
   figurBild2(name, i = 0) {
@@ -2052,6 +2085,7 @@ class Ort extends Phaser.Scene {
     }
     this.feuerDarstellen(s);
     this.spurenDarstellen(s);
+    this.behaelterSymbole(s);
     // liegende Gegenstände
     for (const [id, b] of s.boden) {
       let o = this.bodenObj.get(id);
@@ -2322,6 +2356,10 @@ class Ort extends Phaser.Scene {
     const survivor = !p.unten && !zombie && String(p.aussehen ?? '').startsWith('s');
     const held = !p.unten && !zombie && istHeld(String(p.aussehen ?? '')[0]);
     const tempo = weg / Math.max(dt, 0.001);
+    // Laufrichtung: Füße und (außer kurz beim Schuss/Schlag) Körper zeigen immer in Laufrichtung; der eigene Held nimmt sie sofort aus der Eingabe
+    let lr = p.richtung;
+    if (f === this.figuren.get(meineId) && this.eingabe && Math.hypot(this.eingabe.dx, this.eingabe.dy) > 0.05) lr = Math.atan2(this.eingabe.dy, this.eingabe.dx);
+    const kr = !p.unten && f.zielBis > this.time.now && typeof f.zielW === 'number' ? f.zielW : lr;
     if (p.unten) textur = 'liegend-' + f.n;
     else if (zombie) { textur = 'figuren'; bild = this.figurBild('zombie_hemd', geht ? Math.floor(f.lauf / 11) : 0); }
     else if (survivor) {
@@ -2334,7 +2372,7 @@ class Ort extends Phaser.Scene {
       textur = 'figuren2'; bild = this.figurBild2(`sv_${w}_${art}`, i);
       const fb = geht ? this.figurBild2('sv_fuesse_walk', Math.floor(f.lauf / 6)) : this.figurBild2('sv_fuesse_idle');
       if (f.fuesse.frame.name != fb) f.fuesse.setFrame(fb);   // eslint-disable-line eqeqeq
-      f.fuesse.setRotation(p.richtung).setScale(BOGEN2_GROESSE * mg() * (p.schleicht ? 0.92 : 1));
+      f.fuesse.setRotation(lr).setScale(BOGEN2_GROESSE * mg() * (p.schleicht ? 0.92 : 1));
     }
     else if (held) {
       // Held/Heldin (Gemini): Haltung nach Waffe und Taschenlampe, Stiefel als eigene Ebene
@@ -2344,7 +2382,7 @@ class Ort extends Phaser.Scene {
       const fb = !geht ? this.heldBild(`held_${gg}_stiefel_stehen`)
         : this.heldBild(`held_${gg}_stiefel_${tempo > W.tempoGehen * 1.25 ? 'laufen' : 'gehen'}`, Math.floor(f.lauf / 6));
       if (f.fuesse.texture.key !== 'helden160' || f.fuesse.frame.name != fb) f.fuesse.setTexture('helden160', fb);   // eslint-disable-line eqeqeq
-      f.fuesse.setRotation(p.richtung).setScale(ZOMBIE_GROESSE * groesse('helden160', `held_${gg}_stiefel_stehen`) * mg() * (p.schleicht ? 0.92 : 1));
+      f.fuesse.setRotation(lr).setScale(ZOMBIE_GROESSE * groesse('helden160', `held_${gg}_stiefel_stehen`) * mg() * (p.schleicht ? 0.92 : 1));
     }
     else {
       textur = this.menschTextur(p.aussehen);
@@ -2355,7 +2393,7 @@ class Ort extends Phaser.Scene {
     if (f.bild.texture.key !== textur || f.bild.frame.name != bild) f.bild.setTexture(textur, bild);   // eslint-disable-line eqeqeq
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
-    f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
+    f.bild.setRotation(p.unten ? 0 : kr + wipp * 0.07);
     const gg0 = aussehenLesen(p.aussehen).g === 'f' ? 'w' : 'm';
     const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg() : survivor ? BOGEN2_GROESSE * mg()
       : held ? ZOMBIE_GROESSE * groesse('helden160', `held_${gg0}_leer`) * mg()
@@ -2669,6 +2707,11 @@ class Ort extends Phaser.Scene {
     if (k.art === 'raetsel') $('aktion').style.display = 'none';
   }
 
+  // „Alles durchsuchen“ (Taste C / Knopf): nur wenn es mindestens zwei Behälter/Leichen in Reichweite gibt
+  alleSuchen() {
+    if (this.alleKand?.liste.length >= 2) raum.send('durchsuche_alle');
+  }
+
   // zweiter Knopf: andere Türmöglichkeit, Handel (wenn der Hauptknopf etwas anderes tut) oder Granate werfen
   aktion2() {
     const z = this.zweit;
@@ -2918,6 +2961,14 @@ class Ort extends Phaser.Scene {
     }
     knopf.style.opacity = this.kontext?.aus ? '0.5' : '';   // ausgegraut (Schlüssel nötig), Klick zeigt nur den Hinweis
     knopf2.style.display = zweit ? 'block' : 'none';
+    {   // „Alles durchsuchen“
+      const kand = frei2 ? alleKandidaten(this.wv(this.aktEbene), s.behaelter, s.leichen, { x: this.lokal.x, y: this.lokal.y, ebene: ich.ebene ?? '' }, ich.rucksack.includes('brechstange')) : null;
+      this.alleKand = kand;
+      const ak = $('alleknopf'), zeige = !!kand && kand.liste.length >= 2;
+      ak.style.display = zeige ? 'block' : 'none';
+      if (zeige) { const t = `🔍 Alles durchsuchen (${kand.liste.length}, ${Math.round(kand.dauer * 10) / 10} s) [C]`; if (ak.textContent !== t) ak.textContent = t; }
+      fundPruefen(this.lokal);
+    }
     if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
     if (!this.kontext || this.kontext.art !== 'aufheben_wahl') auswahlZu();
@@ -3097,6 +3148,10 @@ function popupAuf(knopf, platz, ding) {
   const weg = document.createElement('button');
   weg.textContent = 'Wegwerfen'; weg.className = 'zweit';
   weg.onclick = () => { raum.send('wegwerfen', { platz }); popupZu(); };
+  const x = document.createElement('button');
+  x.textContent = '✕'; x.className = 'zweit'; x.title = 'Schließen'; x.setAttribute('aria-label', 'Schließen'); x.style.cssText = 'float:right;padding:0 8px;margin-left:8px';
+  x.onclick = popupZu;
+  titel.prepend(x);
   p.append(titel);
   const anz = raum.state.spieler.get(meineId)?.rucksack.length ?? 0;
   const reihe = document.createElement('div'); reihe.style.cssText = 'display:flex;gap:6px';
@@ -3104,7 +3159,21 @@ function popupAuf(knopf, platz, ding) {
     const b = document.createElement('button');
     b.textContent = z; b.title = tip; b.setAttribute('aria-label', tip); b.className = 'zweit'; b.style.flex = '1';
     b.disabled = platz + d < 0 || platz + d >= anz;
-    b.onclick = () => { raum.send('rucksack_tausch', { von: platz, nach: platz + d }); popupZu(); };
+    b.onclick = () => {   // Fenster bleibt offen und folgt dem Gegenstand an seinen neuen Platz (nach der Server-Antwort)
+      const nach = platz + d;
+      raum.send('rucksack_tausch', { von: platz, nach });
+      b.disabled = true;
+      let n = 0;
+      const warte = setInterval(() => {
+        if ($('popup').style.display === 'none') return clearInterval(warte);
+        const ich = raum.state.spieler.get(meineId);
+        if (ich?.rucksack[nach] === ding || ++n > 25) {
+          clearInterval(warte);
+          const nk = document.querySelector(`#rucksack .platz[data-i="${nach}"]`);
+          if (ich?.rucksack[nach] === ding && nk) popupAuf(nk, nach, ding); else popupZu();
+        }
+      }, 40);
+    };
     reihe.append(b);
   });
   p.append(reihe);
@@ -3155,6 +3224,7 @@ function platzMenue(knopf, platz) {
   p.style.left = Math.max(8, Math.min(window.innerWidth - p.offsetWidth - 8, r.left)) + 'px';
   p.style.bottom = (window.innerHeight - r.top + 8) + 'px';
 }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') popupZu(); });
 document.addEventListener('pointerdown', e => {
   if (!$('popup').contains(e.target) && !e.target.classList?.contains('platz')) popupZu();
 });

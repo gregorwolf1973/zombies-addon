@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { KACHEL, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX, WAFFEN } from '../client/welt.mjs';
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import * as WP from './waffenplaetze.mjs';
+import { LEVEL_KARTEN, KARTEN_NAMEN } from './aufgaben.mjs';
 
 // ---------- Hash ----------
 export const SU_MAX_LAENGE = 200;
@@ -41,7 +42,7 @@ export function anmelden(hash, passwort, schluessel) {
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer'];
 
 function springen(raum, p, x, ziel) {
   p.x = ziel.x; p.y = ziel.y; p.ebene = ziel.ebene ?? ''; p.unten = false; p.anBord = false; p.sicher = ''; p.aktion = ''; p.fortschritt = 0;
@@ -191,6 +192,27 @@ export function befehl(raum, client, m) {
       a.busHeute = false;
       a.ankunft(a.einst().wartezeit);
       return '🚌 Evakuierung gerufen – das Fahrzeug kommt (übrige Aufgaben bleiben offen)';
+    }
+    case 'zeitraffer': {
+      const f = [1, 5, 10, 60].includes(Number(m.faktor)) ? Number(m.faktor) : 1;
+      const SR = raum.constructor;
+      if (SR.testSetzen) SR.testSetzen({ zeitraffer: f }); else SR.einstellungen.zeitraffer = f;
+      raum.broadcast('meldung', { text: `⏩ Zeitraffer ${f}×`, lang: true });
+      return `⏩ Zeitraffer ${f}×`;
+    }
+    case 'level': {
+      const n = Math.round(Number(m.level));
+      if (!(n >= 1 && n <= LEVEL_KARTEN.length)) return 'Unbekanntes Level';
+      const a = raum.aufgaben, karte = LEVEL_KARTEN[n - 1];
+      if (a.wechselLaeuft) return 'Ein Levelwechsel läuft schon';
+      a.wechselLaeuft = true;
+      raum.broadcast('meldung', { text: `🧪 Testsprung: Level ${n} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
+      raum.clock.setTimeout(() => a.levelWechsel({ karte, level: n }), 1500);
+      return `🧪 Wechsel zu Level ${n} (${KARTEN_NAMEN[karte] ?? karte}) …`;
+    }
+    case 'countdown': {
+      if (!raum.finale?.setzen(Number(m.sekunden) || 60)) return 'Kein Atomschlag-Countdown auf dieser Karte (nur Andermatt)';
+      return `☢️ Countdown steht jetzt auf ${Math.round(Number(m.sekunden) || 60)} s`;
     }
     case 'lager': {
       const sp = raum.stuetzpunkt;

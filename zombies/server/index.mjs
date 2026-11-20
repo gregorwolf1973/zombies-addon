@@ -76,6 +76,7 @@ export async function starte({
   const datei = new EinstellungsDatei(einstellungsDatei, optionen);
   // Levelwechsel (Evakuierungsbus): die nächste Karte einstellen, die Welt startet der Raum selbst neu
   SpielRaum.kartenWechsel = karte => { anwenden(datei.aendern({ karte })); };
+  SpielRaum.testSetzen = test => { anwenden(datei.aendern({ test })); return datei.werte.test; };   // Testmenü (Superuser): wie die Verwaltung speichern und für alle Räume übernehmen
   let geladeneKarte = null;
   const anwenden = w => {
     if (!geladeneKarte || geladeneKarte.wahl !== w.karte) geladeneKarte = { wahl: w.karte, karte: ladeKarte(w.karte) };

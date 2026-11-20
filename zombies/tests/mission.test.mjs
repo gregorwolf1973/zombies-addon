@@ -181,7 +181,7 @@ test('Hinweis: raum.missionHinweis halbiert den Suchkreis im Zustand, das Ziel b
     assert.ok(raum.missionHinweis());
     assert.ok([...raum.state.missionen.values()].reduce((s, x) => s + x.r, 0) < vorher);
     // Speicherstand: Hinweise bleiben
-    assert.equal(ag.speichern().mission.hinweise[m.ding], 1);
+    assert.ok(ag.speichern().mission.hinweise[m.ding] >= 1);   // der zufällige Hinweis kann denselben Gegenstand treffen
 
     // Schwierigkeit im Raum: Level, Spieltag, Regler
     const basis = raum.schwierigkeit();
