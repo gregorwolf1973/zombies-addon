@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.61.0 – 20.11.2026
+
+- Missionsgegenstände: In Level 1 müssen Funkgerät, Batterie und Antenne (zusammen am Funktisch = Funkspruch), Torschlüssel und Diesel aus weit auseinanderliegenden Gebäuden geholt und im Safe House abgegeben werden – jede Runde woanders; in Level 2 eigene Liste. Auf der Karte nur Suchkreise (~150 m), die durch Hinweise kleiner werden (gerettete Menschen, Zettel bei Leichen). Das Fahrzeug kommt erst nach allen Abgaben.
+- Schwierigkeit steigt je Level (Zombie-Dichte, Horde, schnelle Zombies, knappere Beute, längere Nächte) und mit jedem Spieltag; Regler „Schwierigkeit“ leicht/normal/schwer in der Verwaltung.
+- Menschen verstecken sich meist in kleinen Gruppen hinter Häusern, Zäunen und Hecken (geduckt, neue Gemini-Bilder), einige laufen in Panik schreiend herum; in manchen Häusern sitzt jemand versteckt (leises Wimmern). Ansprechen → er folgt dir; im Safe House gerettet → Punkte und ein Hinweis oder Gegenstand; Zähler „🙋 gerettet“.
+- Türen: liegen zur Straße hin, nicht in Spalten zwischen Häusern; Vorplatz frei von Autos, Bäumen, Zäunen; Weg zur Straße wird als letzter Schritt geprüft (beide Karten: keine Tür ohne Weg). WELT_VERSION 19.
+- Rucksack-Menü: „Wegwerfen“ und „In die Hand“ ganz unten; Inventar-Icons auf hellerem Grund.
+
 ## 0.60.0 – 20.11.2026
 
 - Gegenstände als Bilder statt Emojis: 31 neue Icons (mit Google Gemini erzeugt) für Waffen, Munition, Vorräte, Geräte und Taschen, dazu die Faust für die leere Hand. Sie erscheinen in der Waffenanzeige oben, auf den Waffenknöpfen, im Rucksack und seinen Menüs, beim Aufheben, beim Tauschen, beim Händler im Lager, im Schießstand und bei Gegenständen am Boden. Fehlt ein Bild, bleibt das Emoji.

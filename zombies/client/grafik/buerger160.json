@@ -1,6 +1,6 @@
 {
  "feld": 160,
- "spalten": 8,
+ "spalten": 16,
  "bilder": {
   "dick": [
    0
@@ -25,6 +25,30 @@
   ],
   "rucksack": [
    7
+  ],
+  "dick_versteckt": [
+   8
+  ],
+  "oma_versteckt": [
+   9
+  ],
+  "jogger_versteckt": [
+   10
+  ],
+  "geschaeftsfrau_versteckt": [
+   11
+  ],
+  "teenager_versteckt": [
+   12
+  ],
+  "bauarbeiter_versteckt": [
+   13
+  ],
+  "opa_versteckt": [
+   14
+  ],
+  "rucksack_versteckt": [
+   15
   ]
  }
 }

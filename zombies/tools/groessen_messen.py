@@ -76,10 +76,16 @@ def main():
     gruppen.append((['figuren2:verwundet'], 'figuren2', ['verwundet'], M_ALT * 1.26, ziel_m))   # Verwundete im Lager (liegend, wie im Spiel 0,42 × 1,26)
     # Bewohner-Typen (buerger160, Standbilder): jeder Typ auf die Schulterbreite des Survivors, nur der dicke Mann bekommt den
     # mittleren Faktor der anderen (Ausgleich auf Körpermitte) und bleibt dadurch sichtbar breiter
-    bt = [n for n in bogen('buerger160')[2] if n != 'dick']
+    alle_bt = list(bogen('buerger160')[2])
+    bt = [n for n in alle_bt if n != 'dick' and not n.endswith('_versteckt')]
     fb = [ziel_m / (hoehe('buerger160', [n]) * M_ALT) for n in bt]
     for n in bt: gruppen.append((['buerger160:' + n], 'buerger160', [n], M_ALT, ziel_m))
     gruppen.append((['buerger160:dick'], 'buerger160', ['dick'], M_ALT, hoehe('buerger160', ['dick']) * M_ALT * st.median(fb) * 1.15))   # +15 % zusätzlich: sichtbar dicker
+    # Geduckte Bilder (Schlüssel <typ>_versteckt): wie die Normalbilder gemessen, aber ruhig 15 % kleiner (zusammengekauert)
+    GEDUCKT = 0.85
+    for n in bt: gruppen.append((['buerger160:' + n + '_versteckt'], 'buerger160', [n + '_versteckt'], M_ALT, ziel_m * GEDUCKT)) if n + '_versteckt' in alle_bt else None
+    if 'dick_versteckt' in alle_bt:
+        gruppen.append((['buerger160:dick_versteckt'], 'buerger160', ['dick_versteckt'], M_ALT, hoehe('buerger160', ['dick']) * M_ALT * st.median(fb) * 1.15 * GEDUCKT))
     HALT = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe']
     for g in ('m', 'w'):   # Held/Heldin (helden160): Stiefel-Ebenen bekommen denselben Faktor wie der Körper
         koerper = ['held_%s_%s' % (g, h) for h in HALT]

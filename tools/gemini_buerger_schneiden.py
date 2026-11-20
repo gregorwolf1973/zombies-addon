@@ -4,7 +4,11 @@
 Stellt frei (Flutfüllung vom Rand, Komponenten je Zelle, eingeschlossene weiße Löcher weg wie in gemini_helden_waffen.py)
 und schreibt grafik/buerger160.webp + buerger160.json (160er Felder, Drehpunkt = Körpermitte, ein Bild je Typ).
 Alle Typen behalten ihr Größenverhältnis zueinander (ein gemeinsamer Maßstab), der dicke Mann bleibt also sichtbar breiter.
-Aufruf: PYTHONPATH=~/code/ahnen-werkzeuge/pil python3 tools/gemini_buerger_schneiden.py [Bogen.jpeg] [Ausgabeordner]"""
+Dritter Parameter = Schlüssel-Endung (z. B. _versteckt): dann wird der Bogen (gleiche 8 Typen, gleiche Reihenfolge) als zusätzliche
+Felder an die vorhandenen 8 Normalbilder angehängt (dick_versteckt …); ohne Endung werden die 8 Normalbilder neu geschrieben
+(und eine vorhandene Versteckt-Reihe dabei verworfen – danach den Versteckt-Bogen erneut mit Endung einspielen).
+Aufruf: PYTHONPATH=~/code/ahnen-werkzeuge/pil python3 tools/gemini_buerger_schneiden.py [Bogen.jpeg] [Ausgabeordner] [Endung]
+Beispiel: ... tools/quellen/buerger_versteckt.jpeg zombies/client/grafik _versteckt"""
 import json, math, pathlib, sys
 from PIL import Image, ImageFilter
 
@@ -14,6 +18,7 @@ from gemini_helden_waffen import loecher_weg                    # noqa: E402
 
 QUELLE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "~/Downloads/weitere Zombies von Gemini/buerger/buerger_8.jpeg").expanduser()
 AUS = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else pathlib.Path(__file__).resolve().parent.parent / "zombies" / "client" / "grafik").expanduser()
+ENDUNG = sys.argv[3] if len(sys.argv) > 3 else ""
 NAMEN = ["dick", "oma", "jogger", "geschaeftsfrau", "teenager", "bauarbeiter", "opa", "rucksack"]
 FELD = 160
 MASSSTAB = 0.42         # Bogen-Pixel → Feldpixel (gleich für alle; Hände rechts brauchen Platz im Feld)
@@ -53,9 +58,14 @@ def koerpermitte(b):
 
 def main():
     bilder = zellen(Image.open(QUELLE).convert("RGB"))
-    atlas = Image.new("RGBA", (len(NAMEN) * FELD, FELD), (0, 0, 0, 0))
+    n0 = len(NAMEN) if ENDUNG else 0          # Zahl der schon vorhandenen Normalfelder (davor bleibt alles stehen)
+    atlas = Image.new("RGBA", ((n0 + len(NAMEN)) * FELD, FELD), (0, 0, 0, 0))
     liste = {}
-    for i, (name, b) in enumerate(zip(NAMEN, bilder)):
+    if ENDUNG:
+        alt = Image.open(AUS / "buerger160.webp").convert("RGBA")
+        atlas.alpha_composite(alt.crop((0, 0, n0 * FELD, FELD)), (0, 0))
+        liste = {k: v for k, v in json.loads((AUS / "buerger160.json").read_text())["bilder"].items() if v[0] < n0}
+    for i, (name, b) in enumerate(zip(NAMEN, bilder), start=n0):
         mx, my = koerpermitte(b)
         k = b.resize((max(1, round(b.width * MASSSTAB)), max(1, round(b.height * MASSSTAB))), Image.LANCZOS)
         f = Image.new("RGBA", (FELD, FELD), (0, 0, 0, 0))
@@ -64,10 +74,10 @@ def main():
             print("WARNUNG:", name, "passt nicht ins Feld", (ox, oy, k.size))
         f.alpha_composite(k, (ox, oy))
         atlas.alpha_composite(f, (i * FELD, 0))
-        liste[name] = [i]
+        liste[name + ENDUNG] = [i]
         print(name, b.size, "Mitte", round(mx), round(my))
     atlas.save(AUS / "buerger160.webp", lossless=True)
-    (AUS / "buerger160.json").write_text(json.dumps({"feld": FELD, "spalten": len(NAMEN), "bilder": liste}, indent=1))
+    (AUS / "buerger160.json").write_text(json.dumps({"feld": FELD, "spalten": n0 + len(NAMEN), "bilder": liste}, indent=1))
 
 
 if __name__ == "__main__":

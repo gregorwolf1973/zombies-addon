@@ -350,7 +350,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 18;   // 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 19;   // 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -389,6 +389,14 @@ export const DINGE = {
   schokoriegel: { name: 'Schokoriegel', zeichen: '🍫' },
   tasche: { name: 'Sporttasche (12 Plätze)', zeichen: '👜', plaetze: 12 },
   trekking: { name: 'Trekkingrucksack (16 Plätze)', zeichen: '🎒', plaetze: 16 },
+  // Missionsgegenstände (server/mission.mjs): nie in Beutetabellen, nicht wegwerfbar (nur in die Safe-Room-Kiste legen), verschwinden nie vom Boden
+  m_funk: { name: 'Funkgerät (Funktisch)', zeichen: '📟', mission: true, intern: true },
+  m_batterie: { name: 'Batterie', zeichen: '🔋', mission: true, intern: true },
+  m_antenne: { name: 'Antenne', zeichen: '📡', mission: true, intern: true },
+  m_schluessel: { name: 'Torschlüssel', zeichen: '🗝️', mission: true, intern: true },
+  m_diesel: { name: 'Diesel für den Bus', zeichen: '🛢️', mission: true, intern: true },
+  m_treibstoff: { name: 'Treibstoffkanister', zeichen: '⛽', mission: true, intern: true },
+  m_landefeuer: { name: 'Landefeuer', zeichen: '🚨', mission: true, intern: true },
 };
 export const BODEN_DAUER = 180;      // weggeworfene Gegenstände bleiben 3 Minuten liegen
 export const TAUSCH_ABSTAND = 34;    // so nah muss man sich sein (berühren), um zu tauschen

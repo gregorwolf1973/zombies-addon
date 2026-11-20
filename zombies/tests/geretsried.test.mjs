@@ -116,7 +116,7 @@ test('Stadtleben: Menschen gehen umher, Gebissene werden zu Zombies, der Bus fä
     const bus0 = { x: busOf().x, y: busOf().y };
     await new Promise(r => setTimeout(r, 12000));
     const bewegt = [...s.menschen.entries()].filter(([id, m]) => { const v = vorher.get(id); return v && (Math.hypot(m.x - v[0], m.y - v[1]) > 20 || m.sichtbar !== v[2]); }).length;
-    assert.ok(bewegt >= 5, 'Menschen bewegen sich nicht: ' + bewegt);
+    assert.ok(bewegt >= 2, 'Menschen bewegen sich nicht: ' + bewegt);   // die Mehrheit sitzt versteckt, nur Panik-Läufer (ca. 12 %) bewegen sich
     const bus = busOf();
     assert.ok(Math.hypot(bus.x - bus0.x, bus.y - bus0.y) > 50, 'Bus fährt nicht');
     // Fahrzeuge bleiben auf den Straßenlinien (nicht quer über Wiesen und Häuser)

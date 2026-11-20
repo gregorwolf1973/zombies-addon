@@ -49,10 +49,11 @@ export class Zombiewelle {
   schritt(dt) {
     const e = this.einst(), zr = this.raum.zeitraffer?.() ?? 1, min = e.welleMinuten ?? 0;
     if (min > 0) {
-      if (this.uhr === null) this.uhr = min * 60;
+      const abstand = min * 60 * (this.raum.schwierigkeit?.().abstand ?? 1);   // Level/Spieltag/Regler: Wellen kommen häufiger
+      if (this.uhr === null) this.uhr = abstand;
       this.uhr -= dt * zr;
       if (this.uhr <= 0) {
-        this.uhr = min * 60;
+        this.uhr = abstand;
         if (!this.ansage && !this.aktiv) this.ansagen();
       }
     } else this.uhr = null;
@@ -93,7 +94,8 @@ export class Zombiewelle {
   // Die Gruppe erscheint dicht beieinander außerhalb des Bildes auf begehbaren Feldern und bekommt ihr Ziel
   erzeugen(seite = 'west') {
     const r = this.raum, e = this.einst(), welt = r.welt;
-    const lo = Math.max(1, Math.min(WELLE_MAX, e.welleMin ?? 20)), hi = Math.max(lo, Math.min(WELLE_MAX, e.welleMax ?? 50));
+    const gr = r.schwierigkeit?.().horde ?? 1;   // Hordengröße × Schwierigkeit
+    const lo = Math.max(1, Math.min(WELLE_MAX, Math.round((e.welleMin ?? 20) * gr))), hi = Math.max(lo, Math.min(WELLE_MAX, Math.round((e.welleMax ?? 50) * gr)));
     const n = lo + Math.floor(r.rnd() * (hi - lo + 1));
     const richtung = seite === 'west' ? 1 : -1;     // Zugrichtung in x
     const ref = this.bezug();
@@ -367,7 +369,7 @@ export class Zombiewelle {
       }
       case 'laerm': return this.laermOrt && a.alter - this.laermOrt.t < 180 ? { x: this.laermOrt.x, y: this.laermOrt.y } : null;
       case 'menschen': {
-        const l = [...s.menschen.values()].filter(m => m.sichtbar && !m.infiziert);
+        const l = [...s.menschen.values()].filter(m => m.sichtbar && !m.infiziert && !m.ebene);
         const m = wahl(l); return m ? this.punktNahe(m.x, m.y, 60, 160) : null;
       }
       case 'spieler': {
@@ -459,7 +461,7 @@ export class Zombiewelle {
       for (const q of sp.schuetzen) { if (q.tot) continue; const d = Math.hypot(q.x - a.mitte.x, q.y - a.mitte.y); if (d < bd) { bd = d; best = q; } }
       if (best) out.push({ key: 'bw', art: 'soldat', x: best.x, y: best.y });
     }
-    for (const [mid, m] of s.menschen) if (m.sichtbar && !m.infiziert) out.push({ key: 'm:' + mid, art: 'mensch', mid, x: m.x, y: m.y });
+    for (const [mid, m] of s.menschen) if (m.sichtbar && !m.infiziert && !m.ebene) out.push({ key: 'm:' + mid, art: 'mensch', mid, x: m.x, y: m.y });
     return out;
   }
 
@@ -467,7 +469,7 @@ export class Zombiewelle {
   opferLage(t) {
     const r = this.raum, s = r.state;
     if (t.art === 'spieler') { const p = s.spieler.get(t.sid); return p && !p.ebene && !p.unten && !p.anBord && !(p.zombie > 0) ? p : null; }
-    if (t.art === 'mensch') { const m = s.menschen.get(t.mid); return m && m.sichtbar && !m.infiziert ? m : null; }
+    if (t.art === 'mensch') { const m = s.menschen.get(t.mid); return m && m.sichtbar && !m.infiziert && !m.ebene ? m : null; }
     const sp = r.stuetzpunkt;
     if (!sp?.schuetzen || s.stuetzpunkt !== 'steht' || !(sp.einst().falltage > 0)) return null;
     let best = null, bd = Infinity;

@@ -17,7 +17,7 @@ export const FAEHIGKEITEN = [
 const IDS = new Set(FAEHIGKEITEN.map(f => f.id));
 
 // Erfahrungspunkte für verschiedene Ereignisse (vor dem Verwaltungs-Faktor)
-export const XP = { zombie: 10, aufgabe: 60, raetsel: 25, wiederbelebt: 40, mensch: 50, evakuierung: 150 };
+export const XP = { zombie: 10, aufgabe: 60, raetsel: 25, wiederbelebt: 40, mensch: 50, rettung: 60, evakuierung: 150 };
 
 // Erfahrung, die von Level L zu L+1 nötig ist
 export const xpFuerAufstieg = level => Math.round(100 * Math.pow(Math.max(1, level), 1.5));

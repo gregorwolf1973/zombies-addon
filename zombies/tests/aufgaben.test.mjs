@@ -10,6 +10,7 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { Aufgaben } from '../server/aufgaben.mjs';
+import { FUNK_TEILE } from '../server/mission.mjs';
 import { KACHEL, WELT_VERSION } from '../client/welt.mjs';
 
 // Figur in den Innenraum eines Safe Rooms setzen (neben die Eingangstür oder an einen Punkt darin)
@@ -106,6 +107,13 @@ test('Funkspruch am Funktisch: Aktion dauert, ist laut und setzt die Aufgabe auf
     p.x = x0; p.y = (m.y + m.h) * KACHEL + 14;
     let laerm = 0;
     const alt = raum.laerm.bind(raum); raum.laerm = (...a) => { laerm = Math.max(laerm, a[2]); return alt(...a); };
+    // ohne Funkgerät, Batterie und Antenne (Missionsgegenstände) geht der Funkspruch nicht
+    assert.ok(raum.aufgaben.mission.length >= 3, 'keine Missionsorte');
+    c.send('aktion');
+    assert.ok(await bis(() => meldungen.some(t => t.includes('es fehlt'))), 'keine Fehlt-Meldung: ' + meldungen.join(' | '));
+    assert.equal(p.aktion, '');
+    for (const d of FUNK_TEILE) raum.state.safes.get(s.id).kiste.push(d);
+    raum.aufgaben.aktualisieren(false);
     c.send('aktion');
     assert.ok(await bis(() => p.aktion === 'funk'), 'Aktion startet nicht');
     assert.equal(raum.state.funk, false);

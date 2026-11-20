@@ -218,6 +218,19 @@ export class Uebersicht {
         c.strokeText('SAFE', x, y + R + 8 * dpr); c.fillStyle = '#a5ff9e'; c.fillText('SAFE', x, y + R + 8 * dpr);
       }
     }
+    // Suchkreise der offenen Missionsgegenstände (Mitte und Radius in Kacheln): nie der genaue Ort, wird mit Hinweisen kleiner
+    for (const k of this.kreise ?? []) {
+      const [x, y] = pos(k.x, k.y), R = k.r * m;
+      if (x + R < 0 || y + R < 0 || x - R > W || y - R > H) continue;
+      c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fillStyle = 'rgba(255,193,7,.16)'; c.fill();
+      c.setLineDash([7 * dpr, 5 * dpr]); c.lineWidth = 2 * dpr; c.strokeStyle = 'rgba(255,193,7,.95)'; c.stroke(); c.setLineDash([]);
+      if (!this.gross && this.zoom < 3 && R < 14 * dpr) continue;
+      c.font = `${Math.round((this.gross ? 18 : 13) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText(k.symbol, x, y);
+      if (this.gross) {
+        c.font = `bold ${Math.round(11 * dpr)}px sans-serif`; c.lineWidth = 3.5 * dpr; c.strokeStyle = '#000';
+        c.strokeText(k.name, x, y + 16 * dpr); c.fillStyle = '#ffe082'; c.fillText(k.name, x, y + 16 * dpr);
+      }
+    }
     // Zielorte der offenen Aufgaben: orangefarbene Raute mit Symbol; auf der großen Karte mit Namen, in der Ecke nur als Punkt
     for (const z of this.ziele ?? []) {
       const [x, y] = pos(z.x, z.y);
