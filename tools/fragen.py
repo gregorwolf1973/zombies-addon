@@ -3,7 +3,7 @@
 und prüft jeden Beleg wörtlich gegen den Kapiteltext. Ausgabe: DokuWiki-Tabelle für
 krisenvorsorge:spielfragen.
 Aufruf: python3 tools/fragen.py <ordner-mit-kapiteln> <ausgabe.txt> [fragen-pro-kapitel]"""
-import json, re, sys, time, pathlib
+import json, re, sys, time, pathlib, os
 from bridge import Bridge
 
 ordner, ausgabe = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
@@ -16,9 +16,12 @@ def norm(t):
 
 SYSTEM = ("Du schreibst Quizfragen für ein Überlebensspiel. Grundlage ist NUR der gegebene Kapiteltext – "
           "kein Wissen von außen. Antworte ausschließlich mit einem JSON-Array.")
+ANBIETER = os.environ.get("FRAGEN_ANBIETER", "gemini")  # oder deepseek
+SKIP = {"k00_vorwort", "k13_einkaufsliste", "k32_anhang", "k33_stichwortverzeichnis"}
 b = Bridge()
 zeilen, verworfen = [], []
 for datei in sorted(ordner.glob("k*.txt")):
+    if datei.stem in SKIP: continue
     text = datei.read_text(encoding="utf-8")
     seite = f"ueberlebenshandbuch:de:{datei.stem}"
     prompt = (
@@ -35,7 +38,7 @@ for datei in sorted(ordner.glob("k*.txt")):
         'Format: [{"thema":"…","frage":"…","richtig":"…","falsch1":"…","falsch2":"…","beleg":"…"}]\n\n'
         f"KAPITELTEXT:\n{text}")
     for versuch in range(4):
-        antwort = b.frage("gemini", prompt, system=SYSTEM, temperature=0.3, max_tokens=6000)
+        antwort = b.frage(ANBIETER, prompt, system=SYSTEM, temperature=0.3, max_tokens=6000, **({"model": "deepseek-flash"} if ANBIETER == "deepseek" else {}))
         m = re.search(r"\[\s*\{.*\}\s*\]", antwort, re.S)
         try:
             fragen = json.loads(m.group(0)); break
