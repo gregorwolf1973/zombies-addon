@@ -150,6 +150,52 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     return zellen;
   };
 
+  // Abstand (Kacheln, Weg um Wände/Wasser herum) zur nächsten Straße: bestimmt, an welcher Hausseite die Tür sitzt
+  const strDist = new Int16Array(BREITE * HOEHE).fill(32767);
+  { const q = [];
+    for (let i = 0; i < k.length; i++) if (k[i] === T.STRASSE) { strDist[i] = 0; q.push(i); }
+    for (let i = 0; i < q.length; i++) {
+      const c = q[i], x = c % BREITE, y = (c - x) / BREITE;
+      for (const [dx, dy] of RICHTUNGEN) {
+        const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
+        const n = ny * BREITE + nx, t = k[n];
+        if (strDist[n] !== 32767 || t === T.WAND || t === T.LEER || t === T.WASSER || t === T.BODEN || t === T.TUER) continue;
+        strDist[n] = strDist[c] + 1; q.push(n);
+      }
+    }
+  }
+  const AUSSEN_OK = new Set([T.WIESE, T.PLATZ, T.STRASSE, T.BAUM]);
+  const ENG = new Set([T.WAND, T.LEER, T.WASSER]);
+  // Türseite wählen (deterministisch, ohne Zufall): OSM-Eingang (g.eingang) hat Vorrang; sonst bleibt die Kartentür, wenn sie ins Freie führt,
+  // dort mindestens 2 Kacheln bis zum Nachbarhaus/Hindernis frei sind und die Straße nicht deutlich weiter entfernt ist als an der besten Seite;
+  // andernfalls wandert die Tür an die Wandkachel mit dem kürzesten Weg zur Straße (Safe-Room-Kandidaten nur oben/unten).
+  const tuerWaehlen = (g, raus) => {
+    const innenOk = (x, y) => hole(x, y) === T.BODEN;
+    const pruefe = (x, y, dx, dy) => {
+      const t = hole(x, y);
+      if ((t !== T.TUER && t !== T.WAND) || !innenOk(x - dx, y - dy)) return null;
+      const aussen = hole(x + dx, y + dy);
+      if (!AUSSEN_OK.has(aussen) || ENG.has(hole(x + 2 * dx, y + 2 * dy))) return null;
+      return strDist[(y + dy) * BREITE + x + dx];
+    };
+    if (g.eingang) for (const [dx, dy] of RICHTUNGEN) {
+      const d = pruefe(g.eingang.x, g.eingang.y, dx, dy);
+      if (d !== null) return { tuer: { x: g.eingang.x, y: g.eingang.y }, raus: { dx, dy } };
+    }
+    const alt = pruefe(g.tuer.x, g.tuer.y, raus.dx, raus.dy);
+    const moeglichSafe = g.flaeche >= 40 || SAFE_WUNSCH.some(([m]) => m.test(g.name ?? '')) || SAFE_ZUSATZ.some(([m]) => m.test(g.name ?? ''));
+    let best = null;
+    for (let y = g.y - 1; y <= g.y + g.h; y++) for (let x = g.x - 1; x <= g.x + g.b; x++) for (const [dx, dy] of RICHTUNGEN) {
+      if (moeglichSafe && dx !== 0) continue;
+      const d = pruefe(x, y, dx, dy); if (d === null) continue;
+      const w = d * 1000 + Math.abs(x - g.tuer.x) + Math.abs(y - g.tuer.y);
+      if (!best || w < best.w) best = { w, d, tuer: { x, y }, raus: { dx, dy } };
+    }
+    if (!best) return { tuer: { ...g.tuer }, raus };
+    if (alt !== null && alt <= best.d + 3) return { tuer: { ...g.tuer }, raus };
+    return { tuer: best.tuer, raus: best.raus };
+  };
+
   const haeuser = [], safeRooms = [], behaelter = [];
   for (const g of karte.gebaeude) {
     if (!g.tuer || g.flaeche < 12) {
@@ -165,7 +211,12 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
       const aussen = hole(g.tuer.x + dx, g.tuer.y + dy), innen = hole(g.tuer.x - dx, g.tuer.y - dy);
       if (innen === T.BODEN && ![T.WAND, T.BODEN, T.LEER, T.WASSER, T.ZAUN].includes(aussen)) { raus = { dx, dy }; break; }
     }
-    const h = { x: g.x, y: g.y, b: g.b, h: g.h, tuer: { ...g.tuer }, raus, nr: haeuser.length, name: g.name ?? '',
+    const wahl = tuerWaehlen(g, raus);
+    if (wahl.tuer.x !== g.tuer.x || wahl.tuer.y !== g.tuer.y) {
+      if (hole(g.tuer.x, g.tuer.y) === T.TUER) setze(g.tuer.x, g.tuer.y, T.WAND);
+      setze(wahl.tuer.x, wahl.tuer.y, T.TUER);
+    }
+    const h = { x: g.x, y: g.y, b: g.b, h: g.h, tuer: { ...wahl.tuer }, raus: wahl.raus, nr: haeuser.length, name: g.name ?? '',
       art: g.shop ?? g.amenity ?? '', flaeche: g.flaeche };
     haeuser.push(h);
   }
@@ -639,6 +690,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details, muell, sperren };
   if (karte.zaeune) welt.fein = baueFein(welt, karte);
   baueStuetzpunkt(welt, seed, setze);   // Bundeswehr-Stützpunkt (eigener Zufall, nach allem anderen)
+  tuerenFreihalten(welt, setze, abstandRechteck);   // LETZTER Schritt: Vorplätze leeren, Wege zur Straße öffnen
   return welt;
 }
 
@@ -712,7 +764,7 @@ function baueFein(welt, karte) {
 }
 
 function zugaengeOeffnen(f, fb, fh, welt) {
-  const W2 = 2;   // Spielerradius 12 px ≈ 1,5 Feinfelder → Fenster ±2
+  const W2 = 1;   // Spielerradius 7 px: die Figur überdeckt höchstens 3 × 3 Feinfelder → Fenster ±1 (Rest macht tuerenFreihalten)
   // frei[c] = im Fenster um c kein Hindernis (getrennt für Zäune und feste Dinge)
   const fenster = (bed) => {
     const zeile = new Uint8Array(fb * fh), aus = new Uint8Array(fb * fh);
@@ -756,5 +808,160 @@ function zugaengeOeffnen(f, fb, fh, welt) {
       const x = c % fb, y = (c - x) / fb;
       for (let dy = -W2; dy <= W2; dy++) for (let dx = -W2; dx <= W2; dx++) { const i = (y + dy) * fb + x + dx; if (f[i] === 2 || f[i] === 3) f[i] = 0; }
     }
+  }
+}
+
+// Prüfung: Häuser (betretbar, mit Tür), deren Vorplatz keinen freien Weg (Feinraster, Spielerradius) zu einer Straßenkachel hat.
+// Rückwärts-Flutung von allen freien Straßen-Feinfeldern aus; Vorplatz = Kachel vor der Tür.
+export function tuerenOhneWeg(welt, rad = 7) {
+  const f = welt.fein; if (!f) return [];
+  const fb = BREITE * FEIN, fh = HOEHE * FEIN, hole = welt.hole;
+  const fr = new Uint8Array(fb * fh);   // 1 = Figur (Radius rad) passt mit Mittelpunkt in dieses Feinfeld
+  const FP = FEIN_PX, rf = Math.ceil(rad / FP);
+  for (let y = 0; y < fh; y++) for (let x = 0; x < fb; x++) {
+    let ok = 1;
+    const x0 = Math.floor(((x + 0.5) * FP - rad) / FP), x1 = Math.floor(((x + 0.5) * FP + rad) / FP);
+    const y0 = Math.floor(((y + 0.5) * FP - rad) / FP), y1 = Math.floor(((y + 0.5) * FP + rad) / FP);
+    if (x0 < 0 || y0 < 0 || x1 >= fb || y1 >= fh) ok = 0;
+    for (let yy = y0; ok && yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) if (f[yy * fb + xx]) { ok = 0; break; }
+    fr[y * fb + x] = ok;
+  }
+  void rf;
+  const erreicht = new Uint8Array(fb * fh), q = [];
+  for (let y = 0; y < fh; y++) for (let x = 0; x < fb; x++) {
+    const c = y * fb + x;
+    if (fr[c] && hole(Math.floor(x / FEIN), Math.floor(y / FEIN)) === T.STRASSE) { erreicht[c] = 1; q.push(c); }
+  }
+  for (let i = 0; i < q.length; i++) {
+    const c = q[i], x = c % fb, y = (c - x) / fb;
+    if (x > 0 && fr[c - 1] && !erreicht[c - 1]) { erreicht[c - 1] = 1; q.push(c - 1); }
+    if (x < fb - 1 && fr[c + 1] && !erreicht[c + 1]) { erreicht[c + 1] = 1; q.push(c + 1); }
+    if (y > 0 && fr[c - fb] && !erreicht[c - fb]) { erreicht[c - fb] = 1; q.push(c - fb); }
+    if (y < fh - 1 && fr[c + fb] && !erreicht[c + fb]) { erreicht[c + fb] = 1; q.push(c + fb); }
+  }
+  return welt.haeuser.filter(h => {
+    if (!h.tuer || !h.betretbar) return false;
+    const vx = Math.floor((h.tuer.x + h.raus.dx + 0.5) * FEIN), vy = Math.floor((h.tuer.y + h.raus.dy + 0.5) * FEIN);
+    return !erreicht[vy * fb + vx] && !erreicht[vy * fb + vx - 1] && !erreicht[(vy - 1) * fb + vx] && !erreicht[(vy - 1) * fb + vx - 1];
+  });
+}
+
+// ---- Letzter Schritt des Weltaufbaus: freie Türen ----
+// 1. Vorplatz (1,5 × 1,5 Kacheln vor der Tür): kein Zaun, keine Hecke, kein Auto, keine Parkbucht, keine Mülltonne, kein Baum, keine Deko.
+// 2. Weg Vorplatz → Straße im Feinraster mit Spielerradius 7 (Figur überdeckt 3 × 3 Feinfelder): Dijkstra, freie Felder kosten 0,
+//    Zaun-/Heckenfelder 1, Zaun-/Deko-Kacheln des groben Rasters 4; Hauswände sind tabu. Auf dem Weg werden Zäune geöffnet.
+// Alles deterministisch (feste Reihenfolge, keine Zufallsvergleiche) – Server und Geräte bauen dieselbe Welt.
+function tuerenFreihalten(welt, setze, abstandRechteck) {
+  const hole = welt.hole, K = KACHEL;
+  const betr = welt.haeuser.filter(h => h.tuer && h.betretbar);
+  // 1. Vorplatz leeren
+  for (const h of betr) {
+    const cx = (h.tuer.x + 0.5 + h.raus.dx * 1.25) * K, cy = (h.tuer.y + 0.5 + h.raus.dy * 1.25) * K, hw = 0.75 * K;
+    const x0 = cx - hw, x1 = cx + hw, y0 = cy - hw, y1 = cy + hw;
+    const drin = (px, py, m = 0) => px >= x0 - m && px <= x1 + m && py >= y0 - m && py <= y1 + m;
+    for (let i = welt.behaelter.length - 1; i >= 0; i--) {
+      const b = welt.behaelter[i];
+      if ((b.art === 'auto' && drin(b.x, b.y, 22)) || ((b.art === 'muelltonne' || b.art === 'container') && drin(b.x, b.y, 0))) welt.behaelter.splice(i, 1);
+    }
+    for (let i = welt.muell.tonnen.length - 1; i >= 0; i--) if (drin(welt.muell.tonnen[i].x, welt.muell.tonnen[i].y, 0)) welt.muell.tonnen.splice(i, 1);
+    for (let i = welt.parkbuchten.length - 1; i >= 0; i--) {
+      const b = welt.parkbuchten[i];
+      if (abstandRechteck(b, cx, cy) >= hw * 1.42) continue;
+      for (let j = welt.behaelter.length - 1; j >= 0; j--) { const a = welt.behaelter[j]; if (a.art === 'auto' && a.platz === 'bucht' && abstandRechteck(b, a.x, a.y) < 8) welt.behaelter.splice(j, 1); }
+      welt.parkbuchten.splice(i, 1);
+    }
+    for (let i = welt.deko.length - 1; i >= 0; i--) {
+      const d = welt.deko[i];
+      if (d.art !== 'busch' && d.art !== 'bus') continue;
+      if (!(d.kx + d.b > x0 / K && d.kx < x1 / K && d.ky + d.h > y0 / K && d.ky < y1 / K)) continue;
+      for (let yy = d.ky; yy < d.ky + d.h; yy++) for (let xx = d.kx; xx < d.kx + d.b; xx++) if (hole(xx, yy) === T.DEKO) setze(xx, yy, d.art === 'bus' ? T.STRASSE : T.WIESE);
+      welt.deko.splice(i, 1);
+    }
+    for (let ky = Math.floor(y0 / K); ky <= Math.floor((y1 - 0.01) / K); ky++) for (let kx = Math.floor(x0 / K); kx <= Math.floor((x1 - 0.01) / K); kx++) {
+      const t = hole(kx, ky);
+      if (t === T.BAUM || t === T.ZAUN) setze(kx, ky, T.WIESE);
+    }
+  }
+  const f = welt.fein; if (!f) return;
+  const fb = BREITE * FEIN, fh = HOEHE * FEIN, N = fb * fh;
+  // Fein-Klassen je Feld: 0 frei, 1 Zaun/Hecke (öffenbar), 2 Zaun-/Deko-Kachel des groben Rasters (öffenbar, teuer), 3 fest
+  const klasse = new Uint8Array(N), fenster = new Uint8Array(N);
+  const feld = c => {
+    const v = f[c]; if (!v) return 0;
+    if (v === 2) return 1;
+    const x = c % fb, y = (c - x) / fb, t = hole(Math.floor(x / FEIN), Math.floor(y / FEIN));
+    return t === T.ZAUN || (t === T.DEKO && welt.deko.some(d => (d.art === 'busch') && d.kx === Math.floor(x / FEIN) && d.ky === Math.floor(y / FEIN))) ? 2 : 3;
+  };
+  const baueKlassen = () => {
+    for (let c = 0; c < N; c++) klasse[c] = f[c] ? feld(c) : 0;
+    for (let y = 0; y < fh; y++) for (let x = 0; x < fb; x++) {
+      let m = 0;
+      if (x === 0 || y === 0 || x === fb - 1 || y === fh - 1) m = 3;
+      else for (let dy = -1; dy <= 1 && m < 3; dy++) for (let dx = -1; dx <= 1; dx++) { const v = klasse[(y + dy) * fb + x + dx]; if (v > m) m = v; }
+      fenster[y * fb + x] = m;
+    }
+  };
+  const flut = () => {
+    const erreicht = new Uint8Array(N), q = [];
+    for (let y = 0; y < fh; y++) for (let x = 0; x < fb; x++) { const c = y * fb + x; if (!fenster[c] && hole(Math.floor(x / FEIN), Math.floor(y / FEIN)) === T.STRASSE) { erreicht[c] = 1; q.push(c); } }
+    for (let i = 0; i < q.length; i++) {
+      const c = q[i], x = c % fb, y = (c - x) / fb;
+      if (x > 0 && !fenster[c - 1] && !erreicht[c - 1]) { erreicht[c - 1] = 1; q.push(c - 1); }
+      if (x < fb - 1 && !fenster[c + 1] && !erreicht[c + 1]) { erreicht[c + 1] = 1; q.push(c + 1); }
+      if (y > 0 && !fenster[c - fb] && !erreicht[c - fb]) { erreicht[c - fb] = 1; q.push(c - fb); }
+      if (y < fh - 1 && !fenster[c + fb] && !erreicht[c + fb]) { erreicht[c + fb] = 1; q.push(c + fb); }
+    }
+    return erreicht;
+  };
+  baueKlassen();
+  let erreicht = flut();
+  const KOSTEN = [0, 1, 4];
+  const startFelder = h => {
+    const vx = Math.floor((h.tuer.x + h.raus.dx + 0.5) * FEIN), vy = Math.floor((h.tuer.y + h.raus.dy + 0.5) * FEIN);
+    return [vy * fb + vx, vy * fb + vx - 1, (vy - 1) * fb + vx, (vy - 1) * fb + vx - 1];
+  };
+  for (const h of betr) {
+    const starts = startFelder(h);
+    if (starts.some(c => erreicht[c])) continue;
+    // Dijkstra (Binärhalde, Gleichstand nach Feldnummer: deterministisch)
+    const kost = new Int32Array(N).fill(1 << 30), vor = new Int32Array(N).fill(-1), halde = [];
+    const hoch = (a, b) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+    const push = e => { halde.push(e); let i = halde.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (!hoch(halde[i], halde[p])) break; [halde[i], halde[p]] = [halde[p], halde[i]]; i = p; } };
+    const pop = () => { const top = halde[0], last = halde.pop(); if (halde.length) { halde[0] = last; let i = 0; for (;;) { let m = i; const l = 2 * i + 1, r2 = l + 1; if (l < halde.length && hoch(halde[l], halde[m])) m = l; if (r2 < halde.length && hoch(halde[r2], halde[m])) m = r2; if (m === i) break; [halde[i], halde[m]] = [halde[m], halde[i]]; i = m; } } return top; };
+    for (const c of starts) if (fenster[c] < 3) { kost[c] = KOSTEN[fenster[c]]; push([kost[c], c]); }
+    let ziel = -1;
+    while (halde.length) {
+      const [k0, c] = pop();
+      if (k0 > kost[c]) continue;
+      if (erreicht[c]) { ziel = c; break; }
+      const x = c % fb, y = (c - x) / fb;
+      for (const n of [x > 0 ? c - 1 : -1, x < fb - 1 ? c + 1 : -1, y > 0 ? c - fb : -1, y < fh - 1 ? c + fb : -1]) {
+        if (n < 0 || fenster[n] >= 3) continue;
+        const nk = k0 + KOSTEN[fenster[n]];
+        if (nk < kost[n]) { kost[n] = nk; vor[n] = c; push([nk, n]); }
+      }
+    }
+    if (ziel < 0) continue;   // Haus eingemauert (Hauswände ringsum): nichts zu öffnen
+    for (let c = ziel; c >= 0; c = vor[c]) {
+      const x = c % fb, y = (c - x) / fb;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const i = (y + dy) * fb + x + dx;
+        if (!f[i]) continue;
+        const kx = Math.floor((x + dx) / FEIN), ky = Math.floor((y + dy) / FEIN), t = hole(kx, ky);
+        if (f[i] === 2) f[i] = 0;
+        else if (t === T.ZAUN || t === T.DEKO) {
+          if (t === T.DEKO) { const di = welt.deko.findIndex(d => d.art === 'busch' && d.kx === kx && d.ky === ky); if (di < 0) continue; welt.deko.splice(di, 1); }
+          setze(kx, ky, T.WIESE);
+          for (let yy = 0; yy < FEIN; yy++) for (let xx = 0; xx < FEIN; xx++) f[(ky * FEIN + yy) * fb + kx * FEIN + xx] = 0;
+        }
+      }
+    }
+    baueKlassen(); erreicht = flut();
+  }
+  // Feinraster am Vorplatz: Zaunfelder im Vorplatzfenster entfernen (auch wenn schon ein Weg besteht)
+  for (const h of betr) {
+    const x0 = Math.floor((h.tuer.x + 0.5 + h.raus.dx * 1.25 - 0.75) * FEIN), x1 = Math.ceil((h.tuer.x + 0.5 + h.raus.dx * 1.25 + 0.75) * FEIN);
+    const y0 = Math.floor((h.tuer.y + 0.5 + h.raus.dy * 1.25 - 0.75) * FEIN), y1 = Math.ceil((h.tuer.y + 0.5 + h.raus.dy * 1.25 + 0.75) * FEIN);
+    for (let y = Math.max(0, y0); y < Math.min(fh, y1); y++) for (let x = Math.max(0, x0); x < Math.min(fb, x1); x++) if (f[y * fb + x] === 2) f[y * fb + x] = 0;
   }
 }

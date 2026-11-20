@@ -4,11 +4,12 @@ import { holeFragen } from './fragenquelle.mjs';
 import { mischeAntworten, waehleFrage } from './raetsel.mjs';
 import { botSchritt, BOT_NAMEN, botGegenangebot, botEinverstanden } from './bots.mjs';
 import { botBefehl } from './botplan.mjs';
-import { Mensch, Stadtleben } from './menschen.mjs';
+import { Mensch, Stadtleben, VERSTECK_WEITE } from './menschen.mjs';
 import { Fahrzeug, Verkehr } from './verkehr.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
 import { Zombiewelle } from './welle.mjs';
-import { Aufgabe, Aufgaben } from './aufgaben.mjs';
+import { Aufgabe, Aufgaben, Mission } from './aufgaben.mjs';
+import { schwierigkeit } from './schwierigkeit.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
@@ -106,6 +107,7 @@ export const Zustand = schema({
   phase: t.string(),        // "spiel" | "erwischt"
   zeit: t.number(),         // Spielzeit in Sekunden (wird gespeichert)
   besiegt: t.uint16(),
+  gerettet: t.uint16(),     // gerettete Bewohner (wird gespeichert)
   verwandelt: t.uint16(),   // Bewohner, die sich nach einem Biss in Zombies verwandelt haben (wird gespeichert)
   torGeloest: t.uint8(),    // richtig beantwortete Rätsel am Tor (3 = offen)
   level: t.uint8(),         // 1 = erste Karte, nach jedem geschafften Evakuierungsbus eins mehr (server/aufgaben.mjs)
@@ -122,6 +124,8 @@ export const Zustand = schema({
   evakY: t.number(),
   evakRest: t.uint16(),     // Sekunden, bis der Hubschrauber landet
   aufgaben: t.map(Aufgabe), // gemeinsame Aufgaben dieses Levels
+  missionen: t.map(Mission),   // Suchkreise der Missionsgegenstände (Mitte/Radius in px, nie der genaue Ort)
+  missionOffen: t.uint8(),     // noch nicht abgegebene Missionsgegenstände (0 = alle da oder keine Mission)
   tag: t.number(),          // Spieltag seit Start dieser Welt (1 = erster Tag; Maßstab wie spieltage())
   uhr: t.number(),          // Tageszeit in Spielminuten (0–1439)
   tagAb: t.number(),        // ab hier ganz hell (Einstellung, für die Clients)
@@ -151,6 +155,7 @@ export const Zustand = schema({
   bwX: t.number(), bwY: t.number(), bwW: t.number(),   // Puma: Position (Turmmitte) und Fahrtrichtung der Wanne, er patrouilliert an der Front
 }, 'Zustand');
 
+const ZETTEL_CHANCE = 0.06;  // Zettel bei einer Leiche draußen: Hinweis auf einen Missionsgegenstand
 const TUER_HP = 100;          // Haltbarkeit einer Tür (nach der Barrikade)
 const TUER_SCHADEN = 4;       // hp pro Sekunde und hämmerndem Zombie
 const TUER_SCHADEN_ZU = 2.8;  // verschlossene Zimmertüren halten länger
@@ -269,7 +274,7 @@ export class SpielRaum extends Room {
         }
       };
       pruefe(s.zombies, c.sichtZ ??= new Set(), z => z.ebene ?? '');
-      pruefe(s.menschen, c.sichtM ??= new Set(), m => m.sichtbar === false ? '\u0000' : '');   // Bewohner im Haus/Bus: nirgends sichtbar
+      pruefe(s.menschen, c.sichtM ??= new Set(), m => m.sichtbar === false ? '\u0000' : (m.ebene ?? ''));   // Bewohner im Haus/Bus: nirgends sichtbar
     }
   }
 
@@ -357,6 +362,7 @@ export class SpielRaum extends Room {
     this.state.uhr = Number.isFinite(stand?.uhr) ? stand.uhr : 8 * 60;   // neue Welt beginnt morgens um acht
     this.state.besiegt = stand?.besiegt ?? 0;
     this.state.verwandelt = Math.max(0, Math.min(65535, Number(stand?.verwandelt) || 0));
+    this.state.gerettet = Math.max(0, Math.min(65535, Number(stand?.gerettet) || 0));
     this.state.torGeloest = Math.min(TOR_RAETSEL, Number(stand?.torGeloest) || 0);
     this.gestellt = new Set(stand?.gestellt ?? []);
     this.offeneRaetsel = new Map();   // sessionId → { id, richtigIndex, seite, richtig, bis }
@@ -417,6 +423,7 @@ export class SpielRaum extends Room {
     this.welle = new Zombiewelle(this);
     this.aufgaben = new Aufgaben(this);
     this.aufgaben.start(stand, !!passt);
+    this.tageszeitenUebernehmen();   // Nachtlänge hängt vom Level ab
     this.stuetzpunkt = new Stuetzpunkt(this);
     this.stuetzpunkt.start(stand, !!passt);
     this.granaten = new Granaten(this);
@@ -972,7 +979,7 @@ export class SpielRaum extends Room {
     // this.zombieFaktor: Vorgabe nur für diesen Raum (Tests), sonst die Einstellung
     // solange viele Menschen gesund sind, kommen weniger Zombies aus dem Umland – die Gefahr wächst mit dem Ausbruch
     const ausbruch = this.stadt?.anfangs ? 0.6 + 0.4 * (1 - this.stadt.ruheAnteil()) : 1;
-    return Math.round(zombieSoll(this.state.spieler.size) * (this.zombieFaktor ?? e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1) * ausbruch);
+    return Math.round(zombieSoll(this.state.spieler.size) * (this.zombieFaktor ?? e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1) * ausbruch * this.schwierigkeit().dichte);
   }
 
   // Taschenlampe nötig: drinnen in dunklen Häusern (Keller immer), draußen nachts
@@ -986,8 +993,12 @@ export class SpielRaum extends Room {
   // Tag/Nacht-Zeiten aus den Einstellungen: für die Regeln auf dem Server und im Zustand für die Clients
   tageszeitenUebernehmen() {
     const e = SpielRaum.einstellungen ?? {};
-    setzeTageszeiten(e.tagAb ?? 420, e.nachtAb ?? 1290);
-    if (this.state) { this.state.tagAb = e.tagAb ?? 420; this.state.nachtAb = e.nachtAb ?? 1290; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.menschenGroesse = e.menschenGroesse ?? 100; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.groesseGesamt = e.groesseGesamt ?? 70; }
+    // Nachtlänge × Schwierigkeit: die Nacht beginnt früher (Faktor 1 = Einstellung unverändert)
+    const tagAb = e.tagAb ?? 420, nachtAb0 = e.nachtAb ?? 1290;
+    const f = this.state ? this.schwierigkeit().nacht : 1;
+    const nachtAb = f === 1 ? nachtAb0 : Math.max(tagAb + 360, Math.round(nachtAb0 - (f - 1) * (1440 - nachtAb0 + tagAb)));
+    setzeTageszeiten(tagAb, nachtAb);
+    if (this.state) { this.state.tagAb = tagAb; this.state.nachtAb = nachtAb; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.menschenGroesse = e.menschenGroesse ?? 100; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.groesseGesamt = e.groesseGesamt ?? 70; }
   }
 
   einstellungenGeaendert() {
@@ -1125,7 +1136,7 @@ export class SpielRaum extends Room {
     for (const [id, inhalt] of this.inhalte) behaelter[id] = inhalt;
     for (const [id, s] of this.state.safes) safes[id] = { barrikade: Math.round(s.barrikade), kiste: [...s.kiste] };
     this.speicher.speichereWelt({
-      version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, verwandelt: this.state.verwandelt, behaelter, safes,
+      version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, verwandelt: this.state.verwandelt, gerettet: this.state.gerettet, behaelter, safes,
       torGeloest: this.state.torGeloest, level: this.state.level, aufgaben: this.aufgaben?.speichern() ?? null, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen, Math.round(t.barrikade), Math.round(t.hp), t.kaputt]])),
       verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
@@ -1175,6 +1186,8 @@ export class SpielRaum extends Room {
       if (d < nd) { nd = d; nahDing = id; }
     }
     if (nahDing && p.rucksack.length < p.plaetze) return { art: 'aufheben', id: nahDing, dauer: 0.4 };
+    const mensch = this.stadt?.ansprechbar?.(p);
+    if (mensch) return { art: 'ansprechen', id: mensch, dauer: 0.6 };
     if (!p.ebene && this.state.torGeloest < TOR_RAETSEL && this.amTor(p)) return { art: 'raetsel' };
     let best = null, bd = AKTION_ABSTAND;
     for (const b of welt.behaelter) {
@@ -1243,6 +1256,7 @@ export class SpielRaum extends Room {
         if (!i || frei(w, zp.x + dx, zp.y + dy, W.zombieRadius)) this.setzeZombie(zp.x + dx, zp.y + dy, ebene, true);
       }
     }
+    this.stadt?.versteckterImHaus?.(ebene, w);   // nur in Häusern ohne Zombies: ein versteckter Mensch
     return w;
   }
 
@@ -1277,9 +1291,10 @@ export class SpielRaum extends Room {
       z.variante = erlaubt?.length ? erlaubt[Math.floor(this.rnd() * erlaubt.length)] : Math.floor(this.rnd() * 25);
     } z.ebene = ebene;
     const id = 'z' + (this.naechsteZombieId++);
+    const schnell = this.schwierigkeit().schnell;   // Anteil schneller Zombies („Läufer“) steigt mit Level und Spieltagen
     this.state.zombies.set(id, z);
     // tempo: fester Tempofaktor 0,9–1,1, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen)
-    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: 0.9 + this.rnd() * 0.2 });
+    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: (schnell > 0 && this.rnd() < schnell ? 1.3 : 0.9) + this.rnd() * 0.2 });
     return id;
   }
 
@@ -1700,6 +1715,10 @@ export class SpielRaum extends Room {
     if (k.art === 'raetsel') return this.stelleRaetsel(client);
     if (k.art === 'schlossraetsel') return this.stelleRaetsel(client, { art: 'tuer', key: k.key, tuer: k.tuer, ebene: k.ebene });
     if (k.art === 'schluessel_noetig') return client.send('meldung', { text: '🔑 Diese Tür braucht einen Schlüssel' });
+    if (k.art === 'funk') {   // Funkspruch braucht Funkgerät, Batterie und Antenne (in einer Safe-Room-Kiste abgegeben)
+      const fehlt = this.aufgaben?.funkFehlt() ?? [];
+      if (fehlt.length) return client.send('meldung', { text: `📻 Der Funkspruch geht noch nicht – es fehlt: ${fehlt.join(', ')} (in die Safe-Room-Kiste legen)`, lang: true });
+    }
     // Kofferräume gehen nur mit Brechstange auf
     if (k.art === 'durchsuchen' && k.behaelter?.art === 'auto' && !p.rucksack.includes('brechstange')) {
       return client.send('meldung', { text: '🔒 Der Kofferraum ist zu – dafür brauchst du eine ⚒️ Brechstange' });
@@ -1735,6 +1754,7 @@ export class SpielRaum extends Room {
     }
     else if (k.art === 'funk') this.aufgaben?.funkAbsetzen(p, k.safe);
     else if (k.art === 'tuer_zu') this.setzeTuer(k.key, false);
+    else if (k.art === 'ansprechen') this.stadt?.ansprechen(sid, p, k.id);
     else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; this.broadcast('klettern', { x: p.x, y: p.y, id: sid }); }
     else if (k.art === 'aufheben') {
       const b = this.state.boden.get(k.id);
@@ -1794,10 +1814,12 @@ export class SpielRaum extends Room {
       const tabelle = BEUTE[art] ?? [];
       const funde = [];
       const n = 1 + (this.rnd() < 0.45 ? 1 : 0);
+      const faktoren = this.fundFaktoren(b);
       for (let i = 0; i < n; i++) {
-        const d = ziehe(tabelle, SpielRaum.einstellungen.funde, this.rnd, BEUTE_BONUS[art]);
+        const d = ziehe(tabelle, faktoren, this.rnd, BEUTE_BONUS[art]);
         if (d) funde.push(d);
       }
+      funde.push(...(this.aufgaben?.missionsFunde(b.id) ?? []));   // Missionsgegenstand dieses Behälters
       this.setzeInhalt(b.id, funde);
     }
     const inhalt = this.inhalte.get(b.id);
@@ -1862,6 +1884,35 @@ export class SpielRaum extends Room {
     const genommen = this.einpacken(p, inhalt);
     l.rest = inhalt.length;
     client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+    // draußen selten ein Zettel mit einem Hinweis auf einen Missionsgegenstand (Suchkreis wird halbiert)
+    if (!l.fest && !l.ebene && !this.zettelBei?.has(id)) {
+      (this.zettelBei ??= new Set()).add(id);
+      if (this.rnd() < ZETTEL_CHANCE) {
+        const d = this.missionHinweis();
+        if (d) client?.send('meldung', { text: `📝 Ein Zettel in der Tasche: Hinweis auf ${DINGE[d].zeichen} ${DINGE[d].name} – der Suchkreis auf der Karte ist kleiner geworden`, lang: true });
+      }
+    }
+  }
+
+  // Schnittstelle für Hinweise (Zettel, gerettete Menschen): Suchkreis halbieren; ding leer = zufällig ein offener Gegenstand; liefert den Gegenstand oder null
+  missionHinweis(ding = '') { return this.aufgaben?.missionHinweis(ding) ?? null; }
+
+  // Schwierigkeit jetzt: Level-Tabelle × Tage seit Levelbeginn × Regler (server/schwierigkeit.mjs)
+  schwierigkeit() {
+    const e = SpielRaum.einstellungen;
+    return schwierigkeit({ level: this.state.level || 1, tage: Math.max(0, (this.state.tag || 1) - 1), regler: e.schwierigkeit ?? 'normal' });
+  }
+
+  // Fundhäufigkeiten (Einstellung je Gegenstand) mal Beute-/Munitionsfaktor; Missionsorte behalten die Grundausstattung (Faktor 1)
+  fundFaktoren(b) {
+    const f = SpielRaum.einstellungen.funde ?? {};
+    const sw = this.schwierigkeit();
+    if (sw.beute === 1 && sw.munition === 1) return f;
+    if (this.aufgaben?.mission?.some(m => b.id.startsWith(`h${m.nr}eg:`) || b.id.startsWith(`h${m.nr}keller:`) || b.id.startsWith(`h${m.nr}dach:`))) return f;
+    const MUN = new Set(['munition', 'pfeil', 'granate40', 'granate']);
+    const aus = {};
+    for (const d of Object.keys(DINGE)) aus[d] = (f[d] ?? 10) * (MUN.has(d) ? sw.munition : sw.beute);
+    return aus;
   }
 
   neueLeiche(z, fest = false) {
@@ -1981,6 +2032,7 @@ export class SpielRaum extends Room {
     if (!direkt && p.rucksack.length >= p.plaetze) {
       const i = Number(m.platz);
       if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return client.send('meldung', { text: '🎒 Rucksack voll – wähle, was du ablegst' });
+      if (DINGE[p.rucksack[i]]?.mission) return client.send('meldung', { text: '🧩 Missionsgegenstände lassen sich nur in die Safe-Room-Kiste legen' });
       const [alt] = p.rucksack.splice(i, 1);
       this.legeHin(alt, p.x, p.y, p.ebene);
     }
@@ -1991,6 +2043,7 @@ export class SpielRaum extends Room {
     const p = this.state.spieler.get(client.sessionId);
     const i = Number(m?.platz);
     if (!p || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
+    if (DINGE[p.rucksack[i]]?.mission) return client.send('meldung', { text: `${DINGE[p.rucksack[i]].zeichen} ${DINGE[p.rucksack[i]].name} ist für die Mission wichtig – nur in die Safe-Room-Kiste legen` });
     const [ding] = p.rucksack.splice(i, 1);
     this.legeHin(ding, p.x, p.y, p.ebene);
   }
@@ -2007,6 +2060,7 @@ export class SpielRaum extends Room {
   bodenAltern(dt) {
     for (const [id, b] of this.state.boden) {
       b.alter = (b.alter ?? 0) + dt;
+      if (DINGE[b.ding]?.mission) continue;   // Missionsgegenstände verschwinden nie
       if (b.alter > BODEN_DAUER) { this.state.boden.delete(id); continue; }
       const st = blassStufe(BODEN_DAUER - b.alter);
       if (b.blass !== st) b.blass = st;
@@ -2161,7 +2215,9 @@ export class SpielRaum extends Room {
     }
     const zr = SpielRaum.einstellungen.zeitraffer || 1;   // Testschalter: Spielzeit läuft schneller
     s.zeit += dt * zr;
+    const tagVorher = s.tag;
     s.tag = Math.floor(s.zeit / ((SpielRaum.einstellungen.tagMinuten || 48) * 60)) + 1;
+    if (s.tag !== tagVorher) this.tageszeitenUebernehmen();   // Schwierigkeit steigt je Spieltag (Nachtlänge)
     // Tageszeit: ein Spieltag dauert tagMinuten echte Minuten
     const vorher = istNacht(s.uhr);
     const raffer = this.aufgaben?.warteRaffer?.() ?? 1;   // Warten am Abholpunkt: nur die Uhr läuft schneller
@@ -2686,7 +2742,7 @@ export class SpielRaum extends Room {
     if (info.mensch) {
       const m = this.state.menschen.get(info.mensch);
       const d = m ? Math.hypot(m.x - z.x, m.y - z.y) : Infinity;
-      if (!m || !m.sichtbar || m.infiziert || ebene || d > W.sichtWeite * 1.6 || !sichtfrei(welt, z.x, z.y, m.x, m.y)) {
+      if (!m || !m.sichtbar || m.infiziert || ebene || m.ebene || (m.versteckt && d > VERSTECK_WEITE * 1.5) || d > W.sichtWeite * 1.6 || !sichtfrei(welt, z.x, z.y, m.x, m.y)) {
         if (m && m.sichtbar && !m.infiziert && d < W.sichtWeite * 1.6) info.punkt = { x: m.x, y: m.y };   // aus den Augen: letzte Stelle ansteuern
         info.mensch = null;
       } else {
@@ -2885,7 +2941,7 @@ export class SpielRaum extends Room {
     for (const d of dinge) {
       if (!DINGE[d]) continue;
       const id = this.legeHin(d, p.x, p.y, p.ebene);
-      this.state.boden.get(id).alter = BODEN_DAUER - tag;   // BODEN_DAUER + (Spieltag) Sekunden bis zum Verschwinden
+      if (!DINGE[d].mission) this.state.boden.get(id).alter = BODEN_DAUER - tag;   // BODEN_DAUER + (Spieltag) Sekunden bis zum Verschwinden
     }
     p.rucksack.splice(0, p.rucksack.length);
     p.waffe = ''; p.munition = 0; p.pfeile = 0; p.granaten = 0; p.handgranaten = 0; WP.leeren(p, this.extra.get([...this.state.spieler.keys()].find(k => this.state.spieler.get(k) === p))); p.kleidung = 0; p.lampe = 0; p.plaetze = RUCKSACK_PLAETZE + fkB;

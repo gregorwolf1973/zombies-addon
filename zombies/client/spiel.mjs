@@ -852,6 +852,7 @@ class Ort extends Phaser.Scene {
       this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, delay: 1500, duration: 700, onComplete: () => t.destroy() });
     });
     raum.onMessage('hilferufe', m => { ton.ereignis('hilferufe', m.x, m.y); });
+    raum.onMessage('wimmern', m => { if (!ton.ereignis('wimmern', m.x, m.y)) ton.stoehnen(m.x, m.y, 0.15); });   // ohne Tondatei ein leises Stöhnen als Ersatz
     raum.onMessage('klettern', m => {
       // eigene Figur: in einem kurzen Sprung hinübergleiten statt springen
       if (m.id === meineId && this.lokal) this.sprung = { vx: this.lokal.x, vy: this.lokal.y, nx: m.x, ny: m.y, t: 0 };
@@ -1158,7 +1159,8 @@ class Ort extends Phaser.Scene {
       const pz = evakArtVon(s) === 'panzer', sym = pz ? '🪖' : '🚌', fzg = pz ? 'Evakuierungspanzer' : 'Bus';
       bus = s.busSteht ? `${sym} ${fzg} wartet am Ortsausgang bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ` · ${sym} du bist an Bord` : ''}`
         : `${sym} ${fzg} fährt zum Ortsausgang vor – einsteigen geht, sobald er steht`;
-    } else if (s.funk && s.busAnkunft >= 0) bus = evakArtVon(s) === 'panzer' ? `🪖 Der Evakuierungspanzer kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang` : `🚌 Der Bus kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang`;
+    } else if (s.funk && s.missionOffen > 0) bus = `🧩 Der ${evakArtVon(s) === 'panzer' ? 'Panzer' : 'Bus'} kommt erst, wenn alle Missionsgegenstände abgegeben sind (noch ${s.missionOffen})`;
+    else if (s.funk && s.busAnkunft >= 0) bus = evakArtVon(s) === 'panzer' ? `🪖 Der Evakuierungspanzer kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang` : `🚌 Der Bus kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang`;
     else bus = `📻 Funkspruch fehlt – ohne ihn kommt kein ${evakArtVon(s) === 'panzer' ? 'Panzer' : 'Bus'}`;
     textSetzen('busanzeige', bus);
   }
@@ -1180,6 +1182,10 @@ class Ort extends Phaser.Scene {
     this.uebersicht.ziele = kats.size ? this.welt.haeuser.filter(h => !h.safe && kats.has(ladenArt(h))).map(h => ({
       x: h.x + h.b / 2, y: h.y + h.h / 2, name: ZIEL_NAMEN[h.art] ?? ZIEL_NAMEN[ladenArt(h)] ?? 'Laden', symbol: ZIEL_SYMBOL[ladenArt(h)] ?? '⭐',
     })) : [];
+    // Suchkreise offener Missionsgegenstände (Server liefert Mitte und Radius in px, nie den genauen Ort)
+    this.uebersicht.kreise = [...(raum.state.missionen?.values() ?? [])].filter(q => !q.abgegeben).map(q => ({
+      x: q.x / KACHEL, y: q.y / KACHEL, r: q.r / KACHEL, symbol: DINGE[q.ding]?.zeichen ?? '❓', name: DINGE[q.ding]?.name ?? q.ding,
+    }));
     this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });
   }
 
@@ -1938,7 +1944,11 @@ class Ort extends Phaser.Scene {
         this.menschenObj.set(id, o);
       }
       const vx = o.x, vy = o.y;
-      o.bild.setScale(o.gs * groesse(o.bogen, o.sorte) * mg());
+      // Versteckte (geduckt): eigenes Bild <typ>_versteckt; ältere Bürgerbilder ohne diese Variante kleiner und abgedunkelt.
+      // Beim Fliehen und Folgen (versteckt = false bzw. folgt) wieder das normale Bild.
+      const duckt = !!m.versteckt && !m.folgt, vk = duckt && o.typ && this.buergerListe?.[o.typ + '_versteckt']?.length ? o.typ + '_versteckt' : null;
+      if (o.typ) { const fr = this.buergerListe[vk ?? o.typ][0]; if (o.frame !== fr) { o.frame = fr; o.bild.setFrame(fr); } }
+      o.bild.setScale(o.gs * groesse(o.bogen, vk ?? o.sorte) * mg() * (duckt && !vk ? 0.8 : 1));
       if (pf.pos('m' + id, rt, pp)) { o.x = pp.x; o.y = pp.y; }
       else o.x += (m.x - o.x) * glatt, o.y += (m.y - o.y) * glatt;
       if (Math.hypot(m.x - o.x, m.y - o.y) > 200) { o.x = m.x; o.y = m.y; }   // aus Haus oder Bus aufgetaucht
@@ -1947,10 +1957,12 @@ class Ort extends Phaser.Scene {
       const weg = Math.hypot(o.x - vx, o.y - vy);
       o.lauf = (o.lauf ?? 0) + weg;
       o.box.setPosition(o.x, o.y).setRotation(o.r);
-      if (o.typ) o.bild.setAngle(weg > 0.2 ? Math.sin(o.lauf / 5) * 5 : 0);   // Standbild: leichtes Wiegen beim Gehen
+      if (o.typ) o.bild.setAngle(weg > 0.2 && !duckt ? Math.sin(o.lauf / 5) * 5 : 0);   // Standbild: leichtes Wiegen beim Gehen
       else o.bild.setFrame(this.figurBild2(o.sorte, weg > 0.2 ? Math.floor(o.lauf / 7) : 0));
-      o.box.setVisible(m.sichtbar && this.aktEbene === '');
-      o.bild.setTint(m.infiziert ? 0xb5d99c : 0xffffff);
+      o.box.setVisible(m.sichtbar && this.aktEbene === (m.ebene ?? ''));
+      // Versteckte in Häusern zeigen sich erst, wenn man nah genug ist (Wimmern verrät sie vorher)
+      o.box.setAlpha(m.ebene && duckt && this.lokal && Math.hypot(m.x - this.lokal.x, m.y - this.lokal.y) > 130 ? 0 : 1);
+      o.bild.setTint(m.infiziert ? 0xb5d99c : duckt && !vk ? 0x777777 : 0xffffff);
     }
     for (const [id, o] of this.menschenObj) if (!s.menschen?.has(id)) { o.box.destroy(); this.menschenObj.delete(id); pf.vergiss('m' + id); }
     // Fahrzeuge: Linienbus, Verkehr, Polizei und Feuerwehr (mit Blaulicht), Wracks
@@ -2577,6 +2589,16 @@ class Ort extends Phaser.Scene {
       if (nah.length === 1 && ich.rucksack.length < ich.plaetze) return { art: 'aufheben', text: `✋ ${DINGE[nah[0].ding]?.zeichen ?? ''} aufheben`, html: `✋ ${dingIcon(nah[0].ding, 22)} aufheben` };
       if (nah.length) return { art: 'aufheben_wahl', text: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => DINGE[n.ding]?.zeichen ?? '').join('')}`, html: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => dingIcon(n.ding, 20)).join('')}`, nah };
     }
+    // Mensch in der Nähe (versteckt oder verängstigt): ansprechen, dann folgt er dir bis in den Safe Room
+    {
+      let nah = null, nd = 56;
+      for (const m of raum.state.menschen?.values() ?? []) {
+        if (!m.sichtbar || m.infiziert || m.folgt || (m.ebene ?? '') !== (ich.ebene ?? '')) continue;
+        const dd = Math.hypot(m.x - x, m.y - y);
+        if (dd < nd) { nd = dd; nah = m; }
+      }
+      if (nah) return { art: 'ansprechen', text: '🙋 Ansprechen' };
+    }
     const tor = this.welt.tor;
     if (!ich.ebene && (raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
       return { art: 'raetsel', text: `🔐 Schloss knacken (${raum.state.torGeloest ?? 0}/3)` };
@@ -2825,7 +2847,7 @@ class Ort extends Phaser.Scene {
       const nt = ich.nachladen > 0 ? `🔄 lädt … ${Math.round(ich.nachladen * 100)} %` : '🔄 Nachladen (R)';
       if (nk.textContent !== nt) nk.textContent = nt;
       textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gesamt`);
-      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} verwandelt · 🧟 ${s.zombieZahl || zombieKarte().size} unterwegs`);   // der Client kennt nur die Zombies in seiner Nähe
+      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} verwandelt · 🙋 ${s.gerettet ?? 0} gerettet · 🧟 ${s.zombieZahl || zombieKarte().size} unterwegs`);   // der Client kennt nur die Zombies in seiner Nähe
       const safe = ich.sicher === 'lager' ? { id: 'lager', name: 'Bundeswehr-Lager', lager: true } : ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
       if (safe?.lager) textSetzen('sichername', `🛡 ${safe.name} · bewacht`);
@@ -2883,7 +2905,7 @@ class Ort extends Phaser.Scene {
     if (s.phase === 'erwischt') hinweis = 'Erwischt! 🧟<br>Ihr schleppt euch in die Safe Rooms …';
     else if (ich && ich.zombie > 0) hinweis = `🧟 Du bist ein Zombie! Beiß die anderen.<br>Noch ${zeitText(ich.zombie)}, dann wachst du im Safe Room auf.`;
     else if (ich && ich.unten) hinweis = `Du liegst am Boden.<br>Ein Mitspieler muss dir aufhelfen.${balken(ich.hilfe)}`;
-    else if (ich && ich.aktion) hinweis = `${{ funk: '📻 Funkspruch läuft', barrikade: '🔨 Verbarrikadieren', wegziehen: '🧟 Wegziehen', aufheben: '✋ Aufheben', aufbrechen: '⚒️ Aufbrechen', aufschliessen: '🔑 Aufschließen', tuer_auf: '🚪 Öffnen', tuer_zu: '🚪 Schließen' }[ich.aktion] ?? '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
+    else if (ich && ich.aktion) hinweis = `${{ funk: '📻 Funkspruch läuft', barrikade: '🔨 Verbarrikadieren', wegziehen: '🧟 Wegziehen', aufheben: '✋ Aufheben', aufbrechen: '⚒️ Aufbrechen', aufschliessen: '🔑 Aufschließen', tuer_auf: '🚪 Öffnen', tuer_zu: '🚪 Schließen', ansprechen: '🙋 Ansprechen' }[ich.aktion] ?? '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
     else if (ich) {
       for (const p of s.spieler.values()) {
         if (p === ich || !p.unten) continue;
@@ -3007,7 +3029,7 @@ function popupAuf(knopf, platz, ding) {
   const weg = document.createElement('button');
   weg.textContent = 'Wegwerfen'; weg.className = 'zweit';
   weg.onclick = () => { raum.send('wegwerfen', { platz }); popupZu(); };
-  p.append(titel, nutzen, weg);
+  p.append(titel);
   if (DINGE[ding]?.waffe || ding === 'granate') {   // Waffe/Handgranaten in einen Waffenplatz legen
     ['Haupt', 'Neben', 'Ersatz'].forEach((n, i) => {
       const b = document.createElement('button');
@@ -3017,6 +3039,8 @@ function popupAuf(knopf, platz, ding) {
       p.append(b);
     });
   }
+  // „Wegwerfen“ und „In die Hand“/„Benutzen“ immer ganz unten (nah am Inventar, Daumen)
+  p.append(weg, nutzen);
   const r = knopf.getBoundingClientRect();
   p.style.display = 'block';
   p.style.left = Math.max(8, Math.min(window.innerWidth - p.offsetWidth - 8, r.left + r.width / 2 - p.offsetWidth / 2)) + 'px';

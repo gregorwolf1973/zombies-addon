@@ -6,6 +6,11 @@ import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
 import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
 import { flugplanBerechnen } from './flugplatz.mjs';
+import { missionsPlan, kreisSchrumpfen, FUNK_TEILE } from './mission.mjs';
+import { DINGE } from '../client/welt.mjs';
+
+// Suchkreis eines Missionsgegenstands für die Clients (Karte): Mitte, Radius, abgegeben
+export const Mission = schema({ ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean() }, 'Mission');
 
 export const Aufgabe = schema({
   id: t.string(),
@@ -61,6 +66,13 @@ const ARTEN = {
     text: () => 'Taschenlampen: jeder hat eine', ziel: n => n,
     stand: a => [...a.raum.state.spieler.values()].filter(p => p.lampe > 0 || p.rucksack.includes('taschenlampe')).length,
   },
+  // Missionsgegenstände (server/mission.mjs): jeder liegt in einem weit entfernten Gebäude und wird in eine Safe-Room-Kiste gelegt
+  mission: {
+    symbol: '🧩', pflicht: true,
+    text: (n, a) => 'Missionsgegenstände finden und in die Safe-Room-Kiste legen: ' + a.mission.map(m => `${a.abgegeben.has(m.ding) ? '✅' : '⬜'} ${DINGE[m.ding].name}`).join(' · '),
+    ziel: (n, a) => Math.max(1, a.mission.length),
+    stand: a => a.abgegeben.size,
+  },
   bretter: {
     symbol: '🪵',
     text: () => 'Den Funk-Safe-Room zu 100 % verbarrikadieren', ziel: () => 100,
@@ -96,6 +108,11 @@ export class Aufgaben {
     this.takt = 0;
     this.flug = null;          // A400M: Landerolle { von, bis, t } | Hubschrauberphase { phase, rest }
     this.heli = null;
+    this.mission = [];         // Plan der Missionsorte (server/mission.mjs)
+    this.abgegeben = new Set();   // Missionsgegenstände, die in einer Safe-Room-Kiste abgegeben wurden
+    this.hinweise = {};        // Gegenstand → Zahl der Hinweise (Suchkreis halbiert)
+    this.planKey = '';
+    this.fehlPruef = 0;
   }
 
   einst() { return { an: false, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, ...(this.raum.einstellungen?.()?.aufgaben ?? {}) }; }
@@ -137,6 +154,7 @@ export class Aufgaben {
     this.basis = s.besiegt;
     if (!this.an()) return;
     const g = passt ? stand?.aufgaben : null;
+    this.planen(g?.mission);
     const ids = Array.isArray(g?.ids) ? g.ids.filter(id => ARTEN[id]) : [];
     if (ids.length) {
       for (const id of ids) this.neu(id, !!g.erledigt?.[id]);
@@ -145,6 +163,7 @@ export class Aufgaben {
       this.medizin = !!g.medizin;
       s.funk = !!g.funk;
     } else this.ziehen();
+    if (this.mission.length && !s.aufgaben.has('mission')) this.neu('mission', false);   // älterer Spielstand ohne Mission
     this.abholMeldung = s.funk && [...s.aufgaben.values()].every(x => !x.pflicht || x.erledigt);   // beim Laden nicht erneut melden
     this.aktualisieren(false);
     if (s.funk) s.busAnkunft = this.einst().stunde * 60;
@@ -154,16 +173,18 @@ export class Aufgaben {
   ziehen() {
     const s = this.raum.state;
     const rng = zufall((s.seed ^ Math.imul(s.level, 0x9e3779b1) ^ 0xa0f6) >>> 0);
-    const rest = Object.keys(ARTEN).filter(id => id !== 'funk');
+    if (!this.planKey) this.planen();
+    const mitMission = this.mission.length > 0;
+    const rest = Object.keys(ARTEN).filter(id => id !== 'funk' && id !== 'mission');
     for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
     const n = Math.max(3, Math.min(6, Math.round(this.einst().anzahl)));
-    for (const id of ['funk', ...rest.slice(0, n - 1)]) this.neu(id, false);
+    for (const id of ['funk', ...(mitMission ? ['mission'] : []), ...rest.slice(0, n - (mitMission ? 2 : 1))]) this.neu(id, false);
   }
 
   neu(id, erledigt) {
     const art = ARTEN[id], a = new Aufgabe(), n = this.spielerZahl();
     a.id = id; a.symbol = art.symbol; a.pflicht = !!art.pflicht;
-    a.text = art.text(n); a.ziel = art.ziel(n); a.fortschritt = erledigt ? a.ziel : 0; a.erledigt = erledigt;
+    a.text = art.text(n, this); a.ziel = art.ziel(n, this); a.fortschritt = erledigt ? a.ziel : 0; a.erledigt = erledigt;
     this.raum.state.aufgaben.set(id, a);
   }
 
@@ -173,22 +194,106 @@ export class Aufgaben {
     return {
       ids: [...s.aufgaben.keys()], erledigt: Object.fromEntries([...s.aufgaben].filter(([, a]) => a.erledigt).map(([id]) => [id, true])),
       basis: this.basis, funk: s.funk, funkSafe: this.funkSafe, medizin: this.medizin,
+      mission: { abgegeben: [...this.abgegeben], hinweise: { ...this.hinweise } },
     };
   }
 
   // Fortschritt neu berechnen; erledigt bleibt erledigt
   aktualisieren(melden = true) {
     const n = this.spielerZahl();
+    this.abgabePruefen(melden);
     for (const [id, a] of this.raum.state.aufgaben) {
       const art = ARTEN[id];
       if (!art || a.erledigt) continue;
-      a.ziel = art.ziel(n); a.text = art.text(n);
+      a.ziel = art.ziel(n, this); a.text = art.text(n, this);
       const f = art.stand(this, n);
       a.fortschritt = Math.min(f, a.ziel);
       if (f >= a.ziel) {
         a.erledigt = true; a.fortschritt = a.ziel;
         if (melden) { this.raum.broadcast('meldung', { text: `✅ Aufgabe erledigt: ${a.symbol} ${a.text}`, lang: true }); this.raum.xpAlle?.('aufgabe'); }
       }
+    }
+  }
+
+  // ---------- Missionsgegenstände (A1/A2) ----------
+  // Plan aus Seed, Level und Karte (jede Runde andere Orte); gespeicherte Abgaben und Hinweise einlesen
+  planen(gespeichert = null) {
+    const r = this.raum, s = r.state;
+    this.mission = []; this.abgegeben = new Set(); this.hinweise = {}; this.planKey = '';
+    s.missionen?.clear(); s.missionOffen = 0;
+    if (!this.an() || !r.welt?.haeuser) return;
+    this.planKey = `${s.seed}:${s.level}:${s.karte}`;
+    this.mission = missionsPlan(s.seed, s.level, s.karte, r.welt);
+    const bekannt = new Set(this.mission.map(m => m.ding));
+    for (const d of gespeichert?.abgegeben ?? []) if (bekannt.has(d)) this.abgegeben.add(d);
+    for (const m of this.mission) {
+      const h = Math.max(0, Math.min(4, Math.round(Number(gespeichert?.hinweise?.[m.ding]) || 0)));
+      for (let i = 0; i < h; i++) kreisSchrumpfen(m);
+      this.hinweise[m.ding] = h;
+      const q = new Mission(); q.ding = m.ding; q.x = Math.round(m.kx); q.y = Math.round(m.ky); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.ding);
+      s.missionen?.set(m.ding, q);
+    }
+    s.missionOffen = this.mission.length - this.abgegeben.size;
+  }
+
+  missionFertig() { return !this.raum.state.aufgaben.has('mission') || this.mission.every(m => this.abgegeben.has(m.ding)); }
+
+  // Gegenstände, die beim ersten Durchsuchen dieses Behälters dazugelegt werden
+  missionsFunde(behaelterId) {
+    if (!this.an()) return [];
+    return this.mission.filter(m => m.behaelter === behaelterId && !this.abgegeben.has(m.ding)).map(m => m.ding);
+  }
+
+  // Fehlende Teile für den Funkspruch (Namen); leer = Funkspruch möglich
+  funkFehlt() {
+    if (!this.raum.state.aufgaben.has('mission')) return [];
+    return FUNK_TEILE.filter(d => this.mission.some(m => m.ding === d) && !this.abgegeben.has(d)).map(d => DINGE[d].name);
+  }
+
+  // Missionsgegenstand in einer Safe-Room-Kiste: abgegeben (zählt für alle, wird aus der Kiste genommen)
+  abgabePruefen(melden = true) {
+    if (!this.mission.length) return;
+    const s = this.raum.state;
+    for (const m of this.mission) {
+      if (this.abgegeben.has(m.ding)) continue;
+      for (const safe of s.safes.values()) {
+        const i = safe.kiste.indexOf(m.ding);
+        if (i < 0) continue;
+        safe.kiste.splice(i, 1);
+        this.abgegeben.add(m.ding);
+        const q = s.missionen.get(m.ding); if (q) q.abgegeben = true;
+        s.missionOffen = this.mission.length - this.abgegeben.size;
+        if (melden) this.raum.broadcast('meldung', { text: `${DINGE[m.ding].zeichen} ${DINGE[m.ding].name} abgegeben (${this.abgegeben.size}/${this.mission.length})`, lang: true });
+        break;
+      }
+    }
+    if (melden && (this.fehlPruef -= 0.5) <= 0) { this.fehlPruef = 10; this.verlorenPruefen(); }
+  }
+
+  // Hinweis (Zettel, geretteter Mensch): Suchkreis des Gegenstands halbieren; ohne Angabe ein zufällig gewählter offener
+  missionHinweis(ding) {
+    const offen = this.mission.filter(m => !this.abgegeben.has(m.ding) && m.r > 150);
+    const m = ding ? this.mission.find(q => q.ding === ding && !this.abgegeben.has(q.ding)) : offen[Math.floor(this.raum.rnd() * offen.length)];
+    if (!m || !kreisSchrumpfen(m)) return null;
+    this.hinweise[m.ding] = (this.hinweise[m.ding] ?? 0) + 1;
+    const q = this.raum.state.missionen.get(m.ding);
+    if (q) { q.x = Math.round(m.kx); q.y = Math.round(m.ky); q.r = Math.round(m.r); }
+    return m.ding;
+  }
+
+  // Gegenstand weg (Spieler abgemeldet, Behälter schon früher geleert …)? Dann liegt er wieder im Behälter
+  verlorenPruefen() {
+    const r = this.raum, s = r.state;
+    for (const m of this.mission) {
+      if (this.abgegeben.has(m.ding)) continue;
+      const inh = r.inhalte.get(m.behaelter);
+      if (!inh) continue;   // noch nie durchsucht: wird beim ersten Mal dazugelegt
+      if (inh.includes(m.ding)) continue;
+      if ([...s.spieler.values()].some(p => p.rucksack.includes(m.ding))) continue;
+      if ([...s.boden.values()].some(b => b.ding === m.ding)) continue;
+      if ([...s.safes.values()].some(sf => sf.kiste.includes(m.ding))) continue;
+      if ([...(r.tausche?.values?.() ?? [])].some(tt => Object.values(tt.angebot ?? {}).some(l => l.includes(m.ding)))) continue;
+      inh.push(m.ding); r.setzeInhalt(m.behaelter, inh);
     }
   }
 
@@ -249,7 +354,7 @@ export class Aufgaben {
     const { stunde, wartezeit } = this.einst();
     const A = stunde * 60;
     if (!s.busDa) {
-      if (!s.funk) return;
+      if (!s.funk || !this.missionFertig()) return;   // der Bus kommt erst, wenn alle Missionsgegenstände abgegeben sind
       const seit = (s.uhr - A + 1440) % 1440;          // Minuten seit der Ankunftszeit
       const bis = (A - s.uhr + 1440) % 1440;           // Minuten bis zur Ankunftszeit
       if (seit < wartezeit) {
