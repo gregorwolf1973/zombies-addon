@@ -75,7 +75,7 @@ button:disabled { opacity: .6; }
 }
 #nachladenknopf.ladet { background: #ff9800aa; }
 /* Waffenplätze (Haupt, Neben, Ersatz): senkrecht unten links über dem Inventar, Antippen wechselt */
-#waffenplaetze { position: fixed; left: max(8px, env(safe-area-inset-left)); bottom: calc(56px + env(safe-area-inset-bottom)); width: 146px; display: flex; flex-direction: column; gap: 4px; pointer-events: auto; z-index: 6; }
+#waffenplaetze { position: fixed; left: max(8px, env(safe-area-inset-left)); bottom: calc(56px + env(safe-area-inset-bottom)); width: 170px; display: flex; flex-direction: column; gap: 4px; pointer-events: auto; z-index: 6; }
 #hud #waffenplaetze { margin: 0; }
 #waffenplaetze button { position: relative; overflow: hidden; display: flex; align-items: center; gap: 4px; width: 100%; min-height: 34px; margin: 0; padding: 3px 6px; font-size: 12px; line-height: 1.1; border-radius: 9px; background: #000a; color: #fff; border: 2px solid #ffffff33; white-space: nowrap; text-align: left; }
 #waffenplaetze button .nr { font-size: 9px; opacity: .6; width: 8px; }
@@ -90,7 +90,7 @@ button:disabled { opacity: .6; }
 #waffenplaetze button.leer { opacity: 0.5; }
 #waffenplaetze button.rot { border-color: #e53935; background: #5a1010cc; }
 #waffenplaetze button.rot .mag { color: #ff8a80; }
-@media (pointer: coarse) { #waffenplaetze { width: 160px; } #waffenplaetze button { min-height: 44px; font-size: 13px; } #waffenplaetze button .zz { font-size: 20px; } }
+@media (pointer: coarse) { #waffenplaetze { width: 182px; } #waffenplaetze button { min-height: 44px; font-size: 13px; } #waffenplaetze button .zz { font-size: 20px; } }
 /* Inventar: schmale Leiste ganz unten über die volle Breite (scrollbar, wenn die Plätze nicht passen) */
 #rucksack {
   display: flex; flex-wrap: nowrap; gap: 5px; pointer-events: auto; background: #000a; box-sizing: border-box; width: 100%;
@@ -409,3 +409,8 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 #sumenue .zeile button { text-align: center; }
 #sumenue #suzu { width: auto; margin: 0; padding: 6px 12px; font-size: 18px; }
 #sumenue .titel { margin: 8px 0 2px; font-size: 12px; opacity: .7; }
+
+/* Gegenstands-Icons (client/dingbild.mjs, Bild grafik/dinge.webp) */
+.ding-icon { display: inline-block; vertical-align: middle; background-image: url(grafik/dinge.webp); background-repeat: no-repeat; flex: none; }
+.platz .ding-icon { display: block; margin: auto; }
+#waffenplaetze .zz .ding-icon, .aufh-knopf .z .ding-icon { display: block; }

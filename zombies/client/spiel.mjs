@@ -32,6 +32,7 @@ const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
 import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
 import { NetzPuffer, nachSeq, ausStufe } from './netzpuffer.mjs';
+import { dingIcon, dingHtml, setzeDingListe, dingRahmen, hatDingBild } from './dingbild.mjs';
 
 const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
 const LAUFBILDER = 8;
@@ -692,6 +693,9 @@ class Ort extends Phaser.Scene {
     evakLaden(this);   // Leopard 2A7, A400M (Draufsichten, siehe grafik/LIZENZ.txt)
     this.load.image('moebel', 'grafik/moebel.webp');
     this.load.json('moebelliste', 'grafik/moebel.json');
+    // Gegenstands-Icons (Gemini, tools/dinge_bilder.py); fehlen sie, bleiben die Emojis
+    this.load.image('dinge', 'grafik/dinge.webp');
+    this.load.json('dingeliste', 'grafik/dinge.json');
   }
 
   create() {
@@ -715,6 +719,7 @@ class Ort extends Phaser.Scene {
     try { setzeAutoBilder(this.textures.get('autos').getSourceImage(), this.cache.json.get('autosliste')); } catch { setzeAutoBilder(null, null); }   // vor den ersten Kartenstücken
     try { setzeMoebelBilder(this.textures.get('moebel').getSourceImage(), this.cache.json.get('moebelliste')); } catch { setzeMoebelBilder(null, null); }
     figurenVorzeichnen(this);
+    try { setzeDingListe(this.cache.json.get('dingeliste')); dingRahmen(this); } catch {}
     ladenZeigen(85, 'Generiere Welt … zeichne Karte');
     this.zeichneKarte();
     this.aussenObjekte = this.children.list.slice();   // alles, was zur Außenwelt gehört
@@ -2020,7 +2025,10 @@ class Ort extends Phaser.Scene {
       let o = this.bodenObj.get(id);
       if (!o) {
         o = this.add.container(b.x, b.y).setDepth(1.7);
-        o.add([this.add.ellipse(0, 6, 18, 6, 0x000000, 0.3), this.add.text(0, 0, DINGE[b.ding]?.zeichen ?? '?', { fontSize: '16px' }).setOrigin(0.5)]);
+        const bild = hatDingBild(b.ding) && this.textures.get('dinge').has(b.ding === 'handgranate' ? 'granate' : b.ding)
+          ? this.add.image(0, 0, 'dinge', b.ding === 'handgranate' ? 'granate' : b.ding).setScale(24 / 128).setOrigin(0.5)
+          : this.add.text(0, 0, DINGE[b.ding]?.zeichen ?? '?', { fontSize: '16px' }).setOrigin(0.5);
+        o.add([this.add.ellipse(0, 7, 20, 6, 0x000000, 0.3), bild]);
         this.tweens.add({ targets: o, y: b.y - 3, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         this.bodenObj.set(id, o);
       }
@@ -2566,8 +2574,8 @@ class Ort extends Phaser.Scene {
     }
     {
       const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene });
-      if (nah.length === 1 && ich.rucksack.length < ich.plaetze) return { art: 'aufheben', text: `✋ ${DINGE[nah[0].ding]?.zeichen ?? ''} aufheben` };
-      if (nah.length) return { art: 'aufheben_wahl', text: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => DINGE[n.ding]?.zeichen ?? '').join('')}`, nah };
+      if (nah.length === 1 && ich.rucksack.length < ich.plaetze) return { art: 'aufheben', text: `✋ ${DINGE[nah[0].ding]?.zeichen ?? ''} aufheben`, html: `✋ ${dingIcon(nah[0].ding, 22)} aufheben` };
+      if (nah.length) return { art: 'aufheben_wahl', text: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => DINGE[n.ding]?.zeichen ?? '').join('')}`, html: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => dingIcon(n.ding, 20)).join('')}`, nah };
     }
     const tor = this.welt.tor;
     if (!ich.ebene && (raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
@@ -2798,15 +2806,15 @@ class Ort extends Phaser.Scene {
       balkenSetzen('durst', ich.durst);
       balkenSetzen('hunger', ich.hunger);
       const wf = WAFFEN[ich.waffe], d = DINGE[ich.waffe];
-      const pfeile = ich.pfeile && !wf?.pfeil ? ` · ➶ ${ich.pfeile} Pfeile` : '';
+      const pfeile = ich.pfeile && !wf?.pfeil ? ` · ${dingIcon('pfeil', 18, '➶')} ${ich.pfeile} Pfeile` : '';
       let waffe;
-      if (!wf) waffe = `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}${pfeile}`;
+      if (!wf) waffe = `${dingIcon('faust', 20, '✊')} Unbewaffnet – stoßen${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
       else if (wf.fern) {
         // „🔫 Pistole 12/15 · 48“: Magazin/Max · Vorrat (Pfeile bzw. Granaten beim Armbrust/Granatwerfer)
         const vorrat = vorratVon(ich, wf), leer = !(ich.magazin > 0) && vorrat <= 0;
-        waffe = `${d.zeichen} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ' · 🔄 lädt nach' : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
-      } else waffe = `${d.zeichen} ${d.name}${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}${pfeile}`;
-      textSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
+        waffe = `${dingIcon(ich.waffe, 20)} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ' · 🔄 lädt nach' : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
+      } else waffe = `${dingIcon(ich.waffe, 20)} ${d.name}${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
+      htmlSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
         + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
       this.waffenplaetzeZeigen(ich);
       // Nachladen-Knopf (Handy; am PC Taste R): nur wenn das Magazin nicht voll ist und Vorrat da ist
@@ -2858,7 +2866,10 @@ class Ort extends Phaser.Scene {
     this.zweit = zweit;
     const knopf = $('aktion'), knopf2 = $('aktion2');
     knopf.style.display = this.kontext ? 'block' : 'none';
-    if (this.kontext && knopf.textContent !== this.kontext.text) knopf.textContent = this.kontext.text;
+    if (this.kontext && knopf.__text !== (this.kontext.html ?? this.kontext.text)) {   // html: mit Gegenstands-Icons
+      knopf.__text = this.kontext.html ?? this.kontext.text;
+      if (this.kontext.html) knopf.innerHTML = this.kontext.html; else knopf.textContent = this.kontext.text;
+    }
     knopf.style.opacity = this.kontext?.aus ? '0.5' : '';   // ausgegraut (Schlüssel nötig), Klick zeigt nur den Hinweis
     knopf2.style.display = zweit ? 'block' : 'none';
     if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
@@ -2919,7 +2930,7 @@ class Ort extends Phaser.Scene {
         b.className = (i === akt && !ich.faust ? 'aktiv ' : '') + (z.w ? '' : 'leer ') + (leer ? 'rot' : '');
         const kurz = z.d ? z.d.name.replace(/^Jagd/, '').replace(/^Baseball/, '').trim().replace(/^./, c => c.toUpperCase()) : 'leer';
         const zahl = z.wf?.fern ? `<span class="mag">${z.m}/${z.max}</span><span class="vor">${z.vorrat}</span>` : '';
-        b.innerHTML = `<span class="nr">${i + 1}</span><span class="zz">${z.d ? z.d.zeichen : '–'}</span><span class="nm">${kurz}</span>${zahl}<i class="lad"></i>`;
+        b.innerHTML = `<span class="nr">${i + 1}</span><span class="zz">${z.d ? dingIcon(z.w, 28) : '–'}</span><span class="nm">${kurz}</span>${zahl}<i class="lad"></i>`;
         b.title = `${namen[i]}: ${z.d ? z.d.name : 'leer'}${z.wf?.fern ? ` – Magazin ${z.m}/${z.max}, Vorrat ${z.vorrat}` : ''} (Taste F wechselt)`;
         // Antippen = in die Hand; gedrückt halten (Handy) bzw. Rechtsklick (PC) = Menü (Rucksack, Fallen lassen, Tauschen)
         let lang = false, timer = 0;
@@ -2932,7 +2943,7 @@ class Ort extends Phaser.Scene {
       });
       const f = document.createElement('button');
       f.type = 'button'; f.className = 'faustknopf' + (ich.faust ? ' aktiv' : '');
-      f.textContent = '✊ Faust'; f.title = 'Nichts in der Hand, ohne einen Platz zu leeren (Taste X)';
+      f.innerHTML = `${dingIcon('faust', 22, '✊')} Faust`; f.title = 'Nichts in der Hand, ohne einen Platz zu leeren (Taste X)';
       f.onclick = e => { e.stopPropagation(); raum.send('faust'); };
       leiste.appendChild(f);
     }
@@ -2976,7 +2987,7 @@ class Ort extends Phaser.Scene {
       const d = ich.rucksack[i];
       const b = document.createElement('button');
       b.className = 'platz' + (d ? '' : ' leer');
-      b.textContent = d ? DINGE[d]?.zeichen ?? '?' : '';
+      b.innerHTML = d ? dingIcon(d, 32) : '';
       b.title = d ? `${DINGE[d]?.name} (Taste ${i + 1})` : 'leer';
       if (d) b.onclick = e => { e.stopPropagation(); popupAuf(b, i, d); };
       leiste.appendChild(b);
@@ -2989,7 +3000,7 @@ function popupAuf(knopf, platz, ding) {
   const p = $('popup');
   p.innerHTML = '';
   const titel = document.createElement('div');
-  titel.className = 'titel'; titel.textContent = dingText(ding);
+  titel.className = 'titel'; titel.innerHTML = dingHtml(ding, 24);
   const nutzen = document.createElement('button');
   nutzen.textContent = DINGE[ding]?.waffe ? 'In die Hand' : ding === 'granate' ? 'Werfen' : ding === 'radio' ? 'Einschalten' : ding === 'bretter' ? 'Wofür?' : 'Benutzen';
   nutzen.onclick = () => { raum.send('benutze', { platz }); popupZu(); };
@@ -3001,7 +3012,7 @@ function popupAuf(knopf, platz, ding) {
     ['Haupt', 'Neben', 'Ersatz'].forEach((n, i) => {
       const b = document.createElement('button');
       const inh = raum.state.spieler.get(meineId)?.['wp' + i];
-      b.textContent = `→ Platz ${i + 1} (${n}${inh && DINGE[inh] ? ': ' + DINGE[inh].zeichen : ''})`; b.className = 'zweit';
+      b.innerHTML = `→ Platz ${i + 1} (${n}${inh && DINGE[inh] ? ': ' + dingIcon(inh, 20) : ''})`; b.className = 'zweit';
       b.onclick = () => { raum.send('platz_aktion', { platz: i, aktion: 'tausch', rs: platz }); popupZu(); };
       p.append(b);
     });
@@ -3019,11 +3030,12 @@ function platzMenue(knopf, platz) {
   const name = ich['wp' + platz] || '', p = $('popup');
   p.innerHTML = '';
   const titel = document.createElement('div');
-  titel.className = 'titel'; titel.textContent = name ? `${['Haupt', 'Neben', 'Ersatz'][platz]}: ${dingText(name)}` : `${['Haupt', 'Neben', 'Ersatz'][platz]}: leer`;
+  titel.className = 'titel'; titel.innerHTML = name ? `${['Haupt', 'Neben', 'Ersatz'][platz]}: ${dingHtml(name, 24)}` : `${['Haupt', 'Neben', 'Ersatz'][platz]}: leer`;
   p.append(titel);
-  const knopfMit = (text, daten, zweit) => {
+  const knopfMit = (text, daten, zweit, html) => {
     const b = document.createElement('button');
-    b.textContent = text; if (zweit) b.className = 'zweit';
+    if (html) b.innerHTML = html; else b.textContent = text;
+    if (zweit) b.className = 'zweit';
     b.onclick = () => { raum.send('platz_aktion', { platz, ...daten }); popupZu(); };
     p.append(b);
   };
@@ -3034,7 +3046,7 @@ function platzMenue(knopf, platz) {
     if (!(DINGE[d]?.waffe || d === 'granate') || gesehen.has(d)) return;
     gesehen.add(d);
     const n = d === 'granate' ? ` (${ich.rucksack.filter(q => q === 'granate').length})` : '';
-    knopfMit(`${name ? 'Tauschen mit' : 'Hierhin:'} ${DINGE[d].zeichen} ${DINGE[d].name}${n}`, { aktion: 'tausch', rs }, true);
+    knopfMit('', { aktion: 'tausch', rs }, true, `${name ? 'Tauschen mit' : 'Hierhin:'} ${dingHtml(d, 22)}${n}`);
   });
   const r = knopf.getBoundingClientRect();
   p.style.display = 'block';
@@ -3060,7 +3072,7 @@ function kisteZeigen(ich, safe) {
     const raster = document.createElement('div'); raster.className = 'raster';
     [...liste].forEach((d, i) => {
       const b = document.createElement('button');
-      b.className = 'ding'; b.textContent = dingText(d);
+      b.className = 'ding'; b.innerHTML = dingHtml(d, 22);
       b.onclick = () => raum.send('kiste', { richtung, platz: i });
       raster.appendChild(b);
     });
@@ -3084,18 +3096,18 @@ function handelZeigen(ich, sp) {
   handelSchluessel = schluessel;
   $('handeltitel').textContent = `${h.zeichen} Mit dem ${h.name} tauschen`;
   const anz = d => ich.rucksack.filter(q => q === d).length;
-  const habe = [...new Set(ich.rucksack)].map(d => `${DINGE[d]?.zeichen ?? '?'} ${anz(d)}`).join('  ') || 'nichts';
-  $('handelhabe').textContent = `Du hast: ${habe}${ich.munition ? `  🧰 ${ich.munition} Schuss` : ''}`;
+  const habe = [...new Set(ich.rucksack)].map(d => `${dingIcon(d, 20)} ${anz(d)}`).join('  ') || 'nichts';
+  $('handelhabe').innerHTML = `Du hast: ${habe}${ich.munition ? `  ${dingIcon('munition', 20)} ${ich.munition} Schuss` : ''}`;
   const box = $('handelangebote');
   box.innerHTML = '';
   for (const a of h.angebote) {
     const zeile = document.createElement('div'); zeile.className = 'angebot';
-    const gibt = a.gibt === 'munition' ? `🧰 ${a.menge} Schuss Munition` : `${DINGE[a.gibt].zeichen} ${a.menge > 1 ? a.menge + '× ' : ''}${DINGE[a.gibt].name}`;
-    const kostet = `${a.kostet.anzahl} beliebige aus ${a.kostet.aus.map(d => DINGE[d].zeichen).join(' ')}`;
+    const gibt = a.gibt === 'munition' ? `${dingIcon('munition', 22)} ${a.menge} Schuss Munition` : `${dingIcon(a.gibt, 22)} ${a.menge > 1 ? a.menge + '× ' : ''}${DINGE[a.gibt].name}`;
+    const kostet = `${a.kostet.anzahl} beliebige aus ${a.kostet.aus.map(d => dingIcon(d, 20)).join(' ')}`;
     const zahl = bezahlung(ich.rucksack, a.kostet);
     const platzOk = a.gibt === 'munition' ? ich.munition < MUNITION_MAX : ich.rucksack.length - (zahl?.length ?? 0) + a.menge <= ich.plaetze;
     const text = document.createElement('div'); text.className = 'text';
-    text.innerHTML = `<b>${gibt}</b><span>kostet ${kostet}</span>${zahl ? `<span class="zahlt">zahlt: ${zahl.map(d => DINGE[d].zeichen).join(' ')}</span>` : '<span class="fehlt">dafür fehlt dir etwas</span>'}`;
+    text.innerHTML = `<b>${gibt}</b><span>kostet ${kostet}</span>${zahl ? `<span class="zahlt">zahlt: ${zahl.map(d => dingIcon(d, 20)).join(' ')}</span>` : '<span class="fehlt">dafür fehlt dir etwas</span>'}`;
     const knopf = document.createElement('button'); knopf.textContent = 'Tauschen';
     knopf.disabled = !zahl || !platzOk;
     if (zahl && !platzOk) knopf.title = a.gibt === 'munition' ? 'Munition voll' : 'Rucksack voll';
@@ -3118,7 +3130,7 @@ function zeigeTausch(m) {
     el.innerHTML = '';
     if (!dinge.length) { el.innerHTML = '<span class="leer">nichts</span>'; return; }
     dinge.forEach((d, i) => {
-      const b = document.createElement('button'); b.className = 'ding'; b.textContent = dingText(d);
+      const b = document.createElement('button'); b.className = 'ding'; b.innerHTML = dingHtml(d, 22);
       if (wenn) b.onclick = () => wenn(i); else b.disabled = true;
       el.appendChild(b);
     });
@@ -3137,7 +3149,7 @@ function tauschRucksack() {
   if (el.dataset.k === schluessel) return;
   el.dataset.k = schluessel; el.innerHTML = '';
   [...(ich?.rucksack ?? [])].forEach((d, i) => {
-    const b = document.createElement('button'); b.className = 'ding'; b.textContent = dingText(d);
+    const b = document.createElement('button'); b.className = 'ding'; b.innerHTML = dingHtml(d, 22);
     b.onclick = () => raum.send('tausch_anbieten', { platz: i });
     el.appendChild(b);
   });
@@ -3199,6 +3211,8 @@ function balkenSetzen(id, wert) {
   if (el.style.width !== w) el.style.width = w;
 }
 function textSetzen(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
+// wie textSetzen, aber mit HTML (Gegenstands-Icons); nur bei Änderung neu setzen
+function htmlSetzen(id, html) { const el = $(id); if (el.__html !== html) { el.__html = html; el.innerHTML = html; } }
 
 function balken(wert) {
   return `<div class="balken"><div style="width:${Math.round(wert * 100)}%"></div></div>`;
