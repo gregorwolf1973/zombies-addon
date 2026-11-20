@@ -1,12 +1,16 @@
-// Startbildschirm vor Level 1: 5 Fähigkeitspunkte verteilen und einen Startgegenstand wählen.
-// Der Server schickt „startwahl“, prüft die Antwort selbst (genau 5 Punkte, nur einmal) und bestätigt mit „startwahl_ok“.
+// Startbildschirm vor Level 1: 5 Fähigkeitspunkte verteilen und zwei Startgegenstände wählen.
+// Der Server schickt „startwahl“, prüft die Antwort selbst (genau 5 Punkte, genau 2 verschiedene Gegenstände, nur einmal) und bestätigt mit „startwahl_ok“.
 import { LISTE } from './faehigkeiten.mjs';
 
 const GEGENSTAENDE = [
-  ['waffe', '🔫', 'Waffe', 'Pistole mit 12 Schuss'],
-  ['lampe', '🔦', 'Taschenlampe', 'leuchtet in dunklen Räumen'],
-  ['brecheisen', '⚒️', 'Brecheisen', 'bricht Türen und Kofferräume auf'],
-  ['wasser', '💧', 'Wasser', 'ein Schluck mehr Vorrat (vorgewählt)'],
+  ['messer', '🔪', 'Messer', 'leiser Nahkampf, schnell'],
+  ['funkgeraet', '📻', 'Funkgerät', 'mit zwei Funkgeräten hört man sich überall'],
+  ['taschenlampe', '🔦', 'Taschenlampe', 'leuchtet in dunklen Räumen'],
+  ['armbrust', '🏹', 'Armbrust', 'leise, mit 6 Pfeilen'],
+  ['schlaeger', '🏏', 'Baseballschläger', 'kräftiger Nahkampf'],
+  ['radio', '📻', 'Radio', 'lockt Zombies mit Lärm weg'],
+  ['schluessel', '🔑', 'Schlüsselbund', 'schließt Türen auf'],
+  ['spritze', '💉', 'Rettungsspritze', 'holt einen Gestürzten oder Infizierten zurück'],
 ];
 
 const CSS = `
@@ -37,14 +41,14 @@ export function startwahlStart(raum) {
   fenster.id = 'swfenster'; fenster.setAttribute('role', 'dialog'); fenster.setAttribute('aria-label', 'Startwahl');
   document.body.append(fenster);
   window.__startwahlOffen = false;
-  let punkte = 5, max = 5, item = 'wasser', stufen = {};
+  let punkte = 5, max = 5, wahl = [], stufen = {};
 
   const verteilt = () => Object.values(stufen).reduce((a, b) => a + b, 0);
   const zeichnen = () => {
     const rest = punkte - verteilt();
     fenster.innerHTML = `<div class="sw-box">
       <h2>🧟 Dein Start</h2>
-      <div class="sw-klein">Verteile ${punkte} Fähigkeitspunkte und wähle einen Gegenstand. Das geht nur einmal.</div>
+      <div class="sw-klein">Verteile ${punkte} Fähigkeitspunkte und wähle genau 2 verschiedene Gegenstände. Dazu gibt es einen Zufallsgegenstand. Das geht nur einmal.</div>
       <h3>Fähigkeiten</h3>
       <div class="sw-rest" id="swrest">${rest} Punkt${rest === 1 ? '' : 'e'} übrig</div>
       ${LISTE.map(([id, sym, name, text]) => {
@@ -53,22 +57,22 @@ export function startwahlStart(raum) {
           <div class="sw-text"><span>${sym}</span> <b>${name}</b> <span class="sw-sterne">${'★'.repeat(n)}${'☆'.repeat(max - n)}</span><div class="sw-klein">${text}</div></div>
           <button class="sw-pm" type="button" data-id="${id}" data-d="1" aria-label="${name} verbessern" ${rest > 0 && n < max ? '' : 'disabled'}>+</button></div>`;
       }).join('')}
-      <h3>Startgegenstand</h3>
-      ${GEGENSTAENDE.map(([id, sym, name, text]) => `<label class="sw-item${item === id ? ' an' : ''}"><input type="radio" name="switem" value="${id}" ${item === id ? 'checked' : ''}>
+      <h3>Startgegenstände (${wahl.length}/2)</h3>
+      ${GEGENSTAENDE.map(([id, sym, name, text]) => `<label class="sw-item${wahl.includes(id) ? ' an' : ''}"><input type="checkbox" name="switem" value="${id}" ${wahl.includes(id) ? 'checked' : ''} ${!wahl.includes(id) && wahl.length >= 2 ? 'disabled' : ''}>
         <span style="font-size:22px">${sym}</span><span><b>${name}</b><div class="sw-klein">${text}</div></span></label>`).join('')}
-      <button class="sw-los" id="swlos" type="button" ${rest === 0 ? '' : 'disabled'}>${rest === 0 ? 'Los geht’s' : `Noch ${rest} Punkt${rest === 1 ? '' : 'e'} verteilen`}</button>
+      <button class="sw-los" id="swlos" type="button" ${rest === 0 && wahl.length === 2 ? '' : 'disabled'}>${rest !== 0 ? `Noch ${rest} Punkt${rest === 1 ? '' : 'e'} verteilen` : wahl.length !== 2 ? `Noch ${2 - wahl.length} Gegenstand wählen` : 'Los geht’s'}</button>
     </div>`;
     fenster.querySelectorAll('.sw-pm').forEach(b => {
       b.onclick = () => { const id = b.dataset.id; stufen[id] = Math.max(0, Math.min(max, (stufen[id] || 0) + Number(b.dataset.d))); zeichnen(); };
     });
-    fenster.querySelectorAll('input[name=switem]').forEach(r => { r.onchange = () => { item = r.value; zeichnen(); }; });
+    fenster.querySelectorAll('input[name=switem]').forEach(r => { r.onchange = () => { wahl = r.checked ? [...wahl, r.value].slice(0, 2) : wahl.filter(w => w !== r.value); zeichnen(); }; });
     fenster.querySelector('#swlos').onclick = () => {
-      if (verteilt() !== punkte) return;
-      raum.send('startwahl', { punkte: Object.fromEntries(Object.entries(stufen).filter(([, n]) => n > 0)), item });
+      if (verteilt() !== punkte || wahl.length !== 2) return;
+      raum.send('startwahl', { punkte: Object.fromEntries(Object.entries(stufen).filter(([, n]) => n > 0)), items: wahl });
     };
   };
   raum.onMessage('startwahl', m => {
-    punkte = Number(m?.punkte) || 5; max = Number(m?.max) || 5; item = 'wasser'; stufen = {};
+    punkte = Number(m?.punkte) || 5; max = Number(m?.max) || 5; wahl = []; stufen = {};
     zeichnen(); fenster.style.display = 'flex'; window.__startwahlOffen = true;
   });
   raum.onMessage('startwahl_ok', () => { fenster.style.display = 'none'; window.__startwahlOffen = false; });

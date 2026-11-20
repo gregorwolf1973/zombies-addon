@@ -5,6 +5,7 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { WAFFEN, DINGE, BEUTE, ziehe, aktiveWaffe, ladenArt } from '../client/welt.mjs';
 import * as FK from '../server/faehigkeiten.mjs';
+import * as WP from '../server/waffenplaetze.mjs';
 
 const PORT = 26170 + Math.floor(Math.random() * 200);
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -122,51 +123,86 @@ test('Maschinengewehr aus der Kiste: kommt sofort in die Hand (Pistole in den Ru
   } finally { await a.leave(); }
 });
 
-test('Startwahl: genau einmal, genau 5 Punkte, ein Startgegenstand', async () => {
+test('Startwahl: genau einmal, genau 5 Punkte, genau 2 verschiedene Gegenstände + Zufall', async () => {
   const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Starter' });
   try {
     const raum = matchMaker.getLocalRoomById(a.roomId);
     const p = raum.state.spieler.get(a.sessionId), x = raum.extra.get(a.sessionId);
     assert.equal(raum.state.level, 1);
     assert.equal(x.startOffen, true);
-    let angebot = null; a.onMessage('startwahl', m => { angebot = m; }); a.onMessage('startwahl_ok', () => {});
+    let angebot = null, ok = null; a.onMessage('startwahl', m => { angebot = m; }); a.onMessage('startwahl_ok', m => { ok = m; }); a.onMessage('meldung', () => {});
     a.send('startwahl', {});
     assert.ok(await bis(() => angebot), 'Angebot kam nicht');
-    assert.equal(angebot.punkte, 5);
-    assert.deepEqual(angebot.gegenstaende, ['waffe', 'lampe', 'brecheisen', 'wasser']);
-    const wasser0 = p.rucksack.filter(d => d === 'wasser').length;
-    // ungültig: 4 Punkte, 6 Punkte, unbekannte Fähigkeit, Stufe über 5, unbekannter Gegenstand
+    assert.equal(angebot.punkte, 5); assert.equal(angebot.anzahl, 2);
+    assert.deepEqual(angebot.gegenstaende, ['messer', 'funkgeraet', 'taschenlampe', 'armbrust', 'schlaeger', 'radio', 'schluessel', 'spritze']);
+    for (const d of angebot.gegenstaende) assert.ok(DINGE[d], d);
+    p.waffe = ''; p.pfeile = 0; p.rucksack.splice(0); p.lampe = 0;
+    // ungültig: Punkte (4, 6, unbekannt, Stufe über 5) und Gegenstände (1, 3, doppelt, unbekannt, keine Liste, nicht in der Liste)
     for (const punkte of [{ zielen: 4 }, { zielen: 5, tempo: 1 }, { gibtsnicht: 5 }, { zielen: 6 }, { zielen: -1, tempo: 6 }]) {
-      a.send('startwahl', { punkte, item: 'wasser' }); await warte(60);
+      a.send('startwahl', { punkte, items: ['messer', 'radio'] }); await warte(60);
       assert.equal(x.startOffen, true, JSON.stringify(punkte));
     }
-    a.send('startwahl', { punkte: { zielen: 5 }, item: 'pistole' }); await warte(60);
-    assert.equal(x.startOffen, true, 'unbekannter Gegenstand');
-    // gültig
-    a.send('startwahl', { punkte: { zielen: 3, tempo: 2 }, item: 'wasser' });
+    for (const items of [['messer'], ['messer', 'radio', 'spritze'], ['messer', 'messer'], ['messer', 'pistole'], 'messer', [], undefined, ['messer', 'brechstange']]) {
+      a.send('startwahl', { punkte: { zielen: 5 }, items }); await warte(60);
+      assert.equal(x.startOffen, true, 'Gegenstände ' + JSON.stringify(items));
+    }
+    // gültig: Messer (Waffe -> Platz) + Radio (Rucksack) + 1 Zufall
+    raum.rnd = () => 0;   // erster Pool-Eintrag: Verband
+    a.send('startwahl', { punkte: { zielen: 3, tempo: 2 }, items: ['messer', 'radio'] });
     assert.ok(await bis(() => x.startOffen === false), 'Wahl nicht angenommen');
+    assert.ok(await bis(() => ok), 'keine Bestätigung');
+    assert.equal(ok.zufall, 'verband');
     assert.equal(x.fk.s.zielen, 3); assert.equal(x.fk.s.tempo, 2); assert.equal(x.fk.bonus, 5);
-    assert.equal(p.rucksack.filter(d => d === 'wasser').length, wasser0 + 1);
+    assert.equal(p.waffe, 'messer');
+    assert.deepEqual([...p.rucksack], ['radio', 'verband']);
     assert.equal(FK.freiePunkte(x.fk), 0, 'Startpunkte sind verbraucht, keine Zusatzpunkte');
     // zweiter Versuch wirkt nicht
-    a.send('startwahl', { punkte: { leben: 5 }, item: 'waffe' }); await warte(100);
-    assert.equal(x.fk.s.leben, 0); assert.equal(x.fk.bonus, 5);
-    // der Stand übersteht das Normieren (Speichern/Laden)
+    a.send('startwahl', { punkte: { leben: 5 }, items: ['spritze', 'schluessel'] }); await warte(100);
+    assert.equal(x.fk.s.leben, 0); assert.equal(x.fk.bonus, 5); assert.ok(!p.rucksack.includes('spritze'));
     assert.equal(FK.normiere(JSON.parse(JSON.stringify(x.fk))).s.zielen, 3);
   } finally { await a.leave(); }
 });
 
-test('Startwahl: Gegenstände Waffe, Lampe, Brecheisen; Bots bekommen automatisch Punkte', async () => {
-  const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Gegenstand' });
+test('Startausrüstung: Waffen in freie Waffenplätze, Armbrust mit 6 Pfeilen, Rest in den Rucksack, bei vollem Rucksack auf den Boden; Zufallspool ohne Missions-/Bundeswehr-Dinge', async () => {
+  const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Ausruestung' });
+  try {
+    const raum = matchMaker.getLocalRoomById(a.roomId);
+    const p = raum.state.spieler.get(a.sessionId), x = raum.extra.get(a.sessionId);
+    for (const d of FK.START_ZUFALL) assert.ok(DINGE[d] && !DINGE[d].mission && !d.startsWith('m_') && !['mg', 'gewehr', 'scharfschuetze'].includes(d), d);
+    p.waffe = ''; p.munition = 0; p.pfeile = 0; p.lampe = 0; p.rucksack.splice(0); WP.leeren(p, x);
+    raum.startGegenstand(p, 'schlaeger', x); assert.equal(p.waffe, 'schlaeger');
+    raum.startGegenstand(p, 'armbrust', x);
+    assert.equal(p.pfeile, 6);
+    assert.ok([p.wp1, p.wp2].includes('armbrust') || p.waffe === 'armbrust', 'Armbrust nicht in einem Waffenplatz');
+    assert.equal(p.rucksack.includes('armbrust'), false);
+    raum.startGegenstand(p, 'taschenlampe', x); assert.ok(p.lampe > 0);
+    raum.startGegenstand(p, 'spritze', x); assert.ok(p.rucksack.includes('spritze'));
+    // voller Rucksack: Gegenstand liegt am Boden
+    p.rucksack.splice(0, p.rucksack.length, ...Array(p.plaetze).fill('wasser'));
+    const vor = raum.state.boden.size;
+    raum.startGegenstand(p, 'radio', x);
+    assert.equal(p.rucksack.length, p.plaetze); assert.equal(raum.state.boden.size, vor + 1);
+    // Bots: zwei sinnvolle Gegenstände automatisch
+    const bots = [...raum.extra.entries()].filter(([, e]) => e.bot);
+    for (const [, e] of bots) { assert.equal(FK.punkteVerteilt(e.fk), 5); assert.equal(e.fk.bonus, 5); }
+    assert.ok(FK.startItemsOk(FK.START_BOT_ITEMS));
+  } finally { await a.leave(); }
+});
+
+test('Rucksack umsortieren: Tausch, Verschieben ans Ende, Grenzen', async () => {
+  const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Sortierer' });
   try {
     const raum = matchMaker.getLocalRoomById(a.roomId);
     const p = raum.state.spieler.get(a.sessionId);
-    p.waffe = ''; p.munition = 0; p.lampe = 0; p.rucksack.splice(0);
-    raum.startGegenstand(p, 'waffe'); assert.equal(p.waffe, 'pistole'); assert.equal(p.munition, 12);
-    raum.startGegenstand(p, 'lampe'); assert.ok(p.lampe > 0);
-    raum.startGegenstand(p, 'brecheisen'); assert.ok(p.rucksack.includes('brechstange'));
-    const bots = [...raum.extra.entries()].filter(([, x]) => x.bot);
-    for (const [, x] of bots) { assert.equal(FK.punkteVerteilt(x.fk), 5); assert.equal(x.fk.bonus, 5); }
+    const setze = () => { p.rucksack.splice(0, p.rucksack.length, 'wasser', 'essen', 'verband', 'radio'); };
+    const sende = async m => { a.send('rucksack_tausch', m); await warte(60); };
+    setze(); await sende({ von: 0, nach: 2 }); assert.deepEqual([...p.rucksack], ['verband', 'essen', 'wasser', 'radio']);
+    setze(); await sende({ von: 1, nach: 0 }); assert.deepEqual([...p.rucksack], ['essen', 'wasser', 'verband', 'radio']);
+    setze(); await sende({ von: 0, nach: 6 }); assert.deepEqual([...p.rucksack], ['essen', 'verband', 'radio', 'wasser'], 'leeres Ziel: ans Ende');
+    // ungültig: nichts ändert sich
+    for (const m of [{ von: 4, nach: 0 }, { von: -1, nach: 0 }, { von: 0, nach: -1 }, { von: 0, nach: p.plaetze }, { von: 0, nach: 99 }, { von: 1.5, nach: 0 }, { von: '0', nach: 1 }, { von: 2, nach: 2 }, {}, { von: null, nach: 0 }]) {
+      setze(); await sende(m); assert.deepEqual([...p.rucksack], ['wasser', 'essen', 'verband', 'radio'], JSON.stringify(m));
+    }
   } finally { await a.leave(); }
 });
 

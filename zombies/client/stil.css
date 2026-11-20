@@ -414,3 +414,7 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 .ding-icon { display: inline-block; vertical-align: middle; background-image: url(grafik/dinge.webp); background-repeat: no-repeat; flex: none; }
 .platz .ding-icon { display: block; margin: auto; }
 #waffenplaetze .zz .ding-icon, .aufh-knopf .z .ding-icon { display: block; }
+
+/* Rucksack umsortieren (Ziehen & Ablegen) */
+#rucksack .platz.zieht { opacity: .35; }
+#rucksack .platz.ziel { outline: 2px solid #ffca28; }

@@ -24,7 +24,15 @@ export const xpFuerAufstieg = level => Math.round(100 * Math.pow(Math.max(1, lev
 
 // Startwahl vor Level 1: 5 zusätzliche Punkte (bonus), die über die normalen Level-Punkte hinausgehen
 export const START_PUNKTE = 5;
-export const START_GEGENSTAENDE = ['waffe', 'lampe', 'brecheisen', 'wasser'];   // 'wasser' ist vorgewählt
+// Startwahl: genau START_ANZAHL verschiedene Gegenstände aus dieser Liste (DING-Namen aus client/welt.mjs)
+export const START_ANZAHL = 2;
+export const START_GEGENSTAENDE = ['messer', 'funkgeraet', 'taschenlampe', 'armbrust', 'schlaeger', 'radio', 'schluessel', 'spritze'];
+export const START_BOT_ITEMS = ['messer', 'taschenlampe'];
+// Zusätzlich ein zufälliger Gegenstand (Duplikate = häufiger; Handgranate selten)
+export const START_ZUFALL = ['verband', 'verband', 'wasser', 'wasser', 'essen', 'essen', 'schokoriegel', 'schokoriegel', 'munition', 'pfeil', 'granate', 'kleidung', 'seil', 'brechstange'];
+// Auswahl prüfen: Feld aus genau START_ANZAHL verschiedenen gültigen Einträgen
+export const startItemsOk = items => Array.isArray(items) && items.length === START_ANZAHL
+  && items.every(i => typeof i === 'string' && START_GEGENSTAENDE.includes(i)) && new Set(items).size === START_ANZAHL;
 export const START_BOT = { zielen: 2, leben: 2, tempo: 1 };   // sinnvolle Verteilung für Bots
 
 export function neuerStand() { return { xp: 0, bonus: 0, s: Object.fromEntries(FAEHIGKEITEN.map(f => [f.id, 0])) }; }
