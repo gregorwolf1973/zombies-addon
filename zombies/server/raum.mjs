@@ -25,7 +25,7 @@ import { Room, ServerError } from '@colyseus/core';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zombieSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
   WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
@@ -2702,7 +2702,9 @@ export class SpielRaum extends Room {
       for (const [sid, p] of this.state.spieler) {
         if (p.unten || p.anBord || p.zombie > 0 || p.ebene !== ebene) continue;
         const d = Math.hypot(p.x - z.x, p.y - z.y);
-        const weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
+        let weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
+        const gute = d < 200 ? sichtGuete(welt, z.x, z.y, p.x, p.y) : 0;   // Bäume mindern die Sicht, verdecken sie aber nie ganz
+        weite *= gute;
         const imKegel = winkelDiff(Math.atan2(p.y - z.y, p.x - z.x), z.richtung) < W.sichtWinkel / 2;
         // wer schleicht oder still steht, kann sich von hinten bis zum ersten Schlag heranpirschen
         const e = this.extra.get(sid)?.eingabe;
@@ -2710,7 +2712,7 @@ export class SpielRaum extends Room {
         const ganzNah = d < (leise && !imKegel ? 8 : 28);
         // Kriecher spüren ringsum, schlafende (lauernde) Zombies in Häusern auch – aber nur bei freier Sicht
         const bemerkt = z.kriecht ? d < (leise ? KRIECHER_SPUERT * 0.5 : KRIECHER_SPUERT) : info.schlaeft ? d < (leise ? 70 : 140) : (ganzNah || (d < weite && imKegel));
-        if (bemerkt && sichtfrei(welt, z.x, z.y, p.x, p.y)) {
+        if (bemerkt && gute > 0) {
           info.ziel = sid; info.verloren = 0; info.punkt = null; info.schlaeft = false;
           this.broadcast('entdeckt', { x: z.x, y: z.y });
           break;
@@ -2743,7 +2745,8 @@ export class SpielRaum extends Room {
 
     if (ziel) {
       const d = Math.hypot(ziel.x - z.x, ziel.y - z.y);
-      const sieht = d < W.sichtWeite * 1.6 && sichtfrei(welt, z.x, z.y, ziel.x, ziel.y);
+      const gute = sichtGuete(welt, z.x, z.y, ziel.x, ziel.y);
+      const sieht = gute > 0 && (d < 40 || d < W.sichtWeite * 1.6 * gute);
       info.verloren = sieht ? 0 : info.verloren + dt;
       if (info.verloren > 10 || d > W.sichtWeite * 3) {
         info.ziel = null; info.punkt = { x: ziel.x, y: ziel.y }; info.suche = true; z.jagt = false;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.62.3 – 20.11.2026
+
+- Geändert: Bäume verdecken den Spieler nicht mehr ganz. Unter einem einzelnen Baum oder hinter einer Baumreihe sehen Zombies dich fast wie im Freien; je mehr Bäume zwischen euch stehen, desto kürzer ihre Sichtweite (je Baum −20 %), im dichten Wald nur noch auf etwa ein Drittel – aber nie gar nicht. Schüsse und Granaten zielen unverändert.
+
 ## 0.62.2 – 20.11.2026
 
 - Behoben: Beim Laufen an Zombies vorbei schien der Held zu spät oder gar nicht zu schießen. Der Server schoss richtig, aber die eigene Figur läuft durch die Vorhersage dem Serverstand voraus, sodass Schusshaltung und Mündungsblitz (auch beim Nahkampf) nicht mehr am Helden erschienen. Eigene Schüsse und Stöße werden jetzt der eigenen Figur zugeordnet und an ihr gezeichnet.
