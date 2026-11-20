@@ -11,6 +11,7 @@ import { setzeMoebelBilder } from './moebel_bilder.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
+import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
@@ -623,6 +624,7 @@ class Ort extends Phaser.Scene {
     this.load.image('puma-wanne-bild', 'grafik/puma_wanne.webp');   // Draufsicht aus dem 3D-Modell (Bug rechts)
     this.load.image('puma-turm-bild', 'grafik/puma_turm.webp');
     this.load.json('autosliste', 'grafik/autos.json');
+    evakLaden(this);   // Leopard 2A7, A400M (Draufsichten, siehe grafik/LIZENZ.txt)
     this.load.image('moebel', 'grafik/moebel.webp');
     this.load.json('moebelliste', 'grafik/moebel.json');
   }
@@ -733,7 +735,8 @@ class Ort extends Phaser.Scene {
       const jetzt = performance.now();
       if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'scharfschuetze' ? 1.8 : m.art === 'armbrust' ? 0.3 : m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp' && m.art !== 'armbrust') ton.huelse(m.x1, m.y1); }
     });
-    raum.onMessage('bwschuss', m => this.bwSchuss(m));
+    raum.onMessage('bwschuss', m => m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
+    raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => this.granateFliegt(m));
@@ -931,14 +934,26 @@ class Ort extends Phaser.Scene {
   // Abholstelle am Ortsausgang: sobald alle Pflichtaufgaben erledigt sind (wie im Server: tor + 1 Kachel)
   abholAktiv() {
     const a = raum.state.aufgaben;
+    if (['heliAnflug', 'heli'].includes(raum.state.evakPhase)) return true;   // A400M ausgefallen: Hubschrauber-Landeplatz
     return !!(a && a.size && this.welt?.tor && [...a.values()].every(x => !x.pflicht || x.erledigt) && [...a.values()].some(x => x.pflicht));
   }
 
+  // Abholpunkt in Pixeln: Ortsausgang, bei A400M/Hubschrauber der Server-Punkt (Heckrampe bzw. Landeplatz)
+  abholPunkt() {
+    const st = raum.state;
+    if (st.evakX > 0 && st.evakY > 0) return { x: st.evakX, y: st.evakY, heli: ['heliAnflug', 'heli'].includes(st.evakPhase) };
+    return this.welt?.tor ? { x: (this.welt.tor.x + 1) * KACHEL, y: (this.welt.tor.y + 1) * KACHEL } : null;
+  }
+
   abholstelleAktualisieren() {
-    const an = this.abholAktiv();
+    const an = this.abholAktiv(), pkt = this.abholPunkt();
+    if (this.abholObj && pkt && (this.abholObj.x !== pkt.x || this.abholObj.y !== pkt.y)) {   // Punkt hat gewechselt (Hubschrauberplatz): neu anlegen
+      for (const k of [this.abholObj.kreis, this.abholObj.glut, this.abholObj.rauch, this.abholObj.stab, this.abholObj.text]) k.destroy();
+      this.abholObj = null;
+    }
     if (!an && !this.abholObj) return;
-    if (an && !this.abholObj) {
-      const x = (this.welt.tor.x + 1) * KACHEL, y = (this.welt.tor.y + 1) * KACHEL;
+    if (an && !this.abholObj && pkt) {
+      const x = pkt.x, y = pkt.y;
       if (!this.textures.exists('abholglut')) {
         const t = this.textures.createCanvas('abholglut', 64, 64), c = t.getContext(), g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
         g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.35, 'rgba(255,255,255,.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
@@ -955,7 +970,7 @@ class Ort extends Phaser.Scene {
       const stab = this.add.graphics().setDepth(5.75);
       stab.fillStyle(0x212121, 1).fillRect(x - 2, y - 10, 4, 14);
       stab.fillStyle(0xff1744, 1).fillRect(x - 3, y - 12, 6, 5);
-      const text = this.add.text(x, y - 48, '📍 Abholung', {
+      const text = this.add.text(x, y - 48, pkt.heli ? '📍 Hubschrauber' : '📍 Abholung', {
         fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#b71c1c', strokeThickness: 5,
       }).setOrigin(0.5).setDepth(6);
       this.abholObj = { kreis, glut, rauch, stab, text, x, y };
@@ -1026,22 +1041,26 @@ class Ort extends Phaser.Scene {
     }).join('');
     if ($('aufgabenliste').innerHTML !== zeilen) $('aufgabenliste').innerHTML = zeilen;
     let bus = '';
-    if (s.busDa) {
+    const flugPos = ich && this.lokal ? this.lokal : ich;
+    const flugText = evakArtVon(s) === 'flugzeug' ? evakHudText(s, !!(s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && Math.hypot(flugPos.x - s.evakX, flugPos.y - s.evakY) < (s.evakPhase === 'heli' ? 90 : BUS_ABSTAND)), uhrText) : null;
+    if (flugText) bus = flugText;
+    else if (s.busDa) {
       const f = [...(s.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung');
       const px = ich && this.lokal ? this.lokal.x : ich?.x, py = ich && this.lokal ? this.lokal.y : ich?.y;
       const an = s.busSteht && f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND;
-      const pz = s.karte === 'isarauen', sym = pz ? '🪖' : '🚌', fzg = pz ? 'Evakuierungspanzer' : 'Bus';
+      const pz = evakArtVon(s) === 'panzer', sym = pz ? '🪖' : '🚌', fzg = pz ? 'Evakuierungspanzer' : 'Bus';
       bus = s.busSteht ? `${sym} ${fzg} wartet am Ortsausgang bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ` · ${sym} du bist an Bord` : ''}`
         : `${sym} ${fzg} fährt zum Ortsausgang vor – einsteigen geht, sobald er steht`;
-    } else if (s.funk && s.busAnkunft >= 0) bus = s.karte === 'isarauen' ? `🪖 Der Evakuierungspanzer kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang` : `🚌 Der Bus kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang`;
-    else bus = `📻 Funkspruch fehlt – ohne ihn kommt kein ${s.karte === 'isarauen' ? 'Panzer' : 'Bus'}`;
+    } else if (s.funk && s.busAnkunft >= 0) bus = evakArtVon(s) === 'panzer' ? `🪖 Der Evakuierungspanzer kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang` : `🚌 Der Bus kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang`;
+    else bus = `📻 Funkspruch fehlt – ohne ihn kommt kein ${evakArtVon(s) === 'panzer' ? 'Panzer' : 'Bus'}`;
     textSetzen('busanzeige', bus);
   }
 
   uebersichtZeichnen() {
     if (!this.uebersicht) return;
     const bf = raum.state.busDa ? [...(raum.state.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung') : null;
-    this.uebersicht.abhol = this.abholAktiv() ? { x: this.welt.tor.x + 1, y: this.welt.tor.y + 1 } : null;
+    const abholP = this.abholAktiv() ? this.abholPunkt() : null;
+    this.uebersicht.abhol = abholP ? { x: abholP.x / KACHEL, y: abholP.y / KACHEL } : null;
     this.uebersicht.bus = bf ? { x: bf.x / KACHEL, y: bf.y / KACHEL } : null;
     const spieler = [...raum.state.spieler.entries()].map(([id, p]) => ({
       x: id === meineId && this.lokal ? this.lokal.x : p.x, y: id === meineId && this.lokal ? this.lokal.y : p.y,
@@ -1198,9 +1217,10 @@ class Ort extends Phaser.Scene {
   // anim: Blaulicht-Bild 1..3 der Polizei (nur mit Bild-Sprite)
   fahrzeugTextur(art, farbe = 0, anim = 0) {
     // Bild-Sprites (autos.webp): Laster je nach Farbe truck/Mini_truck, Polizei mit wechselnden Blaulichtbildern
+    if (art === 'evakuierung') { const eb = evakFahrzeugBild(this, raum.state); if (eb) return eb; }   // Leopard-Wanne / A400M-Rumpf
     const sprite = art === 'laster' ? autoEintraege('laster') : art === 'polizei' ? autoEintraege('polizei') : [];
     const sp = sprite.length ? sprite[farbe % sprite.length] : null;
-    const panzer = art === 'evakuierung' && raum.state.karte === 'isarauen';   // Level 2: Evakuierungspanzer (Puma) statt Bus
+    const panzer = art === 'evakuierung' && evakArtVon(raum.state) === 'panzer';   // Ersatz, falls die Leopard-Bilder fehlen: Puma-Wanne
     const key = panzer ? 'fz-evakuierung-panzer' : art === 'auto' ? 'fz-auto-' + (farbe % 8) : art === 'laster' ? (sp ? 'fz-laster-s' + (farbe % sprite.length) : 'fz-laster-' + (farbe % 4))
       : art === 'polizei' && sp ? 'fz-polizei-s' + anim : 'fz-' + art;
     if (this.textures.exists(key)) return key;
@@ -1830,9 +1850,9 @@ class Ort extends Phaser.Scene {
         }
         o.vorher = d;
       }
-      if (f.art === 'evakuierung') {
-        // blinkende orange Rundumleuchte; im Level 2 (Panzer) zusätzlich Fahne am Heck
-        const pz = s.karte === 'isarauen', lx = pz ? -22 : -8, an = Math.floor(this.time.now / 260) % 2;
+      if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene)) {
+        // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
+        const pz = evakArtVon(s) === 'panzer', lx = pz ? -22 : -8, an = Math.floor(this.time.now / 260) % 2;
         o.licht.fillStyle(0xff9100, an ? 0.3 : 0.12).fillCircle(lx, 0, an ? 34 : 22);
         o.licht.fillStyle(an ? 0xffab00 : 0x8d4f00, 1).fillCircle(lx, 0, 4.5);
         o.licht.lineStyle(1.5, 0x000000, 0.8).strokeCircle(lx, 0, 4.5);
@@ -1864,7 +1884,7 @@ class Ort extends Phaser.Scene {
       }
     }
     for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id) || s.fahrzeuge.get(id).art === 'wrack') {
-      ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); o.sirene = o.radio = null;
+      ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); ton.sireneStoppen(o.kette); o.sirene = o.radio = o.kette = null;
       if (!s.fahrzeuge?.has(id)) { o.box.destroy(); this.busObj.delete(id); }
     }
     this.feuerDarstellen(s);
@@ -2489,6 +2509,7 @@ class Ort extends Phaser.Scene {
     if (ich) this.aussenLicht(ich);
     this.chunksAktualisieren();
     this.abholstelleAktualisieren();
+    heliAktualisieren(this, raum.state, dt, this.aktEbene);   // Hubschrauber (A400M-Evakuierung)
     this.hudZeit -= dt;
     if (this.hudZeit <= 0) { this.hudZeit = 0.15; this.hud(ich); }
     this.geraeusche(ich, dt);

@@ -8,3 +8,5 @@ zombies/tools/glb_draufsicht/lib/
 zombies/tools/glb_draufsicht/*.png
 zombies/tools/glb_draufsicht/*.glb
 zombies/tools/glb_draufsicht/info.txt
+zombies/tools/glb_draufsicht/leopard/
+zombies/tools/glb_draufsicht/*.zip

@@ -3,7 +3,9 @@
 // Der Bus steht zur eingestellten Zeit am Ortsausgang; sind bei der Abfahrt genug Aufgaben erledigt, geht es in
 // die nächste Karte (Level), sonst fährt er ohne die Gruppe ab und kommt am nächsten Spieltag wieder.
 import { schema, t } from '@colyseus/schema';
-import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN } from '../client/welt.mjs';
+import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
+import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
+import { flugplanBerechnen } from './flugplatz.mjs';
 
 export const Aufgabe = schema({
   id: t.string(),
@@ -73,6 +75,9 @@ export const hhmm = min => {
 };
 
 const EVAK_REICHWEITE = 230, EVAK_PAUSE = 0.4, EVAK_TREFFER = 0.8;   // Bus/Panzer: Reichweite (px), Schussfolge (s), Trefferchance
+const HELI_ANFLUG = 30, HELI_NEU = 60, HELI_ABSTAND = 90;            // Hubschrauber: Anflugzeit, Wartezeit bis zum nächsten Anflug (echte Sekunden), Einstiegsradius (px)
+const ROLLEN_TEMPO = 190;                                            // A400M: Aufsetzgeschwindigkeit der Landerolle (px/s), bremst bis zum Stand
+const UEBERROLLEN_PAUSE = 0.1;                                       // Leopard: so oft (s) wird der Fußabdruck auf Zombies geprüft
 
 export class Aufgaben {
   constructor(raum) {
@@ -89,10 +94,36 @@ export class Aufgaben {
     this.wechselLaeuft = false;
     this.wechselVerzoegerung = 5000;   // ms zwischen „Geschafft!“ und dem Weltwechsel
     this.takt = 0;
+    this.flug = null;          // A400M: Landerolle { von, bis, t } | Hubschrauberphase { phase, rest }
+    this.heli = null;
   }
 
   einst() { return { an: false, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, ...(this.raum.einstellungen?.()?.aufgaben ?? {}) }; }
   an() { return !!this.einst().an; }
+  bw() { return { leopardReichweite: 29, leopardPause: EVAK_PAUSE, leopardSchaden: 100, leopardUeberrollen: true, ...(this.raum.einstellungen?.()?.bundeswehr ?? {}) }; }
+
+  // Evakuierungsart dieser Karte; die Einstellung aufgaben.evakArt erzwingt eine Art zum Ausprobieren.
+  // Flugzeug braucht einen Landestreifen und einen Hubschrauberplatz in der Welt, sonst Bus.
+  evakArt() {
+    const s = this.raum.state, w = this.raum.welt;
+    const art = this.einst().evakArt || evakArtFuer(s.karte);
+    if (art === 'flugzeug' && !(w && w.fein && flugplanBerechnen(w, s.seed))) return 'bus';
+    return art;
+  }
+  flugplan() { const w = this.raum.welt; return w?.fein ? flugplanBerechnen(w, this.raum.state.seed) : null; }
+
+  // Art, Anzeige und Abholpunkt in den Zustand schreiben (nur wenn gerade nichts unterwegs ist)
+  evakSync() {
+    const s = this.raum.state;
+    if (s.busDa || this.flug || this.heli) return;
+    const art = this.evakArt();
+    if (s.evakArt !== art) s.evakArt = art;
+    const p = art === 'flugzeug' ? this.flugplan() : null;
+    const x = p ? Math.round(p.rampe.x) : 0, y = p ? Math.round(p.rampe.y) : 0;
+    if (s.evakX !== x) s.evakX = x;
+    if (s.evakY !== y) s.evakY = y;
+    if (s.evakPhase) s.evakPhase = '';
+  }
   spielerZahl() { return Math.max(1, this.raum.state.spieler.size); }
 
   // beim Aufbau der Welt: gespeicherten Stand laden (nur wenn er zur Welt passt) oder neu ziehen
@@ -100,6 +131,7 @@ export class Aufgaben {
     const s = this.raum.state;
     s.level = Math.max(1, Math.min(250, Math.round(Number(stand?.level) || 1)));
     s.funk = false; s.busDa = false; s.busSteht = false; s.busAnkunft = -1; s.busAb = -1; s.busBord = 0; s.busGesamt = 0;
+    this.flug = null; this.heli = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync();
     this.basis = s.besiegt;
     if (!this.an()) return;
     const g = passt ? stand?.aufgaben : null;
@@ -199,14 +231,17 @@ export class Aufgaben {
   // ---------- Takt ----------
   schritt(dt) {
     const s = this.raum.state;
-    if (!this.an()) { if (s.busDa) this.busWeg(); return; }
-    if (s.busDa) this.evakFeuer(dt);
+    if (!this.an()) { if (s.busDa || this.heli) this.busWeg(); return; }
+    if (this.heli) { this.heliSchritt(dt); return; }
+    if (s.busDa) { this.evakFeuer(dt); if (this.flug) this.flugRollen(dt); }
     if (!s.aufgaben.size) { this.basis = s.besiegt; this.ziehen(); }   // zur Laufzeit eingeschaltet
     this.takt -= dt;
-    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); }
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); }
     if (!this.abholMeldung && s.funk && [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt)) {
       this.abholMeldung = true;
-      this.raum.broadcast('meldung', { text: this.raum.state.karte === 'isarauen' ? '📍 Abholstelle am Ortsausgang steht fest – der Panzer holt euch dort ab, sie ist auf der Karte markiert' : '📍 Abholstelle am Ortsausgang steht fest – sie ist auf der Karte markiert', lang: true });
+      const art = this.fz().art;
+      this.raum.broadcast('meldung', { text: art === 'flugzeug' ? '📍 Landeplatz steht fest – der A400M landet dort, er ist auf der Karte markiert'
+        : art === 'panzer' ? '📍 Abholstelle am Ortsausgang steht fest – der Panzer holt euch dort ab, sie ist auf der Karte markiert' : '📍 Abholstelle am Ortsausgang steht fest – sie ist auf der Karte markiert', lang: true });
     }
     if (this.wechselLaeuft) return;
     const { stunde, wartezeit } = this.einst();
@@ -230,7 +265,7 @@ export class Aufgaben {
     if (!this.raum.verkehr?.evakuierungDa(this.busId)) {
       s.busSteht = false;
       if (!s.fahrzeuge.get(this.busId)) { this.busWeg(); s.busBord = 0; }
-      else this.mitfahrer();   // auf dem ganzen Weg einsteigen: wer nah vorbeifahrenden Bus erreicht, fährt mit
+      else if (this.fz().art !== 'flugzeug') this.mitfahrer();   // auf dem ganzen Weg einsteigen: wer nah vorbeifahrenden Bus erreicht, fährt mit (Flugzeug: erst nach der Landerolle)
       return;
     }
     if (!s.busSteht) {
@@ -250,20 +285,30 @@ export class Aufgaben {
   evakFeuer(dt) {
     const r = this.raum, s = r.state, f = s.fahrzeuge.get(this.busId);
     if (!f) return;
+    const art = this.fz().art;
+    if (art === 'flugzeug') return;
+    const bw = this.bw(), panzer = art === 'panzer';
+    if (panzer && bw.leopardUeberrollen) this.ueberrollen(f, dt);
     this.feuerKuehl = (this.feuerKuehl ?? 0) - dt;
     if (this.feuerKuehl > 0) return;
-    let ziel = null, bd = EVAK_REICHWEITE;
+    // Leopard: Turmdrehpunkt vor der Wannenmitte; Reichweite aus den Einstellungen (Meter)
+    const px = panzer ? f.x + Math.cos(f.richtung) * LEOPARD.turmX : f.x, py = panzer ? f.y + Math.sin(f.richtung) * LEOPARD.turmX : f.y;
+    let ziel = null, bd = panzer ? bw.leopardReichweite * 8 : EVAK_REICHWEITE;
     for (const [id, z] of s.zombies) {
       if (z.ebene || !(z.hp > 0)) continue;
-      const d = Math.hypot(z.x - f.x, z.y - f.y);
+      const d = Math.hypot(z.x - px, z.y - py);
       if (d < bd) { bd = d; ziel = [id, z]; }
     }
     if (!ziel) return;
-    this.feuerKuehl = EVAK_PAUSE;
-    const [id, z] = ziel, panzer = s.karte === 'isarauen';
-    // Bus: Fenster verteilt über die Länge, auf der Seite zum Ziel; Panzer: aus dem Turm in der Mitte
-    let x = f.x, y = f.y;
-    if (!panzer) {
+    this.feuerKuehl = panzer ? bw.leopardPause : EVAK_PAUSE;
+    const [id, z] = ziel;
+    // Bus: Fenster verteilt über die Länge, auf der Seite zum Ziel; Leopard: Lader-MG im (zum Ziel gedrehten) Turm
+    let x = f.x, y = f.y, turmW;
+    if (panzer) {
+      turmW = Math.atan2(z.y - py, z.x - px);
+      const c = Math.cos(turmW), sn = Math.sin(turmW);
+      x = px + c * LEOPARD.mgX - sn * LEOPARD.mgY; y = py + sn * LEOPARD.mgX + c * LEOPARD.mgY;
+    } else {
       const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), laengs = (r.rnd() - 0.5) * 100;
       const links = (z.y - f.y) * c - (z.x - f.x) * sn > 0 ? 1 : -1;   // Seite des Ziels
       x = f.x + c * laengs - sn * 9 * links; y = f.y + sn * laengs + c * 9 * links;
@@ -271,12 +316,31 @@ export class Aufgaben {
     const treffer = r.rnd() < (this.evakTrefferChance ?? EVAK_TREFFER);
     const w = Math.atan2(z.y - y, z.x - x) + (treffer ? 0 : (r.rnd() < 0.5 ? -1 : 1) * (0.06 + r.rnd() * 0.08));
     const d = Math.hypot(z.x - x, z.y - y);
-    r.broadcast('bwschuss', { art: 'mg', n: -1, x1: x, y1: y, x2: x + Math.cos(w) * d, y2: y + Math.sin(w) * d, w, t: treffer ? 1 : 0 });
+    r.broadcast('bwschuss', { art: 'mg', n: -1, x1: x, y1: y, x2: x + Math.cos(w) * d, y2: y + Math.sin(w) * d, w, t: treffer ? 1 : 0, ...(panzer ? { evak: 'panzer', tw: turmW } : {}) });
     if (treffer) {
       const vorher = s.besiegt, von = this.schuetze ??= { name: panzer ? 'Evakuierungspanzer' : 'Evakuierungsbus', x, y, besiegt: 0 };
       von.x = x; von.y = y;
-      r.schaden(id, z, r.einstellungen?.()?.waffen?.gewehr?.schaden ?? WAFFEN.gewehr.schaden, von);
+      r.schaden(id, z, panzer ? bw.leopardSchaden : (r.einstellungen?.()?.waffen?.gewehr?.schaden ?? WAFFEN.gewehr.schaden), von);
       s.besiegt = vorher;   // zählt nicht für die Aufgaben der Spieler (wie die Bundeswehr)
+    }
+  }
+
+  // Leopard: Zombies im Fußabdruck der fahrenden Wanne werden überrollt (sterben auf der Stelle, kein Kriechen; Blut und Leiche wie üblich).
+  // Spieler nie: das Fahrzeug bremst vor ihnen (server/verkehr.mjs, imWeg) – hier wird nur geprüft, ob ein Spieler im Weg steht.
+  ueberrollen(f, dt) {
+    this.ueberrollKuehl = (this.ueberrollKuehl ?? 0) - dt;
+    if (this.ueberrollKuehl > 0 || f.haelt) return;
+    this.ueberrollKuehl = UEBERROLLEN_PAUSE;
+    const r = this.raum, s = r.state, hl = LEOPARD.laenge / 2, hb = LEOPARD.breite / 2;
+    for (const [id, z] of [...s.zombies]) {
+      if (z.ebene || !(z.hp > 0) || Math.abs(z.x - f.x) > hl + 12 || Math.abs(z.y - f.y) > hl + 12) continue;
+      if (!imFussabdruck(f, z.x, z.y, hl, hb, 6)) continue;
+      const vorher = s.besiegt, von = this.schuetze ??= { name: 'Evakuierungspanzer', x: f.x, y: f.y, besiegt: 0 };
+      von.x = f.x; von.y = f.y;
+      z.kriecht = true;                         // nicht ganz tot: gibt es nicht, die Ketten erledigen ihn
+      r.schaden(id, z, z.hp + 1, von);
+      s.besiegt = vorher;                       // zählt nicht für die Aufgaben der Spieler
+      r.broadcast('ueberrollt', { x: z.x, y: z.y });
     }
   }
 
@@ -300,7 +364,8 @@ export class Aufgaben {
     let an = this.an() && s.funk && !s.busDa && !this.wechselLaeuft && !!tor
       && [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt);
     if (an) {
-      const ax = (tor.x + 1) * KACHEL, ay = (tor.y + 1) * KACHEL;
+      const ev = s.evakX > 0 && s.evakY > 0 && this.evakArt() === 'flugzeug';
+      const ax = ev ? s.evakX : (tor.x + 1) * KACHEL, ay = ev ? s.evakY : (tor.y + 1) * KACHEL;
       let lebende = 0;
       for (const p of s.spieler.values()) {
         if (p.zombie > 0 || p.verbunden === false) continue;
@@ -320,6 +385,7 @@ export class Aufgaben {
   ankunft(rest) {
     const s = this.raum.state, w = this.raum.welt, tor = w.tor, v = this.raum.verkehr;
     if (!v) return;
+    if (this.evakArt() === 'flugzeug') { this.laufendeArt = 'flugzeug'; this.flugAnkunft(); return; }   // Flug läuft bis zum Ende, auch wenn die Einstellung wechselt
     const tx = (tor.x + 1) * KACHEL, ty = (tor.y + 1) * KACHEL;
     const links = tor.x === 0;
     let x = links ? tx + 4 * KACHEL : tx, y = links ? ty : ty + 4 * KACHEL;
@@ -332,36 +398,43 @@ export class Aufgaben {
     else this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} fährt zum Ortsausgang vor!`, lang: true });
   }
 
-  // Level 2 (Isarauen): statt des Busses kommt ein Panzer (gleiche Logik)
+  // Evakuierungsart je Karte (Einstellung aufgaben.evakArt erzwingt eine): Bus, Panzer (Leopard 2A7, Isarauen) oder A400M mit Hubschrauber
   fz() {
-    return this.raum.state.karte === 'isarauen'
-      ? { zeichen: '🪖', Der: 'Der Evakuierungspanzer', der: 'der Evakuierungspanzer', name: 'Evakuierungspanzer' }
-      : { zeichen: '🚌', Der: 'Der Evakuierungsbus', der: 'der Evakuierungsbus', name: 'Evakuierungsbus' };
+    const art = this.laufendeArt ?? this.evakArt();
+    return art === 'panzer' ? { art, zeichen: '🪖', Der: 'Der Evakuierungspanzer', der: 'der Evakuierungspanzer', name: 'Evakuierungspanzer', neu: 'einen neuen Panzer' }
+      : art === 'flugzeug' ? { art, zeichen: '✈️', Der: 'Der A400M', der: 'der A400M', name: 'A400M', neu: 'eine neue Maschine' }
+      : { art, zeichen: '🚌', Der: 'Der Evakuierungsbus', der: 'der Evakuierungsbus', name: 'Evakuierungsbus', neu: 'einen neuen Bus' };
   }
 
   stehtMeldung() {
     const s = this.raum.state;
     this.busGemeldet = true;
-    this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} steht am Ortsausgang! Abfahrt um ${hhmm(s.busAb)}`, lang: true });
+    this.raum.broadcast('meldung', { text: this.fz().art === 'flugzeug' ? `✈️ Der A400M ist gelandet! Einsteigen an der Heckrampe – Abflug um ${hhmm(s.busAb)}`
+      : `${this.fz().zeichen} ${this.fz().Der} steht am Ortsausgang! Abfahrt um ${hhmm(s.busAb)}`, lang: true });
   }
 
   busWeg() {
     const s = this.raum.state;
     s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.eingestiegen.clear();
     if (this.busId) { this.raum.verkehr?.evakuierungAb(this.busId); this.busId = null; }
+    this.flug = null; this.laufendeArt = null;
+    if (this.heli) { this.heli = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync(); }
+    else if (s.evakPhase) { s.evakPhase = ''; }
   }
 
   // wer in Busnähe steht, ist an Bord; true, wenn alle lebenden verbundenen Spieler (Bots und Liegende zählen mit) an Bord sind
   mitfahrer() {
-    const s = this.raum.state, f = s.fahrzeuge.get(this.busId);
+    const s = this.raum.state;
+    const f = this.einstiegsPunkt();
     if (!f) { this.busWeg(); return false; }
+    const abstand = this.heli ? HELI_ABSTAND : BUS_ABSTAND;
     let bord = 0, gesamt = 0, echtDa = 0, lebende = 0, lebendeDa = 0;
     const klebt = this.fahrtGelingt();   // Einsteigen gilt dauerhaft, sobald die Fahrt geschafft werden kann
     for (const [sid, p] of s.spieler) {
       if (p.zombie > 0) { this.eingestiegen.delete(sid); continue; }
       const bot = !!this.raum.extra.get(sid)?.bot;
       let an = this.eingestiegen.has(sid);
-      if (!an && !p.ebene && !p.unten && Math.hypot(p.x - f.x, p.y - f.y) < BUS_ABSTAND + (klebt ? 20 : 0)) {
+      if (!an && !p.ebene && !p.unten && Math.hypot(p.x - f.x, p.y - f.y) < abstand + (klebt ? 20 : 0)) {
         an = true; if (klebt) this.eingestiegen.add(sid);
       }
       if (an && this.eingestiegen.has(sid)) { p.x = f.x; p.y = f.y; }   // fährt mit
@@ -379,21 +452,127 @@ export class Aufgaben {
     return [...this.raum.state.aufgaben.values()].every(a => !a.pflicht || a.erledigt) && this.erledigtZahl() >= this.noetig();
   }
 
+  // ---------- A400M (Evakuierungsart 'flugzeug') ----------
+  // Ablauf: landet (Landerolle) → Einsteigen an der Heckrampe → sobald alle an Bord sind (oder die Zeit abläuft) fällt ein Triebwerk aus,
+  // der Start wird abgebrochen → alle müssen raus und zu Fuß zum Hubschrauber-Landeplatz → der Hubschrauber landet, holt ab → Levelwechsel.
+  flugAnkunft() {
+    const s = this.raum.state, v = this.raum.verkehr, p = this.flugplan();
+    if (!p) { this.laufendeArt = null; return this.ankunft(0); }
+    const w = p.w;
+    this.busId = v.evakuierungFlugzeug(p.start.x, p.start.y, w);
+    this.busHeute = true; this.busRest = 0; s.busDa = true; s.busSteht = false; this.busGemeldet = false; this.busAbSetzen();
+    this.flug = { von: { ...p.start }, bis: { ...p.mitte }, w, t: 0 };
+    s.evakArt = 'flugzeug'; s.evakPhase = 'landung'; s.evakX = Math.round(p.rampe.x); s.evakY = Math.round(p.rampe.y);
+    this.raum.broadcast('meldung', { text: '✈️ Ein A400M setzt zur Landung an – der Landeplatz ist auf der Karte markiert!', lang: true });
+  }
+
+  // Landerolle: bremst vom Aufsetztempo bis zum Stand an `bis`, dann beginnt das Einsteigen (evakuierungDa)
+  flugRollen(dt) {
+    const s = this.raum.state, f = s.fahrzeuge.get(this.busId), g = this.flug;
+    if (!f || !g || g.fertig) return;
+    const L = Math.hypot(g.bis.x - g.von.x, g.bis.y - g.von.y) || 1, a = ROLLEN_TEMPO * ROLLEN_TEMPO / (2 * L);   // gleichmäßig gebremst
+    g.t += dt;
+    const t = Math.min(g.t, ROLLEN_TEMPO / a), d = ROLLEN_TEMPO * t - a * t * t / 2;
+    f.x = g.von.x + Math.cos(g.w) * d; f.y = g.von.y + Math.sin(g.w) * d; f.richtung = g.w;
+    if (t >= ROLLEN_TEMPO / a - 1e-9) {
+      f.x = g.bis.x; f.y = g.bis.y; g.fertig = true;
+      const inf = this.raum.verkehr.info.get(this.busId);
+      if (inf) inf.angekommen = true;
+      s.evakPhase = 'einsteigen';
+    }
+  }
+
+  // Der Start schlägt fehl: Meldung, alle steigen aus (neben die Heckrampe), der Hubschrauber wird gerufen
+  flugFehlschlag() {
+    const r = this.raum, s = r.state, p = this.flugplan();
+    const ids = [...s.spieler.keys()].filter(id => this.eingestiegen.has(id));
+    const f = s.fahrzeuge.get(this.busId);
+    this.busHeute = true;
+    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0;
+    this.eingestiegen.clear();
+    // das Flugzeug bleibt stehen (Wrack ohne Straßenweg); der Einstiegspunkt wandert zum Hubschrauberplatz
+    this.busId = null;
+    if (f) for (let i = 0; i < ids.length; i++) {
+      const pl = s.spieler.get(ids[i]), c = Math.cos(f.richtung), sn = Math.sin(f.richtung);
+      const q = this.platzNeben(p.rampe.x - c * 30 - sn * (i - (ids.length - 1) / 2) * 22, p.rampe.y - sn * 30 + c * (i - (ids.length - 1) / 2) * 22);
+      pl.x = q.x; pl.y = q.y;
+    }
+    this.heli = { phase: 'anflug', rest: HELI_ANFLUG };
+    s.evakX = Math.round(p.heli.x); s.evakY = Math.round(p.heli.y); s.evakPhase = 'heliAnflug'; s.evakRest = HELI_ANFLUG;
+    r.broadcast('meldung', { text: '🔥 Triebwerk 3 des A400M fängt Feuer – Start abgebrochen! Alle raus!', lang: true });
+    r.broadcast('meldung', { text: `🚁 Zu Fuß zum Hubschrauber-Landeplatz (auf der Karte markiert) – er landet in ${HELI_ANFLUG} s`, lang: true });
+  }
+
+  // nächster freier Punkt um (x, y) (für das Aussteigen)
+  platzNeben(x, y) {
+    const w = this.raum.welt;
+    for (let rad = 0; rad <= 200; rad += 20) for (let k = 0; k < (rad ? 10 : 1); k++) {
+      const a = k * Math.PI / 5, px = x + Math.cos(a) * rad, py = y + Math.sin(a) * rad;
+      if (frei(w, px, py, 10)) return { x: px, y: py };
+    }
+    return { x, y };
+  }
+
+  // Hubschrauber: Anflug → gelandet und wartet (Einsteigen wie beim Bus) → Abflug und Levelwechsel; ohne alle fliegt er ab und kommt später wieder
+  heliSchritt(dt) {
+    const s = this.raum.state, h = this.heli;
+    if (this.wechselLaeuft) return;
+    if (h.phase === 'anflug') {
+      h.rest -= dt; const rest = Math.max(0, Math.ceil(h.rest));
+      if (s.evakRest !== rest) s.evakRest = rest;
+      if (h.rest > 0) return;
+      h.phase = 'wartet'; s.busDa = true; s.busSteht = true; s.evakPhase = 'heli'; this.restSetzen();
+      this.raum.broadcast('meldung', { text: `🚁 Der Hubschrauber ist gelandet! Einsteigen – Abflug um ${hhmm(s.busAb)}`, lang: true });
+      return;
+    }
+    this.busRest -= dt; this.busAbSetzen();
+    const alleDa = this.mitfahrer();
+    if (!this.heli) return;   // mitfahrer() hat abgebrochen
+    if (!alleDa && this.busRest > 0) return;
+    const nichtDa = s.busGesamt > s.busBord;
+    if (this.echteDa >= 1) {
+      this.heli = null; s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.eingestiegen.clear();
+      s.evakPhase = 'abflug'; s.evakRest = 0;
+      this.erfolg(nichtDa, '🚁');
+      return;
+    }
+    // niemand da: er fliegt ab und kommt nach einer Weile wieder
+    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.eingestiegen.clear();
+    this.heli = { phase: 'anflug', rest: HELI_NEU }; s.evakPhase = 'heliAnflug'; s.evakRest = HELI_NEU;
+    this.raum.broadcast('meldung', { text: `🚁 Der Hubschrauber ist ohne euch abgeflogen – er kommt in ${HELI_NEU} s noch einmal`, lang: true });
+  }
+
+  // Punkt, an dem man einsteigt: Bus/Panzer = Fahrzeugmitte, A400M = Heckrampe, Hubschrauber = Landeplatz (Einstellung evakX/evakY)
+  einstiegsPunkt() {
+    const s = this.raum.state;
+    if (this.heli) return { x: s.evakX, y: s.evakY };
+    const f = s.fahrzeuge.get(this.busId);
+    if (!f) return null;
+    return this.fz().art === 'flugzeug' ? { x: s.evakX, y: s.evakY } : f;
+  }
+
   abfahrt() {
     const s = this.raum.state;
     const pflichtOk = [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt);
     const geschafft = pflichtOk && this.erledigtZahl() >= this.noetig() && this.echteDa >= 1;
     const nichtDa = s.busGesamt > s.busBord;
+    if (geschafft && this.fz().art === 'flugzeug') { this.flugFehlschlag(); return; }   // die Maschine schafft es nicht in die Luft
     this.busWeg();
     this.busHeute = true;
     if (!geschafft) {
-      this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} ist ohne euch abgefahren – morgen gibt es ${this.raum.state.karte === 'isarauen' ? 'einen neuen Panzer' : 'einen neuen Bus'}`, lang: true });
+      this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} ist ohne euch ${this.fz().art === 'flugzeug' ? 'abgeflogen' : 'abgefahren'} – morgen gibt es ${this.fz().neu}`, lang: true });
       return;
     }
+    this.erfolg(nichtDa);
+  }
+
+  // Evakuierung geschafft: Meldung, Erfahrung und Levelwechsel nach einer kurzen Pause
+  erfolg(nichtDa, zeichen = this.fz().zeichen) {
+    const s = this.raum.state;
     const karte = this.naechsteKarte();
     this.raum.xpAlle?.('evakuierung');
     this.raum.broadcast('meldung', { text: `🎉 Geschafft! Weiter nach Level ${s.level + 1} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
-    if (nichtDa) this.raum.broadcast('meldung', { text: `${this.fz().zeichen} Wer nicht an Bord war, kommt trotzdem mit – ihr seid eine Gruppe` });
+    if (nichtDa) this.raum.broadcast('meldung', { text: `${zeichen} Wer nicht an Bord war, kommt trotzdem mit – ihr seid eine Gruppe` });
     this.wechselLaeuft = true;
     this.raum.clock.setTimeout(() => this.levelWechsel(), this.wechselVerzoegerung);
   }
