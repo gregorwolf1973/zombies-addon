@@ -34,6 +34,7 @@ export const Spieler = schema({
   x: t.number(), y: t.number(),
   richtung: t.number(),
   hp: t.number(),
+  anBord: t.boolean(),      // sitzt im Evakuierungsfahrzeug (Bus, Panzer, A400M, Hubschrauber): Position folgt ihm, Zombies lassen ihn in Ruhe
   durst: t.number(),        // 100 = satt, 0 = verdurstet
   hunger: t.number(),
   unten: t.boolean(),
@@ -2123,7 +2124,7 @@ export class SpielRaum extends Room {
     const safe = safeRoomVon(this.welt, p);
     p.sicher = safe ? safe.id : this.imLagerSafe(p) ? 'lager' : '';
     if (safe) x.letzterSafe = safe.id;
-    if (p.unten) return;
+    if (p.unten || p.anBord) return;   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
     const e = x.eingabe;
     const laenge = Math.hypot(e.dx, e.dy);
     if (p.zombie > 0) return this.zombieSpielerSchritt(p, x, e, laenge, dt);
@@ -2368,7 +2369,7 @@ export class SpielRaum extends Room {
     const feld = new Int16Array(BREITE * HOEHE).fill(-1);
     const q = [];
     for (const p of this.state.spieler.values()) {
-      if (p.unten || p.zombie > 0 || p.ebene !== ebene) continue;
+      if (p.unten || p.anBord || p.zombie > 0 || p.ebene !== ebene) continue;
       const i = Math.floor(p.y / KACHEL) * BREITE + Math.floor(p.x / KACHEL);
       if (feld[i] === -1) { feld[i] = 0; q.push(i); }
     }
@@ -2468,7 +2469,7 @@ export class SpielRaum extends Room {
     // Sehen: Kegel in Blickrichtung, schleichende Spieler erst später
     if (!info.ziel) {
       for (const [sid, p] of this.state.spieler) {
-        if (p.unten || p.zombie > 0 || p.ebene !== ebene) continue;
+        if (p.unten || p.anBord || p.zombie > 0 || p.ebene !== ebene) continue;
         const d = Math.hypot(p.x - z.x, p.y - z.y);
         const weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
         const imKegel = winkelDiff(Math.atan2(p.y - z.y, p.x - z.x), z.richtung) < W.sichtWinkel / 2;
@@ -2486,7 +2487,7 @@ export class SpielRaum extends Room {
       }
     }
     let ziel = info.ziel ? this.state.spieler.get(info.ziel) : null;
-    if (ziel && (ziel.unten || ziel.zombie > 0 || ziel.ebene !== ebene)) {
+    if (ziel && (ziel.unten || ziel.anBord || ziel.zombie > 0 || ziel.ebene !== ebene)) {
       // der Gejagte ist in ein Haus gelaufen: zur Haustür (letzte bekannte Stelle)
       const m = !ebene && !ziel.unten && !(ziel.zombie > 0) ? EBENE_MUSTER.exec(ziel.ebene ?? '') : null;
       const h = m ? this.welt.haeuser[Number(m[1])] : null;
