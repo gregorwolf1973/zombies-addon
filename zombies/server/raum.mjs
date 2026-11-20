@@ -1337,7 +1337,7 @@ export class SpielRaum extends Room {
     const welt = this.wv(p.ebene);
     const kx = Math.floor(p.x / KACHEL), ky = Math.floor(p.y / KACHEL);
     const t = welt.hole(kx, ky);
-    let ziel = null, pos = null;
+    let ziel = null, pos = null, tuerDraussen = null;
     if (!p.ebene && t === T.TUER) {
       const h = this.welt.haeuser.find(h => h.tuer.x === kx && h.tuer.y === ky);
       if (!h || !h.betretbar) return;
@@ -1353,6 +1353,7 @@ export class SpielRaum extends Room {
       this.haustuerOeffnen(h.nr);
       const r = h.raus ?? { dx: 0, dy: 1 };
       ziel = ''; pos = { x: (h.tuer.x + 0.5 + r.dx * 1.3) * KACHEL, y: (h.tuer.y + 0.5 + r.dy * 1.3) * KACHEL };
+      tuerDraussen = { x: (h.tuer.x + 0.5) * KACHEL, y: (h.tuer.y + 0.5) * KACHEL };
     } else if (p.ebene && (t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH)) {
       const tr = welt.treppen.find(tr => tr.x === kx && tr.y === ky);
       if (!tr) return;
@@ -1365,7 +1366,9 @@ export class SpielRaum extends Room {
     p.ebene = ziel; p.x = platz.x; p.y = platz.y; p.aktion = ''; p.fortschritt = 0;
     // Rückweg-Übergang in der neuen Ebene (Ausgang, Haustür oder Treppe zurück) für die richtungsabhängige Sperre
     let ref = null;
-    if (ziel === '') ref = { x: (kx + 0.5) * KACHEL, y: (ky + 0.5) * KACHEL };   // Haustür draußen = Kachel, aus der man kam
+    // Haustür draußen (NICHT kx/ky: das ist die Ausgangskachel in Innenraum-Koordinaten – damit sperrte die Ankunftsregel
+    // nach dem Verlassen eines Hauses alle Haustüren, bis man sich weit genug von einem beliebigen Punkt oben links entfernt hatte)
+    if (ziel === '') ref = tuerDraussen;
     else {
       const zw = this.wv(ziel, welt.stock ?? '');
       const rk = t === T.TUER ? zw.ausgang : zw.treppen?.find(z => z.ziel === (welt.stock ?? ''));
