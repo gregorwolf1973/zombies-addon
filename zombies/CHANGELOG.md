@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.62.1 – 20.11.2026
+
+- Behoben: Häuser ließen sich nach dem Verlassen eines anderen Hauses manchmal nicht betreten (z. B. Intersport Reiser), erst nach längerem Herumlaufen. Die Sperre gegen sofortiges Zurücklaufen durch die Tür rechnete beim Hinausgehen mit der Ausgangskachel des Innenraums statt mit der Haustür draußen und blockierte dadurch alle Haustüren in Richtung linke obere Kartenecke. Jetzt gilt sie nur an der eigenen Haustür, bis man sich ein paar Schritte entfernt hat.
+
 ## 0.62.0 – 21.11.2026
 
 - Aussteigen aus dem Evakuierungsfahrzeug (Bus, Leopard, A400M-Rampe, Hubschrauber) jederzeit, solange es steht: Taste E/Leertaste (die Aktionstaste) oder der Knopf „🚪 Aussteigen“ am Handy. Ausstieg an freier Stelle neben dem Fahrzeug, 3 s Schonzeit gegen Zombies, kein sofortiges Wiedereinsteigen (erst wieder hingehen).
