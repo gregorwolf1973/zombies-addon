@@ -553,13 +553,25 @@ let musikAus = false;
 // Berührung/Taste irgendwo auf der Seite die Musik (Listener entfernt sich, sobald der Ton läuft).
 export function musikSofort(startseiteSichtbar = () => true) {
   const los = () => {
-    if (musikAus || !startseiteSichtbar()) return;
+    // im Spiel (z. B. nach automatischem Neuladen): erste Berührung schaltet wenigstens den Ton frei
+    if (musikAus || !startseiteSichtbar()) { try { tonStarten(); if (ctx && !document.hidden) Promise.resolve(ctx.resume?.()).catch(() => {}); } catch { /* egal */ } return; }
     try { musikStarten(); } catch { /* egal */ }
     if (!ctx || document.hidden) return;
     try { Promise.resolve(ctx.resume?.()).catch(() => { /* weiter warten */ }); } catch { /* egal */ }
   };
   const ARTEN = ['pointerdown', 'touchstart', 'mousedown', 'keydown', 'click'];
-  const ab = () => { for (const a of ARTEN) document.removeEventListener(a, geste, true); };
+  // Browser spielen erst nach einer Berührung Ton ab (Autoplay-Sperre, nicht umgehbar): solange gesperrt, sichtbarer Hinweis
+  let hinweis = null;
+  const hinweisZeigen = an => {
+    if (an && !hinweis) {
+      hinweis = document.createElement('div');
+      hinweis.textContent = '🔊 Tippe irgendwo für Ton';
+      hinweis.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:50;background:rgba(0,0,0,.72);color:#fff;padding:8px 14px;border-radius:18px;font:600 14px system-ui,sans-serif;pointer-events:none;animation:tonPuls 1.6s ease-in-out infinite';
+      if (!document.getElementById('tonPulsStil')) { const s = document.createElement('style'); s.id = 'tonPulsStil'; s.textContent = '@keyframes tonPuls{0%,100%{opacity:.55}50%{opacity:1}}'; document.head.appendChild(s); }
+      document.body.appendChild(hinweis);
+    } else if (!an && hinweis) { hinweis.remove(); hinweis = null; }
+  };
+  const ab = () => { for (const a of ARTEN) document.removeEventListener(a, geste, true); hinweisZeigen(false); };
   const geste = () => {
     los();
     // erst abmelden, wenn der Ton wirklich läuft; sonst bei der nächsten Geste noch einmal
@@ -567,6 +579,8 @@ export function musikSofort(startseiteSichtbar = () => true) {
   };
   for (const a of ARTEN) document.addEventListener(a, geste, true);
   los();
+  // nach kurzer Zeit prüfen, ob der Browser den Ton zugelassen hat
+  setTimeout(() => { if (!musikAus && startseiteSichtbar() && ctx?.state !== 'running') hinweisZeigen(true); }, 900);
 }
 export function musikAusblenden(sek = 4) {
   musikAus = true;
