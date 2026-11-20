@@ -2547,6 +2547,7 @@ class Ort extends Phaser.Scene {
 
   bestimmeKontext(ich) {
     this.handelKontext = null;
+    if (ich?.anBord) return { art: 'aussteigen', text: '🚪 Aussteigen' };   // an Bord eines Evakuierungsfahrzeugs: Taste E/Leertaste und Knopf
     if (!ich || ich.unten || ich.aktion || ich.zombie > 0 || raum.state.phase !== 'spiel' || !this.lokal) return null;
     const { x, y } = this.lokal;
     // Arzt oder Soldat im Lager in Reichweite (nur solange der Stützpunkt steht)
@@ -2642,6 +2643,7 @@ class Ort extends Phaser.Scene {
     else if (k.art === 'kuehlschrank') raum.send('kuehlschrank');
     else if (k.art === 'tausch') raum.send('tausch_start', { mit: k.mit });
     else if (k.art === 'handel') handelAuf(k.wer);
+    else if (k.art === 'aussteigen') raum.send('aussteigen');
     else if (k.art === 'aufheben_wahl') auswahlAuf(raum, raum.state.spieler.get(meineId), k.nah);
     else raum.send('aktion');
     if (k.art === 'raetsel') $('aktion').style.display = 'none';

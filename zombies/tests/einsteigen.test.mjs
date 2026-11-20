@@ -10,7 +10,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { BUS_ABSTAND } from '../client/welt.mjs';
+import { BUS_ABSTAND, frei } from '../client/welt.mjs';
 
 const PORT = 28100 + Math.floor(Math.random() * 100);
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-einsteigen-'));
@@ -24,6 +24,8 @@ async function bis(bedingung, ms = 4000) {
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: path.join(ordner, 'spiel.db') }); });
 after(async () => { await server.gracefullyShutdown(false); fs.rmSync(ordner, { recursive: true, force: true }); });
 
+// freier Punkt im Abstand d vom Fahrzeug (draußen, nicht im Haus)
+const weitWeg = (raum, bus, d) => { for (let k = 0; k < 72; k++) { const w = k * Math.PI / 36, x = bus.x + Math.cos(w) * d, y = bus.y + Math.sin(w) * d; if (frei(raum.wv(''), x, y, 14)) return { x, y }; } throw new Error('kein freier Punkt'); };
 const busVon = raum => [...raum.state.fahrzeuge.entries()].find(([, f]) => f.art === 'evakuierung');
 // Raum mit gerufenem Evakuierungsbus; fn bekommt { c, raum, p, bus, id, meldungen, ag }
 const mitBus = (aufgaben, fn, extra = {}) => async () => {
@@ -102,3 +104,49 @@ test('Bots steigen ebenso ein und sitzen still', mitBus(['funk', 'tor', 'zombies
   await warte(600);
   assert.ok(b.anBord && Math.hypot(b.x - bus.x, b.y - bus.y) < 1, 'Bot sitzt nicht still im Fahrzeug');
 }, { bots: 2 }));
+
+test('Aussteigen jederzeit, solange das Fahrzeug steht: Knopf und Aktionstaste, Platz daneben, Schonzeit, kein sofortiges Wiedereinsteigen', mitBus(['funk', 'tor', 'zombies', 'lampen'], async ({ c, raum, p, bus, ag, meldungen }) => {
+  p.ebene = ''; p.x = bus.x; p.y = bus.y;
+  assert.ok(await bis(() => p.anBord), 'steigt nicht ein');
+  c.send('aussteigen');
+  assert.ok(await bis(() => !p.anBord), 'Knopf „Aussteigen“ wirkt nicht');
+  const d = Math.hypot(p.x - bus.x, p.y - bus.y);
+  assert.ok(d > 20 && d < BUS_ABSTAND + 150, 'Ausstieg nicht neben dem Fahrzeug: ' + d);   // freie Stelle in der Nähe (Hindernisse verschieben sie)
+  assert.ok(raum.extra.get([...raum.state.spieler.keys()][0]).schonT > 0, 'keine Schonzeit gegen Zombies');
+  await warte(600);
+  assert.equal(p.anBord, false, 'steigt sofort wieder ein');
+  assert.ok(meldungen.some(m => m.includes('ausgestiegen')));
+  // weg und wieder hin: darf wieder einsteigen; Aktionstaste steigt ebenfalls aus
+  { const w = weitWeg(raum, bus, 250); p.x = w.x; p.y = w.y; }
+  await warte(500);
+  assert.ok(await bis(() => { p.ebene = ''; p.x = bus.x; p.y = bus.y; return p.anBord; }, 8000), 'steigt nicht wieder ein');
+  c.send('aktion');
+  assert.ok(await bis(() => !p.anBord), 'Aktionstaste steigt nicht aus');
+  // fährt das Fahrzeug (nicht stehend), geht Aussteigen nicht
+  { const w = weitWeg(raum, bus, 250); p.x = w.x; p.y = w.y; }
+  await warte(500);
+  assert.ok(await bis(() => { p.ebene = ''; p.x = bus.x; p.y = bus.y; return p.anBord; }, 8000));
+  raum.state.busSteht = false; ag.eingestiegen.add([...raum.state.spieler.keys()][0]);
+  c.send('aussteigen'); await warte(300);
+  assert.equal(p.anBord, true, 'ausgestiegen während der Fahrt');
+}));
+
+test('Tote/liegende Bots blockieren die Abfahrt nie: Spieler an Bord, alles erledigt → Abfahrt sofort; sonst nach der Wartezeit mit Aussteigen', mitBus(['funk'], async ({ raum, p, bus, ag }) => {
+  for (const [sid, q] of raum.state.spieler) if (raum.extra.get(sid)?.bot) { q.unten = true; q.hp = 0; q.x = bus.x + 900; q.y = bus.y; }
+  let gewechselt = false; raum.weltNeuStarten = () => { gewechselt = true; }; ag.wechselVerzoegerung = 100;
+  p.ebene = ''; p.x = bus.x; p.y = bus.y;
+  assert.ok(await bis(() => ag.wechselLaeuft, 4000), 'liegende Bots halten die Abfahrt auf');
+  assert.ok(await bis(() => gewechselt, 3000));
+}, { bots: 3 }));
+
+test('Gregors Fall: Spieler an Bord, Aufgaben offen, Bots tot → wartet, nach Ablauf der Wartezeit fährt er ab und setzt alle ab', mitBus(['funk', 'tor', 'zombies', 'lampen'], async ({ raum, p, bus, ag, meldungen }) => {
+  for (const [sid, q] of raum.state.spieler) if (raum.extra.get(sid)?.bot) { q.unten = true; q.hp = 0; q.x = bus.x + 900; q.y = bus.y; }
+  p.ebene = ''; p.x = bus.x; p.y = bus.y;
+  assert.ok(await bis(() => p.anBord));
+  await warte(800);
+  assert.ok(p.anBord && raum.state.busDa, 'fährt vorzeitig ab');
+  assert.equal(raum.state.busBord, 1);
+  ag.busRest = 0.05;
+  assert.ok(await bis(() => !raum.state.busDa && !p.anBord, 3000), 'fährt nach Ablauf der Wartezeit nicht ab / setzt nicht ab');
+  assert.ok(await bis(() => meldungen.some(m => m.includes('fehlte'))));
+}, { bots: 3 }));

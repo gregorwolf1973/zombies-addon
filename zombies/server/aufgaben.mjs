@@ -106,6 +106,7 @@ export class Aufgaben {
     this.wechselLaeuft = false;
     this.wechselVerzoegerung = 5000;   // ms zwischen „Geschafft!“ und dem Weltwechsel
     this.takt = 0;
+    this.ausgestiegen = new Set();   // wer freiwillig ausgestiegen ist, steigt nicht sofort wieder ein
     this.flug = null;          // A400M: Landerolle { von, bis, t } | Hubschrauberphase { phase, rest }
     this.heli = null;
     this.mission = [];         // Plan der Missionsorte (server/mission.mjs)
@@ -150,7 +151,7 @@ export class Aufgaben {
     s.funk = false; s.busDa = false; s.busSteht = false; s.busAnkunft = -1; s.busAb = -1; s.busBord = 0; s.busGesamt = 0;
     this.flug = null; this.heli = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync();
     for (const p of s.spieler.values()) p.anBord = false;
-    this.eingestiegen.clear(); this.folgenId = null;
+    this.eingestiegen.clear(); this.ausgestiegen.clear(); this.folgenId = null;
     this.basis = s.besiegt;
     if (!this.an()) return;
     const g = passt ? stand?.aufgaben : null;
@@ -550,7 +551,8 @@ export class Aufgaben {
       let an = this.eingestiegen.has(sid);
       // Einsteigen: wer nah genug steht, sitzt im Fahrzeug (Position folgt ihm, Figur weg, Zombies lassen ihn in Ruhe) bis zum Levelwechsel.
       // Fehlt noch etwas für die Abfahrt, sagt die Meldung beim Einsteigen, was – es wirft niemand still wieder raus.
-      if (!an && !p.ebene && !p.unten && Math.hypot(p.x - f.x, p.y - f.y) < abstand) {
+      if (this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) >= abstand) this.ausgestiegen.delete(sid);   // erst wieder einsteigen, wenn er einmal weg war
+      if (!an && !p.ebene && !p.unten && !this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) < abstand) {
         an = true; this.eingestiegen.add(sid); p.anBord = true;
         if (!bot) this.einsteigMeldung(sid);
       }
@@ -572,12 +574,27 @@ export class Aufgaben {
     return l;
   }
 
+  // Aussteigen auf Wunsch (Knopf/Aktionstaste), solange das Fahrzeug steht: Platz neben dem Fahrzeug, kurze Schonzeit gegen Zombies
+  aussteigen(sid) {
+    const s = this.raum.state, p = s.spieler.get(sid);
+    if (!p || !this.eingestiegen.has(sid)) return false;
+    if (!s.busSteht || this.wechselLaeuft) { this.sendeAn(sid, '🚪 Aussteigen geht erst, wenn das Fahrzeug steht.'); return false; }
+    const f = this.einstiegsPunkt() ?? p, fz = s.fahrzeuge.get(this.busId), w = (fz?.richtung ?? 0) + Math.PI / 2;
+    const r = (this.heli ? HELI_ABSTAND : BUS_ABSTAND) + 14;
+    const q = this.platzNeben(f.x + Math.cos(w) * r, f.y + Math.sin(w) * r);
+    p.x = q.x; p.y = q.y; p.anBord = false;
+    this.eingestiegen.delete(sid); this.ausgestiegen.add(sid);
+    const x = this.raum.extra.get(sid); if (x) x.schonT = 3;   // 3 s lang beißen Zombies nicht
+    this.sendeAn(sid, '🚪 Du bist ausgestiegen. Steig wieder ein, indem du erneut zum Fahrzeug gehst.');
+    return true;
+  }
+
   sendeAn(sid, text) { this.raum.clients?.find(c => c.sessionId === sid)?.send('meldung', { text, lang: true }); }
 
   einsteigMeldung(sid) {
     const fz = this.heli ? { zeichen: '🚁', der: 'der Hubschrauber' } : this.fz(), fehlt = this.fehlt();
     this.sendeAn(sid, fehlt.length
-      ? `${fz.zeichen} Du bist an Bord. ${fz.der[0].toUpperCase() + fz.der.slice(1)} kann aber noch nicht abfliegen/abfahren – es fehlt: ${fehlt.join(' · ')}. Steig bei Bedarf nach der Wartezeit wieder aus.`
+      ? `${fz.zeichen} Du bist an Bord. ${fz.der[0].toUpperCase() + fz.der.slice(1)} kann aber noch nicht abfliegen/abfahren – es fehlt: ${fehlt.join(' · ')}. Zum Aussteigen: Taste E oder Knopf „Aussteigen“ (sonst fährt er nach der Wartezeit ohne Erfolg ab und setzt alle ab).`
       : `${fz.zeichen} Du bist an Bord – es geht los, sobald alle da sind (oder die Wartezeit abläuft).`);
   }
 
@@ -591,7 +608,7 @@ export class Aufgaben {
       p.x = q.x; p.y = q.y; p.anBord = false;
       if (text && !this.raum.extra.get(sid)?.bot) this.sendeAn(sid, text);
     }
-    this.eingestiegen.clear();
+    this.eingestiegen.clear();; this.ausgestiegen.clear();
   }
 
   // Pflichtaufgaben und Mindestzahl erledigt: wer einsteigt, kann tatsächlich mitfahren

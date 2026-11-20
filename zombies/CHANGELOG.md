@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.62.0 – 21.11.2026
+
+- Aussteigen aus dem Evakuierungsfahrzeug (Bus, Leopard, A400M-Rampe, Hubschrauber) jederzeit, solange es steht: Taste E/Leertaste (die Aktionstaste) oder der Knopf „🚪 Aussteigen“ am Handy. Ausstieg an freier Stelle neben dem Fahrzeug, 3 s Schonzeit gegen Zombies, kein sofortiges Wiedereinsteigen (erst wieder hingehen).
+- Einsteigen vor Erfüllung der Aufgaben bleibt erlaubt; die Meldung nennt, was fehlt, und weist auf das Aussteigen hin. Ohne Erfolg fährt das Fahrzeug nach Ablauf der Wartezeit ab und setzt alle Insassen mit Meldung ab (wie bisher, jetzt getestet; die Wartezeit ist die Einstellung „Der Bus wartet höchstens“, Vorgabe 10 echte Minuten).
+- Tote/liegende Bots und nicht verbundene Spieler blockieren die Abfahrt nie (getestet): sie kommen beim Levelwechsel mit.
+
 ## 0.61.1 – 20.11.2026
 
 - Startwahl: zwei verschiedene Gegenstände frei wählen (Messer, Funkgerät, Taschenlampe, Armbrust mit 6 Pfeilen, Baseballschläger, Radio, Schlüsselbund, Spritze) plus ein Zufallsgegenstand („🎲 Zufall: …“); weiterhin 5 Fähigkeitspunkte.
