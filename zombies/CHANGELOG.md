@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.48.1 – 20.11.2026
+## 0.48.3 – 20.11.2026
 
 - Verwaltung: Fehler „wz is not defined“ beim Laden behoben (Schalter „Horde-Ziele anzeigen“).
 
