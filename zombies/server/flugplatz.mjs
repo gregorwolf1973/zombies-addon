@@ -54,7 +54,13 @@ export function heliPlan(welt, seed = welt.seed ?? 1) {
     liste.push({ x, y });
   }
   for (const p of liste) if (findeWeg(welt, st.x, st.y, p.x, p.y, 11, 40000, true)) return welt._heliplan = { heli: p };
-  return welt._heliplan = liste[0] ? { heli: liste[0] } : null;
+  if (liste[0]) return welt._heliplan = { heli: liste[0] };
+  // nichts Freies gefunden: der nächste freie Fleck um den Start (zur Not der Start selbst) – der Hubschrauber landet immer irgendwo
+  for (let r = 120; r <= 1200; r += 60) for (let k = 0; k < 16; k++) {
+    const a2 = k * Math.PI / 8, x = st.x + Math.cos(a2) * r, y = st.y + Math.sin(a2) * r;
+    if (x > 120 && y > 120 && x < W - 120 && y < H - 120 && frei(welt, x, y, 40)) return welt._heliplan = { heli: { x, y } };
+  }
+  return welt._heliplan = { heli: { x: st.x, y: st.y } };
 }
 
 // Bunkertor (Finale): welt.bunkertor ({x, y} in Pixeln) hat Vorrang, sonst ein freier, erreichbarer Platz abseits des Starts
@@ -73,12 +79,13 @@ export function bunkerPlan(welt, seed = welt.seed ?? 1) {
 // Absturzstelle des A400M (Königsdorf): auf der Anflugachse der Landebahn weit vor dem Aufsetzpunkt, im Kartenrandbereich
 export function absturzPlan(welt, seed = welt.seed ?? 1) {
   if (welt._absturzplan !== undefined) return welt._absturzplan;
-  const W = BREITE * KACHEL, H = HOEHE * KACHEL, fp = welt.fein ? flugplanBerechnen(welt, seed) : null, hp = heliPlan(welt, seed);
-  if (!hp) return welt._absturzplan = null;
+  const W = BREITE * KACHEL, H = HOEHE * KACHEL, hp = heliPlan(welt, seed);
   const rnd = zufall((seed ^ 0x41425354) >>> 0);
-  const w = fp ? fp.w : rnd() * Math.PI * 2, ax = fp ? fp.start.x : hp.heli.x, ay = fp ? fp.start.y : hp.heli.y;
-  const c = Math.cos(w), s = Math.sin(w);
-  let d = 700;
+  // Anflugachse: festgelegte Landebahn der Karte (welt.landebahn = {x, y, w}), sonst die gefundene freie Fläche, sonst beliebig – der Absturz braucht keine Landung
+  const fp = welt.landebahn ? null : (welt.fein ? flugplanBerechnen(welt, seed) : null);
+  const w = welt.landebahn ? welt.landebahn.w : fp ? fp.w : rnd() * Math.PI * 2;
+  const ax = welt.landebahn ? welt.landebahn.x : fp ? fp.start.x : hp.heli.x, ay = welt.landebahn ? welt.landebahn.y : fp ? fp.start.y : hp.heli.y;
+  const c = Math.cos(w), s = Math.sin(w), d = 700;
   const klemme = (v, m) => Math.max(160, Math.min(m - 160, v));
   const x = klemme(ax - c * d, W), y = klemme(ay - s * d, H);
   return welt._absturzplan = { x, y, w: Math.atan2(ay - y, ax - x) || w, heli: hp.heli };

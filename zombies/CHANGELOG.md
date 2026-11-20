@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.64.3 – 21.11.2026
+
+- Königsdorf: Statt des A400M-Absturzes kam ein Leopard. Ursache: Die in der Verwaltung erzwungene Evakuierungsart („Test“) blieb über den Levelwechsel gespeichert und galt auch in der nächsten Karte. Jetzt wird sie beim Kartenwechsel zurückgesetzt.
+- Absturz (Königsdorf) und NH90 (Kochel) fallen nie mehr auf Bus oder Panzer zurück: Die Absturzstelle und der Heliplatz haben immer einen Plan (notfalls ohne freie Fläche); eine festgelegte Landebahn der Karte (`welt.landebahn = {x, y, w}`) bestimmt die Anflugachse, `welt.heliplatz` den Landeplatz.
+- Test: Levelwechsel nach Königsdorf (normal und per Testsprung), Kochel und Andermatt ergibt jeweils die richtige Evakuierungsart; der Bus-Straßentest war flackrig (im Zeitraffer blieb der Bus an einem stehenden Bewohner hängen) und ist stabil.
+
 ## 0.64.2 – 20.11.2026
 
 - Geändert: Die Horde klumpt nicht mehr zu einem Haufen und läuft nicht mehr im Gleichschritt. Jeder Zombie hat einen eigenen Zielpunkt um das Hordenziel, hält Abstand zu den Nachbarn (auch vor Türen), schlingert, macht kurze Pausen und hat eine eigene Laufphase; Ankunft am Ziel richtet sich nach der Streuung, danach zieht die Horde zügig weiter.

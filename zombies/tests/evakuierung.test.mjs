@@ -47,6 +47,8 @@ const mitArt = (art, f) => async () => {
   SpielRaum.einstellungen = { ...alt, aufgaben: { ...alt.aufgaben, evakArt: art } };
   try { await f(); } finally { SpielRaum.einstellungen = alt; }
 };
+// Im Zeitraffer-Test bewegen sich Bewohner nicht mit; ein Mensch mitten auf der Fahrbahn würde das Fahrzeug (Bremsen vor Fußgängern) ewig aufhalten
+const stehendeMenschenWeg = raum => { for (const m of raum.state.menschen?.values?.() ?? []) m.sichtbar = false; };
 const busVon = raum => [...raum.state.fahrzeuge.entries()].find(([, f]) => f.art === 'evakuierung');
 function nurFunk(raum) { raum.state.aufgaben.clear(); raum.aufgaben.neu('funk', false); raum.aufgaben.aktualisieren(false); }
 
@@ -275,6 +277,7 @@ test('Leopard (Isarauen) fährt querfeldein zum Abholpunkt, wartet dort und fäh
     if (inf.querfeld.verschoben) assert.ok(Math.hypot(s.evakX - ziel.x, s.evakY - ziel.y) < 2, 'Abholpunkt nicht verschoben');
     const start = { x: f.x, y: f.y };
     // Fahrt im Zeitraffer (schritt direkt), bis er steht
+    stehendeMenschenWeg(raum);
     for (let i = 0; i < 8000 && !inf.angekommen; i++) v.schritt(0.1);
     assert.ok(inf.angekommen, 'Panzer kommt nicht an');
     assert.ok(Math.hypot(f.x - ziel.x, f.y - ziel.y) < 20, 'steht nicht am Abholpunkt: ' + Math.hypot(f.x - ziel.x, f.y - ziel.y));
@@ -303,6 +306,7 @@ test('Bus (Straße): liegt die nächste Straße weit vom Ortsausgang, wandert de
     s.uhr = 18 * 60 + 0.1;
     assert.ok(await bis(() => busVon(raum), 4000), 'kein Bus');
     const [bid, f] = busVon(raum), inf = raum.verkehr.info.get(bid);
+    stehendeMenschenWeg(raum);
     for (let i = 0; i < 20000 && !inf.angekommen; i++) raum.verkehr.schritt(0.1);   // Fahrt im Zeitraffer
     assert.ok(inf.angekommen, 'Bus kommt nicht an');
     assert.ok(Math.hypot(f.x - s.evakX, f.y - s.evakY) < 40, 'Bus hält nicht am Abholpunkt');
@@ -321,6 +325,7 @@ test('Leopard: einsteigen, warten, Aufgaben werden erfüllt, Abfahrt → bleibt 
     s.uhr = 18 * 60 + 0.1;
     assert.ok(await bis(() => busVon(raum), 4000), 'kein Panzer');
     const [id, f] = busVon(raum), inf = v.info.get(id);
+    stehendeMenschenWeg(raum);
     for (let i = 0; i < 8000 && !inf.angekommen; i++) v.schritt(0.1);
     assert.ok(await bis(() => s.busSteht, 2000), 'steht nicht');
     p.ebene = ''; p.x = f.x; p.y = f.y;
