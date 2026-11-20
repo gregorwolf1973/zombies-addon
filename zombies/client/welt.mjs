@@ -350,7 +350,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 16;   // 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 17;   // 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -374,11 +374,15 @@ export const DINGE = {
   // Armbrust (leise, braucht Pfeile) und Scharfschützengewehr (nutzt normale Munition; selten bei Bundeswehr und Polizei)
   armbrust: { name: 'Armbrust', zeichen: '🏹', waffe: true },
   pfeil: { name: 'Pfeil', zeichen: '➶' },
+  // Granatwerfer (selten, nur Bundeswehr) und seine Munition: zählt wie Pfeile als Vorrat (p.granaten), nicht im Rucksack
+  granatwerfer: { name: 'Granatwerfer', zeichen: '💥', waffe: true },
+  granate40: { name: 'Granate (40 mm)', zeichen: '🧨' },
   scharfschuetze: { name: 'Scharfschützengewehr', zeichen: '🔭', waffe: true },
   sense: { name: 'Sense', zeichen: '🌾', waffe: true },
   kleidung: { name: 'Feste Kleidung', zeichen: '🧥' },
   seil: { name: 'Seil', zeichen: '🪢' },
   taschenlampe: { name: 'Taschenlampe', zeichen: '🔦' },
+  radio: { name: 'Radio', zeichen: '📻', radio: true },   // Lockmittel: einschalten und ablegen, spielt ~75 s und macht weithin Lärm (server/radio.mjs)
   funkgeraet: { name: 'Funkgerät', zeichen: '📻' },   // Sprachfunk: mit zwei Funkgeräten hört man sich überall (client/sprache_regeln.mjs)
   schokoriegel: { name: 'Schokoriegel', zeichen: '🍫' },
   tasche: { name: 'Sporttasche (12 Plätze)', zeichen: '👜', plaetze: 12 },
@@ -398,25 +402,25 @@ export const BEHAELTER_NAME = { bad: 'Toilette / Waschbecken', muelltonne: 'Mül
   vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal', laden_polizei: 'Waffenschrank' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
-  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', 'pfeil', null, null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', 'pfeil', 'radio', null, null],
   spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', 'gewehr', 'schrotflinte', 'funkgeraet', 'armbrust', 'pfeil', null, null],
   // Kofferraum geht nur mit Brechstange auf – darum liegt drin keine, dafür etwas mehr Gutes
   auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', 'funkgeraet', null],
   laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
   laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
-  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', 'armbrust', 'pfeil', 'pfeil', null],
+  laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', 'armbrust', 'pfeil', 'pfeil', 'radio', null],
   laden_gaststaette: ['essen', 'essen', 'wasser', 'wasser', 'messer', 'schokoriegel', null],
   laden: ['essen', 'wasser', 'schokoriegel', null, null],
   vorratsregal: ['wasser', 'wasser', 'wasser', 'essen', 'essen', 'essen', 'verband', 'bretter', 'schokoriegel', 'schokoriegel', 'spritze', 'funkgeraet', null],
   erstehilfe: ['verband', 'verband', 'verband', 'spritze', null],
   // Bundeswehr-Stützpunkt (Teil 2 ergänzt hier die neuen Waffen)
   // Handgranaten häufiger, Maschinenpistole und Maschinengewehr selten (nur hier zu finden)
-  bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', 'pfeil', null],   // MG/Scharfschütze der Kiste: raum.mjs (durchsucht), nicht hier
-  bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', null],
+  bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', 'pfeil', 'granate40', null],   // MG/Scharfschütze der Kiste: raum.mjs (durchsucht), nicht hier
+  bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', 'granatwerfer', 'granate40', 'granate40', null],
   // Polizeiwache (OSM amenity=police): Pistolen, Schrot, selten Maschinenpistole, Maschinengewehr, Scharfschützengewehr
   laden_polizei: ['munition', 'munition', 'verband', 'taschenlampe', 'pistole', 'pistole', 'schrotflinte', 'mp', 'mg', 'mg', 'scharfschuetze', 'funkgeraet', null],
   sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],
-  bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
+  bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', 'radio', null],
   bad: ['wasser', 'wasser', 'wasser', 'verband', 'schokoriegel', null, null],   // Bad: oft Wasser (Spülkasten, Hahn)
   muelltonne: ['essen', 'wasser', 'seil', 'schokoriegel', null, null, null, null, null],   // Hausmüll: meist leer, selten etwas Brauchbares
   container: ['essen', 'essen', 'schokoriegel', 'schokoriegel', 'bretter', 'bretter', 'kleidung', 'kleidung', 'tasche', null, null, null],   // Müll: meist Krempel, selten eine Tasche
@@ -425,6 +429,8 @@ export const MUNITION_PRO_FUND = 12;
 // Pfeile für die Armbrust zählen wie Munition als Vorrat (p.pfeile), nicht im Rucksack. Aus Behältern gibt es PFEILE_PRO_FUND, vom Boden 1 Stück.
 export const PFEILE_PRO_FUND = 6;
 export const PFEILE_MAX = 40;
+export const GRANATEN_PRO_FUND = 2;   // Granaten (40 mm) aus Behältern; vom Boden 1 Stück
+export const GRANATEN_MAX = 20;
 export const MUNITION_MAX = 150;   // so viel Munition trägt man höchstens (Maschinengewehr und Soldaten-Handel brauchen mehr Platz als die alten 99)
 
 // ---------- Handel mit den Ärzten und Soldaten des Bundeswehr-Stützpunkts ----------
@@ -461,7 +467,7 @@ export function bezahlung(rucksack, kostet) {
   return zahl;
 }
 // Bundeswehr-Handgranate: Zünder 2 s ab dem Wurf, fliegt 0,6 s, Radius 5 m (8 px je m), Lärm 600 px
-export const GRANATE = { flug: 0.6, zuender: 2.0, radius: 60, schadenZombie: 220, schadenSpieler: 70, wurfWeite: 200, blickWeite: 136, laerm: 600 };   // Wurfweite +67 %, Radius +50 %, mehr Schaden
+export const GRANATE = { flug: 0.6, flugWerfer: 0.8, zuender: 2.0, radius: 60, schadenZombie: 220, schadenSpieler: 70, wurfWeite: 200, blickWeite: 136, laerm: 600 };   // Wurfweite +67 %, Radius +50 %, mehr Schaden
 // Wer ein Maschinengewehr trägt (in der Hand oder im Rucksack), läuft 15 % langsamer
 export const TEMPO_MG = 0.85;
 export const traegtMg = p => p.waffe === 'mg' || (p.rucksack ?? []).includes('mg');
@@ -741,30 +747,39 @@ export function uhrText(uhr) {
 }
 
 // ---------- Waffen ----------
+// magazin: Schuss je Magazin (nur Fernwaffen), nachlade: Sekunden zum Nachladen (Magazin leer → automatisch, Taste R → von Hand).
+// vorrat (nur bei Granatwerfer): 'granaten' statt Munition; granate: Bogenschuss mit Explosion wie eine Handgranate.
 // fern: braucht Munition (eine pro Schuss); kegel: Schrot trifft alle im Kegel; bogen: Sense trifft alle im Bogen.
 // ueberraschung: Schadensfaktor gegen Zombies, die einen noch nicht bemerkt haben (von hinten anschleichen).
 export const WAFFEN = {
-  pistole: { fern: true, reichweite: WERTE.pistoleReichweite, schaden: 34, pause: 0.45, laut: 1, ueberraschung: 1.5, bild: 1 },
-  gewehr: { fern: true, reichweite: WERTE.pistoleReichweite * 1.8, schaden: 100, pause: 1.2, laut: 1.4, ueberraschung: 1.5, bild: 1 },
+  pistole: { fern: true, magazin: 15, nachlade: 4, reichweite: WERTE.pistoleReichweite, schaden: 34, pause: 0.45, laut: 1, ueberraschung: 1.5, bild: 1 },
+  gewehr: { fern: true, magazin: 30, nachlade: 4, reichweite: WERTE.pistoleReichweite * 1.8, schaden: 100, pause: 1.2, laut: 1.4, ueberraschung: 1.5, bild: 1 },
   // Bundeswehr: Maschinenpistole (30 m, hohe Feuerrate, etwas weniger Schaden als die Pistole) und Maschinengewehr (45 m, sehr hohe Feuerrate)
-  mp: { fern: true, reichweite: 30 * 8, schaden: 28, pause: 0.14, laut: 1.1, ueberraschung: 1.5, bild: 1 },
-  mg: { fern: true, reichweite: 45 * 8, schaden: 30, pause: 0.09, laut: 1.3, ueberraschung: 1.5, bild: 1 },
+  mp: { fern: true, magazin: 30, nachlade: 4, reichweite: 30 * 8, schaden: 28, pause: 0.14, laut: 1.1, ueberraschung: 1.5, bild: 1 },
+  mg: { fern: true, magazin: 100, nachlade: 4, reichweite: 45 * 8, schaden: 30, pause: 0.09, laut: 1.3, ueberraschung: 1.5, bild: 1 },
   // Armbrust: fast lautlos, 25 m, kräftiger Einzelschuss, langsam gespannt; verbraucht Pfeile (p.pfeile), der Pfeil bleibt am Ziel liegen
-  armbrust: { fern: true, pfeil: true, reichweite: 25 * 8, schaden: 80, pause: 2.4, laut: 0.06, ueberraschung: 2, bild: 1 },
+  armbrust: { fern: true, magazin: 1, nachlade: 2, pfeil: true, reichweite: 25 * 8, schaden: 80, pause: 2.4, laut: 0.06, ueberraschung: 2, bild: 1 },
   // Scharfschützengewehr: 75 m, sehr hoher Schaden, langsame Schussfolge, sehr laut; Gewehrmunition
-  scharfschuetze: { fern: true, reichweite: 75 * 8, schaden: 220, pause: 2.8, laut: 2.2, ueberraschung: 1.5, bild: 1 },
-  schrotflinte: { fern: true, reichweite: 160, schaden: 70, nebenSchaden: 45, kegel: 0.45, pause: 0.95, laut: 1.3, ueberraschung: 1.5, bild: 1 },
+  scharfschuetze: { fern: true, magazin: 5, nachlade: 4, reichweite: 75 * 8, schaden: 220, pause: 2.8, laut: 2.2, ueberraschung: 1.5, bild: 1 },
+  schrotflinte: { fern: true, magazin: 6, nachlade: 4, reichweite: 160, schaden: 70, nebenSchaden: 45, kegel: 0.45, pause: 0.95, laut: 1.3, ueberraschung: 1.5, bild: 1 },
+  // Granatwerfer: Bogenschuss auf den Zielpunkt (bis 45 m), Explosion wie Handgranate (Schaden = Zombieschaden), Granaten (40 mm) als Vorrat
+  granatwerfer: { fern: true, granate: true, vorrat: 'granaten', magazin: 1, nachlade: 3, reichweite: 45 * 8, schaden: 220, pause: 2.2, laut: 1.5, ueberraschung: 1, bild: 1 },
   schlaeger: { reichweite: 42, schaden: 40, pause: 0.6, stoss: true, ueberraschung: 3, bild: 2 },
   sense: { reichweite: 58, schaden: 55, bogen: 1.4, pause: 0.85, ueberraschung: 3, bild: 2 },
   messer: { reichweite: 36, schaden: 30, pause: 0.45, ueberraschung: 4, bild: 3 },
   faust: { reichweite: WERTE.nahkampfReichweite, schaden: 20, pause: 0.7, stoss: true, ueberraschung: 2.5, bild: 0 },
 };
-// Vorrat für die Fernwaffe: Pfeile bei der Armbrust, sonst Munition
-export const vorratVon = (p, w) => (w?.pfeil ? p.pfeile : p.munition) ?? 0;
-// womit kämpft der Spieler gerade? (Fernwaffe ohne Munition → Faust)
+// Vorrat für die Fernwaffe (außerhalb des Magazins): Granaten beim Granatwerfer, Pfeile bei der Armbrust, sonst Munition
+export const vorratFeld = w => w?.vorrat === 'granaten' ? 'granaten' : w?.pfeil ? 'pfeile' : 'munition';
+export const vorratVon = (p, w) => p[vorratFeld(w)] ?? 0;
+// Magazingröße der Waffe (0 = keine Fernwaffe)
+export const magazinGroesse = w => (w?.fern ? (w.magazin ?? 1) : 0);
+// Munition insgesamt für die gehaltene Waffe: Magazin + Vorrat (für Bots und die Anzeige „leer?“)
+export const munitionGesamt = p => (p.magazin ?? 0) + (vorratVon(p, WAFFEN[p.waffe]));
+// womit kämpft der Spieler gerade? (Fernwaffe ohne Munition in Magazin und Vorrat → Faust)
 export function aktiveWaffe(p) {
   const w = WAFFEN[p.waffe];
-  return w && (!w.fern || vorratVon(p, w) > 0) ? [p.waffe, w] : ['faust', WAFFEN.faust];
+  return w && (!w.fern || munitionGesamt(p) > 0) ? [p.waffe, w] : ['faust', WAFFEN.faust];
 }
 
 // Über einen Gartenzaun, eine Hecke oder Gartenmauer steigen: Zaunfeld direkt vor der Figur (Blickrichtung zuerst,

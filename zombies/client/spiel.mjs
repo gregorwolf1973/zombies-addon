@@ -3,13 +3,14 @@ import { groesse } from './groessen.mjs';
 import {
   KACHEL, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
+  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
+import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
@@ -588,8 +589,12 @@ const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
 const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   // figuren2: 160er Felder
-// Soldaten/Ärzte/Verwundete im Lager: Bezug = Held bei 100 % (0,42), mal Regler soldatenGroesse
-const soldatSkala = () => ZOMBIE_GROESSE * ((raum.state?.soldatenGroesse || 100) / 100);
+// Größen: ALLE Menschen (Spieler m/w/s/Held/Heldin, Bots, Bewohner, Soldaten, Ärzte, Verwundete) sind bei 100 % gleich
+// breit (Schulterbreite, Ausgleich je Bild in groessen.mjs). Menschengröße × Gesamtgröße = mg(); Zombies zusätzlich × Zombiegröße,
+// Leichen folgen der Zombiegröße. Kollisionsradien bleiben unberührt.
+const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100);
+const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
+const VERWUNDET_GROESSE = 0.42 * 1.26;
 const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // z6/z7 aus figuren2 (Riley Gombart), ab 'kaminkehrer' aus figuren3 (Gemini)
 const GEMINI_TYPEN = new Set(ZOMBIE_TYPEN.slice(7));
@@ -598,8 +603,8 @@ const ZIEL_NAMEN = { pharmacy: 'Apotheke', chemist: 'Drogerie', doctors: 'Arzt',
   apotheke: 'Apotheke', lebensmittel: 'Lebensmittel', kaufhaus: 'Kaufhaus' };
 const ZIEL_SYMBOL = { apotheke: '💊', lebensmittel: '🛒', kaufhaus: '🔦' };
 const HELD_HALTUNGEN = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe'];
-const HELD_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'gewehr', mp: 'gewehr', mg: 'gewehr', armbrust: 'gewehr', scharfschuetze: 'gewehr', schlaeger: 'messer', sense: 'messer', messer: 'messer', brechstange: 'messer' };   // sonst keine Waffe in der Hand
-const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer', mp: 'pistole', mg: 'gewehr', armbrust: 'gewehr', scharfschuetze: 'gewehr' };   // sonst Taschenlampe
+const HELD_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'gewehr', mp: 'gewehr', mg: 'gewehr', armbrust: 'gewehr', scharfschuetze: 'gewehr', schlaeger: 'messer', sense: 'messer', messer: 'messer', brechstange: 'messer', granatwerfer: 'gewehr' };   // sonst keine Waffe in der Hand
+const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer', mp: 'pistole', mg: 'gewehr', armbrust: 'gewehr', scharfschuetze: 'gewehr', granatwerfer: 'gewehr' };   // sonst Taschenlampe
 
 class Ort extends Phaser.Scene {
   constructor() { super('ort'); }
@@ -675,9 +680,11 @@ class Ort extends Phaser.Scene {
     this.passeZoomAn();
     this.scale.on('resize', () => this.passeZoomAn());
 
-    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,SPACE,ESC');
+    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,R,F,SPACE,ESC');
     this.tasten.E.on('down', () => this.aktion());
     this.tasten.Q.on('down', () => this.aktion2());
+    this.tasten.R.on('down', () => raum.send('nachladen'));            // Nachladen von Hand
+    this.tasten.F.on('down', () => raum.send('waffenplatz', { weiter: true }));   // nächster Waffenplatz
     this.tasten.SPACE.on('down', () => this.aktion());
     chatSzene = this;
     this.tasten.ESC.on('down', () => { kisteZu(); popupZu(); handelZu(); });
@@ -740,6 +747,11 @@ class Ort extends Phaser.Scene {
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => this.granateFliegt(m));
+    raum.onMessage('nachladen', m => { if ((m.ebene ?? '') === this.aktEbene) ton.nachladen(m.x, m.y); });
+    this.radioAnz = new RadioAnzeige(this);
+    raum.onMessage('radio', m => this.radioAnz.setze(m));
+    raum.onMessage('radios', m => this.radioAnz.alle(m));
+    raum.onMessage('radioWeg', m => this.radioAnz.weg(m));
     raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, raum.state.zombies.values(), m.x, m.y, m.r ?? 40); });
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
     raum.onMessage('stoss', m => { const fs = naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
@@ -1196,8 +1208,8 @@ class Ort extends Phaser.Scene {
     }
     const ring = ich ? this.add.image(0, 0, 'eigenschein').setDisplaySize(64, 64).setAlpha(0.22).setBlendMode(Phaser.BlendModes.ADD)
       : this.add.ellipse(0, 0, 34, 34).setVisible(false);
-    const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand'));
-    const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE).setVisible(false);
+    const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg());
+    const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE * mg()).setVisible(false);
     const name = this.add.text(0, -28, p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
@@ -1208,7 +1220,7 @@ class Ort extends Phaser.Scene {
 
   neuerZombie(z) {
     const box = this.add.container(z.x, z.y).setDepth(3);
-    const bild = this.add.image(0, 0, 'figuren', this.figurBild('zombie_hemd', 0)).setScale(ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd'));
+    const bild = this.add.image(0, 0, 'figuren', this.figurBild('zombie_hemd', 0)).setScale(ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg());
     box.add([bild]);
     return { box, bild, x: z.x, y: z.y, r: z.richtung };
   }
@@ -1721,7 +1733,7 @@ class Ort extends Phaser.Scene {
     // Zombies
     this.kegel.clear();
     const cam = this.cameras.main.worldView;
-    const zf = (s.zombieGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100;   // Einstellung: Zombiegröße in %
+    const zf = zg();   // Menschengröße × Gesamtgröße × Zombiegröße
     const RAND = 150, rx0 = cam.x - RAND, rx1 = cam.right + RAND, ry0 = cam.y - RAND, ry1 = cam.bottom + RAND;   // Ausschnitt + Rand: nur dort wird gezeichnet
     let gesamtZ = 0, sichtbarZ = 0;
     for (const [id, z] of s.zombies) {
@@ -1794,7 +1806,7 @@ class Ort extends Phaser.Scene {
         this.leichen.set(id, o);
       }
       if (l.x < rx0 || l.x > rx1 || l.y < ry0 || l.y > ry1) { if (o.visible) o.setVisible(false); continue; }
-      o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * (s.leichenGroesse || 100) / 100 * (s.groesseGesamt || 100) / 100);   // Einstellung: Leichengröße in %
+      o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * zg());   // Leichen folgen der Zombiegröße
       o.setVisible((l.ebene ?? '') === this.aktEbene);
       const ausblenden = l.fest ? 1 : Math.min(1, (LEICHE_DAUER - l.alter) / 20);
       o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
@@ -1806,11 +1818,12 @@ class Ort extends Phaser.Scene {
       if (!o) {
         // Bürger (KonitaTutorials) mit Laufanimation, Sorte nach Kennung
         const sorte = String(m.aussehen ?? '').startsWith('p') ? 'polizist' : 'buerger' + (1 + (id.charCodeAt(id.length - 1) % 3));
-        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2(sorte)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', sorte));
+        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2(sorte)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', sorte) * mg());
         o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, sorte, x: m.x, y: m.y, r: m.richtung };
         this.menschenObj.set(id, o);
       }
       const vx = o.x, vy = o.y;
+      o.bild.setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', o.sorte) * mg());
       o.x += (m.x - o.x) * glatt; o.y += (m.y - o.y) * glatt;
       if (Math.hypot(m.x - o.x, m.y - o.y) > 200) { o.x = m.x; o.y = m.y; }   // aus Haus oder Bus aufgetaucht
       o.r = Phaser.Math.Angle.RotateTo(o.r, m.richtung, dt * 8);
@@ -1955,8 +1968,8 @@ class Ort extends Phaser.Scene {
     }
     this.bwLicht = new BwLicht(this, sp);
     const soldat = (x, y, blick, phase, n = -1) => {
-      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(soldatSkala() * groesse('figuren2', 'soldat_idle'));
-      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(soldatSkala() * groesse('figuren2', 'soldat_idle'));
+      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
+      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
       const box = this.add.container(x, y, [fuesse, bild]).setDepth(3.5).setRotation(blick);
       const e = { box, bild, fuesse, phase, blick, schussBis: 0, n };
       o.soldaten.push(e);
@@ -1965,11 +1978,11 @@ class Ort extends Phaser.Scene {
       if (t.art === 'mgnest') soldat(t.x - Math.cos(t.blick) * 5, t.y - Math.sin(t.blick) * 5, t.blick, i, i);   // hinter dem MG
       else if (t.art === 'posten' && t.rolle === 'soldat') soldat(t.x, t.y, t.blick, i, i);   // n = Teil-Nummer: Schüsse vom Server zeigen den Soldaten feuernd
       else if (t.art === 'posten' && t.rolle === 'arzt') {
-        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(soldatSkala() * 0.95 * groesse('figuren2', 'arzt'));
+        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', 'arzt') * mg());
         o.aerzte.push({ box: this.add.container(t.x, t.y, [bild]).setDepth(3.5).setRotation(t.blick), bild });
       } else if (t.art === 'posten' && t.rolle === 'verwundet') {
-        const bild = this.add.image(t.x, t.y, 'figuren2', this.figurBild2('verwundet', t.variante)).setScale(soldatSkala() * 1.26).setRotation(t.blick).setDepth(0.6);
-        o.verwundete.push({ bild, s0: soldatSkala() * 1.26, phase: i });
+        const bild = this.add.image(t.x, t.y, 'figuren2', this.figurBild2('verwundet', t.variante)).setScale(VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg()).setRotation(t.blick).setDepth(0.6);
+        o.verwundete.push({ bild, s0: VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg(), phase: i });
       }
     });
   }
@@ -2039,7 +2052,7 @@ class Ort extends Phaser.Scene {
     const o = this.stuetzpunktObj, e = o?.soldaten.find(q => q.n === m.n);
     if (!e || e.tot) return;
     e.tot = true;
-    const bild = this.add.image(m.x, m.y, 'figuren2', this.figurBild2('verwundet', m.n)).setScale(soldatSkala() * 1.26).setRotation(m.w ?? 0).setDepth(0.6).setTint(0xb0a0a0);
+    const bild = this.add.image(m.x, m.y, 'figuren2', this.figurBild2('verwundet', m.n)).setScale(VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg()).setRotation(m.w ?? 0).setDepth(0.6).setTint(0xb0a0a0);
     (o.leichen ??= []).push(bild);
     if (laut) { ton.ereignis('menschGebissen', m.x, m.y); fetzen(this, m.x, m.y, m.w ?? 0, 1.4); }
   }
@@ -2168,7 +2181,7 @@ class Ort extends Phaser.Scene {
       textur = 'figuren2'; bild = this.figurBild2(`sv_${w}_${art}`, i);
       const fb = geht ? this.figurBild2('sv_fuesse_walk', Math.floor(f.lauf / 6)) : this.figurBild2('sv_fuesse_idle');
       if (f.fuesse.frame.name != fb) f.fuesse.setFrame(fb);   // eslint-disable-line eqeqeq
-      f.fuesse.setRotation(p.richtung).setScale(BOGEN2_GROESSE * (p.schleicht ? 0.92 : 1));
+      f.fuesse.setRotation(p.richtung).setScale(BOGEN2_GROESSE * mg() * (p.schleicht ? 0.92 : 1));
     }
     else if (held) {
       // Held/Heldin (Gemini): Haltung nach Waffe und Taschenlampe, Stiefel als eigene Ebene
@@ -2178,7 +2191,7 @@ class Ort extends Phaser.Scene {
       const fb = !geht ? this.heldBild(`held_${gg}_stiefel_stehen`)
         : this.heldBild(`held_${gg}_stiefel_${tempo > W.tempoGehen * 1.25 ? 'laufen' : 'gehen'}`, Math.floor(f.lauf / 6));
       if (f.fuesse.texture.key !== 'helden160' || f.fuesse.frame.name != fb) f.fuesse.setTexture('helden160', fb);   // eslint-disable-line eqeqeq
-      f.fuesse.setRotation(p.richtung).setScale(ZOMBIE_GROESSE * ((raum.state?.heldenGroesse || 85) / 100) * (p.schleicht ? 0.92 : 1));
+      f.fuesse.setRotation(p.richtung).setScale(ZOMBIE_GROESSE * groesse('helden160', `held_${gg}_stiefel_stehen`) * mg() * (p.schleicht ? 0.92 : 1));
     }
     else {
       textur = this.menschTextur(p.aussehen);
@@ -2190,7 +2203,10 @@ class Ort extends Phaser.Scene {
     // beim Gehen leicht wippen
     const wipp = geht ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(p.unten ? 0 : p.richtung + wipp * 0.07);
-    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * ((raum.state?.zombieGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 100) / 100) : survivor ? BOGEN2_GROESSE : held ? ZOMBIE_GROESSE * ((raum.state?.heldenGroesse || 85) / 100) : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand');
+    const gg0 = aussehenLesen(p.aussehen).g === 'f' ? 'w' : 'm';
+    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg() : survivor ? BOGEN2_GROESSE * mg()
+      : held ? ZOMBIE_GROESSE * groesse('helden160', `held_${gg0}_leer`) * mg()
+      : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg();
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
@@ -2372,6 +2388,11 @@ class Ort extends Phaser.Scene {
     // Funkzelt des Bundeswehr-Stützpunkts: Funkspruch wie am Funktisch
     const funkPunkt = !ich.ebene && raum.state.aufgaben?.size && !raum.state.funk ? this.welt.stuetzpunkt?.teile.find(q => q.art === 'funkzelt')?.funkpunkt : null;
     if (funkPunkt && Math.hypot(x - funkPunkt[0], y - funkPunkt[1]) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
+    // Vorratskisten des Bundeswehr-Lagers (Safe House, solange es steht): gemeinsame Kisten, Munition darf hinein
+    if (!ich.ebene && raum.state.stuetzpunkt === 'steht') {
+      const vk = this.welt.stuetzpunkt?.teile.find(q => q.art === 'vorratskiste' && Math.hypot(x - q.x, y - q.y) < AKTION_ABSTAND + 20);
+      if (vk) return { art: 'kiste', text: '📦 Vorratskiste (Lager)', safe: { id: vk.id, name: 'Bundeswehr-Lager' } };
+    }
     {
       const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene });
       if (nah.length === 1 && ich.rucksack.length < ich.plaetze) return { art: 'aufheben', text: `✋ ${DINGE[nah[0].ding]?.zeichen ?? ''} aufheben` };
@@ -2496,7 +2517,9 @@ class Ort extends Phaser.Scene {
     this.leseEingabe();
     this.zeichneStick();
     this.abgleichen(dt);
+    this.ladeRingeZeichnen();
     this.stuetzpunktAnimieren();
+    if (this.lokal) this.radioAnz?.update(this.aktEbene, this.lokal.x, this.lokal.y);
     const meine = raum.state.spieler.get(meineId);
     if (meine && (meine.ebene ?? '') !== this.aktEbene) {
       this.wechsleAnsicht(meine.ebene ?? '');
@@ -2593,17 +2616,29 @@ class Ort extends Phaser.Scene {
       balkenSetzen('durst', ich.durst);
       balkenSetzen('hunger', ich.hunger);
       const wf = WAFFEN[ich.waffe], d = DINGE[ich.waffe];
-      const pfeile = ich.pfeile ? ` · ➶ ${ich.pfeile} Pfeile` : '';
-      const waffe = !wf ? `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}${pfeile}`
-        : wf.pfeil ? (ich.pfeile > 0 ? `${d.zeichen} ${d.name} · ${ich.pfeile} Pfeile` : `${d.zeichen} ${d.name} – keine Pfeile, stoßen`)
-        : wf.fern ? (ich.munition > 0 ? `${d.zeichen} ${d.name} · ${ich.munition} Schuss${pfeile}` : `${d.zeichen} ${d.name} – keine Munition, stoßen${pfeile}`)
-        : `${d.zeichen} ${d.name}${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}${pfeile}`;
+      const pfeile = ich.pfeile && !wf?.pfeil ? ` · ➶ ${ich.pfeile} Pfeile` : '';
+      let waffe;
+      if (!wf) waffe = `✊ Unbewaffnet – stoßen${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}${pfeile}`;
+      else if (wf.fern) {
+        // „🔫 Pistole 12/15 · 48“: Magazin/Max · Vorrat (Pfeile bzw. Granaten beim Armbrust/Granatwerfer)
+        const vorrat = vorratVon(ich, wf), leer = !(ich.magazin > 0) && vorrat <= 0;
+        waffe = `${d.zeichen} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ' · 🔄 lädt nach' : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
+      } else waffe = `${d.zeichen} ${d.name}${ich.munition ? ` · 🧰 ${ich.munition} Schuss` : ''}${pfeile}`;
       textSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
         + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
+      this.waffenplaetzeZeigen(ich);
+      // Nachladen-Knopf (Handy; am PC Taste R): nur wenn das Magazin nicht voll ist und Vorrat da ist
+      const nk = $('nachladenknopf'); nk.onclick = () => raum.send('nachladen');
+      const kannLaden = !!wf?.fern && !ich.unten && !(ich.zombie > 0) && ((ich.nachladen > 0) || ((ich.magazin ?? 0) < (ich.magmax || wf.magazin) && vorratVon(ich, wf) > 0));
+      nk.style.display = kannLaden ? 'block' : 'none';
+      nk.classList.toggle('ladet', ich.nachladen > 0);
+      const nt = ich.nachladen > 0 ? `🔄 lädt … ${Math.round(ich.nachladen * 100)} %` : '🔄 Nachladen (R)';
+      if (nk.textContent !== nt) nk.textContent = nt;
       textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gemeinsam`);
-      const safe = ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
+      const safe = ich.sicher === 'lager' ? { id: 'lager', name: 'Bundeswehr-Lager', lager: true } : ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
-      if (safe) {
+      if (safe?.lager) textSetzen('sichername', `🛡 ${safe.name} · bewacht`);
+      else if (safe) {
         const bar = Math.round(s.safes.get(safe.id)?.barrikade ?? 0);
         textSetzen('sichername', `🛡 ${safe.name} · Barrikade ${bar} %`);
       }
@@ -2677,6 +2712,39 @@ class Ort extends Phaser.Scene {
     if (h.innerHTML !== hinweis) h.innerHTML = hinweis;
   }
 
+  // Waffenplätze in der Kopfleiste: 1 Haupt (links), 2 Neben (rechts), 3 Ersatz; Antippen wechselt, Taste F schaltet weiter
+  waffenplaetzeZeigen(ich) {
+    const leiste = $('waffenplaetze');
+    const namen = ['Haupt', 'Neben', 'Ersatz'], waffen = [ich.wp0, ich.wp1, ich.wp2];
+    waffen[ich.wplatz ?? 0] = ich.waffe;
+    const schluessel = waffen.map((w, i) => `${w}${i === ich.wplatz ? '*' : ''}`).join('|');
+    if (schluessel === this.waffenplatzSchluessel) return;
+    this.waffenplatzSchluessel = schluessel;
+    leiste.innerHTML = '';
+    waffen.forEach((w, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = (i === (ich.wplatz ?? 0) ? 'aktiv ' : '') + (w ? '' : 'leer');
+      b.textContent = `${i + 1} ${w ? DINGE[w]?.zeichen ?? '?' : '–'} ${namen[i]}`;
+      b.title = `${namen[i]}: ${w ? DINGE[w]?.name : 'leer'} (Taste F wechselt)`;
+      b.onclick = e => { e.stopPropagation(); raum.send('waffenplatz', { platz: i }); };
+      leiste.appendChild(b);
+    });
+  }
+
+  // Nachlade-Fortschritt als Ring um die Figur (alle Spieler)
+  ladeRingeZeichnen() {
+    const g = this.ladeRing ??= this.add.graphics().setDepth(60);
+    g.clear();
+    for (const [id, p] of raum.state.spieler) {
+      if (!(p.nachladen > 0) || (p.ebene ?? '') !== this.aktEbene) continue;
+      const f = this.figuren.get(id), x = id === meineId && this.lokal ? this.lokal.x : f?.x, y = id === meineId && this.lokal ? this.lokal.y : f?.y;
+      if (x === undefined) continue;
+      g.lineStyle(3, 0x000000, 0.45).beginPath().arc(x, y, 17, 0, Math.PI * 2).strokePath();
+      g.lineStyle(3, 0xffb300, 0.95).beginPath().arc(x, y, 17, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.nachladen)).strokePath();
+    }
+  }
+
   rucksackZeigen(ich) {
     const schluessel = ich.plaetze + ':' + [...ich.rucksack].join(',');
     if (schluessel === this.rucksackSchluessel) return;
@@ -2702,7 +2770,7 @@ function popupAuf(knopf, platz, ding) {
   const titel = document.createElement('div');
   titel.className = 'titel'; titel.textContent = dingText(ding);
   const nutzen = document.createElement('button');
-  nutzen.textContent = DINGE[ding]?.waffe ? 'In die Hand' : ding === 'granate' ? 'Werfen' : ding === 'bretter' ? 'Wofür?' : 'Benutzen';
+  nutzen.textContent = DINGE[ding]?.waffe ? 'In die Hand' : ding === 'granate' ? 'Werfen' : ding === 'radio' ? 'Einschalten' : ding === 'bretter' ? 'Wofür?' : 'Benutzen';
   nutzen.onclick = () => { raum.send('benutze', { platz }); popupZu(); };
   const weg = document.createElement('button');
   weg.textContent = 'Wegwerfen'; weg.className = 'zweit';

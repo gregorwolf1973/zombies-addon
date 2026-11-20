@@ -56,11 +56,11 @@ test('Durchsuchen füllt den Rucksack, leerer Behälter bleibt leer', async () =
     assert.ok(b, 'kein freistehender Behälter im Safe Room');
     p.x = b.x; p.y = b.y + 1;
     raum.setzeInhalt(b.id, ['wasser', 'munition', 'verband']);
-    const m0 = p.munition, r0 = p.rucksack.length;
+    const m0 = p.munition + p.magazin, r0 = p.rucksack.length;   // Magazin + Vorrat
     c.send('aktion');
     assert.ok(await bis(() => p.aktion === 'durchsuchen'), 'Aktion startet nicht');
     assert.ok(await bis(() => p.aktion === '' && raum.state.behaelter.get(b.id).rest === 0, 4000), 'nicht fertig');
-    assert.equal(p.munition, m0 + 12);
+    assert.equal(p.munition + p.magazin, m0 + 12);
     assert.equal(p.rucksack.length, r0 + 2);
     assert.ok(await bis(() => c.state.behaelter.get(b.id)?.rest === 0), 'Client sieht leeren Behälter nicht');
     // Bewegen bricht ab
@@ -110,9 +110,9 @@ test('Benutzen: Wasser, Konserve, Verband, Waffe wechseln', async () => {
     assert.ok(await bis(() => p.hp >= 75));
     c.send('benutze', { platz: 0 });
     assert.ok(await bis(() => p.waffe === 'schlaeger'));
-    assert.deepEqual([...p.rucksack], ['pistole']);
-    c.send('wegwerfen', { platz: 0 });
-    assert.ok(await bis(() => p.rucksack.length === 0));
+    // freier Waffenplatz: die Pistole bleibt im Platz „Haupt“, der Schläger kommt auf „Neben“ – nichts im Rucksack
+    assert.deepEqual([...p.rucksack], []);
+    assert.equal(p.wp0, 'pistole'); assert.equal(p.wplatz, 1);
   } finally { await c.leave(); }
 });
 
@@ -173,7 +173,7 @@ test('Speichern: Rucksack und Platz im Safe Room bleiben, draußen → zurück i
   ({ c, raum, p } = await beitreten('Vroni2', id));
   try {
     assert.deepEqual([...p.rucksack], ['verband', 'bretter']);
-    assert.equal(p.munition, 33);
+    assert.equal(p.munition + p.magazin, 33);   // Magazin + Vorrat
     assert.equal(p.name, 'Vroni2');
     assert.equal(p.ebene, s.ebene, 'nicht im Safe Room aufgetaucht');
     // jetzt draußen verlassen

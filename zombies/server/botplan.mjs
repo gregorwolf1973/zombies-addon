@@ -4,7 +4,7 @@
 // Rollen: Begleiter (mindestens einer je Mensch, folgt wie bisher) und Sammler (holt Vorräte, setzt den Funkspruch ab,
 // verbarrikadiert, jagt Zombies in Gruppennähe, geht zum Bus). Chat-Befehle der Menschen: botBefehl().
 // Die Hilfsfunktionen aus bots.mjs (geheZu …) kommen als Parameter H, damit es keine Importschleife gibt.
-import { WERTE as W, findeWeg, KACHEL, AKTION_ABSTAND, BUS_ABSTAND, BEUTE, WAFFEN, KISTE_PLAETZE, istNacht, frei, ladenArt, durchsuchDauer, safeRoomVon } from '../client/welt.mjs';
+import { WERTE as W, findeWeg, KACHEL, AKTION_ABSTAND, BUS_ABSTAND, BEUTE, WAFFEN, KISTE_PLAETZE, istNacht, frei, ladenArt, durchsuchDauer, safeRoomVon, munitionGesamt } from '../client/welt.mjs';
 import { EBENE_MUSTER } from '../client/innen.mjs';
 import { hhmm } from './aufgaben.mjs';
 
@@ -55,7 +55,7 @@ const hausPos = h => ({ x: (h.tuer.x + 0.5) * KACHEL, y: (h.tuer.y + 0.5) * KACH
 const nah = (raum, p, menschen) => { const w = weltPos(raum, p); let d = Infinity; for (const m of menschen) d = Math.min(d, abstand(w, weltPos(raum, m))); return d; };
 function bewaffnet(p) {
   const w = WAFFEN[p.waffe];
-  if (w?.fern) return p.munition >= 4 ? 'fern' : null;
+  if (w?.fern) return munitionGesamt(p) >= 4 ? 'fern' : null;
   return w ? 'nah' : null;
 }
 const gesperrt = (bp, key, jetzt) => (bp.gesperrt.get(key) ?? 0) > jetzt;
@@ -134,7 +134,7 @@ function planer(raum, menschen) {
   for (const [sid, p, x] of bots) {
     const pl = x.bot.plan, befehl = x.bot.befehl;
     let rolle = begleiter.has(sid) ? 'begleiter' : 'sammler';
-    const munitionKnapp = WAFFEN[p.waffe]?.fern && p.munition < 3 && !p.rucksack.some(q => WAFFEN[q] && !WAFFEN[q].fern);
+    const munitionKnapp = WAFFEN[p.waffe]?.fern && munitionGesamt(p) < 3 && !p.rucksack.some(q => WAFFEN[q] && !WAFFEN[q].fern);
     const schwach = p.hp < BOTPLAN.hpRueckkehr || munitionKnapp;
     if (rolle === 'sammler' && !befehl && (nacht || schwach || nah(raum, p, menschen) > BOTPLAN.umkreis * 1.3)) rolle = 'begleiter';
     pl.rolle = rolle;

@@ -51,14 +51,15 @@ test('Einstellungen bereinigen: Unsinn wird zu gültigen Werten', () => {
   assert.equal(e.test.zeitraffer, 1); assert.deepEqual(e.test.unsterblich, []);
 });
 
-test('Einstellungen bereinigen: Zombie- und Leichengröße (50–200 %, Vorgabe 100)', () => {
-  assert.equal(bereinige({}).zombieGroesse, 100); assert.equal(bereinige({}).leichenGroesse, 100);
-  const e = bereinige({ zombieGroesse: 500, leichenGroesse: 10 });
-  assert.equal(e.zombieGroesse, 200); assert.equal(e.leichenGroesse, 50);
+test('Einstellungen bereinigen: Menschen- und Zombiegröße (50–200 %, Vorgabe 100), alte Helden-/Soldaten-/Leichenwerte entfallen', () => {
+  assert.equal(bereinige({}).menschenGroesse, 100); assert.equal(bereinige({}).zombieGroesse, 100);
+  const e = bereinige({ menschenGroesse: 10, zombieGroesse: 500, leichenGroesse: 10, heldenGroesse: 90, soldatenGroesse: 90 });
+  assert.equal(e.menschenGroesse, 50); assert.equal(e.zombieGroesse, 200);
+  for (const k of ['leichenGroesse', 'heldenGroesse', 'soldatenGroesse']) assert.equal(k in e, false);
 });
 
-test('Einstellungen bereinigen: Gesamtgröße (50–150 %) und Zombie-Leben (20–500, Vorgabe 100)', () => {
-  assert.equal(bereinige({}).groesseGesamt, 100); assert.equal(bereinige({}).zombieLeben, 100);
+test('Einstellungen bereinigen: Gesamtgröße (50–150 %, Vorgabe 70) und Zombie-Leben (20–500, Vorgabe 100)', () => {
+  assert.equal(bereinige({}).groesseGesamt, 70); assert.equal(bereinige({}).zombieLeben, 100);
   const e = bereinige({ groesseGesamt: 10, zombieLeben: 9999 });
   assert.equal(e.groesseGesamt, 50); assert.equal(e.zombieLeben, 500);
   assert.equal(bereinige({ groesseGesamt: 400, zombieLeben: 1 }).groesseGesamt, 150);

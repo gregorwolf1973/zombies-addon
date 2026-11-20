@@ -19,6 +19,10 @@ const HOT_ZELLE = 96, HOT_RADIUS = 600, HOT_NAH = 4;   // px, px, Kacheln (nähe
 const PUMA_STREIFE = 0.8, PUMA_JAGD = 1.5, PUMA_RUECK = 1.0, PUMA_WENDE = 1.4;   // Kacheln/s Parken, Angriff, Rückwärts; rad/s Wannendrehung
 const KANONE_SCHADEN = 100, KANONE_FLAECHE = 60, KANONE_RADIUS = 30;
 const MG_LAERM = 520, PUMA_LAERM = 760;
+// Munition: jedes MG-Nest und der Puma haben einen Vorrat (Einstellung bundeswehr.mgMunition / pumaMunition, 0 = unbegrenzt). Ist er leer,
+// schweigt die Waffe; dann holen zwei Soldaten Nachschub vom Bundeswehr-Container (bw_container) und füllen sie wieder auf.
+export const MG_MUNITION = 400, PUMA_MUNITION = 200;
+const NACHSCHUB_WARTEN = 4, NACHSCHUB_SOLDATEN = 2;   // Sekunden am Container, Zahl der Träger
 const HEILEN_PRO_SEK = 2;
 const SCAN_TAKT = 0.25;
 const TAU = Math.PI * 2;
@@ -39,7 +43,7 @@ export class Stuetzpunkt {
   }
 
   get sp() { return this.raum.welt.stuetzpunkt; }
-  einst() { return { aktiv: true, falltage: 3, ...(this.raum.einstellungen?.()?.bundeswehr ?? {}) }; }
+  einst() { return { aktiv: true, falltage: 3, mgMunition: MG_MUNITION, pumaMunition: PUMA_MUNITION, ...(this.raum.einstellungen?.()?.bundeswehr ?? {}) }; }
   steht() { return this.raum.state.stuetzpunkt === 'steht'; }
 
   // Spieltage seit Weltbeginn (state.zeit zählt Sekunden Spielzeit, ein Spieltag = tagMinuten echte Minuten)
@@ -49,11 +53,12 @@ export class Stuetzpunkt {
   start(stand, passt) {
     const s = this.raum.state, sp = this.sp;
     s.stuetzpunkt = ''; s.bwTurm = 0;
+    this.nachschub = null;
     this.nester = []; this.puma = null; this.schuetzen = []; this.sHot = { hotZelle: null }; this.hotT = 0; this.ruheT = 0; this.sendT = 0; this.nahT = 0;
     if (!sp) return;
     sp.teile.forEach((t, n) => {
-      if (t.art === 'mgnest') this.nester.push({ n, x: t.x, y: t.y, blick: t.blick, kuehl: 0, salve: 0, takt: 0, scan: 0, ziel: null });
-      else if (t.art === 'puma') this.puma = { n, x: t.turm.x, y: t.turm.y, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null, u: planKoord(sp, t.x, t.y).u, v: planKoord(sp, t.x, t.y).v, weg: [], hot: null, hotZelle: null, scanU: 0, rueckwaerts: false };
+      if (t.art === 'mgnest') this.nester.push({ n, x: t.x, y: t.y, blick: t.blick, kuehl: 0, salve: 0, takt: 0, scan: 0, ziel: null, muni: this.einst().mgMunition });
+      else if (t.art === 'puma') this.puma = { n, x: t.turm.x, y: t.turm.y, muni: this.einst().pumaMunition, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null, u: planKoord(sp, t.x, t.y).u, v: planKoord(sp, t.x, t.y).v, weg: [], hot: null, hotZelle: null, scanU: 0, rueckwaerts: false };
       // jeder Soldat an seinem Posten schießt mit (er bleibt dabei stehen)
       else if (t.art === 'posten' && t.rolle === 'soldat') this.schuetzen.push({ n, x: t.x, y: t.y, hx: t.x, hy: t.y, blick: t.blick ?? 0, w0: t.blick ?? 0, hp: SOLDAT_HP, tot: false, modus: 'post', weg: [], kuehl: 0.5 + (n % 5) * 0.2, scan: 0, ziel: null, kampfT: 99, deckT: DECKUNG_TAKT + (n % 4) });
     });
@@ -173,7 +178,7 @@ export class Stuetzpunkt {
 
   // kurz im Kampf (Ziel gesehen in den letzten Sekunden): alle paar Sekunden einen kleinen Schritt in der Nähe des Postens, true = läuft los
   deckungSuchen(sch, dt) {
-    if (sch.kampfT > 4 || sch.modus === 'zurueck') return false;
+    if (sch.kampfT > 4 || sch.modus === 'zurueck' || sch.modus === 'nachschub') return false;
     sch.deckT -= dt;
     if (sch.deckT > 0) return false;
     sch.deckT = DECKUNG_TAKT * (0.8 + this.raum.rnd() * 0.8);
@@ -214,9 +219,10 @@ export class Stuetzpunkt {
       }
     }
     this.hotT -= dt;
-    if (this.hotT <= 0) { this.hotT = 1; this.einsatzPlanen(); }
+    if (this.hotT <= 0) { this.hotT = 1; this.einsatzPlanen(); this.nachschubPruefen(); }
     let bewegt = false;
     for (const q of this.schuetzen) if (!q.tot && q.weg.length && this.soldatLaufen(q, dt)) bewegt = true;
+    this.nachschubSchritt(dt);
     this.soldatenSenden(dt, bewegt);
   }
 
@@ -231,7 +237,7 @@ export class Stuetzpunkt {
   // alle 1 s: gibt es einen Angriffs-Hotspot, schickt der Stützpunkt die Hälfte der Soldaten (nie mehr als alle außer 2 Wachen) dorthin;
   // nach HOT_RUHE s ohne Hotspot kehren alle auf ihre Posten zurück
   einsatzPlanen() {
-    const lebend = this.schuetzen.filter(q => !q.tot);
+    const lebend = this.schuetzen.filter(q => !q.tot && q.modus !== 'nachschub');   // Munitionsträger bleiben bei ihrem Auftrag
     if (!lebend.length) return;
     const hot = this.hotspot(this.sHot);
     if (!hot || hot.n < HOT_MIN) {
@@ -324,8 +330,59 @@ export class Stuetzpunkt {
     return true;
   }
 
+  // Vorrat: 0 in den Einstellungen = unbegrenzt; sonst zählt jeder Schuss (muni), leer = die Waffe schweigt
+  hatMuni(t, einstellung) { return !(this.einst()[einstellung] > 0) || t.muni > 0; }
+
+  // ---------- Munitionsnachschub ----------
+  // Ist ein MG-Nest oder der Puma leer, schickt das Lager zwei Soldaten (von ihren Posten, nur im Lager) zum Bundeswehr-Container;
+  // sie warten kurz, bringen die Munition zur leeren Waffe (voller Vorrat) und kehren auf ihre Posten zurück. Unterwegs sind sie angreifbar.
+  nachschubPruefen() {
+    if (this.nachschub) return;
+    const sp = this.sp, ziel = [...this.nester, this.puma].find(t => t && t.muni <= 0 && this.einst()[t === this.puma ? 'pumaMunition' : 'mgMunition'] > 0);
+    const cont = sp.teile.find(t => t.art === 'container');
+    if (!ziel || !cont) return;
+    const frei = this.schuetzen.filter(q => !q.tot && q.modus === 'post').sort((a, b) => Math.hypot(a.x - cont.x, a.y - cont.y) - Math.hypot(b.x - cont.x, b.y - cont.y)).slice(0, NACHSCHUB_SOLDATEN);
+    if (!frei.length) return;
+    this.nachschub = { ziel, traeger: frei, phase: 'hin', t: 0 };
+    frei.forEach((q, i) => { q.modus = 'nachschub'; q.ziel = null; q.weg = this.anlaufen(q, cont, i, 42); });
+    this.raum.broadcast('meldung', { text: '📦 Soldaten holen Munition' });
+    this.sendT = 0;
+  }
+
+  // Weg zu einem Gegenstand im Lager: über die Fahrfläche bis in die Nähe, dann auf den letzten Schritten bis auf `nah` px heran
+  anlaufen(q, ziel, k, nah) {
+    const { u, v } = planKoord(this.sp, ziel.x, ziel.y), weg = this.laufWeg(q, u, v, k), l = weg[weg.length - 1];
+    if (l) {
+      const w = Math.atan2(l.y - ziel.y, l.x - ziel.x) + (k ? 0.7 : -0.7);   // zwei Träger nebeneinander
+      weg.push({ x: ziel.x + Math.cos(w) * nah, y: ziel.y + Math.sin(w) * nah });
+    }
+    return weg;
+  }
+
+  nachschubSchritt(dt) {
+    const n = this.nachschub;
+    if (!n) return;
+    n.traeger = n.traeger.filter(q => !q.tot);
+    if (!n.traeger.length) { this.nachschub = null; return; }   // alle Träger gefallen: beim nächsten Mal neue schicken
+    if (n.traeger.some(q => q.weg.length)) return;              // noch unterwegs
+    if (n.phase === 'hin') { n.phase = 'warten'; n.t = 0; return; }
+    if (n.phase === 'warten') {
+      n.t += dt;
+      if (n.t < NACHSCHUB_WARTEN) return;
+      n.phase = 'zurueck';
+      n.traeger.forEach((q, i) => { q.weg = this.anlaufen(q, n.ziel, i, 20); });
+      this.sendT = 0;
+      return;
+    }
+    // Munition übergeben, Träger zurück auf ihre Posten
+    n.ziel.muni = n.ziel === this.puma ? this.einst().pumaMunition : this.einst().mgMunition;
+    for (const q of n.traeger) this.heimschicken(q);
+    this.nachschub = null;
+  }
+
   nestSchritt(nest, dt) {
     nest.kuehl = Math.max(0, nest.kuehl - dt);
+    if (!this.hatMuni(nest, 'mgMunition')) { nest.salve = 0; return; }
     if (nest.salve > 0) {
       nest.takt -= dt;
       if (nest.takt > 0) return;
@@ -350,6 +407,7 @@ export class Stuetzpunkt {
     let z = this.gueltig(nest.ziel, nest.x, nest.y, MG_REICHWEITE);
     if (!z) { nest.ziel = this.waehleZiel(nest.x, nest.y, MG_REICHWEITE); z = this.gueltig(nest.ziel, nest.x, nest.y, MG_REICHWEITE); }
     if (!z) return false;
+    if (this.einst().mgMunition > 0) nest.muni--;
     const treffer = r.rnd() < this.trefferChance;
     const w = Math.atan2(z.y - nest.y, z.x - nest.x) + (treffer ? 0 : (r.rnd() < 0.5 ? -1 : 1) * (0.07 + r.rnd() * 0.08));
     const d = Math.hypot(z.x - nest.x, z.y - nest.y);
@@ -473,7 +531,8 @@ export class Stuetzpunkt {
     const soll = Math.atan2(z.y - p.y, z.x - p.x), diff = diffWinkel(soll, s.bwTurm);
     const schritt = Math.min(Math.abs(diff), PUMA_DREH * dt);
     if (schritt > 0) { let w = s.bwTurm + Math.sign(diff) * schritt; if (w > Math.PI) w -= TAU; if (w < -Math.PI) w += TAU; s.bwTurm = w; }
-    if (Math.abs(diff) > 0.06 || p.kuehl > 0) return;
+    if (Math.abs(diff) > 0.06 || p.kuehl > 0 || !this.hatMuni(p, 'pumaMunition')) return;
+    if (this.einst().pumaMunition > 0) p.muni--;
     p.kuehl = this.einst().pumaPause ?? PUMA_PAUSE;   // Einstellung „Panzer: Schussfolge“ (Sekunden zwischen zwei Schüssen)
     // Treffpunkt: meist genau das Ziel, manchmal etwas daneben; kleiner Flächenschaden um den Einschlag
     const ix = z.x + (r.rnd() - 0.5) * 14, iy = z.y + (r.rnd() - 0.5) * 14;

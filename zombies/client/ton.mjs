@@ -338,6 +338,16 @@ function durstStimme() {
   if (stimme !== 'durstMann' && stimme !== 'durstFrau') { stimme = Math.random() < 0.5 ? 'durstMann' : 'durstFrau'; try { localStorage.setItem('zob_stimme', stimme); } catch {} }
   return stimme;
 }
+// Nachladen: Ton aus der Verwaltung, sonst zwei kurze Klicks (Magazin raus, Magazin rein)
+export function nachladen(x, y) {
+  if (document.hidden) return;
+  if (probe('nachladen', x, y)) return;
+  const z = ort(x, y, 0.6); if (!z) return;
+  rauschen(z, 0.05, { typ: 'highpass', freq: 2500, freqEnde: 5000, laut: 0.45 });
+  ton(z, 0.06, { typ: 'square', freq: 1200, freqEnde: 700, a: 0.002, laut: 0.18 });
+  rauschen(z, 0.07, { typ: 'highpass', freq: 3000, freqEnde: 6000, start: 0.5, laut: 0.55 });
+  ton(z, 0.08, { typ: 'square', freq: 900, freqEnde: 450, start: 0.5, a: 0.002, laut: 0.22 });
+}
 // Hülse fällt zu Boden (nur in Räumen, kurz nach dem Schuss)
 export function huelse(x, y) {
   if (document.hidden) return;
@@ -448,6 +458,28 @@ export function schleifeStarten(id) {
 export function schleifeLaut(h, v) {
   if (!h || !ctx) return;
   h.g.gain.setTargetAtTime(stufe > 0 ? Math.max(0, v) * h.laut : 0, ctx.currentTime, 0.3);
+}
+
+// Radio-Gegenstand: Schleife aus der Zuordnung „Radio“, sonst aus „Autoradio“, sonst erzeugte Musik (kleine Melodie, Rauschen darunter).
+// Wie die Sirene lenkbar (sireneLage / sireneStoppen); null, solange der Ton aus ist.
+export function radioStarten() {
+  if (!ctx) return null;
+  for (const id of ['radio', 'autoradio']) { const h = schleifeStarten(id); if (h) return h; }
+  const g = ctx.createGain(); g.gain.value = 0;
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  if (pan) { g.connect(pan); pan.connect(haupt); } else g.connect(haupt);
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200;
+  const o = ctx.createOscillator(); o.type = 'square';
+  const og = ctx.createGain(); og.gain.value = 0.16;
+  const NOTEN = [262, 330, 392, 330, 294, 349, 440, 349, 262, 392, 523, 392, 330, 294, 262, 196];   // C-Dur-Melodie, Achtel 0,28 s
+  const jetzt = ctx.currentTime;
+  for (let i = 0; i < 330; i++) o.frequency.setValueAtTime(NOTEN[i % NOTEN.length] * (Math.floor(i / 16) % 2 ? 1.122 : 1), jetzt + i * 0.28);
+  o.connect(og); og.connect(f); f.connect(g); o.start();
+  const rs = ctx.createBufferSource(); rs.buffer = rauschPuffer; rs.loop = true;
+  const rf = ctx.createBiquadFilter(); rf.type = 'bandpass'; rf.frequency.value = 3000; rf.Q.value = 0.8;
+  const rg = ctx.createGain(); rg.gain.value = 0.12;
+  rs.connect(rf); rf.connect(rg); rg.connect(g); rs.start();
+  return { g, pan, laut: 0.45, quellen: [o, rs], rate: null, osz: o };
 }
 
 export function sireneStarten() {

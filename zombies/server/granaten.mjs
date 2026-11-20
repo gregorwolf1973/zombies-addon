@@ -35,12 +35,19 @@ export class Granaten {
     return true;
   }
 
+  // Granatwerfer: Bogenschuss auf den Zielpunkt (zx, zy), schlägt nach kurzem Flug ein und explodiert sofort (schaden = Zombieschaden)
+  abfeuern(p, sid, zx, zy, schaden = GRANATE.schadenZombie) {
+    const r = this.raum, flug = GRANATE.flugWerfer;
+    this.liste.push({ x: zx, y: zy, ebene: p.ebene ?? '', t: 0, von: sid, name: p.name, zuender: flug, schaden });
+    r.broadcast('granate', { x1: p.x, y1: p.y, x2: zx, y2: zy, flug, zeit: flug, ebene: p.ebene ?? '', werfer: true });
+  }
+
   schritt(dt) {
     this.zeit += dt;
     for (let i = this.liste.length - 1; i >= 0; i--) {
       const g = this.liste[i];
       g.t += dt;
-      if (g.t >= GRANATE.zuender) { this.liste.splice(i, 1); this.explodiert(g); }
+      if (g.t >= (g.zuender ?? GRANATE.zuender)) { this.liste.splice(i, 1); this.explodiert(g); }
     }
   }
 
@@ -51,7 +58,7 @@ export class Granaten {
       if ((z.ebene ?? '') !== g.ebene) continue;
       const d = Math.hypot(z.x - g.x, z.y - g.y);
       if (d > R || !sichtfrei(welt, g.x, g.y, z.x, z.y)) continue;
-      r.schaden(id, z, GRANATE.schadenZombie, werfer);
+      r.schaden(id, z, g.schaden ?? GRANATE.schadenZombie, werfer);
     }
     for (const p of r.state.spieler.values()) {
       if (p.ebene !== g.ebene || p.unten || Math.hypot(p.x - g.x, p.y - g.y) > R || !sichtfrei(welt, g.x, g.y, p.x, p.y)) continue;

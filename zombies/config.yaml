@@ -1,6 +1,6 @@
 name: "Zombies in Oberbayern"
 description: "Kooperatives Zombie-Survival für 2–10 Spieler im Handy-Browser – Spielserver mit Colyseus"
-version: "0.50.0"
+version: "0.52.0"
 slug: "zombies"
 url: "https://github.com/gregorwolf1973/zombies-addon"
 init: false

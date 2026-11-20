@@ -8,12 +8,12 @@ export const KARTEN = ['geretsried', 'isarauen', 'dorf'];
 export const LEVEL_WELTEN = ['geretsried', 'isarauen'];   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
 export const EVAK_ARTEN = ['bus', 'panzer', 'flugzeug'];   // Evakuierungsarten (server/aufgaben.mjs); '' in den Einstellungen = je Karte
 export const ZEITRAFFER = [1, 5, 10, 60];
-export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20, mp: 30, mg: 45, armbrust: 25, scharfschuetze: 75 };   // Meter
+export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20, mp: 30, mg: 45, armbrust: 25, scharfschuetze: 75, granatwerfer: 45 };   // Meter
 // Zombietypen (Reihenfolge = Nummer der Variante, siehe ZOMBIE_TYPEN im Client)
 export const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // ab 'kaminkehrer': Gemini-Bogen figuren3
 // je Waffe einstellbar: Schaden und Abklingzeit (Sekunden zwischen zwei Schlägen/Schüssen); Vorgabe = Werte aus WAFFEN
-export const WAFFEN_VORGABE = Object.fromEntries(Object.entries(WAFFEN).map(([w, v]) => [w, { schaden: v.schaden, pause: v.pause }]));
+export const WAFFEN_VORGABE = Object.fromEntries(Object.entries(WAFFEN).map(([w, v]) => [w, { schaden: v.schaden, pause: v.pause, ...(v.fern ? { magazin: v.magazin ?? 1, nachlade: v.nachlade ?? 4 } : {}) }]));
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 
 // Spielereignisse, denen auf der Einstellungsseite Tondateien zugeordnet werden
@@ -46,6 +46,8 @@ export const EREIGNISSE = [
   { id: 'durstFrau', name: 'Durst (Frauenstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler'] },
   { id: 'panzerFaehrt', name: 'Panzer fährt', beschreibung: 'Kettenrasseln des Puma, solange er fährt', art: 'schleife', gruppe: 'bundeswehr', kategorien: ['bundeswehr', 'fahrzeuge'] },
   { id: 'chatKlingel', name: 'Chat-Nachricht', beschreibung: 'Klingelton, wenn eine neue Chat-Nachricht eintrifft (dazu kurze Vibration)', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler'] },
+  { id: 'radio', name: 'Radio (Gegenstand)', beschreibung: 'Ein eingeschaltetes Radio spielt ca. 75 s und lockt Zombies an; ohne Zuordnung nimmt das Spiel das Autoradio, sonst erzeugte Musik', art: 'schleife', gruppe: 'musik', kategorien: ['musik', 'bundeswehr'] },
+  { id: 'nachladen', name: 'Nachladen', beschreibung: 'Wenn eine Waffe nachgeladen wird (ohne Datei ein kurzer Klick)', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
   { id: 'huelse', name: 'Hülse fällt', beschreibung: 'In Räumen kurz nach einem Schuss', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
 ];
 
@@ -122,11 +124,9 @@ export function bereinige(e = {}, alt = {}) {
     tagAb: Math.round(zahl(e.tagAb ?? a.tagAb, 240, 660, 420) / 15) * 15,      // ab dieser Uhrzeit (Minuten) ganz hell, 2 h Dämmerung davor
     nachtAb: Math.round(zahl(e.nachtAb ?? a.nachtAb, 1080, 1439, 1290) / 15) * 15,   // ab dieser Uhrzeit ganz dunkel
     nachtDunkel: Math.round(zahl(e.nachtDunkel ?? a.nachtDunkel, 30, 100, 92)),       // Nachtdunkelheit in % (100 = fast schwarz)
-    zombieGroesse: Math.round(zahl(e.zombieGroesse ?? a.zombieGroesse, 50, 200, 100)),   // Darstellungsgröße der Zombies in % (100 = normal)
-    leichenGroesse: Math.round(zahl(e.leichenGroesse ?? a.leichenGroesse, 50, 200, 100)), // Darstellungsgröße der Leichen in %
-    heldenGroesse: Math.round(zahl(e.heldenGroesse ?? a.heldenGroesse, 50, 200, 85)),     // Darstellungsgröße der Helden in % (Bezug wie Zombies; 85 = ca. 15 % kleiner als früher)
-    soldatenGroesse: Math.round(zahl(e.soldatenGroesse ?? a.soldatenGroesse, 50, 200, 100)),   // Darstellungsgröße der Soldaten/Ärzte/Verwundeten im Lager in % (100 = so groß wie ein Held bei 100 %)
-    groesseGesamt: Math.round(zahl(e.groesseGesamt ?? a.groesseGesamt, 50, 150, 100)),   // Gesamtgröße (Zombies + Leichen) in %, multipliziert mit den Einzelwerten
+    menschenGroesse: Math.round(zahl(e.menschenGroesse ?? a.menschenGroesse, 50, 200, 100)),   // Darstellungsgröße ALLER Menschen in % (100 = alle gleich breit, Schulterbreite)
+    zombieGroesse: Math.round(zahl(e.zombieGroesse ?? a.zombieGroesse, 50, 200, 100)),   // Zombiegröße im Verhältnis zu den Menschen in % (100 = gleich breit; Leichen folgen automatisch)
+    groesseGesamt: Math.round(zahl(e.groesseGesamt ?? a.groesseGesamt, 50, 150, 70)),   // Gesamtgröße in % (Menschen, Zombies, Leichen, Füße), multipliziert mit den Einzelwerten
     zombieLeben: Math.round(zahl(e.zombieLeben ?? a.zombieLeben, 20, 500, 100)),         // Lebenspunkte eines Zombies (100 = normal)
     menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50)),         // Bewohner zu Beginn einer Welt
     verwandlung: Math.round(zahl(e.verwandlung ?? a.verwandlung, 1, 240, 30)),   // Menschen: Spielminuten vom Biss bis zur Verwandlung in einen Zombie
@@ -144,6 +144,10 @@ export function bereinige(e = {}, alt = {}) {
     waffen: Object.fromEntries(Object.entries(WAFFEN_VORGABE).map(([w, v]) => [w, {
       schaden: Math.round(zahl(e.waffen?.[w]?.schaden ?? a.waffen?.[w]?.schaden, 1, 500, v.schaden)),
       pause: Math.round(zahl(e.waffen?.[w]?.pause ?? a.waffen?.[w]?.pause, 0.05, 5, v.pause) * 100) / 100,
+      ...(v.magazin ? {
+        magazin: Math.round(zahl(e.waffen?.[w]?.magazin ?? a.waffen?.[w]?.magazin, 1, 150, v.magazin)),   // Schuss je Magazin
+        nachlade: Math.round(zahl(e.waffen?.[w]?.nachlade ?? a.waffen?.[w]?.nachlade, 0.5, 10, v.nachlade) * 10) / 10,   // Sekunden zum Nachladen
+      } : {}),
     }])),
     toeneVorbelegt: Array.isArray(e.toeneVorbelegt) ? e.toeneVorbelegt.filter(x => typeof x === 'string').slice(0, 50) : (a.toeneVorbelegt ?? []),
     zombies: {
@@ -190,6 +194,8 @@ export function bereinige(e = {}, alt = {}) {
     bundeswehr: {
       aktiv: typeof bw.aktiv === 'boolean' ? bw.aktiv : true,                 // Stützpunkt schießt, handelt und kann fallen
       pumaPause: Math.round(zahl(bw.pumaPause, 0.1, 10, 2.5) * 10) / 10,     // Panzer (Puma): Sekunden zwischen zwei Schüssen
+      mgMunition: Math.round(zahl(bw.mgMunition, 0, 5000, 400)),             // Munition je MG-Nest (0 = unbegrenzt); leer: Soldaten holen Nachschub
+      pumaMunition: Math.round(zahl(bw.pumaMunition, 0, 2000, 200)),         // Munition des Puma (0 = unbegrenzt)
       falltage: Math.round(zahl(bw.falltage, 0, 30, 3)),                      // fällt nach so vielen Spieltagen seit Weltbeginn (0 = nie)
       leopardReichweite: Math.round(zahl(bw.leopardReichweite, 5, 80, 29)),   // Evakuierungspanzer Leopard 2A7: Reichweite des MG in Metern
       leopardPause: Math.round(zahl(bw.leopardPause, 0.1, 5, 0.4) * 10) / 10, // … Sekunden zwischen zwei Schüssen
@@ -207,13 +213,13 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, zombieGroesse: 100, leichenGroesse: 100, heldenGroesse: 85, soldatenGroesse: 100, groesseGesamt: 100, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { geretsried: 12, isarauen: 12 }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { geretsried: 12, isarauen: 12 }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50, hordeZielMin: 2, hordeZielMax: 5, hordeZieleZeigen: false, hordeTruppMin: 5, hordeTruppMax: 15, hordeReichweite: 18, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '' },
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
-    bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true },
+    bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, mgMunition: 400, pumaMunition: 200 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     toene: {},

@@ -14,7 +14,7 @@ export function naheBodenDinge(boden, ich) {
 
 // braucht der Gegenstand einen Rucksackplatz? (Waffe/Munition/Lampe/Kleidung werden direkt genutzt)
 export function brauchtPlatz(ding, ich) {
-  return !((DINGE[ding]?.waffe && !ich.waffe) || ding === 'munition' || ding === 'pfeil' || (ding === 'taschenlampe' && !(ich.lampe > 0)) || (ding === 'kleidung' && !(ich.kleidung > 0)));
+  return !((DINGE[ding]?.waffe && !ich.waffe) || ding === 'munition' || ding === 'pfeil' || ding === 'granate40' || (ding === 'taschenlampe' && !(ich.lampe > 0)) || (ding === 'kleidung' && !(ich.kleidung > 0)));
 }
 
 let leiste = null;

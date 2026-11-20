@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.52.0 – 20.11.2026
+
+- Magazine und Nachladen: jede Schusswaffe hat ein Magazin, Nachladen 4 s (je Waffe einstellbar), Taste R bzw. Knopf „🔄 Nachladen“, HUD zeigt Magazin/Max · Vorrat.
+- Waffenplätze Haupt/Neben/Ersatz als Leiste im HUD, Taste F wechselt; leere Waffe wird automatisch gewechselt.
+- Neue Waffe Granatwerfer (selten bei der Bundeswehr, Bogenschuss, Explosion wie Handgranate).
+- Radio als Lockmittel: abstellen, 75 s Lärm lockt Zombies und die Horde.
+- Bundeswehr-Lager ist ein Safe House (solange es steht) mit 4 Vorratskisten; MG-Nester und Puma haben begrenzte Munition (400/200, einstellbar), leer holen 2 Soldaten Nachschub vom Container. WELT_VERSION 17.
+- Größen vereinheitlicht: ein Regler „Menschengröße“ für alle Menschen (Mann, Frau, Survivor, Held, Heldin, Bots, Bewohner, Soldaten), „Zombiegröße“ im Verhältnis zu den Menschen, „Gesamtgröße“ für alles (Vorgabe 70 %); Helden-, Soldaten- und Leichengröße entfallen, Vorschau zeigt alle Figuren.
+
 ## 0.49.0 – 20.11.2026
 
 - Zombiehorde zügiger und zusammenhängender: Marschtempo höher, folgt dem Weg stärker, weniger Wuseln und Hängenbleiben, seitliches Ausweichen.
