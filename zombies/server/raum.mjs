@@ -14,6 +14,7 @@ import { imLager } from '../client/stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
 import { Radios } from './radio.mjs';
 import * as WP from './waffenplaetze.mjs';
+import { Moerser } from './moerser.mjs';
 import * as FK from './faehigkeiten.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
@@ -302,6 +303,7 @@ export class SpielRaum extends Room {
     this.stuetzpunkt.start(stand, !!passt);
     this.granaten = new Granaten(this);
     this.radios = new Radios(this);
+    this.moerser = new Moerser(this);   // Panzermörser (Test-Schalter test.moerser)
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     this.tuerAnteileUebernehmen();
     if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === WELT_VERSION) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
@@ -2045,6 +2047,7 @@ export class SpielRaum extends Room {
     this.stuetzpunkt?.schritt(dt);
     this.granaten?.schritt(dt);
     this.radios?.schritt(dt);
+    this.moerser?.schritt(dt);
     this.messen('stuetzpunkt', t0);
     this.sprachSchritt(dt);
     this.aufhelfen(dt);

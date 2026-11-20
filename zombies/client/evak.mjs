@@ -25,3 +25,13 @@ export function imFussabdruck(f, x, y, hl, hb, zu = 0) {
   const u = dx * c + dy * s, v = -dx * s + dy * c;
   return Math.abs(u) <= hl + zu && Math.abs(v) <= hb + zu;
 }
+
+// Hubschrauber NH90 (tools/fahrzeug_bilder.py): Rumpf 16,96 m inkl. Heckrotor, Hauptrotor 16 m. Spielmaßstab 8 px je Meter, Bilder mit 12 Bildpunkten je Meter -> skala 0.667.
+// Container-Ursprung = Rotornabe; der Rumpf sitzt dort um (rumpfX | rumpfY) versetzt (Bug nach rechts)
+export const HELI = { skala: 0.6667, rumpfX: -23.0, rumpfY: 3.65, rotorRadius: 64 };
+
+// Tanklaster als Kulisse neben der Nase des gelandeten A400M (Container-Rahmen des Flugzeugs: nach vorn / nach rechts), 100 px lang
+export const TANKLASTER = { skala: 0.6667, x: 178, y: 72 };
+
+// Panzermörser M113 (Bild 217×128, 3 Bildpunkte je Spielpixel): Wanne 71 px lang; Mörserlager 16,2 px hinter der Mitte, Soldat dahinter, Rohr 24 px
+export const M113 = { skala: 0.3333, lagerX: -16.2, soldatX: -27, rohr: 24, laenge: 71, breite: 42 };

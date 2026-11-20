@@ -12,7 +12,7 @@ import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, ze
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
-import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, evakHudText } from './evakdarstellung.mjs';
+import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
@@ -744,6 +744,7 @@ class Ort extends Phaser.Scene {
     });
     raum.onMessage('bwschuss', m => m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
+    raum.onMessage('moerser', m => moerserSchuss(this, m, raum.state));   // Panzermörser: Granate im hohen Bogen
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => this.granateFliegt(m));
@@ -1229,6 +1230,7 @@ class Ort extends Phaser.Scene {
   // anim: Blaulicht-Bild 1..3 der Polizei (nur mit Bild-Sprite)
   fahrzeugTextur(art, farbe = 0, anim = 0) {
     // Bild-Sprites (autos.webp): Laster je nach Farbe truck/Mini_truck, Polizei mit wechselnden Blaulichtbildern
+    if (art === 'moerser') { const mb = moerserBild(this); if (mb) return mb; }   // M113 mit offener Dachluke
     if (art === 'evakuierung') { const eb = evakFahrzeugBild(this, raum.state); if (eb) return eb; }   // Leopard-Wanne / A400M-Rumpf
     const sprite = art === 'laster' ? autoEintraege('laster') : art === 'polizei' ? autoEintraege('polizei') : [];
     const sp = sprite.length ? sprite[farbe % sprite.length] : null;
@@ -1863,6 +1865,7 @@ class Ort extends Phaser.Scene {
         }
         o.vorher = d;
       }
+      if (f.art === 'moerser') moerserFahrzeug(this, o, dt, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
       if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene)) {
         // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
         const pz = evakArtVon(s) === 'panzer', lx = pz ? -22 : -8, an = Math.floor(this.time.now / 260) % 2;

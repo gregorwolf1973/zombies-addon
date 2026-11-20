@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.53.0 – 20.11.2026
+
+- Hubschrauber der A400M-Evakuierung jetzt ein NH90 (Draufsicht aus einem 3D-Modell, Rumpf und Hauptrotor getrennt – der Rotor dreht sich).
+- Kulisse: Ein Tanklaster steht neben der Nase des gelandeten A400M.
+- Neu, vorbereitet: Panzermörser (M113 mit 120-mm-Mörser und Soldat an der offenen Dachluke). Steilfeuer: Die Granate fliegt im hohen Bogen (Flugzeit nach Entfernung), der Einschlag macht Flächenschaden in Zombiegruppen (in der Mitte voll, am Rand die Hälfte). Schießt nur zwischen Mindest- und Höchstreichweite, erst ab einer Mindestzahl Zombies im Radius und nie, wenn ein Spieler oder Mensch in der Nähe des Einschlags steht; Spieler nehmen nie Schaden. In keiner Karte fest eingebaut: nur der Test-Schalter in der Verwaltung (Karte „Bundeswehr“, Vorgabe aus), dort auch Reichweiten, Pause, Schaden, Radius, Mindestzahl, Sicherheitsabstand und Granatentempo.
+- Grafik-Quellen (CC-BY 4.0) in client/grafik/LIZENZ.txt: NH90 (Waroxed), Tanklaster (simonthedigger), M113 (arc4de; Mörserluke selbst eingezeichnet).
+
 ## 0.52.0 – 20.11.2026
 
 - Magazine und Nachladen: jede Schusswaffe hat ein Magazin, Nachladen 4 s (je Waffe einstellbar), Taste R bzw. Knopf „🔄 Nachladen“, HUD zeigt Magazin/Max · Vorrat.
