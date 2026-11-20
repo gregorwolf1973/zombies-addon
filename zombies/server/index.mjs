@@ -11,6 +11,7 @@ import { Encoder } from '@colyseus/schema';
 // Große Horden (bis 1000 Zombies): Zustandspuffer gleich groß genug anlegen, statt bei jedem Wachsen zu warnen
 Encoder.BUFFER_SIZE = 256 * 1024;
 import { SpielRaum } from './raum.mjs';
+import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
 import { EinstellungsDatei, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
@@ -94,7 +95,7 @@ export async function starte({
       bissSpielerLevel: Object.fromEntries(Object.entries(w.bissSpielerLevel ?? {}).map(([k, v]) => [k, v / 100])),   // je Karte/Level
       waffen: w.waffen,                            // je Waffe { schaden, pause }
       zombieTypen: ZOMBIE_TYPEN.filter(k => w.zombies.typen[k]).map(k => ZOMBIE_TYPEN.indexOf(k)),
-      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, welleMinuten: w.zombies.welle, welleMin: w.zombies.welleMin, welleMax: w.zombies.welleMax, hordeZielMin: w.zombies.hordeZielMin, hordeZielMax: w.zombies.hordeZielMax, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTruppMin: w.zombies.hordeTruppMin, hordeTruppMax: w.zombies.hordeTruppMax, hordeReichweite: w.zombies.hordeReichweite, sichtkegel: w.sichtkegel,
+      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, welleMinuten: w.zombies.welle, welleMin: w.zombies.welleMin, welleMax: w.zombies.welleMax, hordeZielMin: w.zombies.hordeZielMin, hordeZielMax: w.zombies.hordeZielMax, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTruppMin: w.zombies.hordeTruppMin, hordeTruppMax: w.zombies.hordeTruppMax, hordeReichweite: w.zombies.hordeReichweite, ueberraschung: w.zombies.ueberraschung, sichtkegel: w.sichtkegel,
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,
@@ -244,6 +245,7 @@ export async function starte({
     logger: leise ? { info() {}, warn() {}, error: console.error, debug() {}, trace() {} } : undefined,
   });
   spielServer.define('zombies', SpielRaum);
+  spielServer.define('schiessstand', SchiessstandRaum);   // Tutorial: ein eigener Übungsraum je Spieler (nichts davon berührt die Hauptwelt)
   await spielServer.listen(port);
   // Auch die Anfragen zum Beitreten (Colyseus hängt eigene Handler an) laufen durch die Prüfung
   const handler = httpServer.listeners('request');

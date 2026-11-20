@@ -40,9 +40,9 @@ function vorladen() { for (const t of Object.values(zuordnung)) for (const d of 
 const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer ? b : null; };
 
 // ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------
-const MAX_STIMMEN = 8, MAX_ZOMBIE_STIMMEN = 4;
+const MAX_STIMMEN = 10, MAX_ZOMBIE_STIMMEN = 5;
 const ZOMBIE_IDS = new Set(['entdeckt', 'kriecher', 'stoehnen', 'zombieTod', 'zombielandTag', 'zombielandNacht']);
-const MIN_ABSTAND = { entdeckt: 400, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 150, stoehnen: 300, kriecher: 400, menschGebissen: 300, hilferufe: 5000, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
+const MIN_ABSTAND = { entdeckt: 400, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 150, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
 const stimmen = [];            // laufende Einzel-Geräusche aus Dateien: { ende (s), v, zombie, g, src }
 const zuletzt = new Map();     // Ereignis-ID → Zeitpunkt (ms) des letzten Abspielens
 
@@ -90,7 +90,7 @@ function probe(id, x, y, extra = 1) {
 }
 
 // ---------- Horden-Grollen: viele Zombies in Hörweite → ein dauerndes tiefes Brummen statt vieler Einzellaute ----------
-const HORDE_AB = 25;            // ab so vielen Zombies in Hörweite
+const HORDE_AB = 35;            // ab so vielen Zombies in Hörweite
 let hordeKnoten = null, hordeAnzahl = 0, hordeStand = 0;
 export const hordeAktiv = () => hordeAnzahl > HORDE_AB;
 // n = Zahl der Zombies in Hörweite; wird vom Spiel regelmäßig gemeldet (bleibt es aus, verklingt das Grollen)
@@ -115,7 +115,7 @@ function hordeLaut() {
     src.start(); lfo.start(); o1.start(); o2.start();
     hordeKnoten = { g };
   }
-  const ziel = an ? Math.min(0.5, 0.12 + (hordeAnzahl - HORDE_AB) / 120 * 0.4) * (drinnenJetzt ? 0.4 : 1) : 0;   // steigt mit der Zahl, gedeckelt
+  const ziel = an ? Math.min(0.32, 0.08 + (hordeAnzahl - HORDE_AB) / 120 * 0.24) * (drinnenJetzt ? 0.4 : 1) : 0;   // steigt mit der Zahl, gedeckelt
   hordeKnoten.g.gain.setTargetAtTime(ziel, ctx.currentTime, 1.2);
 }
 setInterval(() => { if (hordeKnoten && performance.now() - hordeStand > 6000) { hordeAnzahl = 0; } if (hordeKnoten) hordeLaut(); }, 2000);
@@ -286,7 +286,7 @@ export function zombieWeg(x, y) {
 
 // Stöhnen: tiefe Sägezahnstimme mit Formantfilter und Zittern
 export function stoehnen(x, y, laut = 0.5, kriecht = false) {
-  if (hordeAktiv() && Math.random() < 0.6) return;   // in der Horde: Einzellaute noch seltener
+  if (hordeAktiv() && Math.random() < 0.25) return;   // in der Horde: Einzellaute etwas seltener
   if (probe(kriecht ? 'kriecher' : 'stoehnen', x, y, laut * 1.6)) return;
   if (!abstandOk('stoehnen')) return;
   const z = ort(x, y, laut); if (!z) return;

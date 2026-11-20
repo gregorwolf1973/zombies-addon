@@ -485,10 +485,12 @@ export class Zombiewelle {
       const lebende = [...t.ids].filter(id => z.has(id) && r.zombieInfo.get(id)?.trupp === t);
       t.ids = new Set(lebende);
       const lage = lebende.length ? this.opferLage(t) : null;
-      if (!lage || t.alter > 150) { this.truppEnde(t); continue; }
+      if (!lage || t.alter > 300) { this.truppEnde(t); continue; }
       t.x = lage.x; t.y = lage.y;
       let sieht = false;
       for (const id of lebende) { const q = z.get(id); if (Math.hypot(q.x - lage.x, q.y - lage.y) < W.sichtWeite * 1.6) { sieht = true; break; } }
+      // solange das Opfer in Hörweite ist (Zombies im Umkreis), bleibt der Trupp dran
+      if (!sieht && this.laermOrt && a.alter - this.laermOrt.t < 8 && Math.hypot(this.laermOrt.x - lage.x, this.laermOrt.y - lage.y) < 400) sieht = true;
       t.aus = sieht ? 0 : t.aus + dt;
       if (t.aus > t.ausMax) { this.truppEnde(t); continue; }
       for (const id of lebende) {   // wer sein Ziel verloren hat, geht zur letzten bekannten Stelle, solange der Trupp es noch sucht
@@ -514,7 +516,9 @@ export class Zombiewelle {
       const lo = Math.max(1, e.hordeTruppMin ?? 5), hi = Math.max(lo, e.hordeTruppMax ?? 15);
       let n = lo + r.rnd() * (hi - lo);
       n *= Math.max(0.5, Math.min(2, Math.sqrt(a.ids.size / 40)));   // größere Horde → größerer Trupp
+      n = Math.max(n, a.ids.size * (0.15 + r.rnd() * 0.1));          // mindestens 15–25 % der Horde, damit der Angriff nicht versandet
       if (o.art === 'soldat') n *= 2;
+      n = Math.min(n, Math.max(hi * 4, 60));                          // Obergrenze: Einstellung × 4 (mindestens 60)
       n = Math.max(1, Math.min(Math.round(n), a.ids.size - 3, 300));
       this.truppLoesen(o, kand.slice(0, n).map(q => q[1]));
       neu++;
@@ -523,7 +527,7 @@ export class Zombiewelle {
 
   truppLoesen(o, ids) {
     const a = this.aktiv, r = this.raum;
-    const t = { key: o.key, art: o.art, sid: o.sid, mid: o.mid, x: o.x, y: o.y, ids: new Set(), alter: 0, aus: 0, ausMax: 20 + r.rnd() * 10 };
+    const t = { key: o.key, art: o.art, sid: o.sid, mid: o.mid, x: o.x, y: o.y, ids: new Set(), alter: 0, aus: 0, ausMax: 30 + r.rnd() * 15 };
     for (const id of ids) {
       const info = r.zombieInfo.get(id), q = r.state.zombies.get(id);
       if (!info || !q) continue;
@@ -648,7 +652,16 @@ export class Zombiewelle {
       if (info.taumelT > 0) { info.taumelT -= dt; w += info.taumelW; }
     }
     z.richtung = w;
-    if (!r.zombieGehen(z, w, W.zombieTempoJagen * TEMPO * info.wTempo * dt, dt, info)) {
+    // in Spielernähe langsamer werden, statt an ihm vorbeizumarschieren (Nachzügler bleiben im Sichtfeld, Trupps schnappen zu)
+    let bremse = 1;
+    for (const p of r.state.spieler.values()) {
+      if (p.ebene || p.unten) continue;
+      const dx = p.x - z.x, dy = p.y - z.y;
+      if (Math.abs(dx) > 500 || Math.abs(dy) > 500) continue;
+      const d = Math.hypot(dx, dy);
+      bremse = Math.min(bremse, d < 300 ? 0.45 : 0.45 + (d - 300) / 200 * 0.55);
+    }
+    if (!r.zombieGehen(z, w, W.zombieTempoJagen * TEMPO * info.wTempo * bremse * dt, dt, info)) {
       // seitlich am Hindernis entlang: zuerst flache Winkel zur Zugrichtung, die Seite mit freiem Platz wählen
       const seite = r.rnd() < 0.5 ? -1 : 1;
       let neu = null;

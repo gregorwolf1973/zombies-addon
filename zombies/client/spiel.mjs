@@ -14,6 +14,8 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
+import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
+import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
@@ -100,6 +102,7 @@ function frischLaden(wiederBeitreten) { try { if (wiederBeitreten) sessionStorag
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && await veraltet()) frischLaden(!!window.szene); });
 fetch('info').then(r => r.json()).then(i => { seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
+tutorialKnopf(() => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });   // „🎯 Schießstand / Tutorial“ unter „Mitspielen“
 
 // ---------- Startseite: Freigaben (Mikrofon) abfragen, danach Installation als App anbieten ----------
 let installEreignis = null, freigabenFertig = false;
@@ -312,13 +315,14 @@ async function mitspielen() {
     let r = null;
     let token = null;
     try { token = sessionStorage.getItem('zob_token'); } catch {}
-    if (token) { try { r = await client.reconnect(token); } catch { r = null; } }
-    if (!r) r = await client.joinOrCreate('zombies', { name, code, spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst });
+    if (token && !TUT.an) { try { r = await client.reconnect(token); } catch { r = null; } }
+    const beitritt = { name, code, spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst };
+    if (!r) r = TUT.an ? await client.create('schiessstand', beitritt) : await client.joinOrCreate('zombies', beitritt);   // Schießstand: eigener Raum, nichts für die Hauptwelt
     raum = r;
     ladenZeigen(15, 'Generiere Welt … verbunden');
     ton.musikAusblenden(4);   // Startmusik sanft ausblenden
     meineId = r.sessionId;
-    try { sessionStorage.setItem('zob_token', r.reconnectionToken); } catch {}
+    try { if (!TUT.an) sessionStorage.setItem('zob_token', r.reconnectionToken); } catch {}
     raum.onDrop(() => { $('verbindung').style.display = 'block'; });
     raum.onReconnect(() => {
       $('verbindung').style.display = 'none';
@@ -624,6 +628,9 @@ class Ort extends Phaser.Scene {
     // Helden (Gemini): Körper mit roten Haaren/blauer Jacke zum Umfärben + Stiefel als eigene Ebene
     this.load.spritesheet('helden160', 'grafik/helden160.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('heldenliste', 'grafik/helden160.json');
+    // Bewohner-Typen (Gemini, tools/gemini_buerger_schneiden.py): dick, oma, jogger …
+    this.load.spritesheet('buerger160', 'grafik/buerger160.webp', { frameWidth: 160, frameHeight: 160 });
+    this.load.json('buergerliste', 'grafik/buerger160.json');
     // Auto-Bogen (CC0, tools/autos_schneiden.py); fehlt er, bleiben die Autos gezeichnet
     this.load.image('autos', 'grafik/autos.webp');
     this.load.image('puma-wanne-bild', 'grafik/puma_wanne.webp');   // Draufsicht aus dem 3D-Modell (Bug rechts)
@@ -640,6 +647,7 @@ class Ort extends Phaser.Scene {
     // erst einen Frame zeichnen lassen, damit die Anzeige sichtbar ist – das Bauen der Welt blockiert 1–2 s
     einFrame().then(() => {
       this.erzeuge(); this.bereit = true;
+      if (TUT.an) tutorialStart(this, raum, meineId, { abmelden: () => { abgemeldet = true; } });   // Marken am Boden, Bedienfeld, Auswertung
       // Welt mit dem Server abgleichen (weicht sie ab, stehen Kisten und Wände woanders)
       try { raum.send('weltpruefung', { fp: this.weltFp, ua: navigator.userAgent, karte: raum.state.karte, seed: raum.state.seed, autos: raum.state.autos, b: BREITE, h: HOEHE, kartenB: KARTE?.breite, kartenH: KARTE?.hoehe }); } catch {}
     });
@@ -647,7 +655,8 @@ class Ort extends Phaser.Scene {
 
   erzeuge() {
     const s = raum.state;
-    if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
+    if (TUT.an) { setzeKartengroesse(SS_B, SS_H); this.welt = baueSchiessstandWelt(); }   // Schießstand: kleine erzeugte Übungswelt
+    else if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
     this.weltFp = weltFingerabdruck(this.welt);   // sofort nach dem Aufbau – später kommen Haufen, Leichen usw. aus dem Spielstand dazu
     try { setzeAutoBilder(this.textures.get('autos').getSourceImage(), this.cache.json.get('autosliste')); } catch { setzeAutoBilder(null, null); }   // vor den ersten Kartenstücken
@@ -884,6 +893,7 @@ class Ort extends Phaser.Scene {
     this.figurListe2 = this.cache.json.get('figurenliste2')?.bilder ?? {};
     this.figurListe3 = this.cache.json.get('figurenliste3')?.bilder ?? {};
     this.heldenListe = this.cache.json.get('heldenliste')?.bilder ?? {};
+    this.buergerListe = this.cache.json.get('buergerliste')?.bilder ?? {};
     this.stuecke = new Map();
     this.torGrafik = this.add.graphics().setDepth(1.5);
     this.torStand = -1;
@@ -1819,13 +1829,16 @@ class Ort extends Phaser.Scene {
       let o = this.menschenObj.get(id);
       if (!o) {
         // Bürger (KonitaTutorials) mit Laufanimation, Sorte nach Kennung
-        const sorte = String(m.aussehen ?? '').startsWith('p') ? 'polizist' : 'buerger' + (1 + (id.charCodeAt(id.length - 1) % 3));
-        const bild = this.add.image(0, 0, 'figuren2', this.figurBild2(sorte)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', sorte) * mg());
-        o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, sorte, x: m.x, y: m.y, r: m.richtung };
+        // m.typ: Gemini-Typ (buerger160, Standbild), sonst Bürger/Polizist mit Laufanimation
+        const typ = this.buergerListe?.[m.typ]?.length ? m.typ : '';
+        const sorte = typ || (String(m.aussehen ?? '').startsWith('p') ? 'polizist' : 'buerger' + (1 + (id.charCodeAt(id.length - 1) % 3)));
+        const bogen = typ ? 'buerger160' : 'figuren2', gs = typ ? MENSCH_GROESSE : BOGEN2_GROESSE * 0.95;
+        const bild = this.add.image(0, 0, bogen, typ ? this.buergerListe[typ][0] : this.figurBild2(sorte)).setScale(gs * groesse(bogen, sorte) * mg());
+        o = { box: this.add.container(m.x, m.y, [bild]).setDepth(3.5), bild, sorte, typ, bogen, gs, x: m.x, y: m.y, r: m.richtung };
         this.menschenObj.set(id, o);
       }
       const vx = o.x, vy = o.y;
-      o.bild.setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', o.sorte) * mg());
+      o.bild.setScale(o.gs * groesse(o.bogen, o.sorte) * mg());
       o.x += (m.x - o.x) * glatt; o.y += (m.y - o.y) * glatt;
       if (Math.hypot(m.x - o.x, m.y - o.y) > 200) { o.x = m.x; o.y = m.y; }   // aus Haus oder Bus aufgetaucht
       o.r = Phaser.Math.Angle.RotateTo(o.r, m.richtung, dt * 8);
@@ -1833,7 +1846,8 @@ class Ort extends Phaser.Scene {
       const weg = Math.hypot(o.x - vx, o.y - vy);
       o.lauf = (o.lauf ?? 0) + weg;
       o.box.setPosition(o.x, o.y).setRotation(o.r);
-      o.bild.setFrame(this.figurBild2(o.sorte, weg > 0.2 ? Math.floor(o.lauf / 7) : 0));
+      if (o.typ) o.bild.setAngle(weg > 0.2 ? Math.sin(o.lauf / 5) * 5 : 0);   // Standbild: leichtes Wiegen beim Gehen
+      else o.bild.setFrame(this.figurBild2(o.sorte, weg > 0.2 ? Math.floor(o.lauf / 7) : 0));
       o.box.setVisible(m.sichtbar && this.aktEbene === '');
       o.bild.setTint(m.infiziert ? 0xb5d99c : 0xffffff);
     }
@@ -2597,7 +2611,7 @@ class Ort extends Phaser.Scene {
     }
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {
-      this.stoehnZeit = 1.5 + Math.random() * 3;
+      this.stoehnZeit = 1 + Math.random() * 2;
       // nur die nächsten ~6 Zombies kommen als Einzellaut in Frage; die Zahl in Hörweite steuert das Horden-Grollen
       const nahe = [];
       let hoerbar = 0;
@@ -2606,9 +2620,18 @@ class Ort extends Phaser.Scene {
         const d = Math.hypot(z.x - this.lokal.x, z.y - this.lokal.y);
         if (d < 700) { hoerbar++; nahe.push({ z, d }); }
       }
-      nahe.sort((p, q) => p.d - q.d); nahe.length = Math.min(nahe.length, 6);
+      nahe.sort((p, q) => p.d - q.d);
+      // die 6 nächsten plus ein zufälliger weiterer (Einzelne am Rand): sonst belegt eine dichte Horde allein alle Plätze
+      const rest = nahe.slice(6), wahl = nahe.slice(0, 6);
+      if (rest.length) wahl.push(rest[Math.floor(Math.random() * rest.length)]);
       ton.horde(hoerbar);
-      if (nahe.length) { const z = nahe[Math.floor(Math.random() * nahe.length)].z; ton.stoehnen(z.x, z.y, z.kriecht ? 0.35 : 0.55, z.kriecht); }
+      // jagende Zombies klingen eher (aufgeregter), bis zu zwei Laute je Runde
+      const jagende = wahl.filter(q => q.z.jagt);
+      for (let k = 0; k < (wahl.length > 3 && Math.random() < 0.5 ? 2 : 1) && wahl.length; k++) {
+        const quelle = jagende.length && Math.random() < 0.5 ? jagende : wahl;
+        const z = quelle[Math.floor(Math.random() * quelle.length)].z;
+        ton.stoehnen(z.x, z.y, z.kriecht ? 0.35 : 0.55, z.kriecht);
+      }
     }
   }
 
@@ -2637,7 +2660,8 @@ class Ort extends Phaser.Scene {
       nk.classList.toggle('ladet', ich.nachladen > 0);
       const nt = ich.nachladen > 0 ? `🔄 lädt … ${Math.round(ich.nachladen * 100)} %` : '🔄 Nachladen (R)';
       if (nk.textContent !== nt) nk.textContent = nt;
-      textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gemeinsam`);
+      textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gesamt`);
+      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} verwandelt · 🧟 ${s.zombies.size} unterwegs`);
       const safe = ich.sicher === 'lager' ? { id: 'lager', name: 'Bundeswehr-Lager', lager: true } : ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
       if (safe?.lager) textSetzen('sichername', `🛡 ${safe.name} · bewacht`);
@@ -2715,24 +2739,38 @@ class Ort extends Phaser.Scene {
     if (h.innerHTML !== hinweis) h.innerHTML = hinweis;
   }
 
-  // Waffenplätze in der Kopfleiste: 1 Haupt (links), 2 Neben (rechts), 3 Ersatz; Antippen wechselt, Taste F schaltet weiter
+  // Waffenplätze: senkrechte Knopfreihe unten links über dem Inventar (1 Haupt, 2 Neben, 3 Ersatz); Antippen wechselt, Taste F schaltet weiter.
+  // Jeder Knopf zeigt Symbol, Kurzname, Magazin/Max und klein den Vorrat; beim Nachladen läuft ein Balken im aktiven Knopf.
   waffenplaetzeZeigen(ich) {
     const leiste = $('waffenplaetze');
-    const namen = ['Haupt', 'Neben', 'Ersatz'], waffen = [ich.wp0, ich.wp1, ich.wp2];
-    waffen[ich.wplatz ?? 0] = ich.waffe;
-    const schluessel = waffen.map((w, i) => `${w}${i === ich.wplatz ? '*' : ''}`).join('|');
-    if (schluessel === this.waffenplatzSchluessel) return;
-    this.waffenplatzSchluessel = schluessel;
-    leiste.innerHTML = '';
-    waffen.forEach((w, i) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = (i === (ich.wplatz ?? 0) ? 'aktiv ' : '') + (w ? '' : 'leer');
-      b.textContent = `${i + 1} ${w ? DINGE[w]?.zeichen ?? '?' : '–'} ${namen[i]}`;
-      b.title = `${namen[i]}: ${w ? DINGE[w]?.name : 'leer'} (Taste F wechselt)`;
-      b.onclick = e => { e.stopPropagation(); raum.send('waffenplatz', { platz: i }); };
-      leiste.appendChild(b);
+    const namen = ['Haupt', 'Neben', 'Ersatz'], waffen = [ich.wp0, ich.wp1, ich.wp2], akt = ich.wplatz ?? 0;
+    waffen[akt] = ich.waffe;
+    const mg = [ich.mg0, ich.mg1, ich.mg2], mx = [ich.mx0, ich.mx1, ich.mx2];
+    mg[akt] = ich.magazin ?? 0;
+    const zeilen = waffen.map((w, i) => {
+      const d = w ? DINGE[w] : null, wf = w ? WAFFEN[w] : null;
+      const vorrat = wf?.fern ? vorratVon(ich, wf) : 0;
+      return { w, d, wf, vorrat, m: mg[i] ?? 0, max: mx[i] || (wf?.fern ? wf.magazin : 0) };
     });
+    const schluessel = zeilen.map((z, i) => `${z.w}:${z.m}/${z.max}:${z.vorrat}${i === akt ? '*' : ''}`).join('|');
+    if (schluessel !== this.waffenplatzSchluessel) {
+      this.waffenplatzSchluessel = schluessel;
+      leiste.innerHTML = '';
+      zeilen.forEach((z, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        const leer = z.wf?.fern && z.m <= 0 && z.vorrat <= 0;
+        b.className = (i === akt ? 'aktiv ' : '') + (z.w ? '' : 'leer ') + (leer ? 'rot' : '');
+        const kurz = z.d ? z.d.name.replace(/^Jagd/, '').replace(/^Baseball/, '').trim().replace(/^./, c => c.toUpperCase()) : 'leer';
+        const zahl = z.wf?.fern ? `<span class="mag">${z.m}/${z.max}</span><span class="vor">${z.vorrat}</span>` : '';
+        b.innerHTML = `<span class="nr">${i + 1}</span><span class="zz">${z.d ? z.d.zeichen : '–'}</span><span class="nm">${kurz}</span>${zahl}<i class="lad"></i>`;
+        b.title = `${namen[i]}: ${z.d ? z.d.name : 'leer'}${z.wf?.fern ? ` – Magazin ${z.m}/${z.max}, Vorrat ${z.vorrat}` : ''} (Taste F wechselt)`;
+        b.onclick = e => { e.stopPropagation(); raum.send('waffenplatz', { platz: i }); };
+        leiste.appendChild(b);
+      });
+    }
+    const lad = leiste.children[akt]?.querySelector('.lad');   // Nachladefortschritt (ohne Neuaufbau)
+    if (lad) lad.style.width = ich.nachladen > 0 ? `${Math.round(Math.min(1, ich.nachladen) * 100)}%` : '0';
   }
 
   // Nachlade-Fortschritt als Ring um die Figur (alle Spieler)

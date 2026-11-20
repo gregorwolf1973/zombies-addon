@@ -2,6 +2,14 @@
 // Ausgleichsfaktor je Bild („<bogen>:<bild>“) relativ zum bisherigen Maßstab (0,42 bzw. 0,476):
 // Menschen = Schulterbreite des Survivors (25.7 px), Zombies ×1.0 (25.7 px), Leichen-Körperlänge ×1.9 (48.8 px).
 export const GROESSE = {
+  'buerger160:bauarbeiter': 0.542,
+  'buerger160:dick': 0.623,
+  'buerger160:geschaeftsfrau': 0.537,
+  'buerger160:jogger': 0.561,
+  'buerger160:oma': 0.612,
+  'buerger160:opa': 0.542,
+  'buerger160:rucksack': 0.498,
+  'buerger160:teenager': 0.498,
   'figuren2:arzt': 0.963,
   'figuren2:buerger1': 0.963,
   'figuren2:buerger2': 0.963,

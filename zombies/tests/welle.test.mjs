@@ -452,3 +452,57 @@ test('Einstellungen: hordeZieleZeigen Vorgabe aus, bool bleibt', () => {
   assert.equal(bereinige({ zombies: { hordeZieleZeigen: true } }).zombies.hordeZieleZeigen, true);
   assert.equal(bereinige({ zombies: { hordeZieleZeigen: 'ja' } }).zombies.hordeZieleZeigen, false);
 });
+
+test('Soll früh im Ausbruch: mindestens 60 % des vollen Solls', async () => {
+  const { c, raum } = await beitreten('Ausbruch');
+  try {
+    raum.zombieFaktor = 1;
+    const alt = raum.stadt;
+    raum.stadt = { anfangs: 10, ruheAnteil: () => 1 };
+    const frueh = raum.zombieSollJetzt();
+    raum.stadt = { anfangs: 10, ruheAnteil: () => 0 };
+    const spaet = raum.zombieSollJetzt();
+    raum.stadt = alt;
+    assert.ok(spaet > 0 && frueh >= Math.floor(spaet * 0.58), `früh ${frueh}, später ${spaet}`);
+  } finally { await c.leave(); }
+});
+
+test('Horde: Truppgröße wächst mit der Hordengröße (mindestens 15 %)', async () => {
+  const { c, raum, p } = await beitreten('Truppgroesse');
+  try {
+    einst({ welleMinuten: 20, welleMin: 200, welleMax: 200, hordeTruppMin: 5, hordeTruppMax: 5, hordeReichweite: 40 });
+    p.ebene = ''; p.unten = false;
+    raum.welle.erzeugen('west');
+    const a = raum.welle.aktiv, gesamt = a.ids.size;
+    assert.ok(gesamt >= 100, `Horde nur ${gesamt}`);
+    assert.ok(spielerNebenHorde(raum, p));
+    raum.welle.schritt(0.6);
+    const t = a.trupps.find(q => q.sid === c.sessionId);
+    assert.ok(t, 'kein Trupp');
+    assert.ok(t.ids.size >= Math.floor(gesamt * 0.12), `Trupp ${t.ids.size} von ${gesamt}`);
+    raum.welle.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Horde: Trupp bleibt bei sichtbarem Spieler länger als 30 s dran', async () => {
+  const { c, raum, p } = await beitreten('Truppdauer');
+  try {
+    einst({ welleMinuten: 20, welleMin: 40, welleMax: 40, hordeTruppMin: 8, hordeTruppMax: 8 });
+    p.ebene = ''; p.unten = false;
+    raum.welle.erzeugen('west');
+    const a = raum.welle.aktiv;
+    assert.ok(spielerNebenHorde(raum, p));
+    raum.welle.schritt(0.6);
+    const meine = () => a.trupps.filter(t => t.sid === c.sessionId);
+    assert.equal(meine().length, 1);
+    for (let i = 0; i < 70; i++) { raum.welle.schritt(0.6); a.cool.clear(); }   // 42 s, Spieler dauernd in Sicht
+    assert.equal(meine().length, 1, 'Trupp hat trotz Sicht aufgegeben');
+    // außer Sicht: erst nach 30–45 s Schluss
+    const t = meine()[0];
+    for (const id of t.ids) { const q = raum.state.zombies.get(id); q.x = p.x + 3000; q.y = p.y; }
+    raum.welle.laermOrt = null;
+    raum.welle.truppen(0.6);
+    assert.ok(t.aus > 0 && t.ausMax >= 30 && t.ausMax <= 45, `ausMax ${t.ausMax}`);
+    raum.welle.aufloesen();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});

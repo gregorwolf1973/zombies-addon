@@ -37,7 +37,7 @@ Möbel (grafik/moebel.webp, moebel.json): mit Google Gemini für dieses Spiel er
 „Laden/Safe Room“, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben); freigestellt, auf Kachelgröße
 (64 px je Kachel) skaliert und angeordnet mit tools/gemini_moebel_schneiden.py.
 
-App-Icons und Favicon (client/icon-*.png, favicon*, apple-touch-icon.png): aus einem von Gregor bereitgestellten Zombie-Bild, Hintergrund mit Google Gemini entfernt (19.11.2026).
+App-Icons, Favicon, Add-on-Icon und Logo (client/icon-*.png, favicon*, apple-touch-icon.png, ../icon.png, ../logo.png): das Zombie-Emoji 🧟 aus „Noto Color Emoji“ (Google), Lizenz SIL Open Font License 1.1 (OFL), auf dunklen Spielgrund (#1b2a1b) gesetzt (20.11.2026). Ersetzt das frühere Foto-Zombie-Icon.
 
 Schützenpanzer Puma (grafik/puma_wanne.webp, puma_turm.webp): Draufsichten, gerendert aus dem 3D-Modell „SPz Puma“
 von 42manako, https://sketchfab.com/3d-models/spz-puma-8e7d946d4b3d4fdeaf458a3fc4226e1b – dort als CC-BY 4.0 angegeben
@@ -66,3 +66,7 @@ https://sketchfab.com/3d-models/fuel-truck-443da3cd0f4547c980e52168bfbe7b76 – 
 Panzermörser (grafik/m113_moerser.webp): Draufsicht, gerendert aus dem 3D-Modell „M113“ von arc4de,
 https://sketchfab.com/3d-models/7fe132c071584049b51d3569726021a0 – CC-BY 4.0; die offene Dachluke mit dem Mörserlager im Heck wurde selbst eingezeichnet
 (tools/fahrzeug_bilder.py), das 120-mm-Rohr zeichnet das Spiel. Im Repo nur die gerenderte Draufsicht.
+
+Bewohner-Typen (grafik/buerger160.webp, buerger160.json): mit Google Gemini für dieses Spiel erzeugt (ein Bildbogen mit
+acht Typen, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben); freigestellt, skaliert und angeordnet mit
+tools/gemini_buerger_schneiden.py.

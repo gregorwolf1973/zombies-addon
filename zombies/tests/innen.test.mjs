@@ -48,7 +48,7 @@ function pruefe(r, info) {
   for (const b of r.behaelter) {
     const [bx, by] = kachel(b);
     assert.equal(hole(bx, by), T.MOEBEL, `${info}: Behälter ${b.id} nicht an einem Möbel`);
-    assert.ok(['schrank', 'kuehlschrank', 'spind', 'bad'].includes(b.art), `${info}: Behälterart ${b.art}`);
+    assert.ok(['schrank', 'kuehlschrank', 'spind', 'bad', 'herd', 'spuele'].includes(b.art), `${info}: Behälterart ${b.art}`);
     assert.ok([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => GEHBAR.has(hole(bx + dx, by + dy))), `${info}: Behälter ${b.id} unerreichbar`);
   }
   for (const z of r.zombiePlaetze) assert.equal(hole(...kachel(z)), T.BODEN, info + ' Zombieplatz');

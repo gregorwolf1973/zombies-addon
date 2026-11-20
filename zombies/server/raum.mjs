@@ -48,6 +48,8 @@ export const Spieler = schema({
   nachladen: t.number(),    // Fortschritt des Nachladens 0..1 (0 = lädt nicht nach)
   wplatz: t.uint8(),        // aktiver Waffenplatz: 0 = Haupt (links), 1 = Neben (rechts), 2 = Ersatz
   wp0: t.string(), wp1: t.string(), wp2: t.string(),   // Waffen der drei Plätze (der aktive spiegelt p.waffe)
+  mg0: t.uint8(), mg1: t.uint8(), mg2: t.uint8(),      // Schuss im Magazin je Waffenplatz (für die Knöpfe im HUD)
+  mx0: t.uint8(), mx1: t.uint8(), mx2: t.uint8(),      // Magazingröße je Waffenplatz (0 = Nahwaffe)
   ebene: t.string(),        // '' = draußen, sonst z. B. 'h5eg', 'h5keller', 'h5dach'
   lampe: t.number(),        // Restzeit der Taschenlampe in Sekunden (leuchtet drinnen von selbst)
   rucksack: t.array("string"),
@@ -94,6 +96,7 @@ export const Zustand = schema({
   phase: t.string(),        // "spiel" | "erwischt"
   zeit: t.number(),         // Spielzeit in Sekunden (wird gespeichert)
   besiegt: t.uint16(),
+  verwandelt: t.uint16(),   // Bewohner, die sich nach einem Biss in Zombies verwandelt haben (wird gespeichert)
   torGeloest: t.uint8(),    // richtig beantwortete Rätsel am Tor (3 = offen)
   level: t.uint8(),         // 1 = erste Karte, nach jedem geschafften Evakuierungsbus eins mehr (server/aufgaben.mjs)
   funk: t.boolean(),        // Funkspruch abgesetzt: der Evakuierungsbus kommt
@@ -239,6 +242,7 @@ export class SpielRaum extends Room {
     this.state.zeit = stand?.zeit ?? 0;
     this.state.uhr = Number.isFinite(stand?.uhr) ? stand.uhr : 8 * 60;   // neue Welt beginnt morgens um acht
     this.state.besiegt = stand?.besiegt ?? 0;
+    this.state.verwandelt = Math.max(0, Math.min(65535, Number(stand?.verwandelt) || 0));
     this.state.torGeloest = Math.min(TOR_RAETSEL, Number(stand?.torGeloest) || 0);
     this.gestellt = new Set(stand?.gestellt ?? []);
     this.offeneRaetsel = new Map();   // sessionId → { id, richtigIndex, seite, richtig, bis }
@@ -449,7 +453,10 @@ export class SpielRaum extends Room {
       // gespeichert wird nur im Safe Room: dort (im Innenraum) geht es weiter; sonst im letzten Safe Room
       // ohne gespeicherten Ort (neues Level): alle im selben Start-Safe-House
       const safe = !extra.letzterSafe && !Number.isFinite(gespeichert.x) && this.startSafe() || this.safeFuer(extra.letzterSafe, gespeichert.x, gespeichert.y);
-      const pos = safe ? this.safePlatz(safe, this.state.spieler.size) : { ...this.freierPlatz(this.welt.start), ebene: '' };
+      // Abmeldung im Bundeswehr-Lager: genau dort wieder einsteigen, solange das Lager steht; sonst Rückfall auf den nächsten Safe Room
+      const imLagerAbgemeldet = gespeichert.lager === true && Number.isFinite(gespeichert.x) && this.state.stuetzpunkt === 'steht' && !!this.welt.stuetzpunkt && imLager(this.welt.stuetzpunkt, gespeichert.x, gespeichert.y);
+      const pos = imLagerAbgemeldet ? { ...this.freierPlatz({ x: gespeichert.x, y: gespeichert.y }, this.state.spieler.size), ebene: '' }
+        : safe ? this.safePlatz(safe, this.state.spieler.size) : { ...this.freierPlatz(this.welt.start), ebene: '' };
       p.x = pos.x; p.y = pos.y; p.ebene = pos.ebene;
     } else {
       p.hp = 100; p.durst = 100; p.hunger = 100; p.besiegt = 0;
@@ -833,7 +840,7 @@ export class SpielRaum extends Room {
     const e = SpielRaum.einstellungen;
     // this.zombieFaktor: Vorgabe nur für diesen Raum (Tests), sonst die Einstellung
     // solange viele Menschen gesund sind, kommen weniger Zombies aus dem Umland – die Gefahr wächst mit dem Ausbruch
-    const ausbruch = this.stadt?.anfangs ? 0.3 + 0.7 * (1 - this.stadt.ruheAnteil()) : 1;
+    const ausbruch = this.stadt?.anfangs ? 0.6 + 0.4 * (1 - this.stadt.ruheAnteil()) : 1;
     return Math.round(zombieSoll(this.state.spieler.size) * (this.zombieFaktor ?? e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1) * ausbruch);
   }
 
@@ -862,7 +869,7 @@ export class SpielRaum extends Room {
     this.tuerAnteileUebernehmen();
     const soll = this.zombieSollJetzt();
     // zu viele Zombies draußen: die am weitesten entfernten, nicht jagenden verschwinden
-    const draussen = [...this.state.zombies.entries()].filter(([id, z]) => !z.ebene && !z.jagt && !this.zombieInfo.get(id)?.welle);
+    const draussen = [...this.state.zombies.entries()].filter(([id, z]) => !z.ebene && !z.jagt && !this.zombieInfo.get(id)?.welle && !this.zombieInfo.get(id)?.bleibt);   // wie beim Nachfüllen: Stadt- und Horden-Zombies zählen nicht
     const spieler = [...this.state.spieler.values()].filter(p => !p.ebene);
     const abstand = z => Math.min(...spieler.map(p => Math.hypot(p.x - z.x, p.y - z.y)), Infinity);
     draussen.sort((a, b) => abstand(b[1]) - abstand(a[1]));
@@ -971,7 +978,7 @@ export class SpielRaum extends Room {
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
       waffe: p.waffe, munition: p.munition, pfeile: p.pfeile, granaten: p.granaten, ...WP.speicherDaten(p, x), rucksack: [...p.rucksack], plaetze: p.plaetze - this.fkRucksack(p), besiegt: p.besiegt, fk: x.fk,
-      startOffen: !!x.startOffen, aussehen: p.aussehen, letzterSafe: x.letzterSafe, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
+      startOffen: !!x.startOffen, aussehen: p.aussehen, letzterSafe: x.letzterSafe, lager: p.sicher === 'lager' && p.zombie <= 0, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
     });
   }
 
@@ -981,7 +988,7 @@ export class SpielRaum extends Room {
     for (const [id, inhalt] of this.inhalte) behaelter[id] = inhalt;
     for (const [id, s] of this.state.safes) safes[id] = { barrikade: Math.round(s.barrikade), kiste: [...s.kiste] };
     this.speicher.speichereWelt({
-      version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, behaelter, safes,
+      version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, verwandelt: this.state.verwandelt, behaelter, safes,
       torGeloest: this.state.torGeloest, level: this.state.level, aufgaben: this.aufgaben?.speichern() ?? null, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen, Math.round(t.barrikade), Math.round(t.hp), t.kaputt]])),
       verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
@@ -1641,12 +1648,17 @@ export class SpielRaum extends Room {
     }
     // ausgebrannt: nichts mehr zu holen
     if ((b.art === 'auto' || b.art === 'bus') && this.state.verbrannt.has((b.art === 'auto' ? 'auto:' : 'bus:') + b.id)) this.setzeInhalt(b.id, []);
+    // Überraschungszombie: beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto springt selten einer heraus (nicht in Safe Rooms/Lager)
+    if (!this.inhalte.has(b.id) && this.ueberraschung(client, p, b)) return;
     if (!this.inhalte.has(b.id)) {
-      const tabelle = BEUTE[b.art] ?? [];
+      let art = b.art;
+      // Belohnung: Schrank/Spind in einem Raum hinter einer Tür mit Rätsel-Schloss
+      if ((art === 'schrank' || art === 'spind') && b.tuer && this.tuerArt(`${b.id.slice(0, b.id.lastIndexOf(':'))}:${b.tuer[0]},${b.tuer[1]}`) === 'raetsel') art = 'spind_belohnung';
+      const tabelle = BEUTE[art] ?? [];
       const funde = [];
       const n = 1 + (this.rnd() < 0.45 ? 1 : 0);
       for (let i = 0; i < n; i++) {
-        const d = ziehe(tabelle, SpielRaum.einstellungen.funde, this.rnd, BEUTE_BONUS[b.art]);
+        const d = ziehe(tabelle, SpielRaum.einstellungen.funde, this.rnd, BEUTE_BONUS[art]);
         if (d) funde.push(d);
       }
       this.setzeInhalt(b.id, funde);
@@ -1656,6 +1668,32 @@ export class SpielRaum extends Room {
     this.setzeInhalt(b.id, inhalt);
     this.aufgaben?.gefunden(b, genommen);
     client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+  }
+
+  // Überraschungszombie (Einstellung zombies.ueberraschung in %): true = Durchsuchen abgebrochen, Zombie steht daneben.
+  // Je Behälter nur einmal (danach geht das Durchsuchen normal).
+  ueberraschung(client, p, b) {
+    if (!['schrank', 'spind', 'container', 'auto'].includes(b.art)) return false;
+    if (p.sicher || safeRoomVon(this.welt, p)) return false;
+    if (!this.ueberrascht) this.ueberrascht = new Set();
+    if (this.ueberrascht.has(b.id)) return false;
+    this.ueberrascht.add(b.id);
+    const prozent = SpielRaum.einstellungen.ueberraschung ?? 3;
+    if (!(this.rnd() * 100 < prozent)) return false;
+    const w = this.wv(p.ebene);
+    for (let versuch = 0; versuch < 24; versuch++) {
+      const a = this.rnd() * Math.PI * 2, d = 18 + this.rnd() * 14;
+      const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+      if (!frei(w, x, y, W.zombieRadius + 1) || !sichtfrei(w, p.x, p.y, x, y)) continue;
+      const id = this.setzeZombie(x, y, p.ebene ?? '');
+      const z = this.state.zombies.get(id), info = this.zombieInfo.get(id);
+      z.jagt = true; z.richtung = Math.atan2(p.y - y, p.x - x);
+      info.ziel = client?.sessionId ?? null; info.steht = false; info.schlaeft = false; info.verloren = 0;
+      this.broadcast('entdeckt', { x, y, ebene: p.ebene ?? '' });
+      client?.send('meldung', { text: '🧟 Ein Zombie springt heraus!' });
+      return true;
+    }
+    return false;   // kein Platz: nichts passiert
   }
 
   // Gegenstände in den Rucksack (Munition direkt zur Pistole); Rest bleibt liegen
@@ -2459,8 +2497,8 @@ export class SpielRaum extends Room {
       const d = Math.hypot(ziel.x - z.x, ziel.y - z.y);
       const sieht = d < W.sichtWeite * 1.6 && sichtfrei(welt, z.x, z.y, ziel.x, ziel.y);
       info.verloren = sieht ? 0 : info.verloren + dt;
-      if (info.verloren > 6 || d > W.sichtWeite * 3) {
-        info.ziel = null; info.punkt = { x: ziel.x, y: ziel.y }; z.jagt = false;
+      if (info.verloren > 10 || d > W.sichtWeite * 3) {
+        info.ziel = null; info.punkt = { x: ziel.x, y: ziel.y }; info.suche = true; z.jagt = false;
       } else {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
         z.richtung = w;
@@ -2496,8 +2534,10 @@ export class SpielRaum extends Room {
     if (info.punkt) {
       // Geräusch nachgehen
       const d = Math.hypot(info.punkt.x - z.x, info.punkt.y - z.y);
-      if (d < 16) { info.punkt = null; info.wechsel = 0; }
-      else {
+      if (d < 16) {
+        info.punkt = null; info.wechsel = 0;
+        if (info.suche) { info.suche = false; info.sucheT = 4; }   // letzter bekannter Ort erreicht: kurz umsehen, bevor er weiterzieht
+      } else {
         const sieht = sichtfrei(welt, z.x, z.y, info.punkt.x, info.punkt.y);
         z.richtung = sieht ? Math.atan2(info.punkt.y - z.y, info.punkt.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
         if (!this.zombieGehen(z, z.richtung, W.zombieTempoJagen * 0.7 * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt, info)) info.punkt = null;
@@ -2505,6 +2545,8 @@ export class SpielRaum extends Room {
       return;
     }
 
+    // Suche am letzten bekannten Ort: stehen bleiben und sich langsam umsehen (Sehen oben greift weiter)
+    if (info.sucheT > 0) { info.sucheT -= dt; z.richtung += dt * 1.6; return; }
     // Zombiewelle: gemeinsam zum Gruppenziel
     if (info.welle) return this.welle.gehen(id, z, info, dt);
     // schlafende Zombies (in Häusern) bewegen sich nicht, bis sie jemanden sehen oder hören
@@ -2629,10 +2671,13 @@ export class SpielRaum extends Room {
     const draussen = [...this.state.zombies.entries()].filter(([id, z]) => !z.ebene && !this.zombieInfo.get(id)?.bleibt).length;
     if (draussen >= soll || this.nachspawn > 0) return;
     // beim Start viele auf einmal, danach langsam nachrücken
-    const anzahl = this.ersteWelle ? soll - draussen : 1;
-    for (let i = 0; i < anzahl; i++) this.neuerZombie(this.ersteWelle ? 380 : 520);
+    const erste = this.ersteWelle;
+    const anzahl = erste ? soll - draussen : 1;
+    for (let i = 0; i < anzahl; i++) this.neuerZombie(erste ? 380 : 520);
     this.ersteWelle = false;
-    this.nachspawn = 2.5;
+    // deutlich unter Soll: schneller nachrücken (alle 1 s statt 2,5 s)
+    const mangel = soll - draussen;
+    this.nachspawn = mangel > Math.max(4, soll * 0.3) ? 1 : 2.5;
   }
 
   neuerZombie(abstand) {

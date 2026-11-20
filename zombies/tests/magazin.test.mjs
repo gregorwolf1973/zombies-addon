@@ -188,3 +188,26 @@ test('Verwaltung: Magazin und Nachladezeit je Waffe einstellbar, Granatwerfer ha
     assert.equal(vorher.waffen.schlaeger.magazin, undefined);
   } finally { await c.leave(); }
 });
+
+test('Waffenwechsel erzeugt keine Munition: Magazine + Vorrat steigen beim Hin- und Herschalten nie', async () => {
+  const { c, raum, p, x } = await spieler('Zaehler');
+  try {
+    p.waffe = 'pistole'; p.munition = 45; p.pfeile = 0; p.granaten = 0;
+    assert.ok(await bis(() => p.magazin === 15));
+    p.rucksack.push('gewehr');
+    c.send('benutze', { platz: 0 });
+    assert.ok(await bis(() => p.waffe === 'gewehr' && p.magazin > 0));
+    const gesamt = () => p.munition + p.mg0 + p.mg1 + p.mg2;
+    await warte(200);
+    const start = gesamt();
+    for (let i = 0; i < 10; i++) {
+      c.send('waffenplatz', { platz: i % 2 });
+      await warte(150);
+      assert.ok(gesamt() <= start, `Munition entstanden: ${start} → ${gesamt()} (Vorrat ${p.munition}, Magazine ${p.mg0}/${p.mg1}/${p.mg2})`);
+    }
+    // alles leer: auch Wechseln bringt nichts zurück
+    p.munition = 0; p.magazin = 0; x.mag = x.mag.map(e => e && { ...e, n: 0 });
+    for (let i = 0; i < 6; i++) { c.send('waffenplatz', { platz: i % 2 }); await warte(150); }
+    assert.equal(gesamt(), 0, `nach Leerstand wieder Munition: Vorrat ${p.munition}, Magazine ${p.mg0}/${p.mg1}/${p.mg2}`);
+  } finally { await c.leave(); }
+});

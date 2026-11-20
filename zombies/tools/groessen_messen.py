@@ -17,7 +17,7 @@ from PIL import Image
 HIER = os.path.dirname(os.path.abspath(__file__))
 GRAFIK = os.path.join(HIER, '..', 'client', 'grafik')
 AUS = os.path.join(HIER, '..', 'client', 'groessen.mjs')
-BOEGEN = {'figuren': 'figuren.png', 'figuren2': 'figuren2.webp', 'figuren3': 'figuren3.webp', 'helden160': 'helden160.webp'}
+BOEGEN = {'figuren': 'figuren.png', 'figuren2': 'figuren2.webp', 'figuren3': 'figuren3.webp', 'helden160': 'helden160.webp', 'buerger160': 'buerger160.webp'}
 M_ALT, M_B2 = 0.42, 0.476            # bisherige Grundmaßstäbe (wie spiel.mjs)
 ZOMBIE_FAKTOR, LEICHE_FAKTOR = 1.0, 1.9      # Zombie 100 % = gleich breit wie die Menschen
 
@@ -74,6 +74,12 @@ def main():
                     ['buerger1', 'buerger2', 'buerger3', 'polizist', 'arzt'], M_B2 * 0.95, ziel_m))
     gruppen.append((['figuren2:soldat_idle', 'figuren2:soldat_schuss'], 'figuren2', ['soldat_idle', 'soldat_schuss'], M_B2, ziel_m))
     gruppen.append((['figuren2:verwundet'], 'figuren2', ['verwundet'], M_ALT * 1.26, ziel_m))   # Verwundete im Lager (liegend, wie im Spiel 0,42 × 1,26)
+    # Bewohner-Typen (buerger160, Standbilder): jeder Typ auf die Schulterbreite des Survivors, nur der dicke Mann bekommt den
+    # mittleren Faktor der anderen (Ausgleich auf Körpermitte) und bleibt dadurch sichtbar breiter
+    bt = [n for n in bogen('buerger160')[2] if n != 'dick']
+    fb = [ziel_m / (hoehe('buerger160', [n]) * M_ALT) for n in bt]
+    for n in bt: gruppen.append((['buerger160:' + n], 'buerger160', [n], M_ALT, ziel_m))
+    gruppen.append((['buerger160:dick'], 'buerger160', ['dick'], M_ALT, hoehe('buerger160', ['dick']) * M_ALT * st.median(fb) * 1.15))   # +15 % zusätzlich: sichtbar dicker
     HALT = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe']
     for g in ('m', 'w'):   # Held/Heldin (helden160): Stiefel-Ebenen bekommen denselben Faktor wie der Körper
         koerper = ['held_%s_%s' % (g, h) for h in HALT]

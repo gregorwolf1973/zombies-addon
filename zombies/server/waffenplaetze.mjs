@@ -42,6 +42,15 @@ export const speicherDaten = (p, x) => ({ wplatz: p.wplatz, wp0: p.wp0, wp1: p.w
 
 // Hand ↔ Platz ↔ Magazin angleichen (jeden Tick, billig)
 export function abgleich(p, x, einst) {
+  abgleich1(p, x, einst);
+  [0, 1, 2].forEach(i => {   // Magazinstand je Platz für den Client (HUD-Knöpfe)
+    const name = p[PLATZ_FELD[i]], gm = magGroesse(name, einst);
+    const n = !gm ? 0 : i === p.wplatz ? p.magazin : (x.mag[i]?.waffe === name ? x.mag[i].n : 0);
+    if (p['mg' + i] !== n) p['mg' + i] = n;
+    if (p['mx' + i] !== gm) p['mx' + i] = Math.min(255, gm);
+  });
+}
+function abgleich1(p, x, einst) {
   x.mag ??= [null, null, null];
   const a = p.wplatz;
   p[PLATZ_FELD[a]] = p.waffe;

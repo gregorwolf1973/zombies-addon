@@ -7,6 +7,7 @@ import { KACHEL, BREITE, HOEHE, T, findeWeg, sichtfrei, bewege, frei, ladenArt, 
 export const Mensch = schema({
   x: t.number(), y: t.number(), richtung: t.number(),
   aussehen: t.string(),
+  typ: t.string(),             // Bewohner-Typ (siehe TYPEN), '' = gewöhnlicher Bürger oder Polizist
   infiziert: t.boolean(),
   flieht: t.boolean(),
   sichtbar: t.boolean(),       // false = im Haus oder im Bus
@@ -17,6 +18,22 @@ export const POLIZIST_ANTEIL = 0.06;
 const RAD = 10;
 const TEMPO = W.tempoGehen * 0.55, FLUCHT = W.tempoGehen * 0.62;   // Flucht langsamer als ein jagender Zombie (105 px/s), sonst holt er sie nie ein
 const BISS_ABSTAND = 30;
+
+// Bewohner-Typen (Bild buerger160, Client): Tempo = Faktor auf das normale Bewohnertempo, Anteil = Wahrscheinlichkeit je Bewohner
+// (Rest sind die gewöhnlichen Bürger und Polizisten). Wird deterministisch aus der Mensch-ID gewählt.
+export const TYPEN = {
+  dick: { tempo: 0.75, anteil: 0.07 }, oma: { tempo: 0.7, anteil: 0.07 }, opa: { tempo: 0.7, anteil: 0.07 },
+  jogger: { tempo: 1.25, anteil: 0.07 }, teenager: { tempo: 1.1, anteil: 0.07 }, geschaeftsfrau: { tempo: 1, anteil: 0.07 },
+  bauarbeiter: { tempo: 1, anteil: 0.07 }, rucksack: { tempo: 1, anteil: 0.07 },
+};
+export const typFuerId = id => {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;   // Mischen, damit fortlaufende IDs gleichmäßig streuen
+  let u = (h >>> 0) / 4294967296;
+  for (const [n, e] of Object.entries(TYPEN)) { if (u < e.anteil) return n; u -= e.anteil; }
+  return '';
+};
 
 const winkelDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
@@ -49,6 +66,7 @@ export class Stadtleben {
       // ca. 6 % Polizisten (Kennung 'p', der Client zeichnet sie mit dem Polizistenbild)
       m.aussehen = `${r() < POLIZIST_ANTEIL ? 'p' : r() < 0.5 ? 'm' : 'w'},${Math.floor(r() * 6)},${Math.floor(r() * 8)}`;
       const id = 'm' + this.naechsteId++;
+      m.typ = m.aussehen.startsWith('p') ? '' : typFuerId(id);
       this.raum.state.menschen.set(id, m);
       this.info.set(id, { heim, ziel: null, weg: null, warte: m.sichtbar ? 0 : 10 + r() * 120, inf: 0, steckt: 0 });
     }
@@ -134,7 +152,7 @@ export class Stadtleben {
           }
           inf.fluchtW = best;
         }
-        const v = (m.infiziert ? TEMPO : FLUCHT) * d, w = inf.fluchtW ?? 0;
+        const v = (m.infiziert ? TEMPO : FLUCHT) * (TYPEN[m.typ]?.tempo ?? 1) * d, w = inf.fluchtW ?? 0;
         bewege(welt, m, Math.cos(w) * v, Math.sin(w) * v, RAD);
         m.richtung = w;
         inf.weg = null;
@@ -156,7 +174,7 @@ export class Stadtleben {
       }
       while (inf.weg.length > 1 && Math.hypot(inf.weg[0].x - m.x, inf.weg[0].y - m.y) < 10) inf.weg.shift();
       const wp = inf.weg[0];
-      const w = Math.atan2(wp.y - m.y, wp.x - m.x), v = TEMPO * d;
+      const w = Math.atan2(wp.y - m.y, wp.x - m.x), v = TEMPO * (TYPEN[m.typ]?.tempo ?? 1) * d;
       const x0 = m.x, y0 = m.y;
       bewege(welt, m, Math.cos(w) * v, Math.sin(w) * v, RAD);
       m.richtung = w;
@@ -190,6 +208,7 @@ export class Stadtleben {
     const zid = this.raum.setzeZombie(m.x, m.y, '');
     this.raum.zombieInfo.get(zid).bleibt = true;
     this.zuletztVerwandelt = zid;
+    s.verwandelt = Math.min(65535, (s.verwandelt ?? 0) + 1);
     this.raum.broadcast('meldung', { text: '🧟 Ein gebissener Mensch hat sich verwandelt' });
   }
 

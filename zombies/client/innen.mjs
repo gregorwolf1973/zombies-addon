@@ -32,7 +32,7 @@ export const MOEBEL_NAMEN = {
   safe_kuehlschrank: 'Kühlschrank',
 };
 
-const BEHAELTER_ARTEN = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang', 'vorratsregal', 'erstehilfe', 'klo', 'waschbecken']);
+const BEHAELTER_ARTEN = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang', 'vorratsregal', 'erstehilfe', 'klo', 'waschbecken', 'herd', 'spuele']);
 
 // Hilfsfunktion: Index im Raster
 function idx(x, y) {
@@ -746,6 +746,22 @@ export function baueInnenraum(seed, nr, stock, seite = 'unten', laden = false) {
     if (rng() >= 0.3) continue;
     if (amFlur(tuer)) { if (offeneAmFlur <= 1) continue; offeneAmFlur--; }
     tuer.verschlossen = true;
+  }
+  // Behälter in Räumen hinter verschlossenen Zimmertüren merken sich die Tür (b.tuer = [x, y]); der Server gibt ihnen
+  // Belohnungsbeute, wenn die Tür ein Rätsel-Schloss hat. Raum dahinter = der Nachbarraum der Tür ohne Flur/Start; ohne Zufall.
+  {
+    const raumAn = (x, y) => raeume.findIndex(r => x >= r.x && x < r.x + r.b && y >= r.y && y < r.y + r.h);
+    const startR = stock === 'eg' ? flurIndex : -1;
+    for (const tuer of tueren) {
+      if (!tuer.verschlossen) continue;
+      const nachbarn = new Set([[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => raumAn(tuer.x + dx, tuer.y + dy)).filter(i => i >= 0 && i !== startR));
+      if (nachbarn.size !== 1) continue;
+      const r = raeume[[...nachbarn][0]];
+      for (const bh of behaelter) {
+        const kx = Math.floor(bh.x / KACHEL), ky = Math.floor(bh.y / KACHEL);
+        if (!bh.tuer && kx >= r.x && kx < r.x + r.b && ky >= r.y && ky < r.y + r.h) bh.tuer = [tuer.x, tuer.y];
+      }
+    }
   }
 
 
