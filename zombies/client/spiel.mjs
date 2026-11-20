@@ -328,9 +328,17 @@ async function mitspielen() {
       $('verbindung').style.display = 'none';
       try { sessionStorage.setItem('zob_token', raum.reconnectionToken); } catch {}
     });
+    let abgeloest = false;
+    raum.onMessage('abgeloest', () => {   // dieselbe Spieler-ID spielt jetzt in einem anderen Fenster weiter
+      abgeloest = abgemeldet = true;
+      try { sessionStorage.removeItem('zob_token'); } catch {}
+      const v = $('verbindung');
+      v.textContent = 'In einem anderen Fenster weitergespielt';
+      v.style.display = 'block'; v.style.pointerEvents = 'none';
+    });
     raum.onLeave(() => {
       try { sessionStorage.removeItem('zob_token'); } catch {}
-      if (abgemeldet) return;
+      if (abgemeldet || abgeloest) return;
       // In der installierten App gibt es kein Neuladen per Wischen: Hinweis antippen lädt neu,
       // und kommt die App aus dem Hintergrund zurück, lädt sie von selbst neu
       const v = $('verbindung');
@@ -346,7 +354,7 @@ async function mitspielen() {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         clearTimeout(versteckTimer);
-        versteckTimer = setTimeout(() => { autoGetrennt = true; abgemeldet = true; try { raum.leave(true); } catch {} }, 5 * 60 * 1000);
+        versteckTimer = setTimeout(() => { if (abgeloest) return; autoGetrennt = true; abgemeldet = true; try { raum.leave(true); } catch {} }, 5 * 60 * 1000);
       } else {
         clearTimeout(versteckTimer);
         if (autoGetrennt) location.reload();
@@ -691,11 +699,12 @@ class Ort extends Phaser.Scene {
     this.passeZoomAn();
     this.scale.on('resize', () => this.passeZoomAn());
 
-    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,R,F,SPACE,ESC');
+    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,R,F,X,SPACE,ESC');
     this.tasten.E.on('down', () => this.aktion());
     this.tasten.Q.on('down', () => this.aktion2());
     this.tasten.R.on('down', () => raum.send('nachladen'));            // Nachladen von Hand
     this.tasten.F.on('down', () => raum.send('waffenplatz', { weiter: true }));   // nächster Waffenplatz
+    this.tasten.X.on('down', () => raum.send('faust'));   // Faust: nichts in der Hand (nochmal = zurück)
     this.tasten.SPACE.on('down', () => this.aktion());
     chatSzene = this;
     this.tasten.ESC.on('down', () => { kisteZu(); popupZu(); handelZu(); });
@@ -719,6 +728,7 @@ class Ort extends Phaser.Scene {
       }
       if (this.joystick.id !== null || this.kneifen) return;
       this.joystick = { id: p.id, bx: p.x, by: p.y, vx: 0, vy: 0 };
+      this.tippStart = { id: p.id, t: performance.now(), x: p.x, y: p.y };   // kurzes Tippen = Handgranate auf den Punkt werfen
     });
     this.input.on('pointermove', p => {
       if (this.finger.has(p.id)) this.finger.set(p.id, { x: p.x, y: p.y });
@@ -735,6 +745,15 @@ class Ort extends Phaser.Scene {
     });
     const loslassen = p => {
       this.finger.delete(p.id);
+      const tipp = this.tippStart;
+      if (tipp && tipp.id === p.id) {
+        this.tippStart = null;
+        const ich = raum.state.spieler.get(meineId);
+        if (ich && ich.waffe === 'handgranate' && !ich.faust && !ich.unten && performance.now() - tipp.t < 350 && Math.hypot(p.x - tipp.x, p.y - tipp.y) < 14 && !this.kneifen) {
+          const w = this.cameras.main.getWorldPoint(p.x, p.y);
+          raum.send('wurf', { x: Math.round(w.x), y: Math.round(w.y) });
+        }
+      }
       if (this.kneifen && this.finger.size < 2) {
         if (this.finger.size === 0) { this.kneifen = null; try { localStorage.setItem('zob_zoom', this.zoomWahl.toFixed(2)); } catch {} }
         return;
@@ -2129,7 +2148,7 @@ class Ort extends Phaser.Scene {
       const k = Math.min(1, (this.time.now - t0) / flug);
       const x = m.x1 + (m.x2 - m.x1) * k, y = m.y1 + (m.y2 - m.y1) * k;
       schatten.setPosition(x, y);
-      bild.setPosition(x, y - Math.sin(k * Math.PI) * 26).setScale(1 + Math.sin(k * Math.PI) * 0.5);
+      bild.setPosition(x, y - Math.sin(k * Math.PI) * (m.werfer ? 9 : 26)).setScale(1 + Math.sin(k * Math.PI) * 0.5);
       if (k >= 1) { this.events.off('update', tick); bild.setFillStyle(0x6a6f3a); this.tweens.add({ targets: bild, alpha: 0.35, yoyo: true, repeat: 5, duration: 140 }); }
     };
     this.events.on('update', tick);
@@ -2538,6 +2557,7 @@ class Ort extends Phaser.Scene {
     this.zeichneStick();
     this.abgleichen(dt);
     this.ladeRingeZeichnen();
+    this.wurfBogenZeichnen();
     this.stuetzpunktAnimieren();
     if (this.lokal) this.radioAnz?.update(this.aktEbene, this.lokal.x, this.lokal.y);
     const meine = raum.state.spieler.get(meineId);
@@ -2701,7 +2721,7 @@ class Ort extends Phaser.Scene {
     const frei2 = ich && !ich.unten && !ich.aktion && !(ich.zombie > 0) && s.phase === 'spiel' && this.lokal;
     let zweit = frei2 ? this.tuerKontext(ich, 'zweit') : null;
     if (frei2 && !zweit && this.handelKontext && this.kontext !== this.handelKontext && !handelOffen) zweit = this.handelKontext;
-    if (frei2 && !zweit && ich.rucksack.includes('granate')) zweit = { art: 'wurf', text: '💣 Granate werfen (Q)' };
+    if (frei2 && !zweit && (ich.rucksack.includes('granate') || (ich.waffe === 'handgranate' && ich.magazin > 0) || ich.handgranaten > 0)) zweit = { art: 'wurf', text: '💣 Granate werfen (Q)' };
     this.zweit = zweit;
     const knopf = $('aktion'), knopf2 = $('aktion2');
     knopf.style.display = this.kontext ? 'block' : 'none';
@@ -2747,15 +2767,15 @@ class Ort extends Phaser.Scene {
   waffenplaetzeZeigen(ich) {
     const leiste = $('waffenplaetze');
     const namen = ['Haupt', 'Neben', 'Ersatz'], waffen = [ich.wp0, ich.wp1, ich.wp2], akt = ich.wplatz ?? 0;
-    waffen[akt] = ich.waffe;
+    if (!ich.faust) waffen[akt] = ich.waffe;
     const mg = [ich.mg0, ich.mg1, ich.mg2], mx = [ich.mx0, ich.mx1, ich.mx2];
-    mg[akt] = ich.magazin ?? 0;
+    if (!ich.faust) mg[akt] = ich.magazin ?? 0;
     const zeilen = waffen.map((w, i) => {
       const d = w ? DINGE[w] : null, wf = w ? WAFFEN[w] : null;
       const vorrat = wf?.fern ? vorratVon(ich, wf) : 0;
       return { w, d, wf, vorrat, m: mg[i] ?? 0, max: mx[i] || (wf?.fern ? wf.magazin : 0) };
     });
-    const schluessel = zeilen.map((z, i) => `${z.w}:${z.m}/${z.max}:${z.vorrat}${i === akt ? '*' : ''}`).join('|');
+    const schluessel = zeilen.map((z, i) => `${z.w}:${z.m}/${z.max}:${z.vorrat}${i === akt && !ich.faust ? '*' : ''}`).join('|') + (ich.faust ? '|faust' : '') + `|${ich.rucksack.length}`;
     if (schluessel !== this.waffenplatzSchluessel) {
       this.waffenplatzSchluessel = schluessel;
       leiste.innerHTML = '';
@@ -2763,17 +2783,41 @@ class Ort extends Phaser.Scene {
         const b = document.createElement('button');
         b.type = 'button';
         const leer = z.wf?.fern && z.m <= 0 && z.vorrat <= 0;
-        b.className = (i === akt ? 'aktiv ' : '') + (z.w ? '' : 'leer ') + (leer ? 'rot' : '');
+        b.className = (i === akt && !ich.faust ? 'aktiv ' : '') + (z.w ? '' : 'leer ') + (leer ? 'rot' : '');
         const kurz = z.d ? z.d.name.replace(/^Jagd/, '').replace(/^Baseball/, '').trim().replace(/^./, c => c.toUpperCase()) : 'leer';
         const zahl = z.wf?.fern ? `<span class="mag">${z.m}/${z.max}</span><span class="vor">${z.vorrat}</span>` : '';
         b.innerHTML = `<span class="nr">${i + 1}</span><span class="zz">${z.d ? z.d.zeichen : '–'}</span><span class="nm">${kurz}</span>${zahl}<i class="lad"></i>`;
         b.title = `${namen[i]}: ${z.d ? z.d.name : 'leer'}${z.wf?.fern ? ` – Magazin ${z.m}/${z.max}, Vorrat ${z.vorrat}` : ''} (Taste F wechselt)`;
-        b.onclick = e => { e.stopPropagation(); raum.send('waffenplatz', { platz: i }); };
+        // Antippen = in die Hand; gedrückt halten (Handy) bzw. Rechtsklick (PC) = Menü (Rucksack, Fallen lassen, Tauschen)
+        let lang = false, timer = 0;
+        const menue = () => { lang = true; platzMenue(b, i); };
+        b.addEventListener('pointerdown', () => { lang = false; clearTimeout(timer); timer = setTimeout(menue, 500); });
+        for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => clearTimeout(timer));
+        b.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); clearTimeout(timer); if (!lang) menue(); });
+        b.onclick = e => { e.stopPropagation(); if (lang) { lang = false; return; } raum.send('waffenplatz', { platz: i }); };
         leiste.appendChild(b);
       });
+      const f = document.createElement('button');
+      f.type = 'button'; f.className = 'faustknopf' + (ich.faust ? ' aktiv' : '');
+      f.textContent = '✊ Faust'; f.title = 'Nichts in der Hand, ohne einen Platz zu leeren (Taste X)';
+      f.onclick = e => { e.stopPropagation(); raum.send('faust'); };
+      leiste.appendChild(f);
     }
-    const lad = leiste.children[akt]?.querySelector('.lad');   // Nachladefortschritt (ohne Neuaufbau)
+    const lad = ich.faust ? null : leiste.children[akt]?.querySelector('.lad');   // Nachladefortschritt (ohne Neuaufbau)
     if (lad) lad.style.width = ich.nachladen > 0 ? `${Math.round(Math.min(1, ich.nachladen) * 100)}%` : '0';
+  }
+
+  // Handgranaten in der Hand: dezenter 60°-Bogen vor der Figur bis zur maximalen Wurfweite (Tippen wirft genau dorthin)
+  wurfBogenZeichnen() {
+    const g = this.wurfBogen ??= this.add.graphics().setDepth(59);
+    g.clear();
+    const ich = raum.state.spieler.get(meineId);
+    if (!ich || ich.waffe !== 'handgranate' || ich.faust || ich.unten || !(ich.zombie <= 0) || !this.lokal || (ich.ebene ?? '') !== this.aktEbene) return;
+    const r = (ich.wurfweite || GRANATE.wurfWeite / 8) * 8, a = ich.richtung, h = GRANATE.bogen / 2, x = this.lokal.x, y = this.lokal.y;
+    g.fillStyle(0xffffff, 0.07).beginPath().moveTo(x, y).arc(x, y, r, a - h, a + h, false).closePath().fillPath();
+    g.lineStyle(1.5, 0xffffff, 0.3).beginPath().moveTo(x + Math.cos(a - h) * 20, y + Math.sin(a - h) * 20).lineTo(x + Math.cos(a - h) * r, y + Math.sin(a - h) * r)
+      .moveTo(x + Math.cos(a + h) * 20, y + Math.sin(a + h) * 20).lineTo(x + Math.cos(a + h) * r, y + Math.sin(a + h) * r).strokePath();
+    g.lineStyle(2.5, 0xffd54f, 0.55).beginPath().arc(x, y, r, a - h, a + h, false).strokePath();   // Linie der maximalen Wurfweite
   }
 
   // Nachlade-Fortschritt als Ring um die Figur (alle Spieler)
@@ -2820,12 +2864,50 @@ function popupAuf(knopf, platz, ding) {
   weg.textContent = 'Wegwerfen'; weg.className = 'zweit';
   weg.onclick = () => { raum.send('wegwerfen', { platz }); popupZu(); };
   p.append(titel, nutzen, weg);
+  if (DINGE[ding]?.waffe || ding === 'granate') {   // Waffe/Handgranaten in einen Waffenplatz legen
+    ['Haupt', 'Neben', 'Ersatz'].forEach((n, i) => {
+      const b = document.createElement('button');
+      const inh = raum.state.spieler.get(meineId)?.['wp' + i];
+      b.textContent = `→ Platz ${i + 1} (${n}${inh && DINGE[inh] ? ': ' + DINGE[inh].zeichen : ''})`; b.className = 'zweit';
+      b.onclick = () => { raum.send('platz_aktion', { platz: i, aktion: 'tausch', rs: platz }); popupZu(); };
+      p.append(b);
+    });
+  }
   const r = knopf.getBoundingClientRect();
   p.style.display = 'block';
   p.style.left = Math.max(8, Math.min(window.innerWidth - p.offsetWidth - 8, r.left + r.width / 2 - p.offsetWidth / 2)) + 'px';
   p.style.bottom = (window.innerHeight - r.top + 8) + 'px';
 }
 function popupZu() { $('popup').style.display = 'none'; }
+// Menü am Waffenplatz-Knopf (gedrückt halten / Rechtsklick): in den Rucksack, fallen lassen, tauschen mit einer Waffe aus dem Rucksack
+function platzMenue(knopf, platz) {
+  const ich = raum.state.spieler.get(meineId);
+  if (!ich || ich.unten) return;
+  const name = ich['wp' + platz] || '', p = $('popup');
+  p.innerHTML = '';
+  const titel = document.createElement('div');
+  titel.className = 'titel'; titel.textContent = name ? `${['Haupt', 'Neben', 'Ersatz'][platz]}: ${dingText(name)}` : `${['Haupt', 'Neben', 'Ersatz'][platz]}: leer`;
+  p.append(titel);
+  const knopfMit = (text, daten, zweit) => {
+    const b = document.createElement('button');
+    b.textContent = text; if (zweit) b.className = 'zweit';
+    b.onclick = () => { raum.send('platz_aktion', { platz, ...daten }); popupZu(); };
+    p.append(b);
+  };
+  if (name && ich.rucksack.length < (ich.plaetze || RUCKSACK_PLAETZE)) knopfMit('In den Rucksack', { aktion: 'rucksack' });
+  if (name) knopfMit('Fallen lassen', { aktion: 'fallen' }, true);
+  const gesehen = new Set();
+  [...ich.rucksack].forEach((d, rs) => {
+    if (!(DINGE[d]?.waffe || d === 'granate') || gesehen.has(d)) return;
+    gesehen.add(d);
+    const n = d === 'granate' ? ` (${ich.rucksack.filter(q => q === 'granate').length})` : '';
+    knopfMit(`${name ? 'Tauschen mit' : 'Hierhin:'} ${DINGE[d].zeichen} ${DINGE[d].name}${n}`, { aktion: 'tausch', rs }, true);
+  });
+  const r = knopf.getBoundingClientRect();
+  p.style.display = 'block';
+  p.style.left = Math.max(8, Math.min(window.innerWidth - p.offsetWidth - 8, r.left)) + 'px';
+  p.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+}
 document.addEventListener('pointerdown', e => {
   if (!$('popup').contains(e.target) && !e.target.classList?.contains('platz')) popupZu();
 });

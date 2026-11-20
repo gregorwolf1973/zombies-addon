@@ -2,11 +2,11 @@
 // p.waffe ist immer die Waffe in der Hand = der Inhalt des aktiven Platzes p.wplatz; alter Code, der p.waffe setzt, bleibt
 // deshalb gültig – abgleich() übernimmt die Hand jeden Tick in den aktiven Platz und verwaltet das Magazin dazu.
 // p.munition / p.pfeile / p.granaten sind der Vorrat AUSSERHALB des Magazins (p.magazin = Schuss im Magazin der Hand).
-import { WAFFEN, DINGE, vorratFeld, vorratVon, magazinGroesse, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX } from '../client/welt.mjs';
+import { WAFFEN, DINGE, GRANATE, vorratFeld, vorratVon, magazinGroesse, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX } from '../client/welt.mjs';
 
 export const PLATZ_FELD = ['wp0', 'wp1', 'wp2'];
 export const PLATZ_NAME = ['Haupt', 'Neben', 'Ersatz'];
-const VORRAT_MAX = { munition: MUNITION_MAX, pfeile: PFEILE_MAX, granaten: GRANATEN_MAX };
+const VORRAT_MAX = { munition: MUNITION_MAX, pfeile: PFEILE_MAX, granaten: GRANATEN_MAX, handgranaten: HANDGRANATEN_MAX };
 
 // Magazingröße / Nachladedauer: Verwaltung (einst.waffen) vor Vorgabe aus WAFFEN
 export const magGroesse = (name, einst) => { const w = WAFFEN[name]; return w?.fern ? Math.max(1, Math.round(einst?.waffen?.[name]?.magazin ?? magazinGroesse(w))) : 0; };
@@ -38,14 +38,16 @@ export function lade(p, x, g) {
   p.magazin = x.mag[p.wplatz]?.n ?? 0;
   p.nachladen = 0;
 }
-export const speicherDaten = (p, x) => ({ wplatz: p.wplatz, wp0: p.wp0, wp1: p.wp1, wp2: p.wp2, mag: [0, 1, 2].map(i => i === p.wplatz ? p.magazin : x.mag?.[i]?.n ?? 0) });
+export const speicherDaten = (p, x) => ({ wplatz: p.wplatz, wp0: p.wp0, wp1: p.wp1, wp2: p.wp2, mag: [0, 1, 2].map(i => i === p.wplatz && !p.faust ? p.magazin : x.mag?.[i]?.n ?? 0) });
 
 // Hand ↔ Platz ↔ Magazin angleichen (jeden Tick, billig)
 export function abgleich(p, x, einst) {
   abgleich1(p, x, einst);
+  const wm = Math.min(255, Math.round(einst?.reichweite?.handgranate ?? GRANATE.wurfWeite / 8));
+  if (p.wurfweite !== wm) p.wurfweite = wm;
   [0, 1, 2].forEach(i => {   // Magazinstand je Platz für den Client (HUD-Knöpfe)
     const name = p[PLATZ_FELD[i]], gm = magGroesse(name, einst);
-    const n = !gm ? 0 : i === p.wplatz ? p.magazin : (x.mag[i]?.waffe === name ? x.mag[i].n : 0);
+    const n = !gm ? 0 : i === p.wplatz && !p.faust ? p.magazin : (x.mag[i]?.waffe === name ? x.mag[i].n : 0);
     if (p['mg' + i] !== n) p['mg' + i] = n;
     if (p['mx' + i] !== gm) p['mx' + i] = Math.min(255, gm);
   });
@@ -53,6 +55,10 @@ export function abgleich(p, x, einst) {
 function abgleich1(p, x, einst) {
   x.mag ??= [null, null, null];
   const a = p.wplatz;
+  if (p.faust) {   // Faust: Hand leer, der Platz behält Waffe und Magazin; wird von außen eine Waffe in die Hand gesetzt, endet die Faust
+    if (!p.waffe) { p.magazin = 0; p.magmax = 0; p.nachladen = 0; return; }
+    p.faust = false;
+  }
   p[PLATZ_FELD[a]] = p.waffe;
   const e = x.mag[a], gm = magGroesse(p.waffe, einst);
   if (e && e.waffe !== p.waffe) {   // Waffe im Platz ausgetauscht (z. B. gegen eine aus dem Rucksack): Schuss zurück in den Vorrat
@@ -76,10 +82,10 @@ function brauchbar(p, x, i) {
 }
 
 export function wechsle(raum, client, p, x, platz, einst, still = false) {
-  if (!Number.isInteger(platz) || platz < 0 || platz > 2 || platz === p.wplatz) return false;
+  if (!Number.isInteger(platz) || platz < 0 || platz > 2 || (platz === p.wplatz && !p.faust)) return false;
   abgleich(p, x, einst);
   const name = p[PLATZ_FELD[platz]];
-  p.wplatz = platz; p.waffe = name; p.nachladen = 0; x.nRest = 0;
+  p.faust = false; p.wplatz = platz; p.waffe = name; p.nachladen = 0; x.nRest = 0;
   const e = x.mag[platz];
   p.magazin = e && e.waffe === name ? e.n : 0;   // fehlt der Eintrag, füllt abgleich() beim nächsten Schritt
   if (!still) client?.send('meldung', { text: name ? `${DINGE[name].zeichen} ${PLATZ_NAME[platz]}: ${DINGE[name].name}` : `✊ ${PLATZ_NAME[platz]}: leer – Faust` });
@@ -88,7 +94,7 @@ export function wechsle(raum, client, p, x, platz, einst, still = false) {
 
 // nächster belegter Platz (Taste F)
 export function naechster(p) {
-  for (let k = 1; k <= 2; k++) { const i = (p.wplatz + k) % 3; if (p[PLATZ_FELD[i]]) return i; }
+  for (let k = p.faust ? 0 : 1; k <= 2; k++) { const i = (p.wplatz + k) % 3; if (p[PLATZ_FELD[i]]) return i; }
   return -1;
 }
 
@@ -97,6 +103,7 @@ export function naechster(p) {
 // Rucksack gehört, oder '' wenn nichts zurückgelegt werden muss.
 export function inDieHand(raum, client, p, x, ding, einst) {
   abgleich(p, x, einst);
+  if (p.faust) wechsle(raum, null, p, x, p.wplatz, einst, true);   // Aufnehmen beendet die Faust (zurück zum Waffenplatz)
   if (!p.waffe) { p.waffe = ding; return ''; }
   const frei = [1, 2, 0].map(k => (p.wplatz + k) % 3).find(i => !p[PLATZ_FELD[i]]);
   if (frei === undefined) { const alt = p.waffe; p.waffe = ding; return alt; }
@@ -144,5 +151,106 @@ export function schritt(raum, client, p, x, dt, einst) {
 }
 
 // Waffen aller Plätze (für den Sterbehaufen)
-export const alleWaffen = p => [p.wp0, p.wp1, p.wp2].filter((n, i) => n && i !== p.wplatz);
-export function leeren(p, x) { p.wp0 = p.wp1 = p.wp2 = ''; p.wplatz = 0; p.magazin = 0; p.nachladen = 0; if (x) { x.mag = [null, null, null]; x.nRest = 0; } }
+export const alleWaffen = p => [p.wp0, p.wp1, p.wp2].filter((n, i) => n && (i !== p.wplatz || p.faust));
+export function leeren(p, x) { p.wp0 = p.wp1 = p.wp2 = ''; p.wplatz = 0; p.faust = false; p.handgranaten = 0; p.magazin = 0; p.nachladen = 0; if (x) { x.mag = [null, null, null]; x.nRest = 0; } }
+
+// ---------- Waffenplätze verwalten (Menü am Knopf, Rucksack, Faust) ----------
+const istHg = name => name === 'handgranate';
+// Platz mit Handgranaten (oder -1)
+export const handgranatenPlatz = p => [0, 1, 2].find(i => p[PLATZ_FELD[i]] === 'handgranate') ?? -1;
+
+// Waffe aus Platz i nehmen (Platz danach leer). Schuss im Magazin gehen zurück in den Vorrat; Handgranaten werden zu einzelnen
+// 'granate'-Gegenständen (Anzahl = Magazin + Vorrat). Rückgabe { name, anzahl } oder null.
+function entnehmen(p, x, i, einst) {
+  abgleich(p, x, einst);
+  const name = p[PLATZ_FELD[i]];
+  if (!name) return null;
+  const e = x.mag[i];
+  let anzahl = 1;
+  if (istHg(name)) { anzahl = (e?.waffe === name ? e.n : 0) + (p.handgranaten ?? 0); p.handgranaten = 0; }
+  else if (e?.waffe === name && e.n > 0) erstatte(p, name, e.n);
+  x.mag[i] = null; p[PLATZ_FELD[i]] = '';
+  if (i === p.wplatz) { p.waffe = ''; p.magazin = 0; p.nachladen = 0; x.nRest = 0; }
+  return { name, anzahl };
+}
+// Entnommenes in den Rucksack (soweit Platz) – der Rest fällt vor die Füße. Rückgabe: wie viele zu Boden gingen.
+function ablegenRucksack(raum, p, ding) {
+  const name = istHg(ding.name) ? 'granate' : ding.name;
+  let boden = 0;
+  for (let k = 0; k < ding.anzahl; k++) {
+    if (p.rucksack.length < p.plaetze) p.rucksack.push(name);
+    else { raum.legeHin(name, p.x, p.y, p.ebene); boden++; }
+  }
+  return boden;
+}
+// alle 'granate' aus dem Rucksack nehmen (ArraySchema: an Ort und Stelle ändern)
+function granatenEntfernen(p) { for (let k = p.rucksack.length - 1; k >= 0; k--) if (p.rucksack[k] === 'granate') p.rucksack.splice(k, 1); }
+const frage = (raum, p) => !p || p.unten || p.zombie > 0 || raum.state.phase !== 'spiel';
+
+// Nachricht 'platz_aktion' { platz, aktion: 'rucksack' | 'fallen' | 'tausch', rs? }
+export function platzAktion(raum, client, p, x, m, einst) {
+  if (frage(raum, p)) return false;
+  const i = Number(m?.platz);
+  if (!Number.isInteger(i) || i < 0 || i > 2) return false;
+  abgleich(p, x, einst);
+  if (m.aktion === 'tausch') return ausRucksack(raum, client, p, x, Number(m.rs), i, einst);   // auch in einen leeren Platz
+  const name = p[PLATZ_FELD[i]];
+  if (!name) return false;
+  const z = DINGE[name].zeichen, n = DINGE[name].name;
+  if (m.aktion === 'rucksack') {
+    if (p.rucksack.length >= p.plaetze) { client?.send('meldung', { text: '🎒 Rucksack voll' }); return false; }
+    const ding = entnehmen(p, x, i, einst);
+    const boden = ablegenRucksack(raum, p, ding);
+    client?.send('meldung', { text: `${z} ${n} in den Rucksack${boden ? ` (${boden} liegen am Boden)` : ''}` });
+    return true;
+  }
+  if (m.aktion === 'fallen') {
+    const ding = entnehmen(p, x, i, einst);
+    for (let k = 0; k < ding.anzahl; k++) raum.legeHin(istHg(ding.name) ? 'granate' : ding.name, p.x, p.y, p.ebene);
+    client?.send('meldung', { text: `${z} ${n} fallen gelassen` });
+    return true;
+  }
+  return false;
+}
+
+// Rucksack-Eintrag rs (Waffe oder Handgranate) in Platz i; eine dort liegende Waffe geht in den Rucksack (Tausch)
+export function ausRucksack(raum, client, p, x, rs, i, einst) {
+  if (frage(raum, p) || !Number.isInteger(rs) || rs < 0 || rs >= p.rucksack.length || !Number.isInteger(i) || i < 0 || i > 2) return false;
+  const d = p.rucksack[rs];
+  if (d !== 'granate' && !(DINGE[d]?.waffe && !DINGE[d].intern)) return false;
+  abgleich(p, x, einst);
+  if (d === 'granate') {
+    const anzahl = p.rucksack.filter(q => q === 'granate').length;
+    const hg = handgranatenPlatz(p);
+    if (hg >= 0) {   // es gibt schon einen Handgranaten-Platz: alle Granaten dorthin
+      granatenEntfernen(p);
+      p.handgranaten = Math.min(HANDGRANATEN_MAX, (p.handgranaten ?? 0) + anzahl);
+      client?.send('meldung', { text: `💣 ${anzahl} Handgranate${anzahl > 1 ? 'n' : ''} zum Vorrat (Platz ${hg + 1})` });
+      return true;
+    }
+    granatenEntfernen(p);
+    const alt = entnehmen(p, x, i, einst);
+    if (alt) ablegenRucksack(raum, p, alt);
+    p[PLATZ_FELD[i]] = 'handgranate'; p.handgranaten = Math.min(HANDGRANATEN_MAX, anzahl);
+    if (i === p.wplatz && !p.faust) p.waffe = 'handgranate';
+    client?.send('meldung', { text: `💣 ${PLATZ_NAME[i]}: ${anzahl} Handgranate${anzahl > 1 ? 'n' : ''}` });
+    return true;
+  }
+  p.rucksack.splice(rs, 1);
+  const alt = entnehmen(p, x, i, einst);
+  if (alt) ablegenRucksack(raum, p, alt);
+  p[PLATZ_FELD[i]] = d;
+  if (i === p.wplatz && !p.faust) p.waffe = d;
+  client?.send('meldung', { text: `${DINGE[d].zeichen} ${PLATZ_NAME[i]}: ${DINGE[d].name}` });
+  return true;
+}
+
+// Faust: nichts in der Hand, ohne einen Platz zu leeren (nochmal = zurück zum aktiven Platz)
+export function faust(raum, client, p, x, einst) {
+  if (frage(raum, p)) return false;
+  abgleich(p, x, einst);
+  if (p.faust) return wechsle(raum, client, p, x, p.wplatz, einst);
+  p.faust = true; p.waffe = ''; p.magazin = 0; p.nachladen = 0; x.nRest = 0;
+  client?.send('meldung', { text: '✊ Faust' });
+  return true;
+}

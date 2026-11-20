@@ -41,7 +41,7 @@ test('Werte: jede Fernwaffe hat Magazin und Nachladezeit, Granatwerfer ist eine 
   for (const [k, n] of Object.entries(soll)) { assert.equal(WAFFEN[k].magazin, n, k); assert.ok(WAFFEN[k].nachlade > 0, k); }
   assert.equal(WAFFEN.pistole.nachlade, 4);
   assert.ok(WAFFEN.armbrust.nachlade < 4);
-  assert.equal(WAFFEN.granatwerfer.reichweite, 360);
+  assert.equal(WAFFEN.granatwerfer.reichweite, 480);
   assert.ok(DINGE.granatwerfer.waffe && DINGE.granate40.name === 'Granate (40 mm)');
   for (const art of ['bw_kiste', 'bw_container']) assert.ok(BEUTE[art].includes('granate40'), art);
   assert.ok(BEUTE.bw_container.includes('granatwerfer'));
@@ -158,9 +158,9 @@ test('Granatwerfer: Bogenschuss, Explosion am Ziel (Zombie stirbt, Granate verbr
     assert.ok(Math.abs(explosionen[0].x - fluege[0].x2) < 1, 'Explosion am Ziel');
     clearInterval(halte);
     assert.equal(p.magazin, 0);
-    // außerhalb der Reichweite (> 45 m = 360 px) kein Schuss
+    // außerhalb der Reichweite (> 60 m = 480 px) kein Schuss
     const n = fluege.length;
-    const weit = zombieIn(raum, p, 420);
+    const weit = zombieIn(raum, p, 540);
     await warte(700);
     assert.equal(fluege.length, n, 'schießt über die Reichweite');
     raum.state.zombies.delete(weit); raum.zombieInfo.delete(weit);
@@ -182,7 +182,7 @@ test('Verwaltung: Magazin und Nachladezeit je Waffe einstellbar, Granatwerfer ha
       raum.extra.get(c.sessionId).mag = [null, null, null]; p.wp0 = '';
       assert.ok(await bis(() => p.magmax === 7 && p.magazin === 7), 'Magazingröße 7: ' + p.magazin + '/' + p.magmax);
     } finally { raum.constructor.einstellungen = vorher; }
-    assert.ok(vorher.waffen.granatwerfer && vorher.waffen.granatwerfer.schaden > 0 && vorher.reichweite.granatwerfer === 45);
+    assert.ok(vorher.waffen.granatwerfer && vorher.waffen.granatwerfer.schaden > 0 && vorher.reichweite.granatwerfer === 60);
     assert.equal(vorher.waffen.pistole.magazin, 15);
     assert.equal(vorher.waffen.pistole.nachlade, 4);
     assert.equal(vorher.waffen.schlaeger.magazin, undefined);

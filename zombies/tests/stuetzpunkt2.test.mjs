@@ -706,3 +706,26 @@ test('Handgranate: weiter werfen, größerer Radius, mehr Schaden als zuvor (120
   assert.ok(GRANATE.radius >= 40 * 1.5, 'Radius');
   assert.ok(GRANATE.schadenZombie > 150 && GRANATE.schadenSpieler > 50, 'Schaden');
 });
+
+test('Munitionsvorrat der MG-Nester und des Puma wird mit der Welt gespeichert und geladen', async () => {
+  await frisch();
+  const spielerId = neueId();
+  const { c, raum } = await beitreten('Muni', spielerId);
+  assert.ok(raum.stuetzpunkt.nester.length >= 2 && raum.stuetzpunkt.puma, 'Nester/Puma fehlen');
+  raum.stuetzpunkt.nester[0].muni = 123; raum.stuetzpunkt.nester[1].muni = 0; raum.stuetzpunkt.puma.muni = 77;
+  const nr = raum.stuetzpunkt.nester.map(n => n.n), pn = raum.stuetzpunkt.puma.n;
+  raum.speichereWelt();
+  const stand = SpielRaum.speicher.ladeWelt();
+  assert.equal(stand.stuetzpunktMuni.mg[nr[0]], 123);
+  assert.equal(stand.stuetzpunktMuni.puma, 77);
+  await beenden(c);
+  const c2 = await new Client(URL_).joinOrCreate('zombies', { name: 'Muni', spielerId, seed: 7 });
+  const raum2 = matchMaker.getLocalRoomById(c2.roomId);
+  try {
+    const nest = n => raum2.stuetzpunkt.nester.find(x => x.n === n);
+    assert.equal(nest(nr[0]).muni, 123);
+    assert.equal(nest(nr[1]).muni, 0);
+    assert.equal(raum2.stuetzpunkt.puma.muni, 77);
+    assert.equal(raum2.stuetzpunkt.puma.n, pn);
+  } finally { await beenden(c2); }
+});

@@ -187,12 +187,21 @@ test('Speichern: Rucksack und Platz im Safe Room bleiben, draußen → zurück i
   } finally { await c.leave(); }
 });
 
-test('Gleiche Person zweimal gleichzeitig wird abgelehnt', async () => {
+test('Gleiche Person in zweitem Fenster: neues löst altes ab', async () => {
   const id = neueId();
-  const { c } = await beitreten('Eins', id);
+  const { c, p } = await beitreten('Eins', id);
+  let hinweis = false, weg = false;
+  c.onMessage('abgeloest', () => { hinweis = true; });
+  c.onLeave(() => { weg = true; });
+  const c2 = await new Client(URL_).joinOrCreate('zombies', { name: 'Zwei', spielerId: id });
   try {
-    await assert.rejects(new Client(URL_).joinOrCreate('zombies', { name: 'Zwei', spielerId: id }), /anderen Fenster/);
-  } finally { await c.leave(); }
+    assert.ok(await bis(() => hinweis && weg, 3000), 'altes Fenster nicht abgelöst');
+    assert.notEqual(c2.sessionId, c.sessionId);
+    const raum = [...matchMaker.getLocalRoomById ? [matchMaker.getLocalRoomById(c2.roomId)] : []][0];
+    assert.equal(raum.state.spieler.size, 1);
+    assert.equal(raum.state.spieler.get(c2.sessionId)?.verbunden, true);
+    assert.equal(raum.state.spieler.get(c.sessionId), undefined);
+  } finally { await c2.leave(); }
 });
 
 test('Welt bleibt nach Neustart des Raums erhalten', async () => {

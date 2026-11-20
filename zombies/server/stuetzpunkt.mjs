@@ -63,9 +63,23 @@ export class Stuetzpunkt {
       else if (t.art === 'posten' && t.rolle === 'soldat') this.schuetzen.push({ n, x: t.x, y: t.y, hx: t.x, hy: t.y, blick: t.blick ?? 0, w0: t.blick ?? 0, hp: SOLDAT_HP, tot: false, modus: 'post', weg: [], kuehl: 0.5 + (n % 5) * 0.2, scan: 0, ziel: null, kampfT: 99, deckT: DECKUNG_TAKT + (n % 4) });
     });
     if (this.puma) { const pt = sp.teile[this.puma.n]; s.bwTurm = pt.turm.winkel; s.bwX = pt.x; s.bwY = pt.y; s.bwW = pt.winkel; }
+    // Munitionsvorrat aus dem Speicher (nur bei passender Welt; höchstens der aktuelle Höchstvorrat)
+    const m = passt ? stand?.stuetzpunktMuni : null;
+    if (m && typeof m === 'object') {
+      const gueltig = (w, max) => Number.isFinite(w) ? Math.max(0, max > 0 ? Math.min(Math.round(w), max) : Math.round(w)) : null;
+      for (const nest of this.nester) { const w = gueltig(m.mg?.[nest.n], this.einst().mgMunition); if (w !== null) nest.muni = w; }
+      if (this.puma) { const w = gueltig(m.puma, this.einst().pumaMunition); if (w !== null) this.puma.muni = w; }
+    }
     s.stuetzpunkt = passt && stand?.stuetzpunkt === 'gefallen' ? 'gefallen' : 'steht';
     if (s.stuetzpunkt === 'gefallen') this.zombiesErzeugen();
     else if (!this.einst().aktiv) s.stuetzpunkt = 'aus';
+  }
+
+  // Munitionsvorrat: { mg: { teilNr: Munition }, puma }
+  muniSpeichern() {
+    const mg = {};
+    for (const n of this.nester) mg[n.n] = Math.max(0, Math.round(n.muni));
+    return { mg, puma: this.puma ? Math.max(0, Math.round(this.puma.muni)) : null };
   }
 
   speichern() { return this.raum.state.stuetzpunkt === 'gefallen' ? 'gefallen' : this.sp ? 'steht' : ''; }
