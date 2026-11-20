@@ -468,6 +468,7 @@ export class SpielRaum extends Room {
     this.onMessage('handel_raetsel', (client, m) => this.stuetzpunkt.handelRaetsel(client, m));
     this.onMessage('benutze', (client, m) => this.benutze(client, m));
     this.onMessage('wegwerfen', (client, m) => this.wegwerfen(client, m));
+    this.onMessage('rucksack_tausch', (client, m) => this.rucksackTausch(client, m));
     this.onMessage('aufheben_wahl', (client, m) => this.aufhebenWahl(client, m));
     this.onMessage('kiste', (client, m) => this.kiste(client, m));
     // Client meldet den Fingerabdruck seiner Welt; weicht er ab, soll er neu laden (sonst stehen Kisten/Wände woanders)
@@ -1088,34 +1089,46 @@ export class SpielRaum extends Room {
   // ---------- Startwahl vor Level 1: 5 Fähigkeitspunkte + ein Startgegenstand, einmal je Spieler und Runde ----------
   startwahlSenden(sid) {
     const x = this.extra.get(sid), c = this.clients.find(k => k.sessionId === sid);
-    if (x?.startOffen && c) c.send('startwahl', { punkte: FK.START_PUNKTE, gegenstaende: FK.START_GEGENSTAENDE, max: FK.MAX_STUFE });
+    if (x?.startOffen && c) c.send('startwahl', { punkte: FK.START_PUNKTE, gegenstaende: FK.START_GEGENSTAENDE, anzahl: FK.START_ANZAHL, max: FK.MAX_STUFE });
   }
   startwahl(client, m) {
     const x = this.extra.get(client.sessionId), p = this.state.spieler.get(client.sessionId);
     if (!x || !p || x.bot || !x.startOffen || !x.fk) return;
-    const item = String(m?.item ?? '');
-    if (!FK.START_GEGENSTAENDE.includes(item) || !FK.startVergabe(x.fk, m?.punkte)) return this.startwahlSenden(client.sessionId);
+    const items = m?.items;
+    if (!FK.startItemsOk(items) || !FK.startVergabe(x.fk, m?.punkte)) return this.startwahlSenden(client.sessionId);
     x.startOffen = false;
-    this.startGegenstand(p, item);
+    const zufall = this.startAusruestung(p, x, items);
     this.speichereSpieler(client.sessionId);
     this.fkSenden(client.sessionId);
-    client.send('startwahl_ok', {});
+    client.send('startwahl_ok', { zufall });
+    client.send('meldung', { text: `🎲 Zufall: ${DINGE[zufall]?.zeichen ?? ''} ${DINGE[zufall]?.name ?? zufall}`, lang: true });
   }
-  startGegenstand(p, item) {
-    if (item === 'waffe') {
-      if (!p.waffe) p.waffe = 'pistole';
-      p.munition = Math.min(MUNITION_MAX, p.munition + 12);
-    } else {
-      const d = item === 'lampe' ? 'taschenlampe' : item === 'brecheisen' ? 'brechstange' : 'wasser';
-      const rest = [d];
-      this.einpacken(p, rest);
-      if (rest.length) this.legeHin(d, p.x, p.y, p.ebene);   // Rucksack voll: neben die Figur
-    }
+  // zwei gewählte Gegenstände + ein zufälliger; gibt den Zufallsgegenstand zurück
+  startAusruestung(p, x, items) {
+    const zufall = FK.START_ZUFALL[Math.min(FK.START_ZUFALL.length - 1, Math.floor(this.rnd() * FK.START_ZUFALL.length))];
+    for (const d of [...items, zufall]) this.startGegenstand(p, d, x);
+    return zufall;
+  }
+  // Waffen in einen freien Waffenplatz (sonst Rucksack), alles andere über einpacken (Rucksack, sonst neben die Figur)
+  startGegenstand(p, d, x) {
+    const rest = [d];
+    if (DINGE[d]?.waffe) {
+      if (d === 'armbrust') rest.push('pfeil');
+      rest.shift();
+      if (!p.waffe && !p.faust) p.waffe = d;
+      else {
+        const frei = [0, 1, 2].find(i => i !== p.wplatz && !p[WP.PLATZ_FELD[i]]);
+        if (frei !== undefined) p[WP.PLATZ_FELD[frei]] = d; else rest.unshift(d);
+      }
+    } else if (d === 'pfeil' || d === 'munition') { /* Vorrat, über einpacken */ }
+    this.einpacken(p, rest);
+    for (const r of rest) this.legeHin(r, p.x, p.y, p.ebene);   // Rucksack voll: neben die Figur
   }
   // Bots: sofort eine sinnvolle Verteilung (Level 1)
   botStart(p, x) {
     if (this.state.level !== 1) return;
     x.fk = FK.neuerStand(); FK.startVergabe(x.fk, FK.START_BOT); this.fkVon.set(p, x.fk);
+    for (const d of FK.START_BOT_ITEMS) this.startGegenstand(p, d, x);
   }
 
   // trotzdem: auch während des Welt-Neustarts speichern (nur weltNeuStarten selbst); danach darf nichts mehr überschreiben,
@@ -2037,6 +2050,16 @@ export class SpielRaum extends Room {
       this.legeHin(alt, p.x, p.y, p.ebene);
     }
     this.nimmAuf(client, p, m.id, b);
+  }
+
+  // Rucksack umsortieren: Fach „von“ mit Fach „nach“ vertauschen (ein leeres Ziel hinter den Gegenständen = ans Ende schieben)
+  rucksackTausch(client, m) {
+    const p = this.state.spieler.get(client.sessionId);
+    const von = m?.von, nach = m?.nach, n = p?.rucksack.length ?? 0;
+    if (!p || !Number.isInteger(von) || !Number.isInteger(nach) || von < 0 || von >= n || nach < 0 || nach >= p.plaetze || von === nach) return;
+    if (nach >= n) { const [d] = p.rucksack.splice(von, 1); p.rucksack.push(d); }
+    else { const a = p.rucksack[von], b = p.rucksack[nach]; p.rucksack[von] = b; p.rucksack[nach] = a; }
+    this.speichereSpieler(client.sessionId);
   }
 
   wegwerfen(client, m) {

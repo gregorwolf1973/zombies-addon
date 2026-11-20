@@ -3011,13 +3011,57 @@ class Ort extends Phaser.Scene {
       b.className = 'platz' + (d ? '' : ' leer');
       b.innerHTML = d ? dingIcon(d, 32) : '';
       b.title = d ? `${DINGE[d]?.name} (Taste ${i + 1})` : 'leer';
-      if (d) b.onclick = e => { e.stopPropagation(); popupAuf(b, i, d); };
+      b.dataset.i = i;
+      if (d) { b.onclick = e => { e.stopPropagation(); if (zieheJuengst) return; popupAuf(b, i, d); }; rucksackZiehen(b, i); }
       leiste.appendChild(b);
     }
   }
 }
 
 // ---------- Rucksack-Menü, Vorratskiste ----------
+// Fach ziehen und auf ein anderes legen: Maus nach ~6 px Bewegung, Touch erst nach langem Drücken (~400 ms)
+let zieheJuengst = false;
+function rucksackZiehen(knopf, von) {
+  knopf.style.touchAction = 'manipulation';
+  knopf.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    const touch = e.pointerType !== 'mouse', x0 = e.clientX, y0 = e.clientY;
+    let zieht = false, geist = null, timer = null;
+    const los = () => { clearTimeout(timer); document.removeEventListener('pointermove', bewegt); document.removeEventListener('pointerup', ende); document.removeEventListener('pointercancel', ab); document.removeEventListener('touchmove', sperre); };
+    const sperre = ev => { if (zieht) ev.preventDefault(); };
+    const starte = () => {
+      zieht = true; popupZu(); knopf.classList.add('zieht');
+      geist = knopf.cloneNode(true); geist.style.cssText = 'position:fixed;z-index:60;pointer-events:none;opacity:.85;transform:translate(-50%,-50%)';
+      document.body.append(geist); navigator.vibrate?.(20);
+    };
+    const ziel = ev => document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('#rucksack .platz');
+    const bewegt = ev => {
+      if (!zieht) {
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > (touch ? 10 : 6)) { if (touch) los(); else starte(); }
+        return;
+      }
+      geist.style.left = ev.clientX + 'px'; geist.style.top = ev.clientY + 'px';
+      document.querySelectorAll('#rucksack .platz.ziel').forEach(q => q.classList.remove('ziel'));
+      ziel(ev)?.classList.add('ziel');
+    };
+    const aufraeumen = () => { geist?.remove(); knopf.classList.remove('zieht'); document.querySelectorAll('#rucksack .platz.ziel').forEach(q => q.classList.remove('ziel')); };
+    const ende = ev => {
+      const z = zieht ? ziel(ev) : null;
+      los(); aufraeumen();
+      if (zieht) {
+        zieheJuengst = true; setTimeout(() => { zieheJuengst = false; }, 50);
+        const nach = z ? Number(z.dataset.i) : -1;
+        if (nach >= 0 && nach !== von) raum.send('rucksack_tausch', { von, nach });
+      }
+    };
+    const ab = () => { los(); aufraeumen(); };
+    document.addEventListener('pointermove', bewegt);
+    document.addEventListener('pointerup', ende);
+    document.addEventListener('pointercancel', ab);
+    document.addEventListener('touchmove', sperre, { passive: false });
+    if (touch) timer = setTimeout(() => { starte(); bewegt(e); }, 400);
+  });
+}
 function popupAuf(knopf, platz, ding) {
   const p = $('popup');
   p.innerHTML = '';
@@ -3030,6 +3074,16 @@ function popupAuf(knopf, platz, ding) {
   weg.textContent = 'Wegwerfen'; weg.className = 'zweit';
   weg.onclick = () => { raum.send('wegwerfen', { platz }); popupZu(); };
   p.append(titel);
+  const anz = raum.state.spieler.get(meineId)?.rucksack.length ?? 0;
+  const reihe = document.createElement('div'); reihe.style.cssText = 'display:flex;gap:6px';
+  [['◀', -1, 'Ein Fach nach links'], ['▶', 1, 'Ein Fach nach rechts']].forEach(([z, d, tip]) => {
+    const b = document.createElement('button');
+    b.textContent = z; b.title = tip; b.setAttribute('aria-label', tip); b.className = 'zweit'; b.style.flex = '1';
+    b.disabled = platz + d < 0 || platz + d >= anz;
+    b.onclick = () => { raum.send('rucksack_tausch', { von: platz, nach: platz + d }); popupZu(); };
+    reihe.append(b);
+  });
+  p.append(reihe);
   if (DINGE[ding]?.waffe || ding === 'granate') {   // Waffe/Handgranaten in einen Waffenplatz legen
     ['Haupt', 'Neben', 'Ersatz'].forEach((n, i) => {
       const b = document.createElement('button');

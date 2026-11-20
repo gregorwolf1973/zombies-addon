@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.61.1 – 20.11.2026
+
+- Startwahl: zwei verschiedene Gegenstände frei wählen (Messer, Funkgerät, Taschenlampe, Armbrust mit 6 Pfeilen, Baseballschläger, Radio, Schlüsselbund, Spritze) plus ein Zufallsgegenstand („🎲 Zufall: …“); weiterhin 5 Fähigkeitspunkte.
+- Rucksack anordnen: am PC Ziehen und Ablegen, am Handy lange drücken und ziehen, im Rucksack-Menü ◀ ▶; Zifferntasten folgen der Reihenfolge.
+
 ## 0.61.0 – 20.11.2026
 
 - Missionsgegenstände: In Level 1 müssen Funkgerät, Batterie und Antenne (zusammen am Funktisch = Funkspruch), Torschlüssel und Diesel aus weit auseinanderliegenden Gebäuden geholt und im Safe House abgegeben werden – jede Runde woanders; in Level 2 eigene Liste. Auf der Karte nur Suchkreise (~150 m), die durch Hinweise kleiner werden (gerettete Menschen, Zettel bei Leichen). Das Fahrzeug kommt erst nach allen Abgaben.
