@@ -16,7 +16,7 @@ const ANSAGE = 10;                    // Sekunden zwischen Meldung und Auftauche
 const SICHT = 1000;                   // halbe Bildbreite eines breiten PC-Bildschirms: so weit sieht man höchstens
 const ABSTAND = SICHT + 300;          // für die Seitenwahl am Kartenrand (Horde startet hinter dem Bildrand)
 const ZIEL_ABSTAND = 900;             // Gruppenziel: so weit auf der Gegenseite des Spielers
-const TEMPO = 0.5;                    // Anteil von W.zombieTempoJagen (ca. 52 px/s)
+const TEMPO = 0.85;                   // Anteil von W.zombieTempoJagen (ca. 89 px/s): die Horde marschiert zügig, etwa wie ein Zombie auf Geräuschspur
 const MAX_DAUER = 600;                // spätestens dann löst sich die Welle auf (Sekunden); bis dahin zieht sie von Ziel zu Ziel
 const RAND = 7;                       // Wegziele mindestens so viele Kacheln vom Kartenrand (Ortsausfahrt meiden)
 const ABSPALT = 0.06;                 // Anteil der Gruppe, der sich bei jedem neuen Ziel abspaltet und als normaler Zombie streunt
@@ -30,8 +30,9 @@ const INFO_TAKT = 1;                  // Sekunden zwischen 'hordeInfo'-Nachricht
 const WECHSEL_MAX = 5;                // so viele letzte Zielwechsel werden gemeldet
 const TRUPP_TAKT = 0.5;               // Sekunden zwischen Trupp-Prüfungen
 const TRUPP_SPERRE = 25;              // Sekunden, bis dasselbe Ziel wieder einen Trupp bekommt
-const SEP = 34;                       // Schwarm: Abstand, ab dem Nachbarn sich abstoßen (px)
-const GESPERRT = new Set([...BLOCKIERT].filter(t => t !== T.INNENTUER));
+const SEP = 26;                       // Schwarm: Abstand, ab dem Nachbarn sich abstoßen (px)
+const FELD_GEWICHT = 2.2;             // Wegefeld überwiegt Schwarmkräfte deutlich: zügiger Zug statt Wuseln
+const GESPERRT = new Set([...BLOCKIERT, T.TUER, T.BODEN].filter(t => t !== T.INNENTUER));   // Wegefeld führt nie durch Häuser (Türen sind zu): sonst hämmert die Horde an Haustüren
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 
 export class Zombiewelle {
@@ -173,10 +174,13 @@ export class Zombiewelle {
     return feld;
   }
 
-  // Richtung nach dem Wegefeld: zwei Kacheln vorausschauen (glatter Weg um Häuser), null = kein Weg bekannt / am Ziel
+  // Richtung nach dem Wegefeld: bis zu drei Kacheln vorausschauen (glatter Weg um Häuser), aber nur so weit, wie die Gerade
+  // für die Figur frei ist (keine Ecken schneiden und an Hauswänden hängenbleiben); null = kein Weg bekannt / am Ziel
   feldRichtung(feld, x, y) {
     let kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
     if (kx < 0 || ky < 0 || kx >= BREITE || ky >= HOEHE || feld[ky * BREITE + kx] <= 0) return null;
+    const welt = this.raum.welt;
+    const ziele = [];
     for (let schritt = 0; schritt < 3; schritt++) {
       let best = null, bw = feld[ky * BREITE + kx];
       if (bw <= 0) break;
@@ -187,8 +191,18 @@ export class Zombiewelle {
       }
       if (!best) break;
       [kx, ky] = best;
+      ziele.push([(kx + 0.5) * KACHEL, (ky + 0.5) * KACHEL]);
     }
-    return Math.atan2((ky + 0.5) * KACHEL - y, (kx + 0.5) * KACHEL - x);
+    if (!ziele.length) return null;
+    let wahl = ziele[0];
+    for (let i = ziele.length - 1; i > 0; i--) {   // weitestes Ziel mit freier Gerade
+      const [tx, ty] = ziele[i];
+      const d = Math.hypot(tx - x, ty - y), n = Math.ceil(d / 10);
+      let ok = true;
+      for (let k = 1; k <= n && ok; k++) ok = frei(welt, x + (tx - x) * k / n, y + (ty - y) * k / n, W.zombieRadius + 1);
+      if (ok) { wahl = ziele[i]; break; }
+    }
+    return Math.atan2(wahl[1] - y, wahl[0] - x);
   }
 
   // Zeitgeber, Trupps und Lärmsperre einer neuen Horde
@@ -569,8 +583,10 @@ export class Zombiewelle {
       const wf = a.feld ? this.feldRichtung(a.feld, z.x, z.y) : null;
       vx = wf === null ? (a.ziel.x - z.x) / d0 : Math.cos(wf); vy = wf === null ? (a.ziel.y - z.y) / d0 : Math.sin(wf);
       const dm = Math.hypot(a.mitte.x - z.x, a.mitte.y - z.y);
-      if (dm > 90) { const k = Math.min(0.7, (dm - 90) / 260); vx += (a.mitte.x - z.x) / dm * k; vy += (a.mitte.y - z.y) / dm * k; }
+      vx *= FELD_GEWICHT; vy *= FELD_GEWICHT;
+      if (dm > 140) { const k = Math.min(0.4, (dm - 140) / 400); vx += (a.mitte.x - z.x) / dm * k; vy += (a.mitte.y - z.y) / dm * k; }
     }
+    const fx = vx, fy = vy;   // Zugrichtung ohne Schwarmkräfte (für den Wandtest unten)
     let sx = 0, sy = 0, ax = 0, ay = 0, an = 0;
     // Nachbarn aus dem Raster (höchstens 28 prüfen: reicht für Abstand und Ausrichtung, hält den Takt kurz)
     const g = r.zRaster?.get(z.ebene ?? ''), RZ = 96;
@@ -590,9 +606,24 @@ export class Zombiewelle {
         }
       }
     }
-    vx += sx * 1.6; vy += sy * 1.6;
+    // Abstoßung nicht gegen Wände drücken: ist die Richtung mit Abstoßung versperrt, gilt nur die Zugrichtung
+    const sepOk = (qx, qy) => { const l = Math.hypot(qx, qy) || 1; return frei(r.welt, z.x + qx / l * (W.zombieRadius + 5), z.y + qy / l * (W.zombieRadius + 5), W.zombieRadius); };
+    if (sx || sy) {
+      const gx = fx + sx * 0.8, gy = fy + sy * 0.8;
+      if (sepOk(gx, gy)) { vx = gx; vy = gy; } else { vx = fx; vy = fy; }
+    }
     if (an) { const l = Math.hypot(ax, ay) || 1; vx += ax / l * 0.3; vy += ay / l * 0.3; }
-    return Math.atan2(vy, vx);
+    let h = Math.atan2(vy, vx);
+    // feine Hindernisse (Bänke, Autos, Zaunpfosten, Hausecken) voraus: seitlich daran vorbeisteuern, bevor der Zombie anstößt
+    const voraus = ang => frei(r.welt, z.x + Math.cos(ang) * 22, z.y + Math.sin(ang) * 22, W.zombieRadius) && frei(r.welt, z.x + Math.cos(ang) * 11, z.y + Math.sin(ang) * 11, W.zombieRadius);
+    if (!voraus(h)) {
+      info.seite ??= r.rnd() < 0.5 ? -1 : 1;   // bevorzugte Ausweichseite je Zombie (kein Hin und Her)
+      for (const dw of [0.45, 0.9, 1.4, 1.9]) {
+        if (voraus(h + info.seite * dw)) { h += info.seite * dw; break; }
+        if (voraus(h - info.seite * dw)) { h -= info.seite * dw; break; }
+      }
+    }
+    return h;
   }
 
   // Bewegung eines Wellen-Zombies (aus zombieSchritt, wenn er nichts jagt und keinem Geräusch folgt)
@@ -610,15 +641,22 @@ export class Zombiewelle {
         info.steuerT = 0.25 + r.rnd() * 0.25;
         info.lenkW = this.lenken(z, info, a);
         const u = r.rnd();
-        if (u < 0.04) { info.pauseT = 0.6 + r.rnd() * 2; return; }
-        if (u < 0.07) { info.taumelT = 0.5 + r.rnd() * 0.7; info.taumelW = (r.rnd() < 0.5 ? -1 : 1) * (0.8 + r.rnd() * 0.8); }
+        if (u < 0.008) { info.pauseT = 0.4 + r.rnd() * 0.8; return; }
+        if (u < 0.02) { info.taumelT = 0.3 + r.rnd() * 0.4; info.taumelW = (r.rnd() < 0.5 ? -1 : 1) * (0.4 + r.rnd() * 0.4); }
       }
-      w = info.lenkW + Math.sin(info.phase) * 0.28;   // Schlängeln
+      w = info.lenkW + Math.sin(info.phase) * 0.1;   // leichtes Schlängeln
       if (info.taumelT > 0) { info.taumelT -= dt; w += info.taumelW; }
     }
     z.richtung = w;
     if (!r.zombieGehen(z, w, W.zombieTempoJagen * TEMPO * info.wTempo * dt, dt, info)) {
-      info.ausweich = 0.8 + r.rnd() * 0.8; info.ausweichW = w + (r.rnd() < 0.5 ? -1 : 1) * (1.1 + r.rnd() * 0.6);
+      // seitlich am Hindernis entlang: zuerst flache Winkel zur Zugrichtung, die Seite mit freiem Platz wählen
+      const seite = r.rnd() < 0.5 ? -1 : 1;
+      let neu = null;
+      for (const dw of [0.7, 1.2, 1.7]) for (const sg of [seite, -seite]) {
+        const ww = w + sg * dw;
+        if (!neu && frei(r.welt, z.x + Math.cos(ww) * 16, z.y + Math.sin(ww) * 16, W.zombieRadius)) neu = ww;
+      }
+      info.ausweich = 0.4 + r.rnd() * 0.4; info.ausweichW = neu ?? w + seite * 1.4;
     }
   }
 }

@@ -138,3 +138,17 @@ test('Tag/Nacht-Zeiten einstellbar: Helligkeit folgt tagAb/nachtAb, Vorgabe 7:00
   const w = bereinige({ tagAb: 9999, nachtAb: 1300 }, {});
   assert.equal(w.tagAb, 660); assert.equal(w.nachtAb, 1305);
 });
+
+test('Kollisionsradius: Spieler 7 px, Zombie 9 px – eine 16-px-Lücke (4 Feinfelder) ist für Spieler passierbar (Altwert 11 nicht)', () => {
+  assert.equal(WERTE.spielerRadius, 7);
+  assert.equal(WERTE.zombieRadius, 9);
+  const fb = BREITE * 4, fh = HOEHE * 4, FP = KACHEL / 4;
+  const fein = new Uint8Array(fb * fh);
+  const lueckeY = (y0, y1) => { fein.fill(0); for (let fy = 0; fy < fh; fy++) for (let fx = 0; fx < fb; fx++) if (fx >= 40 && fx < 44 && (fy < y0 || fy >= y1)) fein[fy * fb + fx] = 1; };
+  const welt = { fein };
+  // Wand bei x = 40..43 (Feinfelder), Lücke 4 Feinfelder = 16 px hoch (Kachelgröße / 4 je Feld)
+  lueckeY(20, 20 + Math.round(16 / FP));
+  const mx = 42 * FP, my = (20 + Math.round(16 / FP) / 2) * FP;
+  assert.ok(frei(welt, mx, my, WERTE.spielerRadius), 'Spieler passt nicht durch 16 px');
+  assert.ok(!frei(welt, mx, my, 11), 'Altwert 11 hätte nicht gepasst');
+});

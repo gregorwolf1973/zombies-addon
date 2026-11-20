@@ -89,6 +89,39 @@ test('Bundeswehr-Kiste liefert selten ein Maschinengewehr', async () => {
   } finally { await a.leave(); }
 });
 
+test('Maschinengewehr aus der Kiste: kommt sofort in die Hand (Pistole in den Rucksack), schießt und verletzt Zombies', async () => {
+  const a = await new Client(URL_).joinOrCreate('zombies', { name: 'MG-Schütze' });
+  try {
+    const raum = matchMaker.getLocalRoomById(a.roomId);
+    const p = raum.state.spieler.get(a.sessionId), x = raum.extra.get(a.sessionId);
+    raum.state.zombies.clear(); raum.zombieInfo.clear(); raum.zombieFaktor = 0;
+    p.waffe = 'pistole'; p.munition = 0; p.rucksack.splice(0, p.rucksack.length);
+    raum.rnd = () => 0.2;   // unter 25 %: MG
+    raum.durchsucht({ sessionId: a.sessionId, send() {} }, p, { id: 'kistetest2', art: 'bw_kiste' });
+    assert.equal(p.waffe, 'mg', 'MG nicht in der Hand');
+    assert.ok(p.rucksack.includes('pistole'), 'Pistole nicht im Rucksack');
+    assert.ok(p.munition >= 100, 'keine Munition');
+    assert.equal(aktiveWaffe(p)[0], 'mg');
+    // schießt: Zombie 100 px entfernt verliert Leben, Munition sinkt, 'schuss'-Nachricht kommt
+    const schuesse = []; a.onMessage('schuss', m => schuesse.push(m));
+    const ort = raum.welt.start;
+    p.x = ort.x; p.y = ort.y; p.ebene = ''; p.unten = false;
+    const id = raum.setzeZombie(ort.x + 100, ort.y, '');
+    const info = raum.zombieInfo.get(id), z = raum.state.zombies.get(id);
+    info.steht = true; info.schlaeft = false; info.ziel = null;
+    const hp0 = z.hp, mun0 = p.munition;
+    x.pause = 0; x.aktion = null; p.aktion = null;
+    raum.spielerSchritt(a.sessionId, p, x, 0.05);
+    assert.ok(raum.state.zombies.get(id)?.hp < hp0 || !raum.state.zombies.has(id), 'MG verletzt den Zombie nicht');
+    assert.equal(p.munition, mun0 - 1);
+    assert.ok(await bis(() => schuesse.some(m => m.art === 'mg')), 'keine Schussmeldung');
+    // MG schlägt Waffe: auch ein zweites MG-Aufnehmen vom Boden ändert nichts, und eine volle Tasche lässt die Waffe liegen
+    p.waffe = 'gewehr'; p.rucksack.splice(0, p.rucksack.length, ...Array(p.plaetze).fill('wasser'));
+    raum.nimmAuf(null, p, 'gibtsnicht', { ding: 'mg' });
+    assert.equal(p.waffe, 'gewehr', 'bei vollem Rucksack bleibt die Hand unverändert');
+  } finally { await a.leave(); }
+});
+
 test('Startwahl: genau einmal, genau 5 Punkte, ein Startgegenstand', async () => {
   const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Starter' });
   try {

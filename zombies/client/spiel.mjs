@@ -766,6 +766,7 @@ class Ort extends Phaser.Scene {
     startwahlStart(raum);   // Startwahl vor Level 1 (5 Punkte + Gegenstand)
     { const fk = document.getElementById('fkknopf'); if (fk) $('leiste').prepend(fk); }   // Symbolleiste über der Eckkarte
     raum.onMessage('gefunden', m => {
+      if (m.kiste && m.rest === 0) (this.leereKisten ??= new Set()).add(m.kiste);   // Munitionskiste: für mich leer
       if (m.dinge.length) ton.aufheben(); else if (m.rest || !ton.ereignis('truheLeer')) ton.suchen();
       if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : d === 'pfeil' ? '➶ 6 Pfeile' : dingText(d)).join(', '));
       else if (m.rest) meldung('Rucksack voll – der Rest bleibt hier');
@@ -1330,12 +1331,27 @@ class Ort extends Phaser.Scene {
   spurenDarstellen(s) {
     let stand = '';
     for (const [id, b] of s.behaelter) stand += id + b.rest;
+    stand += '|' + [...(this.leereKisten ?? [])].join(',');
     if (stand === this.spurenStand && this.spurenEbene === this.aktEbene) return;
     this.spurenStand = stand; this.spurenEbene = this.aktEbene;
     this.spurenGfx ??= this.add.graphics().setDepth(1.08);
     const g = this.spurenGfx.clear();
+    const gk = (this.kistenGfx ??= this.add.graphics().setDepth(5.05)).clear().setVisible(!this.aktEbene);   // Stützpunkt-Kisten liegen im Kartenstück 'oben' (Tiefe 5)
     const w = this.wv(this.aktEbene);
     for (const b of w.behaelter ?? []) {
+      // Stützpunkt-Kisten: leer = für DIESEN Spieler ausgeräumt (Munitionskisten: je Spieler eigener Inhalt, Meldung 'gefunden' mit kiste-Id)
+      if (b.art === 'bw_kiste' || b.art === 'sanikiste' || b.art === 'bw_container') {
+        if (!(b.art === 'bw_kiste' ? this.leereKisten?.has(b.id) : s.behaelter.get(b.id)?.rest === 0)) continue;
+        const t = this.welt.stuetzpunkt?.teile.find(q => (q.art === 'kiste' || q.art === 'container') && Math.hypot(q.x - b.x, q.y - b.y) < 3);
+        const hw = (t ? t.w : 20) / 2, hd = (t ? t.d : 16) / 2, wi = t ? t.winkel : (b.winkel ?? 0), cs = Math.cos(wi), sn = Math.sin(wi);
+        const pkt = (u, v) => ({ x: b.x + u * cs - v * sn, y: b.y + u * sn + v * cs });
+        const flaeche = (a, f, al) => { const q = [pkt(-a * hw, -a * hd), pkt(a * hw, -a * hd), pkt(a * hw, a * hd), pkt(-a * hw, a * hd)]; gk.fillStyle(f, al).fillPoints(q, true); return q; };
+        flaeche(1, 0x8a8a84, 0.55);        // ausgegraut
+        flaeche(0.72, 0x1c1c1a, 0.7);      // offener, leerer Kasten
+        const k = (x0, y0, x1, y1) => { const p0 = pkt(x0, y0), p1 = pkt(x1, y1); gk.lineStyle(1.5, 0xbdbdbd, 0.8).lineBetween(p0.x, p0.y, p1.x, p1.y); };
+        k(-5, -4, 5, 4); k(5, -4, -5, 4);  // kleines Leer-Kreuz
+        continue;
+      }
       const z = s.behaelter.get(b.id);
       if (!z) continue;
       const leer = z.rest === 0;
@@ -1344,15 +1360,23 @@ class Ort extends Phaser.Scene {
         autoFlaeche(g.fillStyle(0x111111, 0.85), b, -25, -16, 9);   // offener Kofferraum am Heck
         if (leer) autoFlaeche(g.fillStyle(0x9e9e9e, 0.45), b, -23, 23, 11);
       } else if (b.art !== 'bus') {
-        g.lineStyle(2, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokeRect(b.x - 12, b.y - 12, 24, 24);
-        g.fillStyle(0x111111, 0.55).fillRect(b.x - 9, b.y - 9, 18, 18);                    // geöffnete Türen
-        if (leer) {
-          // Kreuz über das ganze Möbelstück (alle Kacheln), sonst nur über die Behälter-Kachel
-          const kx = Math.floor(b.x / KACHEL), ky = Math.floor(b.y / KACHEL);
-          const m = (w.moebel ?? []).find(q => kx >= q.x && kx < q.x + q.b && ky >= q.y && ky < q.y + q.h);
-          const x0 = m ? m.x * KACHEL + 4 : b.x - 6, y0 = m ? m.y * KACHEL + 4 : b.y - 6;
-          const x1 = m ? (m.x + m.b) * KACHEL - 4 : b.x + 6, y1 = m ? (m.y + m.h) * KACHEL - 4 : b.y + 6;
-          g.lineStyle(2, 0xbdbdbd, 0.9).lineBetween(x0, y0, x1, y1).lineBetween(x1, y0, x0, y1);
+        // das Möbelstück, zu dem der Behälter gehört (Rahmen und Kreuz liegen genau auf dem gedrehten Möbelbild = ganzes Möbelrechteck)
+        const kx = Math.floor(b.x / KACHEL), ky = Math.floor(b.y / KACHEL);
+        const m = (w.moebel ?? []).find(q => kx >= q.x && kx < q.x + q.b && ky >= q.y && ky < q.y + q.h);
+        if (m) {
+          const x0 = m.x * KACHEL + 3, y0 = m.y * KACHEL + 3, bw = m.b * KACHEL - 6, bh = m.h * KACHEL - 6;
+          if (leer) {
+            g.fillStyle(0x6e6e6e, 0.28).fillRect(x0, y0, bw, bh);
+            g.lineStyle(1.5, 0xbdbdbd, 0.55).strokeRect(x0, y0, bw, bh);
+            g.lineStyle(1.5, 0xbdbdbd, 0.45).lineBetween(x0 + 3, y0 + 3, x0 + bw - 3, y0 + bh - 3).lineBetween(x0 + bw - 3, y0 + 3, x0 + 3, y0 + bh - 3);
+          } else {
+            g.fillStyle(0x111111, 0.3).fillRect(b.x - 9, b.y - 9, 18, 18);                    // geöffnete Türen
+            g.lineStyle(1.5, 0xffd54f, 0.6).strokeRect(x0, y0, bw, bh);
+          }
+        } else {
+          g.lineStyle(2, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokeRect(b.x - 12, b.y - 12, 24, 24);
+          g.fillStyle(0x111111, 0.55).fillRect(b.x - 9, b.y - 9, 18, 18);
+          if (leer) g.lineStyle(2, 0xbdbdbd, 0.9).lineBetween(b.x - 6, b.y - 6, b.x + 6, b.y + 6).lineBetween(b.x + 6, b.y - 6, b.x - 6, b.y + 6);
         }
       }
     }
@@ -2004,7 +2028,18 @@ class Ort extends Phaser.Scene {
   bwSchuss(m) {
     const o = this.stuetzpunktObj, w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), c = Math.cos(w), sn = Math.sin(w);
     const kanone = m.art === 'kanone', vorn = kanone ? 58 * PUMA_SKALA : 30;
-    const pt = kanone && o?.turm, mx = pt ? o.turm.x + c * o.pumaMuendung : m.x1 + c * vorn, my = pt ? o.turm.y + sn * o.pumaMuendung : m.y1 + sn * vorn;
+    // Mündung: Stützpunkt-Puma = Turmdrehpunkt + Rohrlänge in Richtung des (gedrehten) Turms; Evakuierungspanzer (Level 2) = Fahrzeugmitte
+    // + Versatz Turm → Mündung (feststehender Turm, Fahrzeugrichtung); sonst Soldat/Bus: Abstand in Schussrichtung
+    let mx = m.x1 + c * vorn, my = m.y1 + sn * vorn, wb = w;
+    const evak = !kanone && m.n === -1 && raum.state.karte === 'isarauen' && this.textures.exists('puma-wanne')
+      ? [...(raum.state.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung' && Math.hypot(v.x - m.x1, v.y - m.y1) < 2) : null;
+    if (kanone && o?.turm) {
+      wb = o.turm.rotation; mx = o.turm.x + Math.cos(wb) * o.pumaMuendung; my = o.turm.y + Math.sin(wb) * o.pumaMuendung;
+    } else if (evak) {
+      const f = 113 / PUMA_BILD.laenge, r = this.busObj.get([...raum.state.fahrzeuge.entries()].find(([, v]) => v === evak)?.[0])?.r ?? evak.richtung;
+      const ox = (PUMA_BILD.turmX + PUMA_BILD.muendung) * f, oy = PUMA_BILD.turmY * f;
+      mx = evak.x + Math.cos(r) * ox - Math.sin(r) * oy; my = evak.y + Math.sin(r) * ox + Math.cos(r) * oy; wb = r;
+    }
     if (!kanone) {
       const sold = o?.soldaten.find(q => q.n === m.n);
       if (sold) { sold.schussBis = this.time.now + 260; sold.w = w; }
@@ -2016,8 +2051,8 @@ class Ort extends Phaser.Scene {
     g.lineStyle(1, 0xffffff, 0.9).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
     this.tweens.add({ targets: g, x: (m.x2 - mx) * (1 - l1), y: (m.y2 - my) * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => g.destroy() });
     // Mündungsblitz (additiv) und Pulverrauch
-    const blitz = this.add.image(mx, my, 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(w)
-      .setScale(kanone ? 1.0 : 0.5).setDepth(7);
+    const blitz = this.add.image(mx, my, 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(wb)
+      .setScale(kanone || evak ? 1.0 : 0.5).setDepth(7);
     this.tweens.add({ targets: blitz, alpha: 0, scale: blitz.scale * 1.25, duration: kanone ? 160 : 90, onComplete: () => blitz.destroy() });
     if (kanone) {
       for (let i = 0; i < 6; i++) {
@@ -2330,7 +2365,7 @@ class Ort extends Phaser.Scene {
     for (const b of w.behaelter) {
       const d = Math.hypot(b.x - x, b.y - y);
       if (d >= bd) continue;
-      if (raum.state.behaelter.get(b.id)?.rest === 0) continue;
+      if (raum.state.behaelter.get(b.id)?.rest === 0 || this.leereKisten?.has(b.id)) continue;
       if (!ich.ebene && !sichtfrei(w, x, y, b.x, b.y)) continue;
       bd = d; best = b;
     }

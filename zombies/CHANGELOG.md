@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.49.0 – 20.11.2026
+
+- Zombiehorde zügiger und zusammenhängender: Marschtempo höher, folgt dem Weg stärker, weniger Wuseln und Hängenbleiben, seitliches Ausweichen.
+- Engere Lücken passierbar: Kollisionskreis der Spieler 7 px (vorher 11), Zombies 9 px; Ausgänge sperren jetzt nach Richtung (gehaltene Taste führt nach dem Betreten nicht sofort wieder hinaus).
+- Maschinengewehr: kommt beim Aufheben sofort in die Hand (lag vorher oft im Rucksack und schoss deshalb nicht) und ist häufiger (25 % in Munitionskisten).
+- Handgranate: Wurfweite 200 statt 120 px, Explosionsradius 60 statt 40 px, mehr Schaden.
+- Leere Kisten für den Spieler grau mit Kreuz; Kreuz/Rahmen sitzt genau auf dem Möbelbild; Sandsäcke vor dem Safe House in ordentlichen Reihen mit freiem Durchgang; Mündungsfeuer an der Rohrmündung des Puma.
+
 ## 0.48.3 – 20.11.2026
 
 - Verwaltung: Fehler „wz is not defined“ beim Laden behoben (Schalter „Horde-Ziele anzeigen“).

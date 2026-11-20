@@ -1118,9 +1118,14 @@ export class SpielRaum extends Room {
     // (sonst läuft man mit gehaltener Taste sofort zurück durch Tür oder Treppe)
     x.ankunftT = (x.ankunftT ?? 0) + dt;
     // (Bots stehen nach dem Wechsel oft nur einen Schritt von der Tür entfernt und müssen sofort zurück können – nach 1 s darf es)
-    if (x.ankunft && x.ankunftT > (x.bot ? 1 : 1.5)) x.ankunft = null;
+    // Spieler: Ausgang erst wieder scharf, wenn sie sich vom Ankunftspunkt entfernt haben (gehaltene Taste führt nicht
+    // sofort wieder hinaus – mit dem kleineren Kollisionskreis erreicht man den Ausgang sonst nach Ablauf einer Zeitsperre)
+    if (x.ankunft && x.bot && x.ankunftT > 1) x.ankunft = null;
     if (x.ankunft) {
-      if (Math.hypot(p.x - x.ankunft.x, p.y - x.ankunft.y) < 36) return;
+      if (x.ankunft.ref && !x.bot) {
+        // erst scharf, wenn man sich einmal vom Rückweg-Übergang entfernt hat (weggehen und zurück)
+        if (Math.hypot(p.x - x.ankunft.ref.x, p.y - x.ankunft.ref.y) <= x.ankunft.d0 + 14) return;
+      } else if (Math.hypot(p.x - x.ankunft.x, p.y - x.ankunft.y) < 36) return;
       x.ankunft = null;
     }
     // Bots wechseln nur, wenn sie genau diesen Übergang ansteuern (nicht beim Vorbeilaufen)
@@ -1154,7 +1159,15 @@ export class SpielRaum extends Room {
     } else return;
     const platz = this.freierPlatz(pos, 0, ziel);
     p.ebene = ziel; p.x = platz.x; p.y = platz.y; p.aktion = ''; p.fortschritt = 0;
-    x.wechselSperre = 0.2; x.ankunft = { x: platz.x, y: platz.y }; x.ankunftT = 0; x.schonT = SCHONZEIT_EBENE;
+    // Rückweg-Übergang in der neuen Ebene (Ausgang, Haustür oder Treppe zurück) für die richtungsabhängige Sperre
+    let ref = null;
+    if (ziel === '') ref = { x: (kx + 0.5) * KACHEL, y: (ky + 0.5) * KACHEL };   // Haustür draußen = Kachel, aus der man kam
+    else {
+      const zw = this.wv(ziel, welt.stock ?? '');
+      const rk = t === T.TUER ? zw.ausgang : zw.treppen?.find(z => z.ziel === (welt.stock ?? ''));
+      if (rk) ref = { x: (rk.x + 0.5) * KACHEL, y: (rk.y + 0.5) * KACHEL };
+    }
+    x.wechselSperre = 0.2; x.ankunft = { x: platz.x, y: platz.y, ref, d0: ref ? Math.hypot(platz.x - ref.x, platz.y - ref.y) : 0 }; x.ankunftT = 0; x.schonT = SCHONZEIT_EBENE;
     if (x.bot) { x.bot.weg = null; x.bot.uebergangZiel = null; }
   }
 
@@ -1585,7 +1598,7 @@ export class SpielRaum extends Room {
         const waffen = ['pistole', 'gewehr', 'schrotflinte', 'mp'];
         // selten (je Kiste und Mitspieler) ein Maschinengewehr oder Scharfschützengewehr statt der üblichen Waffe
         const sel = this.rnd();
-        const waffe = sel < 0.12 ? 'mg' : sel < 0.2 ? 'scharfschuetze' : waffen[Math.floor(this.rnd() * waffen.length)];
+        const waffe = sel < 0.25 ? 'mg' : sel < 0.33 ? 'scharfschuetze' : waffen[Math.floor(this.rnd() * waffen.length)];
         this.inhalte.set(schluessel, [waffe, 'taschenlampe']);
         p.munition = Math.min(MUNITION_MAX, p.munition + 100);
         extraGenommen = ['munition'];
@@ -1593,7 +1606,7 @@ export class SpielRaum extends Room {
       const inhalt = this.inhalte.get(schluessel);
       const genommen = [...extraGenommen, ...this.einpacken(p, inhalt)];
       this.aufgaben?.gefunden(b, genommen);
-      return client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+      return client?.send('gefunden', { dinge: genommen, rest: inhalt.length, kiste: b.id });
     }
     // ausgebrannt: nichts mehr zu holen
     if ((b.art === 'auto' || b.art === 'bus') && this.state.verbrannt.has((b.art === 'auto' ? 'auto:' : 'bus:') + b.id)) this.setzeInhalt(b.id, []);
@@ -1623,6 +1636,9 @@ export class SpielRaum extends Room {
       if (d === 'pfeil') { p.pfeile = Math.min(PFEILE_MAX, p.pfeile + PFEILE_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
       // in die Hand bzw. anziehen, wenn frei – das braucht keinen Rucksackplatz
       if (DINGE[d]?.waffe && !p.waffe) { p.waffe = d; genommen.push(d); inhalt.splice(i, 1); continue; }
+      // Maschinengewehr schlägt jede andere Waffe: sofort in die Hand (die bisherige wandert in den Rucksack, wenn Platz ist),
+      // sonst liegt es unbemerkt im Rucksack und „schießt nicht“, weil nur die Waffe in der Hand feuert
+      if (d === 'mg' && p.waffe !== 'mg' && p.rucksack.length < p.plaetze) { p.rucksack.push(p.waffe); p.waffe = 'mg'; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'taschenlampe' && !(p.lampe > 0)) { p.lampe = LAMPE_DAUER; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'kleidung' && !(p.kleidung > 0)) { p.kleidung = 100; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (p.rucksack.length < p.plaetze) { p.rucksack.push(d); genommen.push(d); inhalt.splice(i, 1); continue; }
@@ -1731,6 +1747,7 @@ export class SpielRaum extends Room {
   nimmAuf(client, p, id, b) {
     const d = b.ding;
     if (DINGE[d]?.waffe && !p.waffe) p.waffe = d;
+    else if (d === 'mg' && p.waffe !== 'mg' && p.rucksack.length < p.plaetze) { p.rucksack.push(p.waffe); p.waffe = 'mg'; }   // MG sofort in die Hand
     else if (d === 'munition') p.munition = Math.min(MUNITION_MAX, p.munition + MUNITION_PRO_FUND);
     else if (d === 'pfeil') p.pfeile = Math.min(PFEILE_MAX, p.pfeile + 1);   // einzelner Pfeil vom Boden
     else if (d === 'taschenlampe' && !(p.lampe > 0)) p.lampe = LAMPE_DAUER;
@@ -2384,8 +2401,8 @@ export class SpielRaum extends Room {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
         z.richtung = w;
         const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
-        if (d > W.spielerRadius + W.zombieRadius - 2) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt, info);
-        if (d < W.spielerRadius + W.zombieRadius + 6 && !(this.extra.get(info.ziel)?.schonT > 0)) {
+        if (d > W.spielerRadius + W.zombieRadius + 4) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt, info);
+        if (d < W.spielerRadius + W.zombieRadius + 12 && !(this.extra.get(info.ziel)?.schonT > 0)) {
           const schutz = ziel.kleidung > 0;
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1) * this.fkWert(ziel, 'schadenFaktor'));
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);
@@ -2474,7 +2491,7 @@ export class SpielRaum extends Room {
       const key = `${z.ebene}:${kx},${ky}`, st = this.state.tueren.get(key);
       return st && (!st.offen || this.tuerBarrikade(key) > 0) ? key : null;
     };
-    return pruefe(z.x + Math.cos(w) * (W.zombieRadius + 3), z.y + Math.sin(w) * (W.zombieRadius + 3)) ?? pruefe(z.x, z.y);
+    return pruefe(z.x + Math.cos(w) * (W.zombieRadius + 5), z.y + Math.sin(w) * (W.zombieRadius + 5)) ?? pruefe(z.x, z.y);
   }
 
   zombieGehen(z, w, weg, dt, info = null) {
@@ -2502,7 +2519,7 @@ export class SpielRaum extends Room {
       if (o === z || o.ebene !== z.ebene) continue;
       const d = Math.hypot(o.x - z.x, o.y - z.y);
       if (d > 0 && d < W.zombieRadius * 2) {
-        const f = (W.zombieRadius * 2 - d) / 2;
+        const f = (W.zombieRadius * 2 - d) / 2 * (info?.welle ? 0.3 : 1);   // Horde: sanftes Wegdrücken, sonst bremst der Haufen sich selbst aus
         bewege(welt, z, (z.x - o.x) / d * f, (z.y - o.y) / d * f, W.zombieRadius);
       }
     }

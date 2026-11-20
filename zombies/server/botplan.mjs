@@ -4,7 +4,7 @@
 // Rollen: Begleiter (mindestens einer je Mensch, folgt wie bisher) und Sammler (holt Vorräte, setzt den Funkspruch ab,
 // verbarrikadiert, jagt Zombies in Gruppennähe, geht zum Bus). Chat-Befehle der Menschen: botBefehl().
 // Die Hilfsfunktionen aus bots.mjs (geheZu …) kommen als Parameter H, damit es keine Importschleife gibt.
-import { findeWeg, KACHEL, AKTION_ABSTAND, BUS_ABSTAND, BEUTE, WAFFEN, KISTE_PLAETZE, istNacht, frei, ladenArt, durchsuchDauer, safeRoomVon } from '../client/welt.mjs';
+import { WERTE as W, findeWeg, KACHEL, AKTION_ABSTAND, BUS_ABSTAND, BEUTE, WAFFEN, KISTE_PLAETZE, istNacht, frei, ladenArt, durchsuchDauer, safeRoomVon } from '../client/welt.mjs';
 import { EBENE_MUSTER } from '../client/innen.mjs';
 import { hhmm } from './aufgaben.mjs';
 
@@ -21,7 +21,7 @@ export const BOTPLAN = {
   jagdRadius: 350,         // Zombies in diesem Abstand zu einem Menschen jagen bewaffnete Bots
 };
 
-const RAD = 11;
+const RAD = W.spielerRadius;
 const abstand = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const anz = (liste, d) => { let n = 0; for (const q of liste) if (q === d) n++; return n; };
 const NAMEN = { wasser: 'Wasser', essen: 'Konserven', spritze: 'eine Spritze', bretter: 'Bretter', taschenlampe: 'eine Taschenlampe', alles: 'Vorräte', verband: 'Verbandszeug' };

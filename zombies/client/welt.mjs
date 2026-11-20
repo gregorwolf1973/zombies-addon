@@ -414,7 +414,7 @@ export const BEUTE = {
   bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', 'pfeil', null],   // MG/Scharfschütze der Kiste: raum.mjs (durchsucht), nicht hier
   bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', null],
   // Polizeiwache (OSM amenity=police): Pistolen, Schrot, selten Maschinenpistole, Maschinengewehr, Scharfschützengewehr
-  laden_polizei: ['munition', 'munition', 'verband', 'taschenlampe', 'pistole', 'pistole', 'schrotflinte', 'mp', 'mg', 'scharfschuetze', 'funkgeraet', null],
+  laden_polizei: ['munition', 'munition', 'verband', 'taschenlampe', 'pistole', 'pistole', 'schrotflinte', 'mp', 'mg', 'mg', 'scharfschuetze', 'funkgeraet', null],
   sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', null],
   bad: ['wasser', 'wasser', 'wasser', 'verband', 'schokoriegel', null, null],   // Bad: oft Wasser (Spülkasten, Hahn)
@@ -461,7 +461,7 @@ export function bezahlung(rucksack, kostet) {
   return zahl;
 }
 // Bundeswehr-Handgranate: Zünder 2 s ab dem Wurf, fliegt 0,6 s, Radius 5 m (8 px je m), Lärm 600 px
-export const GRANATE = { flug: 0.6, zuender: 2.0, radius: 40, schadenZombie: 150, schadenSpieler: 50, wurfWeite: 120, blickWeite: 80, laerm: 600 };
+export const GRANATE = { flug: 0.6, zuender: 2.0, radius: 60, schadenZombie: 220, schadenSpieler: 70, wurfWeite: 200, blickWeite: 136, laerm: 600 };   // Wurfweite +67 %, Radius +50 %, mehr Schaden
 // Wer ein Maschinengewehr trägt (in der Hand oder im Rucksack), läuft 15 % langsamer
 export const TEMPO_MG = 0.85;
 export const traegtMg = p => p.waffe === 'mg' || (p.rucksack ?? []).includes('mg');
@@ -628,8 +628,8 @@ export function drinnen(welt, x, y) {
 
 // Spielwerte, die Server und Client kennen müssen
 export const WERTE = {
-  spielerRadius: 11,
-  zombieRadius: 11,
+  spielerRadius: 7,       // Kollisionsradius (px), unabhängig von der Anzeigegröße; kleiner = kommt durch enge Lücken
+  zombieRadius: 9,
   tempoGehen: 150,      // px/s
   tempoSchleichen: 70,
   zombieTempoWandern: 30,
