@@ -1353,7 +1353,7 @@ class Ort extends Phaser.Scene {
     const box = this.add.container(z.x, z.y).setDepth(3);
     const bild = this.add.image(0, 0, 'figuren', this.figurBild('zombie_hemd', 0)).setScale(ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg());
     box.add([bild]);
-    return { box, bild, x: z.x, y: z.y, r: zRichtung(z) };
+    return { box, bild, x: z.x, y: z.y, r: zRichtung(z), lauf: Math.random() * 400 };   // zufällige Laufphase: Horde läuft nicht im Gleichschritt
   }
 
   // Fahrzeugbilder einmalig zeichnen (Front zeigt nach rechts)

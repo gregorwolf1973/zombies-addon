@@ -317,9 +317,9 @@ test('Horde: Trupp kehrt zurück oder streunt, wenn das Ziel 20–30 s außer Si
     raum.welle.erzeugen('west');
     const a = raum.welle.aktiv, gesamt = a.ids.size;
     assert.ok(spielerNebenHorde(raum, p));
-    raum.welle.schritt(0.6);
     // nur den Trupp gegen den Testspieler zählen (in der Zufallswelt können Menschen/Bots weitere Trupps auslösen)
     const meine = () => a.trupps.filter(t => t.sid === c.sessionId);
+    for (let i = 0; i < 20 && !meine().length; i++) raum.welle.schritt(0.6);   // Trupp löst sich je nach Zufallsstart etwas später
     assert.equal(meine().length, 1);
     const t = meine()[0], ids = [...t.ids];
     p.x = 2 * KACHEL; p.y = 2 * KACHEL; p.ebene = 'h0eg';   // Spieler im Haus: nicht mehr angreifbar
@@ -386,7 +386,7 @@ test('Horde: zieht zügig und zusammenhängend – Mitte legt in 60 s Spielzeit 
     raum.zRaster = null;
     assert.ok(raum.welle.aktiv && raum.welle.aktiv.ids.size >= ids.length * 0.4, 'Horde zerfallen');
     assert.ok(weg >= 2000, `Hordenmitte zu langsam: ${Math.round(weg)} px in 60 s`);
-    assert.ok(steht / messungen < 0.2, 'zu viele Zombies stehen oder hängen fest: ' + (steht / messungen));
+    assert.ok(steht / messungen < 0.25, 'zu viele Zombies stehen oder hängen fest: ' + (steht / messungen));   // gewollte kurze Pausen (kein Gleichschritt) erlauben etwas mehr Stillstand
     raum.welle.aufloesen();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
@@ -479,8 +479,9 @@ test('Horde: Truppgröße wächst mit der Hordengröße (mindestens 15 %)', asyn
     const a = raum.welle.aktiv, gesamt = a.ids.size;
     assert.ok(gesamt >= 100, `Horde nur ${gesamt}`);
     assert.ok(spielerNebenHorde(raum, p));
-    raum.welle.schritt(0.6);
-    const t = a.trupps.find(q => q.sid === c.sessionId);
+    // Trupps lösen sich zufällig: bis zu 20 Schritte warten, statt sich auf den ersten zu verlassen
+    let t = null;
+    for (let i = 0; i < 20 && !t; i++) { raum.welle.schritt(0.6); t = a.trupps.find(q => q.sid === c.sessionId); }
     assert.ok(t, 'kein Trupp');
     assert.ok(t.ids.size >= Math.floor(gesamt * 0.12), `Trupp ${t.ids.size} von ${gesamt}`);
     raum.welle.aufloesen();

@@ -223,11 +223,12 @@ export class Zombiewelle {
     const a = this.aktiv, z = this.raum.state.zombies;
     a.alter += dt; a.seitZiel += dt; a.laermPause -= dt;
     let sx = 0, sy = 0, n = 0, amZiel = 0;
+    const streu = Math.max(192, Math.sqrt(Math.max(a.ids.size, 1)) * 14);   // Streuradius der Eigenpunkte (siehe lenken)
     for (const id of a.ids) {
       const q = z.get(id), info = this.raum.zombieInfo.get(id);
       if (!q || !info?.welle) { a.ids.delete(id); continue; }
       sx += q.x; sy += q.y; n++;
-      if (Math.hypot(q.x - a.ziel.x, q.y - a.ziel.y) < 260) amZiel++;
+      if (Math.hypot(q.x - a.ziel.x, q.y - a.ziel.y) < streu + 70) amZiel++;
     }
     a.truppT += dt;
     if (a.truppT >= TRUPP_TAKT) { const d = a.truppT; a.truppT = 0; this.truppen(d); }
@@ -252,7 +253,7 @@ export class Zombiewelle {
     if (a.umwegBis && a.alter >= a.umwegBis) { a.umwegBis = 0; if (a.feldHaupt) { a.feld = a.feldHaupt; a.feldHaupt = null; } }
     a.zielUhr -= dt;
     // Ziel wechseln: Zeit abgelaufen, am Ziel (Mitte nah oder die Hälfte angekommen) oder festgefahren
-    const angekommen = Math.hypot(a.mitte.x - a.ziel.x, a.mitte.y - a.ziel.y) < 160 + Math.sqrt(n) * 6 || amZiel >= n / 2;
+    const angekommen = Math.hypot(a.mitte.x - a.ziel.x, a.mitte.y - a.ziel.y) < 160 + Math.sqrt(n) * 6 || amZiel >= n / 2 || (a.seitZiel > 60 && amZiel >= n * 0.2);
     if (klemmt || angekommen || a.zielUhr <= 0) this.neuesZiel(klemmt ? 'festgefahren' : angekommen ? 'angekommen' : 'zeit');
     this.infoSenden(dt);
   }
@@ -589,11 +590,51 @@ export class Zombiewelle {
       vx = (info.trupp.x - z.x) / d; vy = (info.trupp.y - z.y) / d;
     } else {
       const d0 = Math.hypot(a.ziel.x - z.x, a.ziel.y - z.y) || 1;
-      const wf = a.feld ? this.feldRichtung(a.feld, z.x, z.y) : null;
-      vx = wf === null ? (a.ziel.x - z.x) / d0 : Math.cos(wf); vy = wf === null ? (a.ziel.y - z.y) / d0 : Math.sin(wf);
-      const dm = Math.hypot(a.mitte.x - z.x, a.mitte.y - z.y);
-      vx *= FELD_GEWICHT; vy *= FELD_GEWICHT;
-      if (dm > 140) { const k = Math.min(0.4, (dm - 140) / 400); vx += (a.mitte.x - z.x) / dm * k; vy += (a.mitte.y - z.y) / dm * k; }
+      // eigener, versetzter Zielpunkt um das Hordenziel (Streuung wächst mit der Hordengröße): die Horde staut sich nicht auf einem Punkt
+      // am Platz gedrängt (Nachbarn im Mindestabstand): nach ein paar Sekunden einen weiter entfernten Eigenpunkt suchen, die Traube quillt auseinander
+      if (info.angekommen && info.eng > 0) { if (++info.dicht >= 8) { info.dicht = 0; info.rf = Math.min(4, (info.rf ?? 1) * 1.4); info.zOffNr = -1; } } else info.dicht = 0;
+      if (info.zOff === undefined || info.zOffNr !== a.ziele) {
+        const rmax = Math.max(192, Math.sqrt(Math.max(a.ids.size, 1)) * 14) * (info.rf ?? 1);
+        info.quer ??= (r.rnd() - 0.5) * 0.24;   // seitlicher Versatz quer zur Laufrichtung (kein Gänsemarsch auf einer Linie)
+        info.zOffNr = a.ziele;
+        // Punkt wählen, der vom Ziel aus frei erreichbar ist (nicht hinter Wänden): bis zu 16 Versuche mit schrumpfendem Radius
+        let best = { x: 0, y: 0 };
+        for (let t = 0; t < 16; t++) {
+          const w0 = r.rnd() * Math.PI * 2, rr = (48 + Math.sqrt(r.rnd()) * (rmax - 48)) * (1 - t / 16 * 0.85);
+          const ox = Math.cos(w0) * rr, oy = Math.sin(w0) * rr;
+          let ok = frei(r.welt, a.ziel.x + ox, a.ziel.y + oy, W.zombieRadius);
+          for (let k = 1; ok && k <= 8; k++) ok = frei(r.welt, a.ziel.x + ox * k / 8, a.ziel.y + oy * k / 8, W.zombieRadius);
+          if (ok) { best = { x: ox, y: oy }; break; }
+        }
+        info.zOff = best;
+      }
+      info.stopp = 1;
+      const px = a.ziel.x + info.zOff.x, py = a.ziel.y + info.zOff.y, dp = Math.hypot(px - z.x, py - z.y);
+      let direkt = false;
+      if (d0 < 260 + Math.hypot(info.zOff.x, info.zOff.y)) {   // nah am Ziel: geradeaus zum eigenen Punkt, wenn der Weg frei ist
+        direkt = dp < 20;
+        if (!direkt) {
+          direkt = true;
+          const n = Math.min(12, Math.ceil(dp / 16));
+          for (let i = 1; i <= n && direkt; i++) if (!frei(r.welt, z.x + (px - z.x) * i / n, z.y + (py - z.y) * i / n, W.zombieRadius)) direkt = false;
+        }
+      }
+      if (direkt) {
+        vx = (px - z.x) / (dp || 1) * FELD_GEWICHT; vy = (py - z.y) / (dp || 1) * FELD_GEWICHT;
+        if (dp < 70) { const k = Math.max(dp / 70, 0.05); vx *= k; vy *= k; info.stopp = Math.max(0.3, k); }
+        info.angekommen = dp < 14;
+      } else {
+        info.angekommen = false;
+        const eng = !info.zOff.x && !info.zOff.y && d0 < 90;   // enge Gasse, kein freier Eigenpunkt: vor dem Ziel abbremsen und stehen bleiben
+        const wf = a.feld ? this.feldRichtung(a.feld, z.x, z.y) : null;
+        vx = wf === null ? (a.ziel.x - z.x) / d0 : Math.cos(wf); vy = wf === null ? (a.ziel.y - z.y) / d0 : Math.sin(wf);
+        const dm = Math.hypot(a.mitte.x - z.x, a.mitte.y - z.y);
+        vx *= FELD_GEWICHT; vy *= FELD_GEWICHT;
+        const vl = Math.hypot(vx, vy) || 1;
+        const qx = -vy / vl * info.quer * FELD_GEWICHT, qy = vx / vl * info.quer * FELD_GEWICHT; vx += qx; vy += qy;
+        if (dm > 140) { const k = Math.min(0.4, (dm - 140) / 400); vx += (a.mitte.x - z.x) / dm * k; vy += (a.mitte.y - z.y) / dm * k; }
+        if (eng) { const k = Math.max(d0 / 90, 0.1); vx *= k; vy *= k; info.stopp = Math.max(0.2, k); info.angekommen = d0 < 30; }
+      }
     }
     const fx = vx, fy = vy;   // Zugrichtung ohne Schwarmkräfte (für den Wandtest unten)
     let sx = 0, sy = 0, ax = 0, ay = 0, an = 0;
@@ -617,8 +658,10 @@ export class Zombiewelle {
     }
     // Abstoßung nicht gegen Wände drücken: ist die Richtung mit Abstoßung versperrt, gilt nur die Zugrichtung
     const sepOk = (qx, qy) => { const l = Math.hypot(qx, qy) || 1; return frei(r.welt, z.x + qx / l * (W.zombieRadius + 5), z.y + qy / l * (W.zombieRadius + 5), W.zombieRadius); };
+    info.sepStark = Math.hypot(sx, sy);
     if (sx || sy) {
-      const gx = fx + sx * 0.8, gy = fy + sy * 0.8;
+      const sw = info.angekommen || info.stopp < 1 ? 2.2 : 0.8;   // am Ziel zählt der Abstand mehr als der Zug: lockere Traube statt Haufen
+      const gx = fx + sx * sw, gy = fy + sy * sw;
       if (sepOk(gx, gy)) { vx = gx; vy = gy; } else { vx = fx; vy = fy; }
     }
     if (an) { const l = Math.hypot(ax, ay) || 1; vx += ax / l * 0.3; vy += ay / l * 0.3; }
@@ -650,10 +693,11 @@ export class Zombiewelle {
         info.steuerT = 0.25 + r.rnd() * 0.25;
         info.lenkW = this.lenken(z, info, a);
         const u = r.rnd();
-        if (u < 0.008) { info.pauseT = 0.4 + r.rnd() * 0.8; return; }
+        if (info.angekommen && !info.sepStark) { info.pauseT = 0.6 + r.rnd() * 1.2; return; }   // am eigenen Platz, niemand im Weg: stehen bleiben
         if (u < 0.02) { info.taumelT = 0.3 + r.rnd() * 0.4; info.taumelW = (r.rnd() < 0.5 ? -1 : 1) * (0.4 + r.rnd() * 0.4); }
+        else if (u < 0.04) { info.pauseT = 0.4 + r.rnd() * 0.9; return; }
       }
-      w = info.lenkW + Math.sin(info.phase) * 0.1;   // leichtes Schlängeln
+      w = info.lenkW + Math.sin(info.phase) * 0.18;   // leichtes Schlängeln
       if (info.taumelT > 0) { info.taumelT -= dt; w += info.taumelW; }
     }
     z.richtung = w;
@@ -666,7 +710,7 @@ export class Zombiewelle {
       const d = Math.hypot(dx, dy);
       bremse = Math.min(bremse, d < 300 ? 0.45 : 0.45 + (d - 300) / 200 * 0.55);
     }
-    if (!r.zombieGehen(z, w, W.zombieTempoJagen * TEMPO * info.wTempo * bremse * dt, dt, info)) {
+    if (!r.zombieGehen(z, w, W.zombieTempoJagen * TEMPO * info.wTempo * bremse * (info.stopp ?? 1) * (info.eng ? ((info.stopp ?? 1) < 1 ? (info.eng > 1 ? 0.3 : 0.55) : 0.75) : 1) * dt, dt, info)) {
       // seitlich am Hindernis entlang: zuerst flache Winkel zur Zugrichtung, die Seite mit freiem Platz wählen
       const seite = r.rnd() < 0.5 ? -1 : 1;
       let neu = null;

@@ -2971,6 +2971,27 @@ export class SpielRaum extends Room {
     return pruefe(z.x + Math.cos(w) * (W.zombieRadius + 5), z.y + Math.sin(w) * (W.zombieRadius + 5)) ?? pruefe(z.x, z.y);
   }
 
+  // Abstand zu anderen Zombies halten (auch vor einer Tür: sonst stapelt sich die Horde dort)
+  zombieAbstand(z, welt, info) {
+    // Horde: Mindestabstand 1,5 Radien (dichte Traube, aber keine Figuren übereinander); höchstens 40 Nachbarn prüfen (Rastergröße begrenzt die Kosten)
+    const horde = !!info?.welle, minD = horde ? W.zombieRadius * 1.5 : W.zombieRadius * 2;
+    let gepr = 0, eng = 0;
+    for (const o of this.zRaster ? this.zombiesNahe(z.x, z.y, z.ebene) : this.state.zombies.values()) {
+      if (o === z || o.ebene !== z.ebene) continue;
+      if (horde && ++gepr > 40) break;
+      const dx = z.x - o.x, dy = z.y - o.y;
+      if (Math.abs(dx) >= minD || Math.abs(dy) >= minD) continue;
+      const d = Math.hypot(dx, dy);
+      if (d < minD) {
+        eng++;
+        if (d === 0) { const w = this.rnd() * 6.2832; bewege(welt, z, Math.cos(w) * minD / 2, Math.sin(w) * minD / 2, W.zombieRadius); continue; }
+        const f = horde ? (minD - d) * 0.8 : (minD - d) / 2;   // Horde: halbe Lücke je Schritt, sonst bremst der Haufen sich selbst aus
+        bewege(welt, z, dx / d * f, dy / d * f, W.zombieRadius);
+      }
+    }
+    if (horde) info.eng = eng;   // gedrängt: im nächsten Schritt langsamer (Stau statt Übereinanderlaufen)
+  }
+
   zombieGehen(z, w, weg, dt, info = null) {
     const eifrig = z.jagt || weg > W.zombieTempoWandern * dt * 1.5;   // jagt oder folgt einem Geräusch (nicht nur Umherirren)
     weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
@@ -2984,22 +3005,16 @@ export class SpielRaum extends Room {
     const sperre = this.zombieSperre(z, w, welt);
     if (sperre) {
       z.x = x0; z.y = y0;
+      this.zombieAbstand(z, welt, info);
       if (!eifrig) return false;
       // hinter der Tür niemand? Dann gibt er auf (ein Zimmer ohne Menschen ist es nicht wert)
       if (!this.spielerHinterTuer(sperre).length) return false;
       this.tuerSchlag(sperre, dt, z);
       return true;
     }
-    if (!z.ebene && this.hausEindringen(z)) return true;
+    if (!z.ebene && this.hausEindringen(z)) { this.zombieAbstand(z, welt, info); return true; }
     // Abstand zu anderen Zombies halten
-    for (const o of this.zRaster ? this.zombiesNahe(z.x, z.y, z.ebene) : this.state.zombies.values()) {
-      if (o === z || o.ebene !== z.ebene) continue;
-      const d = Math.hypot(o.x - z.x, o.y - z.y);
-      if (d > 0 && d < W.zombieRadius * 2) {
-        const f = (W.zombieRadius * 2 - d) / 2 * (info?.welle ? 0.3 : 1);   // Horde: sanftes Wegdrücken, sonst bremst der Haufen sich selbst aus
-        bewege(welt, z, (z.x - o.x) / d * f, (z.y - o.y) / d * f, W.zombieRadius);
-      }
-    }
+    this.zombieAbstand(z, welt, info);
     return Math.hypot(z.x - x0, z.y - y0) > schritt * 0.3;
   }
 
