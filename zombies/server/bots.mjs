@@ -302,7 +302,7 @@ export function botSchritt(raum, sid, p, x, dt) {
   const echt = s => { const o = raum.extra.get(s); return s !== sid && !o?.afkBot && (afk || !o?.bot); };
   x.eingabe = { dx: 0, dy: 0, s: false };
   b.uebergangZiel = null;
-  if (p.unten || p.zombie > 0) { b.weg = null; return; }
+  if (p.unten || p.anBord || p.zombie > 0) { b.weg = null; x.eingabe = { dx: 0, dy: 0, s: false }; return; }   // an Bord: sitzt
   if (raum.tausche?.has(sid)) return;   // beim Tauschen stillhalten
   versorgen(p, b, raum.uhr);
   // beim Durchsuchen stillstehen – außer ein Zombie kommt zu nah

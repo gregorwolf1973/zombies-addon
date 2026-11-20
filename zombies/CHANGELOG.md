@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.57.0 – 20.11.2026
+
+- Einsteigen in Evakuierungsfahrzeuge (Bus, Leopard, A400M-Rampe, Hubschrauber) neu: Wer am wartenden Fahrzeug steht, sitzt drin – die Position folgt dem Fahrzeug, die Figur ist ausgeblendet, die Kamera fährt mit, Zombies lassen ihn in Ruhe, Eingaben bewegen ihn nicht. Das gilt auch dann, wenn die Abfahrt noch nicht möglich ist (früher blieb man nur im Umkreis „an Bord“ und lief dem losfahrenden Fahrzeug hinterher).
+- Beim Einsteigen nennt eine Meldung, was für die Abfahrt noch fehlt (offene Pflichtaufgaben, Mindestzahl erledigter Aufgaben). Fährt das Fahrzeug ohne Erfolg ab, steigen alle mit einer Meldung aus („es fehlte: …“) statt still zurückzubleiben. Bei Erfolg fährt man bis zum Levelwechsel mit.
+- Bots steigen ebenso ein und sitzen still. Neuer Spielerzustand `anBord`.
+
 ## 0.56.0 – 20.11.2026
 
 - Waffenplätze verwalten: Knopf gedrückt halten bzw. Rechtsklick → „In den Rucksack“, „Fallen lassen“, „Tauschen mit …“; Knopf „✊ Faust“ (Taste X); im Rucksack „→ Platz 1/2/3“.

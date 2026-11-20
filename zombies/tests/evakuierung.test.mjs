@@ -211,11 +211,13 @@ test('A400M: landet, einsteigen, Triebwerk fällt aus, alle raus, zu Fuß zum Hu
     assert.ok(await bis(() => s.busSteht), 'steht nicht');
     // 2. Einsteigen: wer an der Heckrampe steht, ist an Bord; dann fällt ein Triebwerk aus
     a.p.x = s.evakX; a.p.y = s.evakY;
+    assert.ok(await bis(() => a.p.anBord || s.evakPhase === 'heliAnflug', 2000), 'steigt an der Rampe nicht ein');
     assert.ok(await bis(() => s.evakPhase === 'heliAnflug', 4000), 'kein Fehlschlag: ' + s.evakPhase);
     assert.ok(await bis(() => meldungen.some(m => m.includes('Triebwerk'))), 'Meldung zum Fehlschlag fehlt');
     assert.ok(await bis(() => meldungen.some(m => m.includes('Hubschrauber'))), 'Hinweis auf den Hubschrauber fehlt');
     // 3. alle raus: Spieler steht neben der Heckrampe, das Flugzeug bleibt stehen, der Abholpunkt ist jetzt der Hubschrauberplatz
     assert.ok(Math.hypot(a.p.x - plan.rampe.x, a.p.y - plan.rampe.y) < 250, 'Spieler nicht ausgestiegen');
+    assert.equal(a.p.anBord, false, 'beim Aussteigen noch an Bord');
     assert.ok(busVon(raum), 'Flugzeug verschwunden');
     assert.equal(s.busDa, false);
     assert.ok(Math.hypot(s.evakX - plan.heli.x, s.evakY - plan.heli.y) < 2, 'Abholpunkt nicht am Hubschrauberplatz');
@@ -230,6 +232,7 @@ test('A400M: landet, einsteigen, Triebwerk fällt aus, alle raus, zu Fuß zum Hu
     // 5. zu Fuß hin: Abholung, Meldung, Levelwechsel
     a.p.x = plan.heli.x + 20; a.p.y = plan.heli.y;
     assert.ok(await bis(() => s.evakPhase === 'abflug', 3000), 'kein Abflug');
+    assert.equal(a.p.anBord, true, 'nicht im Hubschrauber');
     assert.ok(await bis(() => meldungen.some(m => m.includes('Geschafft')), 1000));
     ag.wechselVerzoegerung = 50;
   } finally { await beenden(a.c); }

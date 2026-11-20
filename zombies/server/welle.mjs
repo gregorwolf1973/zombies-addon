@@ -78,7 +78,7 @@ export class Zombiewelle {
   // Bezugspunkt: ein zufälliger Spieler draußen; sonst (alle in Häusern) die Haustür-Mitte; sonst die Kartenmitte
   bezug() {
     const s = this.raum.state;
-    const draussen = [...s.spieler.values()].filter(p => !p.ebene && !p.unten && !(p.zombie > 0));
+    const draussen = [...s.spieler.values()].filter(p => !p.ebene && !p.unten && !p.anBord && !(p.zombie > 0));
     const alle = draussen.length ? draussen : [...s.spieler.values()].filter(p => !p.ebene);
     if (alle.length) { const p = alle[Math.floor(this.raum.rnd() * alle.length)]; return { x: p.x, y: p.y, draussen: true }; }
     const tueren = [];
@@ -371,7 +371,7 @@ export class Zombiewelle {
         const m = wahl(l); return m ? this.punktNahe(m.x, m.y, 60, 160) : null;
       }
       case 'spieler': {
-        const l = [...s.spieler.values()].filter(p => !p.ebene && !p.unten && !(p.zombie > 0));
+        const l = [...s.spieler.values()].filter(p => !p.ebene && !p.unten && !p.anBord && !(p.zombie > 0));
         const p = wahl(l); return p ? this.punktNahe(p.x, p.y, 260, 520) : null;
       }
       case 'kreuzung': return wahl(this.kreuzungen());
@@ -452,7 +452,7 @@ export class Zombiewelle {
   // alle möglichen Opfer: Spieler/Bots draußen (nicht am Boden), Soldaten (ein Ziel für den Stützpunkt), sichtbare Menschen
   opfer(a) {
     const r = this.raum, s = r.state, out = [];
-    for (const [sid, p] of s.spieler) if (!p.ebene && !p.unten && !(p.zombie > 0)) out.push({ key: 's:' + sid, art: 'spieler', sid, x: p.x, y: p.y });
+    for (const [sid, p] of s.spieler) if (!p.ebene && !p.unten && !p.anBord && !(p.zombie > 0)) out.push({ key: 's:' + sid, art: 'spieler', sid, x: p.x, y: p.y });
     const sp = r.stuetzpunkt;
     if (sp?.schuetzen && s.stuetzpunkt === 'steht' && sp.einst().falltage > 0) {
       let best = null, bd = Infinity;
@@ -466,7 +466,7 @@ export class Zombiewelle {
   // aktuelle Lage eines Trupp-Ziels ({x, y}) oder null, wenn es nicht mehr angreifbar ist
   opferLage(t) {
     const r = this.raum, s = r.state;
-    if (t.art === 'spieler') { const p = s.spieler.get(t.sid); return p && !p.ebene && !p.unten && !(p.zombie > 0) ? p : null; }
+    if (t.art === 'spieler') { const p = s.spieler.get(t.sid); return p && !p.ebene && !p.unten && !p.anBord && !(p.zombie > 0) ? p : null; }
     if (t.art === 'mensch') { const m = s.menschen.get(t.mid); return m && m.sichtbar && !m.infiziert ? m : null; }
     const sp = r.stuetzpunkt;
     if (!sp?.schuetzen || s.stuetzpunkt !== 'steht' || !(sp.einst().falltage > 0)) return null;
@@ -655,7 +655,7 @@ export class Zombiewelle {
     // in Spielernähe langsamer werden, statt an ihm vorbeizumarschieren (Nachzügler bleiben im Sichtfeld, Trupps schnappen zu)
     let bremse = 1;
     for (const p of r.state.spieler.values()) {
-      if (p.ebene || p.unten) continue;
+      if (p.ebene || p.unten || p.anBord) continue;
       const dx = p.x - z.x, dy = p.y - z.y;
       if (Math.abs(dx) > 500 || Math.abs(dy) > 500) continue;
       const d = Math.hypot(dx, dy);

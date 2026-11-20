@@ -1086,12 +1086,12 @@ class Ort extends Phaser.Scene {
     if ($('aufgabenliste').innerHTML !== zeilen) $('aufgabenliste').innerHTML = zeilen;
     let bus = '';
     const flugPos = ich && this.lokal ? this.lokal : ich;
-    const flugText = evakArtVon(s) === 'flugzeug' ? evakHudText(s, !!(s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && Math.hypot(flugPos.x - s.evakX, flugPos.y - s.evakY) < (s.evakPhase === 'heli' ? 90 : BUS_ABSTAND)), uhrText) : null;
+    const flugText = evakArtVon(s) === 'flugzeug' ? evakHudText(s, !!(ich?.anBord || s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && Math.hypot(flugPos.x - s.evakX, flugPos.y - s.evakY) < (s.evakPhase === 'heli' ? 90 : BUS_ABSTAND)), uhrText) : null;
     if (flugText) bus = flugText;
     else if (s.busDa) {
       const f = [...(s.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung');
       const px = ich && this.lokal ? this.lokal.x : ich?.x, py = ich && this.lokal ? this.lokal.y : ich?.y;
-      const an = s.busSteht && f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND;
+      const an = !!ich?.anBord || (s.busSteht && f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND);
       const pz = evakArtVon(s) === 'panzer', sym = pz ? '🪖' : '🚌', fzg = pz ? 'Evakuierungspanzer' : 'Bus';
       bus = s.busSteht ? `${sym} ${fzg} wartet am Ortsausgang bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ` · ${sym} du bist an Bord` : ''}`
         : `${sym} ${fzg} fährt zum Ortsausgang vor – einsteigen geht, sobald er steht`;
@@ -1756,7 +1756,7 @@ class Ort extends Phaser.Scene {
       if (!f) { f = this.neueFigur(p, id); this.figuren.set(id, f); }
       { const nm = p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name; if (f.name.text !== nm) f.name.setText(nm); }   // AFK: ein Bot steuert die Figur
       if (id === meineId) continue;
-      f.box.setVisible((p.ebene ?? '') === this.aktEbene);
+      f.box.setVisible((p.ebene ?? '') === this.aktEbene && !p.anBord);   // an Bord eines Evakuierungsfahrzeugs: Figur ausgeblendet
       if ((f.ebene ?? '') !== (p.ebene ?? '')) { f.x = p.x; f.y = p.y; f.ebene = p.ebene; }
       f.x += (p.x - f.x) * glatt; f.y += (p.y - f.y) * glatt;
       f.box.setPosition(f.x, f.y);
@@ -2276,7 +2276,7 @@ class Ort extends Phaser.Scene {
     }
     const e = this.eingabe;
     const l = Math.hypot(e.dx, e.dy);
-    if (!p.unten && raum.state.phase === 'spiel' && l > 0.05) {
+    if (!p.unten && !p.anBord && raum.state.phase === 'spiel' && l > 0.05) {   // an Bord sitzt man, die Position kommt vom Fahrzeug
       const schleicht = !(p.zombie > 0) && (e.s || l < 0.55);
       const tempo = p.zombie > 0 ? W.zombieTempoJagen * 1.15
         : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
@@ -2285,7 +2285,7 @@ class Ort extends Phaser.Scene {
     }
     // sanft zum Server hinziehen, bei großem Abstand springen
     const d = Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y);
-    if (d > 64 || p.unten) { this.lokal.x = p.x; this.lokal.y = p.y; }
+    if (d > 64 || p.unten || p.anBord) { this.lokal.x = p.x; this.lokal.y = p.y; }
     else {
       const k = Math.min(1, dt * (l > 0.05 ? 2.5 : 10));
       this.lokal.x += (p.x - this.lokal.x) * k; this.lokal.y += (p.y - this.lokal.y) * k;
@@ -2293,6 +2293,7 @@ class Ort extends Phaser.Scene {
     f.x = this.lokal.x; f.y = this.lokal.y;
     f.box.setPosition(f.x, f.y);
     this.figurDarstellen(f, p, dt);
+    f.box.setVisible(!p.anBord);   // an Bord: Figur weg, die Kamera folgt weiter (dem Fahrzeug)
     return p;
   }
 

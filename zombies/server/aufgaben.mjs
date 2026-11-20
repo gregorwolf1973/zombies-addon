@@ -132,6 +132,8 @@ export class Aufgaben {
     s.level = Math.max(1, Math.min(250, Math.round(Number(stand?.level) || 1)));
     s.funk = false; s.busDa = false; s.busSteht = false; s.busAnkunft = -1; s.busAb = -1; s.busBord = 0; s.busGesamt = 0;
     this.flug = null; this.heli = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync();
+    for (const p of s.spieler.values()) p.anBord = false;
+    this.eingestiegen.clear(); this.folgenId = null;
     this.basis = s.besiegt;
     if (!this.an()) return;
     const g = passt ? stand?.aufgaben : null;
@@ -243,7 +245,7 @@ export class Aufgaben {
       this.raum.broadcast('meldung', { text: art === 'flugzeug' ? '📍 Landeplatz steht fest – der A400M landet dort, er ist auf der Karte markiert'
         : art === 'panzer' ? '📍 Abholstelle am Ortsausgang steht fest – der Panzer holt euch dort ab, sie ist auf der Karte markiert' : '📍 Abholstelle am Ortsausgang steht fest – sie ist auf der Karte markiert', lang: true });
     }
-    if (this.wechselLaeuft) return;
+    if (this.wechselLaeuft) { this.mitnehmen(); return; }
     const { stunde, wartezeit } = this.einst();
     const A = stunde * 60;
     if (!s.busDa) {
@@ -413,13 +415,21 @@ export class Aufgaben {
       : `${this.fz().zeichen} ${this.fz().Der} steht am Ortsausgang! Abfahrt um ${hhmm(s.busAb)}`, lang: true });
   }
 
-  busWeg() {
+  busWeg(behalten = false) {
     const s = this.raum.state;
-    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.eingestiegen.clear();
+    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0;
+    if (!behalten) this.ausladen();
     if (this.busId) { this.raum.verkehr?.evakuierungAb(this.busId); this.busId = null; }
     this.flug = null; this.laufendeArt = null;
     if (this.heli) { this.heli = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync(); }
     else if (s.evakPhase) { s.evakPhase = ''; }
+  }
+
+  // nach der erfolgreichen Abfahrt: wer an Bord ist, bewegt sich mit dem abfahrenden Fahrzeug bis zum Levelwechsel
+  mitnehmen() {
+    const s = this.raum.state, f = this.folgenId ? s.fahrzeuge.get(this.folgenId) : null;
+    if (!f) return;
+    for (const sid of this.eingestiegen) { const p = s.spieler.get(sid); if (p) { p.x = f.x; p.y = f.y; } }
   }
 
   // wer in Busnähe steht, ist an Bord; true, wenn alle lebenden verbundenen Spieler (Bots und Liegende zählen mit) an Bord sind
@@ -429,15 +439,17 @@ export class Aufgaben {
     if (!f) { this.busWeg(); return false; }
     const abstand = this.heli ? HELI_ABSTAND : BUS_ABSTAND;
     let bord = 0, gesamt = 0, echtDa = 0, lebende = 0, lebendeDa = 0;
-    const klebt = this.fahrtGelingt();   // Einsteigen gilt dauerhaft, sobald die Fahrt geschafft werden kann
     for (const [sid, p] of s.spieler) {
-      if (p.zombie > 0) { this.eingestiegen.delete(sid); continue; }
+      if (p.zombie > 0) { this.eingestiegen.delete(sid); p.anBord = false; continue; }
       const bot = !!this.raum.extra.get(sid)?.bot;
       let an = this.eingestiegen.has(sid);
-      if (!an && !p.ebene && !p.unten && Math.hypot(p.x - f.x, p.y - f.y) < abstand + (klebt ? 20 : 0)) {
-        an = true; if (klebt) this.eingestiegen.add(sid);
+      // Einsteigen: wer nah genug steht, sitzt im Fahrzeug (Position folgt ihm, Figur weg, Zombies lassen ihn in Ruhe) bis zum Levelwechsel.
+      // Fehlt noch etwas für die Abfahrt, sagt die Meldung beim Einsteigen, was – es wirft niemand still wieder raus.
+      if (!an && !p.ebene && !p.unten && Math.hypot(p.x - f.x, p.y - f.y) < abstand) {
+        an = true; this.eingestiegen.add(sid); p.anBord = true;
+        if (!bot) this.einsteigMeldung(sid);
       }
-      if (an && this.eingestiegen.has(sid)) { p.x = f.x; p.y = f.y; }   // fährt mit
+      if (an) { p.x = f.x; p.y = f.y; p.anBord = true; }   // fährt mit
       gesamt++; if (an) bord++;
       // Abfahrt wartet nur auf echte, verbundene, stehende Spieler – Bots und Liegende kommen beim Levelwechsel ohnehin mit
       if (!bot && p.verbunden !== false && !p.unten) { lebende++; if (an) lebendeDa++; }
@@ -445,6 +457,36 @@ export class Aufgaben {
     }
     s.busBord = bord; s.busGesamt = gesamt; this.echteDa = echtDa;
     return lebende > 0 && lebendeDa === lebende;
+  }
+
+  // was für eine erfolgreiche Abfahrt noch fehlt (Pflichtaufgaben, Mindestzahl erledigter Aufgaben)
+  fehlt() {
+    const l = [...this.raum.state.aufgaben.values()].filter(a => a.pflicht && !a.erledigt).map(a => `${a.symbol} ${a.text}`);
+    const n = this.noetig(), e = this.erledigtZahl();
+    if (e < n) l.push(`weitere Aufgaben (${e}/${n} erledigt)`);
+    return l;
+  }
+
+  sendeAn(sid, text) { this.raum.clients?.find(c => c.sessionId === sid)?.send('meldung', { text, lang: true }); }
+
+  einsteigMeldung(sid) {
+    const fz = this.heli ? { zeichen: '🚁', der: 'der Hubschrauber' } : this.fz(), fehlt = this.fehlt();
+    this.sendeAn(sid, fehlt.length
+      ? `${fz.zeichen} Du bist an Bord. ${fz.der[0].toUpperCase() + fz.der.slice(1)} kann aber noch nicht abfliegen/abfahren – es fehlt: ${fehlt.join(' · ')}. Steig bei Bedarf nach der Wartezeit wieder aus.`
+      : `${fz.zeichen} Du bist an Bord – es geht los, sobald alle da sind (oder die Wartezeit abläuft).`);
+  }
+
+  // alle an Bord steigen aus (Platz neben dem Fahrzeug bzw. Einstiegspunkt) – Abfahrt ohne sie oder Ende der Evakuierung
+  ausladen(text) {
+    const s = this.raum.state;
+    for (const sid of [...this.eingestiegen]) {
+      const p = s.spieler.get(sid);
+      if (!p) continue;
+      const q = this.platzNeben(p.x + 36, p.y + 20);
+      p.x = q.x; p.y = q.y; p.anBord = false;
+      if (text && !this.raum.extra.get(sid)?.bot) this.sendeAn(sid, text);
+    }
+    this.eingestiegen.clear();
   }
 
   // Pflichtaufgaben und Mindestzahl erledigt: wer einsteigt, kann tatsächlich mitfahren
@@ -490,6 +532,7 @@ export class Aufgaben {
     this.busHeute = true;
     s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0;
     this.eingestiegen.clear();
+    for (const id of ids) { const pl = s.spieler.get(id); if (pl) pl.anBord = false; }
     // das Flugzeug bleibt stehen (Wrack ohne Straßenweg); der Einstiegspunkt wandert zum Hubschrauberplatz
     this.busId = null;
     if (f) for (let i = 0; i < ids.length; i++) {
@@ -531,13 +574,13 @@ export class Aufgaben {
     if (!alleDa && this.busRest > 0) return;
     const nichtDa = s.busGesamt > s.busBord;
     if (this.echteDa >= 1) {
-      this.heli = null; s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.eingestiegen.clear();
+      this.heli = null; s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.folgenId = null;   // wer an Bord ist, bleibt bis zum Levelwechsel dort
       s.evakPhase = 'abflug'; s.evakRest = 0;
       this.erfolg(nichtDa, '🚁');
       return;
     }
     // niemand da: er fliegt ab und kommt nach einer Weile wieder
-    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.eingestiegen.clear();
+    s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.ausladen();
     this.heli = { phase: 'anflug', rest: HELI_NEU }; s.evakPhase = 'heliAnflug'; s.evakRest = HELI_NEU;
     this.raum.broadcast('meldung', { text: `🚁 Der Hubschrauber ist ohne euch abgeflogen – er kommt in ${HELI_NEU} s noch einmal`, lang: true });
   }
@@ -557,7 +600,9 @@ export class Aufgaben {
     const geschafft = pflichtOk && this.erledigtZahl() >= this.noetig() && this.echteDa >= 1;
     const nichtDa = s.busGesamt > s.busBord;
     if (geschafft && this.fz().art === 'flugzeug') { this.flugFehlschlag(); return; }   // die Maschine schafft es nicht in die Luft
-    this.busWeg();
+    if (!geschafft) this.ausladen(`${this.fz().zeichen} ${this.fz().Der} fährt ohne euch ab – ihr steigt aus. Es fehlte: ${this.fehlt().join(' · ') || 'jemand an Bord'}`);
+    else this.folgenId = this.busId;   // wer an Bord ist, fährt bis zum Levelwechsel mit
+    this.busWeg(geschafft);
     this.busHeute = true;
     if (!geschafft) {
       this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} ist ohne euch ${this.fz().art === 'flugzeug' ? 'abgeflogen' : 'abgefahren'} – morgen gibt es ${this.fz().neu}`, lang: true });
@@ -586,6 +631,8 @@ export class Aufgaben {
   levelWechsel() {
     const r = this.raum, s = r.state, karte = this.naechsteKarte();
     r.constructor.kartenWechsel?.(karte);
+    for (const p of s.spieler.values()) p.anBord = false;
+    this.eingestiegen.clear(); this.folgenId = null;
     r.weltNeuStarten(false, {
       version: WELT_VERSION, karte, seed: Math.floor(Math.random() * 2 ** 31), zeit: 0, uhr: 8 * 60,
       besiegt: s.besiegt, level: s.level + 1, chat: [...r.chatVerlauf],
