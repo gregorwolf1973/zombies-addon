@@ -94,6 +94,8 @@ test('Tür bleibt zu: seitlich vorbeilaufen, verschlossene Tür, Barrikade', asy
     await warte(900);
     c.send('eingabe', { dx: 0, dy: 0 });
     assert.equal(st.offen, false, 'Tür beim Vorbeilaufen geöffnet');
+    raum.state.tuerFrei = 0; raum.state.tuerRaetsel = 50; raum.state.tuerSchluessel = 50;   // sonst kann die Tür die Schlossart „frei“ haben (dann öffnet sie normal)
+    assert.notEqual(raum.tuerArt(g.key), 'frei');
     st = schliesse(raum, g, p, g.s.a, true);
     await warte(900);
     assert.equal(st.offen, false, 'verschlossene Tür ging von selbst auf');
