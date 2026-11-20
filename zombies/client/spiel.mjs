@@ -682,6 +682,8 @@ class Ort extends Phaser.Scene {
     this.lokal = null;          // vorhergesagte eigene Position
     this.eingabe = { dx: 0, dy: 0, s: false };
     this.gesendet = { dx: 9, dy: 9, s: false, t: 0 };
+    // Eingabe auch bei niedriger Bildrate (viele Zombies, weite Ansicht) alle 50 ms melden, nicht nur je Frame
+    this.eingabeTimer = setInterval(() => { if (this.tasten && this.joystick && this.bereit !== false && !document.hidden) { try { this.leseEingabe(); } catch {} } }, 50);
     this.kontext = null;
 
     const wb = BREITE * KACHEL, wh = HOEHE * KACHEL;
@@ -1714,7 +1716,8 @@ class Ort extends Phaser.Scene {
     const fx = this.cameras.main.postFX;
     if (!fx) return;
     if (!this.grau) this.grau = fx.addColorMatrix();
-    if (an) this.grau.grayscale(1); else this.grau.reset();
+    if (an) this.grau.grayscale(1);
+    else { fx.remove(this.grau); this.grau = null; }   // Kamera-Nachbearbeitung ganz entfernen: sonst kostet sie auch ohne Wirkung einen Vollbild-Durchgang je Frame
   }
 
   // sichtbar = gleiche Ebene; drinnen zusätzlich nur bei freier Sicht (Türen verdecken)
@@ -2289,7 +2292,7 @@ class Ort extends Phaser.Scene {
     else if (this.joystick.id !== null) { dx = this.joystick.vx; dy = this.joystick.vy; s = false; }
     if (window.__startwahlOffen) { dx = 0; dy = 0; s = false; }   // Startwahl-Dialog offen: Figur steht still
     this.eingabe = { dx, dy, s };
-    const g = this.gesendet, jetzt = this.time.now;
+    const g = this.gesendet, jetzt = performance.now();   // echte Uhr: bei niedriger Bildrate nicht an Frames gebunden
     const anders = Math.abs(g.dx - dx) > 0.05 || Math.abs(g.dy - dy) > 0.05 || g.s !== s;
     if ((anders && jetzt - g.t > 60) || jetzt - g.t > 250) {
       raum.send('eingabe', { dx: +dx.toFixed(3), dy: +dy.toFixed(3), s });
