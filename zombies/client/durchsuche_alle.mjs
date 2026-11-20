@@ -1,6 +1,8 @@
 // "Alles durchsuchen": gemeinsame Auswahl der Behälter/Leichen für Server und Client (rein, ohne Zustand)
 import { KACHEL, AKTION_ABSTAND, sichtfrei, durchsuchDauer } from './welt.mjs';
 
+export const ALLE_FRAGEN = 3;                  // drinnen: so viele Quizfragen richtig, dann gehen alle Türen auf
+export const ALLE_SPERRE = 30;                 // Sekunden Sperre nach einer falschen Antwort
 export const ALLE_FAKTOR = 0.6;                 // Dauer = 60 % der Summe der Einzeldauern
 export const ALLE_WEITE_INNEN = 8 * KACHEL;     // Reichweite im Innenraum (nur mit freier Sicht: geschlossene Türen/Wände sperren)
 export const ALLE_WEITE_AUSSEN = 3.5 * KACHEL;  // draußen nur Autos/Leichen/Container in unmittelbarer Nähe

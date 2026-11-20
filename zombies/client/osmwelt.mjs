@@ -675,10 +675,13 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   }
   mehrBaeume();
 
+  // Landebahn (nur Karten mit 'piste', z. B. Königsdorf): Fläche frei räumen, Rollweg zum Hangar
+  const pisteInfo = karte.piste ? pisteSetzen(karte.piste, k, setze, hole, { behaelter, deko, muell, sperren }) : null;
+
   // Vektordaten nur fürs Aussehen: echte Gebäudeumrisse, Straßenlinien, Flächen
   const safeBox = haeuser.filter(h => h.safe);
   const vektor = {
-    strassen: karte.strassen ?? [], flaechen: karte.flaechen ?? [],
+    strassen: karte.strassen ?? [], flaechen: karte.flaechen ?? [], piste: karte.piste ?? null,
     gebaeude: karte.gebaeude.filter(g => g.umriss?.length >= 6).map(g => ({
       p: g.umriss, typ: g.building ?? 'yes', flaeche: g.flaeche, x: g.x, y: g.y, b: g.b, h: g.h,
       safe: safeBox.some(h => h.x === g.x && h.y === g.y && h.b === g.b && h.h === g.h),
@@ -688,10 +691,45 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   // Gärten, Zaunarten und Gartenausstattung (tools/osm_karte.py) – nur fürs Aussehen; das Raster enthält sie schon
   const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [], zaeune: karte.zaeune ?? null } : null;
   const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details, muell, sperren };
+  if (pisteInfo) welt.piste = pisteInfo;
   if (karte.zaeune) welt.fein = baueFein(welt, karte);
   baueStuetzpunkt(welt, seed, setze);   // Bundeswehr-Stützpunkt (eigener Zufall, nach allem anderen)
   tuerenFreihalten(welt, setze, abstandRechteck);   // LETZTER Schritt: Vorplätze leeren, Wege zur Straße öffnen
   return welt;
+}
+
+// Landebahn: karte.piste = { p: [x0, y0, x1, y1] (Mittellinie, Kacheln), b (Breite in Kacheln), rollweg: [[x, y, x, y, …], …], rb (Rollwegbreite) }.
+// Setzt die Fläche auf begehbaren Platz (T.PLATZ), entfernt Bäume, Zäune, Deko, Behälter, Tonnen und Sperren darauf
+// (Häuser, Türen, Wasser und Wände bleiben). Rein deterministisch, ohne Zufall. Liefert welt.piste für Server und Client.
+function pisteSetzen(pi, k, setze, hole, dinge) {
+  const [x0, y0, x1, y1] = pi.p, L = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / L, uy = (y1 - y0) / L, b = pi.b ?? 11;
+  const rw = (pi.rollweg ?? []).map(l => { const q = []; for (let i = 0; i + 1 < l.length; i += 2) q.push([l[i], l[i + 1]]); return q; });
+  const rb = pi.rb ?? 3;
+  const segAbstand = (px, py, [ax, ay], [bx, by]) => {
+    const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+  };
+  const drin = (kx, ky) => {
+    const px = kx + 0.5, py = ky + 0.5, u = (px - x0) * ux + (py - y0) * uy, v = -(px - x0) * uy + (py - y0) * ux;
+    if (u >= -0.5 && u <= L + 0.5 && Math.abs(v) <= b / 2 + 0.5) return true;
+    for (const q of rw) for (let i = 0; i + 1 < q.length; i++) if (segAbstand(px, py, q[i], q[i + 1]) <= rb / 2 + 0.3) return true;
+    return false;
+  };
+  const px = [x0, x1, ...rw.flat(2).filter((_, i) => i % 2 === 0)], py = [y0, y1, ...rw.flat(2).filter((_, i) => i % 2 === 1)];
+  const MINX = Math.floor(Math.min(...px) - b), MAXX = Math.ceil(Math.max(...px) + b), MINY = Math.floor(Math.min(...py) - b), MAXY = Math.ceil(Math.max(...py) + b);
+  const WEG = new Set([T.WIESE, T.BAUM, T.STRASSE, T.PLATZ, T.DEKO, T.ZAUN, T.TOR]);
+  const flaeche = new Set();
+  for (let y = Math.max(0, MINY); y <= Math.min(HOEHE - 1, MAXY); y++) for (let x = Math.max(0, MINX); x <= Math.min(BREITE - 1, MAXX); x++) {
+    if (!drin(x, y) || !WEG.has(hole(x, y))) continue;
+    setze(x, y, T.PLATZ); flaeche.add(y * BREITE + x);
+  }
+  const auf = (px, py) => flaeche.has(Math.floor(py / KACHEL) * BREITE + Math.floor(px / KACHEL));
+  const filtere = (liste, f) => { for (let i = liste.length - 1; i >= 0; i--) if (!f(liste[i])) liste.splice(i, 1); };
+  filtere(dinge.behaelter, o => !auf(o.x, o.y));
+  filtere(dinge.deko, o => !auf(o.x, o.y));
+  if (dinge.muell?.tonnen) filtere(dinge.muell.tonnen, o => !auf(o.x, o.y));
+  filtere(dinge.sperren, o => !auf(o.x, o.y));
+  return { x0, y0, x1, y1, b, rollweg: rw, rb, laenge: L, w: Math.atan2(y1 - y0, x1 - x0) };
 }
 
 // Feines Kollisionsraster (1 m) aus den echten Umrissen: Häuser nach ihrem OSM-Polygon, Gartenzäune und Hecken nach den

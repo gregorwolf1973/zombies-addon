@@ -107,7 +107,11 @@ export class Uebersicht {
       zeiger.set(e.pointerId, lokal(e));
       // Ziehen startet an der tatsächlich gezeigten Mitte (nicht am eigenen Punkt – sonst springt die Karte)
       const la = this.letzteAnsicht, gezeigt = la ? { x: la.x0 + el.width / la.m / 2, y: la.y0 + el.height / la.m / 2 } : this.aktuelleMitte();
-      if (zeiger.size === 1) zug = { start: lokal(e), mitte: gezeigt, bewegt: false };
+      if (zeiger.size === 1) {
+        zug = { start: lokal(e), mitte: gezeigt, bewegt: false };
+        // Superuser: langer Druck (ohne Verschieben) öffnet „Hierhin springen“
+        if (this.hinSpringen) { const z = zug, cx = e.clientX, cy = e.clientY; clearTimeout(this.hinTimer); this.hinTimer = setTimeout(() => { if (zug === z && !z.bewegt && zeiger.size === 1) { z.lang = true; this.hinKnopf(z.start, cx, cy); } }, 600); }
+      }
       if (zeiger.size === 2) { const [a, b] = [...zeiger.values()]; abstand0 = Math.hypot(a.x - b.x, a.y - b.y); zoom0 = this.zoom; zug = null; }
       e.stopPropagation(); e.preventDefault();
     });
@@ -128,10 +132,12 @@ export class Uebersicht {
         this.zeichneNeu = true;
       }
     });
+    el.addEventListener('contextmenu', e => { if (!this.hinSpringen) return; e.preventDefault(); this.hinKnopf(lokal(e), e.clientX, e.clientY); });
     const ende = e => {
       const war = zug;
+      clearTimeout(this.hinTimer);
       zeiger.delete(e.pointerId);
-      if (zeiger.size === 0 && war && !war.bewegt) this.umschalten();
+      if (zeiger.size === 0 && war && !war.bewegt && !war.lang && e.button !== 2) this.umschalten();
       if (zeiger.size === 0) zug = null;
     };
     el.addEventListener('pointerup', ende);
@@ -141,6 +147,22 @@ export class Uebersicht {
     this.box.querySelector('.minus').onclick = e => { e.stopPropagation(); this.zoomen(1 / 1.5); };
     this.box.querySelector('.mich').onclick = e => { e.stopPropagation(); this.mitte = null; this.zeichneNeu = true; };
   }
+
+  // Superuser: kleines „📍 Hierhin springen“ an der Klickstelle; this.hinSpringen = (pxX, pxY) => … (Weltpixel)
+  hinKnopf(lokalPos, cx, cy) {
+    const a = this.letzteAnsicht; if (!a || !this.hinSpringen) return;
+    const wx = (a.x0 + lokalPos.x / a.m) * KACHEL, wy = (a.y0 + lokalPos.y / a.m) * KACHEL;
+    this.hinWeg();
+    const b = document.createElement('button'); b.type = 'button'; b.id = 'hinknopf'; b.textContent = '📍 Hierhin springen';
+    b.style.cssText = `position:fixed;z-index:60;left:${Math.max(4, Math.min(innerWidth - 170, cx))}px;top:${Math.max(4, Math.min(innerHeight - 44, cy))}px;padding:8px 12px;font-size:14px;background:#1e2a1e;color:#fff;border:1px solid #fff6;border-radius:8px;box-shadow:0 2px 8px #0008`;
+    b.addEventListener('pointerdown', e => e.stopPropagation());
+    b.onclick = e => { e.stopPropagation(); this.hinWeg(); this.hinSpringen(wx, wy); };
+    document.body.appendChild(b); this.hinKnopfEl = b;
+    this.hinZu = e => { if (e.target !== b) this.hinWeg(); };
+    setTimeout(() => document.addEventListener('pointerdown', this.hinZu, true), 0);
+    this.hinAus = setTimeout(() => this.hinWeg(), 5000);
+  }
+  hinWeg() { this.hinKnopfEl?.remove(); this.hinKnopfEl = null; clearTimeout(this.hinAus); if (this.hinZu) document.removeEventListener('pointerdown', this.hinZu, true); this.hinZu = null; }
 
   aktuelleMitte() { return this.mitte ?? this.ich ?? { x: BREITE / 2, y: HOEHE / 2 }; }
 

@@ -21,6 +21,10 @@ function freierPunkt(welt, o) {
 
 // setzt welt.heliplatz / welt.bunkertor ({x, y} in Pixeln), falls die Karte welche hat
 export function levelorteSetzen(welt, karte) {
+  if (welt?.piste) {   // Landebahn (osmwelt.mjs, Karte mit 'piste'): Anfang West, Richtung w in rad, Länge/Breite in Pixeln
+    const pi = welt.piste;
+    welt.landebahn = { x: pi.x0 * KACHEL, y: pi.y0 * KACHEL, w: pi.w, laenge: pi.laenge * KACHEL, breite: pi.b * KACHEL };
+  }
   const t = LEVELORTE[karte];
   if (!t || !welt) return;
   for (const [name, o] of Object.entries(t)) welt[name] = freierPunkt(welt, o);

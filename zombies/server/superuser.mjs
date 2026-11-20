@@ -2,7 +2,7 @@
 // Das Passwort steht NIRGENDS im Code: es wird nur als scrypt-Hash in den Einstellungen gespeichert
 // (Verwaltung → „Superuser-Passwort“, einstellungen.json → superuserHash). Ohne Hash gibt es keinen Superuser.
 import crypto from 'node:crypto';
-import { KACHEL, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX, WAFFEN } from '../client/welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX, WAFFEN } from '../client/welt.mjs';
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { LEVEL_KARTEN, KARTEN_NAMEN } from './aufgaben.mjs';
@@ -36,13 +36,13 @@ export function anmelden(hash, passwort, schluessel) {
   if (typeof passwort !== 'string' || !passwort) return { su: false };
   if (!hashGueltig(hash)) return { su: false, grund: 'Testzugang ist nicht eingerichtet' };
   if (gesperrt(schluessel)) return { su: false, grund: 'Zu viele Versuche – bitte eine Minute warten' };
-  if (pruefe(passwort, hash)) return { su: true };
+  if (pruefe(passwort, hash) || (passwort.trim() !== passwort && pruefe(passwort.trim(), hash))) return { su: true };   // Handy-Tastaturen hängen gern ein Leerzeichen an
   fehlversuch(schluessel);
   return { su: false, grund: 'Testzugang abgelehnt' };
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin'];
 
 function springen(raum, p, x, ziel) {
   p.x = ziel.x; p.y = ziel.y; p.ebene = ziel.ebene ?? ''; p.unten = false; p.anBord = false; p.sicher = ''; p.aktion = ''; p.fortschritt = 0;
@@ -192,6 +192,24 @@ export function befehl(raum, client, m) {
       a.busHeute = false;
       a.ankunft(a.einst().wartezeit);
       return '🚌 Evakuierung gerufen – das Fahrzeug kommt (übrige Aufgaben bleiben offen)';
+    }
+    case 'alleaufgaben': {
+      const a = raum.aufgaben;
+      if (!a.an()) return 'Aufgaben/Evakuierung sind ausgeschaltet';
+      if (!s.funk) a.funkAbsetzen(p, null);   // meldet die Evakuierung an wie der echte Funkspruch
+      for (const mi of a.mission) { a.abgegeben.add(mi.id); const q = s.missionen.get(mi.id); if (q) q.abgegeben = true; }
+      s.missionOffen = 0;
+      for (const q of s.aufgaben.values()) { q.erledigt = true; q.fortschritt = q.ziel; }
+      a.aktualisieren(false);
+      return '✅ Alle Aufgaben erledigt – die Evakuierung kann gerufen werden';
+    }
+    case 'hin': {
+      const px = Number(m.x), py = Number(m.y);
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return 'Ungültiger Ort';
+      const pos = platzSuchen(raum, Math.max(0, Math.min(px, BREITE * KACHEL)), Math.max(0, Math.min(py, HOEHE * KACHEL)));
+      if (!pos) return 'Dort ist kein freier Platz';
+      springen(raum, p, x, { ...pos, ebene: '' });
+      return '📍 Du bist dort';
     }
     case 'zeitraffer': {
       const f = [1, 5, 10, 60].includes(Number(m.faktor)) ? Number(m.faktor) : 1;

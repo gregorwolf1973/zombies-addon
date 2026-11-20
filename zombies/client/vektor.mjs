@@ -231,6 +231,59 @@ export function zeichneFlaechen(ctx, welt, rect) {
     if (f.a === 'parkplatz' || f.a === 'platz' || f.a === 'gewerbe') { ctx.strokeStyle = '#8f8a7f'; ctx.lineWidth = 3; ctx.stroke(); }
     else if (f.a === 'sport' || f.a === 'spielplatz') { ctx.strokeStyle = 'rgba(60,60,60,.5)'; ctx.lineWidth = 2; ctx.stroke(); }
   });
+  if (welt.vektor.piste) zeichnePiste(ctx, welt.vektor.piste, r, m);
+}
+
+// Landebahn mit Rollweg (Karte 'piste', Maße in Metern wie bei echten Pisten): Asphalt, Randlinien, gestrichelte Mittellinie,
+// Schwellenstreifen (Zebra), Pistennummern, Zielpunkt- und Aufsetzmarken; gelbe Mittellinie auf dem Rollweg.
+function zeichnePiste(ctx, pi, r, m) {
+  const [x0, y0, x1, y1] = pi.p, W = pi.b * K, rb = (pi.rb ?? 3) * K, L = Math.hypot(x1 - x0, y1 - y0) * K, M = METER;
+  const w = Math.atan2(y1 - y0, x1 - x0), ox = x0 * K, oy = y0 * K, rand = Math.max(W, L) + 40;
+  if (Math.max(ox, x1 * K) + rand < r.x0 || Math.min(ox, x1 * K) - rand > r.x1 || Math.max(oy, y1 * K) + rand < r.y0 || Math.min(oy, y1 * K) - rand > r.y1) return;
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // Rollweg zuerst (die Bahn deckt die Einmündung sauber ab)
+  const wege = (pi.rollweg ?? []).map(l => { const q = []; for (let i = 0; i + 1 < l.length; i += 2) q.push([l[i] * K, l[i + 1] * K]); return q; });
+  for (const q of wege) { pfad(ctx, q); ctx.strokeStyle = '#34363a'; ctx.lineWidth = rb + 5; ctx.stroke(); }
+  for (const q of wege) { pfad(ctx, q); ctx.strokeStyle = m.asphalt; ctx.lineWidth = rb; ctx.stroke(); }
+  for (const q of wege) { pfad(ctx, q); ctx.strokeStyle = '#e8c21c'; ctx.lineWidth = 2.5; ctx.stroke(); }
+  ctx.translate(ox, oy); ctx.rotate(w);
+  ctx.fillStyle = '#34363a'; ctx.fillRect(-2.5, -W / 2 - 2.5, L + 5, W + 5);
+  ctx.fillStyle = m.asphalt; ctx.fillRect(0, -W / 2, L, W);
+  ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(0, -W / 2, L, W);   // etwas heller als Straßenasphalt
+  ctx.lineCap = 'butt';
+  const weiss = 'rgba(255,255,255,.92)', rl = 0.5 * M;
+  // Randlinien
+  ctx.fillStyle = weiss;
+  for (const sg of [-1, 1]) ctx.fillRect(6 * M, sg * (W / 2 - 1.2 * M) - rl / 2, L - 12 * M, rl);
+  // Mittellinie gestrichelt (30 m Strich, 20 m Lücke)
+  ctx.strokeStyle = weiss; ctx.lineWidth = 0.9 * M; ctx.setLineDash([30 * M, 20 * M]); ctx.lineDashOffset = -45 * M;
+  ctx.beginPath(); ctx.moveTo(45 * M, 0); ctx.lineTo(L - 45 * M, 0); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+  // Schwelle (Zebrastreifen), Zielpunkt- und Aufsetzmarken, Nummern – je Ende gespiegelt
+  const nummern = pi.nummern ?? [];
+  [0, 1].forEach(ende => {
+    ctx.save();
+    if (ende) { ctx.translate(L, 0); ctx.rotate(Math.PI); }
+    const streifen = Math.floor((W - 6 * M) / (3.4 * M));
+    for (let i = 0; i < streifen; i++) {
+      const v = -(streifen * 3.4 * M) / 2 + i * 3.4 * M + 0.8 * M;
+      if (Math.abs(v + 0.9 * M) < 1.4 * M) continue;   // Mitte frei
+      ctx.fillRect(4 * M, v, 28 * M, 1.8 * M);
+    }
+    for (const d of [150, 300, 450]) {   // Aufsetzmarken (Paare); bei 300 m die breiteren Zielpunktbalken
+      if (d * M > L / 2 - 10 * M) continue;
+      const lang = d === 300 ? 40 * M : 22 * M, br = d === 300 ? 3.6 * M : 2 * M, ab = d === 300 ? 9 * M : 6 * M;
+      for (const sg of [-1, 1]) ctx.fillRect(d * M, sg * ab - (sg < 0 ? br : 0), lang, br);
+    }
+    if (nummern[ende]) {   // Ziffern von der Anflugseite lesbar (Oberkante zur Bahn hin)
+      ctx.save(); ctx.translate(44 * M + 5 * M, 0); ctx.rotate(Math.PI / 2);
+      ctx.fillStyle = weiss; ctx.font = `bold ${Math.round(13 * M)}px "Arial Black", Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.scale(1, 1.15); ctx.fillText(nummern[ende], 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  });
+  ctx.restore();
 }
 
 // ---------- Straßen und Wege ----------
