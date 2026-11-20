@@ -642,6 +642,22 @@ export function sichtfrei(welt, x1, y1, x2, y2) {
   return true;
 }
 
+// Sichtgüte 0..1 für Zombie-Wahrnehmung: Wand/Innentür/Leer = 0; jede verschiedene Baumkachel
+// auf der Linie (außer Start- und Zielkachel) mindert um 20 %, nie unter 0,3 (ein bisschen sieht man immer).
+export const BAUM_SICHT = 0.8, BAUM_SICHT_MIN = 0.3;
+export function sichtGuete(welt, x1, y1, x2, y2) {
+  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (KACHEL / 3));
+  const k1 = Math.floor(x1 / KACHEL) + ',' + Math.floor(y1 / KACHEL), k2 = Math.floor(x2 / KACHEL) + ',' + Math.floor(y2 / KACHEL);
+  const baeume = new Set();
+  for (let i = 1; i < n; i++) {
+    const kx = Math.floor((x1 + (x2 - x1) * i / n) / KACHEL), ky = Math.floor((y1 + (y2 - y1) * i / n) / KACHEL);
+    const t = welt.hole(kx, ky);
+    if (t === T.WAND || t === T.INNENTUER || t === T.LEER) return 0;
+    if (t === T.BAUM) { const k = kx + ',' + ky; if (k !== k1 && k !== k2) baeume.add(k); }
+  }
+  return Math.max(BAUM_SICHT_MIN, Math.pow(BAUM_SICHT, baeume.size));
+}
+
 // Ist der Punkt in einem Haus (Boden oder Tür)?
 export function drinnen(welt, x, y) {
   const t = welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL));
