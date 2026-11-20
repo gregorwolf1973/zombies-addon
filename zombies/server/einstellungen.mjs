@@ -171,7 +171,7 @@ export function bereinige(e = {}, alt = {}) {
       welleMax: Math.round(zahl(z.welleMax, 5, 1000, 50)), // … größte Zahl (höchstens 1000)
       hordeZielMin: z.hordeZielMin,                      // Horde wechselt ihr Ziel alle … bis … echte Minuten (Vorgabe 2–5)
       hordeZielMax: z.hordeZielMax,
-      hordeZieleZeigen: typeof z.hordeZieleZeigen === 'boolean' ? z.hordeZieleZeigen : false,   // Prüfwerkzeug: Ziel der Horde im Spiel anzeigen
+      hordeZieleZeigen: typeof z.hordeZieleZeigen === 'boolean' ? z.hordeZieleZeigen : false,   // Prüfwerkzeug: Ziel der Horde für Superuser anzeigen
       hordeTruppMin: z.hordeTruppMin,                    // Angriffstrupp je Ziel: Größe von … bis … Zombies (Vorgabe 5–15, wächst mit der Horde)
       hordeTruppMax: z.hordeTruppMax,
       hordeReichweite: Math.round(zahl(z.hordeReichweite, 5, 60, 18)), // so nah (Meter) an Spielern/Bots/Soldaten/Menschen löst sich ein Trupp

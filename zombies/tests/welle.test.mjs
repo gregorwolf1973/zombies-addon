@@ -432,6 +432,9 @@ test('Horde: festgefahren wechselt nicht vor 30 s (erst Umweg), hordeInfo mit Zi
     const info = []; raum.clients[0].send = (typ, m) => { if (typ === 'hordeInfo') info.push(m); };
     SpielRaum.einstellungen = { ...SpielRaum.einstellungen, hordeZieleZeigen: true };
     w.infoSenden(0, true);
+    assert.equal(info.length, 0, 'hordeInfo nur für Superuser');
+    raum.extra.get(raum.clients[0].sessionId).superuser = true;
+    w.infoSenden(0, true);
     const m = info.at(-1);
     assert.ok(m?.aktiv && m.ziel && m.mitte && typeof m.name === 'string' && m.name && typeof m.rest === 'number', 'hordeInfo unvollständig');
     assert.ok(m.wechsel.length >= 1 && m.wechsel.every(x => x.grund && x.name && x.art));
