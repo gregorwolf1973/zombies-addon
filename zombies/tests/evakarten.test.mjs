@@ -132,3 +132,80 @@ test('Bunker: Einsteigen = hineingehen (anBord), kein Abflug; Countdown-Ende: dr
   assert.equal(s.evakPhase, 'niederlage');
   assert.ok(r.draussen.includes(c.sessionId));
 }));
+
+// ---------- Levelwechsel auf die neuen Karten: Evakuierungsart je Karte, nie Panzer/Bus ----------
+const warteRaum = async () => { assert.ok(await bis(() => !SpielRaum.aktiv, 5000), 'alter Raum lebt noch'); };
+async function levelWechselNach(ag, raum, ziel) {
+  ag.levelWechsel(ziel);
+  await bis(() => !SpielRaum.aktiv, 6000);
+}
+async function neuBeitreten() {
+  const c = await new Client(`http://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Springer', spielerId: crypto.randomBytes(16).toString('hex') });
+  const raum = matchMaker.getLocalRoomById(c.roomId);
+  raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+  return { c, raum };
+}
+
+test('Levelwechsel nach Königsdorf (normal und per Testsprung), Kochel und Andermatt: Evakuierungsart stimmt, nie Panzer oder Bus', async () => {
+  await warteRaum();
+  SpielRaum.speicher.loescheWelt();
+  let { c, raum } = await neuBeitreten();
+  try {
+    assert.equal(raum.state.karte, 'isarauen');
+    assert.equal(raum.state.evakArt, 'panzer');
+    // 1. normaler Levelwechsel: Isarauen → Königsdorf
+    await levelWechselNach(raum.aufgaben, raum, null);
+    ({ c, raum } = await neuBeitreten());
+    assert.equal(raum.state.karte, 'koenigsdorf', 'falsche Karte');
+    assert.equal(raum.state.evakArt, 'absturz', 'Königsdorf: Art ' + raum.state.evakArt);
+    assert.ok(raum.state.evakAX > 0 && raum.state.evakX > 0, 'Absturzstelle/Heliplatz fehlen');
+    // A400M-Ablauf statt Panzer: Funk, Ankunftszeit → Landeanflug (kein Fahrzeug)
+    raum.state.aufgaben.clear(); raum.aufgaben.neu('funk', false); raum.aufgaben.aktualisieren(false);
+    raum.aufgaben.funkAbsetzen(raum.state.spieler.get(c.sessionId), raum.welt.safeRooms[0]);
+    raum.state.uhr = 18 * 60 + 0.1;
+    assert.ok(await bis(() => raum.state.evakPhase === 'absturz', 4000), 'A400M kommt nicht');
+    assert.equal([...raum.state.fahrzeuge.values()].some(f => f.art === 'evakuierung'), false, 'Evakuierungsfahrzeug statt Absturz');
+    // 2. Testsprung (Menü „Level 3“) aus derselben Welt und aus einer anderen
+    await levelWechselNach(raum.aufgaben, raum, { karte: 'kochel', level: 4 });
+    ({ c, raum } = await neuBeitreten());
+    assert.equal(raum.state.karte, 'kochel');
+    assert.equal(raum.state.evakArt, 'heli');
+    assert.equal(raum.state.evakPhase, 'heli', 'NH90 steht nicht');
+    await levelWechselNach(raum.aufgaben, raum, { karte: 'koenigsdorf', level: 3 });
+    ({ c, raum } = await neuBeitreten());
+    assert.equal(raum.state.karte, 'koenigsdorf');
+    assert.equal(raum.state.evakArt, 'absturz', 'Testsprung nach Königsdorf: Art ' + raum.state.evakArt);
+    await levelWechselNach(raum.aufgaben, raum, { karte: 'andermatt', level: 5 });
+    ({ c, raum } = await neuBeitreten());
+    assert.equal(raum.state.evakArt, 'bunker');
+  } finally { await c.leave(); await bis(() => !SpielRaum.aktiv, 3000); SpielRaum.kartenWechsel?.('isarauen'); SpielRaum.speicher.loescheWelt(); }
+});
+
+test('absturzPlan/heliPlan liefern immer einen Plan (auch ohne freie Fläche), Landebahn der Karte hat Vorrang', async () => {
+  const { absturzPlan, heliPlan } = await import('../server/flugplatz.mjs');
+  const leer = { seed: 5, start: { x: 500, y: 500 }, fein: null, kacheln: [], hole: () => 1 };   // alles blockiert: frei() findet nichts
+  const blockiert = { ...leer, fein: new Uint8Array(1).fill(1) };
+  const ap = absturzPlan({ ...blockiert }, 5);
+  assert.ok(ap && Number.isFinite(ap.x) && ap.heli, 'kein Absturzplan ohne freie Fläche');
+  assert.ok(heliPlan({ ...blockiert }, 5)?.heli, 'kein Heliplan ohne freie Fläche');
+  const mitBahn = { ...blockiert, landebahn: { x: 5000, y: 5000, w: 0 }, heliplatz: { x: 4000, y: 4100 } };
+  const p = absturzPlan(mitBahn, 5);
+  assert.equal(p.w > -0.01 && p.w < 0.01, true, 'Anflug nicht entlang der Landebahn');
+  assert.deepEqual(p.heli, { x: 4000, y: 4100 }, 'heliplatz der Karte nicht genutzt');
+});
+
+test('Erzwungene Evakuierungsart (Verwaltung) gilt nur für die aktuelle Karte: nach dem Levelwechsel nach Königsdorf kommt kein Leopard', async () => {
+  await warteRaum();
+  SpielRaum.speicher.loescheWelt();
+  process.env.ZOMBIES_VERWALTUNG_LOKAL = '1';
+  const r = await fetch(`http://127.0.0.1:${PORT}/verwaltung/api`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aufgaben: { evakArt: 'panzer' } }) });
+  assert.ok(r.ok, 'Verwaltung nicht erreichbar: ' + r.status);
+  assert.equal(SpielRaum.einstellungen.aufgaben.evakArt, 'panzer');
+  let { c, raum } = await neuBeitreten();
+  try {
+    await levelWechselNach(raum.aufgaben, raum, { karte: 'koenigsdorf', level: 3 });
+    assert.equal(SpielRaum.einstellungen.aufgaben.evakArt, '', 'erzwungene Art blieb stehen');
+    ({ c, raum } = await neuBeitreten());
+    assert.equal(raum.state.evakArt, 'absturz', 'Königsdorf: Art ' + raum.state.evakArt);
+  } finally { await c.leave(); await bis(() => !SpielRaum.aktiv, 3000); SpielRaum.kartenWechsel?.('isarauen'); SpielRaum.speicher.loescheWelt(); delete process.env.ZOMBIES_VERWALTUNG_LOKAL; }
+});

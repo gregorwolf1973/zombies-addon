@@ -131,8 +131,7 @@ export class Aufgaben {
     const s = this.raum.state, w = this.raum.welt;
     const art = this.einst().evakArt || evakArtFuer(s.karte);
     if (art === 'flugzeug' && !(w && w.fein && flugplanBerechnen(w, s.seed))) return 'bus';
-    if ((art === 'absturz' && !(w && absturzPlan(w, s.seed))) || (art === 'heli' && !(w && heliPlan(w, s.seed)))) return 'bus';
-    return art;
+    return art;   // 'absturz', 'heli' und 'bunker' haben immer einen Plan (Rückfall im Plan selbst, nie auf Bus/Panzer)
   }
   // Abholpunkt der Straßenfahrzeuge: Ortsausgang (tor + 1 Kachel)
   torPunkt() { const t = this.raum.welt?.tor; return t ? { x: (t.x + 1) * KACHEL, y: (t.y + 1) * KACHEL } : null; }
@@ -821,7 +820,7 @@ export class Aufgaben {
   // (Missionsteile erledigt), kommt der NH90 (Anflug, Landung, Einsteigen/Abflug wie bei der A400M-Evakuierung).
   absturzStart() {
     const s = this.raum.state, p = absturzPlan(this.raum.welt, s.seed);
-    if (!p) { this.laufendeArt = null; return this.ankunft(0); }
+    if (!p) return;   // kann nicht vorkommen (absturzPlan liefert immer einen Plan), aber nie in eine andere Evakuierungsart ausweichen
     this.busHeute = true;
     this.crash = { rest: ABSTURZ_DAUER, phase: 'anflug' };
     s.evakArt = 'absturz'; s.evakPhase = 'absturz'; s.evakRest = ABSTURZ_DAUER;

@@ -75,7 +75,8 @@ export async function starte({
     res.sendFile(path.join(path.dirname(require.resolve('@colyseus/sdk/package.json')), 'dist/colyseus.js')));
   const datei = new EinstellungsDatei(einstellungsDatei, optionen);
   // Levelwechsel (Evakuierungsbus): die nächste Karte einstellen, die Welt startet der Raum selbst neu
-  SpielRaum.kartenWechsel = karte => { anwenden(datei.aendern({ karte })); };
+  // (die in der Verwaltung erzwungene Evakuierungsart gilt nur für die aktuelle Karte und wird beim Kartenwechsel zurückgesetzt – sonst käme z. B. der Leopard auch in Königsdorf)
+  SpielRaum.kartenWechsel = karte => { anwenden(datei.aendern({ karte, aufgaben: { evakArt: '' } })); };
   SpielRaum.testSetzen = test => { anwenden(datei.aendern({ test })); return datei.werte.test; };   // Testmenü (Superuser): wie die Verwaltung speichern und für alle Räume übernehmen
   let geladeneKarte = null;
   const anwenden = w => {
