@@ -2484,7 +2484,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     var frisch = $("frischerStart");
     if (!istFokussiert(frisch)) frisch.checked = !!e.frischerStart;
     var hz = $("hordeZieleZeigen");
-    if (!istFokussiert(hz)) hz.checked = !!wz.hordeZieleZeigen;
+    if (!istFokussiert(hz)) hz.checked = !!(e.zombies && e.zombies.hordeZieleZeigen);
 
     var code = $("zugangscode");
     if (!zeitGeber["zugangscode"] && !istFokussiert(code)) {
