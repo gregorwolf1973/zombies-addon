@@ -608,6 +608,14 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
         <span class="wert" id="hordeReichweiteWert">18 m</span>
       </div>
     </div>
+
+    <div class="feld">
+      <label for="ueberraschung">Überraschungszombie beim Durchsuchen (Schrank, Spind, Müllcontainer, Auto)</label>
+      <div class="wertzeile">
+        <input type="range" id="ueberraschung" min="0" max="100" step="1">
+        <span class="wert" id="ueberraschungWert">3 %</span>
+      </div>
+    </div>
   </section>
 
   <!-- Spiel -->
@@ -2573,13 +2581,13 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
     var wz = d.einstellungen && d.einstellungen.zombies || {};
     [["welle", wz.welle === undefined ? 20 : wz.welle], ["welleMin", wz.welleMin || 20], ["welleMax", wz.welleMax || 50],
-      ["hordeZielMin", wz.hordeZielMin || 2], ["hordeZielMax", wz.hordeZielMax || 5], ["hordeTruppMin", wz.hordeTruppMin || 5], ["hordeTruppMax", wz.hordeTruppMax || 15], ["hordeReichweite", wz.hordeReichweite || 18]].forEach(function (p) {
+      ["hordeZielMin", wz.hordeZielMin || 2], ["hordeZielMax", wz.hordeZielMax || 5], ["hordeTruppMin", wz.hordeTruppMin || 5], ["hordeTruppMax", wz.hordeTruppMax || 15], ["hordeReichweite", wz.hordeReichweite || 18], ["ueberraschung", wz.ueberraschung === undefined ? 3 : wz.ueberraschung]].forEach(function (p) {
       var el = $(p[0]);
       if (!zeitGeber[p[0]] && !istFokussiert(el)) el.value = p[1];
       $(p[0] + "Wert").textContent = welleText(p[0], Number(el.value));
     });
   }
-  function welleText(id, v) { return id === "welle" ? (v ? v + " min" : "aus") : id.indexOf("hordeZiel") === 0 ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : String(v); }
+  function welleText(id, v) { return id === "welle" ? (v ? v + " min" : "aus") : id.indexOf("hordeZiel") === 0 ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : id === "ueberraschung" ? v + " %" : String(v); }
 
   function rendereSpiel(d) {
     var e = d.einstellungen || {};
@@ -2737,7 +2745,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       sendenTeil("zombies", "tempo", Number(tempo.value));
     });
 
-    ["welle", "welleMin", "welleMax", "hordeZielMin", "hordeZielMax", "hordeTruppMin", "hordeTruppMax", "hordeReichweite"].forEach(function (id) {
+    ["welle", "welleMin", "welleMax", "hordeZielMin", "hordeZielMax", "hordeTruppMin", "hordeTruppMax", "hordeReichweite", "ueberraschung"].forEach(function (id) {
       var el = $(id);
       el.addEventListener("input", function () { $(id + "Wert").textContent = welleText(id, Number(el.value)); });
       el.addEventListener("change", function () {

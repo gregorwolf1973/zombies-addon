@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.54.0 – 20.11.2026
+
+- Schießstand / Tutorial: Lobby-Knopf „🎯 Schießstand“, eigener Übungsplatz je Spieler (unsterblich), alle Waffen, Entfernungsmarken 10/25/50/75 m, Zombies 5/20/50 starten, Panzer ein/aus, Auswertung je Waffe (Schuss, Treffer, Tote, Schuss je Zombie, Munition) mit Erklärung.
+- Beute: Spinde hinter Rätsel-Türen mit Belohnung (mehr Waffen, Munition, Spritzen), Herd und Spüle durchsuchbar (Messer sehr häufig), Überraschungszombie in Schränken, Müllcontainern und Kofferräumen (Vorgabe 3 %, einstellbar). WELT_VERSION 18.
+- Wer sich im Bundeswehr-Lager abmeldet, steigt dort wieder ein.
+- Waffenknöpfe unten links übereinander, jeder mit Magazin/Max und Vorrat, Nachladebalken, leer rot; App-Icon und Logo als grüner 🧟.
+- Ein Fenster unter der Eckkarte: Uhrzeit · Tag, Zombies von dir/gesamt, verwandelte Menschen und Zombies unterwegs.
+- Mehr Einzel-Zombies (auch früh im Ausbruch), schnelleres Nachrücken; Angriffstrupps der Horde 15–25 % der Horde und bleiben 30–45 s dran, Rest bremst in Spielernähe; normale Zombies jagen länger und suchen am letzten Ort.
+- Mehr Zombie-Geräusche (10 Stimmen, Stöhnen öfter, Horden-Grollen leiser).
+- Acht neue Bewohner-Typen (dicker Mann, Oma, Jogger, Geschäftsfrau, Teenager, Bauarbeiter, Opa, junge Frau mit Rucksack) mit eigenem Tempo.
+
 ## 0.53.0 – 20.11.2026
 
 - Hubschrauber der A400M-Evakuierung jetzt ein NH90 (Draufsicht aus einem 3D-Modell, Rumpf und Hauptrotor getrennt – der Rotor dreht sich).

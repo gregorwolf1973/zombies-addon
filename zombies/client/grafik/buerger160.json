@@ -1,0 +1,30 @@
+{
+ "feld": 160,
+ "spalten": 8,
+ "bilder": {
+  "dick": [
+   0
+  ],
+  "oma": [
+   1
+  ],
+  "jogger": [
+   2
+  ],
+  "geschaeftsfrau": [
+   3
+  ],
+  "teenager": [
+   4
+  ],
+  "bauarbeiter": [
+   5
+  ],
+  "opa": [
+   6
+  ],
+  "rucksack": [
+   7
+  ]
+ }
+}

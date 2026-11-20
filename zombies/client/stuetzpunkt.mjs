@@ -78,10 +78,10 @@ function platzSuchen(welt, start) {
 }
 
 // setze(x, y, typ) schreibt ins grobe Raster (nur zum Entfernen von Bäumen im Baufeld)
-export function baueStuetzpunkt(welt, seed, setze) {
+export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // lageVorgabe { x0, y0, b, h, richtung }: fester Platz (Schießstand)
   welt.stuetzpunkt = null;
   if (!welt.fein) return;
-  const lage = platzSuchen(welt, welt.start);
+  const lage = lageVorgabe ?? platzSuchen(welt, welt.start);
   if (!lage) return;
   const { x0, y0, b, h, richtung } = lage;
   const { th, c, s, ort } = rahmen(x0, y0, b, h, richtung);
