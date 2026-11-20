@@ -20,7 +20,7 @@ import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
-import { schema, t } from '@colyseus/schema';
+import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
@@ -35,8 +35,8 @@ export const Spieler = schema({
   richtung: t.number(),
   hp: t.number(),
   anBord: t.boolean(),      // sitzt im Evakuierungsfahrzeug (Bus, Panzer, A400M, Hubschrauber): Position folgt ihm, Zombies lassen ihn in Ruhe
-  durst: t.number(),        // 100 = satt, 0 = verdurstet
-  hunger: t.number(),
+  durst: t.uint8(),         // 100 = satt, 0 = verdurstet (Server rechnet genau, übertragen wird die ganze Zahl)
+  hunger: t.uint8(),
   unten: t.boolean(),
   afk: t.boolean(),         // true = untätig, ein Bot steuert die Figur (Client: 🤖 hinter dem Namen)
   hilfe: t.number(),        // Fortschritt beim Aufhelfen 0..1
@@ -55,7 +55,7 @@ export const Spieler = schema({
   mg0: t.uint8(), mg1: t.uint8(), mg2: t.uint8(),      // Schuss im Magazin je Waffenplatz (für die Knöpfe im HUD)
   mx0: t.uint8(), mx1: t.uint8(), mx2: t.uint8(),      // Magazingröße je Waffenplatz (0 = Nahwaffe)
   ebene: t.string(),        // '' = draußen, sonst z. B. 'h5eg', 'h5keller', 'h5dach'
-  lampe: t.number(),        // Restzeit der Taschenlampe in Sekunden (leuchtet drinnen von selbst)
+  lampe: t.uint16(),        // Restzeit der Taschenlampe in Sekunden (leuchtet drinnen von selbst; übertragen ganzzahlig)
   rucksack: t.array("string"),
   plaetze: t.uint8(),       // Größe des Rucksacks (8, 12 oder 16)
   farbe: t.uint8(),
@@ -65,16 +65,19 @@ export const Spieler = schema({
   aktion: t.string(),       // "durchsuchen" | "barrikade" | ""
   fortschritt: t.number(),
   besiegt: t.uint16(),
-  kleidung: t.number(),     // Haltbarkeit der festen Kleidung 0..100 (Schutz vor Bissen)
-  infektion: t.number(),    // Sekunden bis zur Verwandlung, 0 = gesund
-  zombie: t.number(),       // Sekunden, die man noch Zombie ist, 0 = Mensch
+  kleidung: t.uint8(),      // Haltbarkeit der festen Kleidung 0..100 (Schutz vor Bissen)
+  infektion: t.uint16(),    // Sekunden bis zur Verwandlung, 0 = gesund (übertragen ganzzahlig, Server rechnet genau)
+  zombie: t.uint16(),       // Sekunden, die man noch Zombie ist, 0 = Mensch
   ruht: t.boolean(),        // ruht auf einem Feldbett im Safe Room (Leben +1/s, Hunger/Durst halb so schnell)
   spricht: t.boolean(),     // spricht gerade ins Mikrofon (Sprachübertragung, zeigt 🔊 über der Figur)
+  seq: t.uint16(),          // Nummer der letzten ganz verarbeiteten Eingabe (Client gleicht seine Vorhersage damit ab)
 }, 'Spieler');
 
+// Positionen als int16 (Karte < 32768 px): der Server rechnet weiter mit Kommazahlen, übertragen werden ganze Pixel.
+// Die Blickrichtung z.richtung (Bogenmaß) ist nur noch eine Server-Eigenschaft; übertragen wird rq = Richtung in 256 Stufen.
 export const Zombie = schema({
-  x: t.number(), y: t.number(),
-  richtung: t.number(),
+  x: t.int16(), y: t.int16(),
+  rq: t.uint8(),
   jagt: t.boolean(),
   hp: t.uint8(),
   kriecht: t.boolean(),     // „nicht ganz tot“: robbt am Boden
@@ -83,8 +86,9 @@ export const Zombie = schema({
 }, 'Zombie');
 
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
-export const Leiche = schema({ x: t.number(), y: t.number(), richtung: t.number(), rest: t.uint8(), alter: t.number(), variante: t.uint8(), ebene: t.string(), fest: t.boolean() }, 'Leiche');  // fest: Tote in Wohnungen, verschwinden nie
-export const BodenDing = schema({ x: t.number(), y: t.number(), ding: t.string(), alter: t.number(), ebene: t.string() }, 'BodenDing');
+// alter (Sekunden) ist nur Server-Eigenschaft; übertragen wird blass (0 = voll, 10 = verschwunden) in den letzten 20 s
+export const Leiche = schema({ x: t.number(), y: t.number(), richtung: t.number(), rest: t.uint8(), blass: t.uint8(), variante: t.uint8(), ebene: t.string(), fest: t.boolean() }, 'Leiche');  // fest: Tote in Wohnungen, verschwinden nie
+export const BodenDing = schema({ x: t.number(), y: t.number(), ding: t.string(), blass: t.uint8(), ebene: t.string() }, 'BodenDing');
 // Türen: Zimmertüren ('ebene:x,y') und Haustüren ('haus:nr'). barrikade und hp 0–100, kaputt = zerbrochen (bleibt offen)
 export const Tuer = schema({ offen: t.boolean(), verschlossen: t.boolean(), barrikade: t.number(), hp: t.number(), kaputt: t.boolean() }, 'Tuer');
 function neueTuer(offen, verschlossen) {
@@ -126,13 +130,15 @@ export const Zustand = schema({
   groesseGesamt: t.number(),  // Gesamtgröße (alles) in %
   autos: t.uint8(),         // Autodichte der Welt (10 = normal), gilt bis zum Neustart der Welt
   spieler: t.map(Spieler),
-  zombies: t.map(Zombie),
+  zombies: t.map(Zombie).view(),   // jeder Client sieht nur Zombies in seinem Bildausschnitt (+ Rand), siehe sichtAktualisieren()
+  zombieZahl: t.uint16(),   // alle Zombies der Welt (für die Anzeige „unterwegs“)
+  takt: t.uint32(),         // Server-Uhr in ms seit Raumstart (Zeitstempel der Positionen für die Glättung im Client)
   behaelter: t.map(Behaelter),   // nur schon durchsuchte
   leichen: t.map(Leiche),       // tote Zombies, die eine Weile liegen bleiben
   boden: t.map(BodenDing),      // weggeworfene Gegenstände
   tueren: t.map(Tuer),          // Zimmertüren der betretenen Häuser ('ebene:x,y') und Haustüren mit Zustand ('haus:nr')
   safes: t.map(Safe),
-  menschen: t.map(Mensch),      // Bewohner der Stadt (Abschnitt 4)
+  menschen: t.map(Mensch).view(),   // Bewohner der Stadt (Abschnitt 4); wie Zombies nur im Bildausschnitt (+ Rand)
   fahrzeuge: t.map(Fahrzeug),   // Linienbus, Verkehr, Polizei, Feuerwehr, Wracks
   feuer: t.map(Feuer),
   verbrannt: t.map('boolean'),  // 'haus:nr', 'auto:bID', 'bus:ID', 'fz:ID'
@@ -149,7 +155,12 @@ const TUER_SCHADEN_ZU = 2.8;  // verschlossene Zimmertüren halten länger
 const BARRIKADE_SCHADEN = 2;  // Barrikade pro Sekunde und Zombie
 const BRETT_STAERKE = 35;
 
-const TICK = 50; // ms → 20 Updates pro Sekunde
+const TICK = 50; // ms → 20 Simulationsschritte pro Sekunde
+const PATCH = 100; // ms → 10 Zustands-Updates pro Sekunde an die Clients (der Client glättet dazwischen)
+const SICHT_RAND = 260, SICHT_LOESEN = 220;   // Pixel um den Bildausschnitt: dort werden Zombies schon geschickt; erst so viel weiter wieder entfernt
+const SICHT_VORGABE = { w: 1100, h: 700 }, SICHT_MAX = 2600;   // halbe Ausschnittgröße in Pixeln, bis der Client seine meldet
+const EINGABE_GUTHABEN_MAX = 1.5;   // Sekunden Bewegung, die der Server nach einem Netz-Hänger nachholt
+const ZWEI_PI = Math.PI * 2;
 const ZOMBIE_HP = 100;   // Vorgabe; wirksam ist die Einstellung zombieLeben
 const STOSS_WEG = 34;   // Schläger und Faust stoßen den Zombie zurück (Waffenwerte: WAFFEN in client/welt.mjs)
 const ANKUNFT_ZOMBIEFREI = 144;   // Pixel (4,5 Kacheln): so weit um den Ankunftspunkt entstehen beim ersten Betreten keine Zombies
@@ -196,12 +207,109 @@ const REDEN_LAERM = 200;        // px (25 m): so weit lockt Reden Zombies, wenn 
 
 const CHAT_MAX = 300, CHAT_VERLAUF = 100, CHAT_ANZAHL = 5, CHAT_FENSTER = 10000;
 
+// Ausblenden in den letzten 20 s: 0 = voll sichtbar … 10 = weg (nur 10 Stufen, damit nicht jeder Takt übertragen wird)
+const blassStufe = rest => rest >= 20 ? 0 : Math.max(0, Math.min(10, Math.ceil((20 - rest) / 2)));
+
 // Spielerdaten in der Form, die lautstaerke() erwartet
 const sprachDaten_ = p => ({ x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: [...(p.rucksack ?? [])] });
 
 export class SpielRaum extends Room {
   maxClients = 10;
-  patchRate = TICK;
+  // Gesendet wird direkt nach jedem PATCH/TICK-ten Simulationsschritt (siehe setSimulationInterval), damit der Zeitstempel
+  // state.takt genau zu den Positionen passt. Der eingebaute Patch-Zeitgeber läuft deshalb praktisch nie (11 Tage).
+  // NICHT null setzen: dann startet Colyseus einen 16-ms-Uhrtakt, und die Simulation bekäme viel zu kleine Zeitschritte.
+  patchRate = 1e9;
+
+  setSimulationInterval(cb, ms = TICK) {
+    let n = 0;
+    const jeder = Math.max(1, Math.round(PATCH / ms));
+    return super.setSimulationInterval(dt => { cb(dt); if (++n % jeder === 0) this.broadcastPatch(); }, ms);
+  }
+
+  // vor jedem Versand: Zeitstempel, Zombie-Zahl und -Richtung (256 Stufen), Sichtbarkeit je Client
+  broadcastPatch() {
+    try { this.netzAbgleich(); } catch (e) { if (!this.netzFehler) { console.error('Netzabgleich:', e.message); this.netzFehler = true; } }
+    return super.broadcastPatch();
+  }
+
+  netzAbgleich() {
+    const s = this.state;
+    if (!s?.zombies) return;
+    this.startZeit ??= performance.now();
+    s.takt = Math.round(performance.now() - this.startZeit) >>> 0;
+    if (s.zombieZahl !== s.zombies.size) s.zombieZahl = s.zombies.size;
+    // erst ab 2 Stufen (~3°) Änderung neu senden: Schwarm-Zombies zittern sonst ständig in der Richtung (der Client dreht ohnehin weich)
+    const rq = o => { const r = o.richtung; if (typeof r !== 'number') return; const q = ((Math.round(r / ZWEI_PI * 256) % 256) + 256) % 256;
+      const d = Math.abs(q - (o.rq ?? -9)); if (Math.min(d, 256 - d) >= 2 || o.rq === undefined) o.rq = q; };
+    for (const z of s.zombies.values()) rq(z);
+    if (s.menschen) for (const m of s.menschen.values()) rq(m);
+    this.sichtAktualisieren();
+  }
+
+  // Zombies nur an Clients, in deren Bildausschnitt (+ Rand) sie stehen – auf derselben Ebene; mit Abstand zum Entfernen,
+  // damit Zombies am Rand nicht ständig hinzukommen und wegfallen
+  sichtAktualisieren() {
+    const s = this.state;
+    for (const c of this.clients) {
+      if (!c.view) { c.view = new StateView(); c.sichtZ = new Set(); c.sichtM = new Set(); }
+      const p = s.spieler.get(c.sessionId);
+      if (!p) continue;
+      const w = c.sicht?.w ?? SICHT_VORGABE.w, h = c.sicht?.h ?? SICHT_VORGABE.h, eb = p.ebene ?? '';
+      const ax = w + SICHT_RAND, ay = h + SICHT_RAND, lx = ax + SICHT_LOESEN, ly = ay + SICHT_LOESEN;
+      const pruefe = (karte, ids, ebeneVon) => {
+        if (!karte) return;
+        for (const id of ids) if (!karte.has(id)) ids.delete(id);
+        for (const [id, o] of karte) {
+          const dx = Math.abs(o.x - p.x), dy = Math.abs(o.y - p.y), gleich = ebeneVon(o) === eb;
+          if (ids.has(id)) {
+            if (!gleich || dx > lx || dy > ly) { c.view.remove(o); ids.delete(id); }
+          } else if (gleich && dx <= ax && dy <= ay) { c.view.add(o); ids.add(id); }
+        }
+      };
+      pruefe(s.zombies, c.sichtZ ??= new Set(), z => z.ebene ?? '');
+      pruefe(s.menschen, c.sichtM ??= new Set(), m => m.sichtbar === false ? '\u0000' : '');   // Bewohner im Haus/Bus: nirgends sichtbar
+    }
+  }
+
+  // Eingabe des Clients. Neue Form { dx, dy, s, n, d }: „d Sekunden lang so gelaufen“, laufende Nummer n – der Server arbeitet
+  // die Warteschlange in Echtzeit ab (holt nach einem Netz-Hänger bis EINGABE_GUTHABEN_MAX nach) und meldet p.seq zurück.
+  // Alte Form ohne n/d (Tests, ältere Clients): gilt, bis die nächste kommt.
+  eingabeEmpfangen(client, m) {
+    if (!m || typeof m !== 'object') return null;
+    let dx = Number(m.dx) || 0, dy = Number(m.dy) || 0;
+    const l = Math.hypot(dx, dy);
+    if (l > 1) { dx /= l; dy /= l; }
+    const x = this.extra.get(client.sessionId);
+    if (!x) return null;
+    const n = Number(m.n), d = Number(m.d);
+    if (Number.isInteger(n) && n >= 0 && Number.isFinite(d)) {
+      x.warte ??= [];
+      x.warte.push({ dx, dy, s: !!m.s, d: Math.max(0, Math.min(0.25, d)), n: n & 0xffff });
+      if (x.warte.length > 80) x.warte.splice(0, x.warte.length - 80);
+    } else { x.warte = null; x.eingabe = { dx, dy, s: !!m.s }; }
+    return { x, bewegt: Math.hypot(dx, dy) > 0.05 };
+  }
+
+  // Bewegungsstücke dieses Takts: [[eingabe, sekunden], …]
+  eingabeSchritte(p, x, dt) {
+    if (x.bot || !x.warte) return [[x.eingabe, dt]];
+    const schritte = [];
+    x.guthaben = Math.min(EINGABE_GUTHABEN_MAX, (x.guthaben ?? 0) + dt);
+    while (x.warte.length && x.guthaben > 1e-4) {
+      const w = x.warte[0], nimm = Math.min(w.d, x.guthaben);
+      if (nimm > 0) schritte.push([w, nimm]);
+      w.d -= nimm; x.guthaben -= nimm;
+      x.eingabe = { dx: w.dx, dy: w.dy, s: w.s };
+      if (w.d <= 1e-4) { x.warte.shift(); p.seq = w.n; }
+    }
+    return schritte;
+  }
+
+  // Warteschlange verwerfen (am Boden, an Bord, Ebenenwechsel …): alles gilt als verarbeitet
+  eingabeVerwerfen(p, x) {
+    if (!x?.warte?.length) { if (x) x.guthaben = 0; return; }
+    p.seq = x.warte[x.warte.length - 1].n; x.warte.length = 0; x.guthaben = 0;
+  }
 
   // vom Server beim Start gesetzt (nicht über Client-Optionen änderbar)
   static einstellungen = { zugangscode: '', zombieFaktor: 1, haeuserFaktor: 1, tempoFaktor: 1, bots: 0, funde: {}, zeitraffer: 1, unsterblich: new Set() };
@@ -317,12 +425,13 @@ export class SpielRaum extends Room {
     if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === WELT_VERSION) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
 
     this.onMessage('eingabe', (client, m) => {
-      if (!m || typeof m !== 'object') return;
-      let dx = Number(m.dx) || 0, dy = Number(m.dy) || 0;
-      const l = Math.hypot(dx, dy);
-      if (l > 1) { dx /= l; dy /= l; }
-      const x = this.extra.get(client.sessionId);
-      if (x) { x.eingabe = { dx, dy, s: !!m.s }; if (Math.hypot(dx, dy) > 0.05) this.ruehrt(client.sessionId); }   // der Client sendet auch im Stand alle 250 ms: nur Bewegung zählt
+      const r = this.eingabeEmpfangen(client, m);
+      if (r?.bewegt) this.ruehrt(client.sessionId);   // der Client sendet auch im Stand alle 250 ms: nur Bewegung zählt
+    });
+    // halbe Größe des Bildausschnitts in Weltpixeln (je nach Bildschirm und Zoom): bestimmt, welche Zombies der Client bekommt
+    this.onMessage('sicht', (client, m) => {
+      const w = Number(m?.w), h = Number(m?.h);
+      if (Number.isFinite(w) && Number.isFinite(h)) client.sicht = { w: Math.max(200, Math.min(SICHT_MAX, w)), h: Math.max(150, Math.min(SICHT_MAX, h)) };
     });
     // jede dieser Nachrichten zeigt, dass jemand am Gerät ist (Rückkehr aus der AFK-Steuerung)
     {
@@ -715,6 +824,7 @@ export class SpielRaum extends Room {
     x.letzteEingabe ??= Date.now();
     if (Date.now() - x.letzteEingabe < (this.afkSekunden ?? AFK_SEKUNDEN) * 1000) return;
     x.afkBot = { nr: 0, afk: true, plan: { rolle: 'begleiter', auftrag: null, pause: 0 } };
+    this.eingabeVerwerfen(p, x);
     p.afk = true; p.spricht = false;
     this.broadcast('meldung', { text: `🤖 ${p.name} ist untätig – ein Bot übernimmt die Figur` });
   }
@@ -1755,7 +1865,7 @@ export class SpielRaum extends Room {
     for (const [d, g] of anteile) { r -= g; if (r < 0) { inhalt.push(d); break; } }
     const id = 'l' + (this.naechsteLeichenId++);
     const l = new Leiche();
-    l.x = z.x; l.y = z.y; l.richtung = z.richtung; l.rest = inhalt.length; l.alter = 0; l.variante = z.variante ?? 0; l.ebene = z.ebene ?? ''; l.fest = fest;
+    l.x = z.x; l.y = z.y; l.richtung = z.richtung; l.rest = inhalt.length; l.alter = 0; l.blass = 0; l.variante = z.variante ?? 0; l.ebene = z.ebene ?? ''; l.fest = fest;
     this.state.leichen.set(id, l);
     this.leichenInhalt.set(id, inhalt);
     if (fest) return id;
@@ -1768,8 +1878,10 @@ export class SpielRaum extends Room {
   leichenAltern(dt) {
     for (const [id, l] of this.state.leichen) {
       if (l.fest) continue;
-      l.alter += dt;
-      if (l.alter > LEICHE_DAUER) { this.state.leichen.delete(id); this.leichenInhalt.delete(id); }
+      l.alter = (l.alter ?? 0) + dt;
+      if (l.alter > LEICHE_DAUER) { this.state.leichen.delete(id); this.leichenInhalt.delete(id); continue; }
+      const b = blassStufe(LEICHE_DAUER - l.alter);
+      if (l.blass !== b) l.blass = b;
     }
   }
 
@@ -1874,7 +1986,7 @@ export class SpielRaum extends Room {
   legeHin(ding, x, y, ebene = '') {
     const b = new BodenDing(); b.ebene = ebene;
     const w = this.rnd() * Math.PI * 2;
-    b.x = x + Math.cos(w) * 10; b.y = y + Math.sin(w) * 10; b.ding = ding; b.alter = 0;
+    b.x = x + Math.cos(w) * 10; b.y = y + Math.sin(w) * 10; b.ding = ding; b.alter = 0; b.blass = 0;
     const id = 'd' + (this.naechsteBodenId++);
     this.state.boden.set(id, b);
     return id;
@@ -1882,8 +1994,10 @@ export class SpielRaum extends Room {
 
   bodenAltern(dt) {
     for (const [id, b] of this.state.boden) {
-      b.alter += dt;
-      if (b.alter > BODEN_DAUER) this.state.boden.delete(id);
+      b.alter = (b.alter ?? 0) + dt;
+      if (b.alter > BODEN_DAUER) { this.state.boden.delete(id); continue; }
+      const st = blassStufe(BODEN_DAUER - b.alter);
+      if (b.blass !== st) b.blass = st;
     }
   }
 
@@ -2124,26 +2238,47 @@ export class SpielRaum extends Room {
     const safe = safeRoomVon(this.welt, p);
     p.sicher = safe ? safe.id : this.imLagerSafe(p) ? 'lager' : '';
     if (safe) x.letzterSafe = safe.id;
-    if (p.unten || p.anBord) return;   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
+    if (p.unten || p.anBord) { this.eingabeVerwerfen(p, x); return; }   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
+    const schritte = this.eingabeSchritte(p, x, dt);
     const e = x.eingabe;
-    const laenge = Math.hypot(e.dx, e.dy);
-    if (p.zombie > 0) return this.zombieSpielerSchritt(p, x, e, laenge, dt);
-    p.schleicht = e.s || (laenge > 0 && laenge < 0.55);
-    // infiziert: langsamer
-    const tempo = (p.schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1) * this.fkWert(p, 'tempo');
-    if (laenge > 0.05) {
-      let f = Math.min(1, laenge / (p.schleicht ? 0.55 : 1)) * tempo * dt;
+    if (p.zombie > 0) {
+      for (const [se, sd] of schritte) {
+        const l = Math.hypot(se.dx, se.dy);
+        if (l <= 0.05) continue;
+        const f = Math.min(1, l) * W.zombieTempoJagen * 1.15 * sd;
+        bewege(this.wv(p.ebene), p, se.dx / l * f, se.dy / l * f, W.spielerRadius);
+        p.richtung = Math.atan2(se.dy, se.dx);
+      }
+      return this.zombieSpielerSchritt(p, x, e, 0, dt);   // Bewegung ist schon erledigt (laenge 0): nur Übergänge und Bisse
+    }
+    { const l = Math.hypot(e.dx, e.dy); p.schleicht = e.s || (l > 0 && l < 0.55); }
+    let bewegt = false;
+    for (const [se, sd] of schritte) {
+      const laenge = Math.hypot(se.dx, se.dy);
+      if (laenge <= 0.05) continue;
+      bewegt = true;
+      const schleicht = se.s || laenge < 0.55;
+      // infiziert: langsamer
+      const tempo = (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1) * this.fkWert(p, 'tempo');
+      let f = Math.min(1, laenge / (schleicht ? 0.55 : 1)) * tempo * sd;
       const x0 = p.x, y0 = p.y;
       if (x.bot) {
         // Bots steigen nicht über Zäune, gehen aber durch Hecken und Holzzäune – langsam
-        f *= Math.min(tierGelaende(welt, x0, y0, W.spielerRadius) || 1, tierGelaende(welt, x0 + e.dx / laenge * f, y0 + e.dy / laenge * f, W.spielerRadius) || 1);
-        bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius, freiTier);
-      } else bewege(welt, p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
-      p.richtung = Math.atan2(e.dy, e.dx);
-      if (!p.schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen * this.fkWert(p, 'hoerweite'), false, p.ebene);
-      if (!x.bot) this.klettern(id, p, x, e, laenge, ((p.x - x0) * e.dx + (p.y - y0) * e.dy) / laenge < f * 0.35, dt);
-    } else x.kletter = 0;
+        f *= Math.min(tierGelaende(welt, x0, y0, W.spielerRadius) || 1, tierGelaende(welt, x0 + se.dx / laenge * f, y0 + se.dy / laenge * f, W.spielerRadius) || 1);
+        bewege(welt, p, se.dx / laenge * f, se.dy / laenge * f, W.spielerRadius, freiTier);
+      } else {
+        // in Teilschritten von höchstens 4 px – genau wie die Vorhersage im Client (spiel.mjs schrittSim), damit Ecken gleich ausgehen
+        const n = Math.max(1, Math.ceil(f / 4));
+        for (let i = 0; i < n; i++) bewege(welt, p, se.dx / laenge * f / n, se.dy / laenge * f / n, W.spielerRadius);
+      }
+      p.richtung = Math.atan2(se.dy, se.dx);
+      if (!schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen * this.fkWert(p, 'hoerweite'), false, p.ebene);
+      if (!x.bot) this.klettern(id, p, x, se, laenge, ((p.x - x0) * se.dx + (p.y - y0) * se.dy) / laenge < f * 0.35, sd);
+    }
+    if (!bewegt) x.kletter = 0;
+    const ebeneVorher = p.ebene;
     this.uebergang(id, p, x, dt);
+    if (p.ebene !== ebeneVorher) this.eingabeVerwerfen(p, x);   // neue Ebene: alte Eingaben gehören zum alten Ort
     // automatischer Angriff (nicht während man durchsucht)
     // Magazin, Nachladen und Waffenwechsel bei leerer Waffe (Server ist maßgeblich; Bots wie Spieler)
     WP.schritt(this, x.bot ? null : this.clients.find(c => c.sessionId === id), p, x, dt, SpielRaum.einstellungen);

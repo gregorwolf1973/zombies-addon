@@ -52,13 +52,10 @@ export class SchiessstandRaum extends SpielRaum {
       }
     };
 
-    this.onMessage('eingabe', (client, m) => {
-      if (!m || typeof m !== 'object') return;
-      let dx = Number(m.dx) || 0, dy = Number(m.dy) || 0;
-      const l = Math.hypot(dx, dy);
-      if (l > 1) { dx /= l; dy /= l; }
-      const x = this.extra.get(client.sessionId);
-      if (x) x.eingabe = { dx, dy, s: !!m.s };
+    this.onMessage('eingabe', (client, m) => this.eingabeEmpfangen(client, m));
+    this.onMessage('sicht', (client, m) => {
+      const w = Number(m?.w), h = Number(m?.h);
+      if (Number.isFinite(w) && Number.isFinite(h)) client.sicht = { w: Math.max(200, Math.min(2600, w)), h: Math.max(150, Math.min(2600, h)) };
     });
     this.onMessage('nachladen', client => { const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId); if (p && x) WP.startNachladen(this, p, x, this.einstellungen()); });
     this.onMessage('waffenplatz', (client, m) => {

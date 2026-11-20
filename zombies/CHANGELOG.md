@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.58.0 – 20.11.2026
+
+- Netz: viel weniger Daten und weniger Pakete. Jeder Spieler bekommt nur noch die Zombies und Bewohner in seinem Bildausschnitt (+ Rand, je nach Bildschirm und Zoom). Positionen gehen als ganze Pixel, Blickrichtungen in 256 Stufen, Hunger/Durst/Lampe ganzzahlig; Leichen und liegende Gegenstände senden nur noch ihre Ausblendstufe statt alle 50 ms ihr Alter. Zustände gehen 10- statt 20-mal je Sekunde raus, direkt nach dem Simulationsschritt. Bei einer Horde von 600 Zombies sinkt die Datenmenge je Spieler von etwa 93 kB/s auf 13–27 kB/s, die Paketzahl von 23 auf 11 je Sekunde.
+- Die eigene Figur wird nach Netz-Hängern nicht mehr zurückgezogen: Der Client meldet „so lange in diese Richtung gelaufen“ mit laufender Nummer; der Server arbeitet die Stücke in Echtzeit ab, holt nach einem Hänger bis zu 1,5 s nach und bestätigt die Nummer. Der Client rechnet vom bestätigten Stand aus mit den offenen Eingaben weiter, Restfehler klingen sanft ab. Beide Seiten rechnen in Teilschritten von höchstens 4 px, damit Ecken gleich ausgehen.
+- Glättung: Zombies, Mitspieler und Bewohner werden mit kleiner, sich selbst anpassender Verzögerung (normal etwa 0,15 s, bei schlechter Verbindung bis 0,45 s) gleichmäßig zwischen zwei Serverständen bewegt (client/netzpuffer.mjs). Die Anzeige „unterwegs“ zählt weiterhin alle Zombies (state.zombieZahl).
+- Werkzeug tools/netz/messen.mjs misst die Datenmenge je Spieler; neue Tests in tests/netz.test.mjs.
+
 ## 0.57.1 – 20.11.2026
 
 - Soldaten rufen „Halt, sofort stehen bleiben!“ bzw. „Keine Bewegung!“ (neues Ton-Ereignis „Soldat ruft“, räumlich, mit Sprechblase), wenn sich ein Spieler dem Lager nähert (je Spieler höchstens alle 45–60 s) und gelegentlich, wenn Zombies den Zaun erreichen.
