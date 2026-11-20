@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.55.1 – 20.11.2026
+
+- Ton: Solange der Browser den Ton sperrt (erst nach einer Berührung erlaubt), zeigt die Startseite „🔊 Tippe irgendwo für Ton“; die erste Berührung schaltet den Ton auch im Spiel frei (z. B. nach automatischem Neuladen).
+- Chat-Klingelton: vier Töne im Wechsel (klingelton1, Samsung-Pfiff, „new message“, „message envoyé“).
+
 ## 0.55.0 – 20.11.2026
 
 - Leistung: Die Kamera-Nachbearbeitung (Schwarzweiß in dunklen Räumen) wird beim Verlassen ganz entfernt; vorher blieb nach dem ersten dunklen Haus ein Vollbild-Durchgang je Bild aktiv.
