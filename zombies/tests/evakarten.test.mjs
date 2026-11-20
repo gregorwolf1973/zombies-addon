@@ -92,7 +92,7 @@ test('Kochel: NH90 steht von Anfang an, Einsteigen jederzeit mit Aussteigen, Abf
   assert.ok(await bis(() => meldungen.some(m => m.includes('es fehlt'))), 'Meldung „was fehlt“');
   ag.busRest = 0.05; await warte(600);
   assert.ok(p.anBord && s.busDa, 'fliegt ohne erfüllte Bedingungen ab');
-  c.send('aussteigen');
+  ag.einstiegT.clear(); c.send('aussteigen');
   assert.ok(await bis(() => !p.anBord), 'Aussteigen geht nicht');
   // Bedingungen erfüllt, wieder einsteigen → Abflug
   ag.fahrtGelingt = () => true;
@@ -124,7 +124,7 @@ test('Bunker: Einsteigen = hineingehen (anBord), kein Abflug; Countdown-Ende: dr
   assert.equal(s.evakPhase, 'sieg');
   assert.ok(r.drinnen.includes(c.sessionId));
   // Aussteigen und draußen sein → Niederlage
-  c.send('aussteigen');
+  ag.einstiegT.clear(); c.send('aussteigen');
   assert.ok(await bis(() => !p.anBord));
   assert.equal(verlassen.length, 1);
   r = ag.bunkerEnde();

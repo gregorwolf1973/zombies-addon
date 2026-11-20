@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.64.1 – 21.11.2026
+
+- Level 2: Der Evakuierungspanzer fuhr nie zum Abholpunkt – der Ortsausgang liegt am Kartenrand, die nächste Straße rund 450 m entfernt, der Panzer rollte nur dorthin bzw. erschien am Rand. Jetzt fährt der Leopard querfeldein (neue Wegsuche server/querfeld.mjs über befahrbaren Boden für die Wannenbreite: Straße, Wiese, Feld, Schotter; nicht durch Häuser, Wasser, Bäume; Zäune und Hecken umfährt er), kommt am Abholpunkt an, wartet dort und fährt den Feldweg wieder hinaus.
+- Mitnehmen: Wer an Bord sitzt, bleibt bis zum Levelwechsel drin. Neu: Aussteigen wird in den ersten 2,5 s nach dem Einsteigen ignoriert, die Leertaste steigt nie aus (nur E oder der Knopf); 60 s und 15 s vor Ablauf der Wartezeit warnt eine Meldung, was noch fehlt; fährt das Fahrzeug ohne Erfolg ab, nennt die Meldung an alle, was fehlte.
+- Rückfallebene: Ist der Abholpunkt für den Panzer nicht befahrbar, wandert er auf die nächste befahrbare Stelle (Markierung auf der Karte folgt). Beim Bus (nur Straße) wandert der Abholpunkt zur nächsten Straße, wenn diese weit vom Ortsausgang liegt.
+
 ## 0.64.0 – 20.11.2026
 
 - Neu: Level 3 Flugplatz Königsdorf (A400M stürzt ab, danach NH90), Level 4 Kochel am See (NH90, Ersatzteile suchen), Level 5 Andermatt (Schweiz) als Finale: Countdown bis zum Atomschlag (Vorgabe 30 min, in der Verwaltung 10–90), Bunkertor öffnet erst nach den Pflichtaufgaben; wer bei null im Bunker ist, überlebt – danach beginnt alles wieder bei Level 1, sonst startet Level 5 neu. Karten aus OpenStreetMap (© OpenStreetMap-Mitwirkende, ODbL), Bissrate steigt je Level (12/12/14/16/18 %).

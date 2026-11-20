@@ -257,3 +257,86 @@ test('A400M: ohne alle an Bord startet er ohne euch wieder und der Hubschrauber 
     assert.equal(ag.heli, null, 'Hubschrauber ohne Fehlschlag');
   } finally { await beenden(a.c); }
 }));
+
+test('Leopard (Isarauen) fährt querfeldein zum Abholpunkt, wartet dort und fährt auf dem Feldweg wieder hinaus', mitArt('panzer', async () => {
+  await frisch();
+  const a = await beitreten('Querfeld');
+  const { raum, p } = a;
+  try {
+    const s = raum.state, ag = raum.aufgaben, v = raum.verkehr;
+    assert.equal(s.evakArt, 'panzer');
+    nurFunk(raum);
+    ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
+    s.uhr = 18 * 60 + 0.1;
+    assert.ok(await bis(() => busVon(raum), 4000), 'kein Panzer');
+    const [id, f] = busVon(raum), inf = v.info.get(id);
+    assert.ok(inf.querfeld, 'kein Querfeldplan');
+    const ziel = inf.querfeld.ziel;
+    if (inf.querfeld.verschoben) assert.ok(Math.hypot(s.evakX - ziel.x, s.evakY - ziel.y) < 2, 'Abholpunkt nicht verschoben');
+    const start = { x: f.x, y: f.y };
+    // Fahrt im Zeitraffer (schritt direkt), bis er steht
+    for (let i = 0; i < 8000 && !inf.angekommen; i++) v.schritt(0.1);
+    assert.ok(inf.angekommen, 'Panzer kommt nicht an');
+    assert.ok(Math.hypot(f.x - ziel.x, f.y - ziel.y) < 20, 'steht nicht am Abholpunkt: ' + Math.hypot(f.x - ziel.x, f.y - ziel.y));
+    assert.ok(Math.hypot(start.x - ziel.x, start.y - ziel.y) > 150, 'kam von nirgendwo');
+    assert.ok(await bis(() => s.busSteht, 2000), 'Server hält ihn nicht für stehend');
+    // Ausfahrt auf dem Feldweg zurück: verschwindet am Einfahrtspunkt
+    v.evakuierungAb(id);
+    for (let i = 0; i < 8000 && raum.state.fahrzeuge.has(id); i++) v.schritt(0.1);
+    assert.equal(raum.state.fahrzeuge.has(id), false, 'Panzer fährt nicht wieder hinaus');
+  } finally { await beenden(a.c); }
+}));
+
+test('Bus (Straße): liegt die nächste Straße weit vom Ortsausgang, wandert der Abholpunkt dorthin und der Bus hält dort', mitArt('bus', async () => {
+  await frisch();
+  const a = await beitreten('Strasse');
+  const { raum, p } = a;
+  try {
+    const s = raum.state, ag = raum.aufgaben;
+    assert.equal(s.evakArt, 'bus');
+    assert.ok(await bis(() => (raum.verkehr?.graph?.knoten?.length ?? 0) > 0 && s.evakX > 0, 4000), 'Abholpunkt nicht auf die Straße verschoben');
+    const bh = ag.busHalt();
+    assert.ok(bh.punkt, 'Isarauen: Straße weit vom Ortsausgang erwartet');
+    assert.ok(Math.hypot(s.evakX - bh.punkt.x, s.evakY - bh.punkt.y) < 2);
+    nurFunk(raum);
+    ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
+    s.uhr = 18 * 60 + 0.1;
+    assert.ok(await bis(() => busVon(raum), 4000), 'kein Bus');
+    const [bid, f] = busVon(raum), inf = raum.verkehr.info.get(bid);
+    for (let i = 0; i < 20000 && !inf.angekommen; i++) raum.verkehr.schritt(0.1);   // Fahrt im Zeitraffer
+    assert.ok(inf.angekommen, 'Bus kommt nicht an');
+    assert.ok(Math.hypot(f.x - s.evakX, f.y - s.evakY) < 40, 'Bus hält nicht am Abholpunkt');
+  } finally { await beenden(a.c); }
+}));
+
+test('Leopard: einsteigen, warten, Aufgaben werden erfüllt, Abfahrt → bleibt an Bord und fährt mit, bis zum Levelwechsel', mitArt('panzer', async () => {
+  await frisch();
+  const a = await beitreten('Mitfahrer');
+  const { raum, p } = a;
+  try {
+    const s = raum.state, ag = raum.aufgaben, v = raum.verkehr;
+    nurFunk(raum);
+    ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
+    ag.fahrtGelingt = () => false;   // noch nicht erfüllt
+    s.uhr = 18 * 60 + 0.1;
+    assert.ok(await bis(() => busVon(raum), 4000), 'kein Panzer');
+    const [id, f] = busVon(raum), inf = v.info.get(id);
+    for (let i = 0; i < 8000 && !inf.angekommen; i++) v.schritt(0.1);
+    assert.ok(await bis(() => s.busSteht, 2000), 'steht nicht');
+    p.ebene = ''; p.x = f.x; p.y = f.y;
+    assert.ok(await bis(() => p.anBord), 'steigt nicht ein');
+    await warte(1500);   // wartet an Bord – er fährt nicht ohne Erfolg los, wirft niemanden raus
+    assert.ok(p.anBord && s.busDa, 'nach dem Warten nicht mehr an Bord');
+    // jetzt sind alle Aufgaben erfüllt: Abfahrt mit Erfolg
+    let gewechselt = false; raum.weltNeuStarten = () => { gewechselt = true; }; ag.wechselVerzoegerung = 4000;   // echtes levelWechsel(), nur der Weltneustart ist ersetzt
+    ag.fahrtGelingt = () => true;
+    assert.ok(await bis(() => ag.wechselLaeuft, 4000), 'keine Abfahrt');
+    assert.ok(p.anBord, 'beim Losfahren abgesetzt');
+    const von = { x: f.x, y: f.y };
+    for (let i = 0; i < 40; i++) { v.schritt(0.1); ag.mitnehmen(); }   // das Fahrzeug fährt den Feldweg hinaus
+    assert.ok(Math.hypot(f.x - von.x, f.y - von.y) > 40, 'Panzer fährt nicht los');
+    assert.ok(p.anBord && Math.hypot(p.x - f.x, p.y - f.y) < 1, 'Fahrgast bleibt zurück (läuft nicht mit dem Panzer)');
+    assert.ok(await bis(() => gewechselt, 6000), 'kein Levelwechsel');
+    assert.equal(p.anBord, false, 'nach dem Levelwechsel noch an Bord');
+  } finally { await beenden(a.c); }
+}));

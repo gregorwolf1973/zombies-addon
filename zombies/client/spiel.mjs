@@ -771,7 +771,7 @@ class Ort extends Phaser.Scene {
     this.tasten.R.on('down', () => raum.send('nachladen'));            // Nachladen von Hand
     this.tasten.F.on('down', () => raum.send('waffenplatz', { weiter: true }));   // nächster Waffenplatz
     this.tasten.X.on('down', () => raum.send('faust'));   // Faust: nichts in der Hand (nochmal = zurück)
-    this.tasten.SPACE.on('down', () => this.aktion());
+    this.tasten.SPACE.on('down', () => { if (this.kontext?.art !== 'aussteigen') this.aktion(); });   // Leertaste steigt nie versehentlich aus (E oder Knopf)
     chatSzene = this;
     this.tasten.ESC.on('down', () => { kisteZu(); popupZu(); handelZu(); });
     for (let i = 1; i <= 8; i++) {

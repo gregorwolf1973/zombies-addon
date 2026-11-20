@@ -108,7 +108,9 @@ test('Bots steigen ebenso ein und sitzen still', mitBus(['funk', 'tor', 'zombies
 test('Aussteigen jederzeit, solange das Fahrzeug steht: Knopf und Aktionstaste, Platz daneben, Schonzeit, kein sofortiges Wiedereinsteigen', mitBus(['funk', 'tor', 'zombies', 'lampen'], async ({ c, raum, p, bus, ag, meldungen }) => {
   p.ebene = ''; p.x = bus.x; p.y = bus.y;
   assert.ok(await bis(() => p.anBord), 'steigt nicht ein');
-  c.send('aussteigen');
+  c.send('aussteigen'); await warte(300);
+  assert.equal(p.anBord, true, 'Fehlbedienung: sofortiges Aussteigen wirft raus');
+  ag.einstiegT.clear(); c.send('aussteigen');
   assert.ok(await bis(() => !p.anBord), 'Knopf „Aussteigen“ wirkt nicht');
   const d = Math.hypot(p.x - bus.x, p.y - bus.y);
   assert.ok(d > 20 && d < BUS_ABSTAND + 150, 'Ausstieg nicht neben dem Fahrzeug: ' + d);   // freie Stelle in der Nähe (Hindernisse verschieben sie)
@@ -120,14 +122,14 @@ test('Aussteigen jederzeit, solange das Fahrzeug steht: Knopf und Aktionstaste, 
   { const w = weitWeg(raum, bus, 250); p.x = w.x; p.y = w.y; }
   await warte(500);
   assert.ok(await bis(() => { p.ebene = ''; p.x = bus.x; p.y = bus.y; return p.anBord; }, 8000), 'steigt nicht wieder ein');
-  c.send('aktion');
+  ag.einstiegT.clear(); c.send('aktion');
   assert.ok(await bis(() => !p.anBord), 'Aktionstaste steigt nicht aus');
   // fährt das Fahrzeug (nicht stehend), geht Aussteigen nicht
   { const w = weitWeg(raum, bus, 250); p.x = w.x; p.y = w.y; }
   await warte(500);
   assert.ok(await bis(() => { p.ebene = ''; p.x = bus.x; p.y = bus.y; return p.anBord; }, 8000));
   raum.state.busSteht = false; ag.eingestiegen.add([...raum.state.spieler.keys()][0]);
-  c.send('aussteigen'); await warte(300);
+  ag.einstiegT.clear(); c.send('aussteigen'); await warte(300);
   assert.equal(p.anBord, true, 'ausgestiegen während der Fahrt');
 }));
 

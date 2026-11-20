@@ -386,7 +386,8 @@ test('Evakuierungsbus und -panzer schießen auf Zombies in der Nähe, nie auf Sp
     const z = raum.state.zombies.get(zid); raum.zombieInfo.get(zid).steht = true; z.hp = 100;
     const fern = raum.setzeZombie(bus.x + 900, bus.y, ''); raum.zombieInfo.get(fern).steht = true;
     assert.ok(await bis(() => !raum.state.zombies.has(zid) || z.hp < 100), 'Bus schießt nicht');
-    assert.ok(schuesse.length > 0 && schuesse.every(m => m.art === 'mg'), 'Schussdarstellung fehlt');
+    assert.ok(await bis(() => schuesse.length > 0), 'Schussdarstellung fehlt');   // die Nachricht kommt nach dem Schaden übers Netz
+    assert.ok(schuesse.every(m => m.art === 'mg'));
     assert.ok(raum.state.zombies.has(fern), 'Zombie außer Reichweite getroffen');
     assert.equal(a.p.hp, hp, 'Spieler getroffen');
     // Panzer in Level 2 (Isarauen): Turm-MG aus der Fahrzeugmitte
