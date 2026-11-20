@@ -450,6 +450,7 @@ export class SpielRaum extends Room {
     }
     this.hordeDebug = new Set();   // Clients mit ?debug: bekommen 'hordeInfo' auch ohne Einstellung
     this.onMessage('hordeDebug', (client, m) => { if (m?.an) this.hordeDebug.add(client.sessionId); else this.hordeDebug.delete(client.sessionId); });
+    this.onMessage('aussteigen', client => this.aufgaben?.aussteigen(client.sessionId));   // aus dem Evakuierungsfahrzeug aussteigen (Knopf/Taste)
     this.onMessage('aktion', client => this.starteAktion(client));
     this.onMessage('aktion2', client => this.starteAktion(client, true));
     this.onMessage('wurf', (client, m) => this.granaten.werfen(client, m));
@@ -1722,6 +1723,7 @@ export class SpielRaum extends Room {
   starteAktion(client, zweit = false) {
     const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
     if (!p || !x || p.aktion) return;
+    if (p.anBord) return void this.aufgaben?.aussteigen(client.sessionId);   // an Bord: die Aktionstaste steigt aus
     // zweite Taste: die andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
     const k = zweit ? (p.unten || p.zombie > 0 || this.state.phase !== 'spiel' ? null : this.tuerKontext(p, 'zweit')) : this.kontext(p);
     if (!k) return;
