@@ -788,6 +788,13 @@ class Ort extends Phaser.Scene {
     raum.onMessage('stoss', m => { const fs = naechsteFigur(m.x, m.y); if (fs) fs.schlagBis = this.time.now + 400; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
+    raum.onMessage('soldatRuf', m => {
+      ton.ereignis('soldatRuf', m.x, m.y);
+      const e = this.stuetzpunktObj?.soldaten.find(q => q.n === m.n);
+      if (e?.tot) return;
+      const t = this.add.text(m.x, m.y - 34, m.t ? 'Keine Bewegung!' : 'Halt! Stehen bleiben!', { fontSize: '11px', fontFamily: 'sans-serif', color: '#fff', backgroundColor: '#000a', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(50);
+      this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, delay: 1500, duration: 700, onComplete: () => t.destroy() });
+    });
     raum.onMessage('hilferufe', m => { ton.ereignis('hilferufe', m.x, m.y); });
     raum.onMessage('klettern', m => {
       // eigene Figur: in einem kurzen Sprung hinübergleiten statt springen

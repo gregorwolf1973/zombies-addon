@@ -43,7 +43,7 @@ const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer 
 // ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------
 const MAX_STIMMEN = 10, MAX_ZOMBIE_STIMMEN = 5;
 const ZOMBIE_IDS = new Set(['entdeckt', 'kriecher', 'stoehnen', 'zombieTod', 'zombielandTag', 'zombielandNacht']);
-const MIN_ABSTAND = { entdeckt: 400, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 150, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
+const MIN_ABSTAND = { entdeckt: 400, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 150, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, soldatRuf: 8000, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
 const stimmen = [];            // laufende Einzel-Geräusche aus Dateien: { ende (s), v, zombie, g, src }
 const zuletzt = new Map();     // Ereignis-ID → Zeitpunkt (ms) des letzten Abspielens
 
