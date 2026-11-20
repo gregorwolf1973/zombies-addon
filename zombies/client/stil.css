@@ -394,3 +394,18 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
   #chatzu { min-height: 36px; min-width: 40px; font-size: 18px; padding: 2px 10px; }
   #chatliste .nachricht { font-size: 14px; max-width: 92%; }
 }
+
+/* Superuser-Testzugang (Anmeldung) und Testmenü */
+.testzugang { margin: 6px 0 0; font-size: 11px; opacity: .55; }
+.testzugang summary { cursor: pointer; }
+.testzugang input { margin-top: 4px; }
+#leiste > #suknopf { display: none; }
+#sumenue { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #0008; z-index: 28; padding: 16px; }
+#sumenue.offen { display: flex; }
+#sumenue .fenster { background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 12px 14px; width: min(420px, 100%); max-height: 90vh; overflow: auto; }
+#sumenue .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#sumenue button { width: 100%; margin: 3px 0; padding: 8px 10px; font-size: 14px; text-align: left; background: #ffffff1a; color: #fff; border: 1px solid #fff3; border-radius: 8px; }
+#sumenue .zeile { display: flex; gap: 4px; }
+#sumenue .zeile button { text-align: center; }
+#sumenue #suzu { width: auto; margin: 0; padding: 6px 12px; font-size: 18px; }
+#sumenue .titel { margin: 8px 0 2px; font-size: 12px; opacity: .7; }

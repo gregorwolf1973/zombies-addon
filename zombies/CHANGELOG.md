@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.59.0 – 20.11.2026
+
+- Superuser-Testmenü: Im Anmeldefenster „Testzugang“ mit Passwort (nur in den Einstellungen des Servers gespeichert, als Hash; in der Verwaltung setzen/löschen). Superuser bekommen ein ☰-Menü: Sprung zur Bundeswehr, zum Evakuierungspunkt und 50 m vor die Horde; alle Bots zu mir (wiederbelebt, voll versorgt); Horde jetzt starten (50/200/500); unsterblich ein/aus; Mittag/Nacht; Ausrüstung auffüllen; Evakuierung sofort rufen; Lager fallen lassen/aufbauen. Jede Nutzung steht im Protokoll, Fehlversuche sind begrenzt.
+
 ## 0.58.1 – 20.11.2026
 
 - Behoben: Laden blieb bei 85 % stehen, wenn man ohne Zombie in Sicht einstieg (z. B. im Safe House). Der Server schickt die Zombie-Liste dann gar nicht, der Client nimmt jetzt eine leere Liste an.

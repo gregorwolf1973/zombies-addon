@@ -93,7 +93,7 @@ export class Stuetzpunkt {
     else if (s.stuetzpunkt === 'steht' && !aktiv) s.stuetzpunkt = 'aus';
     if (s.stuetzpunkt !== 'steht') return;
     const tage = this.einst().falltage;
-    if (tage > 0 && this.spieltage() >= tage) return this.faellt();
+    if (tage > 0 && !this.keinZeitFall && this.spieltage() >= tage) return this.faellt();
     this.verteidigen(dt);
     this.soldatenLeben(dt);
     // alle Soldaten tot: das Lager ist verloren (gleicher Fall wie nach N Tagen, nur früher)
@@ -114,6 +114,7 @@ export class Stuetzpunkt {
   zombiesErzeugen() {
     const r = this.raum, sp = this.sp;
     let i = 0;
+    this.fallIds = [];
     for (const t of sp.teile) {
       let x, y;
       if (t.art === 'mgnest') { x = t.x - Math.cos(t.blick) * 5; y = t.y - Math.sin(t.blick) * 5; }
@@ -123,7 +124,19 @@ export class Stuetzpunkt {
       const id = r.setzeZombie(platz.x, platz.y, '');
       const info = r.zombieInfo.get(id);
       info.bleibt = true; info.schlaeft = false; info.steht = false;
+      this.fallIds.push(id);
     }
+  }
+
+  // Testbefehl (Superuser): gefallenes Lager wieder aufbauen – Zombies des Falls weg, Soldaten/Munition neu, kein Fall nach Zeit mehr
+  aufbauen() {
+    const r = this.raum;
+    for (const id of this.fallIds ?? []) { r.state.zombies.delete(id); r.zombieInfo.delete(id); }
+    this.fallIds = [];
+    this.start(null, false);
+    this.keinZeitFall = true;
+    r.broadcast('meldung', { text: '📻 Der Bundeswehr-Stützpunkt ist wieder besetzt.', lang: true });
+    r.speichereWelt?.();
   }
 
   // ---------- Verteidigung ----------

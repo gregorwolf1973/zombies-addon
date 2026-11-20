@@ -317,7 +317,8 @@ async function mitspielen() {
     let token = null;
     try { token = sessionStorage.getItem('zob_token'); } catch {}
     if (token && !TUT.an) { try { r = await client.reconnect(token); } catch { r = null; } }
-    const beitritt = { name, code, spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst };
+    const testpw = ($('testpw')?.value ?? '').slice(0, 200);   // Testzugang: nur beim Beitritt gesendet, nirgends gespeichert
+    const beitritt = { name, code, ...(testpw ? { testzugang: testpw } : {}), spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst };
     if (!r) r = TUT.an ? await client.create('schiessstand', beitritt) : await client.joinOrCreate('zombies', beitritt);   // Schießstand: eigener Raum, nichts für die Hauptwelt
     raum = r;
     ladenZeigen(15, 'Generiere Welt … verbunden');
@@ -477,6 +478,44 @@ function autoFlaeche(g, b, a, e, halb) {
 })();
 
 // ---------- Meldungen und Anzeige ----------
+let suAn = false;
+const anzeigeName = p => (p.su ? '⭐ ' : '') + (p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name);   // ⭐ = Superuser (Testzugang)
+
+// ---------- Superuser-Testmenü (nur sichtbar, wenn der Server die Anmeldung bestätigt hat; der Server prüft jeden Befehl) ----------
+function suMenueEinrichten(r) {
+  const knopf = $('suknopf');
+  let fenster = $('sumenue');
+  if (!fenster) {
+    fenster = document.createElement('div'); fenster.id = 'sumenue';
+    const b = (befehl, text, extra = {}) => `<button type="button" data-su='${JSON.stringify({ befehl, ...extra })}'>${text}</button>`;
+    fenster.innerHTML = `<div class="fenster"><div class="kopfzeile"><b>☰ Testmenü</b><button type="button" id="suzu" aria-label="Schließen">✕</button></div>
+      <div class="titel">Springen</div>
+      ${b('bw', '🎖 Zur Bundeswehr')}${b('evak', '📍 Zum Evakuierungspunkt')}${b('horde_hin', '🧟 Zur Zombiehorde (50 m davor)')}
+      <div class="titel">Bots und Ausrüstung</div>
+      ${b('bots', '🤖 Alle Bots zu mir (heilen)')}${b('auffuellen', '🎒 Ausrüstung auffüllen')}${b('unsterblich', '⭐ Unsterblich ein/aus')}
+      <div class="titel">Horde jetzt starten</div>
+      <div class="zeile">${b('horde', '50', { groesse: 50 })}${b('horde', '200', { groesse: 200 })}${b('horde', '500', { groesse: 500 })}</div>
+      <div class="titel">Tageszeit</div>
+      <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
+      <div class="titel">Evakuierung und Lager</div>
+      ${b('evakrufen', '🚌 Evakuierung sofort rufen')}
+      <div class="zeile">${b('lager', '💥 Lager fallen', { zustand: 'gefallen' })}${b('lager', '🎖 Lager aufbauen', { zustand: 'steht' })}</div></div>`;
+    document.body.appendChild(fenster);
+    const zu = () => fenster.classList.remove('offen');
+    fenster.querySelector('#suzu').onclick = zu;
+    fenster.addEventListener('click', e => {
+      if (e.target === fenster) return zu();
+      const bt = e.target.closest('button[data-su]');
+      if (!bt) return;
+      try { raum?.send('su', JSON.parse(bt.dataset.su)); } catch { /* egal */ }
+      zu();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') zu(); });
+  }
+  knopf.style.display = 'block';
+  knopf.onclick = () => fenster.classList.add('offen');
+}
+
 function meldung(text, lang = false) {
   const d = document.createElement('div'), box = $('meldungen');
   d.textContent = text;
@@ -1127,7 +1166,7 @@ class Ort extends Phaser.Scene {
     this.uebersicht.bus = bf ? { x: bf.x / KACHEL, y: bf.y / KACHEL } : null;
     const spieler = [...raum.state.spieler.entries()].map(([id, p]) => ({
       x: id === meineId && this.lokal ? this.lokal.x : p.x, y: id === meineId && this.lokal ? this.lokal.y : p.y,
-      ebene: p.ebene ?? '', name: p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name, ich: id === meineId, unten: !!p.unten, farbe: css(FARBEN[p.farbe % FARBEN.length]),
+      ebene: p.ebene ?? '', name: anzeigeName(p), ich: id === meineId, unten: !!p.unten, farbe: css(FARBEN[p.farbe % FARBEN.length]),
     }));
     // Zielorte offener Aufgaben (Apotheke, Supermarkt, Kaufhaus); erledigte fallen weg
     const offen = new Set([...(raum.state.aufgaben?.values() ?? [])].filter(a => !a.erledigt).map(a => a.id));
@@ -1261,7 +1300,7 @@ class Ort extends Phaser.Scene {
       : this.add.ellipse(0, 0, 34, 34).setVisible(false);
     const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg());
     const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE * mg()).setVisible(false);
-    const name = this.add.text(0, -28, p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name, { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
+    const name = this.add.text(0, -28, anzeigeName(p), { fontSize: '11px', fontStyle: 'bold', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5);
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
     const sprechen = this.add.text(-18, -16, '🔊', { fontSize: '11px' }).setOrigin(0.5).setVisible(false);   // spricht gerade (Sprachübertragung)
@@ -1785,7 +1824,8 @@ class Ort extends Phaser.Scene {
     for (const [id, p] of s.spieler) {
       let f = this.figuren.get(id);
       if (!f) { f = this.neueFigur(p, id); this.figuren.set(id, f); }
-      { const nm = p.afk && !p.name.includes('🤖') ? p.name + ' 🤖' : p.name; if (f.name.text !== nm) f.name.setText(nm); }   // AFK: ein Bot steuert die Figur
+      if (id === meineId && p.su && !suAn) { suAn = true; suMenueEinrichten(); }   // Superuser: Testmenü-Knopf (Server prüft jeden Befehl)
+      { const nm = anzeigeName(p); if (f.name.text !== nm) f.name.setText(nm); }   // AFK: ein Bot steuert die Figur
       if (id === meineId) continue;
       f.box.setVisible((p.ebene ?? '') === this.aktEbene && !p.anBord);   // an Bord eines Evakuierungsfahrzeugs: Figur ausgeblendet
       if ((f.ebene ?? '') !== (p.ebene ?? '')) { f.x = p.x; f.y = p.y; f.ebene = p.ebene; pf.vergiss('s' + id); }
@@ -2797,7 +2837,7 @@ class Ort extends Phaser.Scene {
     const liste = [...s.spieler.entries()].map(([id, p]) => {
       const zusatz = p.unten ? ' – am Boden' : !p.verbunden ? ' – Verbindung weg' : p.sicher ? ' 🛡' : '';
       const klasse = p.unten ? 'unten' : !p.verbunden ? 'weg' : '';
-      return `<li class="${klasse}"><span class="punkt" style="background:${css(FARBEN[p.farbe % FARBEN.length])}"></span>${escapeHtml(p.name)}${p.afk && !p.name.includes('🤖') ? ' 🤖' : ''}${id === meineId ? ' (du)' : ''}${zusatz}</li>`;
+      return `<li class="${klasse}"><span class="punkt" style="background:${css(FARBEN[p.farbe % FARBEN.length])}"></span>${p.su ? '⭐ ' : ''}${escapeHtml(p.name)}${p.afk && !p.name.includes('🤖') ? ' 🤖' : ''}${id === meineId ? ' (du)' : ''}${zusatz}</li>`;
     }).join('');
     if ($('liste').innerHTML !== liste) $('liste').innerHTML = liste;
     const punkte = [...s.spieler.entries()].map(([id, p]) => {

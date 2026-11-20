@@ -13,7 +13,7 @@ Encoder.BUFFER_SIZE = 256 * 1024;
 import { SpielRaum } from './raum.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
-import { EinstellungsDatei, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
+import { EinstellungsDatei, oeffentlich, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
@@ -81,6 +81,7 @@ export async function starte({
     if (!geladeneKarte || geladeneKarte.wahl !== w.karte) geladeneKarte = { wahl: w.karte, karte: ladeKarte(w.karte) };
     SpielRaum.einstellungen = {
       zugangscode: w.zugangscode,
+      superuserHash: w.superuserHash,              // nur Hash; ohne Hash kein Superuser
       zombieFaktor: w.zombies.dichte / 10,         // 10 = Standardmenge
       haeuserFaktor: w.zombies.haeuser / 10,
       tempoFaktor: w.zombies.tempo / 100,
@@ -165,7 +166,7 @@ export async function starte({
   const lage = () => {
     const raum = SpielRaum.aktiv;
     return {
-      einstellungen: datei.werte,
+      einstellungen: oeffentlich(datei.werte),
       karten: KARTEN, zeitraffer: ZEITRAFFER,
       dinge: Object.entries(DINGE).filter(([, d]) => !d.intern).map(([id, d]) => ({ id, name: d.name, zeichen: d.zeichen })),
       laufendeKarte: raum ? (raum.state.karte || 'dorf') : null,

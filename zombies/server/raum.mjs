@@ -10,6 +10,7 @@ import { Feuer, Brandstifter } from './feuer.mjs';
 import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben } from './aufgaben.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
+import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
 import { Radios } from './radio.mjs';
@@ -69,6 +70,7 @@ export const Spieler = schema({
   infektion: t.uint16(),    // Sekunden bis zur Verwandlung, 0 = gesund (übertragen ganzzahlig, Server rechnet genau)
   zombie: t.uint16(),       // Sekunden, die man noch Zombie ist, 0 = Mensch
   ruht: t.boolean(),        // ruht auf einem Feldbett im Safe Room (Leben +1/s, Hunger/Durst halb so schnell)
+  su: t.boolean(),          // Superuser (Testzugang): zeigt nur ⭐ neben dem Namen
   spricht: t.boolean(),     // spricht gerade ins Mikrofon (Sprachübertragung, zeigt 🔊 über der Figur)
   seq: t.uint16(),          // Nummer der letzten ganz verarbeiteten Eingabe (Client gleicht seine Vorhersage damit ab)
 }, 'Spieler');
@@ -321,11 +323,11 @@ export class SpielRaum extends Room {
   // Wer über die HA-Seitenleiste (Ingress) kommt, ist schon bei HA angemeldet.
   static async onAuth(_token, optionen = {}, kontext = {}) {
     const code = SpielRaum.einstellungen.zugangscode;
-    if (!code) return true;
     const ingress = kontext.headers?.get?.('x-ingress-path');
-    if (ingress) return true;
-    if (String(optionen.code ?? '').trim() !== code) throw new ServerError(403, 'Falscher Zugangscode');
-    return true;
+    if (code && !ingress && String(optionen.code ?? '').trim() !== code) throw new ServerError(403, 'Falscher Zugangscode');
+    // Testzugang (Superuser): nur mit in den Einstellungen gesetztem Passwort; Fehlversuche je IP und Spieler-ID begrenzt
+    const sid = ID_MUSTER.test(String(optionen.spielerId ?? '')) ? optionen.spielerId : '';
+    return SU.anmelden(SpielRaum.einstellungen.superuserHash, optionen.testzugang, [kontext.ip ? 'ip:' + kontext.ip : 'ohne-ip', sid ? 'id:' + sid : '']);
   }
 
   onCreate(optionen = {}) {
@@ -488,6 +490,7 @@ export class SpielRaum extends Room {
     this.onMessage('sprachWeg', (client, m) => this.sprachWeg(client, m));
     this.onMessage('sprachKann', (client, m) => this.sprachKann(client, m));
     this.onMessage('_$bsprachDaten', (client, m) => this.sprachDaten(client, m));   // Binärnachrichten (sendBytes) kommen mit Vorsatz _$b
+    this.onMessage('su', (client, m) => { const text = SU.befehl(this, client, m); if (text) client.send('meldung', { text }); });
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
     // weltFp wird direkt nach dem Aufbau der Welt festgehalten (oben)
@@ -511,7 +514,7 @@ export class SpielRaum extends Room {
 
   // ---------- Beitreten, Verlassen, Speichern ----------
 
-  onJoin(client, optionen = {}) {
+  onJoin(client, optionen = {}, auth = null) {
     const spielerId = ID_MUSTER.test(String(optionen.spielerId ?? '')) ? optionen.spielerId : crypto.randomBytes(16).toString('hex');
     const name = sauberName(optionen.name);
 
@@ -531,10 +534,11 @@ export class SpielRaum extends Room {
       this.wiederkehr.delete(sid);
       this.state.spieler.delete(sid);
       this.extra.delete(sid);
-      alt.name = name; alt.verbunden = true;
+      alt.name = name; alt.verbunden = true; alt.su = !!auth?.su;
       if (optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
       this.state.spieler.set(client.sessionId, alt);
-      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, afkBot: null, letzteEingabe: Date.now() }); alt.afk = false;
+      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, afkBot: null, letzteEingabe: Date.now(), superuser: !!auth?.su, suUnsterblich: !!auth?.su && x.suUnsterblich }); alt.afk = false;
+      this.suAnmeldung(client, alt, auth);
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
       this.startwahlSenden(client.sessionId);
       this.einstellungenSenden(client, spielerId, alt.aussehen, optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? '')));
@@ -551,7 +555,7 @@ export class SpielRaum extends Room {
     p.aussehen = gewaehlt ? optionen.aussehen : AUSSEHEN.test(String(gemerkt ?? '')) ? gemerkt : vorschau ? optionen.aussehen : this.zufallsAussehen();
     p.verbunden = true; p.unten = false; p.afk = false; p.hilfe = 0; p.richtung = 0;
     p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0; p.spricht = false;
-    const extra = { spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null, letzteEingabe: Date.now() };
+    const extra = { superuser: !!auth?.su, spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null, letzteEingabe: Date.now() };
     const gespeichert = this.speicher?.ladeSpieler(spielerId);
     if (gespeichert) {
       p.hp = Math.max(25, Math.min(100, Number(gespeichert.hp) || 100));
@@ -598,8 +602,10 @@ export class SpielRaum extends Room {
     if (!gespeichert) WP.lade(p, extra, null);
     if (!extra.fk) { extra.fk = FK.neuerStand(); }
     this.fkVon.set(p, extra.fk);
+    p.su = !!auth?.su;
     this.state.spieler.set(client.sessionId, p);
     this.extra.set(client.sessionId, extra);
+    this.suAnmeldung(client, p, auth);
     this.speichereSpieler(client.sessionId);
     this.fkSenden(client.sessionId);
     this.startwahlSenden(client.sessionId);
@@ -1004,7 +1010,13 @@ export class SpielRaum extends Room {
   zeitraffer() { return SpielRaum.einstellungen.zeitraffer || 1; }
   einstellungen() { return SpielRaum.einstellungen; }
 
-  unsterblich(p) { return SpielRaum.einstellungen.unsterblich?.has?.(String(p.name).toLowerCase()); }
+  unsterblich(p, x = null) { return x?.suUnsterblich || SpielRaum.einstellungen.unsterblich?.has?.(String(p.name).toLowerCase()); }
+
+  // Testzugang: Anmeldung ins Protokoll (nie das Passwort), Rückmeldung nur an den Spieler selbst
+  suAnmeldung(client, p, auth) {
+    if (auth?.su) { console.log(`[Superuser] ${p.name} hat sich angemeldet`); client.send('su', { an: true }); }
+    else if (auth?.grund) { console.log(`[Superuser] Anmeldung von ${p.name} abgelehnt: ${auth.grund}`); client.send('meldung', { text: '🔒 ' + auth.grund }); }
+  }
 
   // von der Verwaltungsseite: alle bekommen Bescheid, die Welt wird verworfen und beim nächsten Beitritt neu gebaut
   // neuerStand: Levelwechsel – statt der leeren Welt wird dieser Anfangsstand (neue Karte, Level) gespeichert
@@ -2181,7 +2193,7 @@ export class SpielRaum extends Room {
       }
       this.spielerSchritt(id, p, xs, dt);
       this.beduerfnisse(p, x, dt * zr);
-      if (this.unsterblich(p)) { p.hp = 100; p.unten = false; p.infektion = 0; p.durst = Math.max(p.durst, 30); p.hunger = Math.max(p.hunger, 30); }
+      if (this.unsterblich(p, x)) { p.hp = 100; p.unten = false; p.infektion = 0; p.durst = Math.max(p.durst, 30); p.hunger = Math.max(p.hunger, 30); }
       this.aktionSchritt(id, p, x, dt);
     }
     this.messen('spieler', t0); t0 = performance.now();
