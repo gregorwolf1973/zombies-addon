@@ -428,6 +428,7 @@ function einstellungenEinrichten() {
     let a = '0.6'; try { a = localStorage.getItem('zob_kartealpha') ?? '0.6'; } catch { /* egal */ }
     for (const b of document.querySelectorAll('#eg-karte button')) b.classList.toggle('an', b.dataset.v === a);
     $('eg-hund').hidden = !eigenerHund(raum?.state?.hunde, meineId);   // „Hund wegschicken“ nur mit Hund
+    kulisseSchalterZeigen();   // erst beim Öffnen prüfen: beim Seitenstart ist die Karte noch nicht geladen
     geraetMarkieren();
   };
   geraetEinstellungenEinrichten(markieren);
@@ -459,12 +460,17 @@ function feuerSetzen(an) {
   feuerHalten = !!an;
   $('feuerknopf')?.classList.toggle('gedrueckt', feuerHalten);
 }
+// Kulisse-Schalter nur auf Karten mit Kulisse-Daten sichtbar (je Schalter nur, wenn die Daten dafür da sind)
+function kulisseSchalterZeigen() {
+  const da = kulisseVorhanden();
+  $('eg-kulisse').hidden = !da;
+  if (da) { $('eg-kul-boden-z').hidden = !kulHatFoto(); $('eg-kul-daecher-z').hidden = !kulHatDaecher(); }
+}
 function geraetEinstellungenEinrichten(markieren) {
   const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
   const merke = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
   const K = GERAET_SCHLUESSEL;
-  // Kulisse-Schalter nur auf Karten mit Kulisse-Daten sichtbar (je Schalter nur, wenn die Daten dafür da sind)
-  if (kulisseVorhanden()) { $('eg-kulisse').hidden = false; $('eg-kul-boden-z').hidden = !kulHatFoto(); $('eg-kul-daecher-z').hidden = !kulHatDaecher(); }
+  kulisseSchalterZeigen();
   schiessModus = schiessModusLesen(lies(K.schiessen));
   const stimmenAnzeige = () => { const pr = Math.round(stimmenFaktorLesen(lies(K.stimmen)) * 100); $('eg-stimmen').value = String(pr); $('eg-stimmen-wert').textContent = pr + ' %'; };
   const gruppe = (id, wert, setzen, schluessel) => {

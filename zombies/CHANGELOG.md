@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.69.1 – 21.11.2026
+
+- Behoben: Die Kulisse-Schalter (Luftbild-Boden, Echte Dächer, Schatten) erschienen nicht im Zahnrad, weil beim Seitenstart die Karte noch nicht geladen war.
+
 ## 0.69.0 – 21.11.2026
 
 - Neu (Geretsried 2): echte Kulisse – amtliches Luftbild als Boden (Bayerische Vermessungsverwaltung, CC BY 4.0), echte Dachformen aus dem 3D-Gebäudemodell LoD2 (96 % der Häuser), weiche Schatten von Häusern und Bäumen (nachts und im Nebel aus). Im Zahnrad einzeln schaltbar: Luftbild-Boden, Echte Dächer, Schatten. Bodenbilder werden nur in der Umgebung geladen.
