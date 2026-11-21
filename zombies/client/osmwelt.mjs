@@ -86,12 +86,23 @@ export function zaeuneAusduennen(karte) {
     }
   });
   // grobe Zaunkacheln, die nur zu entfernten Stücken gehören, wieder zur Wiese machen
-  const alle = segs, bleibt = segs.filter(sg => !sg.weg);
-  const nah = (liste, px, py) => liste.some(sg => {
+  // Stücke nach Kachel ihrer Mitte einsortieren: ein Stück (≤ 0,75 lang) mit Punkt ≤ 0,6 vom Kachelmittelpunkt hat seine Mitte
+  // höchstens 0,975 entfernt, liegt also in der Kachel selbst oder einer Nachbarkachel – nur diese 3×3 prüfen (vorher alle Stücke: Sekunden)
+  const raster = liste => { const m = new Map(); for (const sg of liste) { const k = Math.floor(sg.my) * BREITE + Math.floor(sg.mx); (m.get(k) ?? m.set(k, []).get(k)).push(sg); } return m; };
+  const alle = raster(segs), bleibt = raster(segs.filter(sg => !sg.weg));
+  const trifft = (sg, px, py) => {
     const L2 = (sg.bx - sg.ax) ** 2 + (sg.by - sg.ay) ** 2 || 1e-9;
     const t = Math.max(0, Math.min(1, ((px - sg.ax) * (sg.bx - sg.ax) + (py - sg.ay) * (sg.by - sg.ay)) / L2));
     return Math.hypot(sg.ax + t * (sg.bx - sg.ax) - px, sg.ay + t * (sg.by - sg.ay) - py) <= 0.6;
-  });
+  };
+  const nah = (m, px, py) => {
+    const cx = Math.floor(px), cy = Math.floor(py);
+    for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) {
+      const l = m.get(y * BREITE + x);
+      if (l) for (const sg of l) if (trifft(sg, px, py)) return true;
+    }
+    return false;
+  };
   const kach = karte.kacheln.split(''), art = karte.zaunart.split('');
   for (let i = 0; i < kach.length; i++) {
     if (kach[i] !== String(T.ZAUN) || !'hzmw'.includes(art[i])) continue;

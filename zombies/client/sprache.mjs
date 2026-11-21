@@ -475,8 +475,10 @@ export function starte({ raum, meineId, welt, meldung }) {
   // Falls der AudioContext keine Nutzergeste hatte (z. B. Seite neu geladen): bei der ersten Berührung wecken
   if (!ctxWeckerAn) {
     ctxWeckerAn = true;
-    const wecken = () => { vorbereiten(); if (ac?.state === 'running') { document.removeEventListener('pointerdown', wecken); document.removeEventListener('keydown', wecken); } };
-    document.addEventListener('pointerdown', wecken); document.addEventListener('keydown', wecken);
+    // iOS-Safari gibt Ton erst bei touchend/click frei (nicht bei pointerdown/touchstart) – deshalb alle Gesten
+    const GESTEN = ['pointerdown', 'touchend', 'click', 'keydown'];
+    const wecken = () => { vorbereiten(); setTimeout(() => { if (ac?.state === 'running') for (const g of GESTEN) document.removeEventListener(g, wecken, true); }, 300); };
+    for (const g of GESTEN) document.addEventListener(g, wecken, true);
   }
   vorbereiten();
   knopfZeigen();

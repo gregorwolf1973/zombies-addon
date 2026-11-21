@@ -169,6 +169,8 @@
 <div id="hinweis"></div>
 <div id="laden" role="status" aria-live="polite"><div class="ladekarte"><div id="ladentitel"></div><div id="ladentext">Generiere Welt …</div><div class="ladebalken"><div id="ladefuell"></div></div><div id="ladeprozent">0 %</div></div></div>
 <div id="verbindung">Verbindung unterbrochen – verbinde neu …</div>
+<script>/* Nach automatischem Neuladen (Levelwechsel, Update) sofort die Ladeanzeige statt kurz die Anmeldung zeigen, bis spiel.mjs übernimmt */
+try { if (sessionStorage.getItem('zob_autostart') === '1') { document.getElementById('laden').classList.add('an'); document.getElementById('ladentext').textContent = 'Lade Spiel …'; } } catch (e) {}</script>
 
 <script src="vendor/phaser.min.js"></script>
 <script src="vendor/colyseus.js"></script>
