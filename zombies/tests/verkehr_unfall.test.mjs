@@ -72,10 +72,12 @@ test('Kreuzung: zwei Autos wollen gleichzeitig hinein – keine Überlappung üb
     const A = auto(raum, [punkt(K, kr.a.w, 130), K, punkt(K, kr.b.w, 130)]);
     const B = auto(raum, [punkt(K, kr.c.w, 130), K, punkt(K, kr.b.w, 130)]);
     raum.verkehr.unfaelle.uhr = 1e9;
+    const wA = A.inf.weg, wB = B.inf.weg;
     let naheA = 1e9, naheB = 1e9, ueber = 0;
     for (let t = 0; t < 1200; t++) {   // 60 s
       raum.verkehr.schritt(0.05);
-      ueber += ueberlappungen(raum.state).length;
+      // geprüft wird nur auf den vorgegebenen Wegen; danach stehen die Testautos mitten auf einer Kante und suchen sich von dort (U-Wende zum nächsten Knoten) eine freie Route
+      if (A.inf.weg === wA && B.inf.weg === wB) ueber += ueberlappungen(raum.state).length;
       naheA = Math.min(naheA, Math.hypot(A.f.x - K.x, A.f.y - K.y)); naheB = Math.min(naheB, Math.hypot(B.f.x - K.x, B.f.y - K.y));
     }
     assert.equal(ueber, 0, 'Fahrzeuge überlappten sich');

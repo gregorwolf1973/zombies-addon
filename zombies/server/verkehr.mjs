@@ -422,7 +422,7 @@ export class Verkehr {
     for (const abst of [30, 60, 90]) { const n = naechsterKnoten(g, f.x + c * abst, f.y + sn * abst); if (n && n !== hinten) meiden.add(n); }
     const r = this.raum.rnd, wege = [];
     if (inf.zielKnoten) wege.push(inf.zielKnoten);
-    for (let v = 0; v < 5; v++) wege.push((r() < 0.75 && g.haupt.length ? g.haupt : g.knoten)[Math.floor(r() * (g.haupt.length || g.knoten.length))]);
+    if (!inf.evakuierung) for (let v = 0; v < 5; v++) wege.push((r() < 0.75 && g.haupt.length ? g.haupt : g.knoten)[Math.floor(r() * (g.haupt.length || g.knoten.length))]);
     for (const ziel of wege) {
       if (!ziel || ziel === hinten) continue;
       const weg = route(g, hinten, ziel, meiden);
