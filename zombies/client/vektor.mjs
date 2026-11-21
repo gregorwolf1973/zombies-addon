@@ -32,6 +32,17 @@ function vereinfache(p) {
   return pts;
 }
 
+// Dach nach Luftbild: { farbe: [r,g,b] leicht entsättigt, dachart, w (Firstwinkel, Bogenmaß), hell (+1/-1), vmin, vmax } oder null
+function luftbildDach(g, pts) {
+  if (!/^#[0-9a-f]{6}$/i.test(g.dach ?? '') || !['sattel', 'walm', 'flach'].includes(g.dachart)) return null;
+  const c = [1, 3, 5].map(i => parseInt(g.dach.slice(i, i + 2), 16)), grau = 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+  const farbe = c.map(v => Math.max(0, Math.min(255, Math.round((grau + (v - grau) * 1.12) * 0.93))));   // Foto-Dächer wirken im Spiel blass: leicht kräftigere Farbe, etwas dunkler
+  const w = (Number(g.first) || 0) * Math.PI / 180, cs = Math.cos(w), sn = Math.sin(w);
+  let vmin = Infinity, vmax = -Infinity;
+  for (const [x, y] of pts) { const v = -x * sn + y * cs; vmin = Math.min(vmin, v); vmax = Math.max(vmax, v); }
+  return { farbe, dachart: g.dachart, w, hell: g.dachhell === -1 ? -1 : 1, vmin, vmax };
+}
+
 function bbox(pts, rand = 0) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
@@ -57,9 +68,11 @@ function vorbereiten(welt) {
     const pts = vereinfache(g.p);
     // Flachdach: Gewerbe, große Bauten, Wohnblocks – und etwa jedes fünfte Wohnhaus (moderne Bauweise)
     const flach = FLACH.has(g.typ) || g.flaeche > 260 || (g.typ === 'apartments' && g.flaeche > 160) || hash(i * 17 + 5) < 0.2;
-    return { pts, box: bbox(pts, 16), flach, safe: g.safe, kx: g.x, ky: g.y,
+    // Luftbild-Dach (tools/luftbild.py): Farbe, Firstrichtung und Dachart aus dem Foto; fehlen sie, bleibt es bei der bisherigen Darstellung
+    const lb = luftbildDach(g, pts);
+    return { pts, box: bbox(pts, 16), flach: lb ? lb.dachart === 'flach' : flach, lb, safe: g.safe, kx: g.x, ky: g.y,
       // Zeichnen auf das Rastergebäude + 1 Kachel begrenzen (manche OSM-Umrisse ragen über Straßen)
-      clip: [(g.x - 1) * K, (g.y - 1) * K, (g.b + 2) * K, (g.h + 2) * K], farbe: flach ? FLACHDACH[Math.floor(hash(i * 7 + 3) * FLACHDACH.length)] : ZIEGEL[Math.floor(hash(i * 13 + 1) * ZIEGEL.length)] };
+      clip: [(g.x - 1) * K, (g.y - 1) * K, (g.b + 2) * K, (g.h + 2) * K], farbe: lb ? lb.farbe : flach ? FLACHDACH[Math.floor(hash(i * 7 + 3) * FLACHDACH.length)] : ZIEGEL[Math.floor(hash(i * 13 + 1) * ZIEGEL.length)] };
   }).filter(g => g.pts.length >= 3);
   // Gehweg-Abschnitte: nur dort, wo bebaut ist (Haus im Umkreis von 6 Kacheln der Segmentmitte) – nicht an freier Landstraße
   const GITTER = 8, rost = new Map();
@@ -531,7 +544,16 @@ function dachBildRechnen(g, farbeOverride) {
       if (!drin && d1 > UEBERSTAND) continue;
       const q = kanten[e1];
       let f;
-      if (g.flach) {
+      if (g.lb?.dachart === 'sattel' && drin) {
+        // Satteldach nach Luftbild: zwei Hälften quer zur Firstrichtung, die eine heller (so wie im Foto), Firstlinie dazwischen
+        const lb = g.lb, v = -px * Math.sin(lb.w) + py * Math.cos(lb.w), mitte = (lb.vmin + lb.vmax) / 2, halb = Math.max(1, (lb.vmax - lb.vmin) / 2);
+        const seite = v >= mitte ? 1 : -1, rel = Math.abs(v - mitte) / halb;
+        f = 1 + 0.17 * seite * lb.hell;
+        if (Math.abs(v - mitte) < 1.5) f *= 1.12;                                   // First
+        if (d1 < 2.5) f *= 0.86;                                                    // Traufkante
+        else if (rel < 0.97 && (((d1 + 64) % 8) < 1.3)) f *= 0.93;         // feine Ziegelreihen
+        f *= 0.97 + hash(i * 31 + j * 977) * 0.06;
+      } else if (g.flach) {
         // Flachdach: Kies, an der Kante eine hellere Attika mit Schattenfuge
         f = !drin ? 0.62 : d1 < 3 ? 1.12 : d1 < 5 ? 0.78 : 0.94 + (hash(i * 7919 + j * 104729) - 0.5) * 0.08;
       } else {

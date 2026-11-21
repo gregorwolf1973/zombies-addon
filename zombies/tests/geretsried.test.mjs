@@ -309,7 +309,9 @@ test('Mehr Bäume: ca. +50 %, nie auf Haustür-Vorkacheln, Parkbuchten, Containe
   const zahl = t => { let n = 0; for (const x of w.kacheln) if (x === T.BAUM) n++; return n; };
   let roh = 0; for (let i = 0; i < karte.kacheln.length; i++) if (karte.kacheln.charCodeAt(i) - 48 === T.BAUM) roh++;
   const jetzt = zahl();
-  assert.ok(jetzt >= roh * 1.4 && jetzt <= roh * 1.6, `Bäume ${roh} -> ${jetzt}`);
+  // mit Luftbild-Feld (Paket H) stehen die zusätzlichen Bäume dort, wo das Luftbild Baum zeigt (tests/luftbild.test.mjs); sonst Zufalls-Rückfall +50 %
+  if (karte.luftbild) assert.ok(jetzt >= roh, `Bäume ${roh} -> ${jetzt}`);
+  else assert.ok(jetzt >= roh * 1.4 && jetzt <= roh * 1.6, `Bäume ${roh} -> ${jetzt}`);
   for (const h of w.haeuser) if (h.tuer) {
     const fx = h.tuer.x + h.raus.dx, fy = h.tuer.y + h.raus.dy;
     assert.notEqual(w.hole(fx, fy), T.BAUM, 'Baum vor Haustür ' + h.nr);

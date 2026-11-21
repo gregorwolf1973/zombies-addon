@@ -30,7 +30,7 @@ import { fundZeigen, fundZu, fundPruefen } from './fundliste.mjs';
 import { alleKandidaten } from './durchsuche_alle.mjs';
 import * as sprache from './sprache.mjs';
 import { merkzettelAnschliessen, merkzettelErwarten } from './merkzettel.mjs';
-import { GERAET_SCHLUESSEL, stimmenFaktorLesen, anAusLesen, schiessModusLesen, feuerErlaubt as feuerErlaubtRegel } from './einstellungen_regeln.mjs';
+import { GERAET_SCHLUESSEL, kartenbildLesen, stimmenFaktorLesen, anAusLesen, schiessModusLesen, feuerErlaubt as feuerErlaubtRegel } from './einstellungen_regeln.mjs';
 import { fkStart } from './faehigkeiten.mjs';
 import { startwahlStart } from './startwahl.mjs';
 import { Uebersicht } from './uebersicht.mjs';
@@ -464,6 +464,7 @@ function geraetEinstellungenEinrichten(markieren) {
   };
   const marks = [
     gruppe('eg-schiessen', () => schiessModus, v => { schiessModus = schiessModusLesen(v); feuerUiAnwenden(); }, K.schiessen),
+    gruppe('eg-kartenbild', () => kartenbildLesen(lies(K.kartenbild)), v => document.dispatchEvent(new CustomEvent('zob-kartenbild', { detail: kartenbildLesen(v) })), K.kartenbild),
     gruppe('eg-zombieton', () => (anAusLesen(lies(K.zombieTon)) ? 'an' : 'aus'), v => ton.zombieTonSetzen(anAusLesen(v)), K.zombieTon),
     gruppe('eg-musik', () => (anAusLesen(lies(K.musik)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.musikSetzen(anAusLesen(v)); }, K.musik),
   ];
@@ -1245,7 +1246,7 @@ class Ort extends Phaser.Scene {
 
   // ---------- Übersichtskarte (client/uebersicht.mjs) ----------
   uebersichtVorbereiten() {
-    this.uebersicht = new Uebersicht(this.welt, $('kartenbox'));
+    this.uebersicht = new Uebersicht(this.welt, $('kartenbox'), raum.state.karte || null);
     $('einstellknopf').style.display = 'block';
     ton.umgebung(false);
     this.input.keyboard.on('keydown-M', () => { this.uebersicht.umschalten(); this.uebersichtZeichnen(); });

@@ -5,6 +5,7 @@ import { randParkplaetze, strassenBuchten, fahrbahnBreite } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
 import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
 import { laendlicheDetails, b11Ausduennen, freihalteKreise } from './laendlich.mjs';
+import { luftbildBaeume, luftbildAcker } from './luftbild.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -663,6 +664,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   strassenDeko();
 
   // ---- Mehr Bäume: Alleen an Straßen, Gruppen auf Wiesen, in Gärten, Grünflächen und im Wald (ca. +50 % zu den OSM-Bäumen) ----
+  let luftbild = null;
   function mehrBaeume() {
     const WEG = new Set(['footway', 'path', 'cycleway', 'track', 'steps', 'pedestrian']);
     const nein = new Uint8Array(BREITE * HOEHE);   // 1 = hier darf kein Baum stehen
@@ -689,17 +691,19 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
       const x0 = Math.max(0, Math.floor(Math.min(...xs))), x1 = Math.min(BREITE - 1, Math.ceil(Math.max(...xs))), y0 = Math.max(0, Math.floor(Math.min(...ys))), y1 = Math.min(HOEHE - 1, Math.ceil(Math.max(...ys)));
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (imPolygon(x + 0.5, y + 0.5, f.p)) zone[y * BREITE + x] = Math.max(zone[y * BREITE + x], z);
     }
-    const frei = (x, y) => {
+    const frei = (x, y, nachbarn = true) => {
       if (x < 2 || y < 2 || x >= BREITE - 2 || y >= HOEHE - 2) return false;
       const i = y * BREITE + x;
       if (hole(x, y) !== T.WIESE || nein[i] || zone[i] === 2) return false;
-      if (RICHTUNGEN.some(([a, c]) => hole(x + a, y + c) === T.BAUM)) return false;
+      if (nachbarn && RICHTUNGEN.some(([a, c]) => hole(x + a, y + c) === T.BAUM)) return false;
       const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
       if (Math.hypot(px - start.x, py - start.y) < KACHEL * 4) return false;
       return !buchten.some(b => abstandRechteck(b, px, py) < KACHEL * 0.9);
     };
     let n0 = 0; for (let i = 0; i < k.length; i++) if (k[i] === T.BAUM) n0++;
-    const ziel = Math.round(n0 * 0.5);
+    // Luftbild (Paket H): Bäume dort, wo sie auf dem Luftbild stehen; ohne Luftbild-Feld der Karte der Zufalls-Rückfall unten
+    luftbild = luftbildBaeume({ karte: karte0, k, setze, darf: (x, y) => frei(x, y, false), start, KACHEL });
+    const ziel = luftbild ? 0 : Math.round(n0 * 0.5);
     let neu = 0;
     // Alleen: jede dritte freie Wiesenkachel am Straßenrand
     for (let y = 2; y < HOEHE - 2 && neu < ziel * 0.3; y++) for (let x = 2; x < BREITE - 2 && neu < ziel * 0.3; x++) {
@@ -719,7 +723,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     // Ländliche Karten mit wenig Wald: Alleen an Landstraßen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen (laendlich.mjs, ohne r())
     if (karte !== karte0) {
       const zaunart = karte.zaunart ? karte.zaunart.split('') : null;
-      if (zaunart) { laendlicheDetails({ karte, k, hole, setze, haeuser, deko, nein, zone, start, zaunart }); karte.zaunart = zaunart.join(''); }
+      if (zaunart) { laendlicheDetails({ karte, k, hole, setze, haeuser, deko, nein, zone, start, zaunart, ohneBaeume: !!luftbild }); karte.zaunart = zaunart.join(''); }
     }
     b11Ausduennen(karte, k, setze);   // Kreuzung B 11 am Rathaus (geretsried2): wenig Bäume, damit Fahrzeuge Platz haben
   }
@@ -731,9 +735,10 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   // Vektordaten nur fürs Aussehen: echte Gebäudeumrisse, Straßenlinien, Flächen
   const safeBox = haeuser.filter(h => h.safe);
   const vektor = {
-    strassen: karte.strassen ?? [], flaechen: karte.flaechen ?? [], piste: karte.piste ?? null,
+    strassen: karte.strassen ?? [], flaechen: luftbild ? [...(karte.flaechen ?? []), ...luftbildAcker(karte0, k)] : karte.flaechen ?? [], piste: karte.piste ?? null,
     gebaeude: karte.gebaeude.filter(g => g.umriss?.length >= 6).map(g => ({
       p: g.umriss, typ: g.building ?? 'yes', flaeche: g.flaeche, x: g.x, y: g.y, b: g.b, h: g.h,
+      dach: g.dach, first: g.first, dachart: g.dachart, dachhell: g.dachhell,
       safe: safeBox.some(h => h.x === g.x && h.y === g.y && h.b === g.b && h.h === g.h),
     })),
   };
