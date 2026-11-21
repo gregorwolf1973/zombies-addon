@@ -108,7 +108,7 @@ test('Einstellungen: Vorgabe, Grenzen, Zusammenführen', () => {
 
 test('Darstellung: Radius schrumpft mit der Dichte, Deckkraft steigt', () => {
   assert.ok(nebelRadius(1, 20) < nebelRadius(0.5, 20) && nebelRadius(0.5, 20) < nebelRadius(0.1, 20));
-  assert.ok(Math.abs(nebelRadius(1, 20) - 20 * 8 * 1.15) < 1e-9);
+  assert.ok(Math.abs(nebelRadius(1, 20) - 20 * 8 * 1.3) < 1e-9);
   assert.equal(nebelDeckkraft(0), 0); assert.equal(nebelDeckkraft(1), 1);
 });
 
