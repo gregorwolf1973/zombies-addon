@@ -173,7 +173,7 @@ test('Startausrüstung: Waffen in freie Waffenplätze, Armbrust mit 6 Pfeilen, R
     raum.startGegenstand(p, 'schlaeger', x); assert.equal(p.waffe, 'schlaeger');
     raum.startGegenstand(p, 'armbrust', x);
     assert.equal(p.pfeile, 6);
-    assert.ok([p.wp1, p.wp2].includes('armbrust') || p.waffe === 'armbrust', 'Armbrust nicht in einem Waffenplatz');
+    assert.ok([p.wp0, p.wp1].includes('armbrust') || p.waffe === 'armbrust', 'Armbrust nicht in einem Waffenplatz');
     assert.equal(p.rucksack.includes('armbrust'), false);
     raum.startGegenstand(p, 'taschenlampe', x); assert.ok(p.lampe > 0);
     raum.startGegenstand(p, 'spritze', x); assert.ok(p.rucksack.includes('spritze'));

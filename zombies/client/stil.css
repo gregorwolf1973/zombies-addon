@@ -37,6 +37,9 @@ button:disabled { opacity: .6; }
   font-weight: 600; font-size: 14px; text-shadow: 0 1px 2px #000; display: none;
   padding-top: max(10px, env(safe-area-inset-top)); z-index: 9;
 }
+#hud #waffe { display: block; max-width: min(260px, calc(100vw - 218px)); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; font-weight: 600; line-height: 1.3; }
+#hud #waffe .ding-icon { vertical-align: -3px; }
+#hud .zeile.klein { margin-bottom: 4px; }
 #hud .zeile { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 #hud .anzeigen { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .anzeige { display: flex; align-items: center; gap: 5px; font-size: 12px; line-height: 1; }
@@ -60,37 +63,43 @@ button:disabled { opacity: .6; }
   position: fixed; left: 0; right: 0; bottom: 0; display: none; flex-direction: column; align-items: stretch;
   gap: 8px; padding: 0; pointer-events: none; z-index: 5;
 }
-#aktion, #aktion2 { margin-right: max(10px, env(safe-area-inset-right)) !important; }
-#aktion {
-  display: none; align-self: flex-end; font-size: 16px; padding: 12px 16px; border-radius: 14px;
-  background: #ffd54f; color: #2b1d00; box-shadow: 0 3px 10px #0008;
+/* Aktionsknöpfe unten in der Mitte, nebeneinander, feste Plätze: links Zweit-Aktion, Mitte Haupt-Aktion, rechts „Alles durchsuchen“ (nur Superuser) */
+#aktionen {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 8px;
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); pointer-events: none;
 }
-#aktion2 {
-  display: none; align-self: flex-end; font-size: 14px; padding: 9px 14px; border-radius: 14px;
-  background: #ffffff33; color: #fff; box-shadow: 0 3px 10px #0008; pointer-events: auto;
+#aktion, #aktion2, #alleknopf {
+  display: none; width: auto; max-width: 100%; box-sizing: border-box; margin: 0 !important; pointer-events: auto; line-height: 1.15; text-align: center; overflow-wrap: anywhere;
+  box-shadow: 0 3px 10px #0008;
 }
-#nachladenknopf {
-  display: none; align-self: flex-end; font-size: 14px; padding: 9px 14px; border-radius: 14px;
-  background: #ffffff33; color: #fff; box-shadow: 0 3px 10px #0008; pointer-events: auto; margin-right: max(10px, env(safe-area-inset-right)) !important;
+#aktion { grid-column: 2; font-size: 16px; padding: 12px 16px; border-radius: 14px; background: #ffd54f; color: #2b1d00; }
+#aktion .tk { font-size: 11px; font-weight: 600; opacity: .7; }
+@media (pointer: coarse) { #aktion .tk { display: none; } }
+#aktion2, #alleknopf { font-size: 14px; padding: 9px 12px; border-radius: 14px; background: #ffffff33; color: #fff; }
+#aktion2 { grid-column: 1; justify-self: end; }
+#alleknopf { grid-column: 3; justify-self: start; }
+/* Waffenfelder: im HUD oben links unter den Mitspielern (zwei Plätze + festes Granatenfeld) */
+#waffenzeile { --wf: 54px; display: flex; align-items: flex-end; gap: 6px; margin: 6px 0 0; pointer-events: none; }
+#waffenplaetze { display: flex; gap: 6px; pointer-events: auto; }
+#waffenplaetze button, #granatenfeld {
+  position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; flex: none; width: var(--wf); height: var(--wf); margin: 0; padding: 0;
+  border-radius: 10px; background: #ffffff4d; color: #fff; border: 2px solid #ffffff66; box-shadow: 0 2px 6px #0007;
+  -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: manipulation; pointer-events: auto;
 }
-#nachladenknopf.ladet { background: #ff9800aa; }
-/* Waffenplätze (Haupt, Neben, Ersatz): senkrecht unten links über dem Inventar, Antippen wechselt */
-#waffenplaetze { position: fixed; left: max(8px, env(safe-area-inset-left)); bottom: calc(56px + env(safe-area-inset-bottom)); width: 170px; display: flex; flex-direction: column; gap: 4px; pointer-events: auto; z-index: 6; }
-#hud #waffenplaetze { margin: 0; }
-#waffenplaetze button { position: relative; overflow: hidden; display: flex; align-items: center; gap: 4px; width: 100%; min-height: 34px; margin: 0; padding: 3px 6px; font-size: 12px; line-height: 1.1; border-radius: 9px; background: #000a; color: #fff; border: 2px solid #ffffff33; white-space: nowrap; text-align: left; }
-#waffenplaetze button .nr { font-size: 9px; opacity: .6; width: 8px; }
-#waffenplaetze button .zz { font-size: 17px; background: #ffffff33; border-radius: 6px; padding: 1px 3px; }   /* heller Grund hinter dem Waffen-Icon */
-#waffenplaetze button .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-#waffenplaetze button .mag { font-weight: 700; font-size: 13px; }
-#waffenplaetze button .vor { font-size: 10px; opacity: .7; }
+#waffenplaetze button .zz { display: flex; align-items: center; justify-content: center; font-size: 32px; line-height: 1; }
+#waffenplaetze button .zz .ding-icon { filter: drop-shadow(0 1px 1px #000a); }
+#waffenplaetze button .mag { position: absolute; right: 3px; bottom: 1px; font-weight: 800; font-size: 12px; line-height: 1.1; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
 #waffenplaetze button .lad { position: absolute; left: 0; bottom: 0; height: 4px; width: 0; background: #ff9800; }
-#waffenplaetze button.aktiv { border-color: #ffd54f; background: #4a3d0acc; }
-#waffenplaetze button { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
-#waffenplaetze button.faustknopf { min-height: 24px; justify-content: center; font-size: 11px; padding: 2px 6px; }
-#waffenplaetze button.leer { opacity: 0.5; }
-#waffenplaetze button.rot { border-color: #e53935; background: #5a1010cc; }
-#waffenplaetze button.rot .mag { color: #ff8a80; }
-@media (pointer: coarse) { #waffenplaetze { width: 182px; } #waffenplaetze button { min-height: 44px; font-size: 13px; } #waffenplaetze button .zz { font-size: 20px; } }
+#waffenplaetze button.aktiv { border-color: #ffd54f; background: #ffd54f66; }
+#waffenplaetze button.leer { opacity: .6; }
+#waffenplaetze button.rot { border-color: #e53935; background: #e5393580; }
+#waffenplaetze button.rot .mag { color: #ffcdd2; }
+/* Granatenfeld: kleiner, feste Stelle neben den Waffenfeldern, bleibt unsichtbar-reserviert ohne Granaten */
+#granatenfeld { width: calc(var(--wf) * .72); height: calc(var(--wf) * .72); flex-direction: column; gap: 0; }
+#granatenfeld .gz { font-size: 22px; line-height: 1; }
+#granatenfeld #granatenzahl { font-size: 13px; font-weight: 800; line-height: 1.1; text-shadow: 0 1px 2px #000; }
+@media (pointer: coarse) { #waffenzeile { --wf: 60px; } }
+@media (max-width: 420px) { #waffenzeile { --wf: 46px; gap: 4px; } #waffenplaetze { gap: 4px; } #waffenplaetze button .zz { font-size: 26px; } #granatenfeld .gz { font-size: 18px; } }
 /* Inventar: schmale Leiste ganz unten über die volle Breite (scrollbar, wenn die Plätze nicht passen) */
 #rucksack {
   display: flex; flex-wrap: nowrap; gap: 5px; pointer-events: auto; background: #000a; box-sizing: border-box; width: 100%;
@@ -162,7 +171,7 @@ button:disabled { opacity: .6; }
 
 /* Meldungen unten direkt über dem Inventar, klein und halbdurchsichtig, höchstens zwei */
 #meldungen {
-  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(54px + env(safe-area-inset-bottom)); width: min(420px, 90vw); opacity: .85; z-index: 21;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(112px + env(safe-area-inset-bottom)); width: min(420px, 90vw); opacity: .85; z-index: 21;
   display: flex; flex-direction: column; align-items: center; pointer-events: none;
   font-weight: 600; font-size: 11px; line-height: 1.25;
 }
@@ -171,7 +180,7 @@ button:disabled { opacity: .6; }
   background: #0007; text-shadow: 0 1px 2px #000; text-align: center; max-width: 100%;
 }
 #hinweis {
-  position: fixed; left: 50%; bottom: calc(120px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: none;
+  position: fixed; left: 50%; bottom: calc(164px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: none;
   background: #000b; padding: 10px 16px; border-radius: 12px; font-weight: 700; text-align: center;
   pointer-events: none; max-width: 86vw;
 }
@@ -228,13 +237,16 @@ button:disabled { opacity: .6; }
   margin: 0; width: 100%; box-sizing: border-box; flex-direction: column; align-items: stretch; gap: 4px; padding: 4px 6px;
   font-size: 11px; line-height: 1.25; background: #263238b0; text-shadow: 0 1px 2px #000;
 }
-/* Zähler unter der Eckkarte: ein kompaktes Fenster (Zeit, Besiegte, Verwandelte, Zombies) */
-#zaehler { pointer-events: none; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; padding: 3px 6px; border-radius: 10px; background: #000a; text-shadow: 0 1px 2px #000; text-align: right; }
-#hordeliste { pointer-events: none; width: 100%; box-sizing: border-box; margin-top: 3px; padding: 2px 6px; border-radius: 8px; background: #0008; color: #ffd1e0; font: 10px/1.3 monospace; white-space: pre-wrap; overflow: hidden; max-height: 9em; }
-#zaehler span { white-space: nowrap; font-size: 11px; font-weight: 600; line-height: 1.3; }
+#hordeliste { pointer-events: none; width: 180px; max-width: 100%; align-self: flex-end; box-sizing: border-box; margin-top: 3px; padding: 2px 6px; border-radius: 8px; background: #0008; color: #ffd1e0; font: 10px/1.3 monospace; white-space: pre-wrap; overflow: hidden; max-height: 9em; }
 #rechts #ausruhen { font-size: 11px; padding: 4px 6px; }
-#zaehler #verwandelt { font-size: 10px; }
-#zaehler #zeit { font-weight: 700; font-size: 13px; }
+/* Uhrzeit/Tag und Zombiezahl als Überlagerung in der Eckkarte */
+#kartenoben, #kartenunten { position: absolute; left: 6px; display: flex; flex-direction: column; align-items: flex-start; pointer-events: none; text-shadow: 0 1px 2px #000, 0 0 3px #000; font-weight: 700; white-space: nowrap; }
+#kartenoben { top: 5px; font-size: 12px; }
+#kartenunten { bottom: 5px; font-size: 10px; line-height: 1.25; }
+#kartenunten #zombiezahl { font-size: 13px; }
+#kartenbox.gross #kartenoben { font-size: 16px; top: 8px; left: 10px; }
+#kartenbox.gross #kartenunten { font-size: 13px; bottom: 8px; left: 10px; }
+#kartenbox.gross #kartenunten #zombiezahl { font-size: 17px; }
 #kartenbox {
   position: relative; width: 180px; display: none; pointer-events: auto;
   opacity: var(--kartealpha, .6); transition: opacity .2s;
@@ -277,8 +289,6 @@ button:disabled { opacity: .6; }
 .farben button { width: 26px !important; height: 26px; margin: 0 !important; padding: 0 !important; border-radius: 50%; border: 2px solid #ffffff55; }
 .farben button.an { border: 3px solid #fff; box-shadow: 0 0 0 2px #ffd54f; }
 
-/* Zoomknöpfe nur mit Maus – am Touch-Gerät zoomt man mit zwei Fingern */
-@media (pointer: coarse) { .zoomknopf { display: none !important; } }
 
 .figurknoepfe.fest .farben, .figurknoepfe.fest .farbtitel { opacity: .35; pointer-events: none; }
 .grafiknachweis { font-size: 10px; opacity: .6; margin-top: 8px; }
@@ -354,6 +364,7 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
   #meldungen { font-size: 11px; }
   .platz { width: 38px !important; height: 38px; font-size: 21px; }
   #aktion { font-size: 15px; padding: 10px 14px; }
+  #aktion2, #alleknopf { font-size: 13px; padding: 8px 10px; }
   #leiste > button { width: 34px !important; }
 }
 
@@ -414,7 +425,7 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 /* Gegenstands-Icons (client/dingbild.mjs, Bild grafik/dinge.webp) */
 .ding-icon { display: inline-block; vertical-align: middle; background-image: url(grafik/dinge.webp); background-repeat: no-repeat; flex: none; }
 .platz .ding-icon { display: block; margin: auto; }
-#waffenplaetze .zz .ding-icon, .aufh-knopf .z .ding-icon { display: block; }
+.aufh-knopf .z .ding-icon, #waffenplaetze .zz .ding-icon { display: block; }
 
 /* Rucksack umsortieren (Ziehen & Ablegen) */
 #rucksack .platz.zieht { opacity: .35; }
@@ -434,4 +445,3 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 #aufheben-wahl.fundliste { max-height: 55vh; overflow-y: auto; }
 #aufheben-wahl .fund-zeile { margin-bottom: 6px; }
 #aufheben-wahl .fund-name { font-size: 12px; opacity: .75; margin: 2px 4px; }
-#alleknopf { display: none; align-self: flex-end; font-size: 14px; padding: 9px 14px; border-radius: 14px; background: #ffffff33; color: #fff; box-shadow: 0 3px 10px #0008; pointer-events: auto; margin-right: max(10px, env(safe-area-inset-right)) !important; }

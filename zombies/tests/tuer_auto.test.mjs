@@ -105,3 +105,27 @@ test('Tür bleibt zu: seitlich vorbeilaufen, verschlossene Tür, Barrikade', asy
     assert.equal(st.offen, false, 'verbarrikadierte Tür ging von selbst auf');
   } finally { await c.leave(); }
 });
+
+test('Von Hand geschlossen: Auto-Öffnung greift erst nach > 80 px Abstand wieder', async () => {
+  const { c, raum, p } = await beitreten('Schließer');
+  try {
+    const g = findeTuer(raum); assert.ok(g, 'keine Zimmertür');
+    const st = schliesse(raum, g, p, g.s.a);
+    raum.setzeTuer(g.key, true);   // offen, Spieler steht davor
+    const x = raum.extra.get(c.sessionId);
+    // von Hand schließen (Knopf/E): erst die erste, sonst die zweite Möglichkeit
+    c.send('aktion');
+    if (!(await bis(() => st.offen === false, 1200))) { c.send('aktion2'); await bis(() => st.offen === false, 1200); }
+    assert.equal(st.offen, false, 'Tür ließ sich nicht von Hand schließen');
+    assert.equal(x.tuerSperre?.key, g.key, 'keine Sperre nach dem Schließen');
+    await warte(1000);   // länger als die 0,5 s der Auto-Öffnung
+    assert.equal(st.offen, false, 'Tür ging trotz Sperre von selbst wieder auf');
+    // mehr als 80 px weg: Sperre fällt
+    p.x = g.s.a.x - g.s.dx * 90; p.y = g.s.a.y - g.s.dy * 90;
+    await warte(150);
+    assert.equal(x.tuerSperre ?? null, null, 'Sperre blieb nach > 80 px bestehen');
+    // wieder davor: öffnet von selbst
+    p.x = g.s.a.x; p.y = g.s.a.y; x.tuerT = 0; x.tuerKey = null;
+    assert.ok(await bis(() => st.offen === true, 1500), 'Tür geht nach der Sperre nicht mehr automatisch auf');
+  } finally { await c.leave(); }
+});
