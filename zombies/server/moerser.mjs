@@ -29,6 +29,7 @@ export class Moerser {
 
   // Fahrzeug anlegen/entfernen je nach Schalter; steht neben dem Start (freier Platz)
   abgleichen() {
+    if (this.fest) return;   // fest eingebaut (Szene „Stau auf der B11“, server/szene_b11.mjs): Fahrzeug setzt die Szene, Test-Schalter egal
     const r = this.raum, s = r.state;
     if (this.an() && !this.id && r.welt?.start) {
       const p = r.freierPlatz(r.welt.start, 2);
@@ -74,7 +75,7 @@ export class Moerser {
     const r = this.raum, s = r.state;
     this.abgleichen();
     const f = this.fahrzeug();
-    if (!f) return;
+    if (!f || this.schweigt) return;   // schweigt: Besatzung gefallen, Posten aufgegeben
     const e = this.einst();
     // Granaten im Flug
     for (let i = this.flug.length - 1; i >= 0; i--) {
