@@ -319,8 +319,8 @@ test('Mehr Bäume: ca. +50 %, nie auf Haustür-Vorkacheln, Parkbuchten, Containe
   for (const b of w.behaelter) assert.notEqual(w.hole(Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL)), T.BAUM, 'Baum unter ' + b.art);
   for (const s of w.sperren) assert.notEqual(w.hole(Math.floor(s.x / KACHEL), Math.floor(s.y / KACHEL)), T.BAUM, 'Baum auf Sperre');
   assert.notEqual(w.hole(Math.floor(w.start.x / KACHEL), Math.floor(w.start.y / KACHEL)), T.BAUM);
-  // Kronen sind 1,3- bis 1,6-mal so groß wie die alten (58 bzw. 40 px)
-  for (let i = 0; i < 50; i++) { const b = baumVon(i, 3 * i); const basis = b.art.endsWith('klein') ? 40 : 58; assert.ok(b.gr >= basis * 1.3 - 1e-9 && b.gr <= basis * 1.6 + 1e-9); }
+  // Kronen maßstäblich: ca. 6,5–10 m (8 px = 1 m)
+  for (let i = 0; i < 50; i++) { const b = baumVon(i, 3 * i); assert.ok(b.gr >= 6.5 * 8 - 1e-9 && b.gr <= 10 * 8 + 1e-9, 'Krone ' + b.gr); }
   assert.equal(typeof zeichneBoden, 'function');
   // Blumenbeete gibt es nicht mehr
   const quelle = fs.readFileSync(new URL('../client/aussehen.mjs', import.meta.url), 'utf8');
