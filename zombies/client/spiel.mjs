@@ -1832,7 +1832,7 @@ class Ort extends Phaser.Scene {
   nebelZeichnen(ich, dt) {
     const n = this.nebelEbene ??= new NebelEbene(this), st = raum.state;
     if (!ich || !this.lokal) { n.verstecken(); return; }
-    n.aktualisiere(this.cameras.main.worldView, this.lokal.x, this.lokal.y, st.nebel ?? 0, st.nebelSicht || 20, 1 - helligkeit(st.uhr ?? 480), ich.lampe > 0 ? this.lampenRichtung(ich) : null, dt, !!this.aktEbene);
+    n.aktualisiere(this.cameras.main.worldView, this.lokal.x, this.lokal.y, st.nebel ?? 0, st.nebelSicht || 20, 1 - helligkeit(st.uhr ?? 480), ich.lampe > 0 ? this.lampenRichtung(ich) : null, dt, !!this.aktEbene, (d => d * d * (3 - 2 * d) * (st.nachtDunkel ?? 92) / 100)(1 - helligkeit(st.uhr ?? 480)));
   }
 
   // Draußen: Dämmerung färbt warm, nachts dunkelblau; Laternen, Fenster, Taschenlampe und ein kleiner Schein um jeden Spieler

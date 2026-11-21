@@ -10,7 +10,7 @@ const TIEFE = 7.95;             // über Figuren, Zombies und Dingen (≤ 7), un
 // Sichtradius in Pixeln: bei schwacher Dichte weit, bei voller Dichte die eingestellte Sichtweite
 export function nebelRadius(dichte, sichtMeter = 20) {
   const d = Math.max(0, Math.min(1, dichte));
-  return sichtMeter * PIXEL_JE_METER * (1 + (1 - d) * 3) * 1.15;
+  return sichtMeter * PIXEL_JE_METER * (1 + (1 - d) * 3) * 1.3;
 }
 
 // Deckkraft der Nebelebenen aus der Dichte (voll = 1: außerhalb der Sicht ist alles verschluckt)
@@ -67,7 +67,7 @@ export class NebelEbene {
     if (!s.textures.exists('nebel_sicht')) {
       const tex = s.textures.createCanvas('nebel_sicht', 512, 512), c = tex.getContext();
       const g = c.createRadialGradient(256, 256, 0, 256, 256, 256);
-      [[0, 0], [0.5, 0], [0.62, 0.12], [0.75, 0.42], [0.88, 0.8], [1, 1]].forEach(([p, a]) => g.addColorStop(p, `rgba(201,209,214,${a})`));
+      [[0, 0], [0.3, 0], [0.45, 0.06], [0.6, 0.2], [0.75, 0.45], [0.9, 0.82], [1, 1]].forEach(([p, a]) => g.addColorStop(p, `rgba(201,209,214,${a})`));
       c.fillStyle = g; c.fillRect(0, 0, 512, 512); tex.refresh();
     }
     this.ebenen = [
@@ -89,28 +89,32 @@ export class NebelEbene {
   }
 
   // v = sichtbarer Weltausschnitt (cameras.main.worldView), (px, py) = eigene Figur, dunkel 0..1 (Nacht), lampe = Winkel (Bogenmaß) oder null, dt in Sekunden
-  aktualisiere(v, px, py, dichte, sichtMeter, dunkel, lampe, dt, innen) {
+  aktualisiere(v, px, py, dichte, sichtMeter, dunkel, lampe, dt, innen, abdunkeln = 0) {
     if (dichte < 0.02 || innen) { this.verstecken(); return; }
     if (!this.bereit) this.bauen();
     this.t += dt;
+    // Nachts folgt der Nebel der Dunkelheit: eigene Farbe wird dunkelgrau-blau, sonst leuchtet er in Lichtlöchern (Laternen) weiß
+    const k = Math.max(0, Math.min(1, abdunkeln)), mix = (a, b) => Math.round(a + (b - a) * k);
+    const farbe = (mix(0xc9, 0x2a) << 16) | (mix(0xd1, 0x31) << 8) | mix(0xd6, 0x3d);
+    const tm = (d, h) => Math.round(255 + (255 * d / h - 255) * k), toenung = (tm(0x2a, 0xc9) << 16) | (tm(0x31, 0xd1) << 8) | tm(0x3d, 0xd6);   // Texturen sind tagfarben: Tönung = Verhältnis zur Nachtfarbe
     const alpha = nebelDeckkraft(dichte), R = nebelRadius(dichte, sichtMeter);
     // Schwaden: Größe auf 128 gerundet (kein Neuaufbau bei jedem Zoomschritt), folgen der Kamera mit leichter Parallaxe
     const pad = 64, B = Math.ceil((v.width + 2 * pad) / 128) * 128, H = Math.ceil((v.height + 2 * pad) / 128) * 128;
     for (const e of this.ebenen) {
       const b = e.bild;
       if (b.width !== B || b.height !== H) b.setSize(B, H);
-      b.setPosition(v.x - pad, v.y - pad).setVisible(true).setAlpha(e.a * alpha * (0.35 + 0.65 * Math.min(1, dichte * 1.5)));
+      b.setTint(toenung).setPosition(v.x - pad, v.y - pad).setVisible(true).setAlpha(e.a * alpha * (0.35 + 0.65 * Math.min(1, dichte * 1.5)));
       b.tilePositionX = ((v.x - pad) * e.par + this.t * e.vx) / e.skala;
       b.tilePositionY = ((v.y - pad) * e.par + this.t * e.vy) / e.skala;
     }
     // Sichtgrenze: Verlauf um die Figur, außerhalb vier Flächen in derselben Farbe
-    this.sicht.setPosition(px, py).setDisplaySize(2 * R, 2 * R).setAlpha(alpha).setVisible(true);
+    this.sicht.setTint(toenung).setPosition(px, py).setDisplaySize(2 * R, 2 * R).setAlpha(alpha).setVisible(true);
     const x0 = v.x - pad, y0 = v.y - pad, x1 = v.right + pad, y1 = v.bottom + pad, l = px - R, r = px + R, o = py - R, u = py + R;
     const flaechen = [[x0, y0, x1 - x0, o - y0], [x0, u, x1 - x0, y1 - u], [x0, o, l - x0, u - o], [r, o, x1 - r, u - o]];
     flaechen.forEach(([x, y, w, h], i) => {
       const f = this.rand[i];
       if (w <= 0 || h <= 0) { f.setVisible(false); return; }
-      f.setPosition(x, y).setSize(w, h).setFillStyle(NEBEL_FARBE, alpha).setVisible(true);
+      f.setPosition(x, y).setSize(w, h).setFillStyle(farbe, alpha).setVisible(true);
     });
     // Lampenschein: im Dunkeln deutlich, am Tag kaum
     if (this.schein) {
