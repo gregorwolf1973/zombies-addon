@@ -2,6 +2,7 @@
 // MG-Nester und Puma schießen auf Zombies draußen, Ärzte heilen, Ärzte und Soldaten handeln, nach N Spieltagen fällt das Lager.
 // Zustand in state.stuetzpunkt: '' = kein Stützpunkt auf der Karte, 'steht', 'gefallen' (wird mit der Welt gespeichert) oder
 // 'aus' (Schalter „Stützpunkt aktiv“ aus: Figuren weg, nichts schießt, kein Handel – ohne Zombies und ohne Fall).
+import { ueberrolleZombies, UEBERROLLEN_PAUSE } from './ueberrollen.mjs';
 import { entferne, fuegeHinzu, kannAufnehmen, blockGrund } from '../client/stapel.mjs';
 import { KACHEL, WAFFEN, sichtfrei, HANDEL, HANDEL_ABSTAND, HANDEL_RAETSEL, bezahlung, MUNITION_MAX, DINGE } from '../client/welt.mjs';
 import { imLager, planKoord, handelPartner, zeltWandImWeg, rahmen, fahrFlaeche, FAHR_SCHRITT, PUMA_PARK, SP_BREITE, SP_TIEFE } from '../client/stuetzpunkt.mjs';
@@ -151,7 +152,7 @@ export class Stuetzpunkt {
   waehleZiel(x, y, reichweite) {
     const kand = [];
     for (const [id, z] of this.raum.state.zombies) {
-      if (z.ebene) continue;
+      if (z.ebene || this.dekoHaengt(id)) continue;
       const d = Math.hypot(z.x - x, z.y - y);
       if (d > reichweite || !this.draussen(z)) continue;
       kand.push({ id, z, wert: d - (imLager(this.sp, z.x, z.y) ? 200 : this.vorDerLinie(z) ? 90 : 0) });
@@ -163,9 +164,12 @@ export class Stuetzpunkt {
   // v < 4: vor dem Draht oder dicht dahinter (Bauplan-Rahmen, Kacheln von der Front nach hinten)
   vorDerLinie(z) { return planKoord(this.sp, z.x, z.y).v < 4; }
 
+  // Dauerhaft im S-Draht hängende Zombies (Deko vom Weltstart, server/haengend.mjs): Mahnmal, nicht Ziel und kein Hotspot
+  dekoHaengt(id) { return this.raum.zombieInfo.get(id)?.haengtT === Infinity; }
+
   gueltig(id, x, y, reichweite) {
     const z = id && this.raum.state.zombies.get(id);
-    return z && !z.ebene && z.hp > 0 && Math.hypot(z.x - x, z.y - y) <= reichweite && this.draussen(z) && this.sicht(x, y, z.x, z.y) ? z : null;
+    return z && !z.ebene && !this.dekoHaengt(id) && z.hp > 0 && Math.hypot(z.x - x, z.y - y) <= reichweite && this.draussen(z) && this.sicht(x, y, z.x, z.y) ? z : null;
   }
 
   verteidigen(dt) {
@@ -487,8 +491,8 @@ export class Stuetzpunkt {
   // Zombies dieser Zelle als Bauplan-Punkt { u, v, n } oder null. Die bisherige Zelle bleibt, solange sie fast so voll ist wie die beste.
   hotspot(p) {
     const sp = this.sp, r = HOT_RADIUS / KACHEL, zellen = new Map();
-    for (const z of this.raum.state.zombies.values()) {
-      if (z.ebene || !(z.hp > 0)) continue;
+    for (const [id, z] of this.raum.state.zombies) {
+      if (z.ebene || !(z.hp > 0) || this.dekoHaengt(id)) continue;
       const { u, v } = planKoord(sp, z.x, z.y);
       if (u < -r || u > SP_BREITE + r || v < -r || v > SP_TIEFE + r) continue;
       const k = Math.floor(z.x / HOT_ZELLE) + ',' + Math.floor(z.y / HOT_ZELLE);
@@ -577,6 +581,12 @@ export class Stuetzpunkt {
     const [x, y] = r.ort(p.u, p.v);
     p.x = x; p.y = y;
     s.bwX = Math.round(x * 10) / 10; s.bwY = Math.round(y * 10) / 10;
+    // fährt Zombies platt (wie der Leopard, server/ueberrollen.mjs): Wanne 72 × 34 px; Einstellung bundeswehr.leopardUeberrollen (gilt für beide Fahrzeuge)
+    p.ueberKuehl = (p.ueberKuehl ?? 0) - dt;
+    if (p.ueberKuehl <= 0 && this.einst().leopardUeberrollen !== false) {
+      p.ueberKuehl = UEBERROLLEN_PAUSE;
+      ueberrolleZombies(this.raum, { x, y, richtung: s.bwW }, 36, 17, this.schuetze);
+    }
   }
 
   pumaSchritt(p, dt) {

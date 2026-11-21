@@ -7,6 +7,7 @@ import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
 import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
+import { ueberrolleZombies } from './ueberrollen.mjs';
 import { querfeldPlan } from './querfeld.mjs';
 import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplatz.mjs';
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
@@ -519,17 +520,7 @@ export class Aufgaben {
     this.ueberrollKuehl = (this.ueberrollKuehl ?? 0) - dt;
     if (this.ueberrollKuehl > 0 || f.haelt) return;
     this.ueberrollKuehl = UEBERROLLEN_PAUSE;
-    const r = this.raum, s = r.state, hl = LEOPARD.laenge / 2, hb = LEOPARD.breite / 2;
-    for (const [id, z] of [...s.zombies]) {
-      if (z.ebene || !(z.hp > 0) || Math.abs(z.x - f.x) > hl + 12 || Math.abs(z.y - f.y) > hl + 12) continue;
-      if (!imFussabdruck(f, z.x, z.y, hl, hb, 6)) continue;
-      const vorher = s.besiegt, von = this.schuetze ??= { name: 'Evakuierungspanzer', x: f.x, y: f.y, besiegt: 0 };
-      von.x = f.x; von.y = f.y;
-      z.kriecht = true;                         // nicht ganz tot: gibt es nicht, die Ketten erledigen ihn
-      r.schaden(id, z, z.hp + 1, von);
-      s.besiegt = vorher;                       // zählt nicht für die Aufgaben der Spieler
-      r.broadcast('ueberrollt', { x: z.x, y: z.y });
-    }
+    ueberrolleZombies(this.raum, f, LEOPARD.laenge / 2, LEOPARD.breite / 2, this.schuetze ??= { name: 'Evakuierungspanzer', x: f.x, y: f.y, besiegt: 0 });   // gemeinsame Logik mit dem Puma (ueberrollen.mjs)
   }
 
   restSetzen() {
