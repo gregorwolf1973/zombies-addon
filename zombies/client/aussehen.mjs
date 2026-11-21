@@ -9,7 +9,8 @@ import { zeichneMoebelBild } from './moebel_bilder.mjs';
 import { fzPx } from './masse.mjs';
 import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
 import { zeichneEinkaufswagen } from './einkaufswagen.mjs';
-import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach } from './vektor.mjs';
+import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach, vektorGebaeude } from './vektor.mjs';
+import { kulisse, zeichneFoto, strassenHalbtransparent, zeichneSchatten } from './kulisse.mjs';
 
 const TAU = Math.PI * 2;
 
@@ -186,14 +187,18 @@ export function zeichneBoden(ctx, welt, rect = null) {
   }
   ctx.strokeStyle = 'rgba(30,70,25,.55)'; ctx.lineWidth = 1; ctx.stroke(gras);
   ['#fff59d', '#f8bbd0', '#ffffff', '#ce93d8'].forEach((f, i) => { ctx.fillStyle = f; ctx.fill(blumen[i]); });
-  if (vek) zeichneWasser(ctx, welt, { x0, y0, x1, y1 });
-  if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
+  const kul = kulisse();   // Prototyp Kulisse (?kulisse=…): Orthofoto statt gezeichnetem Boden
+  if (kul) zeichneFoto(ctx, { x0, y0, x1, y1 });
+  if (vek && !kul) zeichneWasser(ctx, welt, { x0, y0, x1, y1 });
+  if (vek && !kul) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
+  if (vek && kul) strassenHalbtransparent(ctx, { x0, y0, x1, y1 }, g => zeichneStrassen(g, welt, { x0, y0, x1, y1 }));
+  if (kul?.schatten) zeichneSchatten(ctx, { x0, y0, x1, y1 }, vektorGebaeude(welt), baumKacheln(welt, { x0: x0 - 6, y0: y0 - 6, x1: x1 + 6, y1: y1 + 6 }));
   if (welt.details?.zaeune) zaunLinien(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
   zeichneMuell(ctx, welt, { x0, y0, x1, y1 });
   zeichneSperren(ctx, welt, { x0, y0, x1, y1 });
   zeichneStuetzpunktBoden(ctx, welt, { x0, y0, x1, y1 });
-  zeichneBaumSockel(ctx, welt, { x0, y0, x1, y1 });
+  if (!kul) zeichneBaumSockel(ctx, welt, { x0, y0, x1, y1 });
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
     if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
