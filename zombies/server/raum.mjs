@@ -422,6 +422,7 @@ export class SpielRaum extends Room {
     this.nachspawn = 0;
     this.ersteWelle = true;
     this.erwischtSeit = 0;
+    this.teamSafe = '';
     this.speicherUhr = SPEICHER_TAKT;
 
     // Stadtleben: Menschen, Bus, erste Zombies
@@ -2517,8 +2518,10 @@ export class SpielRaum extends Room {
     this.tauschPruefen();
     this.zombiesAuffuellen(dt);
 
-    const stehend = [...s.spieler.values()].filter(p => !p.unten && !(p.zombie > 0));
-    if (stehend.length === 0) {
+    // Bots zählen nicht: erwischt, sobald alle echten (verbundenen) Spieler unten oder verwandelt sind
+    const echte = [...s.spieler].filter(([sid, p]) => p.verbunden !== false && !this.extra.get(sid)?.bot);
+    const stehend = echte.filter(([, p]) => !p.unten && !(p.zombie > 0));
+    if (echte.length > 0 && stehend.length === 0) {
       s.phase = 'erwischt';
       this.erwischtSeit = 0;
       this.broadcast('meldung', { text: 'Alle erwischt! Ihr schleppt euch in die Safe Rooms …', lang: true });
@@ -2556,7 +2559,7 @@ export class SpielRaum extends Room {
     const welt = this.wv(p.ebene);
     const safe = safeRoomVon(this.welt, p);
     p.sicher = safe ? safe.id : this.imLagerSafe(p) ? 'lager' : '';
-    if (safe) x.letzterSafe = safe.id;
+    if (safe) { x.letzterSafe = safe.id; if (!x.bot) this.teamSafe = safe.id; }   // Team-Safe: zuletzt von einem echten Spieler betreten
     if (p.unten || p.anBord) { this.eingabeVerwerfen(p, x); return; }   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
     const schritte = this.eingabeSchritte(p, x, dt);
     const e = x.eingabe;
@@ -3217,17 +3220,26 @@ export class SpielRaum extends Room {
     p.waffe = ''; p.munition = 0; p.pfeile = 0; p.granaten = 0; p.handgranaten = 0; WP.leeren(p, this.extra.get([...this.state.spieler.keys()].find(k => this.state.spieler.get(k) === p))); p.kleidung = 0; p.lampe = 0; p.plaetze = RUCKSACK_PLAETZE + fkB;
   }
 
-  // alle am Boden: jeder wacht in seinem letzten Safe Room auf, die Welt bleibt erhalten
+  // Safe Room fürs gemeinsame Aufwachen: zuletzt von einem echten Spieler betreten, sonst der zur Mitte der echten Spieler nächste
+  teamSafeWaehlen() {
+    const l = this.welt.safeRooms;
+    const t = l.find(r => r.id === this.teamSafe);
+    if (t) return t;
+    const echte = [...this.state.spieler].filter(([sid, p]) => !this.extra.get(sid)?.bot && Number.isFinite(p.x));
+    if (!echte.length) return this.safeFuer('', NaN, NaN);
+    const mx = echte.reduce((a, [, p]) => a + p.x, 0) / echte.length;
+    const my = echte.reduce((a, [, p]) => a + p.y, 0) / echte.length;
+    return this.safeFuer('', mx, my);
+  }
+
+  // alle am Boden: alle (echte Spieler und Bots) wachen gemeinsam im selben Safe Room auf, die Welt bleibt erhalten
   zurueckInDieSafeRooms() {
     const s = this.state;
-    const besetzt = new Map();
-    for (const [sid, p] of s.spieler) {
-      const x = this.extra.get(sid);
-      const safe = this.safeFuer(x?.letzterSafe, p.x, p.y);
-      const n = besetzt.get(safe.id) ?? 0;
-      besetzt.set(safe.id, n + 1);
+    const safe = this.teamSafeWaehlen();
+    let n = 0;
+    for (const [, p] of s.spieler) {
       this.sterbeHaufen(p);   // Ausrüstung bleibt am Sterbeort liegen (1 Spieltag)
-      const pos = this.safePlatz(safe, n);
+      const pos = this.safePlatz(safe, n++);
       p.x = pos.x; p.y = pos.y; p.ebene = pos.ebene;
       p.hp = 100; p.durst = 100; p.hunger = 100; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0; p.zombie = 0;
     }

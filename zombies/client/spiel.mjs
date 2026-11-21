@@ -23,7 +23,7 @@ let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
 import * as ton from './ton.mjs';
-import { naheBodenDinge, auswahlAuf, auswahlZu, brauchtPlatz } from './aufheben.mjs';
+import { naheBodenDinge, auswahlAuf, auswahlPruefen, brauchtPlatz } from './aufheben.mjs';
 import { fundZeigen, fundZu, fundPruefen } from './fundliste.mjs';
 import { alleKandidaten } from './durchsuche_alle.mjs';
 import * as sprache from './sprache.mjs';
@@ -447,7 +447,7 @@ async function starteSpiel() {
   $('hud').style.display = 'block';
   $('unten').style.display = 'flex';
   oberflaecheEinrichten();
-  new Phaser.Game({
+  const spielObj = new Phaser.Game({
     type: Phaser.AUTO,
     parent: document.body,
     backgroundColor: '#1b2a1b',
@@ -455,7 +455,30 @@ async function starteSpiel() {
     input: { activePointers: 3 },
     scene: [Ort],
   });
+  bildschirmDrehenEinrichten(spielObj);
   sprache.starte({ raum, meineId, welt: () => chatSzene?.welt ?? null, meldung });
+}
+
+// Drehen/Größenänderung (Tablet): Canvas auf die echte Fenstergröße bringen, Zoom und Chunks neu berechnen.
+// Mobile Browser melden nach dem Drehen oft zuerst alte Maße → entprellt nach 250 ms und nochmal nach 600 ms.
+function bildschirmDrehenEinrichten(game) {
+  const messen = () => {
+    const vv = window.visualViewport;
+    const b = Math.round(vv?.width || window.innerWidth), h = Math.round(window.innerHeight || vv?.height);
+    if (!(b > 0 && h > 0)) return;
+    window.scrollTo(0, 0);
+    if (game.scale.width !== b || game.scale.height !== h) game.scale.resize(b, h);
+    game.scale.refresh();
+    const ort = game.scene.getScene('ort') ?? game.scene.scenes[0];
+    try { ort?.passeZoomAn?.(); ort?.chunksAktualisieren?.(); ort?.uebersichtZeichnen?.(); } catch { /* Szene noch nicht bereit */ }
+  };
+  let t1 = 0, t2 = 0;
+  const plane = () => { clearTimeout(t1); clearTimeout(t2); t1 = setTimeout(messen, 250); t2 = setTimeout(messen, 600); };
+  window.addEventListener('orientationchange', plane);
+  window.addEventListener('resize', plane);
+  window.visualViewport?.addEventListener('resize', plane);
+  screen.orientation?.addEventListener?.('change', plane);
+  window.__messen = messen;
 }
 
 // Rechteck im Koordinatensystem eines geparkten Autos (wie autoVonOben gedreht): längs von a bis b, quer ±halb
@@ -2985,7 +3008,7 @@ class Ort extends Phaser.Scene {
     }
     if (zweit && knopf2.__text !== zweit.text) { knopf2.__text = zweit.text; knopf2.textContent = nurText(zweit.text); }
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
-    if (!this.kontext || this.kontext.art !== 'aufheben_wahl') auswahlZu();
+    if (ich && this.lokal) auswahlPruefen(raum.state.boden, ich, { x: this.lokal.x, y: this.lokal.y });   // bleibt offen, aktualisiert sich, schließt nur wenn nichts mehr da ist
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
     tauschRucksack();
     if (handelOffen) handelZeigen(ich, this.welt.stuetzpunkt);

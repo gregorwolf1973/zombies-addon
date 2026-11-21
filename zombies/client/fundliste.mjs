@@ -4,7 +4,8 @@ import { dingIcon } from './dingbild.mjs';
 import { NIMM_WEITE } from './durchsuche_alle.mjs';
 
 let feld = null, ursprung = null;
-export function fundZu() { if (feld) { feld.remove(); feld = null; ursprung = null; } }
+function escZu(e) { if (e.key === 'Escape') fundZu(); }
+export function fundZu() { if (feld) { feld.remove(); feld = null; ursprung = null; } document.removeEventListener('keydown', escZu); }
 
 // Schließt die Liste, wenn man sich weit entfernt hat (der Server nimmt dann ohnehin nichts mehr heraus)
 export function fundPruefen(lok) {
@@ -45,4 +46,5 @@ export function fundZeigen(raum, m, lok, meldung) {
   fuss.append(alle, zu); feld.append(fuss);
   feld.addEventListener('pointerdown', e => e.stopPropagation());
   document.body.appendChild(feld);
+  document.removeEventListener('keydown', escZu); document.addEventListener('keydown', escZu);
 }

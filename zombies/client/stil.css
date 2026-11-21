@@ -1,6 +1,6 @@
 :root { --oben: max(6px, env(safe-area-inset-top)); }
 html, body {
-  margin: 0; height: 100%; overflow: hidden; background: #1b2a1b; color: #fff;
+  margin: 0; height: 100%; width: 100%; overflow: hidden; background: #1b2a1b; color: #fff;
   font-family: system-ui, -apple-system, sans-serif; touch-action: none;
   -webkit-user-select: none; user-select: none;
 }
@@ -448,3 +448,14 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 /* Stapel: Anzahl unten rechts im Platz */
 .platz { position: relative; }
 .platz .stapelzahl { position: absolute; right: 2px; bottom: 0; font-size: 11px; font-weight: 700; line-height: 1; color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000; pointer-events: none; }
+
+/* Höhen einheitlich in dvh (folgt der echten sichtbaren Höhe, auch nach Drehen); vh bleibt als Rückfall oben */
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; }
+  #raetsel .fenster, #kiste .fenster, #handel .fenster { max-height: 85dvh; }
+  #aufgabenkoerper { width: min(320px, calc(100dvw - 20px)); max-height: 70dvh; }
+  #kartenbox.gross { width: min(94dvw, 1000px, calc((100dvh - 76px) * var(--seiten, 1.35))); }
+  #tausch { width: min(560px, calc(100dvw - 20px)); max-height: 55dvh; }
+  #einstellungen .fenster, #sumenue .fenster { max-height: 90dvh; }
+  #aufheben-wahl.fundliste { max-height: 55dvh; }
+}
