@@ -1580,6 +1580,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <label for="rsVorlauf">Stumm ab Spielbeginn (Sekunden, z. B. für Senderwerbung)</label>
   <div class="th-zeile"><input type="range" id="rsVorlauf" min="0" max="120" step="5"><span id="rsVorlaufWert"></span></div>
   <p class="tk-hinweis">Ohne Werbung vorweg: Bayern 3 https://dispatcher.rndfnk.com/br/br3/live/mp3/mid · BR Heimat …/br/brheimat/live/mp3/mid · Bayern 1 Oberbayern …/br/br1/obb/mp3/mid</p>
+  <label for="rsDurchsage">Eilmeldung im Radio alle … Minuten (0 = aus; Dateien unter Geräusche › „Radio-Durchsage Level …“)</label>
+  <div class="th-zeile"><input type="range" id="rsDurchsage" min="0" max="30" step="1"><span id="rsDurchsageWert"></span></div>
   <label for="rsLaut">Lautstärke Live-Radio (%)</label>
   <div class="th-zeile"><input type="range" id="rsLaut" min="0" max="100" step="1"><span id="rsLautWert"></span></div>
   <script>
@@ -1590,6 +1592,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
       if (document.activeElement !== $('rsAn')) $('rsAn').checked = r.an === true;
       if (document.activeElement !== $('rsName')) $('rsName').value = r.name || '';
       if (document.activeElement !== $('rsUrl')) $('rsUrl').value = r.url || '';
+      if (document.activeElement !== $('rsDurchsage')) { $('rsDurchsage').value = r.durchsage === undefined ? 4 : r.durchsage; if ($('rsDurchsageWert')) $('rsDurchsageWert').textContent = $('rsDurchsage').value + ' min'; }
       if (document.activeElement !== $('rsVorlauf')) { $('rsVorlauf').value = r.vorlauf === undefined ? 30 : r.vorlauf; if ($('rsVorlaufWert')) $('rsVorlaufWert').textContent = $('rsVorlauf').value + ' s'; }
       if (document.activeElement !== $('rsLaut')) { $('rsLaut').value = r.laut === undefined ? 60 : r.laut; if ($('rsLautWert')) $('rsLautWert').textContent = $('rsLaut').value + ' %'; }
     }
@@ -1601,6 +1604,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     $('rsName').addEventListener('change', function () { senden({ name: $('rsName').value }); });
     $('rsUrl').addEventListener('change', function () { senden({ url: $('rsUrl').value }); });
     $('rsLaut').addEventListener('change', function () { senden({ laut: Number($('rsLaut').value) }); });
+    $('rsDurchsage').addEventListener('change', function () { senden({ durchsage: Number($('rsDurchsage').value) }); });
     $('rsVorlauf').addEventListener('change', function () { senden({ vorlauf: Number($('rsVorlauf').value) }); });
     fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {});
   })();

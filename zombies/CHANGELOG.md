@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.68.7 – 21.11.2026
+
+- Neu: Eilmeldung im Live-Radio – ein Nachrichtensprecher (Piper-Stimme „Thorsten“) meldet Zombies am Ort des Levels; kommt aus dem Autoradio, der Sender wird dabei leiser. Abstand im Backend (Vorgabe alle 4 Minuten, 0 = aus), Dateien je Level unter Geräusche.
+
 ## 0.68.6 – 21.11.2026
 
 - Live-Radio verbindet gleich bei Spielbeginn und bleibt verbunden; die ersten Sekunden (einstellbar, Vorgabe 30 s) bleibt es stumm – so ist ein Sender-Vorspann vorbei, bevor man das erste Autoradio hört. Hinweis auf werbefreie BR-Streams im Backend.

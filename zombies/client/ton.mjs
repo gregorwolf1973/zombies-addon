@@ -160,7 +160,8 @@ export function toneEinstellungen(i) {
   const url = typeof r.url === 'string' && r.url.startsWith('https://') ? r.url : '';
   if (radioEl && radioEin.url !== url) radioPausieren(true);   // Senderwechsel: beim nächsten Auto neu verbinden
   const rv = Number(r.vorlauf);
-  radioEin = { an: r.an === true && !!url, url, laut: Number.isFinite(rl) ? Math.max(0, Math.min(100, rl)) : 60, vorlauf: Number.isFinite(rv) ? Math.max(0, Math.min(120, rv)) : 30 };
+  const rd = Number(r.durchsage);
+  radioEin = { an: r.an === true && !!url, url, laut: Number.isFinite(rl) ? Math.max(0, Math.min(100, rl)) : 60, vorlauf: Number.isFinite(rv) ? Math.max(0, Math.min(120, rv)) : 30, durchsage: Number.isFinite(rd) ? Math.max(0, Math.min(30, rd)) : 4 };
   if (!radioEin.an && radioEl) radioPausieren(true);
   else radioVorstart();
   radioPegel();
@@ -562,13 +563,15 @@ export function knistern(x, y, staerke = 1) {
 // Ein gemeinsames <audio> holt den Stream direkt beim Sender (CORS erlaubt); jedes Auto mit Radio bekommt einen eigenen
 // Lautstärke-/Richtungszweig (wie die Sirene). Ohne Autos mit Radio wird der Stream nach 5 s getrennt (spart Datenvolumen).
 let radioEin = { an: false, url: '', laut: 60, vorlauf: 30 };
-let radioStummBis = 0, radioStummTimer = null;   // Vorlauf: Stream läuft schon, ist aber noch stumm (Senderwerbung am Anfang)
+let radioStummBis = 0, radioStummTimer = null;
+let radioDuck = null, aktLevel = 1, durchsageNaechste = 0, durchsageLaeuft = false;   // Vorlauf: Stream läuft schon, ist aber noch stumm (Senderwerbung am Anfang)
 let radioEl = null, radioQuelle = null, radioBus = null, radioFrei = false, radioNutzer = 0, radioAusTimer = null;
 function radioAnlegen() {
   if (radioEl || !ctx?.createMediaElementSource) return !!radioEl;
   try {
     radioEl = new Audio(); radioEl.crossOrigin = 'anonymous'; radioEl.preload = 'none'; radioEl.setAttribute('playsinline', '');
     radioQuelle = ctx.createMediaElementSource(radioEl);
+    radioDuck = ctx.createGain(); radioDuck.gain.value = 1; radioQuelle.connect(radioDuck);   // Sender leiser während einer Durchsage
     radioBus = ctx.createGain(); radioBus.gain.value = musikAn ? radioEin.laut / 100 : 0; radioBus.connect(haupt);
     radioEl.onerror = () => { radioPausieren(true); };
     return true;
@@ -612,6 +615,31 @@ function liveMischen() {
   let best = null;
   for (const h of liveZweige) if (jetzt - (h.zeit ?? 0) < 1500 && (!best || (h.ziel ?? 0) > (best.ziel ?? 0))) best = h;
   for (const h of liveZweige) h.g.gain.setTargetAtTime(h === best ? (h.ziel ?? 0) : 0, ctx.currentTime, 0.15);
+  if (best && (best.ziel ?? 0) > 0.05) durchsagePruefen(best);
+}
+// Eilmeldung (Nachrichtensprecher) im Live-Radio: alle radioEin.durchsage Minuten, erstmals ~20 s nachdem man ein Radio hört.
+// Kommt aus dem hörbaren Autoradio (gleicher Zweig: Richtung, Entfernung), der Sender wird solange leiser.
+function durchsagePruefen(h) {
+  const jetzt = performance.now();
+  if (!radioEin.durchsage || durchsageLaeuft || jetzt < radioStummBis) return;
+  if (!durchsageNaechste) { durchsageNaechste = jetzt + 20000; return; }
+  if (jetzt < durchsageNaechste) return;
+  const t = zuordnung['durchsageLevel' + aktLevel] ?? zuordnung.durchsageLevel1, datei = t?.dateien?.[0];
+  if (!datei) return;
+  const buf = geladen(datei);
+  if (!buf) { laden(datei); return; }
+  durchsageLaeuft = true;
+  const src = ctx.createBufferSource(), g = ctx.createGain(), z = ctx.currentTime;
+  src.buffer = buf; g.gain.value = (t.laut ?? 100) / 100 * 2.2;   // Sprecher deutlich über dem (geduckten) Sender
+  src.connect(g); g.connect(h.g);
+  radioDuck.gain.cancelScheduledValues(z); radioDuck.gain.setTargetAtTime(0.12, z, 0.3);
+  src.onended = () => {
+    try { g.disconnect(); } catch { /* egal */ }
+    radioDuck.gain.setTargetAtTime(1, ctx.currentTime, 0.8);
+    durchsageLaeuft = false;
+    durchsageNaechste = performance.now() + radioEin.durchsage * 60000 * (0.85 + Math.random() * 0.3);
+  };
+  src.start(z + 0.6);
 }
 function radioHandle() {
   if (!radioEin.an || !musikAn || !radioAnlegen()) return null;
@@ -620,11 +648,11 @@ function radioHandle() {
   const g = ctx.createGain(); g.gain.value = 0;
   const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
   if (pan) { g.connect(pan); pan.connect(radioBus); } else g.connect(radioBus);
-  radioQuelle.connect(g);
+  radioDuck.connect(g);
   radioNutzer++;
   let weg = false;
   const h = { g, pan, laut: 1, quellen: null, rate: null, live: true };   // Lautstärke regelt radioBus (radioPegel)
-  const ende = { stop() { if (weg) return; weg = true; liveZweige.delete(h); try { radioQuelle.disconnect(g); } catch { /* schon getrennt */ } radioNutzer--; } };   // Stream bleibt verbunden (kein neuer Sender-Vorspann)
+  const ende = { stop() { if (weg) return; weg = true; liveZweige.delete(h); try { radioDuck.disconnect(g); } catch { /* schon getrennt */ } radioNutzer--; } };   // Stream bleibt verbunden (kein neuer Sender-Vorspann)
   h.quellen = [ende];
   liveZweige.add(h);
   return h;
@@ -794,6 +822,7 @@ function stromStarten(datei, { loop = false, ziel, laut = 1, blende = 1, ende } 
 // lage: { level, lager, safe, finale }; etwa jede Sekunde vom Spiel aufgerufen
 export function musikLage(lage) {
   if (!ctx) return;
+  if (lage?.level) aktLevel = Math.max(1, Math.min(5, Number(lage.level) || 1));
   musikSt = musikSchritt(musikSt, { ...lage, horde: hordeSt.aktiv }, hatMusik, performance.now());
   musikAnwenden(musikAn ? musikSt.aktuell : null);
   musikLautstaerke();
