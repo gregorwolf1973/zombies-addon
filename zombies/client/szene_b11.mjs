@@ -148,23 +148,31 @@ function b11Platt(scene) {
     const { dx, dy } = plattLesen(v), w0 = (Number.isFinite(a.winkel) ? a.winkel : a.senkrecht ? Math.PI / 2 : 0) + ((a.farbe + Math.round(a.x)) % 2 ? Math.PI : 0);
     const n = parseInt(id.slice(1), 10) || 0, jit = i => Math.sin(n * 12.9898 + i * 78.233) * 0.5;
     const rot = (x, y, cx, cy, w) => ({ x: cx + x * Math.cos(w) - y * Math.sin(w), y: cy + x * Math.sin(w) + y * Math.cos(w) });
-    // 1. Fleck: deckt das gemalte Auto (46 × 22) samt Schub ab
-    const fl = (hl, hb, cx, cy) => g.fillPoints([rot(-hl, -hb, cx, cy, w0), rot(hl, -hb, cx, cy, w0), rot(hl, hb, cx, cy, w0), rot(-hl, hb, cx, cy, w0)], true);
-    g.fillStyle(0x2b2824, 0.92); fl(26, 14, a.x, a.y); fl(26, 14, a.x + dx, a.y + dy);
-    // 2. zerquetschte Karosserie: flacher, unregelmäßig, dunkel
+    // 1. Maske in Autoform (abgerundet, leicht größer als das gemalte Auto 46 × 22) verdeckt das Original
+    const rund = (hl, hb, r, cx, cy, w) => {
+      const pts = [];
+      for (const [sx, sy, a0] of [[1, 1, 0], [-1, 1, Math.PI / 2], [-1, -1, Math.PI], [1, -1, Math.PI * 1.5]]) for (let k = 0; k <= 4; k++) {
+        const a = a0 + k * Math.PI / 8;
+        pts.push(rot(sx * (hl - r) + Math.cos(a) * r, sy * (hb - r) + Math.sin(a) * r, cx, cy, w));
+      }
+      return pts;
+    };
+    g.fillStyle(0x3b3b3d, 1).fillPoints(rund(25, 13, 9, a.x, a.y, w0), true);
+    // 2. zerknautschtes Auto: gleiche Silhouette, abgedunkelte Farbe, eingedrückte Mitte, Knicke, Glassplitter
     const cx = a.x + dx, cy = a.y + dy, farbe = PLATT_FARBEN[(a.farbe ?? 0) % PLATT_FARBEN.length];
-    const umriss = [[-19, -9], [-6, -11], [8, -10], [19, -8], [21, 0], [19, 8], [7, 11], [-7, 10], [-19, 9], [-21, 0]].map(([x, y], i) => rot(x + jit(i) * 3, y + jit(i + 20) * 3, cx, cy, w0));
-    g.fillStyle(farbe, 1).fillPoints(umriss, true);
-    g.fillStyle(0x000000, 0.45).fillPoints(umriss, true);   // abgedunkelt
-    const dach = [[-9, -6], [7, -6], [9, 5], [-8, 6]].map(([x, y], i) => rot(x + jit(i + 40) * 2, y + jit(i + 60) * 2, cx, cy, w0));
-    g.fillStyle(farbe, 0.8).fillPoints(dach, true);
-    g.lineStyle(1, 0x000000, 0.7);
-    for (let i = 0; i < 3; i++) { const p1 = rot(-12 + i * 9, -9, cx, cy, w0), p2 = rot(-9 + i * 9 + jit(i) * 4, 9, cx, cy, w0); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }   // Knicke
-    g.fillStyle(0xcfd8dc, 0.8);
-    for (let i = 0; i < 4; i++) { const q = rot(-14 + i * 8 + jit(i + 80) * 6, jit(i + 90) * 16, cx, cy, w0); g.fillRect(q.x - 1, q.y - 1, 2, 1.4); }   // Glassplitter
+    g.fillStyle(0x2b2b2d, 1).fillPoints(rund(24, 12.5, 9, cx, cy, w0), true);   // gleich großes Wrack: deckt auch den Schubrand ab
+    g.fillStyle(farbe, 1).fillPoints(rund(22, 11, 8, cx, cy, w0), true);
+    g.fillStyle(0x000000, 0.4).fillPoints(rund(22, 11, 8, cx, cy, w0), true);
+    g.fillStyle(0x000000, 0.35).fillPoints(rund(9 + jit(1) * 2, 8.5, 6, cx, cy, w0), true);   // eingedrückte Mitte
+    g.lineStyle(1, 0x000000, 0.65);
+    for (let i = 0; i < 3; i++) { const p1 = rot(-13 + i * 11, -10, cx, cy, w0), p2 = rot(-10 + i * 11 + jit(i) * 4, 10, cx, cy, w0); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }
+    g.lineStyle(1, 0xffffff, 0.12);
+    for (let i = 0; i < 2; i++) { const p1 = rot(-8 + i * 14, -10, cx, cy, w0), p2 = rot(-6 + i * 14, 10, cx, cy, w0); g.lineBetween(p1.x + 1, p1.y, p2.x + 1, p2.y); }
+    g.fillStyle(0xcfd8dc, 0.85);
+    for (let i = 0; i < 5; i++) { const q = rot(-15 + i * 7.5 + jit(i + 80) * 5, jit(i + 90) * 16, cx, cy, w0); g.fillRect(q.x - 1, q.y - 1, 2, 1.4); }
     // 3. Kettenabdrücke quer über das Wrack (in Schubrichtung)
     const sw = Math.atan2(dy || 0.001, dx || 0.001);
-    g.lineStyle(3, 0x14110e, 0.5);
+    g.lineStyle(2, 0x14110e, 0.3);
     for (const ver of [-7, 7]) { const p1 = rot(-26, ver, cx, cy, sw), p2 = rot(26, ver, cx, cy, sw); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }
   }
 }
