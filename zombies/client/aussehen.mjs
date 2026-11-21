@@ -6,6 +6,7 @@ import { erzeugeZeichner } from './proto_grafik.mjs';
 import { zeichneSafeMoebel } from './safe_moebel.mjs';
 import { zeichneWasser } from './wasser.mjs';
 import { zeichneMoebelBild } from './moebel_bilder.mjs';
+import { fzPx } from './masse.mjs';
 import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
 import { zeichneEinkaufswagen } from './einkaufswagen.mjs';
 import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach } from './vektor.mjs';
@@ -49,13 +50,13 @@ function wiesenWolken(ctx, x0, y0, x1, y1) {
 const begehbarWiese = t => t === T.WIESE || t === T.BAUM;
 
 // ---------- Bäume: Lage/Größe je Kachel (Kronen in eigener Ebene, Schatten und Stamm im Boden) ----------
-// Kronen sind 1,3- bis 1,6-mal so groß wie früher (gemischt); der Stamm bleibt klein, die Kollision ändert sich nicht.
+// Kronen: große 8–10 m, kleine 6,5–8 m Durchmesser (Maßstab 8 px = 1 m; früher bis 11,6 m); der Stamm bleibt klein, die Kollision ändert sich nicht.
 const BAUM_RAND = 3;   // Kacheln: so weit ragen Kronen über ihre Kachel (und damit über Stückgrenzen) hinaus
 export function baumVon(kx, ky) {
   const h = hash(kx * 31, ky * 17);
   const art = h < 0.62 ? 'baum_gross' : h < 0.82 ? 'baum_klein' : h < 0.93 ? 'baum_herbst' : 'baum_herbst_klein';
   const faktor = 1.3 + hash(kx * 7 + 3, ky * 11 + 5) * 0.3;
-  const gr = (art.endsWith('klein') ? 40 : 58) * faktor;
+  const gr = (art.endsWith('klein') ? 40 : 50) * faktor;   // Krone ca. 6,5–10 m (8 px = 1 m)
   return { art, gr, x: kx * KACHEL + KACHEL / 2, y: ky * KACHEL + KACHEL / 2, dreh: hash(ky, kx) * Math.PI * 2 };
 }
 function baumKacheln(welt, rect) {
@@ -234,17 +235,18 @@ export function zeichneOben(ctx, welt, bilder = {}, rect = null) {
   for (const d of welt.deko ?? []) {
     const { x, y } = d, v = d.v ?? 0.5;
     if (!imAusschnitt(x, y)) continue;
+    const klein = (k, fn) => { ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y); fn(); ctx.restore(); };   // Maßstab 8 px = 1 m: Bild um (x, y) verkleinern
     const f = {
       maibaum: () => z.maibaum(x, y),
-      biertisch: () => z.biertisch(x, y),
-      kuh: () => z.kuh(x, y, v),
-      heu: () => z.heu(x, y, v),
+      biertisch: () => klein(0.45, () => z.biertisch(x, y)),   // Garnitur ~2,2 m
+      kuh: () => klein(0.4, () => z.kuh(x, y, v)),               // Kuh ~2,4 m
+      heu: () => klein(0.45, () => z.heu(x, y, v)),              // Rundballen ~1,5 m
       traktor: () => traktorVonOben(ctx, x, y),
       bus: () => busVonOben(ctx, x, y, d.senkrecht, v),
       vogelscheuche: () => z.vogelscheuche(x, y),
       hochsitz: () => z.hochsitz(x, y),
       fels: () => bildZeichnen(ctx, bilder[v < 0.5 ? 'fels1' : 'fels2'], x, y, 30, v * 6),
-      busch: () => bildZeichnen(ctx, bilder[v < 0.75 ? 'busch' : 'busch_herbst'], x, y, 30, v * 6),
+      busch: () => bildZeichnen(ctx, bilder[v < 0.75 ? 'busch' : 'busch_herbst'], x, y, 20, v * 6),   // Busch ~2,5 m
     }[d.art];
     if (f) dinge.push([y, f]);
   }
@@ -358,9 +360,14 @@ export function autoEintraege(art) { return autoListe ? autoListe.autos.filter(a
 // Blaulicht-Bild 1..3 zum Eintrag e (Polizei, Krankenwagen); sonst e selbst
 export function autoAnimEintrag(e, anim) { return autoListe?.autos.find(a => a.art === e.art && a.anim === anim && a.laenge === e.laenge) ?? e; }
 // Bild-Auto ohne Drehung mittig bei cx, cy zeichnen (Front nach rechts); die Felder liegen zeilenweise im Bogen
+// Das Bild wird auf die echten Maße der Fahrzeugart gebracht (client/masse.mjs, 8 px = 1 m): Länge × Breite des Eintrags → Sollmaß
+export function autoSollMass(a) { return fzPx(a.art) ?? [a.laenge, a.breite ?? a.laenge / 2]; }
 export function zeichneAutoBild(ctx, a, cx, cy) {
   const m = autoListe.mass ?? 2, bw = autoListe.feldB, bh = autoListe.feldH, sp = autoListe.spalten;
-  ctx.drawImage(autoBild, (a.nr % sp) * bw, Math.floor(a.nr / sp) * bh, bw, bh, cx - bw / m / 2, cy - bh / m / 2, bw / m, bh / m);
+  const [sl, sb] = autoSollMass(a), kx = sl / a.laenge, ky = sb / (a.breite ?? a.laenge / 2);
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(kx, ky);
+  ctx.drawImage(autoBild, (a.nr % sp) * bw, Math.floor(a.nr / sp) * bh, bw, bh, -bw / m / 2, -bh / m / 2, bw / m, bh / m);
+  ctx.restore();
 }
 function hashText(b) {
   const s = String(b.id ?? ''); let h = 0;
@@ -397,12 +404,13 @@ export function autoVonOben(ctx, b) {
   else if (b.senkrecht) ctx.rotate(Math.PI / 2);
   if (!b.vorwaerts && (b.farbe + Math.round(b.x)) % 2) ctx.rotate(Math.PI);   // mal vorwärts, mal rückwärts geparkt
   if (bildAuto) {
-    const l = bildAuto.laenge, br = bildAuto.breite ?? breit;
+    const [l, br] = autoSollMass(bildAuto);
     ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.roundRect(-l / 2 + 3, -br / 2 + 4, l, br, 7); ctx.fill();
     zeichneAutoBild(ctx, bildAuto, 0, 0);
     ctx.restore();
     return;
   }
+  const [zl, zb] = fzPx('pkw'); ctx.scale(zl / lang, zb / breit);   // gezeichnete Fassung (ohne Bildbogen) auf PKW-Maß 4,5 × 2 m
   const rund = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
   ctx.fillStyle = 'rgba(0,0,0,.32)'; rund(-lang / 2 + 3, -breit / 2 + 4, lang, breit, 7); ctx.fill();
   const g = ctx.createLinearGradient(0, -breit / 2, 0, breit / 2);
@@ -524,6 +532,7 @@ function gartenObjekte(ctx, welt, rect, oben) {
       ctx.fillStyle = '#ef5350'; ctx.beginPath(); ctx.arc(x + 16, y + 16, 3, 0, TAU); ctx.fill();   // Sonnenschirm-Mitte
     } else if (!oben && (o.a === 'bank' || o.a === 'kuebel' || o.a === 'muell')) {
       ctx.translate(x, y); ctx.rotate(o.w ?? 0);
+      ctx.scale(o.a === 'bank' ? 0.55 : o.a === 'kuebel' ? 0.45 : 0.6, o.a === 'bank' ? 0.5 : o.a === 'kuebel' ? 0.45 : 0.6);   // Bank 1,8 × 0,5 m, Kübel ~0,8 m, Papierkorb ~0,4 m
       if (o.a === 'bank') { ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-12, -2, 26, 9); ctx.fillStyle = '#8d6e63'; ctx.fillRect(-13, -4, 26, 8); ctx.fillStyle = '#5d4037'; ctx.fillRect(-13, -4, 26, 2); }
       else if (o.a === 'kuebel') { ctx.fillStyle = '#9e9e9e'; ctx.fillRect(-8, -8, 16, 16); ctx.fillStyle = '#388e3c'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill(); ctx.fillStyle = '#f06292'; ctx.beginPath(); ctx.arc(2, -2, 2, 0, TAU); ctx.fill(); }
       else { ctx.fillStyle = '#37474f'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill(); ctx.fillStyle = '#607d8b'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, TAU); ctx.fill(); }
@@ -553,6 +562,7 @@ function bildZeichnen(ctx, bild, x, y, gr, dreh = 0) {
 // Traktor von oben (Blickrichtung nach rechts): große Hinterräder, kleine Vorderräder, Kabine
 function traktorVonOben(ctx, x, y) {
   ctx.translate(x, y);
+  ctx.scale(0.65, 0.42);   // Traktor 4,5 × 2,5 m
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-24, -20, 54, 44);
   ctx.fillStyle = '#212121';
   ctx.fillRect(-22, -24, 20, 9); ctx.fillRect(-22, 15, 20, 9);      // Hinterräder
@@ -570,7 +580,7 @@ function traktorVonOben(ctx, x, y) {
 export function busVonOben(ctx, x, y, senkrecht, v) {
   ctx.translate(x, y);
   if (senkrecht) ctx.rotate(Math.PI / 2);
-  const L = 122, B = 28;
+  const [L, B] = fzPx('bus');   // 12 × 2,7 m
   const farbe = v < 0.5 ? '#c62828' : v < 0.8 ? '#1565c0' : '#f9a825';
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(-L / 2 + 4, -B / 2 + 5, L, B);
   ctx.fillStyle = farbe; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-L / 2, -B / 2, L, B, 6) : ctx.rect(-L / 2, -B / 2, L, B); ctx.fill();
@@ -741,13 +751,15 @@ function zeichneMuell(ctx, welt, rect) {
   for (const g of welt.muell?.tonnen ?? []) {
     if (g.x < x0 || g.x > x1 || g.y < y0 || g.y > y1) continue;
     ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(g.winkel);   // u (x) = vom Haus weg, v (y) = entlang der Wand
-    g.farben.forEach((f, i) => tonneVonOben(ctx, 0, (i - (g.farben.length - 1) / 2) * 11.5, f, g.rund));
+    ctx.scale(0.5, 0.5);   // Mülltonne ~0,6 × 0,7 m (240 l)
+    g.farben.forEach((f, i) => tonneVonOben(ctx, 0, (i - (g.farben.length - 1) / 2) * 12.5, f, g.rund));
     ctx.restore();
   }
   for (const b of welt.behaelter ?? []) {
     if (b.art === 'einkaufswagen' && b.x >= x0 && b.x <= x1 && b.y >= y0 && b.y <= y1) { zeichneEinkaufswagen(ctx, b); continue; }
     if (b.art !== 'container' || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
     ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.winkel ?? 0);
+    ctx.scale(b.typ === 'glas' ? 0.55 : b.typ === 'gross' ? 0.4 : 1, b.typ === 'glas' ? 0.55 : b.typ === 'gross' ? 0.45 : 1);   // Iglu Ø ~1,6 m, Großtonne 1,4 × 1,1 m
     if (b.typ === 'glas') {          // Altglas-Iglu: Kuppel mit Einwurfloch
       const f = { gruen: ['#2e7d3a', '#43a354'], weiss: ['#c9ccd0', '#eceff1'], braun: ['#6b4a2f', '#8a6544'] }[b.farbe] ?? ['#2e7d3a', '#43a354'];
       ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(2, 3, 12.5, 0, TAU); ctx.fill();
@@ -808,7 +820,7 @@ function zeichneSperren(ctx, welt, rect) {
       ctx.fillStyle = '#ef6c00'; ctx.beginPath(); ctx.arc(x, y, 1.4, 0, TAU); ctx.fill();
     }
     // Streifenwagen schräg hinter der Sperre
-    ctx.translate(seite * 30, -B * 0.16); ctx.rotate(0.3 * seite);
+    ctx.translate(seite * 30, -B * 0.16); ctx.rotate(0.3 * seite); ctx.scale(0.78, 0.76);   // Streifenwagen 4,9 × 2 m
     ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(-23 + 3, -10.5 + 4, 46, 21, 7); ctx.fill();
     ctx.fillStyle = '#f2f4f5'; ctx.beginPath(); ctx.roundRect(-23, -10.5, 46, 21, 7); ctx.fill();
     ctx.fillStyle = '#1e5aa8'; ctx.fillRect(-14, -10, 26, 3); ctx.fillRect(-14, 7, 26, 3);

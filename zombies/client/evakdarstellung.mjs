@@ -55,16 +55,16 @@ export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene, skalaSoldat = 
     o.turmW += winkelDiff(o.turmW, Number.isFinite(f.turm) ? f.turm : o.r) * Math.min(1, dt * 12);
     const loc = o.turmW - o.r, lc = Math.cos(loc), ls = Math.sin(loc);
     o.rueck = Math.max(0, (o.rueck ?? 0) - dt * 2.2);                        // Rückstoß der Hauptkanone: Turm rutscht zurück und kehrt wieder
-    const rueck = o.rueck * 7;
+    const rueck = o.rueck * 4;
     o.turm.setRotation(loc).setPosition(LEOPARD.turmX - lc * rueck, LEOPARD.turmY - ls * rueck);
     const luke = (q, vx, vy) => q.setPosition(LEOPARD.turmX + lc * vx - ls * vy - lc * rueck, LEOPARD.turmY + ls * vx + lc * vy - ls * rueck).setRotation(loc);
     luke(o.kdt, LEOPARD.kommandantX, LEOPARD.kommandantY).setFrame(scene.figurBild2('soldat_idle', Math.floor(jetzt / 300) % 3));
     luke(o.lader, LEOPARD.mgX, LEOPARD.mgY).setFrame(jetzt < (o.mgBis ?? 0) ? scene.figurBild2('soldat_schuss', Math.floor(jetzt / 70)) : scene.figurBild2('soldat_idle', Math.floor(jetzt / 260 + 1) % 3));
     // orangene Rundumleuchte hinten auf dem Wannendeck (Erkennungszeichen des Evakuierungsfahrzeugs)
     const an = Math.floor(jetzt / 260) % 2;
-    o.licht.fillStyle(0xff9100, an ? 0.28 : 0.1).fillCircle(-46, 0, an ? 17 : 11);
-    o.licht.fillStyle(an ? 0xffab00 : 0x8d4f00, 1).fillCircle(-46, 0, 3.5);
-    o.licht.lineStyle(1.2, 0x000000, 0.8).strokeCircle(-46, 0, 3.5);
+    o.licht.fillStyle(0xff9100, an ? 0.28 : 0.1).fillCircle(-25, 0, an ? 10 : 6);
+    o.licht.fillStyle(an ? 0xffab00 : 0x8d4f00, 1).fillCircle(-25, 0, 2);
+    o.licht.lineStyle(1, 0x000000, 0.8).strokeCircle(-25, 0, 2);
     // Kettenrasseln, solange er rollt (Ereignis „Panzer fährt“), draußen und in Hörweite
     const bewegt = o.letztPos !== undefined && Math.hypot(o.x - o.letztPos[0], o.y - o.letztPos[1]) > 0.05;
     o.letztPos = [o.x, o.y];
@@ -242,9 +242,9 @@ export function moerserFahrzeug(scene, o, dt, skalaSoldat) {
   o.rohrW += winkelDiff(o.rohrW, ziel) * Math.min(1, dt * 5);
   const loc = o.rohrW - o.r, c = Math.cos(loc), sn = Math.sin(loc), r0 = M113.lagerX;
   o.rohr.clear();
-  o.rohr.lineStyle(5, 0x2b2f26, 1).lineBetween(r0, 0, r0 + c * M113.rohr, sn * M113.rohr);        // Rohr
-  o.rohr.lineStyle(2.5, 0x5b6350, 1).lineBetween(r0, 0, r0 + c * M113.rohr, sn * M113.rohr);
-  o.rohr.fillStyle(0x15170f, 1).fillCircle(r0 + c * M113.rohr, sn * M113.rohr, 3);                  // Mündung
+  o.rohr.lineStyle(3, 0x2b2f26, 1).lineBetween(r0, 0, r0 + c * M113.rohr, sn * M113.rohr);        // Rohr
+  o.rohr.lineStyle(1.5, 0x5b6350, 1).lineBetween(r0, 0, r0 + c * M113.rohr, sn * M113.rohr);
+  o.rohr.fillStyle(0x15170f, 1).fillCircle(r0 + c * M113.rohr, sn * M113.rohr, 2);                  // Mündung
   o.soldat.setRotation(loc + Math.PI);                                                              // Soldat blickt über das Rohr
   o.soldat.setFrame(scene.figurBild2('soldat_idle', Math.floor(jetzt / 260) % 3));
 }
@@ -254,7 +254,7 @@ export function moerserSchuss(scene, m, s) {
   const id = [...(s?.fahrzeuge?.entries?.() ?? [])].find(([, v]) => v.art === 'moerser')?.[0];
   const o = id ? scene.busObj.get(id) : null;
   if (o) { o.rohrZiel = m.w; o.rohrBis = scene.time.now + 2500; }
-  const mx = m.x1 + Math.cos(m.w) * 20, my = m.y1 + Math.sin(m.w) * 20;
+  const mx = m.x1 + Math.cos(m.w) * 11, my = m.y1 + Math.sin(m.w) * 11;
   for (let i = 0; i < 6; i++) {
     const r = scene.add.circle(mx + (Math.random() - 0.5) * 8, my + (Math.random() - 0.5) * 8, 4 + Math.random() * 4, 0xbdbdbd, 0.6).setDepth(6.5);
     scene.tweens.add({ targets: r, x: r.x + (Math.random() - 0.5) * 30, y: r.y - 16 - Math.random() * 20, alpha: 0, scale: 2.4, duration: 900, onComplete: () => r.destroy() });

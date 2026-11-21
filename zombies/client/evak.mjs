@@ -3,14 +3,14 @@
 export const EVAK_KARTEN = { isarauen: 'panzer', koenigsdorf: 'absturz', kochel: 'heli', andermatt: 'bunker' };            // Evakuierungsart je Karte (nicht aufgeführt = Bus)
 export const evakArtFuer = karte => EVAK_KARTEN[karte] ?? 'bus';
 
-// Leopard 2A7: Wanne 113 px lang (Bild: tools/leopard_bilder.py, 14,59 Spielpixel je Modellmeter), Turmdrehpunkt 14,9 px vor der Wannenmitte,
-// Lader-MG (Knoten Axe_Canon_02) im Turm-Rahmen (nach vorn, nach rechts) = (−7,6 | −13,7)
+// Leopard 2A7: Wanne 7,7 m = 61,6 px lang, 3,75 m = 30 px breit (Bild: tools/leopard_bilder.py, 8 px je Meter -> 7,95 Spielpixel je Modellmeter;
+// früher 1,83-fach zu groß mit 113 px), Turmdrehpunkt 8,1 px vor der Wannenmitte, Lader-MG (Knoten Axe_Canon_02) im Turm-Rahmen (nach vorn, nach rechts)
 export const LEOPARD = {
-  laenge: 113, breite: 56, skala: 0.5527,                  // Wannenbild: Spielpixel je Bildpunkt
-  turmX: 14.9, turmY: 0, turmOx: 0.392, turmOy: 0.490,     // Drehpunkt im Turmbild (Anteile)
-  mgX: -7.6, mgY: -13.7,
-  kommandantX: -1, kommandantY: 11,                        // Lukenplätze im Turm-Rahmen: Kommandant rechts hinten, Ladeschütze (mit MG) links
-  muendung: 89,                                            // Rohrende: so weit vor dem Turmdrehpunkt (Turmbild 265 px, Drehpunkt bei 39 %)
+  laenge: 61.6, breite: 30, skala: 0.3013,                 // Wannenbild: Spielpixel je Bildpunkt
+  turmX: 8.1, turmY: 0, turmOx: 0.392, turmOy: 0.490,      // Drehpunkt im Turmbild (Anteile)
+  mgX: -4.1, mgY: -7.5,
+  kommandantX: -0.5, kommandantY: 6,                       // Lukenplätze im Turm-Rahmen: Kommandant rechts hinten, Ladeschütze (mit MG) links
+  muendung: 48.5,                                          // Rohrende: so weit vor dem Turmdrehpunkt (Rohr ragt gut 3 m über die Wanne, gesamt ~10,9 m)
 };
 
 // A400M: 45 m lang, 42 m Spannweite (Bild: tools/a400m_bilder.py, 800 Spielpixel je Modelleinheit, Rumpfbild 544×506 px)
@@ -35,5 +35,5 @@ export const HELI = { skala: 0.6667, rumpfX: -23.0, rumpfY: 3.65, rotorRadius: 6
 // Tanklaster als Kulisse neben der Nase des gelandeten A400M (Container-Rahmen des Flugzeugs: nach vorn / nach rechts), 100 px lang
 export const TANKLASTER = { skala: 0.6667, x: 178, y: 72 };
 
-// Panzermörser M113 (Bild 217×128, 3 Bildpunkte je Spielpixel): Wanne 71 px lang; Mörserlager 16,2 px hinter der Mitte, Soldat dahinter, Rohr 24 px
-export const M113 = { skala: 0.3333, lagerX: -16.2, soldatX: -27, rohr: 24, laenge: 71, breite: 42 };
+// Panzermörser M113 (Bild 217×128, 5,46 Bildpunkte je Spielpixel): Wanne 4,9 m = 39 px lang, 2,7 m breit (früher 71 × 42 px); Mörserlager 8,9 px hinter der Mitte, Soldat dahinter, Rohr 13 px
+export const M113 = { skala: 0.1832, lagerX: -8.9, soldatX: -14.8, rohr: 13, laenge: 39, breite: 22 };

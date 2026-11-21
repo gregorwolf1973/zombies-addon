@@ -9,6 +9,7 @@ import { starte } from '../server/index.mjs';
 import { setzeKartengroesse } from '../client/welt.mjs';
 import { LAENGE, LASTER_ANTEIL } from '../server/verkehr.mjs';
 import { setzeAutoBilder, autoVonOben } from '../client/aussehen.mjs';
+import { fzPx } from '../client/masse.mjs';
 
 let server;
 const PORT = 27900 + Math.floor(Math.random() * 90);
@@ -25,7 +26,11 @@ test('autos.json: PKW-Varianten vorhanden, Bogen höchstens 4096 px, Felder pass
     assert.ok(a.laenge > 20 && a.laenge <= 90 && a.breite > 10 && a.breite <= 44, 'Größe');
     assert.ok(a.anim === undefined || [1, 2, 3].includes(a.anim));
   }
-  assert.ok(j.autos.filter(a => a.art === 'laster').every(a => a.laenge === LAENGE.laster), 'Laster-Sprites so lang wie im Verkehr');
+  // Maßstab 8 px = 1 m: Abstandswerte im Verkehr (LAENGE) = echte Fahrzeuglänge (client/masse.mjs); Sprites werden beim Zeichnen darauf gebracht
+  for (const [art, fz] of [['auto', 'pkw'], ['laster', 'laster'], ['bus', 'bus'], ['evakuierung', 'evakuierung'], ['polizei', 'polizei'], ['feuerwehr', 'feuerwehr']]) {
+    assert.ok(Math.abs(LAENGE[art] - fzPx(fz)[0]) <= 4, `LAENGE.${art} = ${LAENGE[art]} px, echt ${fzPx(fz)[0]} px`);
+  }
+  assert.equal(fzPx('pkw')[0], 36, 'PKW 4,5 m = 36 px');
   const webp = readFileSync(new URL('../client/grafik/autos.webp', import.meta.url));
   assert.equal(webp.toString('ascii', 8, 12), 'WEBP');
   const breite = webp.readUIntLE(24, 3) + 1, hoehe = webp.readUIntLE(27, 3) + 1;
