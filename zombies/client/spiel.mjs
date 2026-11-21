@@ -31,6 +31,7 @@ import { merkzettelAnschliessen, merkzettelErwarten } from './merkzettel.mjs';
 import { fkStart } from './faehigkeiten.mjs';
 import { startwahlStart } from './startwahl.mjs';
 import { Uebersicht } from './uebersicht.mjs';
+import { b11Registrieren, b11Animieren } from './szene_b11.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
@@ -863,6 +864,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
     raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
     raum.onMessage('moerser', m => moerserSchuss(this, m, raum.state));   // Panzermörser: Granate im hohen Bogen
+    b11Registrieren(this, raum, { skala: () => BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg() });   // Szene „Stau auf der B11“
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => this.granateFliegt(m));
@@ -2075,7 +2077,7 @@ class Ort extends Phaser.Scene {
         const weite = this.aktEbene ? 180 : 360;
         o.haltT = f.haelt ? (o.haltT ?? 0) + dt : 0;
         const stumm = o.haltT > 4;
-        if (!o.sirene && !stumm && d < weite * 1.2) o.sirene = ton.sireneStarten();
+        if (!o.sirene && !stumm && f.farbe !== 200 && d < weite * 1.2) o.sirene = ton.sireneStarten();
         else if (o.sirene && (d > weite * 1.6 || (stumm && o.haltT > 7))) { ton.sireneStoppen(o.sirene); o.sirene = null; }
         if (o.sirene) {
           const naeher = o.letzterAbstand === undefined ? 0 : (o.letzterAbstand - d) / Math.max(dt, 0.001);
@@ -2802,6 +2804,7 @@ class Ort extends Phaser.Scene {
     this.ladeRingeZeichnen();
     this.wurfBogenZeichnen();
     this.stuetzpunktAnimieren();
+    b11Animieren(this);
     if (this.lokal) this.radioAnz?.update(this.aktEbene, this.lokal.x, this.lokal.y);
     const meine = raum.state.spieler.get(meineId);
     if (meine && (meine.ebene ?? '') !== this.aktEbene) {
