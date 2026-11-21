@@ -143,8 +143,6 @@ export class Uebersicht {
     el.addEventListener('pointerup', ende);
     el.addEventListener('pointercancel', e => { zeiger.delete(e.pointerId); zug = null; });
     el.addEventListener('wheel', e => { e.preventDefault(); this.zoomen(e.deltaY < 0 ? 1.25 : 0.8, lokal(e)); }, { passive: false });
-    this.box.querySelector('.plus').onclick = e => { e.stopPropagation(); this.zoomen(1.5); };
-    this.box.querySelector('.minus').onclick = e => { e.stopPropagation(); this.zoomen(1 / 1.5); };
     this.box.querySelector('.mich').onclick = e => { e.stopPropagation(); this.mitte = null; this.zeichneNeu = true; };
   }
 

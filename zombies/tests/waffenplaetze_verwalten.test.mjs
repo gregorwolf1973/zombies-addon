@@ -84,14 +84,15 @@ test('Tauschen mit einer Waffe aus dem Rucksack; Munition geht nicht verloren; R
     assert.deepEqual([...p.rucksack], ['wasser', 'pistole']);
     assert.ok(await bis(() => p.magazin === 30));
     assert.equal(p.munition + p.magazin, vorher, 'Munition bleibt erhalten');
-    // Rucksack → leerer Platz 3 (nicht aktiv)
-    c.send('platz_aktion', { platz: 2, aktion: 'tausch', rs: 1 });
-    assert.ok(await bis(() => p.wp2 === 'pistole'));
+    // Rucksack → leerer Platz 2 (nicht aktiv)
+    c.send('platz_aktion', { platz: 1, aktion: 'tausch', rs: 1 });
+    assert.ok(await bis(() => p.wp1 === 'pistole'));
     assert.equal(p.waffe, 'gewehr'); assert.deepEqual([...p.rucksack], ['wasser']);
-    // ungültig: Wasser ist keine Waffe, Index außerhalb
+    // ungültig: Wasser ist keine Waffe, Index außerhalb, einen dritten Platz gibt es nicht
     c.send('platz_aktion', { platz: 1, aktion: 'tausch', rs: 0 }); c.send('platz_aktion', { platz: 1, aktion: 'tausch', rs: 9 });
+    p.rucksack.push('messer'); c.send('platz_aktion', { platz: 2, aktion: 'tausch', rs: 1 });
     await warte(200);
-    assert.equal(p.wp1, ''); assert.deepEqual([...p.rucksack], ['wasser']);
+    assert.equal(p.wp1, 'pistole'); assert.equal(p.wp2, ''); assert.deepEqual([...p.rucksack], ['wasser', 'messer']);
   } finally { await c.leave(); }
 });
 
@@ -193,12 +194,12 @@ test('Granatwerfer: Auto-Schuss mit Reichweite aus der Einstellung (60 m Vorgabe
   } finally { raum.constructor.einstellungen = vorher; await c.leave(); }
 });
 
-test('Alle drei Plätze mit leeren Waffen: Faust schlägt zu, Waffen bleiben (rot) in den Plätzen, mit Munition wieder aktiv', async () => {
+test('Beide Plätze mit leeren Waffen: Faust schlägt zu, Waffen bleiben (rot) in den Plätzen, mit Munition wieder aktiv', async () => {
   const { c, raum, p } = await spieler('Leer');
   try {
-    p.waffe = 'pistole'; p.wp1 = 'gewehr'; p.wp2 = 'mp'; p.munition = 0;
+    p.waffe = 'pistole'; p.wp1 = 'gewehr'; p.munition = 0;
     await warte(300);
-    assert.equal(p.wp1, 'gewehr'); assert.equal(p.wp2, 'mp'); assert.equal(p.magazin, 0);
+    assert.equal(p.wp1, 'gewehr'); assert.equal(p.magazin, 0);
     const id = zombieIn(raum, p, 20);
     const hp0 = raum.state.zombies.get(id).hp;
     assert.ok(await bis(() => !raum.state.zombies.has(id) || raum.state.zombies.get(id).hp < hp0, 2500), 'Faust schlägt nicht zu');
@@ -208,4 +209,26 @@ test('Alle drei Plätze mit leeren Waffen: Faust schlägt zu, Waffen bleiben (ro
     c.send('waffenplatz', { platz: 0 });
     assert.ok(await bis(() => p.waffe === 'pistole' && p.magazin > 0, 6500), 'lädt nicht nach');
   } finally { await c.leave(); }
+});
+
+test('Nur zwei Waffenplätze: alter Stand mit Platz 3 wandert in einen freien Platz oder in den Rucksack', async () => {
+  const { lade, PLATZ_FELD } = await import('../server/waffenplaetze.mjs');
+  assert.equal(PLATZ_FELD.length, 2);
+  const neu = waffe => ({ waffe, munition: 0, pfeile: 0, granaten: 0, handgranaten: 0 });
+  // Platz 2 frei: Platz-3-Waffe rückt auf (samt Magazin)
+  let p = neu('pistole'), x = {};
+  lade(p, x, { wplatz: 0, wp0: 'pistole', wp1: '', wp2: 'gewehr', mag: [3, 0, 7] });
+  assert.equal(p.wp0, 'pistole'); assert.equal(p.wp1, 'gewehr'); assert.equal(p.wp2, ''); assert.equal(x.mag[1].n, 7); assert.deepEqual(x.ueberlauf, []);
+  // beide belegt: Platz-3-Waffe in den Überlauf (Rucksack), Magazin zurück in den Vorrat
+  p = neu('pistole'); x = {};
+  lade(p, x, { wplatz: 0, wp0: 'pistole', wp1: 'messer', wp2: 'gewehr', mag: [0, 0, 7] });
+  assert.equal(p.wp1, 'messer'); assert.equal(p.wp2, ''); assert.deepEqual(x.ueberlauf, ['gewehr']); assert.equal(p.munition, 7);
+  // Platz 3 war aktiv und kommt nirgends unter: Platz 1 wird aktiv
+  p = neu('sense'); x = {};
+  lade(p, x, { wplatz: 2, wp0: 'pistole', wp1: 'messer', waffe: 'sense', mag: [4, 0, 0] });
+  assert.equal(p.wplatz, 0); assert.equal(p.waffe, 'pistole'); assert.equal(p.magazin, 4); assert.deepEqual(x.ueberlauf, ['sense']);
+  // Platz 3 war aktiv, Platz 2 frei: wird dort aktiv
+  p = neu('sense'); x = {};
+  lade(p, x, { wplatz: 2, wp0: 'pistole', wp1: '', waffe: 'sense', mag: [0, 0, 0] });
+  assert.equal(p.wplatz, 1); assert.equal(p.waffe, 'sense'); assert.equal(p.wp1, 'sense');
 });
