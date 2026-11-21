@@ -17,7 +17,7 @@ const FAHRBAR = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unc
 const KOSTEN = { primary: 0.55, secondary: 0.6, tertiary: 0.75, unclassified: 1, residential: 1.2, living_street: 1.6, service: 3 };
 export const LASTER_ANTEIL = 0.1;   // Anteil Laster im normalen Verkehr
 const HAUPT = new Set(['primary', 'secondary', 'tertiary']);
-export const LAENGE = { auto: 46, laster: 90, bus: 124, evakuierung: 124, polizei: 50, feuerwehr: 74 };   // Fahrzeuglänge in Pixeln (für den Abstand)
+export const LAENGE = { auto: 36, laster: 72, bus: 96, evakuierung: 96, polizei: 39, feuerwehr: 76 };   // Fahrzeuglänge in Pixeln (8 px = 1 m, echte Maße: client/masse.mjs; für den Abstand)
 const TEMPO = { bus: 85, auto: 115, laster: 90, polizei: 175, feuerwehr: 160 };
 const SPUR = { bus: 0.22, auto: 0.22, laster: 0.22, polizei: 0.12, feuerwehr: 0.12 };   // Abstand zur Mitte in Kacheln je Meter Fahrbahn
 

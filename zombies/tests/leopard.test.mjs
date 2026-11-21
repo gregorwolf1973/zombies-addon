@@ -76,7 +76,7 @@ test('Hauptkanone: erst ab 10 Zombies auf einem Fleck, Turm dreht erst hin, Expl
   assert.ok(Math.abs(winkelDiff(f.turm, schuss.w)) < 1e-9 && Math.abs(winkelDiff(f.turm, -0.5)) <= ZIEL_TOLERANZ + 0.05, 'Turm war nicht auf dem Ziel');
   assert.ok(t > 0.5, 'Turm hat nicht gedreht (Turm startete bei 0, Ziel ~ -0,5 rad): ' + t);
   assert.equal(schuss.r, KANONE.schadenRadius * 8, 'Radius 5 m');
-  assert.ok(Math.hypot(schuss.x1 - px, schuss.y1 - 500) > 80, 'Mündungsfeuer nicht am Rohrende');
+  assert.ok(Math.hypot(schuss.x1 - px, schuss.y1 - 500) > LEOPARD.muendung - 10, 'Mündungsfeuer nicht am Rohrende');
   assert.ok(nachrichten.some(m => m.typ === 'explosion' && m.r === 40), 'keine Explosion');
   assert.ok([...r.state.zombies.values()].every(z => z.hp < 100) || r.state.zombies.size < 10, 'kein Flächenschaden');
   // Pause: 8 s kein zweiter Schuss, auch wenn wieder ein Haufen da ist

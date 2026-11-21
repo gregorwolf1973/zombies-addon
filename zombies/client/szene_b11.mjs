@@ -7,6 +7,7 @@ import * as ton from './ton.mjs';
 import { PUMA_BILD } from './stuetzpunkt.mjs';
 import { fetzen } from './effekte.mjs';
 import { LEOPARD } from './evak.mjs';
+import { fzPx } from './masse.mjs';
 import { kettenSpur, kettenAnimieren } from './ketten.mjs';
 import { plattLesen } from './b11_platt.mjs';
 
@@ -36,13 +37,13 @@ function b11Soldat(scene, i, x, y, blick) {
 }
 
 function b11Puma(scene, p) {
-  const m = scene.pumaMasse(113), tb = scene.textures.get('puma-turm').getSourceImage();
+  const m = scene.pumaMasse(fzPx('puma')[0]), tb = scene.textures.get('puma-turm').getSourceImage();
   const wanne = scene.add.image(p[0], p[1], 'puma-wanne').setRotation(p[2]).setScale(m.skala).setDepth(5);
   const turm = scene.add.image(0, 0, 'puma-turm').setOrigin((PUMA_BILD.turmMx + m.R) / tb.width, (PUMA_BILD.turmMy + m.R) / tb.height)
     .setRotation(p[3]).setScale(m.skala).setDepth(5.1);
   const c = Math.cos(p[2]), s = Math.sin(p[2]), vx = PUMA_BILD.turmX * m.f, vy = PUMA_BILD.turmY * m.f;
   turm.setPosition(p[0] + c * vx - s * vy, p[1] + s * vx + c * vy);
-  return { wanne, turm, f: m.f, soll: p[3], ziel: { x: p[0], y: p[1], w: p[2] }, w: p[2], breite: 50 };
+  return { wanne, turm, f: m.f, soll: p[3], ziel: { x: p[0], y: p[1], w: p[2] }, w: p[2], breite: fzPx('puma')[1] };
 }
 
 // Leopard 2 (Bilder wie der Evakuierungspanzer: Wanne, Turm mit Drehpunkt, Kommandant und Ladeschütze in den Luken)
@@ -148,8 +149,10 @@ function b11Platt(scene) {
     const { dx, dy } = plattLesen(v), w0 = (Number.isFinite(a.winkel) ? a.winkel : a.senkrecht ? Math.PI / 2 : 0) + ((a.farbe + Math.round(a.x)) % 2 ? Math.PI : 0);
     const n = parseInt(id.slice(1), 10) || 0, jit = i => Math.sin(n * 12.9898 + i * 78.233) * 0.5;
     const rot = (x, y, cx, cy, w) => ({ x: cx + x * Math.cos(w) - y * Math.sin(w), y: cy + x * Math.sin(w) + y * Math.cos(w) });
-    // 1. Maske in Autoform (abgerundet, leicht größer als das gemalte Auto 46 × 22) verdeckt das Original
+    // 1. Maske in Autoform (abgerundet, leicht größer als das gemalte Auto 36 × 16 = 4,5 × 2 m; Maße unten noch für 46 × 22 gezeichnet, Faktor S) verdeckt das Original
+    const S = 36 / 46, rotS = (x, y, cx, cy, w) => rot(x * S, y * S, cx, cy, w);
     const rund = (hl, hb, r, cx, cy, w) => {
+      hl *= S; hb *= S; r *= S;
       const pts = [];
       for (const [sx, sy, a0] of [[1, 1, 0], [-1, 1, Math.PI / 2], [-1, -1, Math.PI], [1, -1, Math.PI * 1.5]]) for (let k = 0; k <= 4; k++) {
         const a = a0 + k * Math.PI / 8;
@@ -165,15 +168,15 @@ function b11Platt(scene) {
     g.fillStyle(0x000000, 0.4).fillPoints(rund(22, 11, 8, cx, cy, w0), true);
     g.fillStyle(0x000000, 0.35).fillPoints(rund(9 + jit(1) * 2, 8.5, 6, cx, cy, w0), true);   // eingedrückte Mitte
     g.lineStyle(1, 0x000000, 0.65);
-    for (let i = 0; i < 3; i++) { const p1 = rot(-13 + i * 11, -10, cx, cy, w0), p2 = rot(-10 + i * 11 + jit(i) * 4, 10, cx, cy, w0); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }
+    for (let i = 0; i < 3; i++) { const p1 = rotS(-13 + i * 11, -10, cx, cy, w0), p2 = rotS(-10 + i * 11 + jit(i) * 4, 10, cx, cy, w0); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }
     g.lineStyle(1, 0xffffff, 0.12);
-    for (let i = 0; i < 2; i++) { const p1 = rot(-8 + i * 14, -10, cx, cy, w0), p2 = rot(-6 + i * 14, 10, cx, cy, w0); g.lineBetween(p1.x + 1, p1.y, p2.x + 1, p2.y); }
+    for (let i = 0; i < 2; i++) { const p1 = rotS(-8 + i * 14, -10, cx, cy, w0), p2 = rotS(-6 + i * 14, 10, cx, cy, w0); g.lineBetween(p1.x + 1, p1.y, p2.x + 1, p2.y); }
     g.fillStyle(0xcfd8dc, 0.85);
-    for (let i = 0; i < 5; i++) { const q = rot(-15 + i * 7.5 + jit(i + 80) * 5, jit(i + 90) * 16, cx, cy, w0); g.fillRect(q.x - 1, q.y - 1, 2, 1.4); }
+    for (let i = 0; i < 5; i++) { const q = rotS(-15 + i * 7.5 + jit(i + 80) * 5, jit(i + 90) * 16, cx, cy, w0); g.fillRect(q.x - 1, q.y - 1, 2, 1.4); }
     // 3. Kettenabdrücke quer über das Wrack (in Schubrichtung)
     const sw = Math.atan2(dy || 0.001, dx || 0.001);
     g.lineStyle(2, 0x14110e, 0.3);
-    for (const ver of [-7, 7]) { const p1 = rot(-26, ver, cx, cy, sw), p2 = rot(26, ver, cx, cy, sw); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }
+    for (const ver of [-7, 7]) { const p1 = rotS(-26, ver, cx, cy, sw), p2 = rotS(26, ver, cx, cy, sw); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }
   }
 }
 

@@ -1,4 +1,5 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
+import { fzPx } from './masse.mjs';
 import { groesse } from './groessen.mjs';
 import {
   KACHEL, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
@@ -1464,28 +1465,33 @@ class Ort extends Phaser.Scene {
     const key = panzer ? 'fz-evakuierung-panzer' : art === 'auto' ? 'fz-auto-' + (farbe % 8) : art === 'laster' ? (sp ? 'fz-laster-s' + (farbe % sprite.length) : 'fz-laster-' + (farbe % 4))
       : art === 'polizei' && sp ? 'fz-polizei-s' + anim : 'fz-' + art;
     if (this.textures.exists(key)) return key;
-    const breit = art === 'bus' || art === 'evakuierung' ? 136 : art === 'laster' ? 92 : art === 'feuerwehr' ? 84 : 60;
-    const hoch = panzer ? 68 : art === 'bus' || art === 'evakuierung' ? 40 : sp && art === 'laster' ? 46 : 34;
+    const breit = panzer ? 80 : art === 'bus' || art === 'evakuierung' ? 112 : art === 'laster' ? 84 : art === 'feuerwehr' ? 84 : 60;
+    const hoch = panzer ? 40 : art === 'bus' || art === 'evakuierung' ? 32 : sp && art === 'laster' ? 32 : 28;
     const t = this.textures.createCanvas(key, breit, hoch), c = t.getContext();
     if (panzer) {
-      // Puma-Draufsicht aus dem 3D-Modell (Wanne + Turm nach vorn), Bug nach rechts wie bei allen Fahrzeugen; Wanne 113 px lang
-      const m = this.pumaMasse(113), wb = this.textures.get('puma-wanne').getSourceImage(), tb = this.textures.get('puma-turm').getSourceImage();
+      // Puma-Draufsicht aus dem 3D-Modell (Wanne + Turm nach vorn), Bug nach rechts wie bei allen Fahrzeugen; Wanne 7,3 m = 58 px lang
+      const m = this.pumaMasse(fzPx('puma')[0]), wb = this.textures.get('puma-wanne').getSourceImage(), tb = this.textures.get('puma-turm').getSourceImage();
       c.save(); c.translate(breit / 2, hoch / 2); c.scale(m.skala, m.skala); c.drawImage(wb, -wb.width / 2, -wb.height / 2);
       c.translate(PUMA_BILD.turmX * PUMA_BILD.px, PUMA_BILD.turmY * PUMA_BILD.px); c.drawImage(tb, -PUMA_BILD.turmMx - m.R, -PUMA_BILD.turmMy - m.R); c.restore();
     } else if (sp) {
-      // Fahrzeuglänge im Verkehr: Laster 90 px, Polizei 50 px (LAENGE in server/verkehr.mjs); Sprite auf diese Länge strecken
-      const e = art === 'polizei' ? autoAnimEintrag(sp, anim) : sp, soll = art === 'laster' ? 90 : 50, k = soll / e.laenge;
-      c.save(); c.translate(breit / 2, hoch / 2); c.scale(k, k); zeichneAutoBild(c, e, 0, 0); c.restore();
+      // echte Maße (Laster 9 × 2,9 m, Polizei 4,9 × 2 m; client/masse.mjs, LAENGE in server/verkehr.mjs): zeichneAutoBild bringt das Sprite darauf
+      const e = art === 'polizei' ? autoAnimEintrag(sp, anim) : sp;
+      c.save(); c.translate(breit / 2, hoch / 2); zeichneAutoBild(c, e, 0, 0); c.restore();
     } else if (art === 'bus') busVonOben(c, breit / 2, hoch / 2, false, 0.6);
-    else if (art === 'evakuierung') zeichneSchulbus(c, breit, hoch);
-    else if (art === 'feuerwehr') {
+    else if (art === 'evakuierung') {   // Schulbus 12 × 2,7 m (gezeichnet für 124 × 30 px)
+      const [l, b] = fzPx('evakuierung');
+      c.save(); c.translate(breit / 2, hoch / 2); c.scale(l / 124, b / 30); c.translate(-breit / 2, -hoch / 2); zeichneSchulbus(c, breit, hoch); c.restore();
+    } else if (art === 'feuerwehr') {
+      c.save(); c.translate(0, hoch / 2); c.scale(1, 22 / 24); c.translate(0, -hoch / 2);   // Drehleiter 9,5 × 2,7 m
       c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(6, 7, 74, 24);
       c.fillStyle = '#c62828'; c.beginPath(); c.roundRect(2, 4, 76, 24, 5); c.fill();
       c.fillStyle = '#eceff1'; c.fillRect(8, 8, 44, 16);                     // Drehleiter
       c.strokeStyle = '#90a4ae'; c.lineWidth = 1.5; for (let x = 10; x < 52; x += 6) { c.beginPath(); c.moveTo(x, 8); c.lineTo(x, 24); c.stroke(); }
       c.fillStyle = '#263238'; c.fillRect(64, 7, 8, 18);                     // Frontscheibe
       c.fillStyle = '#fff59d'; c.fillRect(76, 6, 2, 4); c.fillRect(76, 22, 2, 4);
+      c.restore();
     } else if (art === 'laster') {
+      c.save(); c.translate(breit / 2, hoch / 2); c.scale(72 / 87, 23 / 26); c.translate(-breit / 2, -hoch / 2);   // gezeichnete Fassung auf 9 × 2,9 m
       // Kastenwagen: Ladefläche mit Plane, Fahrerhaus vorn (rechts)
       const plane = ['#eceff1', '#1565c0', '#f9a825', '#2e7d32'][farbe % 4];
       c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(6, 7, 84, 24);
@@ -1496,6 +1502,7 @@ class Ort extends Phaser.Scene {
       c.fillStyle = '#1f2a33'; c.fillRect(77, 8, 8, 18);                                    // Frontscheibe
       c.fillStyle = '#fff59d'; c.fillRect(87, 8, 2, 4); c.fillRect(87, 22, 2, 4);
       c.fillStyle = '#e53935'; c.fillRect(2, 7, 2, 4); c.fillRect(2, 23, 2, 4);
+      c.restore();
     } else if (art === 'wrack') {
       autoVonOben(c, { x: breit / 2, y: hoch / 2, senkrecht: false, farbe: 4, gezeichnet: true });
       c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(30,20,15,.8)'; c.fillRect(0, 0, breit, hoch);
@@ -1504,7 +1511,7 @@ class Ort extends Phaser.Scene {
     } else {
       const f = art === 'polizei' ? 2 : farbe;
       autoVonOben(c, { id: 'fz' + art + f * 7919, x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f, vorwaerts: true, gezeichnet: art === 'polizei' });
-      if (art === 'polizei') { c.fillStyle = '#1565c0'; c.fillRect(10, hoch / 2 - 11, 40, 3); c.fillRect(10, hoch / 2 + 8, 40, 3); c.fillStyle = '#263238'; c.fillRect(27, hoch / 2 - 6, 6, 12); }
+      if (art === 'polizei') { c.fillStyle = '#1565c0'; c.fillRect(14, hoch / 2 - 7, 32, 2); c.fillRect(14, hoch / 2 + 5, 32, 2); c.fillStyle = '#263238'; c.fillRect(28, hoch / 2 - 4, 5, 8); }
     }
     t.refresh();
     return key;
@@ -1583,7 +1590,7 @@ class Ort extends Phaser.Scene {
       } else {
         const b = this.welt.behaelter.find(q => q.id === rest);
         if (!b) continue;
-        if (art === 'auto') { autoFlaeche(w.fillStyle(0x15100c, 0.92), b, -23, 23, 11); w.fillStyle(0x6d3a1a, 0.6).fillRect(b.x - 4, b.y - 4, 8, 8); }
+        if (art === 'auto') { autoFlaeche(w.fillStyle(0x15100c, 0.92), b, -18, 18, 8); w.fillStyle(0x6d3a1a, 0.6).fillRect(b.x - 4, b.y - 4, 8, 8); }
         else { const d = this.welt.deko.find(q => q.art === 'bus' && Math.hypot(q.x - b.x, q.y - b.y) < 4); const sk = d?.senkrecht; g.fillStyle(0x15100c, 0.9).fillRect(b.x - (sk ? 15 : 62), b.y - (sk ? 62 : 15), sk ? 30 : 124, sk ? 124 : 30); }
       }
     }
@@ -2175,14 +2182,14 @@ class Ort extends Phaser.Scene {
       if (f.art === 'moerser') moerserFahrzeug(this, o, dt, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
       if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg())) {
         // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
-        const pz = evakArtVon(s) === 'panzer', lx = pz ? -22 : -8, an = Math.floor(this.time.now / 260) % 2;
-        o.licht.fillStyle(0xff9100, an ? 0.3 : 0.12).fillCircle(lx, 0, an ? 34 : 22);
-        o.licht.fillStyle(an ? 0xffab00 : 0x8d4f00, 1).fillCircle(lx, 0, 4.5);
-        o.licht.lineStyle(1.5, 0x000000, 0.8).strokeCircle(lx, 0, 4.5);
+        const pz = evakArtVon(s) === 'panzer', lx = pz ? -12 : -8, an = Math.floor(this.time.now / 260) % 2;
+        o.licht.fillStyle(0xff9100, an ? 0.3 : 0.12).fillCircle(lx, 0, an ? 24 : 16);
+        o.licht.fillStyle(an ? 0xffab00 : 0x8d4f00, 1).fillCircle(lx, 0, 3);
+        o.licht.lineStyle(1.2, 0x000000, 0.8).strokeCircle(lx, 0, 3);
         if (pz) {
           const w = Math.sin(this.time.now / 140) * 3;
-          o.licht.lineStyle(1.5, 0x212121, 1).lineBetween(-44, -14, -44, -26);
-          o.licht.fillStyle(0xd50000, 1).fillTriangle(-44, -26, -44, -19, -58, -22.5 + w);
+          o.licht.lineStyle(1.2, 0x212121, 1).lineBetween(-24, -8, -24, -16);
+          o.licht.fillStyle(0xd50000, 1).fillTriangle(-24, -16, -24, -11, -33, -13.5 + w);
         }
       }
       if (f.art === 'polizei' || f.art === 'feuerwehr') {
@@ -2383,7 +2390,7 @@ class Ort extends Phaser.Scene {
     if (kanone && o?.turm) {
       wb = o.turm.rotation; mx = o.turm.x + Math.cos(wb) * o.pumaMuendung; my = o.turm.y + Math.sin(wb) * o.pumaMuendung;
     } else if (evak) {
-      const f = 113 / PUMA_BILD.laenge, r = this.busObj.get([...raum.state.fahrzeuge.entries()].find(([, v]) => v === evak)?.[0])?.r ?? evak.richtung;
+      const f = fzPx('puma')[0] / PUMA_BILD.laenge, r = this.busObj.get([...raum.state.fahrzeuge.entries()].find(([, v]) => v === evak)?.[0])?.r ?? evak.richtung;
       const ox = (PUMA_BILD.turmX + PUMA_BILD.muendung) * f, oy = PUMA_BILD.turmY * f;
       mx = evak.x + Math.cos(r) * ox - Math.sin(r) * oy; my = evak.y + Math.sin(r) * ox + Math.cos(r) * oy; wb = r;
     }

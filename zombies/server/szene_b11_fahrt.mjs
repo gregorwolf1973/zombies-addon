@@ -9,10 +9,10 @@ import { befahrbarNahe } from './querfeld.mjs';
 export const winkelDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 const norm = w => Math.atan2(Math.sin(w), Math.cos(w));
 
-// Maße in Pixeln (8 px = 1 m): halbe Länge/Breite der Wanne (Überrollen), rad = Platzbedarf beim Fahren, tempo px/s, wende rad/s
+// Maße in Pixeln (8 px = 1 m; Puma 7,3 × 3,7 m, Leopard 7,7 × 3,75 m, client/masse.mjs): halbe Länge/Breite der Wanne (Überrollen), rad = Platzbedarf beim Fahren, tempo px/s, wende rad/s
 export const STREIFE = {
-  puma:    { hl: 52, hb: 26, rad: 30, tempo: 22, wende: 0.6, pause: [3, 6], start: 0, route: [[-70, 110], [-240, 170], [-200, 310]] },
-  leopard: { hl: 56, hb: 28, rad: 32, tempo: 18, wende: 0.5, pause: [4, 8], start: 4, route: [[-480, -20], [-460, 140], [-420, 290]] },
+  puma:    { hl: 29, hb: 15, rad: 20, tempo: 22, wende: 0.6, pause: [3, 6], start: 0, route: [[-70, 110], [-240, 170], [-200, 310]] },
+  leopard: { hl: 31, hb: 15, rad: 20, tempo: 18, wende: 0.5, pause: [4, 8], start: 4, route: [[-480, -20], [-460, 140], [-420, 290]] },
 };
 export const MIN_ABSTAND = 160;   // Mindestabstand der Wannenmitten (20 m): kein Fahrzeug fährt näher an das andere heran
 
