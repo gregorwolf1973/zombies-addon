@@ -5,6 +5,7 @@ import { mischeAntworten, waehleFrage } from './raetsel.mjs';
 import { botSchritt, BOT_NAMEN, botGegenangebot, botEinverstanden } from './bots.mjs';
 import { botBefehl } from './botplan.mjs';
 import { Mensch, Stadtleben, VERSTECK_WEITE } from './menschen.mjs';
+import { Hund, Hunde } from './hund.mjs';
 import { Fahrzeug, Verkehr } from './verkehr.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
 import { Zombiewelle } from './welle.mjs';
@@ -160,6 +161,7 @@ export const Zustand = schema({
   boden: t.map(BodenDing),      // weggeworfene Gegenstände
   tueren: t.map(Tuer),          // Zimmertüren der betretenen Häuser ('ebene:x,y') und Haustüren mit Zustand ('haus:nr')
   safes: t.map(Safe),
+  hunde: t.map(Hund),               // Streuner und Begleiter-Hunde (server/hund.mjs)
   menschen: t.map(Mensch).view(),   // Bewohner der Stadt (Abschnitt 4); wie Zombies nur im Bildausschnitt (+ Rand)
   fahrzeuge: t.map(Fahrzeug),   // Linienbus, Verkehr, Polizei, Feuerwehr, Wracks
   feuer: t.map(Feuer),
@@ -453,6 +455,7 @@ export class SpielRaum extends Room {
     this.radios = new Radios(this);
     this.moerser = new Moerser(this);   // Panzermörser (feste Einsätze: B11-Szene, Schießstand)
     this.szeneB11 = new SzeneB11(this); this.szeneB11.start();   // „Stau auf der B11“ (nur geretsried2)
+    this.hunde = new Hunde(this); this.hunde.start();   // Streuner-Hunde (Begleiter), siehe server/hund.mjs
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     this.tuerAnteileUebernehmen();
     if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === WELT_VERSION) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
@@ -574,6 +577,7 @@ export class SpielRaum extends Room {
       if (optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
       this.state.spieler.set(client.sessionId, alt);
       this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, afkBot: null, letzteEingabe: Date.now(), superuser: !!auth?.su, suUnsterblich: !!auth?.su && x.suUnsterblich }); alt.afk = false;
+      this.hunde?.besitzerWechsel(sid, client.sessionId);
       this.suAnmeldung(client, alt, auth);
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
       this.startwahlSenden(client.sessionId);
@@ -644,6 +648,7 @@ export class SpielRaum extends Room {
     p.su = !!auth?.su;
     this.state.spieler.set(client.sessionId, p);
     this.extra.set(client.sessionId, extra);
+    this.hunde?.beitritt(client.sessionId, p, extra, gespeichert);
     this.suAnmeldung(client, p, auth);
     this.speichereSpieler(client.sessionId);
     this.fkSenden(client.sessionId);
@@ -995,6 +1000,7 @@ export class SpielRaum extends Room {
     this.state.spieler.delete(client.sessionId);
     this.sprachNeu(client.sessionId);
     this.extra.delete(client.sessionId);
+    this.hunde?.spielerWeg(client.sessionId);
     this.botsAnpassen();
     this.sprachPartner();
   }
@@ -1199,7 +1205,7 @@ export class SpielRaum extends Room {
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
       waffe: p.waffe, munition: p.munition, pfeile: p.pfeile, granaten: p.granaten, handgranaten: p.handgranaten, ...WP.speicherDaten(p, x), rucksack: [...p.rucksack], plaetze: p.plaetze - this.fkRucksack(p), besiegt: p.besiegt, fk: x.fk, munSerie: x.munSerie ?? 0,
-      startOffen: !!x.startOffen, aussehen: p.aussehen, letzterSafe: x.letzterSafe, lager: p.sicher === 'lager' && p.zombie <= 0, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
+      startOffen: !!x.startOffen, hund: !!x.hund, aussehen: p.aussehen, letzterSafe: x.letzterSafe, lager: p.sicher === 'lager' && p.zombie <= 0, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
     });
   }
 
@@ -2532,6 +2538,7 @@ export class SpielRaum extends Room {
     this.takteGezaehlt = (this.takteGezaehlt ?? 0) + 1;
     this.berechneNah();
     this.baueZombieRaster();
+    this.hunde?.schritt(dt);
     for (const [id, z] of s.zombies) {
       const info = this.zombieInfo.get(id);
       if (!info) continue;
@@ -2974,6 +2981,7 @@ export class SpielRaum extends Room {
     const welt = this.wv(z.ebene);
     const ebene = z.ebene ?? '';
     if (z.haengt) haengtSchritt(this, z, info, dt);   // Zeit im Draht läuft; nach Ablauf frei
+    if (info.hundBis && this.hunde?.zombieJagt(z, info, dt)) return;   // lässt sich vom Hund ablenken (server/hund.mjs)
     // Sehen: Kegel in Blickrichtung, schleichende Spieler erst später
     if (!info.ziel) {
       for (const [sid, p] of this.state.spieler) {

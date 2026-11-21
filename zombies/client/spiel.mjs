@@ -25,6 +25,7 @@ let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
 import * as ton from './ton.mjs';
+import { HundAnzeige, eigenerHund } from './hund.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlPruefen, brauchtPlatz } from './aufheben.mjs';
 import { fundZeigen, fundZu, fundPruefen } from './fundliste.mjs';
 import { alleKandidaten } from './durchsuche_alle.mjs';
@@ -422,11 +423,13 @@ function einstellungenEinrichten() {
     for (const b of document.querySelectorAll('#eg-ton button')) b.classList.toggle('an', Number(b.dataset.v) === ton.lautstaerke());
     let a = '0.6'; try { a = localStorage.getItem('zob_kartealpha') ?? '0.6'; } catch { /* egal */ }
     for (const b of document.querySelectorAll('#eg-karte button')) b.classList.toggle('an', b.dataset.v === a);
+    $('eg-hund').hidden = !eigenerHund(raum?.state?.hunde, meineId);   // „Hund wegschicken“ nur mit Hund
     geraetMarkieren();
   };
   geraetEinstellungenEinrichten(markieren);
   $('einstellknopf').onclick = auf;
   $('einstellzu').onclick = zu;
+  $('hundweg').onclick = () => { raum.send('hundWeg'); $('eg-hund').hidden = true; zu(); };
   fenster.addEventListener('click', e => { if (e.target === fenster) zu(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') zu(); });
   for (const b of document.querySelectorAll('#eg-ton button')) b.onclick = () => {
@@ -782,6 +785,8 @@ class Ort extends Phaser.Scene {
     this.load.spritesheet('buerger160', 'grafik/buerger160.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('buergerliste', 'grafik/buerger160.json');
     // Auto-Bogen (CC0, tools/autos_schneiden.py); fehlt er, bleiben die Autos gezeichnet
+    this.load.spritesheet('hund', 'grafik/hund.webp', { frameWidth: 100, frameHeight: 100 });   // Begleiter-Hund (harrison-lord, CC-BY 3.0)
+    this.load.json('hundliste', 'grafik/hund.json');
     this.load.image('autos', 'grafik/autos.webp');
     this.load.image('puma-wanne-bild', 'grafik/puma_wanne.webp');   // Draufsicht aus dem 3D-Modell (Bug rechts)
     this.load.image('puma-turm-bild', 'grafik/puma_turm.webp');
@@ -829,6 +834,7 @@ class Ort extends Phaser.Scene {
     this.figuren = new Map();   // sessionId → {box, ...}
     this.zombies = new Map();
     this.menschenObj = new Map();   // Bewohner (Abschnitt 4)
+    this.hundAnz = new HundAnzeige(this, this.cache.json.get('hundliste'));   // Hunde (client/hund.mjs)
     this.busObj = new Map();
     this.leichen = new Map();
     this.bodenObj = new Map();
@@ -957,6 +963,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) { fs.schlagBis = this.time.now + 400; if (typeof m.w === 'number') { fs.zielW = m.w; fs.zielBis = this.time.now + 400; } } if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
+    raum.onMessage('hundBellen', m => { if ((m.ebene ?? '') === this.aktEbene) ton.hundBellen(m.x, m.y); });
     raum.onMessage('soldatRuf', m => {
       ton.ereignis('soldatRuf', m.x, m.y);
       const e = this.stuetzpunktObj?.soldaten.find(q => q.n === m.n);
@@ -2145,6 +2152,7 @@ class Ort extends Phaser.Scene {
       o.bild.setTint(m.infiziert ? 0xb5d99c : duckt && !vk ? 0x777777 : 0xffffff);
     }
     for (const [id, o] of this.menschenObj) if (!s.menschen?.has(id)) { o.box.destroy(); this.menschenObj.delete(id); pf.vergiss('m' + id); }
+    this.hundAnz.aktualisieren(s.hunde, dt, mg(), this.aktEbene, { x0: rx0, x1: rx1, y0: ry0, y1: ry1 });
     // Fahrzeuge: Linienbus, Verkehr, Polizei und Feuerwehr (mit Blaulicht), Wracks
     const blink = Math.floor(this.time.now / 180) % 2;
     for (const [id, f] of s.fahrzeuge ?? []) {

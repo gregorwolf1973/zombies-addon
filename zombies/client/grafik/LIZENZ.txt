@@ -74,3 +74,7 @@ tools/gemini_buerger_schneiden.py.
 Gegenstands-Icons (grafik/dinge.webp, dinge.json): 38 Icons für Waffen, Ausrüstung, Vorräte und Missionsgegenstände, mit Google Gemini für dieses
 Spiel erzeugt (fünf Bildbögen auf Magenta-Raster, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben);
 freigestellt, zugeschnitten und angeordnet mit tools/dinge_bilder.py.
+
+Begleiter-Hund (grafik/hund.webp, hund.json): „Top-down Dog + Simple Animation“ von harrison-lord, OpenGameArt,
+https://opengameart.org/content/top-down-dog-simple-animation – CC-BY 3.0. Zugeschnitten, verkleinert und zu einem Bogen
+(4 Richtungen x 6 Laufbilder) angeordnet; der schwarze Schlagschatten wurde halbtransparent gemacht.

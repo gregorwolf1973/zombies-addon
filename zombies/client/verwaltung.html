@@ -900,6 +900,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <label for="tnMoTempo">Mörser: Granatengeschwindigkeit (bestimmt die Flugzeit)</label>
   <div class="tn-zeile"><input type="range" id="tnMoTempo" min="10" max="80" step="1"><span id="tnMoTempoWert">30 m/s</span></div>
   <p class="tn-leise" id="bwInfoMo"></p>
+  <label for="tnHundAblenk">Begleiter-Hund: Wahrscheinlichkeit, dass ein Zombie in 8 m Umkreis ihn statt des Spielers jagt (4–8 s)</label>
+  <div class="tn-zeile"><input type="range" id="tnHundAblenk" min="0" max="100" step="5"><span id="tnHundAblenkWert">40 %</span></div>
   <p class="tn-leise" id="bwInfoMg"></p>
   <label for="tnMgSchritt">Munitionsglück: Zuschlag je Durchsuchung ohne Munition (multiplikativ)</label>
   <div class="tn-zeile"><input type="range" id="tnMgSchritt" min="0" max="100" step="5"><span id="tnMgSchrittWert">20 %</span></div>
@@ -1027,6 +1029,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     var mo = e.moerser || {};
+    feld('tnHundAblenk', (e.hund || {}).ablenkung === undefined ? 40 : e.hund.ablenkung, function (v) { return v + ' %'; });
     var mg = e.munitionsglueck || {};
     feld('tnMgSchritt', mg.schritt === undefined ? 20 : mg.schritt, function (v) { return v + ' %'; });
     feld('tnMgMax', mg.max === undefined ? 300 : mg.max, function (v) { return v + ' %'; });
@@ -1144,6 +1147,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   regler('tnMgLebenF', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { lebenFaktor: v } }; });
   regler('tnMgNot', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { notUnter: v } }; });
   regler('tnMgNotF', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { notFaktor: v } }; });
+  regler('tnHundAblenk', function (v) { return v + ' %'; }, function (v) { return { hund: { ablenkung: v } }; });
   regler('tnMoMin', function (v) { return String(v).replace('.', ',') + ' m'; }, function (v) { return { moerser: { reichweiteMin: v } }; });
   regler('tnMoMax', function (v) { return String(v).replace('.', ',') + ' m'; }, function (v) { return { moerser: { reichweiteMax: v } }; });
   regler('tnMoPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { moerser: { pause: v } }; });
@@ -3131,6 +3135,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     ['tnMoMin', 'tnMoMax', 'tnMoPause', 'tnMoSchaden', 'tnMoRadius', 'tnMoMind', 'tnMoSicher', 'tnMoTempo'].forEach(function (id) { zeile(bw.inhalt, id); });
     rein(bw.inhalt, $('bwInfoMo')); schalter(bw.inhalt, 'tnLeoUeberroll'); schalter(bw.inhalt, 'tnLeoKanone'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
     gruppe(bw);
+    var hg = unter('🐕 Begleiter-Hund'); zeile(hg.inhalt, 'tnHundAblenk'); gruppe(hg);
   }
   var fundeGr = ausKarte(karteVon('titelFunde'), '🎒 Fundhäufigkeit');
   if (tn) ['tnMgSchritt', 'tnMgMax', 'tnMgLeben', 'tnMgLebenF', 'tnMgNot', 'tnMgNotF'].forEach(function (id) { zeile(fundeGr.inhalt, id); });
@@ -3151,7 +3156,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin',
     tnMgSchritt: 'munitionsglueck.schritt', tnMgMax: 'munitionsglueck.max', tnMgLeben: 'munitionsglueck.lebenUnter', tnMgLebenF: 'munitionsglueck.lebenFaktor', tnMgNot: 'munitionsglueck.notUnter', tnMgNotF: 'munitionsglueck.notFaktor',
-    tnMoMin: 'moerser.reichweiteMin', tnMoMax: 'moerser.reichweiteMax', tnMoPause: 'moerser.pause', tnMoSchaden: 'moerser.schaden', tnMoRadius: 'moerser.radius', tnMoMind: 'moerser.mindestZombies', tnMoSicher: 'moerser.sicherheit', tnMoTempo: 'moerser.tempo',
+    tnHundAblenk: 'hund.ablenkung', tnMoMin: 'moerser.reichweiteMin', tnMoMax: 'moerser.reichweiteMax', tnMoPause: 'moerser.pause', tnMoSchaden: 'moerser.schaden', tnMoRadius: 'moerser.radius', tnMoMind: 'moerser.mindestZombies', tnMoSicher: 'moerser.sicherheit', tnMoTempo: 'moerser.tempo',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
     agStunde: 'aufgaben.stunde', agWarteEcht: 'aufgaben.wartenEchtMin', agWarte: 'aufgaben.wartezeit', agFinale: 'aufgaben.finaleMinuten', agAnzahl: 'aufgaben.anzahl', fkFaktor: 'faehigkeiten.xpFaktor',

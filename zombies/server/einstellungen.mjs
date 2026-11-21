@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DINGE, WAFFEN } from '../client/welt.mjs';
 import { MOERSER } from './moerser.mjs';
+import { HUND } from './hund.mjs';
 import { MUNITIONSGLUECK } from './munitionsglueck.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
 import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
@@ -29,6 +30,7 @@ export const TON_STANDARD = {
   horde: { dateien: ['zombie-horde-growls-and-snarls-7c0b158d.mp3', 'alice_soundz-zombie-sound-224167.mp3'], laut: 80 },
   hordeAkzent: { dateien: ['freesound_community-zombie-horde-87204.mp3'], laut: 80 },
   musikLevel5: { dateien: ['franzian-deo-apocalypse-469581.mp3'], laut: 100 },
+  hundBellen: { dateien: ['dragon-studio-free-dog-bark-419014.mp3', 'dragon-studio-dog-bark-382732.mp3'], laut: 80 },
 };
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 
@@ -76,6 +78,7 @@ export const EREIGNISSE = [
   { id: 'chatKlingel', name: 'Chat-Nachricht', beschreibung: 'Klingelton, wenn eine neue Chat-Nachricht eintrifft (dazu kurze Vibration)', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler'] },
   { id: 'radio', name: 'Radio (Gegenstand)', beschreibung: 'Ein eingeschaltetes Radio spielt ca. 75 s und lockt Zombies an; ohne Zuordnung nimmt das Spiel das Autoradio, sonst erzeugte Musik', art: 'schleife', gruppe: 'musik', kategorien: ['musik', 'bundeswehr'] },
   { id: 'nachladen', name: 'Nachladen', beschreibung: 'Wenn eine Waffe nachgeladen wird (ohne Datei ein kurzer Klick)', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
+  { id: 'hundBellen', name: 'Hund bellt', beschreibung: 'Der Begleiter-Hund bellt, wenn ein Zombie vor der Haustür steht, und kurz bei Ablenkung (macht keinen Lärm, lockt keine Zombies an; zählt nicht zu den Zombiegeräuschen)', art: 'einmal', gruppe: 'tiere', kategorien: ['tiere'] },
   { id: 'huelse', name: 'Hülse fällt', beschreibung: 'In Räumen kurz nach einem Schuss', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
   ...MUSIK_EREIGNISSE,
 ];
@@ -91,6 +94,7 @@ export const TON_GRUPPEN = [
   { id: 'tueren', name: 'Türen', symbol: '🚪' },
   { id: 'umgebung', name: 'Umgebung', symbol: '🌲' },
   { id: 'spieler', name: 'Spieler', symbol: '🧍' },
+  { id: 'tiere', name: 'Tiere', symbol: '🐕' },
 ];
 // Stichwörter im Dateinamen → Kategorie (Wortanfang, ab 5 Buchstaben auch mitten im Wort); eine Datei kann mehrere haben
 const TON_STICHWORTE = {
@@ -102,6 +106,7 @@ const TON_STICHWORTE = {
   bundeswehr: ['puma', 'panzer', 'bundeswehr', 'soldat', 'army', 'militar', 'militär', 'funk', 'radio'],
   tueren: ['door', 'tuer', 'tür', 'creak', 'knarr'],
   umgebung: ['wasser', 'bach', 'water', 'river', 'rain', 'regen', 'wind', 'bird', 'vogel', 'city', 'stadt', 'ambient', 'crow', 'cricket', 'fire', 'feuer', 'burn', 'brand', 'wald', 'forest', 'night', 'nacht'],
+  tiere: ['dog', 'hund', 'bark', 'woof', 'wuff'],
   spieler: ['durst', 'thirst', 'cough', 'husten', 'breath', 'atem', 'heartbeat', 'herz', 'hurt', 'pain', 'schmerz'],
 };
 export function tonKategorien(dateiname) {
@@ -284,6 +289,7 @@ export function bereinige(e = {}, alt = {}) {
       leopardKanonePause: Math.round(zahl(bw.leopardKanonePause, 3, 120, 8)),                           // … Sekunden zwischen zwei Kanonenschüssen
       leopardKanoneMin: Math.round(zahl(bw.leopardKanoneMin, 3, 50, 10)),                               // … so viele Zombies müssen auf einem Fleck (6 m Durchmesser) stehen
     },
+    hund: { ablenkung: Math.round(zahl(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)) },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
     moerser: (() => {                                                         // Panzermörser: Reichweite/Radius/Sicherheit in Metern, Pause in Sekunden
       const m = { ...a.moerser, ...(e.moerser ?? {}) }, V = MOERSER;
       const rmin = Math.round(zahl(m.reichweiteMin, 5, 100, V.reichweiteMin)), rmax = Math.max(rmin + 5, Math.round(zahl(m.reichweiteMax, 10, 150, V.reichweiteMax)));
@@ -329,6 +335,7 @@ export function vorgaben() {
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     moerser: { ...MOERSER },
+    hund: { ...HUND },
     munitionsglueck: { ...MUNITIONSGLUECK },
     toene: {},
     toeneHorde: { ...HORDE_TON_VORGABE },
