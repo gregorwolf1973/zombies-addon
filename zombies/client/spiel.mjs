@@ -1135,8 +1135,9 @@ class Ort extends Phaser.Scene {
 
   passeZoomAn() {
     const kurz = Math.min(this.scale.width, this.scale.height);
-    this.grundZoom = Phaser.Math.Clamp(kurz / 520, 0.55, 1.6);
-    if (this.zoomWahl === undefined) { this.zoomWahl = 1; try { this.zoomWahl = Phaser.Math.Clamp(Number(localStorage.getItem('zob_zoom')) || 1, 0.4, 1.8); } catch {} }
+    // Grundzoom ×1,4 näher als früher (kurz / 520): Figuren sind seit 0.69.4 maßstäblicher (Größe gesamt 50 statt 70 %)
+    this.grundZoom = Phaser.Math.Clamp(kurz / 370, 0.75, 2.3);
+    if (this.zoomWahl === undefined) { this.zoomWahl = 1; try { this.zoomWahl = Phaser.Math.Clamp(Number(localStorage.getItem('zob_zoom')) || 1, ZOOM_MIN, ZOOM_MAX); } catch {} }
     this.cameras.main.setZoom(this.zielZoom());
   }
 

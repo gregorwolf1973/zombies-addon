@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.69.4 – 21.11.2026
+
+- Kamera: Grundzoom 1,4× näher und weiter heranzoombar (bis 2,5×), passend zu den maßstäblicheren Figuren (Größe gesamt jetzt 50 %).
+
 ## 0.69.3 – 21.11.2026
 
 - Entfernt: Kistensymbol (📦/∅) über Schränken und Behältern – nirgends mehr eine „noch nicht durchsucht“-Anzeige.

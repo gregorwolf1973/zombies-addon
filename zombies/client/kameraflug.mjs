@@ -4,7 +4,7 @@
 // Mausrad: ein Fensterhörer (nicht nur Phaser-Canvas), damit auch durchlässige HUD-Flächen zoomen; Menüs, Fenster und Eckkarte nicht.
 
 export const FLUG_TEMPO = 60 * 8, FLUG_TEMPO_SCHNELL = 200 * 8;   // Pixel/s (8 px = 1 m): 60 m/s bzw. 200 m/s
-export const ZOOM_MIN = 0.4, ZOOM_MAX = 1.8, FLUG_ZOOM_MIN = 0.12;
+export const ZOOM_MIN = 0.4, ZOOM_MAX = 2.5, FLUG_ZOOM_MIN = 0.12;   // ZOOM_MAX größer: näher heran an die kleineren Figuren
 export const MELDE_ABSTAND_MS = 250;   // Kameraposition an den Server: 4×/s
 
 // Elemente, die ihr eigenes Mausrad haben oder Fenster/Menüs sind: dort zoomt das Spiel nicht
