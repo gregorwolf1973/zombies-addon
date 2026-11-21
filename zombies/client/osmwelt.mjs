@@ -4,6 +4,7 @@ import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX, safeRoomsVe
 import { randParkplaetze, strassenBuchten, fahrbahnBreite } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
 import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
+import { laendlicheDetails, b11Ausduennen, freihalteKreise } from './laendlich.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -22,6 +23,17 @@ const SAFE_ZUSATZ = [
   [/feuerwehr|kraftwerk|gasthof|gasthaus|wirtshaus|hof\b/i, null],
   [/m[öo]max|k[üu]chenmarkt|intersport|xxxlutz/i, null],
 ];
+// Feste Safehouses je Karte über eine Kachelposition (Kachel innerhalb des Hauses; sonst die nächste Haustür im Umkreis von 3 Kacheln).
+// Schlüssel = Kartenbereich (bbox, kommagetrennt) oder die Karte selbst mit dem Feld "festeSafes": [{ x, y, name }].
+// Sie kommen zusätzlich zur Namenswahl (SAFE_WUNSCH), insgesamt höchstens SAFE_MAX Safe Rooms.
+export const SAFE_MAX = 5;
+// geretsried2: ein Wohnhaus (Linie etwa Kachel x 206–226, y 12–87; OSM kennt dort keine Hausnummern).
+// Die Auswahl der Kachel steht in safehouse_auswahl.json/-png (Nummer → Kachel); hier eintragen, z. B. { x: 212, y: 40, name: 'Wohnhaus' }
+export const FESTES_SAFEHOUSE_G2 = null;
+export const FESTE_SAFES = {
+  '47.872,11.4584,47.8872,11.4766': [FESTES_SAFEHOUSE_G2].filter(Boolean),   // geretsried2
+};
+export const festeSafesVon = karte => karte.festeSafes ?? FESTE_SAFES[(karte.bbox ?? []).join(',')] ?? [];
 const RICHTUNGEN = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // Zäune/Hecken ausdünnen (deterministisch, nach Position): rund 15 % der Linienstücke fallen weg, bevorzugt zwischen eng
@@ -30,6 +42,11 @@ const RICHTUNGEN = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 // Jede Lücke wird nachträglich um je ein Nachbarstück verbreitert (3 Stücke = 2,25 Kacheln = 72 px): Spieler/Zombie-Durchmesser
 // 22 px + Zaundicke bis 18 px + Reserve; die Ausgangswahrscheinlichkeiten sind daher niedriger.
 const LUECKE_BASIS = 0.01, LUECKE_ENG = 0.05;
+function punktImPolygon(px, py, p) {
+  let drin = false;
+  for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) if ((p[i + 1] > py) !== (p[j + 1] > py) && px < (p[j] - p[i]) * (py - p[i + 1]) / (p[j + 1] - p[i + 1]) + p[i]) drin = !drin;
+  return drin;
+}
 const posHash = (x, y) => { let h = (Math.round(x * 8) * 73856093) ^ (Math.round(y * 8) * 19349663); h = Math.imul(h ^ (h >>> 13), 0x5bd1e995); return ((h ^ (h >>> 15)) >>> 0) / 4294967296; };
 // Fisher-Yates mit dem Welt-Zufall: auf jeder JS-Engine gleich (anders als sort mit Zufallsvergleich)
 function mischen(liste, r) {
@@ -135,7 +152,9 @@ function wasserGlaetten(k, hole, setze, durchgaenge = 3, R = 4) {
 
 // optionen.autos: Faktor für geparkte Autos (1 = normal)
 export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
-  const karte = zaeuneAusduennen(karteOrig);
+  const karte0 = zaeuneAusduennen(karteOrig);
+  // veränderbare Kopie (ländliche Details ergänzen Zäune, Hecken und Feldwege); die Eingabekarte bleibt unberührt
+  const karte = karte0.zaeune ? { ...karte0, zaeune: [...karte0.zaeune], strassen: karte0.strassen ? [...karte0.strassen] : karte0.strassen } : karte0;
   const autoFaktor = Number.isFinite(optionen.autos) ? Math.max(0, optionen.autos) : 1;
   const r = zufall(seed ^ 0x6a09e667);
   const k = new Uint8Array(BREITE * HOEHE);
@@ -241,16 +260,30 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     h.safe = anzeige; h.safeId = 's' + safeRooms.length;
     safeRooms.push({ id: h.safeId, name: anzeige, haus: h });   // Kiste und Schrank stehen im Innenraum
   }
+  const nimm = (h, anzeige) => {
+    const zellen = flaecheVon(h).filter(([x, y]) => hole(x, y) === T.BODEN);
+    if (zellen.length < 6 || BLOCKIERT.has(hole(h.tuer.x + h.raus.dx, h.tuer.y + h.raus.dy))) return false;   // Tür muss ins Freie führen
+    h.safe = anzeige; h.safeId = 's' + safeRooms.length;
+    safeRooms.push({ id: h.safeId, name: anzeige, haus: h });
+    return true;
+  };
+  // Feste Safehouses per Kachelposition (siehe FESTE_SAFES): zuerst die Kachel im Haus (Umriss, sonst Rahmen), dann die nächste Tür
+  for (const fs of festeSafesVon(karte)) {
+    if (safeRooms.length >= SAFE_MAX) break;
+    const px = fs.x + 0.5, py = fs.y + 0.5;
+    const imUmriss = h => { const p = h.umriss ?? karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss; return p?.length >= 6 && punktImPolygon(px, py, p); };
+    const imRahmen = h => fs.x >= h.x && fs.x < h.x + h.b && fs.y >= h.y && fs.y < h.y + h.h;
+    let h = haeuser.find(q => !q.safe && imUmriss(q)) ?? haeuser.find(q => !q.safe && imRahmen(q));
+    if (!h) {
+      let bd = 3.01;
+      for (const q of haeuser) { const d = Math.hypot(q.tuer.x + 0.5 - px, q.tuer.y + 0.5 - py); if (!q.safe && d < bd) { bd = d; h = q; } }
+    }
+    if (h) nimm(h, fs.name ?? (h.name || 'Safehouse'));
+  }
   // Zu wenige benannte Treffer (andere Karte): Zusatzmuster, dann die größten Gebäude mit Tür
   if (safeRooms.length < 3) {
-    const nimm = (h, anzeige) => {
-      const zellen = flaecheVon(h).filter(([x, y]) => hole(x, y) === T.BODEN);
-      if (zellen.length < 6 || BLOCKIERT.has(hole(h.tuer.x + h.raus.dx, h.tuer.y + h.raus.dy))) return;   // Tür muss ins Freie führen
-      h.safe = anzeige; h.safeId = 's' + safeRooms.length;
-      safeRooms.push({ id: h.safeId, name: anzeige, haus: h });
-    };
     for (const [muster, anzeige] of SAFE_ZUSATZ) {
-      if (safeRooms.length >= 5) break;
+      if (safeRooms.length >= SAFE_MAX) break;
       const h = haeuser.find(h => !h.safe && muster.test(h.name));
       if (h) nimm(h, anzeige ?? h.name);
     }
@@ -684,6 +717,12 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
         if (frei(gx, gy)) { setze(gx, gy, T.BAUM); neu++; }
       }
     }
+    // Ländliche Karten mit wenig Wald: Alleen an Landstraßen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen (laendlich.mjs, ohne r())
+    if (karte !== karte0) {
+      const zaunart = karte.zaunart ? karte.zaunart.split('') : null;
+      if (zaunart) { laendlicheDetails({ karte, k, hole, setze, haeuser, deko, nein, zone, start, zaunart }); karte.zaunart = zaunart.join(''); }
+    }
+    b11Ausduennen(karte, k, setze);   // Kreuzung B 11 am Rathaus (geretsried2): wenig Bäume, damit Fahrzeuge Platz haben
   }
   mehrBaeume();
 
@@ -705,6 +744,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details, muell, sperren };
   if (pisteInfo) welt.piste = pisteInfo;
   if (karte.zaeune) welt.fein = baueFein(welt, karte);
+  welt.freihalten = freihalteKreise(karte);   // Landeplatz/Bunkertor-Gelände: kein Lager darauf
   baueStuetzpunkt(welt, seed, setze);   // Bundeswehr-Stützpunkt (eigener Zufall, nach allem anderen)
   baueFlugfeldDeko(welt, seed);         // Flugfeld-Deko neben der Landebahn (nur Karten mit 'piste'; eigener Seed-Zufall)
   tuerenFreihalten(welt, setze, abstandRechteck);   // LETZTER Schritt: Vorplätze leeren, Wege zur Straße öffnen

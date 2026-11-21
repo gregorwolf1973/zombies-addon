@@ -609,21 +609,32 @@ export function zeichneVektorDaecher(ctx, welt, rect) {
     const t = tuerAufWand(v, h);
     if (t.x < r.x0 - K || t.x > r.x1 + K || t.y < r.y0 - K || t.y > r.y1 + K) continue;
     ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.w);   // x entlang der Wand, y nach außen
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(-10, 2, 22, 9);
-    ctx.fillStyle = '#bdbdbd'; ctx.fillRect(-12, 4, 24, 7);                 // Stufe vor der Tür
-    ctx.fillStyle = '#5d4037'; ctx.fillRect(-10, -3, 20, 7);               // Türblatt
-    ctx.fillStyle = '#3e2723'; ctx.fillRect(-10, -3, 20, 1.5);
-    ctx.fillStyle = '#ffd54f'; ctx.fillRect(5, 0, 2.5, 2.5);               // Klinke
+    // gut sichtbare Haustür: heller Rahmen, kräftig rotbraunes Türblatt mit Füllungen, goldene Klinke, Stufe und Fußabtreter davor
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-15, 3, 32, 13);                      // Schlagschatten
+    ctx.fillStyle = '#e0dcd0'; ctx.fillRect(-16, 4, 32, 11);                              // Stufe (heller Stein)
+    ctx.fillStyle = '#9e9a8c'; ctx.fillRect(-16, 13, 32, 2);                              // Stufenkante
+    ctx.fillStyle = '#2e5d34'; ctx.fillRect(-9, 7, 18, 5);                                // Fußabtreter
+    ctx.fillStyle = '#7fb069'; for (let x = -7; x <= 5; x += 4) ctx.fillRect(x, 8, 2, 3);
+    ctx.fillStyle = '#fff6dc'; ctx.fillRect(-14, -7, 28, 12);                             // heller Türrahmen
+    ctx.strokeStyle = '#1b0f0a'; ctx.lineWidth = 1; ctx.strokeRect(-13.5, -6.5, 27, 11);
+    ctx.fillStyle = '#a63a1a'; ctx.fillRect(-11, -5, 22, 8);                              // Türblatt (Holzrot)
+    ctx.fillStyle = '#6e2410'; ctx.fillRect(-11, -5, 22, 1.5); ctx.fillRect(-0.5, -3.5, 1, 6.5);   // Oberkante, Mittelfuge
+    ctx.fillStyle = '#c4572e'; ctx.fillRect(-9, -2.5, 7, 4.5); ctx.fillRect(2, -2.5, 7, 4.5);        // Füllungen
+    ctx.fillStyle = '#ffd54f'; ctx.fillRect(5.5, -0.5, 3, 3);                             // Klinke
+    ctx.strokeStyle = '#5a4300'; ctx.lineWidth = 0.8; ctx.strokeRect(5.5, -0.5, 3, 3);
     ctx.restore();
   }
 }
+
+// Lage der Haustür auf der echten Hauswand: { wx, wy } = Türmitte an der Wand, w = Drehwinkel (+y zeigt nach draußen, x läuft entlang der Wand)
+export function tuerPose(welt, h) { return tuerAufWand(vorbereiten(welt), h); }
 
 // nächster Punkt auf dem Gebäudeumriss zur Rastertür; w = Winkel, bei dem +y nach draußen zeigt
 function tuerAufWand(v, h) {
   if (h._tuerWand) return h._tuerWand;
   const px = (h.tuer.x + 0.5 + h.raus.dx * 0.5) * K, py = (h.tuer.y + 0.5 + h.raus.dy * 0.5) * K;
   const g = v.gebaeude.find(q => q.kx === h.x && q.ky === h.y);
-  let erg = { x: px, y: py, w: Math.atan2(h.raus.dy, h.raus.dx) - Math.PI / 2 };
+  let erg = { x: px, y: py, w: Math.atan2(h.raus.dy, h.raus.dx) - Math.PI / 2, wx: (h.tuer.x + 0.5 + h.raus.dx * 0.5) * K, wy: (h.tuer.y + 0.5 + h.raus.dy * 0.5) * K };
   if (g) {
     let bd = Infinity;
     for (let i = 0; i < g.pts.length; i++) {
@@ -635,7 +646,7 @@ function tuerAufWand(v, h) {
         bd = d;
         let nx = -dy, ny = dx; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
         if (nx * h.raus.dx + ny * h.raus.dy < 0) { nx = -nx; ny = -ny; }   // Normale nach draußen
-        erg = { x: qx + nx * (UEBERSTAND + 3), y: qy + ny * (UEBERSTAND + 3), w: Math.atan2(ny, nx) - Math.PI / 2 };   // unter dem Dachüberstand hervor
+        erg = { x: qx + nx * (UEBERSTAND + 3), y: qy + ny * (UEBERSTAND + 3), w: Math.atan2(ny, nx) - Math.PI / 2, wx: qx, wy: qy };   // unter dem Dachüberstand hervor; wx/wy = Punkt auf der Wand
       }
     }
   }
