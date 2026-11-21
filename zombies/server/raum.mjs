@@ -29,6 +29,7 @@ import { SzeneB11 } from './szene_b11.mjs';
 import * as FK from './faehigkeiten.mjs';
 import { alleKandidaten, NIMM_WEITE, ALLE_FRAGEN, ALLE_SPERRE } from '../client/durchsuche_alle.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
+if (process.env.ZOMBIES_INNEN1M) setzeInnenFein(true);   // PROTOTYP: Innenräume im Feinraster (Client: ?innen1m), Standard aus
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
@@ -36,8 +37,8 @@ import { Nebel, NEBEL_VORGABE, zombieSichtFaktor } from './nebel.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
-  bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
+  KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
+  bewaffnetSoll, zufall, schlossArt, safeRoomVon, weltVersion, setzeInnenFein, setzeTageszeiten,
   WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
 
@@ -412,7 +413,7 @@ export class SpielRaum extends Room {
     }
     // Bundeswehr-Lager als Safe House: vier gemeinsame Vorratskisten (state.safes 'lager0'…'lager3', wie die Kiste eines Safe Rooms)
     for (const t of this.welt.stuetzpunkt?.teile ?? []) if (t.art === 'vorratskiste') this.state.safes.set(t.id, new Safe());
-    const passt = stand && stand.version === WELT_VERSION && stand.seed === this.state.seed && (stand.karte ?? '') === this.state.karte;
+    const passt = stand && stand.version === weltVersion() && stand.seed === this.state.seed && (stand.karte ?? '') === this.state.karte;
     this.gespeichertTueren = null;
     if (passt) {
       this.gespeicherteTuerenStand = stand.tueren ?? {};
@@ -463,7 +464,7 @@ export class SpielRaum extends Room {
     this.hunde = new Hunde(this); this.hunde.start();   // Streuner-Hunde (Begleiter), siehe server/hund.mjs
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     this.tuerAnteileUebernehmen();
-    if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === WELT_VERSION) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
+    if (stand?.verbrannt && (stand.karte ?? '') === this.state.karte && stand.version === weltVersion()) for (const k of stand.verbrannt.slice(0, 2000)) this.state.verbrannt.set(String(k), true);
 
     this.onMessage('eingabe', (client, m) => {
       const r = this.eingabeEmpfangen(client, m);
@@ -1230,7 +1231,7 @@ export class SpielRaum extends Room {
     for (const [id, inhalt] of this.inhalte) behaelter[id] = inhalt;
     for (const [id, s] of this.state.safes) safes[id] = { barrikade: Math.round(s.barrikade), kiste: [...s.kiste] };
     this.speicher.speichereWelt({
-      version: WELT_VERSION, karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, verwandelt: this.state.verwandelt, gerettet: this.state.gerettet, behaelter, safes,
+      version: weltVersion(), karte: this.state.karte, seed: this.state.seed, zeit: this.state.zeit, uhr: this.state.uhr, autos: this.state.autos, besiegt: this.state.besiegt, verwandelt: this.state.verwandelt, gerettet: this.state.gerettet, behaelter, safes,
       torGeloest: this.state.torGeloest, level: this.state.level, aufgaben: this.aufgaben?.speichern() ?? null, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen, Math.round(t.barrikade), Math.round(t.hp), t.kaputt]])),
       verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
@@ -1331,7 +1332,7 @@ export class SpielRaum extends Room {
         st = g ? this.tuerAusStand(g) : neueTuer(t.offen, t.verschlossen && this.tuerArt(key) !== 'frei');
         this.state.tueren.set(key, st);
       }
-      if (st.offen) w.kacheln[t.y * BREITE + t.x] = T.TUER_OFFEN;
+      if (st.offen) setzeTuerKacheln(w, t, true);
     }
     this.ebenen.set(ebene, w);
     this.wohnungsLeiche(ebene, w);
@@ -1346,7 +1347,7 @@ export class SpielRaum extends Room {
     }
     for (const zp of (w.zombiePlaetze ?? []).filter(zp => !meiden || Math.hypot(zp.x - meiden.x, zp.y - meiden.y) >= ANKUNFT_ZOMBIEFREI)) {
       for (let n = Math.floor(hf) + (this.rnd() < hf % 1 ? 1 : 0), i = 0; i < n; i++) {
-        const dx = i ? (this.rnd() - 0.5) * KACHEL : 0, dy = i ? (this.rnd() - 0.5) * KACHEL : 0;
+        const dx = i ? (this.rnd() - 0.5) * kachelVon(w) : 0, dy = i ? (this.rnd() - 0.5) * kachelVon(w) : 0;
         if (!i || frei(w, zp.x + dx, zp.y + dy, W.zombieRadius)) this.setzeZombie(zp.x + dx, zp.y + dy, ebene, true);
       }
     }
@@ -1422,8 +1423,8 @@ export class SpielRaum extends Room {
     }
     // Bots wechseln nur, wenn sie genau diesen Übergang ansteuern (nicht beim Vorbeilaufen)
     if (x.bot && (!x.bot.uebergangZiel || Math.hypot(p.x - x.bot.uebergangZiel.x, p.y - x.bot.uebergangZiel.y) > 24)) return;
-    const welt = this.wv(p.ebene);
-    const kx = Math.floor(p.x / KACHEL), ky = Math.floor(p.y / KACHEL);
+    const welt = this.wv(p.ebene), KW = kachelVon(welt);
+    const kx = Math.floor(p.x / KW), ky = Math.floor(p.y / KW);
     const t = welt.hole(kx, ky);
     let ziel = null, pos = null, tuerDraussen = null;
     if (!p.ebene && t === T.TUER) {
@@ -1443,7 +1444,7 @@ export class SpielRaum extends Room {
       ziel = ''; pos = { x: (h.tuer.x + 0.5 + r.dx * 1.3) * KACHEL, y: (h.tuer.y + 0.5 + r.dy * 1.3) * KACHEL };
       tuerDraussen = { x: (h.tuer.x + 0.5) * KACHEL, y: (h.tuer.y + 0.5) * KACHEL };
     } else if (p.ebene && (t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH)) {
-      const tr = welt.treppen.find(tr => tr.x === kx && tr.y === ky);
+      const tr = welt.treppen.find(tr => tr.zellen ? tr.zellen.some(([zx, zy]) => zx === kx && zy === ky) : (tr.x === kx && tr.y === ky));
       if (!tr) return;
       ziel = `h${welt.nr}${tr.ziel}`;
       const zw = this.wv(ziel, welt.stock);
@@ -1460,7 +1461,7 @@ export class SpielRaum extends Room {
     else {
       const zw = this.wv(ziel, welt.stock ?? '');
       const rk = t === T.TUER ? zw.ausgang : zw.treppen?.find(z => z.ziel === (welt.stock ?? ''));
-      if (rk) ref = { x: (rk.x + 0.5) * KACHEL, y: (rk.y + 0.5) * KACHEL };
+      if (rk) ref = { x: (rk.x + 0.5) * kachelVon(zw), y: (rk.y + 0.5) * kachelVon(zw) };
     }
     x.wechselSperre = 0.2; x.ankunft = { x: platz.x, y: platz.y, ref, d0: ref ? Math.hypot(platz.x - ref.x, platz.y - ref.y) : 0 }; x.ankunftT = 0; x.schonT = SCHONZEIT_EBENE;
     if (x.bot) { x.bot.weg = null; x.bot.uebergangZiel = null; }
@@ -1469,6 +1470,11 @@ export class SpielRaum extends Room {
   // begehbare Nachbarkachel einer Treppe (dort landet man)
   nebenKachel(w, k) {
     for (const [dx, dy] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+      if (w.kachel) {   // Feinraster: Treppe mehrzellig, nächste freie Zelle am Rechteck, auf die die Figur passt
+        const r = k.rect ?? { x: k.x, y: k.y, b: 1, h: 1 }, tx = dx < 0 ? r.x - 2 : dx > 0 ? r.x + r.b + 1 : r.x + (r.b >> 1), ty = dy < 0 ? r.y - 2 : dy > 0 ? r.y + r.h + 1 : r.y + (r.h >> 1);
+        if (w.hole(tx, ty) === T.BODEN && frei(w, (tx + 0.5) * w.kachel, (ty + 0.5) * w.kachel, 7)) return { x: (tx + 0.5) * w.kachel, y: (ty + 0.5) * w.kachel };
+        continue;
+      }
       if (w.hole(k.x + dx, k.y + dy) === T.BODEN) return { x: (k.x + dx + 0.5) * KACHEL, y: (k.y + dy + 0.5) * KACHEL };
     }
     return w.start;
@@ -1476,7 +1482,7 @@ export class SpielRaum extends Room {
 
   // wohin muss man auf dieser Ebene gehen, um Richtung Zielebene zu kommen? (für Bots)
   uebergangsPunkt(von, nach) {
-    const mitte = k => ({ x: (k.x + 0.5) * KACHEL, y: (k.y + 0.5) * KACHEL });
+    const mitte = k => { const K = kachelVon(this.wv(von)); return { x: (k.x + 0.5) * K, y: (k.y + 0.5) * K }; };
     const ziel = EBENE_MUSTER.exec(nach ?? '');
     if (!von) {
       if (!ziel) return null;
@@ -1570,7 +1576,7 @@ export class SpielRaum extends Room {
 
   // Orte (Ebene, Mitte) der Türkachel(n): wer dort steht, verhindert das Schließen
   tuerStellen(wahl) {
-    const mitte = (k, ebene) => ({ ebene, x: (k.x + 0.5) * KACHEL, y: (k.y + 0.5) * KACHEL });
+    const mitte = (k, ebene) => { const K = ebene ? kachelVon(this.wv(ebene)) : KACHEL; return { ebene, x: (k.x + 0.5) * K, y: (k.y + 0.5) * K }; };
     if (wahl.tuer) return [mitte(wahl.tuer, wahl.ebene)];
     const h = this.welt.haeuser[wahl.nr], a = this.wv(`h${wahl.nr}eg`).ausgang;
     return [mitte(h.tuer, ''), ...(a ? [mitte(a, `h${wahl.nr}eg`)] : [])];
@@ -1581,13 +1587,14 @@ export class SpielRaum extends Room {
     let best = null, bd = Infinity;
     if (p.ebene) {
       const w = this.wv(p.ebene);
+      const KW = kachelVon(w), rt = w.kachel ? 14 : 42;   // Reichweite zur Tür: 1,75 m im Feinraster statt 5 m
       for (const t of w.tueren) {
-        const d = Math.hypot((t.x + 0.5) * KACHEL - p.x, (t.y + 0.5) * KACHEL - p.y);
-        if (d < 42 && d < bd) { bd = d; best = { key: `${p.ebene}:${t.x},${t.y}`, tuer: t, ebene: p.ebene }; }
+        const d = Math.hypot((t.x + 0.5) * KW - p.x, (t.y + 0.5) * KW - p.y);
+        if (d < rt && d < bd) { bd = d; best = { key: `${p.ebene}:${t.x},${t.y}`, tuer: t, ebene: p.ebene }; }
       }
       if (w.ausgang && w.nr !== undefined) {
-        const d = Math.hypot((w.ausgang.x + 0.5) * KACHEL - p.x, (w.ausgang.y + 0.5) * KACHEL - p.y);
-        if (d < 48 && d < bd) best = { key: 'haus:' + w.nr, nr: w.nr, ebene: p.ebene };
+        const d = Math.hypot((w.ausgang.x + 0.5) * KW - p.x, (w.ausgang.y + 0.5) * KW - p.y);
+        if (d < (w.kachel ? 16 : 48) && d < bd) best = { key: 'haus:' + w.nr, nr: w.nr, ebene: p.ebene };
       }
     } else {
       const kx = Math.floor(p.x / KACHEL), ky = Math.floor(p.y / KACHEL);
@@ -1650,7 +1657,7 @@ export class SpielRaum extends Room {
     const w = this.wv(ebene);
     st.offen = offen;
     if (offen) st.verschlossen = false;
-    w.kacheln[y * BREITE + x] = offen ? T.TUER_OFFEN : T.INNENTUER;
+    setzeTuerKacheln(w, w.tueren?.find(t => t.x === x && t.y === y) ?? { x, y }, offen);
     // wer hinter der Tür schläft und jemanden sieht, wacht im nächsten Schritt auf (Sichtprüfung)
   }
 
@@ -2895,23 +2902,23 @@ export class SpielRaum extends Room {
 
   // Wegfeld: Abstand jeder Kachel zum nächsten stehenden Spieler (Breitensuche)
   baueFeld(ebene = '') {
-    const welt = this.wv(ebene);
-    const feld = new Int16Array(BREITE * HOEHE).fill(-1);
+    const welt = this.wv(ebene), KW = kachelVon(welt), BR = breiteVon(welt), HO = hoeheVon(welt), tiefe = welt.kachel ? 400 : WEGEFELD_TIEFE;
+    const feld = new Int16Array(BR * HO).fill(-1);
     const q = [];
     for (const p of this.state.spieler.values()) {
       if (p.unten || p.anBord || p.kamera || p.zombie > 0 || p.ebene !== ebene) continue;
-      const i = Math.floor(p.y / KACHEL) * BREITE + Math.floor(p.x / KACHEL);
+      const i = Math.floor(p.y / KW) * BR + Math.floor(p.x / KW);
       if (feld[i] === -1) { feld[i] = 0; q.push(i); }
     }
     for (let k = 0; k < q.length; k++) {
-      const i = q[k], x = i % BREITE, y = (i - x) / BREITE;
+      const i = q[k], x = i % BR, y = (i - x) / BR;
       for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-        if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
-        const j = ny * BREITE + nx;
+        if (nx < 0 || ny < 0 || nx >= BR || ny >= HO) continue;
+        const j = ny * BR + nx;
         if (feld[j] !== -1) continue;
         if (BLOCKIERT_FELD.has(welt.hole(nx, ny))) continue;
         feld[j] = feld[i] + 1;
-        if (feld[j] < WEGEFELD_TIEFE) q.push(j);   // weiter weg ist das Feld nicht nötig (Zombies sehen/hören höchstens ~500 px)
+        if (feld[j] < tiefe) q.push(j);   // weiter weg ist das Feld nicht nötig (Zombies sehen/hören höchstens ~500 px)
       }
     }
     this.felder.set(ebene, feld);
@@ -2921,16 +2928,17 @@ export class SpielRaum extends Room {
   feldRichtung(x, y, ebene = '') {
     const feld = this.felder.get(ebene);
     if (!feld) return null;
-    const kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
-    const hier = feld[ky * BREITE + kx];
+    const welt = this.wv(ebene), KW = kachelVon(welt), BR = breiteVon(welt), HO = hoeheVon(welt);
+    const kx = Math.floor(x / KW), ky = Math.floor(y / KW);
+    const hier = feld[ky * BR + kx];
     let best = null, bw = hier < 0 ? Infinity : hier;
     for (const [nx, ny] of [[kx + 1, ky], [kx - 1, ky], [kx, ky + 1], [kx, ky - 1]]) {
-      if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
-      const w = feld[ny * BREITE + nx];
+      if (nx < 0 || ny < 0 || nx >= BR || ny >= HO) continue;
+      const w = feld[ny * BR + nx];
       if (w >= 0 && w < bw) { bw = w; best = [nx, ny]; }
     }
     if (!best) return null;
-    return Math.atan2((best[1] + 0.5) * KACHEL - y, (best[0] + 0.5) * KACHEL - x);
+    return Math.atan2((best[1] + 0.5) * KW - y, (best[0] + 0.5) * KW - x);
   }
 
   // „Nah“-Punkte je Ebene: alle Spieler, dazu für draußen die Haustüren der Häuser mit Spielern darin und die Posten des Stützpunkts
@@ -3146,7 +3154,7 @@ export class SpielRaum extends Room {
   // Tür, gegen die der Zombie gerade läuft und die ihn aufhält (geschlossen oder verbarrikadiert), sonst null
   zombieSperre(z, w, welt) {
     const pruefe = (x, y) => {
-      const kx = Math.floor(x / KACHEL), ky = Math.floor(y / KACHEL);
+      const KW = z.ebene ? kachelVon(welt) : KACHEL, kx = Math.floor(x / KW), ky = Math.floor(y / KW);
       if (!z.ebene) {
         const h = this.hausAnTuer(kx, ky);
         if (!h) return null;
@@ -3155,7 +3163,7 @@ export class SpielRaum extends Room {
       }
       const t = welt.hole(kx, ky);
       if (t !== T.INNENTUER && t !== T.TUER_OFFEN) return null;
-      const key = `${z.ebene}:${kx},${ky}`, st = this.state.tueren.get(key);
+      const td = tuerAnZelle(welt, kx, ky), key = `${z.ebene}:${td ? td.x : kx},${td ? td.y : ky}`, st = this.state.tueren.get(key);
       return st && (!st.offen || this.tuerBarrikade(key) > 0) ? key : null;
     };
     return pruefe(z.x + Math.cos(w) * (W.zombieRadius + 5), z.y + Math.sin(w) * (W.zombieRadius + 5)) ?? pruefe(z.x, z.y);

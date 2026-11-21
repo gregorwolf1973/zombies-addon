@@ -4,7 +4,7 @@
 // die nächste Karte (Level), sonst fährt er ohne die Gruppe ab und kommt am nächsten Spieltag wieder.
 import { flach, hat, indexVon, zaehle as zaehleStapel } from '../client/stapel.mjs';
 import { schema, t } from '@colyseus/schema';
-import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
+import { KACHEL, weltVersion, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
 import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
 import { ueberrolleZombies } from './ueberrollen.mjs';
@@ -950,7 +950,7 @@ export class Aufgaben {
     this.eingestiegen.clear(); this.folgenId = null;
     if (ziel?.frisch) return r.weltNeuStarten(false);
     r.weltNeuStarten(false, {
-      version: WELT_VERSION, karte, seed: Math.floor(Math.random() * 2 ** 31), zeit: 0, uhr: 8 * 60,
+      version: weltVersion(), karte, seed: Math.floor(Math.random() * 2 ** 31), zeit: 0, uhr: 8 * 60,
       besiegt: s.besiegt, level: ziel?.level ?? s.level + 1, chat: [...r.chatVerlauf],
     });
   }

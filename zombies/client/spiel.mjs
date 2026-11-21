@@ -2,7 +2,7 @@
 import { fzPx } from './masse.mjs';
 import { groesse } from './groessen.mjs';
 import {
-  KACHEL, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
+  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
@@ -27,6 +27,8 @@ import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
+import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from './innen_fein_bild.mjs';
+try { if (new URLSearchParams(location.search).has('innen1m')) setzeInnenFein(true); } catch { /* ohne Adresszeile (Tests) */ }   // PROTOTYP: Innenräume im Feinraster, Standard aus
 import * as ton from './ton.mjs';
 import { HundAnzeige, eigenerHund } from './hund.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlPruefen, brauchtPlatz } from './aufheben.mjs';
@@ -782,7 +784,11 @@ const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   //
 const LEERE_KARTE = new Map();
 const zombieKarte = () => raum?.state?.zombies ?? LEERE_KARTE;
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
-const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100);
+// PROTOTYP Feinraster: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
+const INNEN_FIGUR = 0.5;
+let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
+const innenFigur = () => (szeneRef?.aktEbene && szeneRef.innenWelten?.get(szeneRef.aktEbene)?.kachel ? INNEN_FIGUR : 1);
+const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100) * innenFigur();
 const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
 const VERWUNDET_GROESSE = 0.42 * 1.26;
 const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
@@ -1113,6 +1119,7 @@ class Ort extends Phaser.Scene {
     if (kartenbox) kartenbox.after(this.hordeListe); else document.body.appendChild(this.hordeListe);
     raum.onMessage('hordeInfo', m => this.hordeInfoEmpfangen(m));
     if (new URLSearchParams(location.search).has('debug')) raum.send('hordeDebug', { an: true });
+    szeneRef = this;
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
     if (new URLSearchParams(location.search).has('debug')) { window.szene = this; window.raum = raum; window.meineId = meineId; }
   }
@@ -1125,7 +1132,7 @@ class Ort extends Phaser.Scene {
   }
 
   // Kamerazoom: Bildschirmgröße × eigene Wahl (Knöpfe, Mausrad, +/−) × drinnen näher
-  zielZoom(ebene = this.aktEbene) { return this.grundZoom * this.zoomWahl * (ebene ? INNEN_ZOOM : 1); }
+  zielZoom(ebene = this.aktEbene) { return this.grundZoom * this.zoomWahl * (ebene ? (this.innenWelten.get(ebene)?.kachel ? INNEN_ZOOM_FEIN : INNEN_ZOOM) : 1); }
 
   // Zoom-Grenzen: im Kameraflug darf man weiter hinaus
   zoomGrenzen() { return [this.flug?.aktiv ? FLUG_ZOOM_MIN : ZOOM_MIN, ZOOM_MAX]; }
@@ -1736,10 +1743,10 @@ class Ort extends Phaser.Scene {
         continue;   // Autos sehen immer normal aus (keine Markierung für durchsuchte/leere Kofferräume)
       } else if (b.art !== 'bus') {
         // das Möbelstück, zu dem der Behälter gehört (Rahmen und Kreuz liegen genau auf dem gedrehten Möbelbild = ganzes Möbelrechteck)
-        const kx = Math.floor(b.x / KACHEL), ky = Math.floor(b.y / KACHEL);
+        const KW = kachelVon(w), kx = Math.floor(b.x / KW), ky = Math.floor(b.y / KW), ra = w.kachel ? 0.5 : 3;
         const m = (w.moebel ?? []).find(q => kx >= q.x && kx < q.x + q.b && ky >= q.y && ky < q.y + q.h);
         if (m) {
-          const x0 = m.x * KACHEL + 3, y0 = m.y * KACHEL + 3, bw = m.b * KACHEL - 6, bh = m.h * KACHEL - 6;
+          const x0 = m.x * KW + ra, y0 = m.y * KW + ra, bw = m.b * KW - 2 * ra, bh = m.h * KW - 2 * ra;
           if (leer) {
             g.fillStyle(0x6e6e6e, 0.28).fillRect(x0, y0, bw, bh);
             g.lineStyle(1.5, 0xbdbdbd, 0.55).strokeRect(x0, y0, bw, bh);
@@ -1768,7 +1775,7 @@ class Ort extends Phaser.Scene {
       for (const b of w.behaelter ?? []) {
         if (n >= 6) break;
         if (b.art === 'bw_kiste' || b.art === 'bus' || b.art === 'auto') continue;   // Autos/Kofferräume ohne Symbol
-        if (Math.hypot(b.x - lok.x, b.y - lok.y) > 2 * KACHEL) continue;
+        if (Math.hypot(b.x - lok.x, b.y - lok.y) > (w.kachel ? 20 : 2 * KACHEL)) continue;
         if (b.art === 'auto' && s.verbrannt?.has('auto:' + b.id)) continue;
         const leer = b.art === 'bw_kiste' ? this.leereKisten?.has(b.id) : s.behaelter.get(b.id)?.rest === 0;
         const t = pool[n] ??= this.add.text(0, 0, '', { fontSize: '13px', fontFamily: 'sans-serif', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6);
@@ -1879,10 +1886,12 @@ class Ort extends Phaser.Scene {
     let a = this.innenAnsichten.get(ebene);
     if (a) return a;
     const w = this.wv(ebene);
-    const B = w.b * KACHEL, H = w.h * KACHEL, X = w.ox * KACHEL, Y = w.oy * KACHEL;
-    const tex = this.textures.createCanvas('innen-' + ebene, B, H);
-    zeichneInnen(tex.getContext(), w); tex.refresh();
-    const bild = this.add.image(X, Y, 'innen-' + ebene).setOrigin(0).setDepth(0.2);
+    const K = kachelVon(w), SK = w.kachel ? BILD_SKALA : 1;   // Feinraster: Bild in höherer Auflösung
+    const B = w.b * K, H = w.h * K, X = w.ox * K, Y = w.oy * K;
+    const tex = this.textures.createCanvas('innen-' + ebene, B * SK, H * SK);
+    if (w.kachel) zeichneInnenFein(tex.getContext(), w); else zeichneInnen(tex.getContext(), w);
+    tex.refresh();
+    const bild = this.add.image(X, Y, 'innen-' + ebene).setOrigin(0).setDepth(0.2).setScale(1 / SK);
     const tueren = this.add.graphics().setDepth(0.4);
     const symbole = this.add.container(0, 0).setDepth(0.5);   // ❓/🔑 an verschlossenen Türen
     const dunkel = this.add.renderTexture(X, Y, B, H).setOrigin(0).setDepth(9);
@@ -1923,7 +1932,7 @@ class Ort extends Phaser.Scene {
     if (!ebene || !ich) return;
     const a = this.innenAnsicht(ebene), w = a.w;
     // Bretter an der Haustür (am Ausgang) je nach Barrikade (34 % je Brett); Safe Rooms zeigen den Wert aus ihrem Safe
-    if (w.ausgang && w.nr !== undefined) {
+    if (w.ausgang && w.nr !== undefined && !w.kachel) {
       const wert = Math.ceil(((w.safe ? raum.state.safes.get(w.safe)?.barrikade : raum.state.tueren.get('haus:' + w.nr)?.barrikade) ?? 0) / 34);
       if (wert !== a.bretterWert) {
         a.bretterWert = wert;
@@ -1940,7 +1949,7 @@ class Ort extends Phaser.Scene {
     for (const t of w.tueren) {
       const st = raum.state.tueren.get(`${ebene}:${t.x},${t.y}`);
       const offen = !!st?.offen, zu = st ? st.verschlossen : t.verschlossen;
-      w.kacheln[t.y * BREITE + t.x] = offen ? T.TUER_OFFEN : T.INNENTUER;
+      setzeTuerKacheln(w, t, offen);
       const sa = zu && !offen ? this.schlossArtVon(`${ebene}:${t.x},${t.y}`) : 'frei';   // frei: geht einfach auf, kein Schloss zu sehen
       stand += offen ? 'o' : sa === 'raetsel' ? 'r' : sa === 'schluessel' ? 's' : 'z';
       zus += `${Math.ceil((st?.barrikade ?? 0) / 34)}${st?.kaputt ? 'k' : ''},`;   // Bretter und Bruch
@@ -1953,6 +1962,7 @@ class Ort extends Phaser.Scene {
       const g = a.tueren.clear();
       a.symbole.removeAll(true);
       w.tueren.forEach((t, i) => {
+        if (w.kachel) { zeichneTuerFein(g, this, a, w, t, stand[i], zusListe[i]); return; }
         const x = t.x * KACHEL, y = t.y * KACHEL, z = stand[i];
         const senkrecht = w.hole(t.x, t.y - 1) === T.WAND;   // Wand oben/unten → Tür in senkrechter Wand
         if (z === 'o') {
@@ -2102,8 +2112,8 @@ class Ort extends Phaser.Scene {
 
   // Von der eigenen Position aus alles erkunden, was ohne geschlossene Tür erreichbar ist; einmal gesehen bleibt sichtbar
   nebelAktualisieren(a) {
-    const w = a.w, tx = Math.floor(this.lokal.x / KACHEL), ty = Math.floor(this.lokal.y / KACHEL);
-    const start = ty * BREITE + tx;
+    const w = a.w, KW = kachelVon(w), BR = breiteVon(w), tx = Math.floor(this.lokal.x / KW), ty = Math.floor(this.lokal.y / KW);
+    const start = ty * BR + tx;
     if (a.bekannt.has(start) && a.nebelStand === a.stand) return;
     a.nebelStand = a.stand;
     const drin = (x, y) => x >= w.ox && x < w.ox + w.b && y >= w.oy && y < w.oy + w.h;
@@ -2112,7 +2122,7 @@ class Ort extends Phaser.Scene {
     while (offen.length) {
       const [x, y] = offen.pop();
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx, ny = y + dy, k = ny * BREITE + nx;
+        const nx = x + dx, ny = y + dy, k = ny * BR + nx;
         if (!drin(nx, ny) || gesehen.has(k)) continue;
         gesehen.add(k);
         a.bekannt.add(k);                                       // Wände und Türen am Rand sind auch zu sehen
@@ -2122,8 +2132,15 @@ class Ort extends Phaser.Scene {
     }
     a.bekannt.add(start);
     const g = a.nebel.clear().fillStyle(0x000000, 1);
-    for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++)
-      if (!a.bekannt.has(y * BREITE + x)) g.fillRect(x * KACHEL - 0.5, y * KACHEL - 0.5, KACHEL + 1, KACHEL + 1);
+    const ueb = w.kachel ? 0.1 : 0.5;
+    for (let y = w.oy; y < w.oy + w.h; y++) {
+      for (let x = w.ox; x < w.ox + w.b; x++) {
+        if (a.bekannt.has(y * BR + x)) continue;
+        let x2 = x; while (x2 + 1 < w.ox + w.b && !a.bekannt.has(y * BR + x2 + 1)) x2++;   // zusammenhängende Strecke in einem Rechteck
+        g.fillRect(x * KW - ueb, y * KW - ueb, (x2 - x + 1) * KW + 2 * ueb, KW + 2 * ueb);
+        x = x2;
+      }
+    }
   }
 
   // drinnen ohne Licht: alles schwarz-weiß (Farbmatrix der Kamera, nur mit WebGL)
@@ -2856,13 +2873,14 @@ class Ort extends Phaser.Scene {
     let best = null, bd = Infinity;
     if (ich.ebene) {
       const w = this.wv(ich.ebene);
+      const KW = kachelVon(w);
       for (const t of w.tueren) {
-        const d = Math.hypot((t.x + 0.5) * KACHEL - x, (t.y + 0.5) * KACHEL - y);
-        if (d < 42 && d < bd) { bd = d; best = { key: `${ich.ebene}:${t.x},${t.y}`, tuer: t }; }
+        const d = Math.hypot((t.x + 0.5) * KW - x, (t.y + 0.5) * KW - y);
+        if (d < (w.kachel ? 14 : 42) && d < bd) { bd = d; best = { key: `${ich.ebene}:${t.x},${t.y}`, tuer: t }; }
       }
       if (w.ausgang && w.nr !== undefined) {
-        const d = Math.hypot((w.ausgang.x + 0.5) * KACHEL - x, (w.ausgang.y + 0.5) * KACHEL - y);
-        if (d < 48 && d < bd) best = { key: 'haus:' + w.nr, nr: w.nr, safe: w.safe };
+        const d = Math.hypot((w.ausgang.x + 0.5) * KW - x, (w.ausgang.y + 0.5) * KW - y);
+        if (d < (w.kachel ? 16 : 48) && d < bd) best = { key: 'haus:' + w.nr, nr: w.nr, safe: w.safe };
       }
     } else {
       if (!this.hausTuerKarte) {
