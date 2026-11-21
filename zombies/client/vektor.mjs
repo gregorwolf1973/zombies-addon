@@ -132,21 +132,27 @@ function pfad(ctx, pts, zu = false) {
 
 // ---------- Flächen (unter allem anderen) ----------
 // kleinstes umschließendes Rechteck (Ausrichtung an einer Polygonkante): für Spielfeldlinien und Parkbuchten
+// Kleinstes umschließendes gedrehtes Rechteck. Wird auch vom Weltcode benutzt (Parkbuchten) und muss deshalb auf jeder
+// JS-Engine Bit für Bit gleich rechnen: nur + − × ÷ und Math.sqrt (IEEE-genau), KEIN atan2/sin/cos für Entscheidungen
+// (die weichen zwischen Engines in der letzten Stelle ab). w (Winkel) nur für die Zeichnung.
 function orientierteBox(pts) {
   if (pts._box) return pts._box;
   let best = null;
   for (let i = 0; i < pts.length; i++) {
     const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
-    const w = Math.atan2(by - ay, bx - ax), c = Math.cos(w), sn = Math.sin(w);
+    const dx = bx - ax, dy = by - ay, len = Math.sqrt(dx * dx + dy * dy);
+    if (!(len > 0)) continue;
+    const c = dx / len, sn = dy / len;
     let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
     for (const [x, y] of pts) { const u = x * c + y * sn, v = -x * sn + y * c; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
     const fl = (u1 - u0) * (v1 - v0);
-    if (!best || fl < best.fl) best = { fl, w, u0, u1, v0, v1 };
+    if (!best || fl < best.fl - 1e-6) best = { fl, c, sn, u0, u1, v0, v1 };
   }
-  let { w, u0, u1, v0, v1 } = best;
-  if (u1 - u0 < v1 - v0) { w += Math.PI / 2; [u0, u1, v0, v1] = [v0, v1, -u1, -u0]; }   // lange Seite entlang w
-  const c = Math.cos(w), sn = Math.sin(w), uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
-  return (pts._box = { cx: uc * c - vc * sn, cy: uc * sn + vc * c, w, lang: u1 - u0, breit: v1 - v0 });
+  if (!best) return (pts._box = { cx: pts[0]?.[0] ?? 0, cy: pts[0]?.[1] ?? 0, w: 0, c: 1, sn: 0, lang: 0, breit: 0 });
+  let { c, sn, u0, u1, v0, v1 } = best;
+  if (u1 - u0 < v1 - v0) { [c, sn] = [-sn, c]; [u0, u1, v0, v1] = [v0, v1, -u1, -u0]; }   // lange Seite entlang (c, sn)
+  const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
+  return (pts._box = { cx: uc * c - vc * sn, cy: uc * sn + vc * c, c, sn, w: Math.atan2(sn, c), lang: u1 - u0, breit: v1 - v0 });
 }
 // im gedrehten Rechteck zeichnen: Ursprung = Mitte, x entlang der langen Seite
 function imRechteck(ctx, b, f) { ctx.save(); ctx.translate(b.cx, b.cy); ctx.rotate(b.w); f(b.lang / 2, b.breit / 2); ctx.restore(); }
@@ -186,8 +192,10 @@ export const PARK_TIEFE = 5 * K / 4, PARK_GASSE = 6 * K / 4, PARK_BREIT = 2.5 * 
 export function parkplatzBuchten(pts) {
   if (pts._buchten) return pts._buchten;
   const b = orientierteBox(pts), L = b.lang / 2, Bt = b.breit / 2;
-  const c = Math.cos(b.w), sn = Math.sin(b.w), welt = (u, v) => [b.cx + u * c - v * sn, b.cy + u * sn + v * c];
-  const reihen = [], buchten = [], winkel = b.w + Math.PI / 2;
+  // Weltcode: gerundet (1/64 px), damit winzige Engine-Unterschiede nie eine Entscheidung kippen
+  const q = z => Math.round(z * 64) / 64;
+  const c = b.c, sn = b.sn, welt = (u, v) => [q(b.cx + u * c - v * sn), q(b.cy + u * sn + v * c)];
+  const reihen = [], buchten = [], winkel = Math.round((b.w + Math.PI / 2) * 1e4) / 1e4;
   for (let y = -Bt + 2; y + PARK_TIEFE <= Bt; y += PARK_TIEFE * 2 + PARK_GASSE) {
     for (const [y0, y1] of [[y, y + PARK_TIEFE], [y + PARK_TIEFE + PARK_GASSE, y + PARK_TIEFE * 2 + PARK_GASSE]]) {
       if (y1 > Bt) continue;

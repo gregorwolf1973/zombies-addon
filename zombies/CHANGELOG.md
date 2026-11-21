@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.68.5 – 21.11.2026
+
+- Behoben: Parkbucht-Berechnung ohne Winkelfunktionen – Server (Node 22) und Browser bauen auf Kochel und Geretsried 2 wieder exakt dieselbe Welt.
+
 ## 0.68.4 – 21.11.2026
 
 - Behoben: Geparkte Autos stehen auf Parkplätzen jetzt mittig und längs in den eingezeichneten (auch schrägen) Parkbuchten, mit freien Lücken.
