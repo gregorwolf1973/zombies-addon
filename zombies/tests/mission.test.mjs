@@ -11,25 +11,25 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, DINGE, setzeKartengroesse } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
-import { missionsPlan, missionListe, kreisSchrumpfen, SUCH_MIN, FUNK_TEILE } from '../server/mission.mjs';
+import { missionsPlan, missionListe, kreisSchrumpfen, SUCH_MIN, FUNK_TEILE, MISSION_MAX, MISSIONEN, ortText } from '../server/mission.mjs';
 import { schwierigkeit, LEVEL_TABELLE } from '../server/schwierigkeit.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
 
 const karte = n => JSON.parse(fs.readFileSync(new URL(`../client/karten/${n}.json`, import.meta.url)));
 
-test('Missionsorte: Level 1 hat 5 Gegenstände, weit auseinander, je Runde und Level andere Orte, deterministisch', () => {
+test('Missionsorte: Level 1 hat 3 Gegenstände (Obergrenze MISSION_MAX), weit auseinander, je Runde und Level andere Orte, deterministisch', () => {
   const k = karte('geretsried');
   setzeKartengroesse(k.breite, k.hoehe);
   try {
     const w = baueWeltAusKarte(k, 7);
     const breite = k.breite * KACHEL;
-    assert.deepEqual(missionListe('geretsried').map(m => m.ding), ['m_funk', 'm_batterie', 'm_antenne', 'm_schluessel', 'm_diesel']);
+    assert.deepEqual(missionListe('geretsried').map(m => m.ding), ['m_funk', 'm_batterie', 'm_antenne']);
     const orte = plan => plan.map(m => m.nr).join(',');
     const gesehen = new Set();
     for (const [seed, level] of [[7, 1], [7, 2], [8, 1], [9, 1]]) {
       const plan = missionsPlan(seed, level, 'geretsried', w);
-      assert.equal(plan.length, 5, 'Gegenstände fehlen');
-      assert.equal(new Set(plan.map(m => m.nr)).size, 5, 'zwei Gegenstände im selben Haus');
+      assert.equal(plan.length, 3, 'Gegenstände fehlen');
+      assert.equal(new Set(plan.map(m => m.nr)).size, 3, 'zwei Gegenstände im selben Haus');
       assert.ok(plan.every(m => m.behaelter.startsWith(`h${m.nr}eg:`)), 'Behälter gehört nicht zum Haus');
       let min = Infinity;
       for (const a of plan) for (const b of plan) if (a !== b) min = Math.min(min, Math.hypot(a.x - b.x, a.y - b.y));
@@ -39,28 +39,41 @@ test('Missionsorte: Level 1 hat 5 Gegenstände, weit auseinander, je Runde und L
     }
     assert.equal(gesehen.size, 4, 'Orte wiederholen sich bei anderem Seed/Level');
     // Level 2 (Isarauen): eigene Liste
-    assert.deepEqual(missionListe('isarauen').map(m => m.ding), ['m_funk', 'm_batterie', 'm_antenne', 'm_treibstoff', 'm_landefeuer']);
+    assert.deepEqual(missionListe('isarauen').map(m => m.ding), ['m_funk', 'm_antenne', 'm_landefeuer']);
     assert.ok(Object.values(DINGE).filter(d => d.mission).length >= 7);
   } finally { setzeKartengroesse(64, 48); }
 });
 
-test('Suchkreis: enthält das Ziel, wird mit jedem Hinweis kleiner, nie unter das Minimum', () => {
+test('Obergrenze: höchstens 3 Missionsgegenstände je Level, in jeder Karte und jeder Spielerzahl; Vorräte höchstens 2 × 5', async () => {
+  assert.equal(MISSION_MAX, 3);
+  for (const [k, l] of Object.entries(MISSIONEN)) assert.ok(l.length <= 3 && l.length >= 1, `${k}: ${l.length} Gegenstände`);
+  const { VORRAT_MAX } = await import('../server/aufgaben.mjs');
+  assert.equal(VORRAT_MAX, 5);
+  for (const k of ['geretsried', 'isarauen', 'koenigsdorf']) {
+    const kt = karte(k);
+    setzeKartengroesse(kt.breite, kt.hoehe);
+    try {
+      const w = baueWeltAusKarte(kt, 3);
+      for (const spieler of [1, 3, 5, 9]) assert.ok(missionsPlan(3, 2, k, w, spieler).length <= 3, `${k} mit ${spieler} Spielern`);
+    } finally { setzeKartengroesse(64, 48); }
+  }
+});
+
+test('Position exakt: Kreismitte = Gegenstandsort (Gebäudemitte), Hinweisfeld nennt Gebäude und Stockwerk', () => {
   const k = karte('geretsried');
   setzeKartengroesse(k.breite, k.hoehe);
   try {
     const w = baueWeltAusKarte(k, 11);
     for (const m of missionsPlan(11, 1, 'geretsried', w)) {
-      assert.ok(Math.hypot(m.kx - m.x, m.ky - m.y) < m.r, 'Ziel nicht im Kreis');
-      assert.ok(Math.hypot(m.kx - m.x, m.ky - m.y) > 0, 'Kreismitte liegt genau auf dem Ziel');
-      let r = m.r;
-      assert.ok(r === 800, 'Radius nicht 100 m: ' + r);
-      while (kreisSchrumpfen(m)) {
-        assert.ok(m.r < r, 'Kreis schrumpft nicht');
-        assert.ok(Math.hypot(m.kx - m.x, m.ky - m.y) <= m.r, 'Ziel nach Hinweis nicht mehr im Kreis');
-        r = m.r;
-      }
+      const h = w.haeuser[m.nr];
+      assert.equal(m.kx, m.x); assert.equal(m.ky, m.y, 'Kreismitte nicht genau auf dem Gegenstand');
+      assert.equal(m.x, (h.x + h.b / 2) * KACHEL); assert.equal(m.y, (h.y + h.h / 2) * KACHEL);
       assert.equal(m.r, SUCH_MIN);
+      assert.match(m.ort, /, Erdgeschoss$/);
+      assert.equal(kreisSchrumpfen(m), false, 'Kreis darf nicht mehr schrumpfen');
     }
+    assert.equal(ortText({ art: 'hardware', name: 'Bauhaus' }), 'Baumarkt Bauhaus, Erdgeschoss');
+    assert.equal(ortText({ art: 'car_repair' }), 'Autowerkstatt, Erdgeschoss');
   } finally { setzeKartengroesse(64, 48); }
 });
 
@@ -166,23 +179,20 @@ test('Missionsgegenstände: liegen im Behälter, nicht wegwerfbar, Abgabe in der
   } finally { await beenden(a.c, b.c); }
 });
 
-test('Hinweis: raum.missionHinweis halbiert den Suchkreis im Zustand, das Ziel bleibt drin; Schwierigkeit im Raum steigt', async () => {
+test('Missionsposition im Zustand exakt, keine Hinweise mehr; Schwierigkeit im Raum steigt', async () => {
   await frisch();
   const a = await beitreten('Hinweis');
   const { raum } = a;
   try {
     const ag = raum.aufgaben, m = ag.mission[1], q = raum.state.missionen.get(m.ding);
+    assert.ok(ag.mission.length <= 3);
+    assert.equal(q.x, Math.round(m.x)); assert.equal(q.y, Math.round(m.y), 'Position nicht exakt');
+    assert.equal(q.behaelter, m.behaelter); assert.match(q.ort, /Erdgeschoss/);
+    assert.match(raum.state.aufgaben.get('mission').text, /Erdgeschoss/, 'Aufgabentext ohne Ortshinweis');
     const r0 = q.r;
-    assert.ok(Math.hypot(q.x - m.x, q.y - m.y) <= q.r, 'Ziel nicht im Suchkreis');
-    assert.equal(raum.missionHinweis(m.ding), m.ding);
-    assert.ok(q.r <= Math.ceil(r0 / 2) && q.r >= r0 / 2 - 1, `Radius ${r0} -> ${q.r}`);
-    assert.ok(Math.hypot(q.x - m.x, q.y - m.y) <= q.r + 1, 'Ziel nach Hinweis nicht mehr im Kreis');
-    // zufälliger Gegenstand, wenn keiner genannt ist
-    const vorher = [...raum.state.missionen.values()].reduce((s, x) => s + x.r, 0);
-    assert.ok(raum.missionHinweis());
-    assert.ok([...raum.state.missionen.values()].reduce((s, x) => s + x.r, 0) < vorher);
-    // Speicherstand: Hinweise bleiben
-    assert.ok(ag.speichern().mission.hinweise[m.ding] >= 1);   // der zufällige Hinweis kann denselben Gegenstand treffen
+    assert.equal(raum.missionHinweis(m.ding), null);
+    assert.equal(raum.missionHinweis(), null);
+    assert.equal(q.r, r0);
 
     // Schwierigkeit im Raum: Level, Spieltag, Regler
     const basis = raum.schwierigkeit();

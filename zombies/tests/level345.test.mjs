@@ -30,7 +30,7 @@ test('Karten registriert, Reihenfolge 1→2→3→4→5, Namen, Einstellungen', 
     assert.ok(KARTEN.includes(k) && LEVEL_WELTEN.includes(k), k);
     assert.ok(KARTEN_NAMEN[k]);
     assert.equal(ladeKarte(k).name, k);
-    assert.ok(Array.isArray(missionListe(k)) && missionListe(k).length >= 4);
+    assert.ok(Array.isArray(missionListe(k)) && missionListe(k).length === 3, 'genau 3 Missionsgegenstände je Level');
   }
   const e = bereinige({});
   for (const k of LEVEL_WELTEN) assert.ok(e.bissSpielerLevel[k] > 0, 'Biss ' + k);

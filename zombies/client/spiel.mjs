@@ -1308,9 +1308,11 @@ class Ort extends Phaser.Scene {
     this.uebersicht.ziele = kats.size ? this.welt.haeuser.filter(h => !h.safe && kats.has(ladenArt(h))).map(h => ({
       x: h.x + h.b / 2, y: h.y + h.h / 2, name: ZIEL_NAMEN[h.art] ?? ZIEL_NAMEN[ladenArt(h)] ?? 'Laden', symbol: ZIEL_SYMBOL[ladenArt(h)] ?? '⭐',
     })) : [];
-    // Suchkreise offener Missionsgegenstände (Server liefert Mitte und Radius in px, nie den genauen Ort)
+    // offene Missionsgegenstände: exakte Position vom Server (Mitte = Gegenstand), mit Gegenstandsbild, falls vorhanden
+    const dTex = this.textures.exists('dinge') ? this.textures.get('dinge') : null;
+    const dBild = ding => { const n = ding === 'handgranate' ? 'granate' : ding; if (!dTex || !hatDingBild(ding) || !dTex.has(n)) return null; const f = dTex.get(n); return { img: f.source.image, sx: f.cutX, sy: f.cutY, s: f.cutWidth }; };
     this.uebersicht.kreise = [...(raum.state.missionen?.values() ?? [])].filter(q => !q.abgegeben).map(q => ({
-      x: q.x / KACHEL, y: q.y / KACHEL, r: q.r / KACHEL, symbol: DINGE[q.ding]?.zeichen ?? '❓', name: (DINGE[q.ding]?.name ?? q.ding) + (q.nummer && q.von > 1 ? ` ${q.nummer}/${q.von}` : ''),
+      x: q.x / KACHEL, y: q.y / KACHEL, r: q.r / KACHEL, symbol: DINGE[q.ding]?.zeichen ?? '❓', bild: dBild(q.ding), name: (DINGE[q.ding]?.name ?? q.ding) + (q.nummer && q.von > 1 ? ` ${q.nummer}/${q.von}` : ''),
     }));
     this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });
   }
@@ -1662,6 +1664,23 @@ class Ort extends Phaser.Scene {
       }
     }
     for (let i = n; i < pool.length; i++) pool[i].setVisible(false);
+  }
+
+  // Missionsgegenstand im Haus: der Behälter, in dem er liegt, glänzt goldgelb und pulsiert (solange er nicht durchsucht ist)
+  missionGlanz(s) {
+    const w = this.aktEbene ? this.wv(this.aktEbene) : null;
+    const liste = w ? [...(s.missionen?.values() ?? [])].filter(q => !q.abgegeben && q.behaelter && q.behaelter.startsWith(this.aktEbene + ':') && !s.behaelter.has(q.behaelter)) : [];
+    if (!liste.length) { this.glanzGfx?.clear(); return; }
+    const g = (this.glanzGfx ??= this.add.graphics().setDepth(6.2)).clear();
+    const ph = (this.time.now % 1500) / 1500;
+    for (const q of liste) {
+      const b = (w.behaelter ?? []).find(x => x.id === q.behaelter);
+      if (!b) continue;
+      const puls = 0.5 + 0.5 * Math.sin(ph * Math.PI * 2);
+      g.fillStyle(0xffd600, 0.18 + 0.14 * puls); g.fillCircle(b.x, b.y, 17 + 3 * puls);
+      g.lineStyle(2, 0xffe57f, 0.9 * (1 - ph)); g.strokeCircle(b.x, b.y, 12 + 22 * ph);
+      g.lineStyle(2, 0xffd600, 0.85); g.strokeCircle(b.x, b.y, 15);
+    }
   }
 
   figurBild2(name, i = 0) {
@@ -2213,6 +2232,7 @@ class Ort extends Phaser.Scene {
     this.feuerDarstellen(s);
     this.spurenDarstellen(s);
     this.behaelterSymbole(s);
+    this.missionGlanz(s);
     // liegende Gegenstände
     for (const [id, b] of s.boden) {
       let o = this.bodenObj.get(id);
