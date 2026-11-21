@@ -303,7 +303,7 @@ test('Geretsried: Mülltonnen, Container, Straßensperren, freie Parkplätze', a
 });
 
 test('Mehr Bäume: ca. +50 %, nie auf Haustür-Vorkacheln, Parkbuchten, Containern, Sperren oder am Start', async () => {
-  const { baumVon, zeichneBoden } = await import('../client/aussehen.mjs');
+  const { baumVon, baumKronen, zeichneBoden } = await import('../client/aussehen.mjs');
   setzeKartengroesse(karte.breite, karte.hoehe);
   const w = baueWeltAusKarte(karte, 7);
   const zahl = t => { let n = 0; for (const x of w.kacheln) if (x === T.BAUM) n++; return n; };
@@ -319,8 +319,9 @@ test('Mehr Bäume: ca. +50 %, nie auf Haustür-Vorkacheln, Parkbuchten, Containe
   for (const b of w.behaelter) assert.notEqual(w.hole(Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL)), T.BAUM, 'Baum unter ' + b.art);
   for (const s of w.sperren) assert.notEqual(w.hole(Math.floor(s.x / KACHEL), Math.floor(s.y / KACHEL)), T.BAUM, 'Baum auf Sperre');
   assert.notEqual(w.hole(Math.floor(w.start.x / KACHEL), Math.floor(w.start.y / KACHEL)), T.BAUM);
-  // Kronen maßstäblich: ca. 6,5–10 m (8 px = 1 m)
-  for (let i = 0; i < 50; i++) { const b = baumVon(i, 3 * i); assert.ok(b.gr >= 6.5 * 8 - 1e-9 && b.gr <= 10 * 8 + 1e-9, 'Krone ' + b.gr); }
+  // Kronen maßstäblich: 4–8 m je Baum (8 px = 1 m), Einzelbäume kleiner als Waldbäume (Regeln und Überlappung: tests/baumgruppen.test.mjs)
+  for (let i = 0; i < 50; i++) for (const n of [1, 3, 8, 24]) { const b = baumVon(i, 3 * i, n); assert.ok(b.gr >= 4 * 8 - 1e-9 && b.gr <= 8 * 8 + 1e-9, 'Krone ' + b.gr); }
+  for (const b of baumKronen(w, { x0: 0, y0: 0, x1: 120, y1: 120 })) assert.ok(b.gr >= 32 - 1e-9 && b.gr <= 64 + 1e-9, 'Krone ' + b.gr);
   assert.equal(typeof zeichneBoden, 'function');
   // Blumenbeete gibt es nicht mehr
   const quelle = fs.readFileSync(new URL('../client/aussehen.mjs', import.meta.url), 'utf8');

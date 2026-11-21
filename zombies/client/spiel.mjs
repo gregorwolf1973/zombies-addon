@@ -18,7 +18,7 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
-import { ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulSchatten, kulBaumAlpha, fotoStatus, fotoWunsch } from './kulisse.mjs';
+import { ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulSchatten, fotoStatus, fotoWunsch } from './kulisse.mjs';
 import { KUL_SCHLUESSEL, schattenFaktor } from './kulisse_regeln.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
@@ -29,6 +29,7 @@ const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum 
 import { innenraumFuer } from './innen.mjs';
 import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from './innen_fein_bild.mjs';
 // ?innen1m in der Adresse: nur noch zum Testen vorgesehen; maßgeblich ist der Schalter des Servers (state.optionen, siehe erzeuge())
+import { hindernisFelder, hindernisPixel } from './hindernisse.mjs';
 import * as ton from './ton.mjs';
 import { HundAnzeige, eigenerHund } from './hund.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlPruefen, brauchtPlatz } from './aufheben.mjs';
@@ -431,6 +432,7 @@ function einstellungenEinrichten() {
     let a = '0.6'; try { a = localStorage.getItem('zob_kartealpha') ?? '0.6'; } catch { /* egal */ }
     for (const b of document.querySelectorAll('#eg-karte button')) b.classList.toggle('an', b.dataset.v === a);
     $('eg-hund').hidden = !eigenerHund(raum?.state?.hunde, meineId);   // „Hund wegschicken“ nur mit Hund
+    kulisseSchalterZeigen();   // erst beim Öffnen prüfen: beim Seitenstart ist die Karte noch nicht geladen
     geraetMarkieren();
   };
   geraetEinstellungenEinrichten(markieren);
@@ -462,12 +464,17 @@ function feuerSetzen(an) {
   feuerHalten = !!an;
   $('feuerknopf')?.classList.toggle('gedrueckt', feuerHalten);
 }
+// Kulisse-Schalter nur auf Karten mit Kulisse-Daten sichtbar (je Schalter nur, wenn die Daten dafür da sind)
+function kulisseSchalterZeigen() {
+  const da = kulisseVorhanden();
+  $('eg-kulisse').hidden = !da;
+  if (da) { $('eg-kul-boden-z').hidden = !kulHatFoto(); $('eg-kul-daecher-z').hidden = !kulHatDaecher(); }
+}
 function geraetEinstellungenEinrichten(markieren) {
   const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
   const merke = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
   const K = GERAET_SCHLUESSEL;
-  // Kulisse-Schalter nur auf Karten mit Kulisse-Daten sichtbar (je Schalter nur, wenn die Daten dafür da sind)
-  if (kulisseVorhanden()) { $('eg-kulisse').hidden = false; $('eg-kul-boden-z').hidden = !kulHatFoto(); $('eg-kul-daecher-z').hidden = !kulHatDaecher(); }
+  kulisseSchalterZeigen();
   schiessModus = schiessModusLesen(lies(K.schiessen));
   const stimmenAnzeige = () => { const pr = Math.round(stimmenFaktorLesen(lies(K.stimmen)) * 100); $('eg-stimmen').value = String(pr); $('eg-stimmen-wert').textContent = pr + ' %'; };
   const gruppe = (id, wert, setzen, schluessel) => {
@@ -600,6 +607,7 @@ function suMenueEinrichten(szene) {
       <div class="titel">Horde jetzt starten</div>
       <div class="zeile">${b('horde', '50', { groesse: 50 })}${b('horde', '200', { groesse: 200 })}${b('horde', '500', { groesse: 500 })}</div>
       ${bs('hordeanzeige', '🎯 Horden-Ziele anzeigen')}
+      <button type="button" class="umschalter" data-hind="1" data-text="🧱 Hindernisse zeigen">🧱 Hindernisse zeigen: AUS</button>
       <div class="titel">Tageszeit</div>
       <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
       ${bs('nebel', '🌫 Nebel')}
@@ -619,6 +627,7 @@ function suMenueEinrichten(szene) {
     fenster.addEventListener('click', e => {
       if (e.target === fenster) return zu();
       if (e.target.closest('button[data-flug]')) { zu(); szene?.flug?.starten(); return; }
+      if (e.target.closest('button[data-hind]')) { hindernisAn = !hindernisAn; hindernisKnopf(); return; }   // rein lokal, kein Server
       const bt = e.target.closest('button[data-su]');
       if (!bt) return;
       try { raum?.send('su', JSON.parse(bt.dataset.su)); } catch { /* egal */ }
@@ -637,8 +646,15 @@ function suMenueEinrichten(szene) {
 
 // Zustand der Umschalter im Testmenü anzeigen (AN grün, AUS grau); Werte kommen als 'suStatus' vom Server
 let suStatusRaum = null;
+let hindernisAn = false;   // „Hindernisse zeigen“ (nur lokal, nur Superuser)
+function hindernisKnopf() {
+  const bt = $('sumenue')?.querySelector('button[data-hind]'); if (!bt) return;
+  bt.textContent = `${bt.dataset.text}: ${hindernisAn ? 'AN' : 'AUS'}`;
+  bt.classList.toggle('an', hindernisAn); bt.setAttribute('aria-pressed', hindernisAn ? 'true' : 'false');
+}
 function suStatusZeigen(st) {
   const f = $('sumenue'); if (!f || !st) return;
+  hindernisKnopf();
   for (const bt of f.querySelectorAll('button[data-schalter]')) {
     const an = !!st[bt.dataset.schalter];
     bt.textContent = `${bt.dataset.text}: ${an ? 'AN' : 'AUS'}`;
@@ -1315,6 +1331,30 @@ class Ort extends Phaser.Scene {
     this.hordeListe.style.display = 'block';
   }
 
+  // Superuser „Hindernisse zeigen“: halbtransparentes Bild (1 Pixel = 1-m-Feld) über dem sichtbaren Ausschnitt samt Rand;
+  // neu gerechnet nur, wenn die Kamera den gerechneten Bereich verlässt (oder Ebene/Zoom wechseln) – höchstens 4-mal je Sekunde
+  hindernisAktualisieren() {
+    const an = hindernisAn && suAn;
+    if (!an) { if (this.hindBild) { this.hindBild.destroy(); this.hindBild = null; this.textures.remove('hindernisse'); this.hindStand = null; } return; }
+    const jetzt = performance.now();
+    if (this.hindStand && jetzt - this.hindStand.t < 250) return;
+    const v = this.cameras.main.worldView, FP = KACHEL / 4, ebene = this.aktEbene;
+    const sx0 = Math.floor(v.x / FP), sy0 = Math.floor(v.y / FP), sx1 = Math.ceil((v.x + v.width) / FP), sy1 = Math.ceil((v.y + v.height) / FP);
+    const h = this.hindStand;
+    if (h && h.ebene === ebene && this.hindBild && sx0 >= h.x0 && sy0 >= h.y0 && sx1 <= h.x0 + h.nx && sy1 <= h.y0 + h.ny) return;
+    const rand = 24, welt = this.wv(ebene);
+    const x0 = Math.max(0, sx0 - rand), y0 = Math.max(0, sy0 - rand), nx = Math.min(BREITE * 4, sx1 + rand) - x0, ny = Math.min(HOEHE * 4, sy1 + rand) - y0;
+    if (nx <= 0 || ny <= 0) return;
+    const grenze = ebene ? { x0: welt.ox, y0: welt.oy, x1: welt.ox + welt.b, y1: welt.oy + welt.h } : null;
+    const codes = hindernisFelder(welt, x0, y0, nx, ny, W.spielerRadius, grenze);
+    this.hindBild?.destroy(); this.hindBild = null;
+    if (this.textures.exists('hindernisse')) this.textures.remove('hindernisse');
+    const tex = this.textures.createCanvas('hindernisse', nx, ny), c = tex.getContext(), bd = c.createImageData(nx, ny);
+    hindernisPixel(codes, bd.data); c.putImageData(bd, 0, 0); tex.refresh(); tex.setFilter(1);   // 1 = NEAREST: scharfe Felder
+    this.hindBild = this.add.image(x0 * FP, y0 * FP, 'hindernisse').setOrigin(0).setScale(FP).setDepth(8.6);
+    this.hindStand = { t: jetzt, x0, y0, nx, ny, ebene };
+  }
+
   // Zielfahne, gestrichelte Linie und Countdown (jedes Bild, nur wenn Infos da sind)
   hordeZeichnen() {
     const h = this.hordeInfo, g = this.hordeGfx;
@@ -1447,9 +1487,10 @@ class Ort extends Phaser.Scene {
     const rect = { x0: cx * STUECK, y0: cy * STUECK, x1: Math.min(BREITE, (cx + 1) * STUECK), y1: Math.min(HOEHE, (cy + 1) * STUECK) };
     const B = (rect.x1 - rect.x0) * KACHEL, H = (rect.y1 - rect.y0) * KACHEL, key = cx + ',' + cy;
     const tb = this.textures.createCanvas('boden-' + key, B, H);
+    const foto = kulBoden() && fotoStatus(rect) === 'bereit';   // gleiche Bedingung wie in zeichneBoden: Luftbild statt gezeichnetem Boden
     zeichneBoden(tb.getContext(), this.welt, rect); tb.refresh(); this.kanteFesthalten(tb);
     const boden = this.add.image(rect.x0 * KACHEL, rect.y0 * KACHEL, 'boden-' + key).setOrigin(0).setDepth(0).setVisible(!this.aktEbene);
-    const st = { cx, cy, key, rect, B, H, boden, oben: null, baum: undefined, schatten: null };
+    const st = { cx, cy, key, rect, B, H, foto, boden, oben: null, baum: undefined, schatten: null };
     this.stuecke.set(key, st);
     if (kulSchatten()) this.baueStueckSchatten(st);
     return st;
@@ -1504,11 +1545,11 @@ class Ort extends Phaser.Scene {
 
   // Baumkronen eines Stücks: eigene Ebene über den Figuren, halbtransparent, damit man darunter alles sieht (auch sich selbst)
   baueStueckBaeume(st) {
-    if (!hatBaeume(this.welt, st.rect)) { st.baum = null; return; }
+    if (st.foto || !hatBaeume(this.welt, st.rect)) { st.baum = null; return; }   // Luftbild: das Foto zeigt die Bäume, im Boden stehen nur Stamm-/Schattenpunkte
     const tk = this.textures.createCanvas('baum-' + st.key, st.B, st.H);
     zeichneKronen(tk.getContext(), this.welt, this.bilder, st.rect);
     tk.refresh(); this.kanteFesthalten(tk);
-    st.baum = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'baum-' + st.key).setOrigin(0).setDepth(6.5).setAlpha(kulBaumAlpha()).setVisible(!this.aktEbene);
+    st.baum = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'baum-' + st.key).setOrigin(0).setDepth(6.5).setAlpha(0.55).setVisible(!this.aktEbene);
   }
 
   // Haustüren draußen: geschlossen = dunkler Balken, Barrikade = Bretter, zerbrochen = Splitter
@@ -2396,7 +2437,7 @@ class Ort extends Phaser.Scene {
     }
     this.feuerDarstellen(s);
     this.spurenDarstellen(s);
-    this.behaelterSymbole(s);
+    // (kein Kistensymbol 📦/∅ über Behältern – bewusst keine „noch nicht durchsucht“-Anzeige)
     this.missionGlanz(s);
     // liegende Gegenstände
     for (const [id, b] of s.boden) {
@@ -3113,6 +3154,7 @@ class Ort extends Phaser.Scene {
     if (!this.bereit) return;
     const dt = Math.min(0.1, ms / 1000);
     if (this.hordeInfo) this.hordeZeichnen();
+    this.hindernisAktualisieren();
     // Tag/Nacht-Zeiten vom Server (Einstellung) übernehmen
     if (raum.state.tagAb && (raum.state.tagAb !== this.tagAb || raum.state.nachtAb !== this.nachtAb)) {
       this.tagAb = raum.state.tagAb; this.nachtAb = raum.state.nachtAb; setzeTageszeiten(this.tagAb, this.nachtAb);
