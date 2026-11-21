@@ -1,5 +1,6 @@
 // Steuerung der simulierten Mitspieler (zweite Fassung, Claude): Wegsuche über Kacheln, feste Plätze hinter
 // dem Anführer, Abstand zu allen Figuren, bewaffnete Bots kämpfen. Ein Bot steuert sich nur über x.eingabe.
+import { hat, zaehle, flach, entferne, nimmEins, fuegeHinzu, kannAufnehmen, freiePlaetze, dingId } from '../client/stapel.mjs';
 import { planSchritt, entnahmeFrei } from './botplan.mjs';   // Team-Planer (Aufträge, Rollen, Chat-Befehle)
 import { WERTE as W, frei, sichtfrei, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE, durchsuchDauer, MUNITION_MAX, munitionGesamt } from '../client/welt.mjs';
 
@@ -18,20 +19,20 @@ function bewaffnet(p) {
 // Selbstversorgung direkt am Zustand (höchstens alle 1 s)
 function versorgen(p, b, jetzt) {
   if (jetzt - (b.versorgt ?? 0) < 1) return;
-  const nimm = (d, f) => { const i = p.rucksack.indexOf(d); if (i < 0) return false; p.rucksack.splice(i, 1); f(); b.versorgt = jetzt; return true; };
+  const nimm = (d, f) => { if (entferne(p.rucksack, d, 1) < 1) return false; f(); b.versorgt = jetzt; return true; };
   if (p.infektion > 0 && nimm('spritze', () => { p.infektion = 0; })) return;
   if (p.hp < 40 && nimm('verband', () => { p.hp = Math.min(100, p.hp + 45); })) return;
   if (p.durst < 35 && nimm('wasser', () => { p.durst = Math.min(100, p.durst + 45); })) return;
   if (p.hunger < 35 && (nimm('essen', () => { p.hunger = Math.min(100, p.hunger + 45); }) || nimm('schokoriegel', () => { p.hunger = Math.min(100, p.hunger + 20); }))) return;
   // bessere Waffe aus dem Rucksack nehmen (die alte kommt hinein); Fernwaffen nur mit Munition
   const rang = w => (WAFFEN[w]?.fern && !p.munition) ? 0 : WAFFEN_RANG.indexOf(w) + 1;
-  const besser = WAFFEN_RANG.filter(w => p.rucksack.includes(w) && rang(w) > rang(p.waffe)).at(-1);
-  if (besser && nimm(besser, () => { if (p.waffe) p.rucksack.push(p.waffe); p.waffe = besser; })) return;
+  const besser = WAFFEN_RANG.filter(w => hat(p.rucksack, w) && rang(w) > rang(p.waffe)).at(-1);
+  if (besser && nimm(besser, () => { if (p.waffe && fuegeHinzu(p.rucksack, p.plaetze, p.waffe) < 1) p.rucksack.push(p.waffe); p.waffe = besser; })) return;
   // aufgehobene Munitionsschachtel einlegen
   if (p.munition < 30 && nimm('munition', () => { p.munition = Math.min(MUNITION_MAX, p.munition + 12); })) return;
   // größere Tasche umpacken
   for (const t of ['trekking', 'tasche']) {
-    if (p.rucksack.includes(t) && (DINGE[t]?.plaetze ?? 0) > p.plaetze && nimm(t, () => { p.plaetze = DINGE[t].plaetze; })) return;
+    if (hat(p.rucksack, t) && (DINGE[t]?.plaetze ?? 0) > p.plaetze && nimm(t, () => { p.plaetze = DINGE[t].plaetze; })) return;
   }
 }
 // (Maschinenpistole und Maschinengewehr von der Bundeswehr stehen über dem Gewehr)
@@ -42,21 +43,21 @@ export const GRENZE = { wasser: 3, essen: 3, schokoriegel: 3, verband: 3, spritz
   taschenlampe: 2, kleidung: 1, tasche: 0, trekking: 0,
   granate: 2 };   // Bots werfen keine Granaten – nur zwei behalten, damit sie nicht horten
 const grenze = d => GRENZE[d] ?? (WAFFEN[d] ? 1 : 2);
-const anzahl = (p, d) => p.rucksack.filter(q => q === d).length + (p.waffe === d ? 1 : 0);
+const anzahl = (p, d) => zaehle(p.rucksack, d) + (p.waffe === d ? 1 : 0);
 function willHaben(p, d) {
   if ((d === 'tasche' || d === 'trekking') && (DINGE[d]?.plaetze ?? 0) > p.plaetze) return true;   // größere Tasche
-  if (WAFFEN[d] && WAFFEN_RANG.indexOf(d) < WAFFEN_RANG.indexOf(p.waffe) && p.rucksack.some(q => WAFFEN[q])) return false;   // schlechtere Waffe, Ersatz schon da
+  if (WAFFEN[d] && WAFFEN_RANG.indexOf(d) < WAFFEN_RANG.indexOf(p.waffe) && flach(p.rucksack).some(q => WAFFEN[q])) return false;   // schlechtere Waffe, Ersatz schon da
   return anzahl(p, d) < grenze(d);
 }
 
 // Überzähliges ablegen (höchstens eins je Sekunde); der Bot merkt sich das Ding, damit er es nicht wieder aufhebt
-const ueberzaehlig = p => p.rucksack.find((q, i) => p.rucksack.slice(0, i + 1).filter(r => r === q).length + (p.waffe === q ? 1 : 0) > grenze(q)
+const ueberzaehlig = p => flach(p.rucksack).find((q, i, fl) => fl.slice(0, i + 1).filter(r => r === q).length + (p.waffe === q ? 1 : 0) > grenze(q)
   && !((q === 'tasche' || q === 'trekking') && (DINGE[q]?.plaetze ?? 0) > p.plaetze));
 function ueberzaehligesAblegen(raum, p, b) {
   if (raum.uhr - (b.abgelegt ?? 0) < 1) return false;
   const d = ueberzaehlig(p);
   if (!d) return false;
-  p.rucksack.splice(p.rucksack.lastIndexOf(d), 1);
+  entferne(p.rucksack, d, 1);
   const id = raum.legeHin(d, p.x, p.y, p.ebene ?? '');
   (b.verschmaeht ??= new Set()).add(id);
   b.abgelegt = raum.uhr;
@@ -83,7 +84,7 @@ function reserve(p, d) {
   if (d === 'munition') return WAFFEN[p.waffe]?.fern ? 1 : 0;
   return 0;
 }
-const waffenZahl = p => (p.waffe ? 1 : 0) + p.rucksack.filter(q => WAFFEN[q]).length;
+const waffenZahl = p => (p.waffe ? 1 : 0) + flach(p.rucksack).filter(q => WAFFEN[q]).length;
 // darf der Bot dieses Ding hergeben? übrig (über der Bedarfsgrenze) oder der Mensch braucht es und der Bot hat genug; nie die einzige Waffe
 function abgebbar(p, d, braucht) {
   if (WAFFEN[d] && waffenZahl(p) <= 1) return false;
@@ -94,21 +95,22 @@ function abgebbar(p, d, braucht) {
 }
 // Gegenangebot des Bots (Liste von Dingen aus seinem Rucksack) zu dem, was der Mensch (H) anbietet: ungefähr gleich viele Dinge
 export function botGegenangebot(bot, mensch, H) {
-  const braucht = menschBraucht(mensch), platz = Math.max(0, mensch.plaetze - mensch.rucksack.length);
+  const braucht = menschBraucht(mensch), platz = freiePlaetze(mensch.rucksack, mensch.plaetze);
   const ziel = Math.min(platz, Math.max(1, H.length)), angebot = [];
   // Rucksack des Bots als Kopie, aus der beim Auswählen schon abgezogen wird (zählt für Bedarfsgrenze und Reserve)
   const ich = { rucksack: [...bot.rucksack], waffe: bot.waffe, hp: bot.hp, durst: bot.durst, hunger: bot.hunger, infektion: bot.infektion, plaetze: bot.plaetze };
-  const kandidaten = [...new Set(ich.rucksack)].map(d => ({ d, braucht: braucht.includes(d) }))
+  const kandidaten = [...new Set(flach(ich.rucksack))].map(d => ({ d, braucht: braucht.includes(d) }))
     .sort((a, b) => (b.braucht - a.braucht) || (H.includes(a.d) - H.includes(b.d)));
   for (const k of kandidaten) {
-    while (angebot.length < ziel && abgebbar(ich, k.d, k.braucht)) { ich.rucksack.splice(ich.rucksack.indexOf(k.d), 1); angebot.push(k.d); }
+    while (angebot.length < ziel && abgebbar(ich, k.d, k.braucht)) { entferne(ich.rucksack, k.d, 1); angebot.push(k.d); }
   }
   return angebot;
 }
 // Stimmt der Bot dem Tausch zu? (H = Angebot des Menschen, B = sein eigenes, schon aus dem Rucksack genommen)
 export function botEinverstanden(bot, H, B) {
   if (!H.length) return true;
-  if (bot.rucksack.length - B.length + H.length > bot.plaetze) return false;
+  const t = [...bot.rucksack];   // B ist schon aus dem Rucksack genommen: passt H hinein?
+  for (const d of H) if (fuegeHinzu(t, bot.plaetze, d) < 1) return false;
   if (!B.length) return true;   // Geschenk eines Mitspielers: immer annehmen, solange Platz ist (Überzähliges legt er später ab)
   return B.length >= H.length || H.some(d => willHaben(bot, d));
 }
@@ -118,7 +120,7 @@ export function botEinverstanden(bot, H, B) {
 function brauchtDringend(p, d) {
   if (d === 'wasser') return p.durst < 40;
   if (d === 'essen' || d === 'schokoriegel') return p.hunger < 40;
-  if (d === 'verband') return p.hp < 50 && !p.rucksack.includes('verband');
+  if (d === 'verband') return p.hp < 50 && !hat(p.rucksack, 'verband');
   if (d === 'spritze') return p.infektion > 0;
   if (d === 'munition') return WAFFEN[p.waffe]?.fern && p.munition < 10;
   if (WAFFEN[d]?.pfeil || WAFFEN[d]?.granate) return false;   // Bots nutzen Armbrust und Granatwerfer nicht (Pfeile/Granaten als eigener Vorrat)
@@ -131,24 +133,23 @@ function brauchtDringend(p, d) {
 function vorratskiste(raum, sid, p, x, welt) {
   const safe = safeRoomVon(raum.welt, p), kiste = safe && raum.state.safes.get(safe.id)?.kiste;
   if (!kiste || !welt.kiste) return false;
-  const b = x.bot, ueber = kiste.length < KISTE_PLAETZE ? ueberzaehlig(p) : null;
-  const fehlt = p.rucksack.length < p.plaetze ? [...kiste].findIndex(d => brauchtDringend(p, d) && willHaben(p, d) && entnahmeFrei(raum, d, p)) : -1;
+  const b = x.bot, u0 = ueberzaehlig(p), ueber = u0 && kannAufnehmen(kiste, KISTE_PLAETZE, u0, 1, true) ? u0 : null;
+  const fehlt = [...kiste].findIndex(e => { const d = dingId(e); return kannAufnehmen(p.rucksack, p.plaetze, d) && brauchtDringend(p, d) && willHaben(p, d) && entnahmeFrei(raum, d, p); });
   if (!ueber && fehlt < 0) return false;
   if (abstand(p, welt.kiste) > AKTION_ABSTAND - 4) { geheZu(raum, sid, p, x, welt.kiste, 0.8, AKTION_ABSTAND - 10); return true; }
   if (raum.uhr - (b.kisteZeit ?? 0) < 0.8) return true;
   b.kisteZeit = raum.uhr;
-  if (ueber) { p.rucksack.splice(p.rucksack.lastIndexOf(ueber), 1); kiste.push(ueber); }
-  else { const d = kiste[fehlt]; kiste.splice(fehlt, 1); p.rucksack.push(d); }
+  if (ueber) { entferne(p.rucksack, ueber, 1); fuegeHinzu(kiste, KISTE_PLAETZE, ueber, 1, true); }
+  else { const d = dingId(kiste[fehlt]); nimmEins(kiste, fehlt); fuegeHinzu(p.rucksack, p.plaetze, d); }
   return true;
 }
 
 // Dinge vom Boden aufheben, die der Bot brauchen kann (z. B. was ein Mitspieler fallen lässt)
 function aufheben(raum, sid, p, x, welt) {
   const b = x.bot;
-  if (p.rucksack.length >= p.plaetze) return false;
   const kandidaten = [];
   for (const [id, d] of raum.state.boden) {
-    if ((d.ebene ?? '') !== (p.ebene ?? '') || b.verschmaeht?.has(id) || !willHaben(p, d.ding)) continue;
+    if ((d.ebene ?? '') !== (p.ebene ?? '') || b.verschmaeht?.has(id) || !willHaben(p, d.ding) || !kannAufnehmen(p.rucksack, p.plaetze, d.ding)) continue;
     kandidaten.push({ id, x: d.x, y: d.y });
   }
   const ziel = naechster(kandidaten, p, 220, c => sichtfrei(welt, p.x, p.y, c.x, c.y));
@@ -166,7 +167,7 @@ function durchsuchen(raum, sid, p, x, welt) {
   const kandidaten = [];
   for (const c of welt.behaelter ?? []) {
     if (b.durchsucht.has(c.id) || raum.state.behaelter.get(c.id)?.rest === 0) continue;
-    if (c.art === 'auto' && !p.rucksack.includes('brechstange')) continue;
+    if (c.art === 'auto' && !hat(p.rucksack, 'brechstange')) continue;
     kandidaten.push(c);
   }
   for (const [id, l] of raum.state.leichen) if ((l.ebene ?? '') === (p.ebene ?? '') && l.rest !== 0 && !b.durchsucht.has(id)) kandidaten.push({ id, x: l.x, y: l.y, leiche: true });

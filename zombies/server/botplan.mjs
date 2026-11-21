@@ -4,6 +4,7 @@
 // Rollen: Begleiter (mindestens einer je Mensch, folgt wie bisher) und Sammler (holt Vorräte, setzt den Funkspruch ab,
 // verbarrikadiert, jagt Zombies in Gruppennähe, geht zum Bus). Chat-Befehle der Menschen: botBefehl().
 // Die Hilfsfunktionen aus bots.mjs (geheZu …) kommen als Parameter H, damit es keine Importschleife gibt.
+import { hat, zaehle, flach, indexVon, entferne, nimmEins, fuegeHinzu, kannAufnehmen } from '../client/stapel.mjs';
 import { WERTE as W, findeWeg, KACHEL, AKTION_ABSTAND, BUS_ABSTAND, BEUTE, WAFFEN, KISTE_PLAETZE, istNacht, frei, ladenArt, durchsuchDauer, safeRoomVon, munitionGesamt } from '../client/welt.mjs';
 import { EBENE_MUSTER } from '../client/innen.mjs';
 import { hhmm } from './aufgaben.mjs';
@@ -23,7 +24,7 @@ export const BOTPLAN = {
 
 const RAD = W.spielerRadius;
 const abstand = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-const anz = (liste, d) => { let n = 0; for (const q of liste) if (q === d) n++; return n; };
+const anz = (liste, d) => zaehle(liste, d);   // zählt Stück in flachen Listen und in Stapel-Listen (Rucksack, Kiste)
 const NAMEN = { wasser: 'Wasser', essen: 'Konserven', spritze: 'eine Spritze', bretter: 'Bretter', taschenlampe: 'eine Taschenlampe', alles: 'Vorräte', verband: 'Verbandszeug' };
 const WAS_WORT = { wasser: 'wasser', trinken: 'wasser', essen: 'essen', konserven: 'essen', konserve: 'essen', medizin: 'spritze', spritze: 'spritze',
   bretter: 'bretter', brett: 'bretter', holz: 'bretter', lampe: 'taschenlampe', taschenlampe: 'taschenlampe', lampen: 'taschenlampe' };
@@ -78,7 +79,7 @@ function sagt(raum, sid, p, text, erzwingen = false) {
 }
 
 // ---------- Bedarf ----------
-const kistenListe = raum => [...raum.state.safes.values()].flatMap(s => [...s.kiste]);
+const kistenListe = raum => [...raum.state.safes.values()].flatMap(s => flach(s.kiste));
 function bedarfRechnen(raum, bots) {
   const s = raum.state, n = Math.max(1, s.spieler.size), k = kistenListe(raum);
   const bedarf = {
@@ -89,7 +90,7 @@ function bedarfRechnen(raum, bots) {
   };
   // was Bots schon bei sich tragen (über ihrer Reserve), zählt als unterwegs
   for (const [, p] of bots) for (const d of ['wasser', 'essen', 'spritze']) bedarf[d] = Math.max(0, bedarf[d] - Math.max(0, anz(p.rucksack, d) - (RESERVE[d] ?? 0)));
-  const lampe = o => o.lampe > 0 || o.rucksack.includes('taschenlampe');
+  const lampe = o => o.lampe > 0 || hat(o.rucksack, 'taschenlampe');
   if (s.aufgaben.get('lampen') && !s.aufgaben.get('lampen').erledigt) bedarf.taschenlampe = [...s.spieler.values()].filter(o => !lampe(o)).length;
   const fs = raum.aufgaben?.funkSafe;
   if (fs && fs !== 'stuetzpunkt') { const bar = s.safes.get(fs)?.barrikade ?? 100; if (bar < 100) bedarf.bretter = Math.ceil((100 - bar) / 35); }
@@ -134,7 +135,7 @@ function planer(raum, menschen) {
   for (const [sid, p, x] of bots) {
     const pl = x.bot.plan, befehl = x.bot.befehl;
     let rolle = begleiter.has(sid) ? 'begleiter' : 'sammler';
-    const munitionKnapp = WAFFEN[p.waffe]?.fern && munitionGesamt(p) < 3 && !p.rucksack.some(q => WAFFEN[q] && !WAFFEN[q].fern);
+    const munitionKnapp = WAFFEN[p.waffe]?.fern && munitionGesamt(p) < 3 && !flach(p.rucksack).some(q => WAFFEN[q] && !WAFFEN[q].fern);
     const schwach = p.hp < BOTPLAN.hpRueckkehr || munitionKnapp;
     if (rolle === 'sammler' && !befehl && (nacht || schwach || nah(raum, p, menschen) > BOTPLAN.umkreis * 1.3)) rolle = 'begleiter';
     pl.rolle = rolle;
@@ -205,10 +206,10 @@ function auftragGueltig(raum, bp, a, p, ctx) {
     case 'holen':
       if (a.phase === 'liefern') return true;
       if (a.was === 'alles') return p.rucksack.length < p.plaetze - 1 || abgabeListe(p, 'alles').length > 0;
-      if (a.was === 'taschenlampe') return ctx.bedarf.taschenlampe > 0 || p.rucksack.includes('taschenlampe');
-      return ctx.bedarf[a.was] > 0 || abgabeListe(p, a.was).length > 0 || (a.was === 'bretter' && p.rucksack.includes('bretter'));
+      if (a.was === 'taschenlampe') return ctx.bedarf.taschenlampe > 0 || hat(p.rucksack, 'taschenlampe');
+      return ctx.bedarf[a.was] > 0 || abgabeListe(p, a.was).length > 0 || (a.was === 'bretter' && hat(p.rucksack, 'bretter'));
     case 'funk': return !s.funk;
-    case 'barrikade': return ctx.bedarf.bretter > 0 || p.rucksack.includes('bretter');
+    case 'barrikade': return ctx.bedarf.bretter > 0 || hat(p.rucksack, 'bretter');
     case 'jagen': return raum.uhr < a.bis && s.zombies.has(a.zombie);
     default: return false;
   }
@@ -327,13 +328,13 @@ function barrikadeAusfuehren(raum, sid, p, x, H, a) {
   const br = anz(p.rucksack, 'bretter');
   if (!br) {
     // Bretter aus der Kiste nehmen, sonst suchen
-    const kiste = raum.state.safes.get(id).kiste, i = [...kiste].indexOf('bretter');
-    if (i >= 0 && p.rucksack.length < p.plaetze) {
+    const kiste = raum.state.safes.get(id).kiste, i = indexVon(kiste, 'bretter');
+    if (i >= 0 && kannAufnehmen(p.rucksack, p.plaetze, 'bretter')) {
       if (reise(raum, sid, p, x, H, a, s.ebene)) return true;
       const k = raum.wv(s.ebene).kiste;
       if (abstand(p, k) > AKTION_ABSTAND - 4) { gehe(raum, sid, p, x, H, a, k, 'k:' + id, 0.9, AKTION_ABSTAND - 10); return true; }
       if (raum.uhr - (x.bot.kisteZeit ?? 0) < 0.8) { still(x); return true; }
-      x.bot.kisteZeit = raum.uhr; kiste.splice(i, 1); p.rucksack.push('bretter'); return true;
+      x.bot.kisteZeit = raum.uhr; nimmEins(kiste, i); fuegeHinzu(p.rucksack, p.plaetze, 'bretter'); return true;
     }
     x.bot.plan.auftrag = neuHolen('bretter');
     return false;
@@ -372,7 +373,7 @@ function jagenAusfuehren(raum, sid, p, x, H, a) {
 
 // ---------- Holen und Abliefern ----------
 function passt(raum, bp, bh, was, p) {
-  if (bh.art === 'auto' && !p.rucksack.includes('brechstange')) return false;
+  if (bh.art === 'auto' && !hat(p.rucksack, 'brechstange')) return false;
   if (bh.art?.startsWith('bw_')) return false;
   if (bp.durchsucht.has(bh.id) || gesperrt(bp, 'b:' + bh.id, raum.uhr)) return false;
   if (raum.state.behaelter.get(bh.id)?.rest === 0) return false;
@@ -442,14 +443,14 @@ function holenAusfuehren(raum, sid, p, x, H, a, menschen, bots) {
   const bp = zustand(raum), ctx = bp.ctx, b = x.bot, was = a.was;
   if (was === 'taschenlampe') return lampeAusfuehren(raum, sid, p, x, H, a, menschen);
   // Bretter: mit Brettern im Rucksack und bekanntem Funk-Safe-Room gleich verbarrikadieren
-  if (was === 'bretter' && p.rucksack.includes('bretter') && (ctx?.bedarf.bretter ?? 0) > 0 && (anz(p.rucksack, 'bretter') >= Math.min(3, ctx.bedarf.bretter) || a.phase === 'liefern')) {
+  if (was === 'bretter' && hat(p.rucksack, 'bretter') && (ctx?.bedarf.bretter ?? 0) > 0 && (anz(p.rucksack, 'bretter') >= Math.min(3, ctx.bedarf.bretter) || a.phase === 'liefern')) {
     b.plan.auftrag = { art: 'barrikade' }; return barrikadeAusfuehren(raum, sid, p, x, H, b.plan.auftrag);
   }
   const liste = abgabeListe(p, was), voll = p.rucksack.length >= p.plaetze;
   const gezaehlt = was === 'alles' ? liste.length : anz(liste, was);
   const stapel = was === 'alles' ? 3 : Math.max(1, Math.min(BOTPLAN.batch, ctx?.bedarf[was] || 1));
   if (a.phase === 'liefern' || gezaehlt >= stapel || (liste.length > 0 && (voll || a.keineZiele))) { a.phase = 'liefern'; return liefern(raum, sid, p, x, H, a, liste); }
-  if (was === 'bretter' && a.keineZiele && p.rucksack.includes('bretter')) { a.phase = 'liefern'; return liefern(raum, sid, p, x, H, a, ['bretter']); }
+  if (was === 'bretter' && a.keineZiele && hat(p.rucksack, 'bretter')) { a.phase = 'liefern'; return liefern(raum, sid, p, x, H, a, ['bretter']); }
   if (voll && was !== 'alles') { fertig(raum, b, a); return false; }
   // Ziel suchen
   if (!zielGueltig(raum, bp, a.ziel, p, was)) a.ziel = null;
@@ -457,7 +458,7 @@ function holenAusfuehren(raum, sid, p, x, H, a, menschen, bots) {
     a.ziel = sucheZiel(raum, bp, p, x, was, menschen, bots, sid);
     if (!a.ziel) {
       a.keineZiele = true;
-      if (liste.length || (was === 'bretter' && p.rucksack.includes('bretter'))) return holenAusfuehren(raum, sid, p, x, H, a, menschen, bots);
+      if (liste.length || (was === 'bretter' && hat(p.rucksack, 'bretter'))) return holenAusfuehren(raum, sid, p, x, H, a, menschen, bots);
       fertig(raum, b, a); return false;
     }
     if (!a.angesagt) { a.angesagt = true; sagt(raum, sid, p, `Ich hol ${NAMEN[was] ?? was} ${zielText(a.ziel)}`.replace('Ich hol Vorräte', 'Ich schau mich nach Vorräten um')); }
@@ -483,7 +484,7 @@ function liefern(raum, sid, p, x, H, a, liste) {
   if (!liste.length) {
     const was = a.was === 'alles' ? null : a.was;
     if (was && a.abgegeben) {
-      const k = raum.state.safes.get(s.id).kiste, n = anz([...k], was);
+      const k = raum.state.safes.get(s.id).kiste, n = anz(k, was);
       sagt(raum, sid, p, `${n} ${NAMEN[was].replace('eine ', '').replace('Konserven', n === 1 ? 'Konserve' : 'Konserven')} ${n === 1 ? 'liegt' : 'liegen'} jetzt in der Kiste im ${s.name}`);
     }
     fertig(raum, b, a); return false;
@@ -499,21 +500,22 @@ function liefern(raum, sid, p, x, H, a, liste) {
   if (raum.uhr - (b.kisteZeit ?? 0) < 0.8) { still(x); return true; }
   b.kisteZeit = raum.uhr;
   const kiste = raum.state.safes.get(s.id).kiste, d = liste[0];
-  p.rucksack.splice(p.rucksack.lastIndexOf(d), 1); kiste.push(d); a.abgegeben = (a.abgegeben ?? 0) + 1;
+  if (fuegeHinzu(kiste, KISTE_PLAETZE, d, 1, true) < 1) { a.safe = null; fertig(raum, b, a); return false; }   // Kiste voll
+  entferne(p.rucksack, d, 1); a.abgegeben = (a.abgegeben ?? 0) + 1;
   return true;
 }
 // Taschenlampe: findet der Bot eine über, legt er sie einem Menschen ohne Lampe vor die Füße
-const lampeVorhanden = o => o.lampe > 0 || o.rucksack.includes('taschenlampe');
+const lampeVorhanden = o => o.lampe > 0 || hat(o.rucksack, 'taschenlampe');
 function lampeAusfuehren(raum, sid, p, x, H, a, menschen) {
   const b = x.bot, bp = zustand(raum);
   const ohne = menschen.filter(m => !lampeVorhanden(m));
   if (a.phase === 'liefern' || (anz(p.rucksack, 'taschenlampe') > 0 && ohne.length) || anz(p.rucksack, 'taschenlampe') > 1) {
     a.phase = 'liefern';
     const m = ohne.sort((q, r) => abstand(weltPos(raum, p), weltPos(raum, q)) - abstand(weltPos(raum, p), weltPos(raum, r)))[0];
-    if (!m || !p.rucksack.includes('taschenlampe')) { fertig(raum, b, a); return false; }
+    if (!m || !hat(p.rucksack, 'taschenlampe')) { fertig(raum, b, a); return false; }
     if ((p.ebene ?? '') !== (m.ebene ?? '')) { if (reise(raum, sid, p, x, H, a, m.ebene ?? '')) return true; fertig(raum, b, a); return false; }
     if (abstand(p, m) > 40) { gehe(raum, sid, p, x, H, a, m, 'l:' + m.name, 1, 34); return true; }
-    p.rucksack.splice(p.rucksack.lastIndexOf('taschenlampe'), 1);
+    entferne(p.rucksack, 'taschenlampe', 1);
     const id = raum.legeHin('taschenlampe', m.x, m.y, m.ebene ?? '');
     (b.verschmaeht ??= new Set()).add(id);
     sagt(raum, sid, p, `${m.name}, hier liegt eine Taschenlampe für dich`);

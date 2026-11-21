@@ -1,4 +1,5 @@
 // Team-Planer der Bots (server/botplan.mjs): Rollen, Sammeln, Funkspruch, Chat-Befehle, Bus, Kiste
+import { zaehle } from '../client/stapel.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -119,7 +120,7 @@ test('Sammler holt Wasser aus einem Behälter und legt es in die Safe-Room-Kiste
     raum.setzeInhalt(w.behaelter[0].id, ['wasser', 'wasser']);
     raum.aufgaben.aktualisieren(false);
     const vorher = raum.state.aufgaben.get('vorraete').fortschritt;
-    const wasser = () => [...kiste].filter(d => d === 'wasser').length;
+    const wasser = () => zaehle(kiste, 'wasser');
     assert.ok(await bis(() => wasser() >= 2, 45000), `kein Wasser in der Kiste (Rollen ${bots.map(rolle)}, Aufträge ${bots.map(b => JSON.stringify(b[2].bot.plan?.auftrag?.art + ':' + b[2].bot.plan?.auftrag?.was))})`);
     assert.ok(await bis(() => raum.state.aufgaben.get('vorraete').fortschritt > vorher, 3000), 'Fortschritt steigt nicht');
     assert.equal(raum.state.behaelter.get(w.behaelter[0].id).rest, 0);
@@ -196,7 +197,7 @@ test('Bots nehmen Aufgaben-Vorräte nicht aus der Kiste, Überschuss nur bei Bed
     const kiste = raum.state.safes.get(s.id).kiste;
     const n = raum.state.spieler.size;   // Mensch + Bot → je 4 Wasser und Essen für die Aufgabe
     for (let i = 0; i < 2 + n; i++) { kiste.push('wasser'); kiste.push('essen'); }
-    const wasser = () => [...kiste].filter(d => d === 'wasser').length;
+    const wasser = () => zaehle(kiste, 'wasser');
     await warte(4000);
     assert.equal(wasser(), 2 + n, 'Bot hat Aufgaben-Wasser herausgenommen');
     // (sein Rucksack kann trotzdem wachsen: im Safe Room stehen durchsuchbare Vorratsregale)
