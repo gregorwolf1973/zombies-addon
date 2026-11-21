@@ -43,7 +43,7 @@ export function anmelden(hash, passwort, schluessel) {
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel', 'unfall'];
 
 function springen(raum, p, x, ziel) {
   p.x = ziel.x; p.y = ziel.y; p.ebene = ziel.ebene ?? ''; p.unten = false; p.anBord = false; p.sicher = ''; p.aktion = ''; p.fortschritt = 0;
@@ -183,6 +183,11 @@ export function befehl(raum, client, m) {
       raum.nebel ??= new Nebel();
       s.nebel = raum.nebel.schalte(an);
       return an ? '🌫 Nebel: an (volle Dichte)' : 'Nebel: aus';
+    }
+    case 'unfall': {
+      if (p.ebene) return 'Geh erst nach draußen, dann kann ein Unfall passieren';
+      return raum.verkehr?.unfaelle?.ausloesen({ x: p.x, y: p.y }, { erzeugen: true, nah: true })
+        ? '💥 Ein Auto verunglückt in deiner Nähe' : 'Kein Platz für einen Unfall gefunden (keine Straße in der Nähe)';
     }
     case 'auffuellen':
       auffuellen(raum, p, x);

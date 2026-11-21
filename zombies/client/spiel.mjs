@@ -586,6 +586,8 @@ function suMenueEinrichten(szene) {
       <div class="titel">Tageszeit</div>
       <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
       ${b('nebel', '🌫 Nebel ein/aus')}
+      <div class="titel">Verkehr</div>
+      ${b('unfall', '💥 Unfall in der Nähe auslösen')}
       <div class="titel">Zeitraffer</div>
       <div class="zeile">${[1, 5, 10, 60].map(n => b('zeitraffer', `⏩ ${n}×`, { faktor: n })).join('')}</div>
       <div class="titel">Evakuierung und Lager</div>
@@ -957,6 +959,8 @@ class Ort extends Phaser.Scene {
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
     raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) { fs.schlagBis = this.time.now + 400; if (typeof m.w === 'number') { fs.zielW = m.w; fs.zielBis = this.time.now + 400; } } if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
+    raum.onMessage('krach', m => { if (!ton.ereignis('krach', m.x, m.y)) { ton.schuss(m.x, m.y, 1.8); ton.stoss(m.x, m.y, false); } this.krachEffekt(m.x, m.y); });
+    raum.onMessage('blech', m => { if (!ton.ereignis('blech', m.x, m.y)) ton.stoss(m.x, m.y, false); });
     raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
     raum.onMessage('soldatRuf', m => {
       ton.ereignis('soldatRuf', m.x, m.y);
@@ -2179,6 +2183,15 @@ class Ort extends Phaser.Scene {
         }
         o.vorher = d;
       }
+      // Rauch über einem verunglückten Fahrzeug (Server setzt Fahrzeug.rauch bis das Feuer erloschen ist)
+      if (f.rauch && !this.aktEbene && this.lokal && Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y) < 900) {
+        o.rauchUhr = (o.rauchUhr ?? 0) - dt;
+        if (o.rauchUhr <= 0) {
+          o.rauchUhr = 0.18 + Math.random() * 0.12;
+          const q = this.add.circle(o.x + (Math.random() - 0.5) * 14, o.y + (Math.random() - 0.5) * 10, 5 + Math.random() * 4, 0x555555, 0.55).setDepth(7.6);
+          this.tweens.add({ targets: q, y: q.y - 34 - Math.random() * 20, x: q.x + 8 + Math.random() * 10, alpha: 0, scale: 2.6, duration: 1500 + Math.random() * 600, onComplete: () => q.destroy() });
+        }
+      }
       if (f.art === 'moerser') moerserFahrzeug(this, o, dt, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
       if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg())) {
         // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
@@ -2435,6 +2448,22 @@ class Ort extends Phaser.Scene {
     };
     this.events.on('update', tick);
     this.time.delayedCall(m.zeit * 1000 - 40, () => { this.events.off('update', tick); bild.destroy(); schatten.destroy(); });
+  }
+
+  // Autounfall: Funken, Splitter und eine Staubwolke, leichtes Kamerawackeln (Rauch danach: Fahrzeug.rauch in abgleichen)
+  krachEffekt(x, y) {
+    if (this.aktEbene) return;
+    for (let i = 0; i < 10; i++) {
+      const w = Math.random() * Math.PI * 2, d = 14 + Math.random() * 26;
+      const f = this.add.circle(x, y, 1.5 + Math.random() * 2, i % 2 ? 0xffd54f : 0xcfd8dc, 0.95).setDepth(7.8);
+      this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, duration: 260 + Math.random() * 240, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
+    }
+    const staub = this.add.circle(x, y, 10, 0x9e9e9e, 0.5).setDepth(7.7);
+    this.tweens.add({ targets: staub, scale: 3, alpha: 0, duration: 900, onComplete: () => staub.destroy() });
+    if (this.lokal) {
+      const nah = Math.max(0, 1 - Math.hypot(this.lokal.x - x, this.lokal.y - y) / 420);
+      if (nah > 0) this.cameras.main.shake(140, 0.003 + 0.006 * nah);
+    }
   }
 
   // Explosion: Blitz, Druckwelle, Feuer- und Rauchteilchen, Kamerawackeln (stärker, je näher man ist)
