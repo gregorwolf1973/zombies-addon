@@ -136,3 +136,19 @@ test('Einstellungen bereinigen: Türanteile (0–100 %, Vorgabe 50/25/25, nie al
   assert.deepEqual(bereinige({ tueren: { frei: 500, raetsel: -3, schluessel: 'x' } }).tueren, { frei: 100, raetsel: 0, schluessel: 25 });
   assert.deepEqual(bereinige({ tueren: { frei: 0, raetsel: 0, schluessel: 0 } }).tueren, { frei: 100, raetsel: 0, schluessel: 0 });
 });
+
+test('Hordengeräusch- und Musik-Einstellungen: Vorgaben und Klammern', async () => {
+  const { bereinige, vorgaben, EREIGNISSE } = await import('../server/einstellungen.mjs');
+  const v = bereinige({});
+  assert.deepEqual(v.toeneHorde, { ab: 8, nurHorde: 20, voll: 40, aus: 5, hoerweite: 30 });
+  assert.deepEqual(v.musik, { laut: 35, blende: 3 });
+  assert.deepEqual(vorgaben().toeneHorde, v.toeneHorde);
+  const k = bereinige({ toeneHorde: { ab: 999, aus: -4, hoerweite: 5, voll: 'x' }, musik: { laut: 500, blende: 0.1 } });
+  assert.deepEqual(k.toeneHorde, { ab: 100, nurHorde: 20, voll: 40, aus: 0, hoerweite: 10 });
+  assert.deepEqual(k.musik, { laut: 100, blende: 1 });
+  // Werte bleiben bei Teil-Änderungen erhalten
+  assert.equal(bereinige({ toeneHorde: { ab: 12 } }, k).toeneHorde.hoerweite, 10);
+  for (const id of ['horde', 'hordeAkzent', 'musikLevel1', 'musikLevel5', 'musikLager', 'musikHorde', 'musikSafe', 'musikFinale']) assert.ok(EREIGNISSE.some(e => e.id === id), id);
+  assert.equal(v.toene.musikLevel1.laut, 100);
+  assert.deepEqual(v.toene.horde.dateien, []);
+});

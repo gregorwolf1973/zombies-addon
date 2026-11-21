@@ -110,7 +110,7 @@ async function veraltet() {
 function autostartMerken() { try { sessionStorage.setItem('zob_autostart', '1'); const pw = $('testpw')?.value; if (pw) sessionStorage.setItem('zob_testpwtmp', pw); } catch {} }
 function frischLaden(wiederBeitreten) { if (wiederBeitreten) autostartMerken(); location.reload(); }
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && await veraltet()) frischLaden(!!window.szene); });
-fetch('info').then(r => r.json()).then(i => { seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); }).catch(() => {});
+fetch('info').then(r => r.json()).then(i => { seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 tutorialKnopf(() => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });   // „🎯 Schießstand / Tutorial“ unter „Mitspielen“
 
@@ -2907,22 +2907,28 @@ class Ort extends Phaser.Scene {
         if (this.wasserTon) ton.schleifeLaut(this.wasserTon, naechste < 12 ? (1 - naechste / 12) ** 1.5 : 0);
       }
     }
+    // jede Sekunde: Hordengeräusch (Zahl hörbarer Zombies) und Hintergrundmusik (Level, Lager, Safe, Finale)
+    this.tonTakt = (this.tonTakt ?? 0) - dt;
+    if (this.tonTakt <= 0) {
+      this.tonTakt = 1;
+      ton.hordeLage(zombieKarte().values(), { x: this.lokal.x, y: this.lokal.y, ebene: this.aktEbene ?? '' });
+      const st = raum.state, tot = (ich.zombie ?? 0) > 0 || ich.hp <= 0;
+      ton.musikLage({ level: st.level || 1, lager: ich.sicher === 'lager' && !tot, safe: !!ich.sicher && ich.sicher !== 'lager' && !tot, finale: (st.finaleRest || 0) > 0 });
+    }
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {
       this.stoehnZeit = 1 + Math.random() * 2;
       // nur die nächsten ~6 Zombies kommen als Einzellaut in Frage; die Zahl in Hörweite steuert das Horden-Grollen
       const nahe = [];
-      let hoerbar = 0;
       for (const z of zombieKarte().values()) {
         if ((z.ebene ?? '') !== this.aktEbene) continue;
         const d = Math.hypot(z.x - this.lokal.x, z.y - this.lokal.y);
-        if (d < 700) { hoerbar++; nahe.push({ z, d }); }
+        if (d < 700) nahe.push({ z, d });
       }
       nahe.sort((p, q) => p.d - q.d);
       // die 6 nächsten plus ein zufälliger weiterer (Einzelne am Rand): sonst belegt eine dichte Horde allein alle Plätze
       const rest = nahe.slice(6), wahl = nahe.slice(0, 6);
       if (rest.length) wahl.push(rest[Math.floor(Math.random() * rest.length)]);
-      ton.horde(hoerbar);
       // jagende Zombies klingen eher (aufgeregter), bis zu zwei Laute je Runde
       const jagende = wahl.filter(q => q.z.jagt);
       for (let k = 0; k < (wahl.length > 3 && Math.random() < 0.5 ? 2 : 1) && wahl.length; k++) {

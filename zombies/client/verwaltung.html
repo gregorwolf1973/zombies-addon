@@ -1519,6 +1519,31 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <h2 id="titelToene">🔊 Geräusche</h2>
   <p class="tk-hinweis">Ordne jedem Ereignis eine oder mehrere Tondateien zu – bei mehreren wird zufällig gewählt. Ohne Zuordnung erzeugt das Spiel einen eigenen Ton.</p>
 
+
+  <h3 class="tk-abschnitt">Hordengeräusch</h3>
+  <p class="tk-hinweis">Das Spiel zählt jede Sekunde die Zombies in Hörweite (draußen, gleiche Ebene; drinnen klingt es gedämpft). Ab der Schwelle läuft die Schleife „Hordengeräusch“ und Einzelschreie kommen nur noch halb so oft; ab der zweiten Schwelle nur noch von Zombies unter 5 m (höchstens alle 4 s). Die Lautstärke steigt von der ersten Schwelle bis „voll“. Unter „aus“ verklingt es wieder.</p>
+  <div id="thZeilen">
+    <label for="thAb">Hordengeräusch ab … Zombies</label>
+    <div class="th-zeile"><input type="range" id="thAb" min="1" max="100" step="1"><span id="thAbWert"></span></div>
+    <label for="thNur">Einzelschreie nur noch aus der Nähe ab … Zombies</label>
+    <div class="th-zeile"><input type="range" id="thNur" min="1" max="200" step="1"><span id="thNurWert"></span></div>
+    <label for="thVoll">Volle Lautstärke bei … Zombies</label>
+    <div class="th-zeile"><input type="range" id="thVoll" min="2" max="300" step="1"><span id="thVollWert"></span></div>
+    <label for="thAus">Ausblenden unter … Zombies</label>
+    <div class="th-zeile"><input type="range" id="thAus" min="0" max="50" step="1"><span id="thAusWert"></span></div>
+    <label for="thWeite">Hörweite der Horde (Meter)</label>
+    <div class="th-zeile"><input type="range" id="thWeite" min="10" max="100" step="1"><span id="thWeiteWert"></span></div>
+  </div>
+
+  <h3 class="tk-abschnitt">Musik</h3>
+  <p class="tk-hinweis">Unten in der Gruppe „Musik im Spiel“ ordnest du Lieder zu (je Level, im Lager, im Safehouse, im Kampf gegen eine Horde, im Finale; mehrere Dateien wechseln sich ab). Vorrang: Finale, Horde, Lager, Safehouse, Level-Hauptlied; ohne Datei gilt die nächstniedrigere Stufe. Eine neue Situation muss 4 s anstehen, die Horden-Musik bleibt nach dem Kampf noch 10 s.</p>
+  <div id="muZeilen">
+    <label for="muLaut">Musiklautstärke</label>
+    <div class="th-zeile"><input type="range" id="muLaut" min="0" max="100" step="1"><span id="muLautWert"></span></div>
+    <label for="muBlende">Überblendzeit (Sekunden)</label>
+    <div class="th-zeile"><input type="range" id="muBlende" min="1" max="10" step="0.5"><span id="muBlendeWert"></span></div>
+  </div>
+
   <div class="tk-status" id="tkStatus" role="status" aria-live="polite"></div>
   <div class="tk-lade" id="tkLade">Wird geladen …</div>
   <div id="tkEreignisse"></div>
@@ -1534,6 +1559,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
 
 <style>
   #toeneKarte { color: var(--text); }
+  #toeneKarte .th-zeile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #toeneKarte .th-zeile input { flex: 1; }
   #toeneKarte .tk-hinweis { color: var(--text-soft); font-size: 0.9rem; margin: 0 0 0.75rem; }
   #toeneKarte .tk-lade { color: var(--text-soft); font-size: 0.9rem; padding: 0.5rem 0; }
   #toeneKarte .tk-status { min-height: 1.3em; font-size: 0.9rem; margin-bottom: 0.5rem; }
@@ -2238,6 +2265,41 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   });
 
   ladeDaten();
+})();
+</script>
+
+<script>
+// Hordengeräusch- und Musik-Einstellungen (Zahlenfelder entstehen aus den Schiebern, siehe „Zahlenfelder statt Schieber“)
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var FELDER = [
+    ['thAb', 'toeneHorde', 'ab'], ['thNur', 'toeneHorde', 'nurHorde'], ['thVoll', 'toeneHorde', 'voll'],
+    ['thAus', 'toeneHorde', 'aus'], ['thWeite', 'toeneHorde', 'hoerweite'],
+    ['muLaut', 'musik', 'laut'], ['muBlende', 'musik', 'blende']
+  ];
+  var aktiv = null;
+  function zeige(d) {
+    var e = d.einstellungen || {}, v = d.vorgaben || {};
+    FELDER.forEach(function (f) {
+      if (aktiv === f[0]) return;
+      var w = (e[f[1]] || {})[f[2]];
+      if (w === undefined) w = (v[f[1]] || {})[f[2]];
+      if (w !== undefined) $(f[0]).value = w;
+    });
+  }
+  function senden(f, wert) {
+    var t = {}; t[f[1]] = {}; t[f[1]][f[2]] = wert;
+    return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { aktiv = null; zeige(d); })
+      .catch(function () { aktiv = null; });
+  }
+  FELDER.forEach(function (f) {
+    var el = $(f[0]);
+    el.addEventListener('input', function () { aktiv = f[0]; });
+    el.addEventListener('change', function () { senden(f, Number(el.value)); });
+  });
+  fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {});
 })();
 </script>
 
@@ -3043,6 +3105,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin',
     tnMoMin: 'moerser.reichweiteMin', tnMoMax: 'moerser.reichweiteMax', tnMoPause: 'moerser.pause', tnMoSchaden: 'moerser.schaden', tnMoRadius: 'moerser.radius', tnMoMind: 'moerser.mindestZombies', tnMoSicher: 'moerser.sicherheit', tnMoTempo: 'moerser.tempo',
+    thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
     agStunde: 'aufgaben.stunde', agWarteEcht: 'aufgaben.wartenEchtMin', agWarte: 'aufgaben.wartezeit', agFinale: 'aufgaben.finaleMinuten', agAnzahl: 'aufgaben.anzahl', fkFaktor: 'faehigkeiten.xpFaktor',
     tuFrei: 'tueren.frei', tuRaetsel: 'tueren.raetsel', tuSchluessel: 'tueren.schluessel' };
