@@ -71,8 +71,8 @@ test('Puma und Leopard streifen im Bereich, halten Abstand zu allen Fahrzeugen, 
     minAbstand = Math.min(minAbstand, Math.hypot(sp.k.x - sl.k.x, sp.k.y - sl.k.y));
   }
   assert.ok(weg[0] > 600 && weg[1] > 600, 'Streifen fahren: ' + weg.map(Math.round));
-  assert.ok(enden[0].size === 3 && enden[1].size === 3, 'alle Wegpunkte angefahren (hin und zurück)');
-  assert.ok(maxK < 650, 'bleibt im Bereich der Kreuzung/des Parkplatzes: ' + maxK);
+  assert.ok(enden[0].size === sp.route.length && enden[1].size === sl.route.length, 'alle Wegpunkte angefahren: ' + enden.map(e => [...e].sort().join(',')).join(' / '));
+  assert.ok(maxK < 1000, 'bleibt im Bereich Parkplatz–Kreuzung–Rathaus: ' + maxK);
   assert.ok(minAbstand >= MIN_ABSTAND - 1, 'Abstand Puma–Leopard ' + minAbstand);
   assert.ok(minFremd >= 15 * 8, 'Abstand zu Mörser/Feuerwehr unter 15 m: ' + minFremd);
   assert.ok(STREIFE.puma.tempo <= 30 && STREIFE.leopard.tempo <= 30, 'langsam');

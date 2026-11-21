@@ -11,8 +11,8 @@ const norm = w => Math.atan2(Math.sin(w), Math.cos(w));
 
 // Maße in Pixeln (8 px = 1 m): halbe Länge/Breite der Wanne (Überrollen), rad = Platzbedarf beim Fahren, tempo px/s, wende rad/s
 export const STREIFE = {
-  puma:    { hl: 52, hb: 26, rad: 30, tempo: 22, wende: 0.6, pause: [3, 6], start: 0, route: [[-70, 110], [-240, 170], [-200, 310]] },
-  leopard: { hl: 56, hb: 28, rad: 32, tempo: 18, wende: 0.5, pause: [4, 8], start: 4, route: [[-480, -20], [-460, 140], [-420, 290]] },
+  puma:    { hl: 52, hb: 26, rad: 30, tempo: 22, wende: 0.6, pause: [3, 6], start: 0, route: [[-200, 310], [-240, 170], [-70, 110], [10, -60], [77, -272], [157, -560], [157, -752]] },   // Parkplatz → Kreuzung → Straße hinauf bis vor den Rathauseingang
+  leopard: { hl: 56, hb: 28, rad: 32, tempo: 18, wende: 0.5, pause: [4, 8], start: 4, route: [[-420, 290], [-460, 140], [-480, -20], [-320, -330], [-419, -576], [-470, -720]] },   // Parkplatz → Wiese → Karl-Lederer-Platz vor der Westseite des Rathauses
 };
 export const MIN_ABSTAND = 160;   // Mindestabstand der Wannenmitten (20 m): kein Fahrzeug fährt näher an das andere heran
 
