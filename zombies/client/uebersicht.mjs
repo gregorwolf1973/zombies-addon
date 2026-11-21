@@ -1,6 +1,7 @@
 // Übersichtskarte: klein in der Ecke, angetippt groß. Häuser und Straßen nach den echten Umrissen (OSM),
 // Zoom mit +/−, Mausrad oder zwei Fingern, in der großen Ansicht verschiebbar.
 import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
+import { kartenbildLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
 
 const S = 4;   // Pixel je Kachel im Grundbild
 
@@ -53,6 +54,38 @@ function grundbild(welt) {
   return c;
 }
 
+// Grundbild mit Luftbild als Hintergrund (<karte>_luftbild.webp, 2 px je Kachel): Straßen wie im Navi darübergezeichnet
+// (dunkler Rand, Hauptstraßen breiter und gelblich), Gebäude leicht hervorgehoben. Wird einmal vorgerendert, nicht je Bild neu skaliert.
+function grundbildLuftbild(welt, bild) {
+  const v = welt.vektor;
+  const c = document.createElement('canvas');
+  c.width = BREITE * S; c.height = HOEHE * S;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.drawImage(bild, 0, 0, c.width, c.height);
+  const pfad = (p, zu) => {
+    g.beginPath(); g.moveTo(p[0] * S, p[1] * S);
+    for (let i = 2; i < p.length; i += 2) g.lineTo(p[i] * S, p[i + 1] * S);
+    if (zu) g.closePath();
+  };
+  g.lineJoin = g.lineCap = 'round';
+  const WEG = new Set(['footway', 'path', 'cycleway', 'track', 'steps', 'pedestrian']);
+  const HAUPT = new Set(['motorway', 'trunk', 'primary', 'secondary']);
+  g.setLineDash([3, 3]);
+  for (const s of v.strassen) if (WEG.has(s.t)) { pfad(s.p); g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 1.2; g.stroke(); }
+  g.setLineDash([]);
+  const fahr = v.strassen.filter(s => !WEG.has(s.t));
+  const breite = s => Math.max(3, s.b * S * (HAUPT.has(s.t) ? 1.25 : 1));
+  for (const s of fahr) { pfad(s.p); g.strokeStyle = 'rgba(25,25,28,.9)'; g.lineWidth = breite(s) + 3; g.stroke(); }
+  for (const s of fahr) { pfad(s.p); g.strokeStyle = HAUPT.has(s.t) ? '#f6d86a' : s.t === 'service' ? '#d6d6d2' : '#f4f4f0'; g.lineWidth = breite(s); g.stroke(); }
+  for (const h of v.gebaeude) {
+    pfad(h.p, true);
+    g.fillStyle = h.safe ? 'rgba(102,187,106,.55)' : 'rgba(255,214,190,.30)'; g.fill();
+    g.strokeStyle = h.safe ? '#1b5e20' : 'rgba(55,28,18,.85)'; g.lineWidth = h.safe ? 2.2 : 1; g.stroke();
+  }
+  return c;
+}
+
 // Für jeden Straßennamen die längsten Abschnitte (je Weg der längste, nach Länge sortiert) als Beschriftungsplätze
 function strassenNamen(welt) {
   const plaetze = [];
@@ -69,10 +102,20 @@ function strassenNamen(welt) {
 }
 
 export class Uebersicht {
-  constructor(welt, box) {
+  constructor(welt, box, kartenName = null) {
     this.welt = welt; this.box = box;
     this.el = box.querySelector('canvas');
-    this.basis = grundbild(welt);
+    this.basisKarte = grundbild(welt); this.basisLuft = null; this.basis = this.basisKarte;
+    this.modus = 'luft';
+    try { this.modus = kartenbildLesen(localStorage.getItem(GERAET_SCHLUESSEL.kartenbild)); } catch { /* egal */ }
+    // Luftbild einmal laden (fehlt es oder gibt es kein Vektor-Gebäudebild: bisherige Darstellung)
+    if (kartenName && welt.vektor && typeof Image !== 'undefined') {
+      const img = new Image();
+      img.onload = () => { this.basisLuft = grundbildLuftbild(welt, img); this.basisWaehlen(); };
+      img.src = `karten/${kartenName}_luftbild.webp`;
+    }
+    this.kartenbildHoerer = e => { this.modus = kartenbildLesen(e.detail); this.basisWaehlen(); };
+    if (typeof document !== 'undefined') document.addEventListener('zob-kartenbild', this.kartenbildHoerer);
     this.namen = strassenNamen(welt);
     this.zoom = 1;          // 1 = ganze Karte passt hinein
     this.mitte = null;      // null = folgt mir; sonst {x, y} in Kacheln (verschoben)
@@ -81,6 +124,11 @@ export class Uebersicht {
     box.style.display = 'block';
     box.style.setProperty('--seiten', String(BREITE / HOEHE));   // für die Größe der aufgeklappten Karte (stil.css)
     this.bedienung();
+  }
+
+  basisWaehlen() {
+    this.basis = this.modus === 'luft' && this.basisLuft ? this.basisLuft : this.basisKarte;
+    this.zeichneNeu = true;
   }
 
   umschalten(gross = !this.gross) {

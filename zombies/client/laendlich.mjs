@@ -99,9 +99,11 @@ export function b11Ausduennen(karte, k, setze) {
 // ctx: { karte, k, hole, setze, haeuser, deko, nein (Uint8Array, 1 = gesperrt), zone (Uint8Array, 2 = Acker/Sport/Parkplatz …), start }
 // karte.zaeune / karte.zaunart / karte.strassen müssen veränderbare Kopien sein (osmwelt.mjs sorgt dafür).
 export function laendlicheDetails(ctx) {
-  const { karte, k, hole, setze, haeuser, deko, nein, zone, start } = ctx;
+  const { karte, k, hole, setze, haeuser, deko, nein, zone, start, ohneBaeume } = ctx;
   const N = BREITE * HOEHE;
-  let bestand = 0; for (let i = 0; i < N; i++) if (k[i] === T.BAUM) bestand++;
+  // Entscheidung „ländlich“ immer nach den OSM-Bäumen (Karten-Rohdaten); k enthält mit Luftbild schon die Luftbild-Bäume
+  const lb = ohneBaeume ? karte.luftbild : null;
+  let bestand = 0; for (let i = 0; i < N; i++) if ((lb ? karte.kacheln.charCodeAt(i) - 48 : k[i]) === T.BAUM) bestand++;
   if (bestand >= BAUM_ZIEL * N) return { baeume: 0, hecken: 0, zaeune: 0, ballen: 0, wege: 0 };
   const erg = { baeume: 0, hecken: 0, zaeune: 0, ballen: 0, wege: 0 };
 
@@ -149,6 +151,7 @@ export function laendlicheDetails(ctx) {
   const ok = (x, y, aGeb, aStr, aPfad) => {
     if (x < 3 || y < 3 || x >= BREITE - 3 || y >= HOEHE - 3) return false;
     const i = y * BREITE + x;
+    if (lb && lb.charCodeAt(i) !== 50 && lb.charCodeAt(i) !== 51) return false;   // mit Luftbild nur auf Wiese/Acker (Ziffer 2/3)
     return k[i] === T.WIESE && !neinFeld[i] && !gesperrt[i] && zone[i] !== 2 && dGeb[i] >= aGeb && dStr[i] >= aStr && dPfad[i] >= aPfad;
   };
   const sperre = (x, y, rad = 0) => { for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) if (x + dx >= 0 && y + dy >= 0 && x + dx < BREITE && y + dy < HOEHE) neinFeld[(y + dy) * BREITE + x + dx] = 1; };
@@ -163,7 +166,7 @@ export function laendlicheDetails(ctx) {
     // Allee: etwa alle 4 Kacheln ein Baum, je Seite mit Lücken
     entlangLinie(s.p, 4, (px, py, ux, uy) => {
       for (const seite of [-1, 1]) {
-        if (hsh(Math.round(px * 2), Math.round(py * 2), 31 + seite) > 0.5) continue;
+        if (ohneBaeume || hsh(Math.round(px * 2), Math.round(py * 2), 31 + seite) > 0.5) continue;   // mit Luftbild: Bäume nur dort, wo das Luftbild sie zeigt
         const ab = fb / 2 + 1.8, x = Math.floor(px - uy * ab * seite), y = Math.floor(py + ux * ab * seite);
         if (ok(x, y, 6, 1, 3)) baum(x, y);
       }
@@ -197,7 +200,7 @@ export function laendlicheDetails(ctx) {
     zellen.push({ i, j, key: hsh(i, j, 11) * (zone[ci] === 1 ? 0.5 : 1) * (dGeb[ci] < 5 ? 1.6 : 1) });
   }
   zellen.sort((a, b) => a.key - b.key || a.j - b.j || a.i - b.i);
-  for (let durchgang = 0; durchgang < 3 && anzahl < ziel; durchgang++) {
+  for (let durchgang = 0; durchgang < 3 && anzahl < ziel && !ohneBaeume; durchgang++) {
     for (const c of zellen) {
       if (anzahl >= ziel) break;
       const ox = 3 + c.i * Z + Math.floor(hsh(c.i, c.j, 12 + durchgang) * Z), oy = 3 + c.j * Z + Math.floor(hsh(c.i, c.j, 15 + durchgang) * Z);
@@ -220,7 +223,7 @@ export function laendlicheDetails(ctx) {
     karte.zaeune.push({ a: art, p: tiles.length > 1 ? [tiles[0][0] + 0.5, tiles[0][1] + 0.5, tiles.at(-1)[0] + 0.5, tiles.at(-1)[1] + 0.5] : [tiles[0][0] + 0.2, tiles[0][1] + 0.5, tiles[0][0] + 0.8, tiles[0][1] + 0.5] });
   };
   for (let j = 0; j * 16 + 3 < HOEHE - 3; j++) for (let i = 0; i * 16 + 3 < BREITE - 3; i++) {
-    if (hsh(i, j, 51) > 0.3) continue;
+    if (ohneBaeume || hsh(i, j, 51) > 0.3) continue;   // mit Luftbild keine Zufalls-Hecken
     const quer = hsh(i, j, 52) < 0.5, laenge = 8 + Math.floor(hsh(i, j, 53) * 8);
     const x0 = 3 + i * 16 + Math.floor(hsh(i, j, 54) * 6), y0 = 3 + j * 16 + Math.floor(hsh(i, j, 55) * 6);
     const stuecke = []; let aktuell = [];

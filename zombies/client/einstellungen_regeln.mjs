@@ -32,6 +32,7 @@ export const GERAET_SCHLUESSEL = {
   zombieTon: 'zob_zombieton',      // Zombiegeräusche an/aus (Standard an)
   musik: 'zob_musik',              // Musik an/aus (Standard an)
   schiessen: 'zob_schiessen',      // 'auto' (Standard) oder 'knopf'
+  kartenbild: 'zob_kartenbild',    // Eckkarte: 'luft' (Standard, Luftbild-Hintergrund) oder 'karte' (gezeichnete Karte)
 };
 
 // Text → Faktor 0–2 (ungültig/leer = 1); gerundet auf ganze Prozent
@@ -43,6 +44,8 @@ export function stimmenFaktorLesen(roh) {
 }
 // Text → true/false; nur ein ausdrückliches 'aus' schaltet ab
 export function anAusLesen(roh) { return roh !== 'aus'; }
+// Text → 'luft' | 'karte' (Standard Luftbild)
+export function kartenbildLesen(roh) { return roh === 'karte' ? 'karte' : 'luft'; }
 // Text → 'auto' | 'knopf'
 export function schiessModusLesen(roh) { return roh === 'knopf' ? 'knopf' : 'auto'; }
 // Darf der Server auf Ziele schießen? Automatisch: immer; per Knopf: nur solange der Knopf gehalten wird
