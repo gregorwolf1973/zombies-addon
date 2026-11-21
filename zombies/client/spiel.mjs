@@ -4,6 +4,7 @@ import {
   KACHEL, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
+import { NebelEbene } from './nebel.mjs';
 import { dingId, dingN, hat, zaehle, flach, kannAufnehmen, entferne as entferneStueck } from './stapel.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
@@ -583,6 +584,7 @@ function suMenueEinrichten(szene) {
       ${b('hordeanzeige', '🎯 Horden-Ziele anzeigen ein/aus')}
       <div class="titel">Tageszeit</div>
       <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
+      ${b('nebel', '🌫 Nebel ein/aus')}
       <div class="titel">Zeitraffer</div>
       <div class="zeile">${[1, 5, 10, 60].map(n => b('zeitraffer', `⏩ ${n}×`, { faktor: n })).join('')}</div>
       <div class="titel">Evakuierung und Lager</div>
@@ -1902,6 +1904,13 @@ class Ort extends Phaser.Scene {
     return this.lampenWinkel;
   }
 
+  // Nebel (client/nebel.mjs): Dichte und Sichtweite kommen vom Server
+  nebelZeichnen(ich, dt) {
+    const n = this.nebelEbene ??= new NebelEbene(this), st = raum.state;
+    if (!ich || !this.lokal) { n.verstecken(); return; }
+    n.aktualisiere(this.cameras.main.worldView, this.lokal.x, this.lokal.y, st.nebel ?? 0, st.nebelSicht || 20, 1 - helligkeit(st.uhr ?? 480), ich.lampe > 0 ? this.lampenRichtung(ich) : null, dt, !!this.aktEbene);
+  }
+
   // Draußen: Dämmerung färbt warm, nachts dunkelblau; Laternen, Fenster, Taschenlampe und ein kleiner Schein um jeden Spieler
   aussenLicht(ich) {
     let rt = this.nachtRT;
@@ -2922,6 +2931,7 @@ class Ort extends Phaser.Scene {
     this.sichtMelden();
     this.innenAktualisieren(ich);
     if (ich) this.aussenLicht(ich);
+    this.nebelZeichnen(ich, dt);
     this.chunksAktualisieren();
     this.abholstelleAktualisieren();
     heliAktualisieren(this, raum.state, dt, this.aktEbene);

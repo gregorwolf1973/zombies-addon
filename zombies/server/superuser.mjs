@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { KACHEL, BREITE, HOEHE, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX, WAFFEN } from '../client/welt.mjs';
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import * as WP from './waffenplaetze.mjs';
+import { Nebel } from './nebel.mjs';
 import { LEVEL_KARTEN, KARTEN_NAMEN, level1Karte } from './aufgaben.mjs';
 
 // ---------- Hash ----------
@@ -42,7 +43,7 @@ export function anmelden(hash, passwort, schluessel) {
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel'];
 
 function springen(raum, p, x, ziel) {
   p.x = ziel.x; p.y = ziel.y; p.ebene = ziel.ebene ?? ''; p.unten = false; p.anBord = false; p.sicher = ''; p.aktion = ''; p.fortschritt = 0;
@@ -176,6 +177,12 @@ export function befehl(raum, client, m) {
       const h = Number(m.stunde) === 23 ? 23 : 12;
       s.uhr = h * 60;
       return h === 12 ? '☀️ Es ist 12:00 Uhr' : '🌙 Es ist 23:00 Uhr';
+    }
+    case 'nebel': {
+      const an = !(raum.nebel?.erzwungen || s.nebel > 0.05);   // schaltet um: ist Nebel da, geht er aus
+      raum.nebel ??= new Nebel();
+      s.nebel = raum.nebel.schalte(an);
+      return an ? '🌫 Nebel: an (volle Dichte)' : 'Nebel: aus';
     }
     case 'auffuellen':
       auffuellen(raum, p, x);
