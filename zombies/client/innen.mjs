@@ -1,6 +1,7 @@
 // Innenraum-Generator – Entwurf von DeepSeek (v4-pro), nach Testrückmeldung korrigiert
 // Innenraum-Generator – Entwurf von DeepSeek (v4-pro), von Claude geprüft
-import { KACHEL, BREITE, HOEHE, T, zufall, ladenArt, seiteVon } from './welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, zufall, ladenArt, seiteVon, INNEN_FEIN } from './welt.mjs';
+import { innenraumFein } from './innen_fein.mjs';
 
 export const MOEBEL_NAMEN = {
   regal_lang: 'Ladenregal',
@@ -892,6 +893,7 @@ export function innenraumFuer(seed, welt, ebene) {
   const m = EBENE_MUSTER.exec(ebene ?? '');
   if (!m) return null;
   const nr = Number(m[1]), haus = welt.haeuser[nr];
+  if (INNEN_FEIN && haus && !haus.safe) return innenraumFein(seed, welt, ebene, EBENE_MUSTER);   // PROTOTYP Feinraster (Safe Rooms bleiben vorerst grob)
   const kat = haus?.safe ? '' : ladenArt(haus);
   const w = baueInnenraum(seed, nr, m[2], seiteVon(haus), !!kat);
   if (kat) w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; });
