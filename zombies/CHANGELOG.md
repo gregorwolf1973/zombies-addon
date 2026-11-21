@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.68.4 – 21.11.2026
+
+- Behoben: Geparkte Autos stehen auf Parkplätzen jetzt mittig und längs in den eingezeichneten (auch schrägen) Parkbuchten, mit freien Lücken.
+
 ## 0.68.3 – 21.11.2026
 
 - Behoben: Live-Radio wurde bei vielen Autos (z. B. Stau an der B11) sehr laut, weil sich derselbe Sender je Auto addierte – jetzt ist nur das nächste Autoradio zu hören.
