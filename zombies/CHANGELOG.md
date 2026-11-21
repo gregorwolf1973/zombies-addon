@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.70.0 – 22.11.2026
+
+- Neu (vorerst AUS, Backend-Schalter „Maßstäbliche Innenräume“): Häuser innen im echten Maßstab – Grundriss = echter Hausumriss, Wände 25 cm, Türen 1,25 m, Möbel in echten Maßen mit Maserung/Polster/Fliesen, Safehouses, Läden und Keller im feinen Raster; Tempo drinnen einstellbar (Vorgabe 35 %). Beim Umschalten landen Spieler im Haus sicher an der Haustür.
+
 ## 0.69.4 – 21.11.2026
 
 - Kamera: Grundzoom 1,4× näher und weiter heranzoombar (bis 2,5×), passend zu den maßstäblicheren Figuren (Größe gesamt jetzt 50 %).
