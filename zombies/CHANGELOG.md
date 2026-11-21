@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.69.0 – 21.11.2026
+
+- Neu (Geretsried 2): echte Kulisse – amtliches Luftbild als Boden (Bayerische Vermessungsverwaltung, CC BY 4.0), echte Dachformen aus dem 3D-Gebäudemodell LoD2 (96 % der Häuser), weiche Schatten von Häusern und Bäumen (nachts und im Nebel aus). Im Zahnrad einzeln schaltbar: Luftbild-Boden, Echte Dächer, Schatten. Bodenbilder werden nur in der Umgebung geladen.
+- Baumkronen über dem Luftbild dezenter, damit die echten Bäume sichtbar bleiben.
+
 ## 0.68.8 – 21.11.2026
 
 - Radio-Eilmeldung jetzt mit zwei ElevenLabs-Sprechern (abwechselnd) für Geretsried und die Isarauen; die Piper-Stimme ist entfernt. Level ohne passende Aufnahme bleiben ohne Durchsage.
