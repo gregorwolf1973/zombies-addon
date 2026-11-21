@@ -154,16 +154,12 @@ export function befehl(raum, client, m) {
       const n = [50, 200, 500].includes(Number(m.groesse)) ? Number(m.groesse) : 50;
       const w = raum.welle;
       if (!w) return 'Keine Wellenlogik';
-      if (w.aktiv || w.ansage) return 'Es läuft schon eine Horde';
-      const orig = w.einst.bind(w);
-      w.einst = () => ({ ...orig(), welleMin: n, welleMax: n });
-      try {
-        const seite = w.ansagen();
-        w.ansage = null;
-        const ids = w.erzeugen(seite);
-        if (!ids) return 'Kein Platz für die Horde gefunden';
-        return `🧟 Horde mit ${ids.length} Zombies gestartet`;
-      } finally { delete w.einst; }
+      if (w.ansage) return 'Eine Horde wird gerade angesagt';
+      const seite = w.ansagen();
+      w.ansage = null;
+      const ids = w.erzeugen(seite, n);
+      if (!ids) return 'Kein Platz für die Horde gefunden';
+      return `🧟 Horde mit ${ids.length} Zombies gestartet`;
     }
     case 'hordeanzeige': {
       const sid = client.sessionId, alle = !!raum.welle?.einst?.().hordeZieleZeigen;

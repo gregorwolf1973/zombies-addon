@@ -404,40 +404,56 @@
 .gr-knoepfe { gap: 8px; justify-content: flex-start; }
 .gr-ergebnis { margin: 6px 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .gr-vorschau canvas { display: block; width: 100%; height: 260px; margin: 8px 0 4px; border-radius: 8px; border: 1px solid var(--border); background: #6a994e; }
-/* ---------- Akkordeon in den Reitern ---------- */
-.akk-kopf { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 4px 0; font: inherit; font-size: 1.15rem; font-weight: 700; text-align: left;
-  color: var(--text); background: none; border: 0; box-shadow: none; cursor: pointer; -webkit-appearance: none; appearance: none; min-height: 44px; }
-.akk-kopf:focus-visible { outline: 3px solid var(--akzent); outline-offset: 2px; border-radius: 6px; }
-.akk-pfeil { flex: 0 0 auto; width: 1.2em; color: var(--akzent); }
-.akk-titel { flex: 1 1 auto; }
-.akk-huelle { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s ease; }
-.akk-huelle > .akk-inhalt { min-height: 0; overflow: hidden; visibility: hidden; transition: visibility 0s .25s; }
-section.akk-offen > .akk-huelle { grid-template-rows: 1fr; }
-section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-delay: 0s; overflow: visible; }
-@media (prefers-reduced-motion: reduce) { .akk-huelle, .akk-huelle > .akk-inhalt { transition: none; } }
-/* ---------- Reiter (Gliederung und Code-Grundlage: DeepSeek) ---------- */
-.reiterleiste { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; padding: 10px 12px; background: var(--bg);
-  border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; scroll-behavior: smooth; margin: 0 0 4px; }
-.reiterleiste::-webkit-scrollbar { display: none; width: 0; height: 0; }
-.reiterleiste [role="tab"] { flex: 0 0 auto; scroll-snap-align: start; margin: 0; padding: 8px 14px; font: inherit; font-size: .95rem; line-height: 1.25;
-  white-space: nowrap; color: var(--text); background: var(--chip); border: 1px solid var(--border); border-radius: 999px; box-shadow: none; cursor: pointer;
-  -webkit-appearance: none; appearance: none; width: auto; }
-.reiterleiste [role="tab"]:hover { border-color: var(--akzent); }
-.reiterleiste [role="tab"][aria-selected="true"] { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); font-weight: 600; }
-.reiterleiste [role="tab"]:focus { outline: none; }
-.reiterleiste [role="tab"]:focus-visible { outline: 3px solid var(--akzent); outline-offset: 3px; }
-.reiterleiste [role="tab"][aria-selected="true"]:focus-visible { outline-color: var(--text); }
-.reiterpanel { padding: 12px 0 32px; }
-.reiterpanel[hidden] { display: none; }
-.reiterpanel > section.karte { margin: 0 0 16px 0; }
-.reiterpanel > section.karte:last-child { margin-bottom: 0; }
-.hilfe { display: block; margin: 4px 0 0; font-size: .8rem; line-height: 1.4; color: var(--text-soft); }
 /* Speicher-Rückmeldung der Regler: unten rechts, damit sie in jedem Reiter sichtbar ist */
 #tnStatus { position: fixed; right: 16px; bottom: 16px; z-index: 30; margin: 0; padding: 6px 12px; border-radius: 999px; background: var(--card);
   box-shadow: var(--shadow); font-weight: 600; pointer-events: none; }
 #tnStatus:empty { display: none; }
-@media (min-width: 600px) { .reiterleiste { flex-wrap: wrap; overflow-x: visible; } }
+</style>
+<style>
+/* Einstellungen: eine Zeile je Wert (Bezeichnung, Zahlenfeld mit − / +, ↺ für die Vorgabe), keine Schieber */
+.ez { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.ez:last-of-type { border-bottom: 0; }
+.ez > label { flex: 1 1 240px; margin: 0 !important; font-weight: 400 !important; display: block; min-width: 0; }
+.ez > .sf-zeile { flex: 0 0 auto; display: flex !important; align-items: center; gap: 6px; margin: 0 !important; }
+.sf-zeile > span.sf-einheit { min-width: 0 !important; width: auto; text-align: left !important; font-size: .8rem; font-weight: 400; color: var(--text-soft); white-space: nowrap; }
+.sf-weg { display: none !important; }
+.sf { display: inline-flex; align-items: center; gap: 4px; }
+.sf button { margin: 0; min-width: 38px; min-height: 38px; padding: 0 8px; font-size: 1.1rem; line-height: 1; }
+.sf button.sf-vorgabe { min-width: 34px; font-size: 1rem; color: var(--text-soft); }
+.sf button.sf-vorgabe[disabled] { opacity: .3; cursor: default; }
+.sf input[type="number"] { width: 5.6em; min-height: 38px; text-align: center; font: inherit; font-variant-numeric: tabular-nums; padding: 0 4px; -moz-appearance: textfield; appearance: textfield; }
+.sf input[type="number"]::-webkit-outer-spin-button, .sf input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+@media (max-width: 520px) { .ez > label { flex-basis: 100%; } .ez > .sf-zeile { width: 100%; justify-content: flex-end; } }
+.ez .hilfe, .unter-inhalt > .hilfe { display: block; flex: 1 0 100%; }
+
+/* Gruppen */
+section.feinheiten { padding: 0; overflow: hidden; }
+section.feinheiten > details > summary { padding: 14px 16px; font-size: 1.15rem; font-weight: 700; cursor: pointer; }
+details.unter { border-top: 1px solid var(--border); }
+details.unter > summary { padding: 12px 16px; font-weight: 600; cursor: pointer; }
+details.unter > .unter-inhalt { padding: 2px 16px 16px; }
+details.unter details.unter { margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; }
+details.unter details.unter > summary { padding: 8px 12px; }
+details.unter details.unter > .unter-inhalt { padding: 2px 12px 12px; }
+
+/* Zombies je Level */
+.lv-scroll { overflow-x: auto; margin: 8px -4px 4px; padding: 0 4px; }
+table.lv-tabelle { border-collapse: collapse; width: 100%; min-width: 640px; }
+table.lv-tabelle th, table.lv-tabelle td { padding: 5px 4px; text-align: center; vertical-align: middle; }
+table.lv-tabelle thead th { font-size: .8rem; font-weight: 600; color: var(--text-soft); }
+table.lv-tabelle tbody th { text-align: left; font-weight: 400; padding-right: 8px; min-width: 150px; }
+table.lv-tabelle tbody tr + tr th, table.lv-tabelle tbody tr + tr td { border-top: 1px solid var(--border); }
+table.lv-tabelle .sf { gap: 2px; }
+table.lv-tabelle .sf button { min-width: 30px; min-height: 36px; padding: 0 4px; }
+table.lv-tabelle .sf input[type="number"] { width: 3.6em; min-height: 36px; }
+table.lv-tabelle .sf-vorgabe { min-width: 30px; }
+.lv-status { min-height: 1.2em; font-size: .85rem; color: var(--akzent); margin: 4px 0 0; }
+table.lv-vorschau { border-collapse: collapse; width: 100%; min-width: 420px; font-variant-numeric: tabular-nums; }
+table.lv-vorschau th, table.lv-vorschau td { padding: 4px 6px; text-align: center; border-top: 1px solid var(--border); font-size: .9rem; }
+table.lv-vorschau thead th { border-top: 0; font-size: .8rem; color: var(--text-soft); }
+table.lv-vorschau tbody th { text-align: left; font-weight: 600; white-space: nowrap; }
+table.lv-vorschau td small { display: block; color: var(--text-soft); font-size: .75rem; }
+.lv-formel { font-size: .8rem; color: var(--text-soft); margin: 6px 0; }
 </style>
 </head>
 <body>
@@ -467,15 +483,6 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       <table id="leistungTabelle"><thead><tr><th>Teil</th><th>Mittel</th><th>Spitze</th></tr></thead><tbody></tbody></table>
     </details>
   </section>
-<nav class="reiterleiste" role="tablist" aria-label="Einstellungen">
-  <button type="button" role="tab" id="reiter-spiel" aria-controls="panel-spiel" aria-selected="false" tabindex="-1">🎮 Spiel</button>
-  <button type="button" role="tab" id="reiter-zombies" aria-controls="panel-zombies" aria-selected="false" tabindex="-1">🧟 Zombies</button>
-  <button type="button" role="tab" id="reiter-welt" aria-controls="panel-welt" aria-selected="false" tabindex="-1">🌍 Welt &amp; Ausbruch</button>
-  <button type="button" role="tab" id="reiter-funde" aria-controls="panel-funde" aria-selected="false" tabindex="-1">🎒 Funde &amp; Waffen</button>
-  <button type="button" role="tab" id="reiter-ton" aria-controls="panel-ton" aria-selected="false" tabindex="-1">🗣️ Sprache &amp; Töne</button>
-  <button type="button" role="tab" id="reiter-aufgaben" aria-controls="panel-aufgaben" aria-selected="false" tabindex="-1">🎯 Aufgaben</button>
-  <button type="button" role="tab" id="reiter-admin" aria-controls="panel-admin" aria-selected="false" tabindex="-1">🧪 Test &amp; Neustart</button>
-</nav>
 
   <!-- Testwerkzeuge -->
   <section class="karte" aria-labelledby="titelTest">
@@ -496,109 +503,48 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     </div>
   </section>
 
-  <!-- Zombies -->
+  <!-- Zombies (Feinheiten): Mengen und Horden je Level stehen in der Karte „Zombies je Level“ -->
   <section class="karte" aria-labelledby="titelZombies">
     <h2 id="titelZombies">Zombies</h2>
 
     <div class="feld">
-      <label for="dichte">Menge draußen</label>
-      <div class="wertzeile">
-        <input type="range" id="dichte" min="0" max="50" step="1">
-        <span class="wert" id="dichteWert">×1,0</span>
-      </div>
-      <div class="aktion-zeile" style="margin-top:4px;">
-        <button type="button" class="klein" data-normal="dichte">normal</button>
-      </div>
-    </div>
-
-    <div class="feld">
-      <label for="haeuser">In Häusern</label>
-      <div class="wertzeile">
-        <input type="range" id="haeuser" min="0" max="50" step="1">
-        <span class="wert" id="haeuserWert">×1,0</span>
-      </div>
-      <div class="aktion-zeile" style="margin-top:4px;">
-        <button type="button" class="klein" data-normal="haeuser">normal</button>
-      </div>
-    </div>
-
-    <div class="feld">
-      <label for="tempo">Tempo</label>
+      <label for="tempo">Tempo (Prozent)</label>
       <div class="wertzeile">
         <input type="range" id="tempo" min="50" max="150" step="1">
         <span class="wert" id="tempoWert">100 %</span>
       </div>
-      <div class="aktion-zeile" style="margin-top:4px;">
-        <button type="button" class="klein" data-normal="tempo">normal</button>
-      </div>
     </div>
 
     <div class="feld">
-      <label for="welle">Zombiewelle: alle</label>
+      <label for="ueberraschung">Überraschungszombie beim Durchsuchen (Schrank, Spind, Müllcontainer, Auto)</label>
       <div class="wertzeile">
-        <input type="range" id="welle" min="0" max="120" step="5">
-        <span class="wert" id="welleWert">20 min</span>
+        <input type="range" id="ueberraschung" min="0" max="100" step="1">
+        <span class="wert" id="ueberraschungWert">3 %</span>
       </div>
-      <p class="hinweis">Eine große Gruppe zieht von links oder rechts durchs Bild (Meldung 10 echte Sekunden vorher). 0 = keine Wellen. Echte Minuten (bei Zeitraffer 1×).</p>
     </div>
+  </section>
+
+  <!-- Horden (Feinheiten) -->
+  <section class="karte" aria-labelledby="titelHorden">
+    <h2 id="titelHorden">Horden und Angriffstrupps</h2>
+    <p class="hinweis">Wie viele Horden wann kommen und wie groß sie sind, steht in „Zombies je Level“. Hier: wie sie sich verhalten.</p>
 
     <div class="feld">
-      <label for="welleMin">Größe der Welle: mindestens</label>
+      <label for="hordeZiel">Zielwechsel alle … min</label>
       <div class="wertzeile">
-        <input type="range" id="welleMin" min="5" max="1000" step="5">
-        <span class="wert" id="welleMinWert">20</span>
+        <input type="range" id="hordeZiel" min="0.5" max="30" step="0.5">
+        <span class="wert" id="hordeZielWert">3,5 min</span>
       </div>
+      <p class="hinweis">Die Horde marschiert auf ein Ziel zu (Safe-Room, Laden, Stützpunkt, Lärm, Menschen, Spielernähe, Kreuzung) und wählt nach dieser Zeit (echte Minuten, ±40 % Streuung) oder bei Ankunft ein neues.</p>
     </div>
 
     <div class="feld">
-      <label for="welleMax">… höchstens</label>
+      <label for="hordeTrupp">Angriffstrupp-Größe</label>
       <div class="wertzeile">
-        <input type="range" id="welleMax" min="5" max="1000" step="5">
-        <span class="wert" id="welleMaxWert">50</span>
+        <input type="range" id="hordeTrupp" min="1" max="300" step="1">
+        <span class="wert" id="hordeTruppWert">10</span>
       </div>
-    </div>
-
-    <div class="feld">
-      <label for="hordeZielMin">Horde wechselt ihr Ziel: frühestens nach</label>
-      <div class="wertzeile">
-        <input type="range" id="hordeZielMin" min="1" max="30" step="0.5">
-        <span class="wert" id="hordeZielMinWert">2 min</span>
-      </div>
-      <p class="hinweis">Die Horde marschiert auf ein Ziel zu (Safe-Room, Laden, Stützpunkt, Lärm, Menschen, Spielernähe, Kreuzung) und wählt nach dieser Zeit (echte Minuten) oder bei Ankunft ein neues.</p>
-    </div>
-
-    <div class="feld">
-      <label for="hordeZielMax">… spätestens nach</label>
-      <div class="wertzeile">
-        <input type="range" id="hordeZielMax" min="1" max="30" step="0.5">
-        <span class="wert" id="hordeZielMaxWert">5 min</span>
-      </div>
-    </div>
-
-    <div class="feld">
-      <label class="schalter" for="hordeZieleZeigen">
-        <input type="checkbox" id="hordeZieleZeigen">
-        <span class="anzeige" aria-hidden="true"></span>
-        <span>Ziel der Horde für Superuser anzeigen (Prüfhilfe)</span>
-      </label>
-      <p class="hinweis">Zeigt Superusern eine Zielfahne mit Name, eine Linie von der Horde zum Ziel, den Countdown bis zum Zielwechsel und die letzten Wechsel mit Grund (unter dem Zählerfenster). Eingeschaltet ist es für Superuser von Anfang an sichtbar, ausgeschaltet nur nach ☰ → „Horden-Ziele anzeigen“. Jeder Superuser kann es im ☰-Menü für sich ein- und ausschalten. Normale Spieler sehen es nie.</p>
-    </div>
-
-    <div class="feld">
-      <label for="hordeTruppMin">Angriffstrupp: mindestens</label>
-      <div class="wertzeile">
-        <input type="range" id="hordeTruppMin" min="1" max="100" step="1">
-        <span class="wert" id="hordeTruppMinWert">5</span>
-      </div>
-      <p class="hinweis">Kommt die Horde in Reichweite von Spielern, Bots, Soldaten oder Menschen, lösen sich die nächsten Zombies als Trupp und jagen sie; die Horde zieht weiter. Die Größe wächst mit der Hordengröße (Stützpunkt: doppelt).</p>
-    </div>
-
-    <div class="feld">
-      <label for="hordeTruppMax">… höchstens</label>
-      <div class="wertzeile">
-        <input type="range" id="hordeTruppMax" min="1" max="100" step="1">
-        <span class="wert" id="hordeTruppMaxWert">15</span>
-      </div>
+      <p class="hinweis">Kommt die Horde in Reichweite von Spielern, Bots, Soldaten oder Menschen, lösen sich die nächsten Zombies als Trupp und jagen sie (±30 % Streuung); die Horde zieht weiter. Die Größe wächst mit der Hordengröße (Stützpunkt: doppelt).</p>
     </div>
 
     <div class="feld">
@@ -610,11 +556,12 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
     </div>
 
     <div class="feld">
-      <label for="ueberraschung">Überraschungszombie beim Durchsuchen (Schrank, Spind, Müllcontainer, Auto)</label>
-      <div class="wertzeile">
-        <input type="range" id="ueberraschung" min="0" max="100" step="1">
-        <span class="wert" id="ueberraschungWert">3 %</span>
-      </div>
+      <label class="schalter" for="hordeZieleZeigen">
+        <input type="checkbox" id="hordeZieleZeigen">
+        <span class="anzeige" aria-hidden="true"></span>
+        <span>Horden für Superuser anzeigen (Prüfhilfe)</span>
+      </label>
+      <p class="hinweis">Zeigt Superusern je Horde eine Linie zum Ziel, die Zielfahne mit Name und die Hordenliste (Größe, Restzeit, nächstes Ziel; unter dem Zählerfenster). Im ☰-Menü je Person schaltbar.</p>
     </div>
   </section>
 
@@ -2620,25 +2567,17 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   }
 
   function rendereZombies(d) {
-    var z = (d.einstellungen && d.einstellungen.zombies) || { dichte: 10, haeuser: 10, tempo: 100 };
-    var dichte = $("dichte");
-    var haeuser = $("haeuser");
+    var z = (d.einstellungen && d.einstellungen.zombies) || { tempo: 100 };
     var tempo = $("tempo");
-    if (!zeitGeber["dichte"] && !istFokussiert(dichte)) { dichte.value = z.dichte; }
-    if (!zeitGeber["haeuser"] && !istFokussiert(haeuser)) { haeuser.value = z.haeuser; }
     if (!zeitGeber["tempo"] && !istFokussiert(tempo)) { tempo.value = z.tempo; }
-    $("dichteWert").textContent = faktor(Number(dichte.value));
-    $("haeuserWert").textContent = faktor(Number(haeuser.value));
     $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
-    var wz = d.einstellungen && d.einstellungen.zombies || {};
-    [["welle", wz.welle === undefined ? 20 : wz.welle], ["welleMin", wz.welleMin || 20], ["welleMax", wz.welleMax || 50],
-      ["hordeZielMin", wz.hordeZielMin || 2], ["hordeZielMax", wz.hordeZielMax || 5], ["hordeTruppMin", wz.hordeTruppMin || 5], ["hordeTruppMax", wz.hordeTruppMax || 15], ["hordeReichweite", wz.hordeReichweite || 18], ["ueberraschung", wz.ueberraschung === undefined ? 3 : wz.ueberraschung]].forEach(function (p) {
+    [["hordeZiel", z.hordeZiel || 3.5], ["hordeTrupp", z.hordeTrupp || 10], ["hordeReichweite", z.hordeReichweite || 18], ["ueberraschung", z.ueberraschung === undefined ? 3 : z.ueberraschung]].forEach(function (p) {
       var el = $(p[0]);
       if (!zeitGeber[p[0]] && !istFokussiert(el)) el.value = p[1];
       $(p[0] + "Wert").textContent = welleText(p[0], Number(el.value));
     });
   }
-  function welleText(id, v) { return id === "welle" ? (v ? v + " min" : "aus") : id.indexOf("hordeZiel") === 0 ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : id === "ueberraschung" ? v + " %" : String(v); }
+  function welleText(id, v) { return id === "hordeZiel" ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : id === "ueberraschung" ? v + " %" : String(v); }
 
   function rendereSpiel(d) {
     var e = d.einstellungen || {};
@@ -2766,29 +2705,7 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
   // ---------- Events ----------
 
   function bindeEvents() {
-    var dichte = $("dichte");
-    var haeuser = $("haeuser");
     var tempo = $("tempo");
-
-    function sliderLabel() {
-      $("dichteWert").textContent = faktor(Number(dichte.value));
-    }
-    dichte.addEventListener("input", sliderLabel);
-    dichte.addEventListener("change", function () {
-      $("dichteWert").textContent = faktor(Number(dichte.value));
-      clearTimeout(zeitGeber["dichte"]);
-      sendenTeil("zombies", "dichte", Number(dichte.value));
-    });
-
-    haeuser.addEventListener("input", function () {
-      $("haeuserWert").textContent = faktor(Number(haeuser.value));
-    });
-    haeuser.addEventListener("change", function () {
-      $("haeuserWert").textContent = faktor(Number(haeuser.value));
-      clearTimeout(zeitGeber["haeuser"]);
-      sendenTeil("zombies", "haeuser", Number(haeuser.value));
-    });
-
     tempo.addEventListener("input", function () {
       $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
     });
@@ -2798,28 +2715,13 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       sendenTeil("zombies", "tempo", Number(tempo.value));
     });
 
-    ["welle", "welleMin", "welleMax", "hordeZielMin", "hordeZielMax", "hordeTruppMin", "hordeTruppMax", "hordeReichweite", "ueberraschung"].forEach(function (id) {
+    ["hordeZiel", "hordeTrupp", "hordeReichweite", "ueberraschung"].forEach(function (id) {
       var el = $(id);
       el.addEventListener("input", function () { $(id + "Wert").textContent = welleText(id, Number(el.value)); });
       el.addEventListener("change", function () {
         $(id + "Wert").textContent = welleText(id, Number(el.value));
         clearTimeout(zeitGeber[id]);
         sendenTeil("zombies", id, Number(el.value));
-      });
-    });
-
-    document.querySelectorAll("button[data-normal]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var feld = b.getAttribute("data-normal");
-        var ziel = feld === "tempo" ? 100 : 10;
-        var teil = { zombies: {} };
-        teil.zombies[feld] = ziel;
-        var el = $(feld);
-        if (feld === "dichte") $("dichteWert").textContent = faktor(ziel);
-        if (feld === "haeuser") $("haeuserWert").textContent = faktor(ziel);
-        if (feld === "tempo") $("tempoWert").textContent = ziel + " %";
-        if (el) el.value = ziel;
-        senden(teil);
       });
     });
 
@@ -2988,73 +2890,354 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
 })();
 </script>
 <script>
-// Einstellungen in Reiter gliedern: vorhandene Karten und Regler werden nur verschoben (ids bleiben, die übrigen Skripte
-// finden alles wie bisher). Die gemischte Karte „Tag, Nacht, Ausbruch und Waffen“ wird auf passende Karten verteilt.
+// Aufbau der Seite: eine Spalte mit den Gruppen Spiel, Zombies je Level, Tag/Nacht, Aufgaben, Türen; alles andere eingeklappt unter
+// „Feinheiten“. Vorhandene Karten und Regler werden nur verschoben (ids bleiben, die übrigen Skripte finden alles wie bisher).
+// Danach wird jeder Schieber (input[type=range]) durch eine Zeile ersetzt: Bezeichnung, Zahlenfeld mit − / + und ↺ (Vorgabe).
+// Der Schieber bleibt unsichtbar als Modell bestehen (Min/Max/Schritt, Klammern und alle bisherigen Speicherwege wie vorher).
 (function () {
+  'use strict';
   var $ = function (id) { return document.getElementById(id); };
+  var el = function (tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+  var wrap = document.querySelector('.wrap');
   var karteVon = function (titelId) { var h = $(titelId); return h ? h.closest('section') : null; };
-  var nav = document.querySelector('.reiterleiste');
-  if (!nav) return;
-  var P = {}, nach = nav;
-  ['spiel', 'zombies', 'welt', 'funde', 'ton', 'aufgaben', 'admin'].forEach(function (id) {
-    var d = document.createElement('div');
-    d.className = 'reiterpanel'; d.id = 'panel-' + id; d.setAttribute('role', 'tabpanel');
-    d.setAttribute('data-reiter', id); d.setAttribute('aria-labelledby', 'reiter-' + id); d.hidden = true;
-    nach.parentNode.insertBefore(d, nach.nextSibling); nach = d; P[id] = d;
-  });
-  function rein(panel, el) { if (el) panel.appendChild(el); }
-  function neueKarte(panel, titel) {
-    var s = document.createElement('section'); s.className = 'karte';
-    var h = document.createElement('h2'); h.textContent = titel; s.appendChild(h);
-    panel.appendChild(s); return s;
+
+  // ---------- Grundbausteine ----------
+  function karte(titel, id) {
+    var s = el('section', 'karte'); if (id) s.id = id;
+    s.appendChild(el('h2', '', titel));
+    return s;
   }
-  function zeile(karte, id) {
-    var l = document.querySelector('label[for="' + id + '"]'), e = $(id), r = e && e.closest('.tn-zeile');
-    if (l) karte.appendChild(l);
-    if (r) karte.appendChild(r);
+  function unter(titel, offen) {
+    var d = el('details', 'unter'); if (offen) d.open = true;
+    d.appendChild(el('summary', '', titel));
+    var inh = el('div', 'unter-inhalt'); d.appendChild(inh);
+    d.inhalt = inh;
+    return d;
   }
-  var tn = $('tagNachtKarte');
-  // 🎮 Spiel
-  rein(P.spiel, karteVon('titelSpielEinst'));
-  // 🧟 Zombies: Menge/Tempo, dazu nachts und Sichtkegel
-  var zk = karteVon('titelZombies');
-  rein(P.zombies, zk);
-  if (zk) { var ztt = $('ztTitel'); if (ztt) zk.appendChild(ztt); (window.ZTYPEN || []).forEach(function (k) { var el = $('zt_' + k); if (el && el.closest('label')) zk.appendChild(el.closest('label')); }); }
-  if (zk) { zeile(zk, 'tnNacht'); zeile(zk, 'tnZLeben'); rein(zk, $('tnZLebenHinweis')); var kegel = $('tnKegel'); if (kegel) zk.appendChild(kegel.closest('label'));
-    var ztAnker = $('ztTitel'); if ($('grAbschnitt')) zk.insertBefore($('grAbschnitt'), ztAnker); }
-  // 🌍 Welt & Ausbruch
+  // Etikett (und seine Zeile) hinter ziel stellen, in eine Einstellungszeile gepackt
+  function zeile(ziel, id) {
+    var l = document.querySelector('label[for="' + id + '"]'), e = $(id), r = e && (e.closest('.tn-zeile, .sp-zeile, .ag-zeile, .tu-zeile') || e.parentElement);
+    if (!l || !r) return;
+    var w = el('div', 'ez');
+    w.appendChild(l); w.appendChild(r);
+    ziel.appendChild(w);
+  }
+  function rein(ziel, e) { if (e) ziel.appendChild(e); }
+  function schalter(ziel, id) { var e = $(id); if (e && e.closest('label')) ziel.appendChild(e.closest('label')); }
+  // vorhandene Karte als Untergruppe übernehmen
+  function ausKarte(sec, titel) {
+    if (!sec) return null;
+    var u = unter(titel || (sec.querySelector(':scope > h2') || {}).textContent || '');
+    var h = sec.querySelector(':scope > h2'); if (h) h.remove();
+    while (sec.firstChild) u.inhalt.appendChild(sec.firstChild);
+    sec.remove();
+    return u;
+  }
+
+  var tn = $('tagNachtKarte'), neustart = karteVon('titelNeustart');
+  var vor = neustart;   // alles Neue kommt vor „Welt neu starten“
+  function hinein(e) { if (e) wrap.insertBefore(e, vor); }
+
+  // ---------- Spiel ----------
+  var spiel = karteVon('titelSpielEinst');
+  hinein(spiel);
+
+  // ---------- Zombies je Level (Tabelle + Vorschau, siehe unten) ----------
+  var levelKarte = karte('Zombies je Level', 'levelKarte');
+  hinein(levelKarte);
+  var nachtBox = el('div'); zeile(nachtBox, 'tnNacht');   // Nachtfaktor gehört zur Menge draußen (Platz in der Karte: nach der Tabelle)
+
+  // ---------- Tag/Nacht ----------
   if (tn) {
-    var zeit = neueKarte(P.welt, '🌗 Tag & Nacht');
-    [tn.querySelector('.tn-uhr'), tn.querySelector('.tn-knoepfe')].forEach(function (el) { if (el) zeit.appendChild(el); });
-    var knoepfeHinweis = zeit.querySelector('.tn-knoepfe');
-    var hinweis = tn.querySelector('.tn-knoepfe + p.tn-leise') || [].filter.call(tn.querySelectorAll('p.tn-leise'), function (p) { return /Uhrzeit setzen/.test(p.textContent); })[0];
+    var zeit = karte('🌗 Tag/Nacht', 'zeitKarte');
+    [tn.querySelector('.tn-uhr'), tn.querySelector('.tn-knoepfe')].forEach(function (e) { if (e) zeit.appendChild(e); });
+    var hinweis = [].filter.call(tn.querySelectorAll('p.tn-leise'), function (p) { return /Uhrzeit setzen/.test(p.textContent); })[0];
     if (hinweis) { hinweis.textContent = 'Uhrzeit setzen geht nur, solange jemand spielt. Sanfter Übergang über eine Spielstunde vor Tag- und Nachtbeginn.'; zeit.appendChild(hinweis); }
     ['tnTag', 'tnTagAb', 'tnNachtAb', 'tnNachtDunkel'].forEach(function (id) { zeile(zeit, id); });
-    var ausbruch = neueKarte(P.welt, '🦠 Ausbruch');
-    ['tnMenschen', 'tnAnst', 'tnBissSpGeretsried', 'tnBissSpIsarauen', 'tnBissSpKoenigsdorf', 'tnBissSpKochel', 'tnBissSpAndermatt', 'tnBiss'].forEach(function (id) { zeile(ausbruch, id); });
-    rein(ausbruch, $('tnBewohner'));
-    var bundeswehr = neueKarte(P.welt, '🎖 Bundeswehr');
-    var bwAktiv = $('tnBwAktiv'); if (bwAktiv) bundeswehr.appendChild(bwAktiv.closest('label'));
-    zeile(bundeswehr, 'tnBwTage'); zeile(bundeswehr, 'tnPumaPause'); zeile(bundeswehr, 'tnMgMunition'); zeile(bundeswehr, 'tnPumaMunition'); rein(bundeswehr, $('bwInfoPuma'));
-    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden'].forEach(function (id) { zeile(bundeswehr, id); });
-    var moT = $('tnMoTest'); if (moT) bundeswehr.appendChild(moT.closest('label'));
-    ['tnMoMin','tnMoMax','tnMoPause','tnMoSchaden','tnMoRadius','tnMoMind','tnMoSicher','tnMoTempo'].forEach(function (id) { zeile(bundeswehr, id); }); rein(bundeswehr, $('bwInfoMo'));
-    var leoU = $('tnLeoUeberroll'); if (leoU) bundeswehr.appendChild(leoU.closest('label')); rein(bundeswehr, $('bwInfoLeo')); rein(bundeswehr, $('bwInfoMg')); rein(bundeswehr, $('tnBwStatus'));
-    var stadt = neueKarte(P.welt, '🚗 Stadt & Verkehr');
-    zeile(stadt, 'tnAutos'); rein(stadt, $('tnAutosHinweis'));
-    ['tnVerkehr', 'tnVerkehrPhase', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt, id); });
+    hinein(zeit);
   }
-  // 🎒 Funde & Waffen
-  rein(P.funde, karteVon('titelFunde'));
-  if (tn) { var wk = neueKarte(P.funde, '🔫 Waffen: Schaden, Schussfolge, Magazin'); rein(wk, $('wfHinweis')); Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk, 'wfS_' + k); zeile(wk, 'wfP_' + k); rein(wk, $('wfInfo_' + k)); if (window.WFMAG[k]) { zeile(wk, 'wfM_' + k); zeile(wk, 'wfN_' + k); } }); var wt = $('wfTitel'); if (wt) wt.parentNode.removeChild(wt); }
-  if (tn) { var waffen = neueKarte(P.funde, '🔫 Automatische Schussreichweite'); ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwGranat', 'rwHandgranate', 'rwScharf'].forEach(function (id) { zeile(waffen, id); }); }
-  // 🗣️ Sprache & Töne, 🎯 Aufgaben, 🧪 Test & Neustart
-  rein(P.ton, $('spracheKarte')); rein(P.ton, $('toeneKarte'));
-  rein(P.aufgaben, $('aufgabenKarte'));
-  rein(P.spiel, $('tuerKarte'));
-  rein(P.admin, karteVon('titelTest')); rein(P.admin, karteVon('titelNeustart'));
-  // Rest der alten Sammelkarte: Statusanzeige behalten (schwebt unten rechts), Karte entfernen
-  if (tn) { var st = $('tnStatus'); if (st) document.body.appendChild(st); tn.parentNode.removeChild(tn); }
+  // ---------- Aufgaben, Türen ----------
+  hinein($('aufgabenKarte'));
+  hinein($('tuerKarte'));
+
+  // ---------- Feinheiten ----------
+  var fein = el('section', 'karte feinheiten');
+  var feinD = el('details'); feinD.id = 'feinheiten';
+  feinD.appendChild(el('summary', '', 'Feinheiten'));
+  fein.appendChild(feinD);
+  hinein(fein);
+  var gruppe = function (u) { if (u) feinD.appendChild(u); return u; };
+
+  // Zombies: Tempo, Leben, Überraschung, Sichtkegel; Zombietypen und Größen eingeklappt
+  var zk = ausKarte(karteVon('titelZombies'), '🧟 Zombies');
+  if (zk) {
+    zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel');
+    var typen = unter('Zombietypen (mindestens einer bleibt an)');
+    (window.ZTYPEN || []).forEach(function (k) { schalter(typen.inhalt, 'zt_' + k); });
+    var ztt = $('ztTitel'); if (ztt) ztt.remove();
+    zk.inhalt.appendChild(typen);
+    var gr = $('grAbschnitt');
+    if (gr) { var groessen = unter('Größen'); var t = $('grTitel'); if (t) t.remove(); groessen.inhalt.appendChild(gr); zk.inhalt.appendChild(groessen); }
+    gruppe(zk);
+  }
+  // Horden und Angriffstrupps
+  gruppe(ausKarte(karteVon('titelHorden'), '🧟 Horden und Angriffstrupps'));
+  // Ausbruch und Biss
+  if (tn) {
+    var ausbruch = unter('🦠 Ausbruch und Biss');
+    ['tnMenschen', 'tnAnst', 'tnBissSpGeretsried', 'tnBissSpIsarauen', 'tnBissSpKoenigsdorf', 'tnBissSpKochel', 'tnBissSpAndermatt', 'tnBiss'].forEach(function (id) { zeile(ausbruch.inhalt, id); });
+    rein(ausbruch.inhalt, $('tnBewohner'));
+    gruppe(ausbruch);
+    var stadt = unter('🚗 Autos, Verkehr, Feuer');
+    zeile(stadt.inhalt, 'tnAutos'); rein(stadt.inhalt, $('tnAutosHinweis'));
+    ['tnVerkehr', 'tnVerkehrPhase', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt.inhalt, id); });
+    gruppe(stadt);
+    var wk = unter('🔫 Waffen: Schaden, Schussfolge, Magazin'); rein(wk.inhalt, $('wfHinweis'));
+    Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk.inhalt, 'wfS_' + k); zeile(wk.inhalt, 'wfP_' + k); rein(wk.inhalt, $('wfInfo_' + k)); if (window.WFMAG[k]) { zeile(wk.inhalt, 'wfM_' + k); zeile(wk.inhalt, 'wfN_' + k); } });
+    var wt = $('wfTitel'); if (wt) wt.remove();
+    gruppe(wk);
+    var rw = unter('🎯 Automatische Schussreichweite');
+    ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwGranat', 'rwHandgranate', 'rwScharf'].forEach(function (id) { zeile(rw.inhalt, id); });
+    gruppe(rw);
+    var bw = unter('🎖 Bundeswehr, Panzer, Mörser');
+    schalter(bw.inhalt, 'tnBwAktiv');
+    zeile(bw.inhalt, 'tnBwTage'); zeile(bw.inhalt, 'tnPumaPause'); zeile(bw.inhalt, 'tnMgMunition'); zeile(bw.inhalt, 'tnPumaMunition'); rein(bw.inhalt, $('bwInfoPuma'));
+    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden'].forEach(function (id) { zeile(bw.inhalt, id); });
+    schalter(bw.inhalt, 'tnMoTest');
+    ['tnMoMin', 'tnMoMax', 'tnMoPause', 'tnMoSchaden', 'tnMoRadius', 'tnMoMind', 'tnMoSicher', 'tnMoTempo'].forEach(function (id) { zeile(bw.inhalt, id); });
+    rein(bw.inhalt, $('bwInfoMo')); schalter(bw.inhalt, 'tnLeoUeberroll'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
+    gruppe(bw);
+  }
+  gruppe(ausKarte(karteVon('titelFunde'), '🎒 Fundhäufigkeit'));
+  gruppe(ausKarte($('spracheKarte'), '🎙 Sprache'));
+  gruppe(ausKarte($('fkKarte'), '⭐ Fähigkeiten'));
+  gruppe(ausKarte($('toeneKarte'), '🔊 Geräusche'));
+  gruppe(ausKarte(karteVon('titelTest'), '🧪 Testwerkzeuge'));
+  // Statusanzeige der alten Sammelkarte behalten (schwebt unten rechts), Karte entfernen
+  if (tn) { var st = $('tnStatus'); if (st) document.body.appendChild(st); tn.remove(); }
+
+  // ---------- Zahlenfelder statt Schieber ----------
+  var ORIG = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
+    tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
+    tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
+    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrPhase: 'verkehrPhase', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
+    rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
+    tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden',
+    tnMoMin: 'moerser.reichweiteMin', tnMoMax: 'moerser.reichweiteMax', tnMoPause: 'moerser.pause', tnMoSchaden: 'moerser.schaden', tnMoRadius: 'moerser.radius', tnMoMind: 'moerser.mindestZombies', tnMoSicher: 'moerser.sicherheit', tnMoTempo: 'moerser.tempo',
+    spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
+    agStunde: 'aufgaben.stunde', agWarteEcht: 'aufgaben.wartenEchtMin', agWarte: 'aufgaben.wartezeit', agFinale: 'aufgaben.finaleMinuten', agAnzahl: 'aufgaben.anzahl', fkFaktor: 'faehigkeiten.xpFaktor',
+    tuFrei: 'tueren.frei', tuRaetsel: 'tueren.raetsel', tuSchluessel: 'tueren.schluessel' };
+  var WFPFAD = { wfS_: 'schaden', wfP_: 'pause', wfM_: 'magazin', wfN_: 'nachlade' };
+  function holen(obj, pfad) { return pfad.split('.').reduce(function (o, k) { return o == null ? undefined : o[k]; }, obj); }
+  var VORGABEN = null;
+  function vorgabeFuer(id) {
+    if (!VORGABEN) return undefined;
+    if (PFAD[id]) return holen(VORGABEN, PFAD[id]);
+    var m = /^(wf[SPMN]_)(.+)$/.exec(id);
+    if (m) return holen(VORGABEN, 'waffen.' + m[2] + '.' + WFPFAD[m[1]]);
+    if (/^fund_/.test(id)) return 10;
+    if (/^laut-/.test(id)) return 80;
+    return undefined;
+  }
+  var aktualisierer = [];
+  var zahlText = function (v) { return String(+Number(v).toFixed(3)); };
+
+  // Gemeinsamer Baustein: [−] [Zahl] [+] [↺]; opt = { lies(), schreibe(v) → angewendeter Wert, live(v), fertig(v), vorgabe(), step, name }
+  function baustein(opt) {
+    var box = el('span', 'sf');
+    var minus = el('button', '', '−'), plus = el('button', '', '+'), zur = el('button', 'sf-vorgabe', '↺');
+    minus.type = plus.type = zur.type = 'button';
+    minus.setAttribute('aria-label', (opt.name || 'Wert') + ' verringern'); plus.setAttribute('aria-label', (opt.name || 'Wert') + ' erhöhen');
+    var num = el('input'); num.type = 'number'; num.step = String(opt.step || 1); num.inputMode = 'decimal';
+    num.setAttribute('aria-label', opt.name || 'Wert');
+    box.append(minus, num, plus, zur);
+    var timer = null;
+    function zeigen() {
+      var v = opt.lies();
+      if (document.activeElement !== num) num.value = zahlText(v);
+      var d = opt.vorgabe ? opt.vorgabe() : undefined;
+      if (d === undefined || d === null) { zur.disabled = true; zur.title = 'Vorgabe unbekannt'; return; }
+      zur.disabled = Math.abs(Number(v) - Number(d)) < 1e-9;
+      zur.title = zur.disabled ? 'Wert entspricht der Vorgabe (' + zahlText(d) + ')' : 'Auf Vorgabe zurücksetzen (' + zahlText(d) + ')';
+    }
+    function setzen(v, sofort) {
+      var a = opt.schreibe(v);
+      num.value = zahlText(a); zeigen();
+      if (opt.live) opt.live(a);
+      clearTimeout(timer);
+      if (sofort) opt.fertig(a); else timer = setTimeout(function () { opt.fertig(opt.lies()); }, 450);
+    }
+    var schritt = function (r) { var s = Number(opt.step || 1); var v = Number(opt.lies()) + r * s; return Math.round(v * 1000) / 1000; };
+    minus.addEventListener('click', function () { setzen(schritt(-1), false); });
+    plus.addEventListener('click', function () { setzen(schritt(1), false); });
+    zur.addEventListener('click', function () { var d = opt.vorgabe && opt.vorgabe(); if (d !== undefined && d !== null) setzen(Number(d), true); });
+    num.addEventListener('change', function () {
+      var v = parseFloat(String(num.value).replace(',', '.'));
+      if (!isFinite(v)) { num.value = zahlText(opt.lies()); return; }
+      setzen(v, true);
+    });
+    num.addEventListener('focus', function () { try { num.select(); } catch (e) { /* egal */ } });
+    num.addEventListener('blur', zeigen);
+    zeigen();
+    aktualisierer.push(zeigen);
+    return { box: box, zeigen: zeigen, num: num };
+  }
+
+  // Schieber → Zeile mit Zahlenfeld (Schieber bleibt unsichtbar als Modell, Programmzugriffe auf .value werden gespiegelt)
+  function aufruesten(r) {
+    if (r.dataset.sf) return;
+    r.dataset.sf = '1';
+    var span = r.nextElementSibling && r.nextElementSibling.tagName === 'SPAN' ? r.nextElementSibling : null;
+    var label = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
+    var name = label ? label.textContent.replace(/\s+/g, ' ').trim().slice(0, 80) : r.id;
+    var b = baustein({
+      name: name, step: Number(r.step) || 1,
+      lies: function () { return Number(ORIG.get.call(r)); },
+      schreibe: function (v) { ORIG.set.call(r, v); return Number(ORIG.get.call(r)); },
+      live: function () { r.dispatchEvent(new Event('input', { bubbles: true })); },
+      fertig: function () { r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); },
+      vorgabe: function () { return vorgabeFuer(r.id); },
+    });
+    Object.defineProperty(r, 'value', { configurable: true, get: function () { return ORIG.get.call(r); }, set: function (v) { ORIG.set.call(r, v); b.zeigen(); } });
+    r.classList.add('sf-weg');
+    r.insertAdjacentElement('afterend', b.box);
+    if (span) { span.classList.add('sf-einheit'); b.box.insertAdjacentElement('afterend', span); }
+    var cont = r.parentElement;
+    cont.classList.add('sf-zeile');
+    if (cont.parentElement && cont.parentElement.classList.contains('ez')) return;   // schon in einer Zeile
+    if (label && !cont.contains(label)) {
+      var hilfen = [], n = label.nextElementSibling;
+      while (n && n !== cont && (n.classList.contains('hilfe') || n.tagName === 'P')) { hilfen.push(n); n = n.nextElementSibling; }
+      if (n === cont && label.parentElement === cont.parentElement) {
+        var w = el('div', 'ez');
+        cont.parentElement.insertBefore(w, label);
+        w.append(label, cont);
+        hilfen.reverse().forEach(function (h) { w.insertAdjacentElement('afterend', h); });
+      }
+    } else if (label) cont.classList.add('ez');
+  }
+  function alleAufruesten() { document.querySelectorAll('input[type="range"]').forEach(aufruesten); }
+  alleAufruesten();
+  var beobachter = new MutationObserver(function () { alleAufruesten(); });
+  beobachter.observe(document.body, { childList: true, subtree: true });
+
+  // ---------- Zombies je Level ----------
+  var NAMEN = ['1 · Geretsried', '2 · Isarauen', '3 · Königsdorf', '4 · Kochel', '5 · Andermatt'];
+  var FELDER = [
+    { k: 'grund', t: 'Zombies draußen: Grundmenge', step: 1 },
+    { k: 'jeSpieler', t: '… dazu je Spieler', step: 1 },
+    { k: 'horde', t: 'Horde: Zombies je Spieler', step: 1 },
+    { k: 'dauer', t: 'Hordendauer (min)', step: 1 },
+    { k: 'pause', t: 'Pause bis zur nächsten Horde (min)', step: 0.5 },
+    { k: 'gleichzeitig', t: 'Horden gleichzeitig (0 = keine)', step: 1 },
+    { k: 'haeuser', t: 'Zombies in Häusern (10 = ein Zombie je Platz)', step: 1 },
+  ];
+  var GRENZEN = { grund: [0, 200], jeSpieler: [0, 100], horde: [0, 200], dauer: [1, 60], pause: [0.5, 60], gleichzeitig: [0, 5], haeuser: [0, 50] };
+  var lv = null, lvZellen = [], lvTimer = null, lvStatus = el('p', 'lv-status');
+  lvStatus.setAttribute('aria-live', 'polite');
+  var klammer = function (k, v) { var g = GRENZEN[k]; v = Math.max(g[0], Math.min(g[1], v)); return k === 'pause' ? Math.round(v * 2) / 2 : Math.round(v); };
+
+  function lvSpeichern() {
+    clearTimeout(lvTimer);
+    lvTimer = setTimeout(function () {
+      fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zombies: { level: lv } }) })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (d) {
+          var neu = d.einstellungen && d.einstellungen.zombies && d.einstellungen.zombies.level;
+          if (neu) { lv = neu; lvZellen.forEach(function (z) { z.zeigen(); }); }
+          lvStatus.textContent = '✓ Gespeichert'; setTimeout(function () { lvStatus.textContent = ''; }, 2500);
+          vorschau();
+        }).catch(function (e) { lvStatus.textContent = 'Fehler: ' + e.message; });
+    }, 500);
+  }
+
+  function lvBauen() {
+    var kopf = levelKarte;
+    kopf.appendChild(el('p', 'hinweis', 'Je Level (Karte) einstellbar. Spielerzahl = echte Spieler + ½ je Bot. Zombies draußen = Grundmenge + je Spieler × Spielerzahl, nachts mehr (Faktor unten), dazu Tag-Bonus (+8 % je Spieltag, höchstens +60 %) und Schwierigkeit. Eine Horde lebt „Hordendauer“ Minuten, danach zieht der Rest ab; nach der Pause kommt die nächste, höchstens „gleichzeitig“ zugleich.'));
+    var sc = el('div', 'lv-scroll'), tab = el('table', 'lv-tabelle');
+    var th = el('thead'), tr = el('tr');
+    tr.appendChild(el('th', '', 'Einstellung'));
+    NAMEN.forEach(function (n) { tr.appendChild(el('th', '', 'Level ' + n)); });
+    tr.appendChild(el('th', '', 'Vorgabe'));
+    th.appendChild(tr); tab.appendChild(th);
+    var tb = el('tbody');
+    FELDER.forEach(function (f) {
+      var z = el('tr'), kopfz = el('th', '', f.t); kopfz.scope = 'row'; z.appendChild(kopfz);
+      NAMEN.forEach(function (n, i) {
+        var td = el('td');
+        var b = baustein({
+          name: f.t + ', Level ' + (i + 1), step: f.step,
+          lies: function () { return lv && lv[i] ? Number(lv[i][f.k]) : 0; },
+          schreibe: function (v) { if (!lv) return 0; lv[i][f.k] = klammer(f.k, v); return lv[i][f.k]; },
+          live: vorschau, fertig: function () { lvSpeichern(); },
+          vorgabe: function () { return VORGABEN ? VORGABEN.zombies.level[i][f.k] : undefined; },
+        });
+        // in der Tabelle kein ↺ je Zelle (Platz): die Zeile hat eines am Ende
+        b.box.querySelector('.sf-vorgabe').style.display = 'none';
+        lvZellen.push(b);
+        td.appendChild(b.box); z.appendChild(td);
+      });
+      var tdv = el('td'), alle = el('button', 'sf-vorgabe', '↺');
+      alle.type = 'button'; alle.style.minHeight = '36px'; alle.title = 'Diese Zeile bei allen Leveln auf die Vorgabe setzen';
+      alle.setAttribute('aria-label', f.t + ' bei allen Leveln auf Vorgabe');
+      alle.addEventListener('click', function () {
+        if (!VORGABEN || !lv) return;
+        for (var i = 0; i < 5; i++) lv[i][f.k] = VORGABEN.zombies.level[i][f.k];
+        lvZellen.forEach(function (c) { c.zeigen(); }); vorschau(); lvSpeichern();
+      });
+      tdv.appendChild(alle); z.appendChild(tdv);
+      tb.appendChild(z);
+    });
+    tab.appendChild(tb); sc.appendChild(tab); kopf.appendChild(sc);
+    var alles = el('button', '', '↺ Ganze Tabelle auf Vorgaben');
+    alles.type = 'button';
+    alles.addEventListener('click', function () {
+      if (!VORGABEN || !window.confirm('Alle Werte der Tabelle auf die Vorgaben zurücksetzen?')) return;
+      lv = JSON.parse(JSON.stringify(VORGABEN.zombies.level));
+      lvZellen.forEach(function (c) { c.zeigen(); }); vorschau(); lvSpeichern();
+    });
+    var az = el('div', 'aktion-zeile'); az.style.marginTop = '8px'; az.appendChild(alles); kopf.appendChild(az);
+    kopf.appendChild(lvStatus);
+    kopf.appendChild(nachtBox);
+    kopf.appendChild(el('h3', '', 'Vorschau'));
+    kopf.lastChild.style.cssText = 'font-size:1rem;margin:14px 0 4px';
+    var vs = el('div', 'lv-scroll'); vs.id = 'lvVorschau'; kopf.appendChild(vs);
+    kopf.appendChild(el('p', 'lv-formel', 'Spalten: Spielerzahl (Bots zählen halb). Große Zahl: Zombies draußen am Tag · in der Nacht; darunter die Hordengröße (zufällig ±30 %). Gerechnet für Spieltag 1 und die gewählte Schwierigkeit; zu Beginn einer Welt sind es durch den Ausbruch 60–100 % davon.'));
+  }
+
+  function vorschau() {
+    var box = $('lvVorschau'); if (!box || !lv) return;
+    var sw = $('schwierigkeit') ? $('schwierigkeit').value : 'normal';
+    var regler = { leicht: 0.75, normal: 1, schwer: 1.3 }[sw] || 1;
+    var nacht = (Number($('tnNacht') ? $('tnNacht').value : 15) || 15) / 10;
+    var N = [1, 2, 4, 6];
+    var html = '<table class="lv-vorschau"><thead><tr><th>Level</th>' + N.map(function (n) { return '<th>' + n + ' Spieler</th>'; }).join('') + '</tr></thead><tbody>';
+    lv.forEach(function (l, i) {
+      html += '<tr><th>' + NAMEN[i] + '</th>' + N.map(function (n) {
+        var tag = Math.round((l.grund + l.jeSpieler * n) * regler), nach = Math.round((l.grund + l.jeSpieler * n) * nacht * regler);
+        var h = l.gleichzeitig > 0 ? 'Horde ≈ ' + Math.round(l.horde * n * regler) : 'keine Horden';
+        return '<td>' + tag + ' · ' + nach + '<small>' + h + '</small></td>';
+      }).join('') + '</tr>';
+    });
+    box.innerHTML = html + '</tbody></table>';
+  }
+  document.addEventListener('change', function (e) { if (e.target && (e.target.id === 'schwierigkeit' || e.target.id === 'tnNacht')) vorschau(); });
+  document.addEventListener('input', function (e) { if (e.target && e.target.id === 'tnNacht') vorschau(); });
+
+  lvBauen();
+
+  // Daten holen: Vorgaben (für ↺) und die Tabelle
+  fetch('verwaltung/api').then(function (r) { return r.json(); }).then(function (d) {
+    VORGABEN = d.vorgaben || null;
+    var z = d.einstellungen && d.einstellungen.zombies;
+    lv = z && z.level ? z.level : (VORGABEN ? JSON.parse(JSON.stringify(VORGABEN.zombies.level)) : null);
+    aktualisierer.forEach(function (f) { f(); });
+    lvZellen.forEach(function (c) { c.zeigen(); });
+    vorschau();
+  }).catch(function () { /* ohne Server: Tabelle bleibt leer */ });
+  // die Werte der übrigen Zeilen setzen die alten Skripte; ↺ nachziehen, wenn sie fertig sind
+  setInterval(function () { aktualisierer.forEach(function (f) { try { f(); } catch (e) { /* egal */ } }); }, 1500);
 })();
 </script>
 <script>
@@ -3110,7 +3293,8 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
       ['tnFeuer', 'echte Minuten · Abstand schwankt um ±40 %'],
       ['tnFeuerPhase', 'echte Minuten seit Weltbeginn'],
       ['tnVerkehrPhase', 'echte Minuten seit Weltbeginn'],
-      ['welle', 'echte Minuten'],
+      ['hordeZiel', 'echte Minuten · schwankt um ±40 %'],
+      ['hordeTrupp', 'Zombies · schwankt um ±30 %'],
       ['agStunde', 'Uhrzeit der Spieluhr · ein Spieltag = ' + tm + ' echte min'],
       ['agWarteEcht', 'echte Minuten ab dem Halt'],
       ['agWarte', 'Spielminuten · ' + wert('agWarte', 60) + ' Spielminuten ≈ ' + dauer(wert('agWarte', 60) * pro) + ' echt bei ' + tm + ' min/Spieltag'],
@@ -3135,110 +3319,6 @@ section.akk-offen > .akk-huelle > .akk-inhalt { visibility: visible; transition-
 })();
 </script>
 <style>.zeit-notiz { font-weight: 400; color: var(--text-soft); font-size: .85em; }</style>
-<script>
-// Reiter umschalten (Grundlage: DeepSeek), Wahl merken, Tastatur ←/→/Pos1/Ende, Start aus #reiter oder localStorage
-(function () {
-  'use strict';
-  var SCHLUESSEL = 'verwaltung-reiter';
-  var leiste = document.querySelector('.reiterleiste');
-  if (!leiste) return;
-  var reiter = [].slice.call(leiste.querySelectorAll('[role="tab"]'));
-  var ids = reiter.map(function (k) { return String(k.id).replace(/^reiter-/, ''); });
-  if (!reiter.length) return;
-  function istGueltig(id) { return ids.indexOf(id) >= 0; }
-  function zeige(id) {
-    var ziel = istGueltig(id) ? id : ids[0];
-    for (var k = 0; k < reiter.length; k++) {
-      var aktiv = ids[k] === ziel, panel = document.getElementById('panel-' + ids[k]);
-      reiter[k].setAttribute('aria-selected', aktiv ? 'true' : 'false');
-      reiter[k].setAttribute('tabindex', aktiv ? '0' : '-1');
-      if (panel) panel.hidden = !aktiv;
-      if (aktiv) { try { reiter[k].scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* alte Browser */ } }
-    }
-    try { window.localStorage.setItem(SCHLUESSEL, ziel); } catch (e) { /* kein Speicher */ }
-    try { if (window.history && window.history.replaceState) window.history.replaceState(null, '', '#' + ziel); } catch (e) { /* egal */ }
-  }
-  function fokussiere(index) {
-    var pos = ((index % reiter.length) + reiter.length) % reiter.length;
-    try { reiter[pos].focus(); } catch (e) { /* egal */ }
-    zeige(ids[pos]);
-  }
-  leiste.addEventListener('click', function (e) {
-    var t = e.target && e.target.closest ? e.target.closest('[role="tab"]') : null;
-    if (t) zeige(String(t.id).replace(/^reiter-/, ''));
-  });
-  leiste.addEventListener('keydown', function (e) {
-    var aktuell = reiter.indexOf(document.activeElement);
-    if (aktuell < 0) aktuell = reiter.findIndex(function (r) { return r.getAttribute('aria-selected') === 'true'; });
-    if (aktuell < 0) aktuell = 0;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); fokussiere(aktuell - 1); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); fokussiere(aktuell + 1); }
-    else if (e.key === 'Home') { e.preventDefault(); fokussiere(0); }
-    else if (e.key === 'End') { e.preventDefault(); fokussiere(reiter.length - 1); }
-  });
-  window.addEventListener('hashchange', function () { var id = String(location.hash || '').replace(/^#/, ''); if (istGueltig(id)) zeige(id); });
-  var start = String(location.hash || '').replace(/^#/, '');
-  if (!istGueltig(start)) { try { start = String(window.localStorage.getItem(SCHLUESSEL) || ''); } catch (e) { start = ''; } }
-  window.zeigeReiter = zeige;
-  zeige(start);
-})();
-</script>
-<script>
-// Akkordeon: In jedem Reiter hat jede Karte eine klickbare Kopfzeile; es ist immer nur eine Karte pro Reiter offen
-// (Start: zuletzt geöffnete, sonst die erste). Inhalte werden nur in eine Hülle verschoben, ids und Regler bleiben.
-(function () {
-  'use strict';
-  var SCHLUESSEL = 'verwaltung-akkordeon';
-  var gemerkt = {};
-  try { gemerkt = JSON.parse(window.localStorage.getItem(SCHLUESSEL) || '{}') || {}; } catch (e) { gemerkt = {}; }
-  function merke(panel, nr) { gemerkt[panel] = nr; try { window.localStorage.setItem(SCHLUESSEL, JSON.stringify(gemerkt)); } catch (e) { /* kein Speicher */ } }
-  var panels = [].slice.call(document.querySelectorAll('.reiterpanel'));
-  panels.forEach(function (panel) {
-    var karten = [].slice.call(panel.children).filter(function (k) { return k.tagName === 'SECTION' && k.classList.contains('karte'); });
-    var akk = karten.filter(function (k) { return k.querySelector(':scope > h2'); });
-    if (!akk.length) return;
-    function setze(karte, offen) {
-      karte.classList.toggle('akk-offen', offen);
-      var kopf = karte.querySelector(':scope > h2 > .akk-kopf');
-      kopf.setAttribute('aria-expanded', offen ? 'true' : 'false');
-      kopf.querySelector('.akk-pfeil').textContent = offen ? '▾' : '▸';
-      var inh = karte.querySelector(':scope > .akk-huelle > .akk-inhalt');
-      if (offen) inh.removeAttribute('inert'); else inh.setAttribute('inert', '');
-      inh.setAttribute('aria-hidden', offen ? 'false' : 'true');
-    }
-    akk.forEach(function (karte, nr) {
-      var h2 = karte.querySelector(':scope > h2');
-      var id = (panel.id || 'p') + '-akk-' + nr;
-      var kopf = document.createElement('button');
-      kopf.type = 'button'; kopf.className = 'akk-kopf'; kopf.id = id + '-kopf'; kopf.setAttribute('aria-controls', id);
-      var pfeil = document.createElement('span'); pfeil.className = 'akk-pfeil'; pfeil.setAttribute('aria-hidden', 'true'); pfeil.textContent = '▸';
-      var titel = document.createElement('span'); titel.className = 'akk-titel';
-      while (h2.firstChild) titel.appendChild(h2.firstChild);
-      kopf.appendChild(pfeil); kopf.appendChild(titel);
-      h2.appendChild(kopf);
-      var huelle = document.createElement('div'); huelle.className = 'akk-huelle';
-      var inhalt = document.createElement('div'); inhalt.className = 'akk-inhalt'; inhalt.id = id;
-      inhalt.setAttribute('role', 'region'); inhalt.setAttribute('aria-labelledby', kopf.id);
-      while (h2.nextSibling) inhalt.appendChild(h2.nextSibling);
-      huelle.appendChild(inhalt); karte.appendChild(huelle);
-      kopf.addEventListener('click', function () {
-        var offen = !karte.classList.contains('akk-offen');
-        if (offen) akk.forEach(function (k) { if (k !== karte) setze(k, false); });
-        setze(karte, offen);
-        merke(panel.id, offen ? nr : -1);
-        if (offen) {
-          var rolle = function () { try { karte.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { karte.scrollIntoView(); } };
-          // nach dem Schließen der anderen verschiebt sich die Seite: erst danach in den sichtbaren Bereich
-          setTimeout(function () { var r = karte.getBoundingClientRect(); var oben = (document.querySelector('.reiterleiste') || { offsetHeight: 0 }).offsetHeight + 8; if (r.top < oben || r.top > window.innerHeight * 0.6) { try { window.scrollTo({ top: window.pageYOffset + r.top - oben, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, window.pageYOffset + r.top - oben); } } }, 280);
-        }
-      });
-    });
-    var start = typeof gemerkt[panel.id] === 'number' ? gemerkt[panel.id] : 0;
-    if (start >= akk.length) start = 0;
-    akk.forEach(function (k, nr) { setze(k, nr === start); });
-  });
-})();
-</script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };

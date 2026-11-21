@@ -5,6 +5,7 @@ import path from 'node:path';
 import { DINGE, WAFFEN } from '../client/welt.mjs';
 import { MOERSER } from './moerser.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
+import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
 
 export const KARTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt', 'dorf'];
 export const LEVEL_WELTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
@@ -91,8 +92,42 @@ const zahl = (v, min, max, vorgabe) => {
   return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : vorgabe;
 };
 
+// Alte Einstellungen (vor der Level-Tabelle) übernehmen: globale Zombiedichte/-häuser/Hordengröße skalieren die Level-Vorgaben,
+// Min/Max-Paare (Trupp, Zielwechsel) werden zu ihrem Mittelwert, welle = 0 (keine Wellen) schaltet die Horden aus.
+// Die alten Felder fallen danach weg; gibt es schon eine Tabelle (zombies.level), gilt sie.
+const ALT_FELDER = ['dichte', 'haeuser', 'welle', 'welleMin', 'welleMax', 'hordeZielMin', 'hordeZielMax', 'hordeTruppMin', 'hordeTruppMax'];
+export function migriereZombies(e = {}) {
+  const z = e?.zombies;
+  if (!z || typeof z !== 'object' || !ALT_FELDER.some(k => k in z)) return e;
+  const n = { ...z }, num = (v, d) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : d);
+  if (!Array.isArray(n.level)) {
+    const fd = num(z.dichte, 10) / 10, fh = num(z.haeuser, 10) / 10;
+    const mittel = (num(z.welleMin, 20) + num(z.welleMax, 50)) / 2 / 35;   // alte Vorgabe 20–50, Mittel 35
+    const aus = num(z.welle, 20) === 0;
+    n.level = LEVEL_VORGABE.map(v => ({
+      grund: v.grund * fd, jeSpieler: v.jeSpieler * fd, horde: v.horde * mittel, haeuser: v.haeuser * fh,
+      ...(aus ? { gleichzeitig: 0 } : {}),
+    }));
+  }
+  if (('hordeZielMin' in z || 'hordeZielMax' in z) && n.hordeZiel === undefined) n.hordeZiel = (num(z.hordeZielMin, 2) + num(z.hordeZielMax, 5)) / 2;
+  if (('hordeTruppMin' in z || 'hordeTruppMax' in z) && n.hordeTrupp === undefined) n.hordeTrupp = (num(z.hordeTruppMin, 5) + num(z.hordeTruppMax, 15)) / 2;
+  for (const k of ALT_FELDER) delete n[k];
+  return { ...e, zombies: n };
+}
+
+// Tabelle „Zombies je Level“: fehlende oder ungültige Werte kommen aus der bisherigen Tabelle bzw. der Vorgabe
+function bereinigeLevel(neu, alt) {
+  return LEVEL_VORGABE.map((v, i) => Object.fromEntries(Object.entries(v).map(([k, vorgabe]) => {
+    const [lo, hi] = LEVEL_GRENZEN[k];
+    const roh = neu?.[i]?.[k] ?? alt?.[i]?.[k];
+    const n = zahl(roh, lo, hi, vorgabe);
+    return [k, k === 'pause' ? Math.round(n * 2) / 2 : Math.round(n)];
+  })));
+}
+
 // aus beliebiger Eingabe gültige Einstellungen machen (unbekannte Felder fallen weg)
 export function bereinige(e = {}, alt = {}) {
+  e = migriereZombies(e ?? {});
   const a = { ...vorgaben(), ...alt };
   const z = { ...a.zombies, ...(e.zombies ?? {}) };
   const t = { ...a.test, ...(e.test ?? {}) };
@@ -114,11 +149,6 @@ export function bereinige(e = {}, alt = {}) {
       laut: Math.round(zahl(neu.laut ?? alt.laut, 0, 100, 80)),
     };
   }
-  // Wellen: 0 = aus, sonst mindestens alle 5 Minuten; Maximum nie kleiner als Minimum
-  if (z.welle > 0 && z.welle < 5) z.welle = 5;
-  z.welleMin = Math.round(zahl(z.welleMin, 5, 1000, 20)); z.welleMax = Math.max(z.welleMin, Math.round(zahl(z.welleMax, 5, 1000, 50)));
-  z.hordeZielMin = Math.round(zahl(z.hordeZielMin, 1, 30, 2) * 2) / 2; z.hordeZielMax = Math.max(z.hordeZielMin, Math.round(zahl(z.hordeZielMax, 1, 30, 5) * 2) / 2);
-  z.hordeTruppMin = Math.round(zahl(z.hordeTruppMin, 1, 300, 5)); z.hordeTruppMax = Math.max(z.hordeTruppMin, Math.round(zahl(z.hordeTruppMax, 1, 300, 15)));
   // Superuser-Testzugang: nur der scrypt-Hash wird gespeichert; ein Klartext-Passwort (superuserPasswort) wird sofort gehasht,
   // superuserLoeschen schaltet den Superuser ab. Leer = Superuser unmöglich.
   const suHash = e.superuserLoeschen === true ? ''
@@ -163,18 +193,12 @@ export function bereinige(e = {}, alt = {}) {
     }])),
     toeneVorbelegt: Array.isArray(e.toeneVorbelegt) ? e.toeneVorbelegt.filter(x => typeof x === 'string').slice(0, 50) : (a.toeneVorbelegt ?? []),
     zombies: {
-      dichte: Math.round(zahl(z.dichte, 0, 50, 10)),     // draußen, 10 = normal
-      haeuser: Math.round(zahl(z.haeuser, 0, 50, 10)),   // schlafende Zombies in Häusern, 10 = normal
+      level: bereinigeLevel(e.zombies?.level, a.zombies?.level),   // je Level: draußen, Horden, Häuser (siehe LEVEL_VORGABE)
       tempo: Math.round(zahl(z.tempo, 50, 150, 100)),    // Laufgeschwindigkeit in Prozent
       nacht: Math.round(zahl(z.nacht, 10, 30, 15)),      // nachts so viel mehr draußen (15 = ×1,5)
-      welle: Math.round(zahl(z.welle, 0, 120, 20)),      // alle so viele Spielminuten kommt eine Zombiewelle (0 = aus; sonst mindestens 5)
-      welleMin: Math.round(zahl(z.welleMin, 5, 1000, 20)), // Größe der Welle: kleinste Zahl
-      welleMax: Math.round(zahl(z.welleMax, 5, 1000, 50)), // … größte Zahl (höchstens 1000)
-      hordeZielMin: z.hordeZielMin,                      // Horde wechselt ihr Ziel alle … bis … echte Minuten (Vorgabe 2–5)
-      hordeZielMax: z.hordeZielMax,
+      hordeZiel: Math.round(zahl(z.hordeZiel, 0.5, 30, 3.5) * 2) / 2,   // Horde wechselt ihr Ziel etwa alle … echte Minuten (±40 % Streuung im Code)
       hordeZieleZeigen: typeof z.hordeZieleZeigen === 'boolean' ? z.hordeZieleZeigen : false,   // Prüfwerkzeug: Ziel der Horde für Superuser anzeigen
-      hordeTruppMin: z.hordeTruppMin,                    // Angriffstrupp je Ziel: Größe von … bis … Zombies (Vorgabe 5–15, wächst mit der Horde)
-      hordeTruppMax: z.hordeTruppMax,
+      hordeTrupp: Math.round(zahl(z.hordeTrupp, 1, 300, 10)),   // Angriffstrupp je Ziel: Größe in Zombies (±30 % Streuung im Code, wächst mit der Horde)
       hordeReichweite: Math.round(zahl(z.hordeReichweite, 5, 60, 18)), // so nah (Meter) an Spielern/Bots/Soldaten/Menschen löst sich ein Trupp
       ueberraschung: Math.round(zahl(z.ueberraschung, 0, 100, 3)),   // % Chance, dass beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto ein Zombie herausspringt
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
@@ -242,7 +266,7 @@ export function bereinige(e = {}, alt = {}) {
 export function vorgaben() {
   return {
     superuserHash: '', zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
-    zombies: { dichte: 10, haeuser: 10, tempo: 100, nacht: 15, welle: 20, welleMin: 20, welleMax: 50, hordeZielMin: 2, hordeZielMax: 5, hordeZieleZeigen: false, hordeTruppMin: 5, hordeTruppMax: 15, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
+    zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },

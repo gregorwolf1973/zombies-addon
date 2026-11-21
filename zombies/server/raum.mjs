@@ -9,7 +9,7 @@ import { Fahrzeug, Verkehr } from './verkehr.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
 import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben, Mission } from './aufgaben.mjs';
-import { schwierigkeit } from './schwierigkeit.mjs';
+import { schwierigkeit, LEVEL_VORGABE } from './schwierigkeit.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
 import { Finale } from './finale.mjs';
@@ -31,7 +31,7 @@ import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
-  bewaffnetSoll, zombieSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
+  bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
   WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
 
@@ -992,13 +992,26 @@ export class SpielRaum extends Room {
   }
 
   // von der Verwaltungsseite: neue Werte gelten sofort
-  // Zombies draußen: Grundmenge × Einstellung, nachts × Nachtfaktor
+  // Spielerzahl für die Zombiemengen: echte Spieler + 0,5 × Bots
+  spielerZahl() {
+    let n = 0;
+    for (const sid of this.state.spieler.keys()) n += this.extra?.get(sid)?.bot ? 0.5 : 1;
+    return Math.max(0.5, n);
+  }
+
+  // Zeile der Level-Tabelle (Einstellung zombies.level) für das aktuelle Level; fehlende Werte aus der Vorgabe
+  levelEinst(level = this.state?.level || 1) {
+    const i = Math.max(0, Math.min(LEVEL_VORGABE.length - 1, Math.floor(Number(level) || 1) - 1));
+    return { ...LEVEL_VORGABE[i], ...(SpielRaum.einstellungen.zombiesLevel?.[i] ?? {}) };
+  }
+
+  // Zombies draußen = (Grund + je Spieler × Spielerzahl) × Nacht × Ausbruch × Tag-Bonus × Regler (Level-Tabelle, siehe LEVEL_VORGABE)
   zombieSollJetzt() {
-    const e = SpielRaum.einstellungen;
-    // this.zombieFaktor: Vorgabe nur für diesen Raum (Tests), sonst die Einstellung
+    const e = SpielRaum.einstellungen, lv = this.levelEinst();
+    // this.zombieFaktor: Vorgabe nur für diesen Raum (Tests), sonst der Prüfhaken der Einstellung
     // solange viele Menschen gesund sind, kommen weniger Zombies aus dem Umland – die Gefahr wächst mit dem Ausbruch
     const ausbruch = this.stadt?.anfangs ? 0.6 + 0.4 * (1 - this.stadt.ruheAnteil()) : 1;
-    return Math.round(zombieSoll(this.state.spieler.size) * (this.zombieFaktor ?? e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1) * ausbruch * this.schwierigkeit().dichte);
+    return Math.round((lv.grund + lv.jeSpieler * this.spielerZahl()) * (this.zombieFaktor ?? e.zombieFaktor ?? 1) * (istNacht(this.state.uhr) ? (e.nachtFaktor ?? 1.5) : 1) * ausbruch * this.schwierigkeit().dichte);
   }
 
   // Taschenlampe nötig: drinnen in dunklen Häusern (Keller immer), draußen nachts
@@ -1274,7 +1287,7 @@ export class SpielRaum extends Room {
     this.wohnungsLeiche(ebene, w);
     // schlafende Zombies hinter den Türen
     // Menge über die Einstellung „Zombies in Häusern“ (10 = normal): Plätze ausdünnen oder verdoppeln
-    const hf = SpielRaum.einstellungen.haeuserFaktor ?? 1;
+    const hf = (SpielRaum.einstellungen.haeuserFaktor ?? 1) * this.levelEinst().haeuser / 10;   // Level-Tabelle: Zombies je Zombieplatz (10 = 1)
     // Ankunftspunkt: von draußen der Start, sonst neben der Treppe zur Herkunftsebene – dort bleibt ein Umkreis zombiefrei
     let meiden = null;
     if (von !== undefined) {

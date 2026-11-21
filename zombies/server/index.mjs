@@ -13,7 +13,7 @@ Encoder.BUFFER_SIZE = 256 * 1024;
 import { SpielRaum } from './raum.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
-import { EinstellungsDatei, oeffentlich, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
+import { EinstellungsDatei, oeffentlich, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
@@ -84,8 +84,9 @@ export async function starte({
     SpielRaum.einstellungen = {
       zugangscode: w.zugangscode,
       superuserHash: w.superuserHash,              // nur Hash; ohne Hash kein Superuser
-      zombieFaktor: w.zombies.dichte / 10,         // 10 = Standardmenge
-      haeuserFaktor: w.zombies.haeuser / 10,
+      zombieFaktor: 1,                             // Prüfhaken für Tests (0 = keine Zombies draußen); die Mengen stehen in zombiesLevel
+      haeuserFaktor: 1,
+      zombiesLevel: w.zombies.level,               // Tabelle je Level (grund, jeSpieler, horde, dauer, pause, gleichzeitig, haeuser)
       tempoFaktor: w.zombies.tempo / 100,
       nachtFaktor: w.zombies.nacht / 10,
       autoFaktor: w.autos / 10,
@@ -99,7 +100,7 @@ export async function starte({
       bissSpielerLevel: Object.fromEntries(Object.entries(w.bissSpielerLevel ?? {}).map(([k, v]) => [k, v / 100])),   // je Karte/Level
       waffen: w.waffen,                            // je Waffe { schaden, pause }
       zombieTypen: ZOMBIE_TYPEN.filter(k => w.zombies.typen[k]).map(k => ZOMBIE_TYPEN.indexOf(k)),
-      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, welleMinuten: w.zombies.welle, welleMin: w.zombies.welleMin, welleMax: w.zombies.welleMax, hordeZielMin: w.zombies.hordeZielMin, hordeZielMax: w.zombies.hordeZielMax, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTruppMin: w.zombies.hordeTruppMin, hordeTruppMax: w.zombies.hordeTruppMax, hordeReichweite: w.zombies.hordeReichweite, ueberraschung: w.zombies.ueberraschung, sichtkegel: w.sichtkegel,
+      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, blaulicht: w.blaulicht, hordeZiel: w.zombies.hordeZiel, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTrupp: w.zombies.hordeTrupp, hordeReichweite: w.zombies.hordeReichweite, ueberraschung: w.zombies.ueberraschung, sichtkegel: w.sichtkegel,
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,
@@ -169,7 +170,7 @@ export async function starte({
   const lage = () => {
     const raum = SpielRaum.aktiv;
     return {
-      einstellungen: oeffentlich(datei.werte),
+      einstellungen: oeffentlich(datei.werte), vorgaben: oeffentlich(vorgaben()),   // vorgaben: Werte für „↺“ (Vorgabe) auf der Verwaltungsseite
       karten: KARTEN, zeitraffer: ZEITRAFFER,
       dinge: Object.entries(DINGE).filter(([, d]) => !d.intern).map(([id, d]) => ({ id, name: d.name, zeichen: d.zeichen })),
       laufendeKarte: raum ? (raum.state.karte || 'dorf') : null,
