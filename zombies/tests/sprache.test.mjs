@@ -9,23 +9,21 @@ const sp = (xm, ym, ebene = '', rucksack = []) => ({ x: xm * M, y: ym * M, ebene
 const nah = (a, b, e = E) => lautstaerke(a, b, welt, e).nah;
 const nahe = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${b}`);
 
-test('Kurve: voll bis 5 m, weich bis 0 bei Hörweite, Ränder', () => {
-  assert.equal(kurve(0, 40, 5), 1);
-  assert.equal(kurve(5, 40, 5), 1);
-  assert.equal(kurve(40, 40, 5), 0);
-  assert.equal(kurve(90, 40, 5), 0);
-  nahe(kurve(22.5, 40, 5), 0.5);
+test('Kurve: voll bis Hörweite, danach Kosinus-Abfall auf 0 bei +50 %', () => {
+  assert.equal(kurve(0, 50), 1);
+  assert.equal(kurve(50, 50), 1);
+  nahe(kurve(62.5, 50), 0.5);
+  assert.equal(kurve(75, 50), 0);
+  assert.equal(kurve(200, 50), 0);
   let letzte = 1;
-  for (let m = 5; m <= 40; m += 0.5) { const k = kurve(m, 40, 5); assert.ok(k <= letzte + 1e-12 && k >= 0); letzte = k; }
-  assert.equal(kurve(3, 5, 5), 1);   // entartet: Hörweite ≤ vollBis
-  assert.equal(kurve(6, 5, 5), 0);
+  for (let m = 50; m <= 75; m += 0.5) { const k = kurve(m, 50); assert.ok(k <= letzte + 1e-12 && k >= 0); letzte = k; }
 });
 
-test('beide draußen: Kurve nach Entfernung, 0 jenseits der Hörweite', () => {
+test('beide draußen: voll bis Hörweite, 0 ab +50 %', () => {
   assert.equal(nah(sp(0, 0), sp(3, 0)), 1);
-  assert.equal(nah(sp(0, 0), sp(5, 0)), 1);
-  nahe(nah(sp(0, 0), sp(0, 22.5)), 0.5);   // auch senkrecht, Entfernung zählt
-  assert.equal(nah(sp(0, 0), sp(40, 0)), 0);
+  assert.equal(nah(sp(0, 0), sp(40, 0)), 1);
+  nahe(nah(sp(0, 0), sp(0, 50)), 0.5);   // auch senkrecht, Entfernung zählt
+  assert.equal(nah(sp(0, 0), sp(60, 0)), 0);
   assert.equal(nah(sp(0, 0), sp(100, 0)), 0);
   assert.equal(nah(sp(0, 0), sp(20, 0), { ...E, hoerweite: 10 }), 0);   // kleinere Hörweite
 });
@@ -41,13 +39,13 @@ test('beide draußen: Pan nach links/rechts, begrenzt auf ±0,8', () => {
 });
 
 test('gleiches Haus, gleiches Stockwerk: mindestens 0,6, Pan 0', () => {
-  const r = lautstaerke(sp(0, 0, 'h3eg'), sp(30, 0, 'h3eg'), welt, E);
+  const r = lautstaerke(sp(0, 0, 'h3eg'), sp(70, 0, 'h3eg'), welt, E);
   assert.equal(r.nah, 0.6);
   assert.equal(r.pan, 0);
   assert.equal(nah(sp(0, 0, 'h3eg'), sp(2, 0, 'h3eg')), 1);
   nahe(nah(sp(0, 0, 'h3eg'), sp(0, 0, 'h3eg'), { ...E, hoerweite: 40 }), 1);
   // auf Entfernung leicht leiser, aber nie unter 0,6
-  assert.ok(nah(sp(0, 0, 'h3eg'), sp(10, 0, 'h3eg')) >= 0.6);
+  assert.ok(nah(sp(0, 0, 'h3eg'), sp(60, 0, 'h3eg')) >= 0.6);
 });
 
 test('gleiches Haus, anderes Stockwerk: Wert aus der Einstellung', () => {
@@ -62,8 +60,8 @@ test('einer drinnen, einer draußen: gedämpft nach Abstand zur Haustür-Vorkach
   const vx = 10.5 * 4, vy = 11.5 * 4;
   nahe(nah(sp(vx, vy + 2), sp(0, 0, 'h3eg')), 0.10);               // direkt vor der Tür
   nahe(nah(sp(0, 0, 'h3eg'), sp(vx, vy + 2)), 0.10);               // symmetrisch
-  nahe(nah(sp(vx + 22.5, vy), sp(0, 0, 'h3keller')), 0.05);        // halbe Hörweite
-  assert.equal(nah(sp(vx + 40, vy), sp(0, 0, 'h3eg')), 0);
+  nahe(nah(sp(vx + 50, vy), sp(0, 0, 'h3keller')), 0.05);        // Mitte des Abfalls (40 m + 10 m)
+  assert.equal(nah(sp(vx + 60, vy), sp(0, 0, 'h3eg')), 0);
   nahe(nah(sp(vx, vy), sp(0, 0, 'h3eg'), { ...E, drinnenDraussen: 0.5 }), 0.5);
   assert.equal(nah(sp(vx, vy), sp(0, 0, 'h3eg'), { ...E, drinnenDraussen: 0 }), 0);
   assert.equal(lautstaerke(sp(vx, vy), sp(0, 0, 'h3eg'), welt, E).pan, 0);

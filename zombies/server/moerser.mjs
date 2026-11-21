@@ -1,5 +1,5 @@
 // Panzermörser (M113 mit 120-mm-Mörser, Besatzung ein Soldat): Steilfeuer auf Zombiegruppen.
-// Noch an keiner Karte fest eingebaut: nur der Test-Schalter test.moerser (Verwaltung) stellt ihn neben den Start (Vorgabe aus).
+// Kein Testwerkzeug mehr: er läuft nur über feste Einsätze (Szene „Stau auf der B11“, server/szene_b11.mjs) und den Schießstand (erzwungen).
 // Ablauf: Ziel = Zombie mit den meisten Zombies im Splitterradius (zwischen Mindest- und Höchstreichweite), Granate fliegt im hohen Bogen
 // (Flugzeit nach Entfernung, Nachricht 'moerser'), Einschlag mit Flächenschaden (nach außen schwächer, Sicht egal – Steilfeuer von oben).
 // Es wird nie geschossen, wenn ein Spieler (auch Bot) oder Mensch im Sicherheitsradius um den Einschlagpunkt steht; Spieler nehmen nie Schaden.
@@ -25,12 +25,12 @@ export class Moerser {
   }
 
   einst() { return { ...MOERSER, ...(this.raum.einstellungen?.()?.moerser ?? {}) }; }
-  // Schalter test.moerser; der Schießstand erzwingt ihn per this.erzwungen (true/false) und gibt den Standplatz in this.platz { x, y } vor
-  an() { return this.erzwungen ?? !!this.raum.einstellungen?.()?.test?.moerser; }
+  // Der Schießstand erzwingt ihn per this.erzwungen (true/false) und gibt den Standplatz in this.platz { x, y } vor; sonst ist er aus
+  an() { return this.erzwungen ?? false; }
 
   // Fahrzeug anlegen/entfernen je nach Schalter; steht neben dem Start (freier Platz)
   abgleichen() {
-    if (this.fest) return;   // fest eingebaut (Szene „Stau auf der B11“, server/szene_b11.mjs): Fahrzeug setzt die Szene, Test-Schalter egal
+    if (this.fest) return;   // fest eingebaut (Szene „Stau auf der B11“, server/szene_b11.mjs): Fahrzeug setzt die Szene
     const r = this.raum, s = r.state;
     if (this.an() && !this.id && r.welt?.start) {
       const p = this.platz ?? (q => ({ x: q.x + 60, y: q.y }))(r.freierPlatz(r.welt.start, 2));

@@ -127,7 +127,7 @@ export async function starte({
       bundeswehr: w.bundeswehr,                     // { aktiv, falltage }
       ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,
-      test: { moerser: w.test.moerser },              // Test-Schalter Panzermörser (M113)
+      munitionsglueck: w.munitionsglueck,           // { schritt, max, lebenUnter, lebenFaktor, notUnter, notFaktor } in %
       moerser: w.moerser,                           // { reichweiteMin, reichweiteMax, pause, schaden, radius, mindestZombies, sicherheit, tempo }
       unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),
     };

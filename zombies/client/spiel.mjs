@@ -1867,7 +1867,32 @@ class Ort extends Phaser.Scene {
       this.lampenPinsel.setRotation(this.lampenRichtung(ich)).setScale(0.8).setAlpha(1);
       d.erase(this.lampenPinsel, lx, ly);
     }
+    this.fremdeLampen(d, a.X, a.Y, ebene, 0.65);
     this.setzeGrau(!lampe);
+  }
+
+  // Taschenlampen der Mitspieler: Kegel in Blickrichtung (weich nachgeführt), gleiche Pinsel-Technik wie der eigene; höchstens 8 (nächste zuerst).
+  // Drinnen nur Mitspieler auf derselben Ebene (Haus und Stockwerk), draußen nur Mitspieler draußen.
+  fremdeLampen(ziel, ox, oy, ebene, skala) {
+    if (!this.lampenWinkelAndere) this.lampenWinkelAndere = new Map();
+    const v = this.cameras.main.worldView, r = 360, liste = [];
+    for (const [id, p] of raum.state.spieler) {
+      if (id === meineId) continue;
+      if (!(p.lampe > 0) || (p.ebene ?? '') !== (ebene ?? '') || p.zombie > 0 || p.unten || !p.verbunden) continue;
+      if (p.x < v.x - r || p.x > v.right + r || p.y < v.y - r || p.y > v.bottom + r) continue;
+      liste.push([Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y), id, p]);
+    }
+    liste.sort((a, b) => a[0] - b[0]);
+    const dt = this.game.loop.delta / 1000, benutzt = new Set();
+    for (const [, id, p] of liste.slice(0, 8)) {
+      benutzt.add(id);
+      const w = this.lampenWinkelAndere.get(id) ?? p.richtung;
+      const neu = Phaser.Math.Angle.RotateTo(w, p.richtung, dt * 3.5);
+      this.lampenWinkelAndere.set(id, neu);
+      this.lampenPinsel.setRotation(neu).setScale(skala).setAlpha(1);
+      ziel.erase(this.lampenPinsel, p.x - ox, p.y - oy);
+    }
+    for (const id of this.lampenWinkelAndere.keys()) if (!benutzt.has(id) && !raum.state.spieler.get(id)?.lampe) this.lampenWinkelAndere.delete(id);
   }
 
   // Kegel folgt der Laufrichtung weich (nicht jedem Ruck, z. B. beim automatischen Zielen)
@@ -1909,6 +1934,7 @@ class Ort extends Phaser.Scene {
       if ((p.ebene ?? '') !== '' || id === meineId) continue;
       if (sicht(p.x, p.y, 100)) { P.setScale(p.lampe > 0 ? 0.7 : 0.45).setAlpha(0.7); rt.erase(P, p.x - ox, p.y - oy); }
     }
+    this.fremdeLampen(rt, ox, oy, '', 0.85);
     const lx = this.lokal.x - ox, ly = this.lokal.y - oy;
     P.setScale(0.6).setAlpha(0.8); rt.erase(P, lx, ly);
     if (ich.lampe > 0) { this.lampenPinsel.setRotation(this.lampenRichtung(ich)).setScale(1.0).setAlpha(1); rt.erase(this.lampenPinsel, lx, ly); }
