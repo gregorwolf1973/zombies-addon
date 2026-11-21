@@ -86,11 +86,13 @@ def main():
     for n in bt: gruppen.append((['buerger160:' + n + '_versteckt'], 'buerger160', [n + '_versteckt'], M_ALT, ziel_m * GEDUCKT)) if n + '_versteckt' in alle_bt else None
     if 'dick_versteckt' in alle_bt:
         gruppen.append((['buerger160:dick_versteckt'], 'buerger160', ['dick_versteckt'], M_ALT, hoehe('buerger160', ['dick']) * M_ALT * st.median(fb) * 1.15 * GEDUCKT))
-    HALT = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe']
+    HALT = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe',
+            'schrotflinte', 'mp', 'mg', 'armbrust', 'scharfschuetze', 'granatwerfer', 'sense', 'schlaeger', 'handgranate', 'faust']
+    HELDIN = 0.86        # Heldin ist absichtlich schlanker (Bild quer um 0,86 gestaucht): gleicher Maßstab wie der Held, nicht auf Survivor-Breite aufgeblasen
     for g in ('m', 'w'):   # Held/Heldin (helden160): Stiefel-Ebenen bekommen denselben Faktor wie der Körper
         koerper = ['held_%s_%s' % (g, h) for h in HALT]
         stiefel = ['held_%s_stiefel_%s' % (g, a) for a in ('stehen', 'gehen', 'laufen')]
-        gruppen.append((['helden160:' + n for n in koerper + stiefel], 'helden160', koerper[:1], M_ALT, ziel_m))   # Messbild = held_<g>_leer
+        gruppen.append((['helden160:' + n for n in koerper + stiefel], 'helden160', koerper[:1], M_ALT, ziel_m * (HELDIN if g == 'w' else 1)))   # Messbild = held_<g>_leer
     for t in ('tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose'):
         namen = ['zombie_' + t]
         schl = ['figuren:zombie_' + t]

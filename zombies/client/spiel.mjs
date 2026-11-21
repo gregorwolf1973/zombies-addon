@@ -675,8 +675,9 @@ const GEMINI_LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];   /
 const ZIEL_NAMEN = { pharmacy: 'Apotheke', chemist: 'Drogerie', doctors: 'Arzt', dentist: 'Zahnarzt', medical_supply: 'Sanitätshaus', supermarket: 'Supermarkt', convenience: 'Laden', bakery: 'Bäcker', butcher: 'Metzger', kiosk: 'Kiosk', beverages: 'Getränke', greengrocer: 'Gemüse', department_store: 'Kaufhaus', hardware: 'Baumarkt', doityourself: 'Baumarkt', sports: 'Sport', outdoor: 'Outdoor',
   apotheke: 'Apotheke', lebensmittel: 'Lebensmittel', kaufhaus: 'Kaufhaus' };
 const ZIEL_SYMBOL = { apotheke: '💊', lebensmittel: '🛒', kaufhaus: '🔦' };
-const HELD_HALTUNGEN = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe'];
-const HELD_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'gewehr', mp: 'gewehr', mg: 'gewehr', armbrust: 'gewehr', scharfschuetze: 'gewehr', schlaeger: 'messer', sense: 'messer', messer: 'messer', brechstange: 'messer', granatwerfer: 'gewehr' };   // sonst keine Waffe in der Hand
+const HELD_HALTUNGEN = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe',
+  'schrotflinte', 'mp', 'mg', 'armbrust', 'scharfschuetze', 'granatwerfer', 'sense', 'schlaeger', 'handgranate', 'faust'];   // ab 'schrotflinte': eigene Bilder ohne Lampen-Variante
+const HELD_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrotflinte', mp: 'mp', mg: 'mg', armbrust: 'armbrust', scharfschuetze: 'scharfschuetze', schlaeger: 'schlaeger', sense: 'sense', messer: 'messer', brechstange: 'messer', granatwerfer: 'granatwerfer', handgranate: 'handgranate', faust: 'faust' };   // sonst keine Waffe in der Hand
 const SV_WAFFE = { pistole: 'pistole', gewehr: 'gewehr', schrotflinte: 'schrot', messer: 'messer', mp: 'pistole', mg: 'gewehr', armbrust: 'gewehr', scharfschuetze: 'gewehr', granatwerfer: 'gewehr' };   // sonst Taschenlampe
 
 class Ort extends Phaser.Scene {
@@ -2384,7 +2385,7 @@ class Ort extends Phaser.Scene {
     else if (held) {
       // Held/Heldin (Gemini): Haltung nach Waffe und Taschenlampe, Stiefel als eigene Ebene
       const a = aussehenLesen(p.aussehen), gg = a.g === 'f' ? 'w' : 'm', wf = HELD_WAFFE[aktiveWaffe(p)[0]] ?? '', lampe = p.lampe > 0;
-      const haltung = wf ? (lampe ? wf + '_lampe' : wf) : (lampe ? 'lampe' : 'leer');
+      const haltung = wf ? (lampe && HELD_HALTUNGEN.includes(wf + '_lampe') ? wf + '_lampe' : wf) : (lampe ? 'lampe' : 'leer');
       textur = this.heldenTextur(p.aussehen); bild = Math.max(0, HELD_HALTUNGEN.indexOf(haltung));
       const fb = !geht ? this.heldBild(`held_${gg}_stiefel_stehen`)
         : this.heldBild(`held_${gg}_stiefel_${tempo > W.tempoGehen * 1.25 ? 'laufen' : 'gehen'}`, Math.floor(f.lauf / 6));

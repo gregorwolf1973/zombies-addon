@@ -26,75 +26,135 @@
   "held_m_messer_lampe": [
    7
   ],
-  "held_m_stiefel_stehen": [
+  "held_m_schrotflinte": [
    8
   ],
-  "held_m_stiefel_gehen": [
-   9,
-   10,
-   11,
-   12,
-   13,
-   14,
-   15,
+  "held_m_mp": [
+   9
+  ],
+  "held_m_mg": [
+   10
+  ],
+  "held_m_armbrust": [
+   11
+  ],
+  "held_m_scharfschuetze": [
+   12
+  ],
+  "held_m_granatwerfer": [
+   13
+  ],
+  "held_m_sense": [
+   14
+  ],
+  "held_m_schlaeger": [
+   15
+  ],
+  "held_m_handgranate": [
    16
   ],
-  "held_m_stiefel_laufen": [
-   17,
-   18,
+  "held_m_faust": [
+   17
+  ],
+  "held_m_stiefel_stehen": [
+   18
+  ],
+  "held_m_stiefel_gehen": [
    19,
    20,
    21,
    22,
    23,
-   24
-  ],
-  "held_w_leer": [
-   25
-  ],
-  "held_w_pistole": [
+   24,
+   25,
    26
   ],
+  "held_m_stiefel_laufen": [
+   27,
+   28,
+   29,
+   30,
+   31,
+   32,
+   33,
+   34
+  ],
+  "held_w_leer": [
+   35
+  ],
+  "held_w_pistole": [
+   36
+  ],
   "held_w_gewehr": [
-   27
+   37
   ],
   "held_w_messer": [
-   28
+   38
   ],
   "held_w_lampe": [
-   29
+   39
   ],
   "held_w_pistole_lampe": [
-   30
+   40
   ],
   "held_w_gewehr_lampe": [
-   31
-  ],
-  "held_w_messer_lampe": [
-   32
-  ],
-  "held_w_stiefel_stehen": [
-   33
-  ],
-  "held_w_stiefel_gehen": [
-   34,
-   35,
-   36,
-   37,
-   38,
-   39,
-   40,
    41
   ],
-  "held_w_stiefel_laufen": [
-   42,
-   43,
-   44,
-   45,
-   46,
-   47,
-   48,
+  "held_w_messer_lampe": [
+   42
+  ],
+  "held_w_schrotflinte": [
+   43
+  ],
+  "held_w_mp": [
+   44
+  ],
+  "held_w_mg": [
+   45
+  ],
+  "held_w_armbrust": [
+   46
+  ],
+  "held_w_scharfschuetze": [
+   47
+  ],
+  "held_w_granatwerfer": [
+   48
+  ],
+  "held_w_sense": [
    49
+  ],
+  "held_w_schlaeger": [
+   50
+  ],
+  "held_w_handgranate": [
+   51
+  ],
+  "held_w_faust": [
+   52
+  ],
+  "held_w_stiefel_stehen": [
+   53
+  ],
+  "held_w_stiefel_gehen": [
+   54,
+   55,
+   56,
+   57,
+   58,
+   59,
+   60,
+   61
+  ],
+  "held_w_stiefel_laufen": [
+   62,
+   63,
+   64,
+   65,
+   66,
+   67,
+   68,
+   69
   ]
  }
 }
