@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.71.0 – 22.11.2026
+
+- Neu (Geretsried 2): Objekte aus Luftbild und 3D-Modell – 243 geparkte Autos an ihren echten Plätzen (Gemini, Präzision ~90 %), 500 Einzelbäume mit echter Kronengröße, 8 Pools, 559 Garagen/Gartenhäuser/Nebengebäude mit echten Dächern als Hindernisse.
+- Neu: Unter Bäumen langsamer (Backend „Tempo unter Bäumen“, Vorgabe 25 %) für Helden, Bots, Zombies und Menschen.
+- Geändert: Fluss im Luftbild glatt statt kachelweise getönt; Schilf und Maibaum entfernt; Puma im BW-Lager/Flugfeld in echten Maßen wie an der B11.
+
 ## 0.70.0 – 22.11.2026
 
 - Neu (vorerst AUS, Backend-Schalter „Maßstäbliche Innenräume“): Häuser innen im echten Maßstab – Grundriss = echter Hausumriss, Wände 25 cm, Türen 1,25 m, Möbel in echten Maßen mit Maserung/Polster/Fliesen, Safehouses, Läden und Keller im feinen Raster; Tempo drinnen einstellbar (Vorgabe 35 %). Beim Umschalten landen Spieler im Haus sicher an der Haustür.
