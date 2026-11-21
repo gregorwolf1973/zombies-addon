@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.66.0 – 21.11.2026
+
+- Neu: Bundeswehr-Lager mit Flandernzaun rundum (Holzböcke mit Stacheldraht, Spieler kommen nicht durch, Zombies nur sehr langsam), Tor und drei S-Draht-Rollen. Zombies bleiben mit 40 % im Draht hängen, zappeln, beißen und reißen sich nach 60 s los; einige hängen schon bei Spielbeginn.
+- Neu: Der Puma fährt Zombies platt (wie der Leopard).
+- Neu: Flugfeld Königsdorf mit verlassenen Puma und Leopard, Drahtrollen mit hängenden Zombies und vielen Toten.
+- Neu: Leopard dreht den Turm langsam (ca. 40 °/s), Kommandant und Ladeschütze schauen aus den Luken, der Ladeschütze schießt mit dem MG. Ab 10 Zombies auf einem Fleck feuert die Hauptkanone (Explosion ca. 5 m, mind. 8 s Pause, nie bei Spielern in der Nähe des Ziels).
+- Neu: Schießstand mit Fahrzeugwahl: keins, Puma, Leopard oder Mörserpanzer.
+- Neu (Geretsried 2): Stau auf der B11 mit brennenden Autos und Feuerwehr; an der Kreuzung beim Rathaus ein Bundeswehr-Posten mit Puma, Mörserpanzer und 8 Infanteristen. Gefallene Soldaten lassen Munition liegen und stehen später als Zombie auf.
+- Geändert: Sind alle echten Spieler am Boden (Bots zählen nicht), wachen alle gemeinsam im zuletzt betretenen Safehouse des Teams auf.
+- Behoben: Nach dem Drehen von Tablet oder Handy wird das Bild neu angepasst.
+- Geändert: Das Aufheben-Fenster bleibt offen, bis nichts mehr zum Aufheben da ist oder man es selbst schließt.
+
 ## 0.65.1 – 21.11.2026
 
 - Neu: Zweite Level-1-Karte „Geretsried 2 (Level 1)“ – Geretsried-Nord vom Veilchenweg bis zum Karl-Lederer-Platz mit Rathaus, B11 und Gewerbegebiet (1,4 × 1,7 km). Level 1 wählt bei jedem Start zufällig Geretsried oder Geretsried 2; im Backend lässt sich auch eine feste Karte wählen.

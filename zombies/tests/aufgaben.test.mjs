@@ -335,15 +335,15 @@ test('Levelwechsel: mit erfüllten Aufgaben fährt der Bus los, die Karte wechse
     assert.ok(meldungen.some(t => t.includes('trotzdem mit')), 'keine Mitkommen-Meldung');
     const stand = SpielRaum.speicher.ladeWelt();
     assert.equal(stand.level, 2);
-    assert.equal(stand.karte, 'geretsried');
-    assert.equal(SpielRaum.einstellungen.karte?.name, 'geretsried');
+    assert.ok(['geretsried', 'geretsried2'].includes(stand.karte), 'Level-1-Karte: ' + stand.karte);   // Level 1 = Zufall aus beiden Geretsried-Karten
+    assert.ok(['geretsried', 'geretsried2', 'level1'].includes(SpielRaum.einstellungen.karte?.name));
     assert.ok(SpielRaum.speicher.ladeSpieler(a.spielerId).rucksack.includes('wasser'), 'Rucksack nicht gespeichert');
     assert.equal(SpielRaum.speicher.ladeSpieler(a.spielerId).x, null, 'Platz wird in der neuen Welt neu bestimmt');
   } finally { await beenden(a.c, b.c); }
 
   neu = await beitreten('Fahrgast2', id);
   try {
-    assert.equal(neu.raum.state.karte, 'geretsried');
+    assert.ok(['geretsried', 'geretsried2'].includes(neu.raum.state.karte));
     assert.equal(neu.raum.state.level, 2);
     assert.equal(neu.raum.state.aufgaben.size, 4);
     assert.equal(neu.raum.state.funk, false, 'Funkspruch gilt nur je Level');
@@ -390,10 +390,7 @@ test('Evakuierungsbus und -panzer schießen auf Zombies in der Nähe, nie auf Sp
     assert.ok(schuesse.every(m => m.art === 'mg'));
     assert.ok(raum.state.zombies.has(fern), 'Zombie außer Reichweite getroffen');
     assert.equal(a.p.hp, hp, 'Spieler getroffen');
-    // Panzer in Level 2 (Isarauen): Turm-MG aus der Fahrzeugmitte
-    raum.state.karte = 'isarauen'; schuesse.length = 0;
-    const z2 = raum.setzeZombie(bus.x - 120, bus.y, ''); raum.zombieInfo.get(z2).steht = true;
-    assert.ok(await bis(() => schuesse.some(m => m.evak === 'panzer' && Math.hypot(m.x1 - bus.x, m.y1 - bus.y) < 30)), 'Leopard schießt nicht aus dem Turm');
+    // Leopard (Turm, Lader-MG, Kanone) prüft tests/leopard.test.mjs
     // Abfahrt: Schluss mit Schießen
     raum.aufgaben.busWeg();
     await warte(100); schuesse.length = 0;
