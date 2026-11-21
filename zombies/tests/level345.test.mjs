@@ -45,7 +45,7 @@ test('Schwierigkeit steigt von Level 1 bis 5, darüber wie 5', () => {
   let vor = schwierigkeit({ level: 1, tage: 0 });
   for (let l = 2; l <= 5; l++) {
     const j = schwierigkeit({ level: l, tage: 0 });
-    assert.ok(j.dichte > vor.dichte && j.horde > vor.horde && j.schnell > vor.schnell && j.abstand < vor.abstand, 'Level ' + l);
+    assert.ok(j.schnell > vor.schnell && j.nacht > vor.nacht && j.beute < vor.beute, 'Level ' + l);
     vor = j;
   }
   assert.deepEqual(schwierigkeit({ level: 9, tage: 0 }), vor);

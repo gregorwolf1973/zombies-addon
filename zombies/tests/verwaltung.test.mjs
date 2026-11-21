@@ -28,26 +28,26 @@ test('Verwaltung: ohne Seitenleiste gesperrt', async () => {
 test('Verwaltung: ändern gilt sofort und wird gespeichert', async () => {
   process.env.ZOMBIES_VERWALTUNG_LOKAL = '1';
   const r = await fetch(`http://127.0.0.1:${PORT}/verwaltung/api`, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ zombies: { dichte: 25, tempo: 999 }, test: { zeitraffer: 10, unsterblich: ['Gregor', 'gregor', ''] }, funde: { wasser: 0, gibtsnicht: 5 } }) });
+    body: JSON.stringify({ zombies: { level: [{ grund: 20, horde: 7 }], tempo: 999 }, test: { zeitraffer: 10, unsterblich: ['Gregor', 'gregor', ''] }, funde: { wasser: 0, gibtsnicht: 5 } }) });
   assert.equal(r.status, 200);
   const d = await r.json();
-  assert.equal(d.einstellungen.zombies.dichte, 25);
+  assert.equal(d.einstellungen.zombies.level[0].grund, 20); assert.equal(d.einstellungen.zombies.level[0].jeSpieler, 5);
   assert.equal(d.einstellungen.zombies.tempo, 150, 'Tempo begrenzt');
   assert.equal(d.einstellungen.funde.wasser, 0);
   assert.ok(!('gibtsnicht' in d.einstellungen.funde));
-  assert.equal(SpielRaum.einstellungen.zombieFaktor, 2.5);
+  assert.equal(SpielRaum.einstellungen.zombiesLevel[0].grund, 20); assert.equal(SpielRaum.einstellungen.zombiesLevel[0].horde, 7);
   assert.equal(SpielRaum.einstellungen.zeitraffer, 10);
   assert.ok(SpielRaum.einstellungen.unsterblich.has('gregor'));
   const datei = JSON.parse(fs.readFileSync(path.join(ordner, 'einstellungen.json'), 'utf8'));
-  assert.equal(datei.zombies.dichte, 25);
+  assert.equal(datei.zombies.level[0].grund, 20);
   // Seitenleiste zeigt die Verwaltung, ?spielen das Spiel
   const seite = await (await fetch(`http://127.0.0.1:${PORT}/verwaltung.html`)).text();
   assert.match(seite, /verwaltung\/api/);
 });
 
 test('Einstellungen bereinigen: Unsinn wird zu gültigen Werten', () => {
-  const e = bereinige({ karte: 'mond', bots: -3, zombies: { dichte: 'viel' }, test: { zeitraffer: 7, unsterblich: 'x' } });
-  assert.equal(e.karte, 'geretsried'); assert.equal(e.bots, 0); assert.equal(e.zombies.dichte, 10);
+  const e = bereinige({ karte: 'mond', bots: -3, zombies: { level: [{ grund: 'viel' }] }, test: { zeitraffer: 7, unsterblich: 'x' } });
+  assert.equal(e.karte, 'geretsried'); assert.equal(e.bots, 0); assert.equal(e.zombies.level[0].grund, 8);
   assert.equal(e.test.zeitraffer, 1); assert.deepEqual(e.test.unsterblich, []);
 });
 
