@@ -133,3 +133,16 @@ export function zeichneWasser(ctx, welt, rect) {
   ctx.restore();
   ctx.restore();
 }
+
+// Luftbild-Boden: Wasser fehlt als Hindernis im Foto → glatte, halbtransparente Fläche mit weichem Rand (kein Kachelraster)
+export function zeichneWasserHauch(ctx, welt, rect) {
+  const r = { x0: rect.x0 * K - 12, y0: rect.y0 * K - 12, x1: rect.x1 * K + 12, y1: rect.y1 * K + 12 };
+  const sicht = wasserLinien(welt).filter(l => l.box.x1 >= r.x0 && l.box.x0 <= r.x1 && l.box.y1 >= r.y0 && l.box.y0 <= r.y1);
+  if (!sicht.length) return;
+  ctx.save();
+  if ('filter' in ctx) ctx.filter = 'blur(2px)';
+  ctx.beginPath();
+  for (const l of sicht) pfad(ctx, l.p);
+  ctx.fillStyle = 'rgba(42,112,152,.40)'; ctx.fill('evenodd');
+  ctx.restore();
+}

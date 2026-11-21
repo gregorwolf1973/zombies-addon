@@ -702,6 +702,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <label class="tn-schalter"><input type="checkbox" id="tnInnen"> Maßstäbliche Innenräume (echter Grundriss, Wände 25 cm, Möbel in echten Maßen; wirkt sofort – wer drinnen ist, kommt an die Haustür)</label>
   <label for="tnZLeben">Lebenspunkte eines Zombies (100 = normal; ein Kriecher hat danach 35 % davon)</label>
   <div class="tn-zeile"><input type="range" id="tnZLeben" min="20" max="500" step="5"><span id="tnZLebenWert">100</span></div>
+  <label for="tnBaumTempo">Tempo unter Bäumen (%)</label>
+  <span class="hilfe">Menschen, Zombies, Spieler und Bots laufen auf Baumkacheln nur mit diesem Anteil ihres Tempos (Vorgabe 25 % = 75 % langsamer; 100 = kein Unterschied). Fahrzeuge und der Hund sind nicht betroffen.</span>
+  <div class="tn-zeile"><input type="range" id="tnBaumTempo" min="5" max="100" step="5"><span id="tnBaumTempoWert">25 %</span></div>
   <p class="tn-leise" id="tnZLebenHinweis"></p>
   <div id="grAbschnitt" class="gr-abschnitt">
     <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="grTitel">Größen</div>
@@ -977,6 +980,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     feld('tnMGroesse', e.menschenGroesse === undefined ? 100 : e.menschenGroesse, function (v) { return v + ' %'; });
     feld('tnZGroesse', e.zombieGroesse === undefined ? 100 : e.zombieGroesse, function (v) { return v + ' %'; });
     feld('tnGGroesse', e.groesseGesamt === undefined ? 70 : e.groesseGesamt, function (v) { return v + ' %'; });
+    feld('tnBaumTempo', e.baumTempo === undefined ? 25 : e.baumTempo, function (v) { return v + ' %'; });
     feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
     if (window.groessenVorschau) window.groessenVorschau();
     var bsl = e.bissSpielerLevel || {}, bsf = function (v) { return v ? v + ' %' : 'nie'; };
@@ -1121,6 +1125,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   regler('tnInnenTempo', function (v) { return v + ' %'; }, function (v) { return { innenTempo: v }; });
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { verwandlung: v }; });
   regler('tnMGroesse', function (v) { return v + ' %'; }, function (v) { return { menschenGroesse: v }; });
+  regler('tnBaumTempo', function (v) { return v + ' %'; }, function (v) { return { baumTempo: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
   regler('tnGGroesse', function (v) { return v + ' %'; }, function (v) { return { groesseGesamt: v }; });
   function globalSetzen(f) {
@@ -3183,7 +3188,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin',
     tnMgSchritt: 'munitionsglueck.schritt', tnMgMax: 'munitionsglueck.max', tnMgLeben: 'munitionsglueck.lebenUnter', tnMgLebenF: 'munitionsglueck.lebenFaktor', tnMgNot: 'munitionsglueck.notUnter', tnMgNotF: 'munitionsglueck.notFaktor',
-    tnHundAblenk: 'hund.ablenkung',
+    tnHundAblenk: 'hund.ablenkung', tnBaumTempo: 'baumTempo',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
     agStunde: 'aufgaben.stunde', agWarteEcht: 'aufgaben.wartenEchtMin', agWarte: 'aufgaben.wartezeit', agFinale: 'aufgaben.finaleMinuten', agAnzahl: 'aufgaben.anzahl', fkFaktor: 'faehigkeiten.xpFaktor',

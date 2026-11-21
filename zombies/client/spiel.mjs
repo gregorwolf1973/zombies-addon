@@ -4,7 +4,7 @@ import { groesse } from './groessen.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
-  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
+  BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, baumFaktor, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
 import { dingId, dingN, hat, zaehle, flach, kannAufnehmen, entferne as entferneStueck } from './stapel.mjs';
 import { laternen, tuerPose, zeichneSafeEingang } from './vektor.mjs';
@@ -763,6 +763,7 @@ function chatAnschliessen(raum) {
     for (const n of liste) chatAnhaengen({ ...n, ich: vonMir(n) });
     $('chatliste').scrollTop = $('chatliste').scrollHeight;
   };
+  raum.onMessage('baumTempo', v => { if (Number.isFinite(v)) baumTempoWert = v; });   // Einstellung „Tempo unter Bäumen“ (%), für die Vorhersage
   raum.onMessage('chatVerlauf', m => {
     const liste = m.nachrichten ?? [];
     meineKennung = m.ich ?? '';
@@ -801,6 +802,7 @@ const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   //
 const LEERE_KARTE = new Map();
 const zombieKarte = () => raum?.state?.zombies ?? LEERE_KARTE;
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
+let baumTempoWert = 25;
 // Maßstäbliche Innenräume: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
 const INNEN_FIGUR = 0.5;
 let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
@@ -2897,7 +2899,7 @@ class Ort extends Phaser.Scene {
     const zombie = p.zombie > 0, schleicht = !zombie && (s || l < 0.55);
     const tempo = zombie ? W.zombieTempoJagen * 1.15
       : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
-    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d * tempoVon(welt);
+    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d * tempoVon(welt) * baumFaktor(welt, pos.x, pos.y, baumTempoWert);   // drinnen Maßstab-Tempo, unter Bäumen langsamer (wie raum.mjs)
     const n = Math.max(1, Math.ceil(weg / 4));   // Teilschritte wie auf dem Server (raum.mjs spielerSchritt)
     for (let i = 0; i < n; i++) bewege(welt, pos, dx / l * weg / n, dy / l * weg / n, W.spielerRadius);
   }

@@ -8,9 +8,10 @@
 // winkel (Drehung des Rahmens) sowie b, h (Ausdehnung in Weltachsen). Blickrichtungen (blick) sind Weltwinkel im Bogenmaß.
 import { KACHEL, BREITE, HOEHE, T, FEIN, FEIN_PX, zufall, findeWeg } from './welt.mjs';
 import { zeichneSafeMoebel } from './safe_moebel.mjs';
+import { fzPx } from './masse.mjs';
 
 const K = KACHEL, TAU = Math.PI * 2;
-export const PUMA_SKALA = 1.6;   // Puma (Wanne und Turm) wird so viel größer gezeichnet als die Bauplan-Maße
+export const PUMA_SKALA = 1;   // Puma (Wanne und Turm) wird in echten Maßen gezeichnet (7,3 × 3,7 m, client/masse.mjs); früher 1,6 (zu groß)
 export const SP_BREITE = 30, SP_TIEFE = 22;   // Kacheln im Bauplan (quer zur Front, von der Front nach hinten)
 const WINKEL = { n: 0, o: Math.PI / 2, s: Math.PI, w: -Math.PI / 2 };
 const hash = (a, b) => { let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -137,8 +138,8 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
   }
   {   // Puma: Wanne 72 × 34 px, Bug zur Stadt (−v); der Turm ist ein eigenes Teil (Mittelpunkt, Ausrichtung, Rohrlänge)
     // Ruheplatz in der Lagermitte; danach fährt er frei im Innenbereich (server/stuetzpunkt.mjs, fahrFlaeche), deshalb keine Sperre im Feinraster
-    const L = 72, Bw = 34, [x, y] = ort(...PUMA_PARK);
-    teile.push({ art: 'puma', x, y, winkel: blickVorn, laenge: L, breite: Bw, b: c ? Bw : L, h: c ? L : Bw, turm: { x, y, winkel: blickVorn, rohr: 44 } });
+    const [L, Bw] = fzPx('puma'), [x, y] = ort(...PUMA_PARK);   // echte Maße: 58,4 × 29,6 px
+    teile.push({ art: 'puma', x, y, winkel: blickVorn, laenge: L, breite: Bw, b: c ? Bw : L, h: c ? L : Bw, turm: { x, y, winkel: blickVorn, rohr: 22 } });
   }
   // ---- (b) Sandsackstellungen (U) und MG-Nester hinter der Sperrlinie ----
   for (const [u, v] of [[10.5, 4.0], [19.5, 4.0]]) {
@@ -312,10 +313,10 @@ export function imLager(sp, x, y) {
 
 // ---------- Fahrfläche des Puma ----------
 // Der Puma fährt frei im Innenbereich des Lagers. Seine Mitte darf nur dort stehen, wo ein Kreis vom Radius PUMA_R (deckt die
-// Wanne in jeder Drehung ab: 115 × 54 px) kein festes Teil berührt: Draht, Sandsäcke, MG-Nester, Zelte (auch innen), Betten, Kisten,
+// Wanne in jeder Drehung ab: 58 × 30 px) kein festes Teil berührt: Draht, Sandsäcke, MG-Nester, Zelte (auch innen), Betten, Kisten,
 // Container, LKW, Antenne, Posten sowie die Einfahrt (Durchfahrt bis v 4,5 und 3 Kacheln seitlich: dort treten Spieler ein).
 // Raster in Bauplan-Koordinaten (u, v in Kacheln), Knoten alle 0,5 Kacheln; frei[j * nu + i] = 1: Knoten darf befahren werden.
-export const PUMA_R = 62;                 // Pixel
+export const PUMA_R = 45;                 // Pixel (halbe Diagonale der Wanne 58 × 30 px = 32,7 plus Luft für die Knotenabstände der Wegsuche)
 export const FAHR_SCHRITT = 0.5;          // Kacheln
 export const PUMA_PARK = [15.5, 9.0];     // Ruheplatz: Lagermitte hinter der Einfahrt
 const fahrCache = new WeakMap();
@@ -343,9 +344,9 @@ export function fahrFlaeche(sp) {
     for (const [cu, cv, cr] of kreise) m = Math.min(m, Math.hypot(u - cu, v - cv) - cr);
     return m;
   };
-  const ok = (u, v) => u >= rk && u <= SP_BREITE - rk && v >= rk && v <= SP_TIEFE - rk && abstand(u, v) > rk;
+  const ok = (u, v, mehr = 0) => u >= rk && u <= SP_BREITE - rk && v >= rk && v <= SP_TIEFE - rk && abstand(u, v) > rk + mehr;
   const frei = new Uint8Array(nu * nv);
-  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) frei[j * nu + i] = ok(i * FAHR_SCHRITT, j * FAHR_SCHRITT) ? 1 : 0;
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) frei[j * nu + i] = ok(i * FAHR_SCHRITT, j * FAHR_SCHRITT, 0.08) ? 1 : 0;   // Knoten mit etwas Luft: Wege zwischen Knoten laufen an runden Hindernissen minimal innen vorbei
   // Strecke frei befahrbar? (abgetastet alle 0,2 Kacheln)
   const strecke = (u0, v0, u1, v1) => {
     const n = Math.max(1, Math.ceil(Math.hypot(u1 - u0, v1 - v0) / 0.2));

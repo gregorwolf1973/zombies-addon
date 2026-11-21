@@ -283,9 +283,7 @@ function baueDeko(seed, k, setze, hole, haeuser, markt, start, behaelter, tor, s
   const deko = [];
   const px = (x, b) => (x + b / 2) * KACHEL;
 
-  // Maibaum (zwei Kacheln über der Marktmitte, damit der Startplatz frei bleibt) und Biertische
-  const mx = Math.floor(markt.x + markt.b / 2), my = Math.floor(markt.y + markt.h / 2) - 2;
-  setze(mx, my, T.DEKO); deko.push({ art: 'maibaum', kx: mx, ky: my, b: 1, h: 1, x: px(mx, 1), y: (my + 1) * KACHEL - 4 });
+  // Biertische (der Maibaum entfällt seit Version 26)
   for (const [bx, by] of [[markt.x + 1, markt.y + 1], [markt.x + markt.b - 3, markt.y + markt.h - 2]]) {
     setze(bx, by, T.DEKO); setze(bx + 1, by, T.DEKO);
     deko.push({ art: 'biertisch', kx: bx, ky: by, b: 2, h: 1, x: px(bx, 2), y: (by + 0.5) * KACHEL });
@@ -378,7 +376,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 25;   // 25: Autos aus dem Luftbild (karte.autosLuftbild ersetzt die zufälligen Parkplatz-/Bucht-Autos), 24: Parkplatzautos stehen in den gezeichneten Buchten (Winkel = Buchtrichtung, parkplatzBuchten in vektor.mjs), 23: Kulisse nach Luftbild (Bäume, Äcker, Dachfarben nach amtlichen Luftbildern), 22: Einkaufswagen vor Läden (durchsuchbar), geglättete Zaunlinien (zaunglatt.mjs), 21: ländliche Details (Alleen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen), B-11-Kreuzung ausgedünnt, feste Safehouses per Kachel, 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 26;   // 26: Maibaum entfällt, Panzer in echten Maßen (Puma/Leopard im Lager und auf dem Flugfeld), 25: Autos aus dem Luftbild (karte.autosLuftbild ersetzt die zufälligen Parkplatz-/Bucht-Autos), 24: Parkplatzautos stehen in den gezeichneten Buchten (Winkel = Buchtrichtung, parkplatzBuchten in vektor.mjs), 23: Kulisse nach Luftbild (Bäume, Äcker, Dachfarben nach amtlichen Luftbildern), 22: Einkaufswagen vor Läden (durchsuchbar), geglättete Zaunlinien (zaunglatt.mjs), 21: ländliche Details (Alleen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen), B-11-Kreuzung ausgedünnt, feste Safehouses per Kachel, 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -645,6 +643,12 @@ export function tierGelaende(welt, x, y, rad) {
     faktor = Math.min(faktor, ZAUN_TEMPO[art]);
   }
   return faktor;
+}
+
+// Tempo unter Bäumen: Faktor (prozent / 100), wenn die Kachel unter (x, y) ein Baum ist, sonst 1 (nicht in Innenräumen, nicht für Fahrzeuge/Hund)
+export function baumFaktor(welt, x, y, prozent = 25) {
+  if (welt.ebene || prozent >= 100) return 1;
+  return welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL)) === T.BAUM ? Math.max(0.05, prozent / 100) : 1;
 }
 
 // Bewegen mit Gleiten an Wänden: erst x, dann y getrennt

@@ -523,10 +523,8 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     n++;
   }
 
-  // Deko: Maibaum auf dem Platz, Busse auf Straßen, Büsche auf Wiesen
+  // Deko: Busse auf Straßen, Büsche auf Wiesen
   const deko = [];
-  const mbx = Math.floor(start.x / KACHEL), mby = Math.floor(start.y / KACHEL) - 2;
-  if (hole(mbx, mby) === T.PLATZ) { setze(mbx, mby, T.DEKO); deko.push({ art: 'maibaum', kx: mbx, ky: mby, b: 1, h: 1, x: (mbx + 0.5) * KACHEL, y: (mby + 1) * KACHEL - 4 }); }
   for (let n = 0, v = 0; n < 8 && v < 2000; v++) {
     const [x, y, senkrecht] = randStrasse[Math.floor(r() * randStrasse.length)];
     const kacheln = []; for (let j = 0; j < 4; j++) kacheln.push(senkrecht ? [x, y + j] : [x + j, y]);
