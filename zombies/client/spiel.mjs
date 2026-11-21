@@ -2,7 +2,7 @@
 import { fzPx } from './masse.mjs';
 import { groesse } from './groessen.mjs';
 import {
-  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
+  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, INNEN_FEIN, INNEN_TEMPO, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
@@ -28,7 +28,7 @@ let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
 import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from './innen_fein_bild.mjs';
-try { if (new URLSearchParams(location.search).has('innen1m')) setzeInnenFein(true); } catch { /* ohne Adresszeile (Tests) */ }   // PROTOTYP: Innenräume im Feinraster, Standard aus
+// ?innen1m in der Adresse: nur noch zum Testen vorgesehen; maßgeblich ist der Schalter des Servers (state.optionen, siehe erzeuge())
 import * as ton from './ton.mjs';
 import { HundAnzeige, eigenerHund } from './hund.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlPruefen, brauchtPlatz } from './aufheben.mjs';
@@ -70,10 +70,11 @@ function figurenVorzeichnen(szene) {
   });
 }
 // Laufbild aus der zurückgelegten Strecke
-function laufBild(f, dx, dy, dt, schrittLaenge) {
+// tf/ff: drinnen im Feinraster sind Tempo und Figur kleiner (Schrittlänge schrumpft mit der Figur, Schwelle fürs Gehen mit dem Tempo)
+function laufBild(f, dx, dy, dt, schrittLaenge, tf = 1, ff = 1) {
   const weg = Math.hypot(dx, dy);
-  f.lauf = (f.lauf ?? 0) + weg;
-  const geht = weg / Math.max(dt, 0.001) > 12;
+  f.lauf = (f.lauf ?? 0) + weg / ff;
+  const geht = weg / Math.max(dt, 0.001) > 12 * tf;
   return geht ? Math.floor((f.lauf / schrittLaenge) % 1 * LAUFBILDER) : -1;
 }
 
@@ -787,7 +788,7 @@ const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?
 // PROTOTYP Feinraster: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
 const INNEN_FIGUR = 0.5;
 let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
-const innenFigur = () => (szeneRef?.aktEbene && szeneRef.innenWelten?.get(szeneRef.aktEbene)?.kachel ? INNEN_FIGUR : 1);
+const innenFigur = () => (szeneRef?.feinInnen() ? INNEN_FIGUR : 1);
 const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100) * innenFigur();
 const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
 const VERWUNDET_GROESSE = 0.42 * 1.26;
@@ -853,6 +854,11 @@ class Ort extends Phaser.Scene {
 
   erzeuge() {
     const s = raum.state;
+    // „Maßstäbliche Innenräume“: der Server gibt den Schalter vor (Einstellung); wird er umgeschaltet, lädt der Client neu
+    if (!TUT.an) {
+      setzeInnenFein(!!((s.optionen ?? 0) & 2));
+      raum.onStateChange(st => { if (this.bereit && !!((st?.optionen ?? 0) & 2) !== INNEN_FEIN) setTimeout(() => location.reload(), 300); });
+    }
     if (TUT.an) { setzeKartengroesse(SS_B, SS_H); this.welt = baueSchiessstandWelt(); }   // Schießstand: kleine erzeugte Übungswelt
     else if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
@@ -1130,6 +1136,9 @@ class Ort extends Phaser.Scene {
     if (this.zoomWahl === undefined) { this.zoomWahl = 1; try { this.zoomWahl = Phaser.Math.Clamp(Number(localStorage.getItem('zob_zoom')) || 1, 0.4, 1.8); } catch {} }
     this.cameras.main.setZoom(this.zielZoom());
   }
+
+  // ist die aktuelle Ebene ein maßstäblicher Innenraum?
+  feinInnen() { return !!(this.aktEbene && this.wv(this.aktEbene)?.kachel); }
 
   // Kamerazoom: Bildschirmgröße × eigene Wahl (Knöpfe, Mausrad, +/−) × drinnen näher
   zielZoom(ebene = this.aktEbene) { return this.grundZoom * this.zoomWahl * (ebene ? (this.innenWelten.get(ebene)?.kachel ? INNEN_ZOOM_FEIN : INNEN_ZOOM) : 1); }
@@ -2213,7 +2222,7 @@ class Ort extends Phaser.Scene {
       const zeigen = this.sichtbar(z);
       if (zeigen) sichtbarZ++;
       f.box.setVisible(zeigen);
-      const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
+      const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30, this.feinInnen() ? INNEN_TEMPO : 1, this.feinInnen() ? INNEN_FIGUR : 1);
       const typ = ZOMBIE_TYPEN[(z.variante ?? 0) % ZOMBIE_TYPEN.length];
       const neu = !z.kriecht && (typ === 'z6' || typ === 'z7');
       const gem = !z.kriecht && GEMINI_TYPEN.has(typ);
@@ -2672,13 +2681,14 @@ class Ort extends Phaser.Scene {
     const zombie = p.zombie > 0;
     const weg = Math.hypot(f.x - f.altX, f.y - f.altY);
     f.altX = f.x; f.altY = f.y;
-    f.lauf = (f.lauf ?? 0) + weg;
-    const geht = weg / Math.max(dt, 0.001) > 12;
+    const tfa = p.ebene && this.feinInnen() ? INNEN_TEMPO : 1;   // drinnen im Feinraster: Tempo und Figurgröße kleiner
+    f.lauf = (f.lauf ?? 0) + weg / (tfa < 1 ? INNEN_FIGUR : 1);
+    const geht = weg / Math.max(dt, 0.001) > 12 * tfa;
     // Haltung nach Ausrüstung: Pistole, Nahkampf/Lampe in der Hand, sonst ohne
     let textur, bild = 0;
     const survivor = !p.unten && !zombie && String(p.aussehen ?? '').startsWith('s');
     const held = !p.unten && !zombie && istHeld(String(p.aussehen ?? '')[0]);
-    const tempo = weg / Math.max(dt, 0.001);
+    const tempo = weg / Math.max(dt, 0.001) / tfa;
     // Laufrichtung: Füße und (außer kurz beim Schuss/Schlag) Körper zeigen immer in Laufrichtung; der eigene Held nimmt sie sofort aus der Eingabe
     let lr = p.richtung;
     if (f === this.figuren.get(meineId) && this.eingabe && Math.hypot(this.eingabe.dx, this.eingabe.dy) > 0.05) lr = Math.atan2(this.eingabe.dy, this.eingabe.dx);
@@ -2825,7 +2835,7 @@ class Ort extends Phaser.Scene {
     const zombie = p.zombie > 0, schleicht = !zombie && (s || l < 0.55);
     const tempo = zombie ? W.zombieTempoJagen * 1.15
       : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
-    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d;
+    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d * tempoVon(welt);
     const n = Math.max(1, Math.ceil(weg / 4));   // Teilschritte wie auf dem Server (raum.mjs spielerSchritt)
     for (let i = 0; i < n; i++) bewege(welt, pos, dx / l * weg / n, dy / l * weg / n, W.spielerRadius);
   }
@@ -2942,22 +2952,22 @@ class Ort extends Phaser.Scene {
     const tuer = this.tuerKontext(ich, 'auf');
     if (tuer) return tuer;
     if (safe && w.ausgang) {
-      const tx = (w.ausgang.x + 0.5) * KACHEL, ty = (w.ausgang.y + 0.5) * KACHEL;
+      const KW = kachelVon(w), tx = (w.ausgang.x + 0.5) * KW, ty = (w.ausgang.y + 0.5) * KW;
       const bar = raum.state.safes.get(safe.id)?.barrikade ?? 0;
-      if (Math.hypot(x - tx, y - ty) < 56) {
-        const imWeg = [...raum.state.leichen.values()].some(l => (l.ebene ?? '') === safe.ebene && Math.hypot(l.x - tx, l.y - ty) < 44);
+      if (Math.hypot(x - tx, y - ty) < reichVon(w, 56)) {
+        const imWeg = [...raum.state.leichen.values()].some(l => (l.ebene ?? '') === safe.ebene && Math.hypot(l.x - tx, l.y - ty) < reichVon(w, 44));
         if (imWeg) return { art: 'wegziehen', text: '🧟 Toten Zombie aus der Tür ziehen' };
         if (hat(ich.rucksack, 'bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Eingangstür verbarrikadieren' };
       }
       const funkTisch = raum.state.aufgaben?.size && !raum.state.funk ? w.moebel?.find(q => q.art === 'funktisch') : null;
       if (funkTisch) {
-        const nx = Math.max(funkTisch.x * KACHEL, Math.min((funkTisch.x + funkTisch.b) * KACHEL, x)), ny = Math.max(funkTisch.y * KACHEL, Math.min((funkTisch.y + funkTisch.h) * KACHEL, y));
-        if (Math.hypot(x - nx, y - ny) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
+        const nx = Math.max(funkTisch.x * KW, Math.min((funkTisch.x + funkTisch.b) * KW, x)), ny = Math.max(funkTisch.y * KW, Math.min((funkTisch.y + funkTisch.h) * KW, y));
+        if (Math.hypot(x - nx, y - ny) < reichVon(w, 44)) return { art: 'funk', text: '📻 Funkspruch absetzen' };
       }
-      if (w.kuehlschrank && Math.hypot(x - w.kuehlschrank.x, y - w.kuehlschrank.y) < AKTION_ABSTAND + 20) {
+      if (w.kuehlschrank && Math.hypot(x - w.kuehlschrank.x, y - w.kuehlschrank.y) < reichVon(w, AKTION_ABSTAND + 20)) {
         return { art: 'kuehlschrank', text: 'Kühlschrank öffnen (Notvorrat, unter 30 %)' };
       }
-      if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < AKTION_ABSTAND + 20) {
+      if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < reichVon(w, AKTION_ABSTAND + 20)) {
         return { art: 'kiste', text: 'Vorräte öffnen', safe };
       }
     }
@@ -2970,13 +2980,13 @@ class Ort extends Phaser.Scene {
       if (vk) return { art: 'kiste', text: 'Vorratskiste öffnen (Lager)', safe: { id: vk.id, name: 'Bundeswehr-Lager' } };
     }
     {
-      const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene });
+      const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene }, reichVon(w, AKTION_ABSTAND));
       if (nah.length === 1 && (!brauchtPlatz(nah[0].ding, ich) || kannAufnehmen(ich.rucksack, ich.plaetze, nah[0].ding))) return { art: 'aufheben', text: `${DINGE[nah[0].ding]?.name ?? 'Gegenstand'} aufheben` };
       if (nah.length) return { art: 'aufheben_wahl', text: `Aufheben … (${nah.length})`, nah };
     }
     // Mensch in der Nähe (versteckt oder verängstigt): ansprechen, dann folgt er dir bis in den Safe Room
     {
-      let nah = null, nd = 56;
+      let nah = null, nd = reichVon(w, 56);
       for (const m of raum.state.menschen?.values() ?? []) {
         if (!m.sichtbar || m.infiziert || m.folgt || (m.ebene ?? '') !== (ich.ebene ?? '')) continue;
         const dd = Math.hypot(m.x - x, m.y - y);
@@ -2988,7 +2998,7 @@ class Ort extends Phaser.Scene {
     if (!ich.ebene && (raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
       return { art: 'raetsel', text: `🔐 Schloss knacken (${raum.state.torGeloest ?? 0}/3)` };
     }
-    let best = null, bd = AKTION_ABSTAND;
+    let best = null, bd = reichVon(w, AKTION_ABSTAND);
     for (const b of w.behaelter) {
       const d = Math.hypot(b.x - x, b.y - y);
       if (d >= bd) continue;
@@ -3014,7 +3024,7 @@ class Ort extends Phaser.Scene {
     if (!tauschOffen) {
       for (const [sid, o] of raum.state.spieler) {
         if (sid === meineId || o.unten || o.zombie > 0 || o.ebene !== ich.ebene) continue;
-        if (Math.hypot(o.x - x, o.y - y) < TAUSCH_ABSTAND + 6) return { art: 'tausch', mit: sid, text: `🤝 Tauschen mit ${o.name}` };
+        if (Math.hypot(o.x - x, o.y - y) < reichVon(w, TAUSCH_ABSTAND + 6)) return { art: 'tausch', mit: sid, text: `🤝 Tauschen mit ${o.name}` };
       }
     }
     return null;
@@ -3308,7 +3318,7 @@ class Ort extends Phaser.Scene {
     }
     if (zweit && knopf2.__text !== zweit.text) { knopf2.__text = zweit.text; knopf2.textContent = nurText(zweit.text); }
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
-    if (ich && this.lokal) auswahlPruefen(raum.state.boden, ich, { x: this.lokal.x, y: this.lokal.y });   // bleibt offen, aktualisiert sich, schließt nur wenn nichts mehr da ist
+    if (ich && this.lokal) auswahlPruefen(raum.state.boden, ich, { x: this.lokal.x, y: this.lokal.y }, reichVon(this.wv(ich.ebene), AKTION_ABSTAND));   // bleibt offen, aktualisiert sich, schließt nur wenn nichts mehr da ist
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
     tauschRucksack();
     if (handelOffen) handelZeigen(ich, this.welt.stuetzpunkt);

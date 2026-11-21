@@ -1771,7 +1771,7 @@ export class SpielRaum extends Room {
     const p = this.state.spieler.get(ich), q = this.state.spieler.get(du);
     if (!p || !q || ich === du || this.tausche.has(ich) || this.tausche.has(du)) return;
     if (p.unten || q.unten || p.zombie > 0 || q.zombie > 0 || p.ebene !== q.ebene) return;
-    if (Math.hypot(p.x - q.x, p.y - q.y) > TAUSCH_ABSTAND + 8) return client.send('meldung', { text: 'Zum Tauschen musst du direkt neben ihm stehen' });
+    if (Math.hypot(p.x - q.x, p.y - q.y) > reichVon(this.wv(p.ebene), TAUSCH_ABSTAND + 8)) return client.send('meldung', { text: 'Zum Tauschen musst du direkt neben ihm stehen' });
     const t = { seiten: [ich, du], angebot: { [ich]: [], [du]: [] }, ok: { [ich]: false, [du]: false } };
     this.tausche.set(ich, t); this.tausche.set(du, t);
     this.tauschGeaendert(t);
@@ -2360,7 +2360,7 @@ export class SpielRaum extends Room {
     const p = this.state.spieler.get(client.sessionId);
     if (!p || p.unten || p.zombie > 0 || this.state.phase !== 'spiel' || typeof m?.id !== 'string') return;
     const b = this.state.boden.get(m.id);
-    if (!b || (b.ebene ?? '') !== p.ebene || Math.hypot(b.x - p.x, b.y - p.y) >= AKTION_ABSTAND) return;
+    if (!b || (b.ebene ?? '') !== p.ebene || Math.hypot(b.x - p.x, b.y - p.y) >= reichVon(this.wv(p.ebene), AKTION_ABSTAND)) return;
     const d = b.ding;
     // wandert der Gegenstand nicht in den Rucksack (Waffe/Munition/Lampe/Kleidung), braucht er keinen Platz
     if (this.bodenBrauchtPlatz(p, d)) {
@@ -2418,7 +2418,7 @@ export class SpielRaum extends Room {
     const p = this.state.spieler.get(client.sessionId);
     if (!p || p.unten || p.zombie > 0) return;
     const s = safeRoomVon(this.welt, p), k = s && this.wv(s.ebene).kuehlschrank;
-    if (!k || Math.hypot(k.x - p.x, k.y - p.y) > AKTION_ABSTAND + 24) return;
+    if (!k || Math.hypot(k.x - p.x, k.y - p.y) > reichVon(this.wv(p.ebene), AKTION_ABSTAND + 24)) return;
     const sage = text => client.send('meldung', { text });
     const stunde = (SpielRaum.einstellungen.tagMinuten || 48) * 60 / 24;
     const schluessel = this.extra.get(client.sessionId)?.spielerId ?? client.sessionId;
@@ -2460,7 +2460,7 @@ export class SpielRaum extends Room {
     if (lk) kiste = this.state.safes.get(lk.id).kiste;
     else {
       const s = safeRoomVon(this.welt, p), k = s && this.wv(s.ebene).kiste;
-      if (!k || Math.hypot(k.x - p.x, k.y - p.y) > AKTION_ABSTAND + 24) return;
+      if (!k || Math.hypot(k.x - p.x, k.y - p.y) > reichVon(this.wv(p.ebene), AKTION_ABSTAND + 24)) return;
       kiste = this.state.safes.get(s.id).kiste;
     }
     const i = Number(m?.platz);
