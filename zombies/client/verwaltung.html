@@ -697,6 +697,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
   <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
+  <label for="tnInnenTempo">Tempo in maßstäblichen Innenräumen (% vom Tempo draußen; drinnen sind Figuren halb so groß und die Kamera ist näher)</label>
+  <div class="tn-zeile"><input type="range" id="tnInnenTempo" min="10" max="100" step="2"><span id="tnInnenTempoWert">35 %</span></div>
+  <label class="tn-schalter"><input type="checkbox" id="tnInnen"> Maßstäbliche Innenräume (echter Grundriss, Wände 25 cm, Möbel in echten Maßen; wirkt sofort – wer drinnen ist, kommt an die Haustür)</label>
   <label for="tnZLeben">Lebenspunkte eines Zombies (100 = normal; ein Kriecher hat danach 35 % davon)</label>
   <div class="tn-zeile"><input type="range" id="tnZLeben" min="20" max="500" step="5"><span id="tnZLebenWert">100</span></div>
   <p class="tn-leise" id="tnZLebenHinweis"></p>
@@ -1010,6 +1013,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     feld('tnNebelZombie', nb.zombie === undefined ? 50 : nb.zombie, function (v) { return v + ' %'; });
     if (document.activeElement !== $('tnBlaulicht')) $('tnBlaulicht').value = e.blaulicht || 'selten';
     if (document.activeElement !== $('tnKegel')) $('tnKegel').checked = !!e.sichtkegel;
+    if (document.activeElement !== $('tnInnen')) $('tnInnen').checked = !!e.innenMassstab;
+    feld('tnInnenTempo', e.innenTempo === undefined ? 35 : e.innenTempo, function (v) { return v + ' %'; });
     var rw = e.reichweite || {};
     feld('rwPistole', rw.pistole || 29, function (v) { return v + ' m'; });
     feld('rwGewehr', rw.gewehr || 52, function (v) { return v + ' m'; });
@@ -1110,6 +1115,10 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   $('tnKegel').addEventListener('change', function () {
     anfrage('verwaltung/api', { sichtkegel: $('tnKegel').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
+  $('tnInnen').addEventListener('change', function () {
+    anfrage('verwaltung/api', { innenMassstab: $('tnInnen').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
+  regler('tnInnenTempo', function (v) { return v + ' %'; }, function (v) { return { innenTempo: v }; });
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { verwandlung: v }; });
   regler('tnMGroesse', function (v) { return v + ' %'; }, function (v) { return { menschenGroesse: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });

@@ -2,7 +2,7 @@
 // dem Anführer, Abstand zu allen Figuren, bewaffnete Bots kämpfen. Ein Bot steuert sich nur über x.eingabe.
 import { hat, zaehle, flach, entferne, nimmEins, fuegeHinzu, kannAufnehmen, freiePlaetze, dingId } from '../client/stapel.mjs';
 import { planSchritt, entnahmeFrei } from './botplan.mjs';   // Team-Planer (Aufträge, Rollen, Chat-Befehle)
-import { WERTE as W, frei, sichtfrei, sichtGuete, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE, durchsuchDauer, MUNITION_MAX, munitionGesamt } from '../client/welt.mjs';
+import { WERTE as W, frei, sichtfrei, sichtGuete, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, kachelVon, reichVon, tempoVon, KISTE_PLAETZE, durchsuchDauer, MUNITION_MAX, munitionGesamt } from '../client/welt.mjs';
 
 export const BOT_NAMEN = ['Resi', 'Vroni', 'Sepp', 'Wastl', 'Kathi', 'Hias', 'Burgi', 'Girgl', 'Loisl', 'Zenzi'];
 
@@ -136,7 +136,7 @@ function vorratskiste(raum, sid, p, x, welt) {
   const b = x.bot, u0 = ueberzaehlig(p), ueber = u0 && kannAufnehmen(kiste, KISTE_PLAETZE, u0, 1, true) ? u0 : null;
   const fehlt = [...kiste].findIndex(e => { const d = dingId(e); return kannAufnehmen(p.rucksack, p.plaetze, d) && brauchtDringend(p, d) && willHaben(p, d) && entnahmeFrei(raum, d, p); });
   if (!ueber && fehlt < 0) return false;
-  if (abstand(p, welt.kiste) > AKTION_ABSTAND - 4) { geheZu(raum, sid, p, x, welt.kiste, 0.8, AKTION_ABSTAND - 10); return true; }
+  if (abstand(p, welt.kiste) > reichVon(welt, AKTION_ABSTAND - 4)) { geheZu(raum, sid, p, x, welt.kiste, 0.8, reichVon(welt, AKTION_ABSTAND - 10)); return true; }
   if (raum.uhr - (b.kisteZeit ?? 0) < 0.8) return true;
   b.kisteZeit = raum.uhr;
   if (ueber) { entferne(p.rucksack, ueber, 1); fuegeHinzu(kiste, KISTE_PLAETZE, ueber, 1, true); }
@@ -154,7 +154,7 @@ function aufheben(raum, sid, p, x, welt) {
   }
   const ziel = naechster(kandidaten, p, 220, c => sichtfrei(welt, p.x, p.y, c.x, c.y));
   if (!ziel) return false;
-  if (abstand(p, ziel) > AKTION_ABSTAND - 8) { geheZu(raum, sid, p, x, ziel, 0.9, AKTION_ABSTAND - 12); return true; }
+  if (abstand(p, ziel) > reichVon(welt, AKTION_ABSTAND - 8)) { geheZu(raum, sid, p, x, ziel, 0.9, reichVon(welt, AKTION_ABSTAND - 12)); return true; }
   p.aktion = 'aufheben'; p.fortschritt = 0; x.aktionZiel = { art: 'aufheben', id: ziel.id, dauer: 0.4 };
   return true;
 }
@@ -173,7 +173,7 @@ function durchsuchen(raum, sid, p, x, welt) {
   for (const [id, l] of raum.state.leichen) if ((l.ebene ?? '') === (p.ebene ?? '') && l.rest !== 0 && !b.durchsucht.has(id)) kandidaten.push({ id, x: l.x, y: l.y, leiche: true });
   const ziel = naechster(kandidaten, p, 170, c => sichtfrei(welt, p.x, p.y, c.x, c.y));
   if (!ziel) return false;
-  if (abstand(p, ziel) > AKTION_ABSTAND - 8) { geheZu(raum, sid, p, x, ziel, 0.9, AKTION_ABSTAND - 12); return true; }
+  if (abstand(p, ziel) > reichVon(welt, AKTION_ABSTAND - 8)) { geheZu(raum, sid, p, x, ziel, 0.9, reichVon(welt, AKTION_ABSTAND - 12)); return true; }
   // genau diesen Behälter durchsuchen (nicht, was zufällig am nächsten liegt – z. B. ein verschlossenes Auto)
   b.durchsucht.add(ziel.id);
   const behaelter = ziel.leiche ? { id: ziel.id, art: 'leiche', x: ziel.x, y: ziel.y } : ziel;
@@ -186,23 +186,25 @@ function durchsuchen(raum, sid, p, x, welt) {
 const TUER_ARTEN = new Set([T.TUER, T.AUSGANG, T.TREPPE_RUNTER, T.TREPPE_HOCH, T.INNENTUER, T.TUER_OFFEN]);
 // Mitte der nächsten Tür/Treppe (Haustür, Innentür, Ausgang) im Umkreis r um p, sonst null
 function tuerNahe(welt, p, r = 44) {
-  const kx = Math.floor(p.x / KACHEL), ky = Math.floor(p.y / KACHEL);
+  const K = kachelVon(welt), n = welt.kachel ? Math.ceil(r / K) : 1;   // Feinraster: Zellen sind klein, Suchbereich entsprechend größer
+  const kx = Math.floor(p.x / K), ky = Math.floor(p.y / K);
   let best = null, bd = r;
-  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+  for (let dy = -n; dy <= n; dy++) for (let dx = -n; dx <= n; dx++) {
     if (!TUER_ARTEN.has(welt.hole(kx + dx, ky + dy))) continue;
-    const m = { x: (kx + dx + 0.5) * KACHEL, y: (ky + dy + 0.5) * KACHEL }, d = abstand(p, m);
+    const m = { x: (kx + dx + 0.5) * K, y: (ky + dy + 0.5) * K }, d = abstand(p, m);
     if (d < bd) { bd = d; best = m; }
   }
   return best;
 }
 // Standplatz neben einer Tür (nicht in ihrem Bereich, nicht auf einer anderen Figur), von der Tür aus gesehen in Richtung des Bots
 function ausweichPunkt(raum, sid, p, welt, tuer, vonWo = null) {
-  const a0 = abstand(p, tuer) > 3 ? Math.atan2(p.y - tuer.y, p.x - tuer.x) : (vonWo ? Math.atan2(tuer.y - vonWo.y, tuer.x - vonWo.x) : 0);
-  for (const r of [58, 72]) for (const dw of [0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, Math.PI]) {
+  const R = welt.reich ?? 1;
+  const a0 = abstand(p, tuer) > 3 * R ? Math.atan2(p.y - tuer.y, p.x - tuer.x) : (vonWo ? Math.atan2(tuer.y - vonWo.y, tuer.x - vonWo.x) : 0);
+  for (const r of [58 * R, 72 * R]) for (const dw of [0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, Math.PI]) {
     const z = { x: tuer.x + Math.cos(a0 + dw) * r, y: tuer.y + Math.sin(a0 + dw) * r };
-    if (!frei(welt, z.x, z.y, RAD) || tuerNahe(welt, z, 44) || !sichtfrei(welt, p.x, p.y, z.x, z.y)) continue;
+    if (!frei(welt, z.x, z.y, RAD) || tuerNahe(welt, z, 44 * R) || !sichtfrei(welt, p.x, p.y, z.x, z.y)) continue;
     let besetzt = false;
-    for (const [osid, o] of raum.state.spieler) if (osid !== sid && o.ebene === p.ebene && abstand(o, z) < 24) { besetzt = true; break; }
+    for (const [osid, o] of raum.state.spieler) if (osid !== sid && o.ebene === p.ebene && abstand(o, z) < 24 * R) { besetzt = true; break; }
     if (!besetzt) return z;
   }
   return null;
@@ -210,38 +212,47 @@ function ausweichPunkt(raum, sid, p, welt, tuer, vonWo = null) {
 // Reihenfolge am Übergang: wer näher an der Tür ist (bei Gleichstand die kleinere Id), geht zuerst; Rang 0 = dran.
 // Menschen, die gerade in der Tür stehen, zählen als „davor“.
 function tuerRang(raum, sid, p, ziel) {
-  const d = abstand(p, ziel);
+  const d = abstand(p, ziel), R = raum.wv(p.ebene).reich ?? 1;
   let rang = 0;
   for (const [osid, o] of raum.state.spieler) {
     if (osid === sid || o.ebene !== p.ebene || o.unten) continue;
     const ox = raum.extra.get(osid);
     if (ox?.bot) {
       const z = ox.bot.uebergangZiel;
-      if (!z || abstand(z, ziel) > 6) continue;
+      if (!z || abstand(z, ziel) > 6 * R) continue;
       const dO = abstand(o, ziel);
-      if (dO < d - 3 || (Math.abs(dO - d) <= 3 && osid < sid)) rang++;
-    } else if (abstand(o, ziel) < 26 && abstand(o, ziel) < d) rang++;
+      if (dO < d - 3 * R || (Math.abs(dO - d) <= 3 * R && osid < sid)) rang++;
+    } else if (abstand(o, ziel) < 26 * R && abstand(o, ziel) < d) rang++;
   }
   return rang;
 }
 
+// begehbare Punkte um ein nicht begehbares Ziel (Möbelmitte), vom Bot aus gesehen die nächsten zuerst (Ringe 5–11 px, 16 Richtungen)
+function zugangsPunkte(welt, p, ziel) {
+  const l = [];
+  for (let r = 5; r <= 11; r += 2) for (let i = 0; i < 16; i++) {
+    const q = { x: ziel.x + Math.cos(i * Math.PI / 8) * r, y: ziel.y + Math.sin(i * Math.PI / 8) * r };
+    if (frei(welt, q.x, q.y, RAD)) l.push({ q, d: abstand(p, q) });
+  }
+  return l.sort((a, b) => a.d - b.d).map(e => e.q);
+}
 // zum Ziel gehen: Weg berechnen (gelegentlich neu), Wegpunkten folgen, Abstand zu anderen halten
 function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
   const b = x.bot, jetzt = raum.uhr;
+  const welt = raum.wv(p.ebene), R = welt.reich ?? 1;   // R: Maßstab der Nahbereichs-Abstände (drinnen im Feinraster kleiner)
   if (abstand(p, ziel) < halt) { x.eingabe = { dx: 0, dy: 0, s: false }; b.messPos = null; return true; }
-  const welt = raum.wv(p.ebene);
   // Übergang (Tür/Treppe): in der Reihe warten, nur der Vorderste geht durch; die anderen stehen seitlich der Tür
   const anTuer = b.uebergangZiel === ziel;
   let dran = true;
-  if (anTuer && abstand(p, ziel) < 110) {
+  if (anTuer && abstand(p, ziel) < 110 * R) {
     const rang = tuerRang(raum, sid, p, ziel);
     if (rang > 0) {
       b.wartetSeit ??= jetzt;
       if (jetzt - b.wartetSeit < 3) {
         dran = false;
         const dz = abstand(p, ziel);
-        if (!b.warteOrt || abstand(b.warteOrt, ziel) < 44 || jetzt > (b.warteBis ?? 0)) { b.warteOrt = ausweichPunkt(raum, sid, p, welt, ziel); b.warteBis = jetzt + 1.5; }
-        if (b.warteOrt && abstand(p, b.warteOrt) > 8 && dz < 110) {
+        if (!b.warteOrt || abstand(b.warteOrt, ziel) < 44 * R || jetzt > (b.warteBis ?? 0)) { b.warteOrt = ausweichPunkt(raum, sid, p, welt, ziel); b.warteBis = jetzt + 1.5; }
+        if (b.warteOrt && abstand(p, b.warteOrt) > 8 * R && dz < 110 * R) {
           const w = b.warteOrt, l = abstand(p, w) || 1;
           x.eingabe = { dx: (w.x - p.x) / l * 0.8, dy: (w.y - p.y) / l * 0.8, s: false };
         } else x.eingabe = { dx: 0, dy: 0, s: false };
@@ -250,32 +261,41 @@ function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
       }
     } else b.wartetSeit = null;
   } else if (!anTuer) b.wartetSeit = null;
-  const neu = !b.weg || jetzt - b.wegZeit > 0.8 || !b.wegZiel || abstand(b.wegZiel, ziel) > 40;
+  const neu = !b.weg || jetzt - b.wegZeit > 0.8 || !b.wegZiel || abstand(b.wegZiel, ziel) > 40 * R;
   if (neu) {
-    b.weg = findeWeg(welt, p.x, p.y, ziel.x, ziel.y, RAD, 40000, true) ?? [{ x: ziel.x, y: ziel.y }];
+    let weg = findeWeg(welt, p.x, p.y, ziel.x, ziel.y, RAD, 40000, true);
+    b.wegIstZugang = false;
+    if (!weg && welt.kachel) {   // maßstäbliche Innenräume: Ziel ist oft die Mitte eines Möbelstücks (nicht begehbar) – an den nächsten freien Punkt davor gehen
+      for (const q of zugangsPunkte(welt, p, ziel).slice(0, 8)) {   // der erste Punkt mit Weg (ein Punkt in einer abgeschlossenen Lücke zwischen Möbeln hat keinen)
+        weg = findeWeg(welt, p.x, p.y, q.x, q.y, RAD, 40000, true);
+        if (weg) { b.wegIstZugang = true; break; }
+      }
+    }
+    b.weg = weg ?? [{ x: ziel.x, y: ziel.y }];
     b.wegZeit = jetzt; b.wegZiel = { x: ziel.x, y: ziel.y };
   }
-  while (b.weg.length > 1 && abstand(p, b.weg[0]) < 10) b.weg.shift();
+  while (b.weg.length > 1 && abstand(p, b.weg[0]) < 10 * R) b.weg.shift();
   const wp = b.weg[0];
+  if (b.wegIstZugang && b.weg.length === 1 && abstand(p, wp) < 2.5 * R) { x.eingabe = { dx: 0, dy: 0, s: false }; b.messPos = null; return true; }   // am Zugangspunkt vor dem Möbelstück angekommen
   let dx = wp.x - p.x, dy = wp.y - p.y;
   const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
   // Abstand zu anderen Figuren (nicht durch Mitspieler hindurchdrängeln)
   // (wer an der Tür dran ist oder festhängt, drängelt nicht mit)
-  const nahTuer = anTuer && dran && abstand(p, ziel) < 80;
+  const nahTuer = anTuer && dran && abstand(p, ziel) < 80 * R;
   if (!nahTuer && jetzt >= (b.ohneAbstand ?? 0)) for (const [osid, o] of raum.state.spieler) {
     if (osid === sid || o.ebene !== p.ebene || !raum.extra.get(osid)?.bot) continue;
     const d = abstand(p, o);
-    if (d > 0 && d < 44) { dx += (p.x - o.x) / d * (44 - d) / 44 * 1.4; dy += (p.y - o.y) / d * (44 - d) / 44 * 1.4; }
+    if (d > 0 && d < 44 * R) { dx += (p.x - o.x) / d * (44 * R - d) / (44 * R) * 1.4; dy += (p.y - o.y) / d * (44 * R - d) / (44 * R) * 1.4; }
   }
   const n = Math.hypot(dx, dy) || 1;
   // festhängen: nach 1 s ohne Fortschritt Weg neu und kurz seitlich
   b.messZeit = (b.messZeit ?? 0) + raum.dt;
   if (b.messZeit > 1) {
-    if (b.messPos && abstand(b.messPos, p) < 6) {
+    if (b.messPos && abstand(b.messPos, p) < 6 * tempoVon(welt)) {
       // Türen sind enge Stellen: öfter festgehangen → länger seitlich, und für 2 s nicht mehr von anderen Bots abdrängen lassen
       b.weg = null; b.festZahl = (b.festZahl ?? 0) + 1;
       b.seitlich = 0.5 + 0.25 * Math.min(b.festZahl, 3); b.seite = -(b.seite || 1);
-      if (b.festZahl >= 2 || tuerNahe(welt, p, 60)) b.ohneAbstand = jetzt + 2;
+      if (b.festZahl >= 2 || tuerNahe(welt, p, 60 * R)) b.ohneAbstand = jetzt + 2;
     } else b.festZahl = 0;
     b.messZeit = 0; b.messPos = { x: p.x, y: p.y };
   }
@@ -283,7 +303,7 @@ function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
     b.seitlich -= raum.dt;
     for (const sg of [b.seite, -b.seite]) {
       const sx = -dy / n * sg, sy = dx / n * sg;
-      if (frei(welt, p.x + sx * 20, p.y + sy * 20, RAD)) { x.eingabe = { dx: sx, dy: sy, s: false }; return false; }
+      if (frei(welt, p.x + sx * 20 * R, p.y + sy * 20 * R, RAD)) { x.eingabe = { dx: sx, dy: sy, s: false }; return false; }
     }
   }
   x.eingabe = { dx: dx / n * tempo, dy: dy / n * tempo, s: tempo < 0.55 };
@@ -308,19 +328,19 @@ export function botSchritt(raum, sid, p, x, dt) {
   versorgen(p, b, raum.uhr);
   // beim Durchsuchen stillstehen – außer ein Zombie kommt zu nah
   if (p.aktion) {
-    const nah = [...raum.state.zombies.values()].some(z => (z.ebene ?? '') === (p.ebene ?? '') && abstand(p, z) < 110);
+    const nah = [...raum.state.zombies.values()].some(z => (z.ebene ?? '') === (p.ebene ?? '') && abstand(p, z) < 110 * (raum.wv(p.ebene).reich ?? 1));
     if (!nah) return;
     p.aktion = ''; p.fortschritt = 0; x.aktionZiel = null;
   }
 
-  const welt = raum.wv(p.ebene);
+  const welt = raum.wv(p.ebene), R = welt.reich ?? 1;
   const alleSpieler = [...raum.state.spieler.entries()];
   const spieler = alleSpieler.filter(([, o]) => o.ebene === p.ebene);
   const zombies = [...raum.state.zombies.values()].filter(z => (z.ebene ?? '') === p.ebene);
 
   // 1. Liegenden Mitspieler aufhelfen
   const liegend = naechster(spieler.map(([, o]) => o), p, 420, o => o !== p && o.unten && !(o.zombie > 0));
-  if (liegend) { geheZu(raum, sid, p, x, liegend, 1, 24); return; }
+  if (liegend) { geheZu(raum, sid, p, x, liegend, 1, 24 * R); return; }
 
   // 2. Kämpfen oder fliehen
   const waffe = bewaffnet(p);
@@ -329,23 +349,23 @@ export function botSchritt(raum, sid, p, x, dt) {
     const d = abstand(p, gefahr);
     if (waffe === 'fern') {
       // Schussabstand halten: zu nah → zurück, zu weit → heran (schießen tut der Server)
-      if (d < 90) { const w = Math.atan2(p.y - gefahr.y, p.x - gefahr.x); const ziel = { x: p.x + Math.cos(w) * 60, y: p.y + Math.sin(w) * 60 }; if (frei(welt, ziel.x, ziel.y, RAD)) { geheZu(raum, sid, p, x, ziel); return; } }
-      else if (d > 200) { geheZu(raum, sid, p, x, gefahr, 1, 180); return; }
+      if (d < 90 * R) { const w = Math.atan2(p.y - gefahr.y, p.x - gefahr.x); const ziel = { x: p.x + Math.cos(w) * 60 * R, y: p.y + Math.sin(w) * 60 * R }; if (frei(welt, ziel.x, ziel.y, RAD)) { geheZu(raum, sid, p, x, ziel); return; } }
+      else if (d > 200 * R) { geheZu(raum, sid, p, x, gefahr, 1, 180 * R); return; }
       else return;   // im Schussabstand stehen bleiben
     } else if (waffe === 'nah') {
       // auf Zombies losgehen, die jemanden jagen oder nah sind
-      if (gefahr.jagt || d < 80) { geheZu(raum, sid, p, x, gefahr, 1, 22); return; }
-    } else if (gefahr.jagt && d < 100) {
+      if (gefahr.jagt || d < 80 * R) { geheZu(raum, sid, p, x, gefahr, 1, 22 * R); return; }
+    } else if (gefahr.jagt && d < 100 * R) {
       const w = Math.atan2(p.y - gefahr.y, p.x - gefahr.x);
       for (const dw of [0, 0.6, -0.6, 1.2, -1.2]) {
-        const ziel = { x: p.x + Math.cos(w + dw) * 70, y: p.y + Math.sin(w + dw) * 70 };
+        const ziel = { x: p.x + Math.cos(w + dw) * 70 * R, y: p.y + Math.sin(w + dw) * 70 * R };
         if (frei(welt, ziel.x, ziel.y, RAD)) { geheZu(raum, sid, p, x, ziel); return; }
       }
     }
   }
 
   // 2a. Team-Planer (botplan.mjs): Auftrag ausführen (holen, funken, barrikadieren, jagen, Bus …), sonst weiter unten wie bisher
-  if (!afk && (!gefahr || (!gefahr.jagt && abstand(p, gefahr) > 90)) && planSchritt(raum, sid, p, x, { geheZu })) return;
+  if (!afk && (!gefahr || (!gefahr.jagt && abstand(p, gefahr) > 90 * R)) && planSchritt(raum, sid, p, x, { geheZu })) return;
 
   // 2b. Gelegenheit: Überzähliges ablegen, Brauchbares aufheben, in der Nähe durchsuchen – solange der Mensch nicht weit weg ist
   // sind alle Menschen auf einer anderen Ebene (z. B. schon draußen), hat Folgen Vorrang vor Kiste und Ablegen
@@ -359,7 +379,7 @@ export function botSchritt(raum, sid, p, x, dt) {
   const ueberall = alleSpieler.filter(([s, o]) => echt(s) && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
   if (ueberall.length && !ueberall.some(o => o.ebene === p.ebene)) {
     const punkt = raum.uebergangsPunkt(p.ebene, ueberall[0].ebene);
-    if (punkt) { b.uebergangZiel = punkt; geheZu(raum, sid, p, x, punkt, 1, 2); return; }
+    if (punkt) { b.uebergangZiel = punkt; geheZu(raum, sid, p, x, punkt, 1, 2 * R); return; }
   }
   const menschen = spieler.filter(([s, o]) => echt(s) && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
   const anfuehrer = naechster(menschen, p, Infinity);
@@ -383,26 +403,26 @@ export function botSchritt(raum, sid, p, x, dt) {
     // Begleiter: feste, weit verteilte Plätze hinter dem Menschen – kein Zurückweichen, wenn er herankommt
     const n = Math.min(2, Math.max(1, bots.length));
     const winkel = anfuehrer.richtung + Math.PI + ((nr % 2) - (n - 1) / 2) * 1.1;
-    const entf = drinnen ? 55 : 75 + (nr % 2) * 30;
+    const entf = drinnen ? 55 * R : 75 + (nr % 2) * 30;
     let platz = { x: anfuehrer.x + Math.cos(winkel) * entf, y: anfuehrer.y + Math.sin(winkel) * entf };
     if (!frei(welt, platz.x, platz.y, RAD) || !sichtfrei(welt, anfuehrer.x, anfuehrer.y, platz.x, platz.y)) platz = anfuehrer;
     // nah genug: stehen bleiben (auch wenn der Mensch auf den Bot zugeht) – im Safe Room aber nicht vor der Eingangstür
     // – nie in einer Tür (Haustür, Innentür, Ausgang, Treppe) stehen bleiben: seitlich daneben Platz machen
-    const tuerPunkt = tuerNahe(welt, p, 46);
-    if (d < 70 && !tuerPunkt) return;
-    if (d < 70 && tuerPunkt) {
+    const tuerPunkt = tuerNahe(welt, p, 46 * R);
+    if (d < 70 * R && !tuerPunkt) return;
+    if (d < 70 * R && tuerPunkt) {
       const aus = ausweichPunkt(raum, sid, p, welt, tuerPunkt, anfuehrer);
-      if (aus) { geheZu(raum, sid, p, x, aus, 0.8, 8); return; }
+      if (aus) { geheZu(raum, sid, p, x, aus, 0.8, 8 * R); return; }
       return;
     }
     const tempo = anfuehrer.schleicht ? 0.45 : d > 180 ? 1 : 0.8;
-    geheZu(raum, sid, p, x, platz, tempo, platz === anfuehrer ? 60 : 18);
+    geheZu(raum, sid, p, x, platz, tempo, (platz === anfuehrer ? 60 : 18) * R);
     return;
   }
 
   // 4. Niemand da: nach draußen und in den nächsten Safe Room
   if (safeRoomVon(raum.welt, p)) return;   // schon im Safe Room: dort warten
-  if (p.ebene) { const raus = raum.uebergangsPunkt(p.ebene, ''); if (raus) { b.uebergangZiel = raus; geheZu(raum, sid, p, x, raus, 1, 2); } return; }
+  if (p.ebene) { const raus = raum.uebergangsPunkt(p.ebene, ''); if (raus) { b.uebergangZiel = raus; geheZu(raum, sid, p, x, raus, 1, 2 * R); } return; }
   const safe = naechster(raum.welt.safeRooms, p, Infinity, () => true, r => r.vorTuer);
-  if (safe) { const tuer = raum.uebergangsPunkt('', safe.ebene); b.uebergangZiel = tuer; geheZu(raum, sid, p, x, tuer, 1, 2); }
+  if (safe) { const tuer = raum.uebergangsPunkt('', safe.ebene); b.uebergangZiel = tuer; geheZu(raum, sid, p, x, tuer, 1, 2 * R); }
 }

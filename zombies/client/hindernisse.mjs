@@ -36,6 +36,19 @@ export function hindernisFelder(welt, fx0, fy0, nx, ny, rad = WERTE.spielerRadiu
   return aus;
 }
 
+// Maßstäbliche Innenräume (welt.kachel): ein Feld = eine Zelle (0,25 m); Grenze = Rastergröße des Raums
+export function hindernisFelderFein(welt, fx0, fy0, nx, ny, rad = WERTE.spielerRadius) {
+  const aus = new Uint8Array(nx * ny), K = welt.kachel;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const fx = fx0 + i, fy = fy0 + j, t = welt.hole(fx, fy);
+    let code = H_FREI;
+    if (BLOCKIERT.has(t)) code = H_FEST;
+    else if (!frei(welt, (fx + 0.5) * K, (fy + 0.5) * K, rad)) code = H_RAND;
+    aus[j * nx + i] = code;
+  }
+  return aus;
+}
+
 // Codes → RGBA-Bytes (für ImageData)
 export function hindernisPixel(codes, ziel) {
   for (let i = 0; i < codes.length; i++) { const c = H_FARBEN[codes[i]]; ziel[i * 4] = c[0]; ziel[i * 4 + 1] = c[1]; ziel[i * 4 + 2] = c[2]; ziel[i * 4 + 3] = c[3]; }

@@ -4,12 +4,12 @@ import { dingIcon, dingHtml } from './dingbild.mjs';
 import { dingId, dingN, kannAufnehmen, blockGrund } from './stapel.mjs';
 
 // Bodengegenstände im Aufhebe-Radius, nächster zuerst: [{ id, ding, d }]
-export function naheBodenDinge(boden, ich) {
+export function naheBodenDinge(boden, ich, weite = AKTION_ABSTAND) {
   const l = [];
   for (const [id, b] of boden) {
     if ((b.ebene ?? '') !== (ich.ebene ?? '')) continue;
     const d = Math.hypot(b.x - ich.x, b.y - ich.y);
-    if (d < AKTION_ABSTAND) l.push({ id, ding: b.ding, d });
+    if (d < weite) l.push({ id, ding: b.ding, d });
   }
   return l.sort((a, b) => a.d - b.d);
 }
@@ -84,9 +84,9 @@ export function auswahlAuf(raum, ich, dinge) {
 }
 
 // Pro Frame: Inhalt aktualisieren (nichts schließt von selbst, außer es ist nichts mehr zum Aufheben da)
-export function auswahlPruefen(boden, ich, pos) {
+export function auswahlPruefen(boden, ich, pos, weite = AKTION_ABSTAND) {
   if (!zustand || !leiste) return;
-  const nah = naheBodenDinge(boden, { x: pos.x, y: pos.y, ebene: ich.ebene }).filter(d => !zustand.weg.has(d.id));
+  const nah = naheBodenDinge(boden, { x: pos.x, y: pos.y, ebene: ich.ebene }, weite).filter(d => !zustand.weg.has(d.id));
   for (const id of [...zustand.weg]) if (!boden.has(id)) zustand.weg.delete(id);
   if (!nah.length) return auswahlZu();
   if (zustand.schritt !== 'wahl') {

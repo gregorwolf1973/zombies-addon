@@ -240,6 +240,11 @@ export function befehl(raum, client, m) {
       return '✅ Alle Aufgaben erledigt – die Evakuierung kann gerufen werden';
     }
     case 'hin': {
+      if (typeof m.ebene === 'string' && /^h\d+(eg|keller|dach)$/.test(m.ebene)) {   // Prüfhilfe: direkt in ein Haus (Start der Ebene bzw. Pixelort x/y dort)
+        const w = raum.wv(m.ebene), ox = Number.isFinite(Number(m.x)) ? Number(m.x) : w.start.x, oy = Number.isFinite(Number(m.y)) ? Number(m.y) : w.start.y;
+        springen(raum, p, x, { x: ox, y: oy, ebene: m.ebene });
+        return '📍 Du bist im Haus';
+      }
       const px = Number(m.x), py = Number(m.y);
       if (!Number.isFinite(px) || !Number.isFinite(py)) return 'Ungültiger Ort';
       const pos = platzSuchen(raum, Math.max(0, Math.min(px, BREITE * KACHEL)), Math.max(0, Math.min(py, HOEHE * KACHEL)));

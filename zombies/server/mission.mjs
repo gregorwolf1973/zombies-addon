@@ -62,6 +62,7 @@ export function ortText(haus) {
 export function behaelterAufKarte(seed, welt, nr, b) {
   const h = welt.haeuser[nr], w = innenraumFuer(seed, welt, `h${nr}eg`);
   if (!h || !w?.b || !w?.h) return [((h?.x ?? 0) + (h?.b ?? 0) / 2) * KACHEL, ((h?.y ?? 0) + (h?.h ?? 0) / 2) * KACHEL];
+  if (w.zuKarte) return w.zuKarte(b.x, b.y);   // maßstäbliche Innenräume: exakt (Umkehrung der Ausrichtung am Umriss)
   const rx = Math.max(0, Math.min(1, (b.x / KACHEL - w.ox) / w.b)), ry = Math.max(0, Math.min(1, (b.y / KACHEL - w.oy) / w.h));
   return [Math.round((h.x + rx * h.b) * KACHEL), Math.round((h.y + ry * h.h) * KACHEL)];
 }

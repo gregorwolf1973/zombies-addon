@@ -5,7 +5,7 @@
 // verbarrikadiert, jagt Zombies in Gruppennähe, geht zum Bus). Chat-Befehle der Menschen: botBefehl().
 // Die Hilfsfunktionen aus bots.mjs (geheZu …) kommen als Parameter H, damit es keine Importschleife gibt.
 import { hat, zaehle, flach, indexVon, entferne, nimmEins, fuegeHinzu, kannAufnehmen } from '../client/stapel.mjs';
-import { WERTE as W, findeWeg, KACHEL, AKTION_ABSTAND, BUS_ABSTAND, BEUTE, WAFFEN, KISTE_PLAETZE, istNacht, frei, ladenArt, durchsuchDauer, safeRoomVon, munitionGesamt } from '../client/welt.mjs';
+import { WERTE as W, findeWeg, KACHEL, kachelVon, reichVon, AKTION_ABSTAND, BUS_ABSTAND, BEUTE, WAFFEN, KISTE_PLAETZE, istNacht, frei, ladenArt, durchsuchDauer, safeRoomVon, munitionGesamt } from '../client/welt.mjs';
 import { EBENE_MUSTER } from '../client/innen.mjs';
 import { hhmm } from './aufgaben.mjs';
 
@@ -241,7 +241,7 @@ function jagdZiel(raum, p, menschen, bots, sid) {
 function gehe(raum, sid, p, x, H, a, ziel, key, tempo = 1, halt = 14) {
   const bp = zustand(raum), key2 = key + '@' + (p.ebene ?? ''), d = abstand(p, ziel), f = a.fort;
   if (!f || f.key !== key2) a.fort = { key: key2, d, t: raum.uhr };
-  else if (d < f.d - 10) { f.d = d; f.t = raum.uhr; }
+  else if (d < f.d - 10 * (raum.wv(p.ebene).reich ?? 1)) { f.d = d; f.t = raum.uhr; }
   else if (raum.uhr - f.t > BOTPLAN.verwerfenNach) {
     bp.gesperrt.set(key, raum.uhr + BOTPLAN.sperrzeit);
     a.fort = null; a.ziel = null; x.eingabe = { dx: 0, dy: 0, s: false };
@@ -256,7 +256,7 @@ function reise(raum, sid, p, x, H, a, zielEbene, sperrKey = 'u:' + zielEbene) {
   const punkt = raum.uebergangsPunkt(p.ebene ?? '', zielEbene);
   if (!punkt) return false;
   x.bot.uebergangZiel = punkt;
-  const r = gehe(raum, sid, p, x, H, a, punkt, sperrKey, 1, 2);
+  const r = gehe(raum, sid, p, x, H, a, punkt, sperrKey, 1, 2 * (raum.wv(p.ebene).reich ?? 1));
   return r === 'unterwegs';
 }
 function standpunkt(welt, p, rechtecke) {
@@ -332,7 +332,7 @@ function barrikadeAusfuehren(raum, sid, p, x, H, a) {
     if (i >= 0 && kannAufnehmen(p.rucksack, p.plaetze, 'bretter')) {
       if (reise(raum, sid, p, x, H, a, s.ebene)) return true;
       const k = raum.wv(s.ebene).kiste;
-      if (abstand(p, k) > AKTION_ABSTAND - 4) { gehe(raum, sid, p, x, H, a, k, 'k:' + id, 0.9, AKTION_ABSTAND - 10); return true; }
+      if (abstand(p, k) > reichVon(raum.wv(s.ebene), AKTION_ABSTAND - 4)) { gehe(raum, sid, p, x, H, a, k, 'k:' + id, 0.9, reichVon(raum.wv(s.ebene), AKTION_ABSTAND - 10)); return true; }
       if (raum.uhr - (x.bot.kisteZeit ?? 0) < 0.8) { still(x); return true; }
       x.bot.kisteZeit = raum.uhr; nimmEins(kiste, i); fuegeHinzu(p.rucksack, p.plaetze, 'bretter'); return true;
     }
@@ -343,7 +343,7 @@ function barrikadeAusfuehren(raum, sid, p, x, H, a) {
   const w = raum.wv(s.ebene), spot = raum.nebenKachel(w, w.ausgang);
   const k = raum.kontext(p);
   if (k && (k.art === 'barrikade' || k.art === 'wegziehen')) { startAktion(p, x, k.art, k); a.fort = null; return true; }
-  const r = gehe(raum, sid, p, x, H, a, spot, 'bar:' + id, 0.9, 8);
+  const r = gehe(raum, sid, p, x, H, a, spot, 'bar:' + id, 0.9, 8 * (w.reich ?? 1));
   if (r === 'verworfen') { x.bot.plan.auftrag = null; x.bot.plan.pause = raum.uhr + 15; return false; }
   return true;
 }
@@ -492,8 +492,8 @@ function liefern(raum, sid, p, x, H, a, liste) {
   if (reise(raum, sid, p, x, H, a, s.ebene)) return true;
   const w = raum.wv(s.ebene), k = w.kiste;
   if (!k) { fertig(raum, b, a); return false; }
-  if (abstand(p, k) > AKTION_ABSTAND - 4) {
-    const r = gehe(raum, sid, p, x, H, a, k, 'k:' + s.id, 0.9, AKTION_ABSTAND - 10);
+  if (abstand(p, k) > reichVon(w, AKTION_ABSTAND - 4)) {
+    const r = gehe(raum, sid, p, x, H, a, k, 'k:' + s.id, 0.9, reichVon(w, AKTION_ABSTAND - 10));
     if (r === 'verworfen') { a.safe = null; fertig(raum, b, a); return false; }
     return true;
   }
@@ -534,7 +534,7 @@ function lampeAusfuehren(raum, sid, p, x, H, a, menschen) {
 // Standplatz neben einem Behälter (Regale und Schränke selbst sind nicht begehbar): freier Punkt in der Nähe mit Weg dorthin
 function behaelterStand(raum, p, bh) {
   const welt = raum.wv(p.ebene), c = [];
-  for (const r of [28, 34, 42]) for (let i = 0; i < 8; i++) {
+  for (const r of welt.kachel ? [7, 9, 11] : [28, 34, 42]) for (let i = 0; i < 8; i++) {   // Feinraster: am Möbel steht man dicht dran (Reichweite 14 px)
     const q = { x: bh.x + Math.cos(i * Math.PI / 4) * r, y: bh.y + Math.sin(i * Math.PI / 4) * r };
     if (frei(welt, q.x, q.y, RAD)) c.push(q);
   }
@@ -550,10 +550,11 @@ function zielAnsteuern(raum, sid, p, x, H, a) {
     return reise(raum, sid, p, x, H, a, ebene, 'h:' + z.nr) || (a.ziel = null, false);
   }
   if ((p.ebene ?? '') !== z.ebene) { a.ziel = null; return false; }
-  if (abstand(p, z.b) > AKTION_ABSTAND - 4 && !(z.stand && abstand(p, z.stand) < 16)) {
+  const wz = raum.wv(p.ebene);
+  if (abstand(p, z.b) > reichVon(wz, AKTION_ABSTAND - 4) && !(z.stand && abstand(p, z.stand) < 16 * (wz.reich ?? 1))) {
     if (z.stand === undefined) z.stand = behaelterStand(raum, p, z.b);
     if (!z.stand) { bp.gesperrt.set('b:' + z.id, raum.uhr + BOTPLAN.sperrzeit); a.ziel = null; return false; }
-    const r = gehe(raum, sid, p, x, H, a, z.stand, 'b:' + z.id, 0.9, 8);
+    const r = gehe(raum, sid, p, x, H, a, z.stand, 'b:' + z.id, 0.9, 8 * (wz.reich ?? 1));
     return r === 'unterwegs' || (a.ziel = null, false);
   }
   b.durchsucht ??= new Set(); b.durchsucht.add(z.id); bp.durchsucht.add(z.id);

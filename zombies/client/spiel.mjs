@@ -2,7 +2,7 @@
 import { fzPx } from './masse.mjs';
 import { groesse } from './groessen.mjs';
 import {
-  KACHEL, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
+  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
@@ -27,7 +27,9 @@ import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
-import { hindernisFelder, hindernisPixel } from './hindernisse.mjs';
+import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from './innen_fein_bild.mjs';
+// ?innen1m in der Adresse: nur noch zum Testen vorgesehen; maßgeblich ist der Schalter des Servers (state.optionen, siehe erzeuge())
+import { hindernisFelder, hindernisFelderFein, hindernisPixel } from './hindernisse.mjs';
 import * as ton from './ton.mjs';
 import { HundAnzeige, eigenerHund } from './hund.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlPruefen, brauchtPlatz } from './aufheben.mjs';
@@ -69,10 +71,11 @@ function figurenVorzeichnen(szene) {
   });
 }
 // Laufbild aus der zurückgelegten Strecke
-function laufBild(f, dx, dy, dt, schrittLaenge) {
+// tf/ff: drinnen im Feinraster sind Tempo und Figur kleiner (Schrittlänge schrumpft mit der Figur, Schwelle fürs Gehen mit dem Tempo)
+function laufBild(f, dx, dy, dt, schrittLaenge, tf = 1, ff = 1) {
   const weg = Math.hypot(dx, dy);
-  f.lauf = (f.lauf ?? 0) + weg;
-  const geht = weg / Math.max(dt, 0.001) > 12;
+  f.lauf = (f.lauf ?? 0) + weg / ff;
+  const geht = weg / Math.max(dt, 0.001) > 12 * tf;
   return geht ? Math.floor((f.lauf / schrittLaenge) % 1 * LAUFBILDER) : -1;
 }
 
@@ -798,7 +801,11 @@ const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   //
 const LEERE_KARTE = new Map();
 const zombieKarte = () => raum?.state?.zombies ?? LEERE_KARTE;
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
-const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100);
+// Maßstäbliche Innenräume: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
+const INNEN_FIGUR = 0.5;
+let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
+const innenFigur = () => (szeneRef?.feinInnen() ? INNEN_FIGUR : 1);
+const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100) * innenFigur();
 const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
 const VERWUNDET_GROESSE = 0.42 * 1.26;
 const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
@@ -863,6 +870,14 @@ class Ort extends Phaser.Scene {
 
   erzeuge() {
     const s = raum.state;
+    // „Maßstäbliche Innenräume“: der Server gibt den Schalter vor (Einstellung); wird er umgeschaltet, lädt der Client neu
+    if (!TUT.an) {
+      setzeInnenFein(!!((s.optionen ?? 0) & 2)); setzeInnenTempo((((s.optionen ?? 0) >> 2) & 63) * 2 / 100);
+      raum.onStateChange(st => {
+        if (this.bereit && !!((st?.optionen ?? 0) & 2) !== INNEN_FEIN) setTimeout(() => location.reload(), 300);
+        else setzeInnenTempo((((st?.optionen ?? 0) >> 2) & 63) * 2 / 100);   // Tempo drinnen kann im Spiel geändert werden
+      });
+    }
     if (TUT.an) { setzeKartengroesse(SS_B, SS_H); this.welt = baueSchiessstandWelt(); }   // Schießstand: kleine erzeugte Übungswelt
     else if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
@@ -1129,6 +1144,7 @@ class Ort extends Phaser.Scene {
     if (kartenbox) kartenbox.after(this.hordeListe); else document.body.appendChild(this.hordeListe);
     raum.onMessage('hordeInfo', m => this.hordeInfoEmpfangen(m));
     if (new URLSearchParams(location.search).has('debug')) raum.send('hordeDebug', { an: true });
+    szeneRef = this;
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
     if (new URLSearchParams(location.search).has('debug')) { window.szene = this; window.raum = raum; window.meineId = meineId; }
   }
@@ -1141,8 +1157,11 @@ class Ort extends Phaser.Scene {
     this.cameras.main.setZoom(this.zielZoom());
   }
 
+  // ist die aktuelle Ebene ein maßstäblicher Innenraum?
+  feinInnen() { return !!(this.aktEbene && this.wv(this.aktEbene)?.kachel); }
+
   // Kamerazoom: Bildschirmgröße × eigene Wahl (Knöpfe, Mausrad, +/−) × drinnen näher
-  zielZoom(ebene = this.aktEbene) { return this.grundZoom * this.zoomWahl * (ebene ? INNEN_ZOOM : 1); }
+  zielZoom(ebene = this.aktEbene) { return this.grundZoom * this.zoomWahl * (ebene ? (this.innenWelten.get(ebene)?.kachel ? INNEN_ZOOM_FEIN : INNEN_ZOOM) : 1); }
 
   // Zoom-Grenzen: im Kameraflug darf man weiter hinaus
   zoomGrenzen() { return [this.flug?.aktiv ? FLUG_ZOOM_MIN : ZOOM_MIN, ZOOM_MAX]; }
@@ -1323,15 +1342,15 @@ class Ort extends Phaser.Scene {
     if (!an) { if (this.hindBild) { this.hindBild.destroy(); this.hindBild = null; this.textures.remove('hindernisse'); this.hindStand = null; } return; }
     const jetzt = performance.now();
     if (this.hindStand && jetzt - this.hindStand.t < 250) return;
-    const v = this.cameras.main.worldView, FP = KACHEL / 4, ebene = this.aktEbene;
+    const v = this.cameras.main.worldView, ebene = this.aktEbene, welt = this.wv(ebene), fein = !!welt.kachel, FP = fein ? welt.kachel : KACHEL / 4;
     const sx0 = Math.floor(v.x / FP), sy0 = Math.floor(v.y / FP), sx1 = Math.ceil((v.x + v.width) / FP), sy1 = Math.ceil((v.y + v.height) / FP);
     const h = this.hindStand;
     if (h && h.ebene === ebene && this.hindBild && sx0 >= h.x0 && sy0 >= h.y0 && sx1 <= h.x0 + h.nx && sy1 <= h.y0 + h.ny) return;
-    const rand = 24, welt = this.wv(ebene);
-    const x0 = Math.max(0, sx0 - rand), y0 = Math.max(0, sy0 - rand), nx = Math.min(BREITE * 4, sx1 + rand) - x0, ny = Math.min(HOEHE * 4, sy1 + rand) - y0;
+    const rand = fein ? 8 : 24;
+    const x0 = Math.max(0, sx0 - rand), y0 = Math.max(0, sy0 - rand), nx = Math.min(fein ? welt.breite : BREITE * 4, sx1 + rand) - x0, ny = Math.min(fein ? welt.hoehe : HOEHE * 4, sy1 + rand) - y0;
     if (nx <= 0 || ny <= 0) return;
     const grenze = ebene ? { x0: welt.ox, y0: welt.oy, x1: welt.ox + welt.b, y1: welt.oy + welt.h } : null;
-    const codes = hindernisFelder(welt, x0, y0, nx, ny, W.spielerRadius, grenze);
+    const codes = fein ? hindernisFelderFein(welt, x0, y0, nx, ny, W.spielerRadius) : hindernisFelder(welt, x0, y0, nx, ny, W.spielerRadius, grenze);
     this.hindBild?.destroy(); this.hindBild = null;
     if (this.textures.exists('hindernisse')) this.textures.remove('hindernisse');
     const tex = this.textures.createCanvas('hindernisse', nx, ny), c = tex.getContext(), bd = c.createImageData(nx, ny);
@@ -1778,17 +1797,19 @@ class Ort extends Phaser.Scene {
         continue;   // Autos sehen immer normal aus (keine Markierung für durchsuchte/leere Kofferräume)
       } else if (b.art !== 'bus') {
         // das Möbelstück, zu dem der Behälter gehört (Rahmen und Kreuz liegen genau auf dem gedrehten Möbelbild = ganzes Möbelrechteck)
-        const kx = Math.floor(b.x / KACHEL), ky = Math.floor(b.y / KACHEL);
+        const KW = kachelVon(w), kx = Math.floor(b.x / KW), ky = Math.floor(b.y / KW), ra = w.kachel ? 0.5 : 3;
         const m = (w.moebel ?? []).find(q => kx >= q.x && kx < q.x + q.b && ky >= q.y && ky < q.y + q.h);
         if (m) {
-          const x0 = m.x * KACHEL + 3, y0 = m.y * KACHEL + 3, bw = m.b * KACHEL - 6, bh = m.h * KACHEL - 6;
+          const x0 = m.x * KW + ra, y0 = m.y * KW + ra, bw = m.b * KW - 2 * ra, bh = m.h * KW - 2 * ra;
           if (leer) {
+            const lw = w.kachel ? 0.35 : 1.5, ei = w.kachel ? 0.8 : 3;
             g.fillStyle(0x6e6e6e, 0.28).fillRect(x0, y0, bw, bh);
-            g.lineStyle(1.5, 0xbdbdbd, 0.55).strokeRect(x0, y0, bw, bh);
-            g.lineStyle(1.5, 0xbdbdbd, 0.45).lineBetween(x0 + 3, y0 + 3, x0 + bw - 3, y0 + bh - 3).lineBetween(x0 + bw - 3, y0 + 3, x0 + 3, y0 + bh - 3);
+            g.lineStyle(lw, 0xbdbdbd, 0.55).strokeRect(x0, y0, bw, bh);
+            g.lineStyle(lw, 0xbdbdbd, 0.45).lineBetween(x0 + ei, y0 + ei, x0 + bw - ei, y0 + bh - ei).lineBetween(x0 + bw - ei, y0 + ei, x0 + ei, y0 + bh - ei);
           } else {
-            g.fillStyle(0x111111, 0.3).fillRect(b.x - 9, b.y - 9, 18, 18);                    // geöffnete Türen
-            g.lineStyle(1.5, 0xffd54f, 0.6).strokeRect(x0, y0, bw, bh);
+            if (!w.kachel) g.fillStyle(0x111111, 0.3).fillRect(b.x - 9, b.y - 9, 18, 18);   // geöffnete Türen
+            else g.fillStyle(0x111111, 0.22).fillRect(x0, y0, bw, bh);
+            g.lineStyle(w.kachel ? 0.35 : 1.5, 0xffd54f, 0.6).strokeRect(x0, y0, bw, bh);
           }
         } else {
           g.lineStyle(2, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokeRect(b.x - 12, b.y - 12, 24, 24);
@@ -1810,7 +1831,7 @@ class Ort extends Phaser.Scene {
       for (const b of w.behaelter ?? []) {
         if (n >= 6) break;
         if (b.art === 'bw_kiste' || b.art === 'bus' || b.art === 'auto') continue;   // Autos/Kofferräume ohne Symbol
-        if (Math.hypot(b.x - lok.x, b.y - lok.y) > 2 * KACHEL) continue;
+        if (Math.hypot(b.x - lok.x, b.y - lok.y) > (w.kachel ? 20 : 2 * KACHEL)) continue;
         if (b.art === 'auto' && s.verbrannt?.has('auto:' + b.id)) continue;
         const leer = b.art === 'bw_kiste' ? this.leereKisten?.has(b.id) : s.behaelter.get(b.id)?.rest === 0;
         const t = pool[n] ??= this.add.text(0, 0, '', { fontSize: '13px', fontFamily: 'sans-serif', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6);
@@ -1832,9 +1853,10 @@ class Ort extends Phaser.Scene {
       const b = (w.behaelter ?? []).find(x => x.id === q.behaelter);
       if (!b) continue;
       const puls = 0.5 + 0.5 * Math.sin(ph * Math.PI * 2);
-      g.fillStyle(0xffd600, 0.18 + 0.14 * puls); g.fillCircle(b.x, b.y, 17 + 3 * puls);
-      g.lineStyle(2, 0xffe57f, 0.9 * (1 - ph)); g.strokeCircle(b.x, b.y, 12 + 22 * ph);
-      g.lineStyle(2, 0xffd600, 0.85); g.strokeCircle(b.x, b.y, 15);
+      const k = w.kachel ? 0.3 : 1;   // maßstäblich: Glanz im Maßstab des Möbelstücks
+      g.fillStyle(0xffd600, 0.18 + 0.14 * puls); g.fillCircle(b.x, b.y, (17 + 3 * puls) * k);
+      g.lineStyle(2 * k, 0xffe57f, 0.9 * (1 - ph)); g.strokeCircle(b.x, b.y, (12 + 22 * ph) * k);
+      g.lineStyle(2 * k, 0xffd600, 0.85); g.strokeCircle(b.x, b.y, 15 * k);
     }
   }
 
@@ -1921,16 +1943,18 @@ class Ort extends Phaser.Scene {
     let a = this.innenAnsichten.get(ebene);
     if (a) return a;
     const w = this.wv(ebene);
-    const B = w.b * KACHEL, H = w.h * KACHEL, X = w.ox * KACHEL, Y = w.oy * KACHEL;
-    const tex = this.textures.createCanvas('innen-' + ebene, B, H);
-    zeichneInnen(tex.getContext(), w); tex.refresh();
-    const bild = this.add.image(X, Y, 'innen-' + ebene).setOrigin(0).setDepth(0.2);
+    const K = kachelVon(w), SK = w.kachel ? BILD_SKALA : 1;   // Feinraster: Bild in höherer Auflösung
+    const B = w.b * K, H = w.h * K, X = w.ox * K, Y = w.oy * K;
+    const tex = this.textures.createCanvas('innen-' + ebene, B * SK, H * SK);
+    if (w.kachel) zeichneInnenFein(tex.getContext(), w); else zeichneInnen(tex.getContext(), w);
+    tex.refresh();
+    const bild = this.add.image(X, Y, 'innen-' + ebene).setOrigin(0).setDepth(0.2).setScale(1 / SK);
     const tueren = this.add.graphics().setDepth(0.4);
     const symbole = this.add.container(0, 0).setDepth(0.5);   // ❓/🔑 an verschlossenen Türen
     const dunkel = this.add.renderTexture(X, Y, B, H).setOrigin(0).setDepth(9);
     const nebel = this.add.graphics().setDepth(9.5);   // Räume hinter nie geöffneten Türen: ganz schwarz
     // Safe Room: Vorratskiste (Kistenbild) und Bretter an der Eingangstür
-    const safe = w.kiste ? this.add.image(w.kiste.x, w.kiste.y, 'kiste').setScale(0.62).setDepth(0.45) : null;
+    const safe = w.kiste && !w.kachel ? this.add.image(w.kiste.x, w.kiste.y, 'kiste').setScale(0.62).setDepth(0.45) : null;   // maßstäblich: Vorratskiste ist ein gezeichnetes Möbelstück
     const bretter = this.add.graphics().setDepth(0.46);
     const schild = w.safe ? this.add.text(X + B / 2, Y - 14, '🛡 ' + (w.safeName ?? 'Safe Room'), {
       fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
@@ -1969,12 +1993,25 @@ class Ort extends Phaser.Scene {
       const wert = Math.ceil(((w.safe ? raum.state.safes.get(w.safe)?.barrikade : raum.state.tueren.get('haus:' + w.nr)?.barrikade) ?? 0) / 34);
       if (wert !== a.bretterWert) {
         a.bretterWert = wert;
-        const g = a.bretter.clear(), tx = w.ausgang.x * KACHEL, ty = w.ausgang.y * KACHEL;
-        const quer = w.hole(w.ausgang.x - 1, w.ausgang.y) === T.WAND;   // Tür in waagrechter Wand
-        for (let i = 0; i < wert; i++) {
-          const o = 4 + i * 9;
-          if (quer) { g.fillStyle(0xa1887f, 1).fillRect(tx - 4, ty + o, KACHEL + 8, 6); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx - 4, ty + o, KACHEL + 8, 6); }
-          else { g.fillStyle(0xa1887f, 1).fillRect(tx + o, ty - 4, 6, KACHEL + 8); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx + o, ty - 4, 6, KACHEL + 8); }
+        const g = a.bretter.clear();
+        if (w.kachel) {   // maßstäblich: Bretter quer vor der Haustür, von der Türöffnung ins Zimmer gestapelt (1,25 m breit, je Brett 0,25 m)
+          const r = w.ausgang.rect, K = w.kachel, [nx, ny] = w.ausgang.nach;
+          for (let i = 0; i < wert; i++) {
+            const off = (i + 0.5) * 1.7;
+            const [bx, by, bw, bh] = ny !== 0
+              ? [r.x * K - 0.6, (ny > 0 ? r.y * K : (r.y + r.h) * K) - ny * off - 0.55, r.b * K + 1.2, 1.1]
+              : [(nx > 0 ? r.x * K : (r.x + r.b) * K) - nx * off - 0.55, r.y * K - 0.6, 1.1, r.h * K + 1.2];
+            g.fillStyle(0xa1887f, 1).fillRect(bx, by, bw, bh); g.lineStyle(0.25, 0x4e342e, 1).strokeRect(bx, by, bw, bh);
+            g.fillStyle(0x424242, 1).fillRect(bx + 0.4, by + 0.4, 0.3, 0.3).fillRect(bx + bw - 0.7, by + bh - 0.7, 0.3, 0.3);
+          }
+        } else {
+          const tx = w.ausgang.x * KACHEL, ty = w.ausgang.y * KACHEL;
+          const quer = w.hole(w.ausgang.x - 1, w.ausgang.y) === T.WAND;   // Tür in waagrechter Wand
+          for (let i = 0; i < wert; i++) {
+            const o = 4 + i * 9;
+            if (quer) { g.fillStyle(0xa1887f, 1).fillRect(tx - 4, ty + o, KACHEL + 8, 6); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx - 4, ty + o, KACHEL + 8, 6); }
+            else { g.fillStyle(0xa1887f, 1).fillRect(tx + o, ty - 4, 6, KACHEL + 8); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx + o, ty - 4, 6, KACHEL + 8); }
+          }
         }
       }
     }
@@ -1982,7 +2019,7 @@ class Ort extends Phaser.Scene {
     for (const t of w.tueren) {
       const st = raum.state.tueren.get(`${ebene}:${t.x},${t.y}`);
       const offen = !!st?.offen, zu = st ? st.verschlossen : t.verschlossen;
-      w.kacheln[t.y * BREITE + t.x] = offen ? T.TUER_OFFEN : T.INNENTUER;
+      setzeTuerKacheln(w, t, offen);
       const sa = zu && !offen ? this.schlossArtVon(`${ebene}:${t.x},${t.y}`) : 'frei';   // frei: geht einfach auf, kein Schloss zu sehen
       stand += offen ? 'o' : sa === 'raetsel' ? 'r' : sa === 'schluessel' ? 's' : 'z';
       zus += `${Math.ceil((st?.barrikade ?? 0) / 34)}${st?.kaputt ? 'k' : ''},`;   // Bretter und Bruch
@@ -1995,6 +2032,7 @@ class Ort extends Phaser.Scene {
       const g = a.tueren.clear();
       a.symbole.removeAll(true);
       w.tueren.forEach((t, i) => {
+        if (w.kachel) { zeichneTuerFein(g, this, a, w, t, stand[i], zusListe[i]); return; }
         const x = t.x * KACHEL, y = t.y * KACHEL, z = stand[i];
         const senkrecht = w.hole(t.x, t.y - 1) === T.WAND;   // Wand oben/unten → Tür in senkrechter Wand
         if (z === 'o') {
@@ -2039,7 +2077,8 @@ class Ort extends Phaser.Scene {
     d.clear();
     d.fill(0x030405, lampe ? (w.stock === 'keller' ? 0.94 : 0.88) : 0.965);
     const lx = this.lokal.x - a.X, ly = this.lokal.y - a.Y;
-    this.lichtPinsel.setScale(lampe ? 0.42 : 0.36).setAlpha(lampe ? 1 : 0.8);
+    const lk = w.kachel ? 0.3 : 1;   // maßstäblich: Lichtkreis um die Figur im Maßstab des Raums (Radius ~2 m statt ~12 m)
+    this.lichtPinsel.setScale((lampe ? 0.42 : 0.36) * lk).setAlpha(lampe ? 1 : 0.8);
     d.erase(this.lichtPinsel, lx, ly);
     if (lampe) {
       this.lampeKegel(d, lx, ly, this.lampenRichtung(ich), true);
@@ -2052,7 +2091,7 @@ class Ort extends Phaser.Scene {
   // Drinnen nur Mitspieler auf derselben Ebene (Haus und Stockwerk), draußen nur Mitspieler draußen.
   // Ein Kegel für alle (eigene, Mitspieler, Bots, Nebel): gleicher Pinsel, gleiche Länge/Helligkeit; drinnen etwas kürzer
   lampeKegel(ziel, x, y, winkel, innen, alpha = 1) {
-    this.lampenPinsel.setRotation(winkel).setScale(innen ? 0.8 : 1.0).setAlpha(alpha);
+    this.lampenPinsel.setRotation(winkel).setScale((innen ? 0.8 : 1.0) * (innen && this.feinInnen() ? 0.13 : 1)).setAlpha(alpha);   // maßstäblich: Lichtkegel ~7 m lang
     ziel.erase(this.lampenPinsel, x, y);
   }
 
@@ -2144,8 +2183,8 @@ class Ort extends Phaser.Scene {
 
   // Von der eigenen Position aus alles erkunden, was ohne geschlossene Tür erreichbar ist; einmal gesehen bleibt sichtbar
   nebelAktualisieren(a) {
-    const w = a.w, tx = Math.floor(this.lokal.x / KACHEL), ty = Math.floor(this.lokal.y / KACHEL);
-    const start = ty * BREITE + tx;
+    const w = a.w, KW = kachelVon(w), BR = breiteVon(w), tx = Math.floor(this.lokal.x / KW), ty = Math.floor(this.lokal.y / KW);
+    const start = ty * BR + tx;
     if (a.bekannt.has(start) && a.nebelStand === a.stand) return;
     a.nebelStand = a.stand;
     const drin = (x, y) => x >= w.ox && x < w.ox + w.b && y >= w.oy && y < w.oy + w.h;
@@ -2154,7 +2193,7 @@ class Ort extends Phaser.Scene {
     while (offen.length) {
       const [x, y] = offen.pop();
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx, ny = y + dy, k = ny * BREITE + nx;
+        const nx = x + dx, ny = y + dy, k = ny * BR + nx;
         if (!drin(nx, ny) || gesehen.has(k)) continue;
         gesehen.add(k);
         a.bekannt.add(k);                                       // Wände und Türen am Rand sind auch zu sehen
@@ -2164,8 +2203,15 @@ class Ort extends Phaser.Scene {
     }
     a.bekannt.add(start);
     const g = a.nebel.clear().fillStyle(0x000000, 1);
-    for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++)
-      if (!a.bekannt.has(y * BREITE + x)) g.fillRect(x * KACHEL - 0.5, y * KACHEL - 0.5, KACHEL + 1, KACHEL + 1);
+    const ueb = w.kachel ? 0.1 : 0.5;
+    for (let y = w.oy; y < w.oy + w.h; y++) {
+      for (let x = w.ox; x < w.ox + w.b; x++) {
+        if (a.bekannt.has(y * BR + x)) continue;
+        let x2 = x; while (x2 + 1 < w.ox + w.b && !a.bekannt.has(y * BR + x2 + 1)) x2++;   // zusammenhängende Strecke in einem Rechteck
+        g.fillRect(x * KW - ueb, y * KW - ueb, (x2 - x + 1) * KW + 2 * ueb, KW + 2 * ueb);
+        x = x2;
+      }
+    }
   }
 
   // drinnen ohne Licht: alles schwarz-weiß (Farbmatrix der Kamera, nur mit WebGL)
@@ -2238,7 +2284,7 @@ class Ort extends Phaser.Scene {
       const zeigen = this.sichtbar(z);
       if (zeigen) sichtbarZ++;
       f.box.setVisible(zeigen);
-      const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30);
+      const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30, this.feinInnen() ? INNEN_TEMPO : 1, this.feinInnen() ? INNEN_FIGUR : 1);
       const typ = ZOMBIE_TYPEN[(z.variante ?? 0) % ZOMBIE_TYPEN.length];
       const neu = !z.kriecht && (typ === 'z6' || typ === 'z7');
       const gem = !z.kriecht && GEMINI_TYPEN.has(typ);
@@ -2254,21 +2300,21 @@ class Ort extends Phaser.Scene {
       } else if (neu) {
         // flüssig animierte Zombies (Riley Gombart): Laufen, Angriff, Stehen
         let nah = false;
-        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < W.spielerRadius + W.zombieRadius + 16) { nah = true; break; }
+        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < (W.spielerRadius + W.zombieRadius + 16) * (this.feinInnen() ? INNEN_REICH : 1)) { nah = true; break; }
         const art = nah ? 'angriff' : bildNr < 0 ? 'stehen' : 'laufen';
         const i = art === 'laufen' ? Math.floor((f.lauf ?? 0) / 6) : Math.floor(this.time.now / (art === 'angriff' ? 70 : 140));
         f.bild.setFrame(this.figurBild2(`${typ}_${art}`, i)).setRotation(0).setScale(BOGEN2_GROESSE * zf * groesse('figuren2', typ + '_laufen'));
       } else {
         // Angriff: beim Zubeißen das Bild mit offenem Mund (wo vorhanden)
         let nah = false;
-        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < W.spielerRadius + W.zombieRadius + 16) { nah = true; break; }
+        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < (W.spielerRadius + W.zombieRadius + 16) * (this.feinInnen() ? INNEN_REICH : 1)) { nah = true; break; }
         const angriff = nah && this.figurListe['zombie_' + typ + '_angriff'];
         f.bild.setFrame(angriff ? angriff[0] : this.figurBild('zombie_' + typ, bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 11)));
         // schlurfen: leicht wanken
         f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'zombie_' + typ) * (angriff ? 1.06 : 1));
       }
       f.bild.setTint(z.jagt ? 0xffd2c8 : 0xffffff);
-      if (s.kegel && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
+      if ((s.optionen & 1) && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
         if (z.kriecht) {
           // Kriecher sehen nicht, sie spüren ringsum
           this.kegel.lineStyle(1, 0xff8a65, 0.35).strokeCircle(f.x, f.y, 110);
@@ -2697,13 +2743,14 @@ class Ort extends Phaser.Scene {
     const zombie = p.zombie > 0;
     const weg = Math.hypot(f.x - f.altX, f.y - f.altY);
     f.altX = f.x; f.altY = f.y;
-    f.lauf = (f.lauf ?? 0) + weg;
-    const geht = weg / Math.max(dt, 0.001) > 12;
+    const tfa = p.ebene && this.feinInnen() ? INNEN_TEMPO : 1;   // drinnen im Feinraster: Tempo und Figurgröße kleiner
+    f.lauf = (f.lauf ?? 0) + weg / (tfa < 1 ? INNEN_FIGUR : 1);
+    const geht = weg / Math.max(dt, 0.001) > 12 * tfa;
     // Haltung nach Ausrüstung: Pistole, Nahkampf/Lampe in der Hand, sonst ohne
     let textur, bild = 0;
     const survivor = !p.unten && !zombie && String(p.aussehen ?? '').startsWith('s');
     const held = !p.unten && !zombie && istHeld(String(p.aussehen ?? '')[0]);
-    const tempo = weg / Math.max(dt, 0.001);
+    const tempo = weg / Math.max(dt, 0.001) / tfa;
     // Laufrichtung: Füße und (außer kurz beim Schuss/Schlag) Körper zeigen immer in Laufrichtung; der eigene Held nimmt sie sofort aus der Eingabe
     let lr = p.richtung;
     if (f === this.figuren.get(meineId) && this.eingabe && Math.hypot(this.eingabe.dx, this.eingabe.dy) > 0.05) lr = Math.atan2(this.eingabe.dy, this.eingabe.dx);
@@ -2850,7 +2897,7 @@ class Ort extends Phaser.Scene {
     const zombie = p.zombie > 0, schleicht = !zombie && (s || l < 0.55);
     const tempo = zombie ? W.zombieTempoJagen * 1.15
       : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
-    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d;
+    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d * tempoVon(welt);
     const n = Math.max(1, Math.ceil(weg / 4));   // Teilschritte wie auf dem Server (raum.mjs spielerSchritt)
     for (let i = 0; i < n; i++) bewege(welt, pos, dx / l * weg / n, dy / l * weg / n, W.spielerRadius);
   }
@@ -2898,13 +2945,14 @@ class Ort extends Phaser.Scene {
     let best = null, bd = Infinity;
     if (ich.ebene) {
       const w = this.wv(ich.ebene);
+      const KW = kachelVon(w);
       for (const t of w.tueren) {
-        const d = Math.hypot((t.x + 0.5) * KACHEL - x, (t.y + 0.5) * KACHEL - y);
-        if (d < 42 && d < bd) { bd = d; best = { key: `${ich.ebene}:${t.x},${t.y}`, tuer: t }; }
+        const d = Math.hypot((t.x + 0.5) * KW - x, (t.y + 0.5) * KW - y);
+        if (d < (w.kachel ? 14 : 42) && d < bd) { bd = d; best = { key: `${ich.ebene}:${t.x},${t.y}`, tuer: t }; }
       }
       if (w.ausgang && w.nr !== undefined) {
-        const d = Math.hypot((w.ausgang.x + 0.5) * KACHEL - x, (w.ausgang.y + 0.5) * KACHEL - y);
-        if (d < 48 && d < bd) best = { key: 'haus:' + w.nr, nr: w.nr, safe: w.safe };
+        const d = Math.hypot((w.ausgang.x + 0.5) * KW - x, (w.ausgang.y + 0.5) * KW - y);
+        if (d < (w.kachel ? 16 : 48) && d < bd) best = { key: 'haus:' + w.nr, nr: w.nr, safe: w.safe };
       }
     } else {
       if (!this.hausTuerKarte) {
@@ -2966,22 +3014,22 @@ class Ort extends Phaser.Scene {
     const tuer = this.tuerKontext(ich, 'auf');
     if (tuer) return tuer;
     if (safe && w.ausgang) {
-      const tx = (w.ausgang.x + 0.5) * KACHEL, ty = (w.ausgang.y + 0.5) * KACHEL;
+      const KW = kachelVon(w), tx = (w.ausgang.x + 0.5) * KW, ty = (w.ausgang.y + 0.5) * KW;
       const bar = raum.state.safes.get(safe.id)?.barrikade ?? 0;
-      if (Math.hypot(x - tx, y - ty) < 56) {
-        const imWeg = [...raum.state.leichen.values()].some(l => (l.ebene ?? '') === safe.ebene && Math.hypot(l.x - tx, l.y - ty) < 44);
+      if (Math.hypot(x - tx, y - ty) < reichVon(w, 56)) {
+        const imWeg = [...raum.state.leichen.values()].some(l => (l.ebene ?? '') === safe.ebene && Math.hypot(l.x - tx, l.y - ty) < reichVon(w, 44));
         if (imWeg) return { art: 'wegziehen', text: '🧟 Toten Zombie aus der Tür ziehen' };
         if (hat(ich.rucksack, 'bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Eingangstür verbarrikadieren' };
       }
       const funkTisch = raum.state.aufgaben?.size && !raum.state.funk ? w.moebel?.find(q => q.art === 'funktisch') : null;
       if (funkTisch) {
-        const nx = Math.max(funkTisch.x * KACHEL, Math.min((funkTisch.x + funkTisch.b) * KACHEL, x)), ny = Math.max(funkTisch.y * KACHEL, Math.min((funkTisch.y + funkTisch.h) * KACHEL, y));
-        if (Math.hypot(x - nx, y - ny) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
+        const nx = Math.max(funkTisch.x * KW, Math.min((funkTisch.x + funkTisch.b) * KW, x)), ny = Math.max(funkTisch.y * KW, Math.min((funkTisch.y + funkTisch.h) * KW, y));
+        if (Math.hypot(x - nx, y - ny) < reichVon(w, 44)) return { art: 'funk', text: '📻 Funkspruch absetzen' };
       }
-      if (w.kuehlschrank && Math.hypot(x - w.kuehlschrank.x, y - w.kuehlschrank.y) < AKTION_ABSTAND + 20) {
+      if (w.kuehlschrank && Math.hypot(x - w.kuehlschrank.x, y - w.kuehlschrank.y) < reichVon(w, AKTION_ABSTAND + 20)) {
         return { art: 'kuehlschrank', text: 'Kühlschrank öffnen (Notvorrat, unter 30 %)' };
       }
-      if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < AKTION_ABSTAND + 20) {
+      if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < reichVon(w, AKTION_ABSTAND + 20)) {
         return { art: 'kiste', text: 'Vorräte öffnen', safe };
       }
     }
@@ -2994,13 +3042,13 @@ class Ort extends Phaser.Scene {
       if (vk) return { art: 'kiste', text: 'Vorratskiste öffnen (Lager)', safe: { id: vk.id, name: 'Bundeswehr-Lager' } };
     }
     {
-      const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene });
+      const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene }, reichVon(w, AKTION_ABSTAND));
       if (nah.length === 1 && (!brauchtPlatz(nah[0].ding, ich) || kannAufnehmen(ich.rucksack, ich.plaetze, nah[0].ding))) return { art: 'aufheben', text: `${DINGE[nah[0].ding]?.name ?? 'Gegenstand'} aufheben` };
       if (nah.length) return { art: 'aufheben_wahl', text: `Aufheben … (${nah.length})`, nah };
     }
     // Mensch in der Nähe (versteckt oder verängstigt): ansprechen, dann folgt er dir bis in den Safe Room
     {
-      let nah = null, nd = 56;
+      let nah = null, nd = reichVon(w, 56);
       for (const m of raum.state.menschen?.values() ?? []) {
         if (!m.sichtbar || m.infiziert || m.folgt || (m.ebene ?? '') !== (ich.ebene ?? '')) continue;
         const dd = Math.hypot(m.x - x, m.y - y);
@@ -3012,7 +3060,7 @@ class Ort extends Phaser.Scene {
     if (!ich.ebene && (raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
       return { art: 'raetsel', text: `🔐 Schloss knacken (${raum.state.torGeloest ?? 0}/3)` };
     }
-    let best = null, bd = AKTION_ABSTAND;
+    let best = null, bd = reichVon(w, AKTION_ABSTAND);
     for (const b of w.behaelter) {
       const d = Math.hypot(b.x - x, b.y - y);
       if (d >= bd) continue;
@@ -3038,7 +3086,7 @@ class Ort extends Phaser.Scene {
     if (!tauschOffen) {
       for (const [sid, o] of raum.state.spieler) {
         if (sid === meineId || o.unten || o.zombie > 0 || o.ebene !== ich.ebene) continue;
-        if (Math.hypot(o.x - x, o.y - y) < TAUSCH_ABSTAND + 6) return { art: 'tausch', mit: sid, text: `🤝 Tauschen mit ${o.name}` };
+        if (Math.hypot(o.x - x, o.y - y) < reichVon(w, TAUSCH_ABSTAND + 6)) return { art: 'tausch', mit: sid, text: `🤝 Tauschen mit ${o.name}` };
       }
     }
     return null;
@@ -3176,7 +3224,7 @@ class Ort extends Phaser.Scene {
     const l = this.letzterOrt ?? this.lokal;
     this.schrittWeg = (this.schrittWeg ?? 0) + Math.hypot(this.lokal.x - l.x, this.lokal.y - l.y);
     this.letzterOrt = { x: this.lokal.x, y: this.lokal.y };
-    if (this.schrittWeg > 46) { this.schrittWeg = 0; ton.schritt(!!this.aktEbene); }
+    if (this.schrittWeg > (this.feinInnen() ? 46 * INNEN_FIGUR : 46)) { this.schrittWeg = 0; ton.schritt(!!this.aktEbene); }
     if (this.altHp != null && ich.hp < this.altHp - 2) ton.biss();
     // Wassermangel: alle ~25 s ein trockenes Husten mit Tropfen, solange Durst unter der Schwelle (nicht im Hintergrund)
     if (ich.durst < 20 && ich.hp > 0 && !document.hidden) {
@@ -3329,11 +3377,11 @@ class Ort extends Phaser.Scene {
       ak.style.display = zeige && suAn ? 'block' : 'none';   // nur für Superuser
       const sperre = Math.ceil(((this.alleSperreBis ?? 0) - Date.now()) / 1000);
       if (zeige) { const t = sperre > 0 && ich.ebene ? `Alles durchsuchen in ${sperre} s` : kand.drinnen ? 'Alles durchsuchen (3 Rätsel)' : `Alles durchsuchen (${kand.liste.length}, ${Math.round(kand.dauer * 10) / 10} s)`; if (ak.textContent !== t) ak.textContent = t; }
-      fundPruefen(this.lokal);
+      fundPruefen(this.lokal, this.aktEbene ? this.wv(this.aktEbene) : null);
     }
     if (zweit && knopf2.__text !== zweit.text) { knopf2.__text = zweit.text; knopf2.textContent = nurText(zweit.text); }
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
-    if (ich && this.lokal) auswahlPruefen(raum.state.boden, ich, { x: this.lokal.x, y: this.lokal.y });   // bleibt offen, aktualisiert sich, schließt nur wenn nichts mehr da ist
+    if (ich && this.lokal) auswahlPruefen(raum.state.boden, ich, { x: this.lokal.x, y: this.lokal.y }, reichVon(this.wv(ich.ebene), AKTION_ABSTAND));   // bleibt offen, aktualisiert sich, schließt nur wenn nichts mehr da ist
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
     tauschRucksack();
     if (handelOffen) handelZeigen(ich, this.welt.stuetzpunkt);

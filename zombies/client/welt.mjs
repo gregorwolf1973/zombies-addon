@@ -10,6 +10,32 @@ export const KACHEL = 32;
 export let BREITE = 64;
 export let HOEHE = 48;
 export function setzeKartengroesse(b, h) { BREITE = b; HOEHE = h; }
+// „Maßstäbliche Innenräume“ (Schalter, Standard aus): Innenräume mit eigener Kachelgröße (INNEN_Z px, 4 Zellen = 1 m),
+// eigener Rastergröße (w.breite/w.hoehe), kleinerem Figurenradius (w.rs) und eigenen Faktoren für Tempo und Reichweiten (w.tempo, w.reich).
+// Ohne Schalter bleibt alles beim Alten. Der Server gibt den Schalter vor (Einstellung oder ZOMBIES_INNEN1M), der Client folgt ihm.
+export let INNEN_FEIN = false;
+export function setzeInnenFein(an) { INNEN_FEIN = !!an; }
+export const INNEN_VERSION = 2;
+// Tempo und Reichweiten drinnen: Figuren erscheinen drinnen halb so groß (INNEN_FIGUR) und die Kamera ist 3,4-fach näher;
+// 8 px = 1 m gilt drinnen wie draußen, aber das Bild läuft sonst 3,4-mal schneller vorbei. Faktor so, dass das Vorbeilaufen des Bildes
+// etwa wie draußen aussieht (ein Haus von 14 m durchquert man in gut 2 s).
+export let INNEN_TEMPO = 0.35;   // Vorgabe 35 %; einstellbar in der Verwaltung (Server → state.optionen → Client)
+export function setzeInnenTempo(faktor) { INNEN_TEMPO = Math.max(0.1, Math.min(1.5, Number(faktor) || 0.35)); }
+export const INNEN_REICH = 0.35;        // Aktionsreichweiten (Durchsuchen, Türen, Aufheben …): 40 px (5 m) draußen → 14 px (1,75 m) drinnen
+export const tempoVon = w => (w?.kachel ? INNEN_TEMPO : 1);
+export const reichVon = (w, wert) => (w?.reich ? Math.round(wert * w.reich) : wert);
+export const kachelVon = w => w?.kachel ?? KACHEL;      // Pixel je Kachel dieser Welt/Ebene
+export const breiteVon = w => w?.breite ?? BREITE;      // Kacheln je Zeile
+export const hoeheVon = w => w?.hoehe ?? HOEHE;
+// Tür (ggf. mehrzellig) öffnen/schließen: Zimmertüren im Feinraster bestehen aus mehreren Zellen
+export function setzeTuerKacheln(w, t, offen) {
+  const b = breiteVon(w), typ = offen ? T.TUER_OFFEN : T.INNENTUER;
+  for (const [x, y] of t.zellen ?? [[t.x, t.y]]) w.kacheln[y * b + x] = typ;
+}
+// Zimmertür, zu der die Zelle kx,ky gehört (alt: eine Kachel je Tür; Feinraster: mehrere Zellen)
+export function tuerAnZelle(w, kx, ky) {
+  return (w.tueren ?? []).find(t => t.zellen ? t.zellen.some(([x, y]) => x === kx && y === ky) : (t.x === kx && t.y === ky)) ?? null;
+}
 // Seite der Haustür für den Innenraum-Generator (aus der Austrittsrichtung)
 // Art eines Gebäudes für Einrichtung und Funde (aus den OSM-Tags shop/amenity)
 const LADEN_ARTEN = {
@@ -520,7 +546,8 @@ export const INFEKTION_DAUER = 5400;   // 90 Minuten bis zur Verwandlung
 export const ZOMBIE_ZEIT = 180;        // so lange spielt man als Zombie gegen die anderen
 
 export function blockiert(welt, px, py) {
-  return BLOCKIERT.has(welt.hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL)));
+  const K = welt.kachel ?? KACHEL;
+  return BLOCKIERT.has(welt.hole(Math.floor(px / K), Math.floor(py / K)));
 }
 
 // Feines Kollisionsraster (1 m): 4 × 4 Felder je Kachel; 0 = frei, 1 = fest, 2 = Zaun/Hecke (kletterbar)
@@ -531,9 +558,18 @@ export function feinWert(welt, x, y) {
   return welt.fein[fy * fb + fx];
 }
 
+// Innenraum im Feinraster: Figurenradius schrumpft (rs, höchstens radMax), alle überdeckten Zellen müssen begehbar sein
+function freiInnen(welt, x, y, rad) {
+  const K = welt.kachel, B = welt.breite, H = welt.hoehe, r = Math.min(rad * (welt.rs ?? 1), welt.radMax ?? 1e9), k = welt.kacheln;
+  const x0 = Math.floor((x - r) / K), x1 = Math.floor((x + r) / K), y0 = Math.floor((y - r) / K), y1 = Math.floor((y + r) / K);
+  if (x0 < 0 || y0 < 0 || x1 >= B || y1 >= H) return false;
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0, i = cy * B + x0; cx <= x1; cx++, i++) if (BLOCKIERT.has(k[i])) return false;
+  return true;
+}
 // Kreis mit Radius rad frei? Mit feinem Raster: alle überdeckten Feinfelder; sonst die vier Ecken des Quadrats
 const freiStandard = (welt, x, y, rad) => frei(welt, x, y, rad);
 export function frei(welt, x, y, rad) {
+  if (welt.kachel) return freiInnen(welt, x, y, rad);
   const f = welt.fein;
   if (f) {
     const fb = BREITE * FEIN, fh = HOEHE * FEIN;
@@ -619,7 +655,7 @@ export function bewege(welt, obj, dx, dy, rad, frei = freiStandard) {
   if (gehtY) obj.y += dy;
   // Ecken-Hilfe: wer fast gerade gegen eine Wand läuft und knapp daneben
   // einen Durchgang (Tür) hat, wird seitlich hineingeschoben
-  const EINRASTEN = KACHEL * 0.5;
+  const EINRASTEN = welt.einrasten ?? KACHEL * 0.5;
   if (dy && !gehtY && Math.abs(dx) < Math.abs(dy) * 0.4) {
     for (let off = 2; off <= EINRASTEN; off += 2) {
       for (const s of [1, -1]) {
@@ -644,10 +680,11 @@ export function bewege(welt, obj, dx, dy, rad, frei = freiStandard) {
 
 // Freie Sichtlinie zwischen zwei Punkten (Wände und Bäume verdecken)
 export function sichtfrei(welt, x1, y1, x2, y2) {
-  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (KACHEL / 3));
+  const K = welt.kachel ?? KACHEL;
+  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (K / (welt.kachel ? 1 : 3)));
   for (let i = 1; i < n; i++) {
     const x = x1 + (x2 - x1) * i / n, y = y1 + (y2 - y1) * i / n;
-    const t = welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL));
+    const t = welt.hole(Math.floor(x / K), Math.floor(y / K));
     if (t === T.WAND || t === T.BAUM || t === T.INNENTUER || t === T.LEER) return false;
   }
   return true;
@@ -657,11 +694,12 @@ export function sichtfrei(welt, x1, y1, x2, y2) {
 // auf der Linie (außer Start- und Zielkachel) mindert um 20 %, nie unter 0,3 (ein bisschen sieht man immer).
 export const BAUM_SICHT = 0.8, BAUM_SICHT_MIN = 0.3;
 export function sichtGuete(welt, x1, y1, x2, y2) {
-  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (KACHEL / 3));
-  const k1 = Math.floor(x1 / KACHEL) + ',' + Math.floor(y1 / KACHEL), k2 = Math.floor(x2 / KACHEL) + ',' + Math.floor(y2 / KACHEL);
+  const K = welt.kachel ?? KACHEL;
+  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (K / (welt.kachel ? 1 : 3)));
+  const k1 = Math.floor(x1 / K) + ',' + Math.floor(y1 / K), k2 = Math.floor(x2 / K) + ',' + Math.floor(y2 / K);
   const baeume = new Set();
   for (let i = 1; i < n; i++) {
-    const kx = Math.floor((x1 + (x2 - x1) * i / n) / KACHEL), ky = Math.floor((y1 + (y2 - y1) * i / n) / KACHEL);
+    const kx = Math.floor((x1 + (x2 - x1) * i / n) / K), ky = Math.floor((y1 + (y2 - y1) * i / n) / K);
     const t = welt.hole(kx, ky);
     if (t === T.WAND || t === T.INNENTUER || t === T.LEER) return 0;
     if (t === T.BAUM) { const k = kx + ',' + ky; if (k !== k1 && k !== k2) baeume.add(k); }
@@ -671,7 +709,8 @@ export function sichtGuete(welt, x1, y1, x2, y2) {
 
 // Ist der Punkt in einem Haus (Boden oder Tür)?
 export function drinnen(welt, x, y) {
-  const t = welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL));
+  const K = welt.kachel ?? KACHEL;
+  const t = welt.hole(Math.floor(x / K), Math.floor(y / K));
   return t === T.BODEN || t === T.TUER;
 }
 
@@ -722,23 +761,25 @@ export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = I
 function findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, zaunOk) {
   const frei_ = zaunOk ? freiTier : frei;
   const begehbar = (x, y) => { const t = welt.hole(x, y); return BEGEHBAR_WEG.has(t) || (zaunOk && t === T.ZAUN && tierZaunArt(welt, x, y) !== null); };
-  const sx = Math.floor(vonX / KACHEL), sy = Math.floor(vonY / KACHEL);
-  const zx = Math.floor(nachX / KACHEL), zy = Math.floor(nachY / KACHEL);
+  const K = welt.kachel ?? KACHEL, BR = welt.breite ?? BREITE, HO = welt.hoehe ?? HOEHE;   // Innenräume im Feinraster: eigene Größe
+  const sx = Math.floor(vonX / K), sy = Math.floor(vonY / K);
+  const zx = Math.floor(nachX / K), zy = Math.floor(nachY / K);
   if (!begehbar(zx, zy)) return null;
-  const vor = new Int32Array(BREITE * HOEHE).fill(-1);
-  const start = sy * BREITE + sx, ziel = zy * BREITE + zx;
+  const vor = new Int32Array(BR * HO).fill(-1);
+  const start = sy * BR + sx, ziel = zy * BR + zx;
   vor[start] = start;
   const q = [start];
   for (let k = 0; k < q.length && k < maxKnoten; k++) {
     const i = q[k];
     if (i === ziel) break;
-    const x = i % BREITE, y = (i - x) / BREITE;
+    const x = i % BR, y = (i - x) / BR;
     for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-      if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE) continue;
-      const j = ny * BREITE + nx;
+      if (nx < 0 || ny < 0 || nx >= BR || ny >= HO) continue;
+      const j = ny * BR + nx;
       if (vor[j] !== -1 || !begehbar(nx, ny)) continue;
       // mit feinem Raster: Kachelmitte und Übergang dorthin müssen auch fein frei sein (Zaunlinien, Hausumrisse)
       if (welt.fein && j !== ziel && (!frei_(welt, (nx + 0.5) * KACHEL, (ny + 0.5) * KACHEL, 9) || !frei_(welt, (x + nx + 1) * KACHEL / 2, (y + ny + 1) * KACHEL / 2, 9))) continue;
+      if (welt.kachel && j !== ziel && !frei_(welt, (nx + 0.5) * K, (ny + 0.5) * K, rad)) continue;   // Feinraster innen: Figur muss auf die Zelle passen
       vor[j] = i; q.push(j);
     }
   }
@@ -746,7 +787,7 @@ function findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, zaunOk) 
   const kacheln = [];
   for (let i = ziel; i !== start; i = vor[i]) kacheln.push(i);
   kacheln.reverse();
-  const punkte = kacheln.map(i => ({ x: (i % BREITE + 0.5) * KACHEL, y: (Math.floor(i / BREITE) + 0.5) * KACHEL }));
+  const punkte = kacheln.map(i => ({ x: (i % BR + 0.5) * K, y: (Math.floor(i / BR) + 0.5) * K }));
   punkte.push({ x: nachX, y: nachY });
   // Abkürzen: von jedem Punkt so weit wie möglich geradeaus
   const glatt = [];
@@ -879,6 +920,7 @@ export function weltFingerabdruck(w) {
   const mische = v => { h = Math.imul(h ^ (Math.round(Number(v) || 0) | 0), 0x01000193) >>> 0; };
   const text = s => { for (const ch of String(s ?? '')) mische(ch.charCodeAt(0)); };
   mische(WELT_VERSION);
+  if (INNEN_FEIN) mische(1000 + INNEN_VERSION);   // Feinraster-Innenräume: nur im Schalter-Modus anderer Fingerabdruck
   for (const g of w.haeuser ?? []) { mische(g.x); mische(g.y); mische(g.b); mische(g.h); }
   for (const b of w.behaelter ?? []) { mische(b.x); mische(b.y); text(b.art); }
   for (const b of w.stuetzpunkt?.behaelter ?? []) { mische(b.x); mische(b.y); text(b.art); }

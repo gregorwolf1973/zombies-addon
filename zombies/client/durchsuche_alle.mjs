@@ -6,13 +6,15 @@ export const ALLE_SPERRE = 30;                 // Sekunden Sperre nach einer fal
 export const ALLE_FAKTOR = 0.6;                 // Dauer = 60 % der Summe der Einzeldauern
 export const ALLE_WEITE_INNEN = 8 * KACHEL;     // Reichweite im Innenraum (nur mit freier Sicht: geschlossene Türen/Wände sperren)
 export const ALLE_WEITE_AUSSEN = 3.5 * KACHEL;  // draußen nur Autos/Leichen/Container in unmittelbarer Nähe
+export const ALLE_WEITE_INNEN_FEIN = 80;       // maßstäbliche Innenräume (8 px = 1 m): 10 m, ein ganzes Haus ohne geschlossene Tür
 export const NIMM_WEITE = ALLE_WEITE_INNEN + 24;
+export const nimmWeite = w => (w?.kachel ? ALLE_WEITE_INNEN_FEIN + 8 : NIMM_WEITE);   // so weit darf man beim Nehmen aus der Fundliste vom Behälter entfernt sein
 
 // ich: { x, y, ebene }, w: Welt der Ebene, behaelter: Map id→{rest} (nur durchsuchte), leichen: Map id→{x,y,ebene,rest}
 // Rückgabe: { liste: [{ id, art, x, y }], dauer, autoZu } – autoZu: Kofferräume ohne Brechstange (übersprungen)
 export function alleKandidaten(w, behaelter, leichen, ich, hatBrechstange) {
   const ebene = ich.ebene ?? '';
-  const weite = ebene ? ALLE_WEITE_INNEN : ALLE_WEITE_AUSSEN;
+  const weite = ebene ? (w.kachel ? ALLE_WEITE_INNEN_FEIN : ALLE_WEITE_INNEN) : ALLE_WEITE_AUSSEN;
   const liste = []; let autoZu = 0;
   for (const b of w.behaelter ?? []) {
     if (b.art === 'bw_kiste' || b.art === 'bus') continue;   // Munitionskisten haben je Spieler eigenen Inhalt; Bus bleibt Einzelsuche
