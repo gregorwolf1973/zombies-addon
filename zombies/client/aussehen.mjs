@@ -4,7 +4,7 @@
 import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
 import { erzeugeZeichner } from './proto_grafik.mjs';
 import { zeichneSafeMoebel } from './safe_moebel.mjs';
-import { zeichneWasser } from './wasser.mjs';
+import { zeichneWasser, zeichneWasserHauch } from './wasser.mjs';
 import { zeichneMoebelBild } from './moebel_bilder.mjs';
 import { fzPx } from './masse.mjs';
 import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
@@ -273,11 +273,7 @@ export function zeichneOben(ctx, welt, bilder = {}, rect = null) {
   for (let ky = ay0; ky < ay1; ky++) for (let kx = ax0; kx < ax1; kx++) {
     const t = welt.hole(kx, ky);
     // Bäume (T.BAUM) kommen in die eigene Kronen-Ebene (zeichneKronen) und in den Boden (Schatten, Stamm)
-    if (t === T.WASSER && hash(kx * 5, ky * 3) < 0.25) {
-      // Schilf am Ufer
-      const land = [[-1, 0], [1, 0]].some(([dx]) => { const n = welt.hole(kx + dx, ky); return n !== T.WASSER && n !== T.ZAUN; });
-      if (land) dinge.push([mitte(ky), () => z.schilf(mitte(kx), mitte(ky) + 6, 0.8)]);
-    } else if (t === T.STRASSE && (kx + ky * 3) % 9 === 0) {
+    if (t === T.STRASSE && (kx + ky * 3) % 9 === 0) {
       // Leitpfosten am Straßenrand
       const rand = welt.hole(kx - 1, ky) === T.WIESE ? -1 : welt.hole(kx + 1, ky) === T.WIESE ? 1 : 0;
       if (rand) dinge.push([mitte(ky), () => z.leitpfosten(mitte(kx) + rand * 14, mitte(ky) + 8)]);
@@ -290,7 +286,6 @@ export function zeichneOben(ctx, welt, bilder = {}, rect = null) {
     if (!imAusschnitt(x, y)) continue;
     const klein = (k, fn) => { ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y); fn(); ctx.restore(); };   // Maßstab 8 px = 1 m: Bild um (x, y) verkleinern
     const f = {
-      maibaum: () => z.maibaum(x, y),
       biertisch: () => klein(0.45, () => z.biertisch(x, y)),   // Garnitur ~2,2 m
       kuh: () => klein(0.4, () => z.kuh(x, y, v)),               // Kuh ~2,4 m
       heu: () => klein(0.45, () => z.heu(x, y, v)),              // Rundballen ~1,5 m
@@ -540,10 +535,10 @@ function zeichneKollisionsSockel(ctx, welt, rect, foto) {
     ctx.strokeStyle = 'rgba(210,210,200,.45)'; ctx.lineWidth = 1.5; ctx.strokeRect(kx * K + 2, ky * K + 2, K - 4, K - 4);
   }
   if (!foto) return;
+  zeichneWasserHauch(ctx, welt, rect);   // glatt statt Kachelraster
   for (let ky = Math.max(0, y0); ky < Math.min(HOEHE, y1); ky++) for (let kx = Math.max(0, x0); kx < Math.min(BREITE, x1); kx++) {
     const t = welt.hole(kx, ky);
-    if (t === T.WASSER) { ctx.fillStyle = 'rgba(42,112,152,.42)'; ctx.fillRect(kx * K, ky * K, K, K); }
-    else if (t === T.ZAUN && (kx === 0 || ky === 0 || kx === BREITE - 1 || ky === HOEHE - 1)) {
+    if (t === T.ZAUN && (kx === 0 || ky === 0 || kx === BREITE - 1 || ky === HOEHE - 1)) {
       ctx.fillStyle = 'rgba(52,44,38,.72)'; ctx.fillRect(kx * K, ky * K, K, K);
       ctx.fillStyle = 'rgba(161,136,127,.55)'; ctx.fillRect(kx * K, ky * K + K / 2 - 1.5, K, 3);
     }

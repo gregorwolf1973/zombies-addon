@@ -2,7 +2,7 @@
 // Menschen gehen von zu Hause zum Einkaufen, zum Platz und zur Bushaltestelle, ein Bus fährt die Haltestellen ab.
 // Zombies wittern Menschen und beißen sie; Gebissene werden nach einer einstellbaren Zeit selbst zu Zombies.
 import { schema, t } from '@colyseus/schema';
-import { KACHEL, BREITE, HOEHE, T, findeWeg, sichtfrei, bewege, frei, ladenArt, zufall, DINGE, WERTE as W } from '../client/welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, findeWeg, sichtfrei, bewege, baumFaktor, frei, ladenArt, zufall, DINGE, WERTE as W } from '../client/welt.mjs';
 
 export const Mensch = schema({
   x: t.int16(), y: t.int16(),   // Position übertragen in ganzen Pixeln (Server rechnet genau)
@@ -55,6 +55,10 @@ export function versteckPunkte(hole, breite, hoehe, kachel, T) {
   }
   return punkte;
 }
+
+// Tempo unter Bäumen in % (Einstellung, wird je Takt aus den Einstellungen geholt); die Baumkachel unter dem Menschen zählt
+let baumProzent = 25;
+const baum = (welt, m) => baumFaktor(welt, m.x, m.y, baumProzent);
 
 // Bewegung in Teilschritten von höchstens 4 px (Netz: keine Sprünge)
 const gehe = (welt, m, dx, dy) => {
@@ -165,6 +169,7 @@ export class Stadtleben {
 
   // Weg zu einem Punkt (A*, höchstens eine Wegsuche je Takt-Budget); 'keinWeg' wenn es keinen gibt, sonst true bei Bewegung
   gehePfad(welt, m, inf, ziel, v, d) {
+    v *= baum(welt, m);
     if (!inf.weg) {
       if (this.suchBudget <= 0) return true;
       this.suchBudget--;
@@ -206,7 +211,7 @@ export class Stadtleben {
     m.flieht = true; m.versteckt = false;
     inf.panikT = (inf.panikT ?? 0) - d;
     if (inf.panikT <= 0 || inf.steckt > 0.4) { inf.panikW = r() * Math.PI * 2; inf.panikT = 1.2 + r() * 2; inf.steckt = 0; }
-    const v = FLUCHT * 1.1 * (TYPEN[m.typ]?.tempo ?? 1) * d, w = inf.panikW, x0 = m.x, y0 = m.y;
+    const v = FLUCHT * 1.1 * (TYPEN[m.typ]?.tempo ?? 1) * d * baum(welt, m), w = inf.panikW, x0 = m.x, y0 = m.y;
     gehe(welt, m, Math.cos(w) * v, Math.sin(w) * v);
     m.richtung = w;
     inf.steckt = Math.hypot(m.x - x0, m.y - y0) < v * 0.3 ? (inf.steckt ?? 0) + d : 0;
@@ -272,7 +277,7 @@ export class Stadtleben {
     const dp = Math.hypot(p.x - m.x, p.y - m.y);
     if (p.sicher && dp < 240) return this.retten(id, m, inf, p);
     if (dp <= FOLGE_ABSTAND) { m.richtung = Math.atan2(p.y - m.y, p.x - m.x); return; }
-    const v = (dp > 180 ? W.tempoGehen * 0.95 : W.tempoGehen * 0.62) * (TYPEN[m.typ]?.tempo ?? 1) * d;
+    const v = (dp > 180 ? W.tempoGehen * 0.95 : W.tempoGehen * 0.62) * (TYPEN[m.typ]?.tempo ?? 1) * d * baum(welt, m);
     if (sichtfrei(welt, m.x, m.y, p.x, p.y)) {
       const w = Math.atan2(p.y - m.y, p.x - m.x);
       gehe(welt, m, Math.cos(w) * v, Math.sin(w) * v); m.richtung = w; inf.weg = null;
@@ -463,7 +468,7 @@ export class Stadtleben {
           }
           inf.fluchtW = best;
         }
-        const v = (m.infiziert ? TEMPO : FLUCHT) * (TYPEN[m.typ]?.tempo ?? 1) * d, w = inf.fluchtW ?? 0;
+        const v = (m.infiziert ? TEMPO : FLUCHT) * (TYPEN[m.typ]?.tempo ?? 1) * d * baum(welt, m), w = inf.fluchtW ?? 0;
         bewege(welt, m, Math.cos(w) * v, Math.sin(w) * v, RAD);
         m.richtung = w;
         inf.weg = null;
@@ -488,7 +493,7 @@ export class Stadtleben {
       }
       while (inf.weg.length > 1 && Math.hypot(inf.weg[0].x - m.x, inf.weg[0].y - m.y) < 10) inf.weg.shift();
       const wp = inf.weg[0];
-      const w = Math.atan2(wp.y - m.y, wp.x - m.x), v = TEMPO * (TYPEN[m.typ]?.tempo ?? 1) * d;
+      const w = Math.atan2(wp.y - m.y, wp.x - m.x), v = TEMPO * (TYPEN[m.typ]?.tempo ?? 1) * d * baum(welt, m);
       const x0 = m.x, y0 = m.y;
       bewege(welt, m, Math.cos(w) * v, Math.sin(w) * v, RAD);
       m.richtung = w;

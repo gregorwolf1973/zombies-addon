@@ -104,7 +104,7 @@ export async function starte({
       schwierigkeit: w.schwierigkeit,               // 'leicht' | 'normal' | 'schwer' (server/schwierigkeit.mjs)
       tagMinuten: w.tagMinuten,
       nebel: w.nebel,                               // { an, morgen, abend, sicht, zombie } (server/nebel.mjs)
-      tagAb: w.tagAb, nachtAb: w.nachtAb, nachtDunkel: w.nachtDunkel, menschenGroesse: w.menschenGroesse, zombieGroesse: w.zombieGroesse, groesseGesamt: w.groesseGesamt, zombieLeben: w.zombieLeben,
+      tagAb: w.tagAb, nachtAb: w.nachtAb, nachtDunkel: w.nachtDunkel, menschenGroesse: w.menschenGroesse, zombieGroesse: w.zombieGroesse, groesseGesamt: w.groesseGesamt, baumTempo: w.baumTempo, zombieLeben: w.zombieLeben,
       menschen: w.menschen,
       verwandlungMin: w.verwandlung,               // Spielminuten Biss → Zombie (Menschen)
       bissChance: w.biss / 100,

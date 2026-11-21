@@ -36,7 +36,7 @@ import { Nebel, NEBEL_VORGABE, zombieSichtFaktor } from './nebel.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
-  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
+  KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
   WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
@@ -594,6 +594,7 @@ export class SpielRaum extends Room {
       this.hunde?.besitzerWechsel(sid, client.sessionId);
       this.suAnmeldung(client, alt, auth);
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
+      client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25);
       this.startwahlSenden(client.sessionId);
       this.einstellungenSenden(client, spielerId, alt.aussehen, optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? '')));
       this.sprachStart(client); this.sprachPartner();
@@ -668,6 +669,7 @@ export class SpielRaum extends Room {
     this.fkSenden(client.sessionId);
     this.startwahlSenden(client.sessionId);
     client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
+    client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25);
     this.einstellungenSenden(client, spielerId, p.aussehen, gewaehlt);
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
     this.botsAnpassen();
@@ -1080,6 +1082,8 @@ export class SpielRaum extends Room {
     const nachtAb = f === 1 ? nachtAb0 : Math.max(tagAb + 360, Math.round(nachtAb0 - (f - 1) * (1440 - nachtAb0 + tagAb)));
     setzeTageszeiten(tagAb, nachtAb);
     if (this.state) { this.state.tagAb = tagAb; this.state.nachtAb = nachtAb; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.nebelSicht = (e.nebel ?? NEBEL_VORGABE).sicht; this.state.menschenGroesse = e.menschenGroesse ?? 100; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.groesseGesamt = e.groesseGesamt ?? 70; }
+    const bt = e.baumTempo ?? 25;   // Tempo unter Bäumen (%): kein Schema-Feld mehr frei (Grenze 63), der Client bekommt es als Nachricht
+    if (bt !== this.baumTempoSend) { this.baumTempoSend = bt; try { this.broadcast('baumTempo', bt); } catch { /* noch kein Raum */ } }
   }
 
   einstellungenGeaendert() {
@@ -2637,7 +2641,7 @@ export class SpielRaum extends Room {
       for (const [se, sd] of schritte) {
         const l = Math.hypot(se.dx, se.dy);
         if (l <= 0.05) continue;
-        const f = Math.min(1, l) * W.zombieTempoJagen * 1.15 * sd;
+        const f = Math.min(1, l) * W.zombieTempoJagen * 1.15 * sd * this.baumTempo(welt, p);
         bewege(this.wv(p.ebene), p, se.dx / l * f, se.dy / l * f, W.spielerRadius);
         p.richtung = Math.atan2(se.dy, se.dx);
       }
@@ -2652,7 +2656,7 @@ export class SpielRaum extends Room {
       const schleicht = se.s || laenge < 0.55;
       // infiziert: langsamer
       const tempo = (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1) * this.fkWert(p, 'tempo');
-      let f = Math.min(1, laenge / (schleicht ? 0.55 : 1)) * tempo * sd;
+      let f = Math.min(1, laenge / (schleicht ? 0.55 : 1)) * tempo * sd * this.baumTempo(welt, p);
       const x0 = p.x, y0 = p.y;
       if (x.bot) {
         // Bots steigen nicht über Zäune, gehen aber durch Hecken und Holzzäune – langsam
@@ -2748,11 +2752,14 @@ export class SpielRaum extends Room {
     this.broadcast('klettern', { x: z.x, y: z.y, id });
   }
 
+  // Tempo-Faktor unter Bäumen (Einstellung „Tempo unter Bäumen“, 25 = 75 % langsamer); die Baumkachel unter der Figurmitte zählt
+  baumTempo(welt, o) { return baumFaktor(welt, o.x, o.y, SpielRaum.einstellungen.baumTempo ?? 25); }
+
   // als Zombie: schnell, beißt Menschen bei Berührung, sonst nichts
   zombieSpielerSchritt(p, x, e, laenge, dt) {
     p.schleicht = false;
     if (laenge > 0.05) {
-      const f = Math.min(1, laenge) * W.zombieTempoJagen * 1.15 * dt;
+      const f = Math.min(1, laenge) * W.zombieTempoJagen * 1.15 * dt * this.baumTempo(this.wv(p.ebene), p);
       bewege(this.wv(p.ebene), p, e.dx / laenge * f, e.dy / laenge * f, W.spielerRadius);
       p.richtung = Math.atan2(e.dy, e.dx);
     }
@@ -3190,7 +3197,7 @@ export class SpielRaum extends Room {
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
     // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)
-    const schritt = weg * Math.min(tierGelaende(welt, x0, y0, W.zombieRadius) || 1, tierGelaende(welt, x0 + Math.cos(w) * weg, y0 + Math.sin(w) * weg, W.zombieRadius) || 1);
+    const schritt = weg * this.baumTempo(welt, z) * Math.min(tierGelaende(welt, x0, y0, W.zombieRadius) || 1, tierGelaende(welt, x0 + Math.cos(w) * weg, y0 + Math.sin(w) * weg, W.zombieRadius) || 1);
     bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.zombieRadius, freiTier);
     // geschlossene oder verbarrikadierte Tür (Haustür, Zimmertür): nicht durch, sondern dagegen hämmern
     const sperre = this.zombieSperre(z, w, welt);

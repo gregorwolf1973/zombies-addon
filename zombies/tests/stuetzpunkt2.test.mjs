@@ -287,7 +287,7 @@ test('Puma fährt zum Hotspot: stärkste Häufung, auch rechts und seitlich des 
   for (const [u, v] of [[4, -5], [4.4, -5.3], [3.8, -4.6]]) zombieBei(raum, sp, u, v);
   assert.ok(await bis(() => planKoord(sp, raum.state.bwX, raum.state.bwY).u < 8, 30000), 'Puma fährt nicht nach links');
   const pk = planKoord(sp, raum.state.bwX, raum.state.bwY);
-  assert.ok(pk.v >= 5.5, 'bleibt hinter dem Draht und den Sandsäcken: v = ' + pk.v);
+  assert.ok(pk.v >= 4.5, 'bleibt hinter dem Draht und den Sandsäcken: v = ' + pk.v);   // Wanne nur noch 58 × 30 px (früher 115 × 54): darf näher an die Front
   b.ende();
   assert.equal(b.fehler, 0, 'Puma stand in einem Hindernis');
   assert.ok(b.maxU > 20 && b.minU < 9, `u von ${b.minU} bis ${b.maxU}`);

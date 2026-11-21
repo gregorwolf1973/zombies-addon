@@ -6,9 +6,10 @@
 import { KACHEL, BREITE, HOEHE, FEIN, FEIN_PX, frei, zufall } from './welt.mjs';
 import { PUMA_SKALA, PUMA_BILD, zeichneSDrahtRolle } from './stuetzpunkt.mjs';
 import { LEOPARD } from './evak.mjs';
+import { fzPx } from './masse.mjs';
 
 const K = KACHEL, TAU = Math.PI * 2;
-export const FLUGFELD_PUMA = { laenge: 72, breite: 34 };       // Wanne wie im Lager (gezeichnet 1,6-fach: 115 × 54 px)
+export const FLUGFELD_PUMA = { laenge: fzPx('puma')[0], breite: fzPx('puma')[1] };       // echte Maße wie im Lager und auf der B 11 (7,3 × 3,7 m)
 export const FLUGFELD_TOTE = 40;
 const PUMA_HL = FLUGFELD_PUMA.laenge * PUMA_SKALA / 2, PUMA_HB = FLUGFELD_PUMA.breite * PUMA_SKALA / 2;
 const DRAHT_L = 4 * K, DRAHT_D = 13;

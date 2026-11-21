@@ -28,7 +28,7 @@ for (const seed of [1, 42, 1234]) {
     zeichneBoden(boden, w);
     zeichneOben(oben, w);
     assert.ok(boden.aufrufe > 10000, 'Boden zeichnet zu wenig');
-    assert.ok(oben.aufrufe > 1000, 'obere Ebene zeichnet zu wenig');
+    assert.ok(oben.aufrufe > 300, 'obere Ebene zeichnet zu wenig');
     w.haeuser.forEach((h, i) => zeichneDach(scheinCanvas(), h, i));
   });
 }
