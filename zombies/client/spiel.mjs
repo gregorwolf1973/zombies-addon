@@ -7,7 +7,7 @@ import {
 import { NebelEbene } from './nebel.mjs';
 import { dingId, dingN, hat, zaehle, flach, kannAufnehmen, entferne as entferneStueck } from './stapel.mjs';
 import { laternen, tuerPose } from './vektor.mjs';
-import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
+import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt, aussehenMigriert } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
@@ -170,7 +170,7 @@ ton.musikSofort(() => $('start').style.display !== 'none');
 
 // ---------- Figurenwahl ----------
 let meinAussehen = aussehenLesen(null), aussehenAngefasst = false;   // angefasst: in der Anmeldung selbst gewählt
-try { meinAussehen = aussehenLesen(localStorage.getItem('zob_aussehen')); } catch {}
+try { meinAussehen = aussehenLesen(aussehenMigriert(localStorage.getItem('zob_aussehen'))); if (/^[mw],/.test(localStorage.getItem('zob_aussehen') ?? '')) localStorage.setItem('zob_aussehen', aussehenText(meinAussehen)); } catch {}
 const figurVorlage = { bild: new Image(), liste: null, bild2: new Image(), liste2: null, bild3: new Image(), liste3: null };
 figurVorlage.bild3.src = 'grafik/helden160.webp';
 fetch('grafik/helden160.json').then(r => r.json()).then(j => { figurVorlage.liste3 = j; vorschauZeichnen(); }).catch(() => {});

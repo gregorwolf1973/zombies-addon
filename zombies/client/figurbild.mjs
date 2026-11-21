@@ -14,8 +14,10 @@ export const WAFFEN_BILD = ['hand', 'pistole', 'schlaeger', 'messer'];
 
 export function aussehenLesen(text) {
   const m = /^([mwshf]),([0-5]),([0-7])$/.exec(String(text ?? ''));
-  return m ? { g: m[1], haar: Number(m[2]), kleid: Number(m[3]) } : { g: 'm', haar: 1, kleid: 0 };
+  return m ? { g: m[1], haar: Number(m[2]), kleid: Number(m[3]) } : { g: 'h', haar: 1, kleid: 0 };
 }
+// Mann/Frau gibt es in der Figurwahl nicht mehr: gespeichertes m → h (Held), w → f (Heldin); alles andere unverändert
+export const aussehenMigriert = text => typeof text === 'string' ? text.replace(/^m,/, 'h,').replace(/^w,/, 'f,') : text;
 // h/f = Held/Heldin (Gemini-Bogen grafik/helden160)
 export const istHeld = g => g === 'h' || g === 'f';
 export const aussehenText = a => `${a.g},${a.haar},${a.kleid}`;

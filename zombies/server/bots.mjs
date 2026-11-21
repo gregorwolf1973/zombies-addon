@@ -2,7 +2,7 @@
 // dem Anführer, Abstand zu allen Figuren, bewaffnete Bots kämpfen. Ein Bot steuert sich nur über x.eingabe.
 import { hat, zaehle, flach, entferne, nimmEins, fuegeHinzu, kannAufnehmen, freiePlaetze, dingId } from '../client/stapel.mjs';
 import { planSchritt, entnahmeFrei } from './botplan.mjs';   // Team-Planer (Aufträge, Rollen, Chat-Befehle)
-import { WERTE as W, frei, sichtfrei, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE, durchsuchDauer, MUNITION_MAX, munitionGesamt } from '../client/welt.mjs';
+import { WERTE as W, frei, sichtfrei, sichtGuete, safeRoomVon, findeWeg, KACHEL, T, WAFFEN, DINGE, AKTION_ABSTAND, KISTE_PLAETZE, durchsuchDauer, MUNITION_MAX, munitionGesamt } from '../client/welt.mjs';
 
 export const BOT_NAMEN = ['Resi', 'Vroni', 'Sepp', 'Wastl', 'Kathi', 'Hias', 'Burgi', 'Girgl', 'Loisl', 'Zenzi'];
 
@@ -324,7 +324,7 @@ export function botSchritt(raum, sid, p, x, dt) {
 
   // 2. Kämpfen oder fliehen
   const waffe = bewaffnet(p);
-  const gefahr = naechster(zombies, p, waffe === 'fern' ? 260 : 170, z => sichtfrei(welt, p.x, p.y, z.x, z.y));
+  const gefahr = naechster(zombies, p, waffe === 'fern' ? 260 : 170, z => waffe === 'fern' ? sichtGuete(welt, p.x, p.y, z.x, z.y) > 0 : sichtfrei(welt, p.x, p.y, z.x, z.y));
   if (gefahr) {
     const d = abstand(p, gefahr);
     if (waffe === 'fern') {

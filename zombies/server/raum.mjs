@@ -17,6 +17,8 @@ import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
 import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
+import { waehleZiel, schussGuete, ersterBaum } from './baumschuss.mjs';
+import { aussehenMigriert } from '../client/figurbild.mjs';
 import { Granaten } from './granaten.mjs';
 import { Radios } from './radio.mjs';
 import * as WP from './waffenplaetze.mjs';
@@ -551,6 +553,7 @@ export class SpielRaum extends Room {
   // ---------- Beitreten, Verlassen, Speichern ----------
 
   onJoin(client, optionen = {}, auth = null) {
+    if (optionen.aussehen) optionen = { ...optionen, aussehen: aussehenMigriert(optionen.aussehen) };   // Mann/Frau gibt es nicht mehr (m→h, w→f)
     const spielerId = ID_MUSTER.test(String(optionen.spielerId ?? '')) ? optionen.spielerId : crypto.randomBytes(16).toString('hex');
     const name = sauberName(optionen.name);
 
@@ -587,7 +590,7 @@ export class SpielRaum extends Room {
     p.farbe = this.freieFarbe();
     const vorschau = AUSSEHEN.test(String(optionen.aussehen ?? ''));
     const gewaehlt = vorschau && optionen.aussehenGewaehlt !== false;   // false: Spieler hat in der Anmeldung nichts gewählt, nur die Vorschau
-    const gemerkt = this.speicher?.ladeEinstellungen(spielerId)?.zob_aussehen;   // von einem anderen Gerät
+    const gemerkt = aussehenMigriert(this.speicher?.ladeEinstellungen(spielerId)?.zob_aussehen);   // von einem anderen Gerät
     p.aussehen = gewaehlt ? optionen.aussehen : AUSSEHEN.test(String(gemerkt ?? '')) ? gemerkt : vorschau ? optionen.aussehen : this.zufallsAussehen();
     p.verbunden = true; p.unten = false; p.afk = false; p.hilfe = 0; p.richtung = 0;
     p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0; p.spricht = false;
@@ -603,7 +606,7 @@ export class SpielRaum extends Room {
       p.granaten = Math.max(0, Math.min(GRANATEN_MAX, Number(gespeichert.granaten) || 0));
       p.handgranaten = Math.max(0, Math.min(HANDGRANATEN_MAX, Number(gespeichert.handgranaten) || 0));
       p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
-      if (!gewaehlt && !AUSSEHEN.test(String(gemerkt ?? '')) && AUSSEHEN.test(String(gespeichert.aussehen ?? ''))) p.aussehen = gespeichert.aussehen;
+      if (!gewaehlt && !AUSSEHEN.test(String(gemerkt ?? '')) && AUSSEHEN.test(aussehenMigriert(gespeichert.aussehen))) p.aussehen = aussehenMigriert(gespeichert.aussehen);
       p.infektion = Math.max(0, Math.min(INFEKTION_DAUER, Number(gespeichert.infektion) || 0));
       p.kleidung = Math.max(0, Math.min(100, Number(gespeichert.kleidung) || 0));
       p.lampe = Math.max(0, Math.min(LAMPE_DAUER, Number(gespeichert.lampe) || 0));
@@ -913,7 +916,7 @@ export class SpielRaum extends Room {
 
   zufallsAussehen() {
     const r = this.rnd();
-    return `${r < 0.2 ? 's' : r < 0.6 ? 'm' : 'w'},${Math.floor(this.rnd() * 6)},${Math.floor(this.rnd() * 8)}`;
+    return `${r < 0.2 ? 's' : r < 0.6 ? 'h' : 'f'},${Math.floor(this.rnd() * 6)},${Math.floor(this.rnd() * 8)}`;
   }
 
   freieFarbe() {
@@ -2675,11 +2678,13 @@ export class SpielRaum extends Room {
         const w = Math.atan2(z.y - p.y, z.x - p.x);
         // Überraschung: Zombie hat noch niemanden im Visier → deutlich mehr Schaden (von hinten anschleichen)
         const faktor = t => { if (t[0].startsWith('spieler:')) return 1; const info = this.zombieInfo.get(t[0]); return !t[1].jagt && !info?.ziel ? wf.ueberraschung : 1; };
-        const treffer = (liste, menge) => { for (const t of liste) this.schaden(t[0], t[1], menge * faktor(t), p, id); };
+        // Fernwaffe: jeder Baum dazwischen senkt die Trefferchance (Güte); Fehlschuss bleibt im Baum stecken
+        const gueteVon = t => !wf.fern ? 1 : (t[2] ?? schussGuete(welt, p.x, p.y, t[1], this.zombieInfo.get(t[0])?.ziel === id && Math.hypot(t[1].x - p.x, t[1].y - p.y) < 40));
+        const treffer = (liste, menge) => { for (const t of liste) { if (this.rnd() < gueteVon(t)) this.schaden(t[0], t[1], menge * faktor(t), p, id); } };
         // mehrere Ziele: alle Zombies im Kegel bzw. Bogen
         const imWinkel = winkel => [...this.state.zombies.entries()].filter(([, q]) => (q.ebene ?? '') === (p.ebene ?? '')
           && Math.hypot(q.x - p.x, q.y - p.y) <= wf.reichweite && winkelDiff(Math.atan2(q.y - p.y, q.x - p.x), w) <= winkel
-          && sichtfrei(welt, p.x, p.y, q.x, q.y));
+          && (wf.fern ? sichtGuete(welt, p.x, p.y, q.x, q.y) > 0 : sichtfrei(welt, p.x, p.y, q.x, q.y)));
         if (wf.fern) {
           if (!(this.rnd() < this.fkWert(p, 'schussFrei', 0))) p.magazin--;   // Fähigkeit „Zielen“: manchmal kostet der Schuss nichts
           this.laerm(p.x, p.y, W.hoerweiteSchuss * (wf.laut ?? 1) * this.fkWert(p, 'hoerweite'), true, p.ebene);
@@ -2693,9 +2698,10 @@ export class SpielRaum extends Room {
             }
             treffer([ziel], wf.schaden); treffer(alle, wf.nebenSchaden);
           } else {
-            this.broadcast('schuss', { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name, z: zid });
-            treffer([ziel], wf.schaden);
-            if (wf.pfeil) this.legeHin('pfeil', z.x, z.y, p.ebene);   // der Pfeil bleibt am Einschlagort liegen und lässt sich aufheben
+            const baum = gueteVon(ziel) >= 1 ? null : ersterBaum(welt, p.x, p.y, z.x, z.y), fehl = !!baum && !(this.rnd() < gueteVon(ziel));   // Fehlschuss: Spur endet am ersten Baum
+            this.broadcast('schuss', fehl ? { x1: p.x, y1: p.y, x2: baum.x, y2: baum.y, art: name } : { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name, z: zid });
+            if (!fehl) this.schaden(zid, z, wf.schaden * faktor(ziel), p, id);
+            if (wf.pfeil) this.legeHin('pfeil', fehl ? baum.x : z.x, fehl ? baum.y : z.y, p.ebene);   // der Pfeil bleibt am Einschlagort liegen und lässt sich aufheben
           }
         } else if (wf.bogen) {
           this.broadcast('stoss', { x: p.x, y: p.y, w, sense: true });
@@ -2809,21 +2815,20 @@ export class SpielRaum extends Room {
     this.broadcast('meldung', { text: `${p.name} liegt am Boden – hilf ihm auf!`, lang: true });
   }
 
+  // Ziel für die automatische Waffe: Bäume verdecken nicht ganz (Güte), Wand/Innentür/Leer vollständig; Ergebnis [id, z, guete]
   naechsterZombie(x, y, reichweite, selbst = null) {
-    let best = null, bd = reichweite;
-    const ebene = selbst?.ebene ?? '', welt = this.wv(ebene);
+    const ebene = selbst?.ebene ?? '', welt = this.wv(ebene), kand = [];
+    const sid = selbst ? [...this.state.spieler].find(([, o]) => o === selbst)?.[0] : null;
     for (const [id, z] of this.state.zombies) {
       if ((z.ebene ?? '') !== ebene) continue;
-      const d = Math.hypot(z.x - x, z.y - y);
-      if (d < bd && sichtfrei(welt, x, y, z.x, z.y)) { bd = d; best = [id, z]; }
+      kand.push([id, z, !!sid && this.zombieInfo.get(id)?.ziel === sid && Math.hypot(z.x - x, z.y - y) < 40]);
     }
     // verwandelte Mitspieler sind auch Ziele
-    for (const [sid, o] of this.state.spieler) {
+    for (const [s, o] of this.state.spieler) {
       if (o === selbst || !(o.zombie > 0) || o.ebene !== ebene) continue;
-      const d = Math.hypot(o.x - x, o.y - y);
-      if (d < bd && sichtfrei(welt, x, y, o.x, o.y)) { bd = d; best = ['spieler:' + sid, o]; }
+      kand.push(['spieler:' + s, o, false]);
     }
-    return best;
+    return waehleZiel(welt, kand, x, y, reichweite);
   }
 
   schaden(id, z, menge, von, vonSid = null) {

@@ -5,6 +5,7 @@
 // unbegrenzter Vorrat (Magazin und Nachladen wie im Spiel). Ein Fahrzeug am Lager (Auswahl vor dem Start) feuert auf die Zombies: Puma des
 // Bundeswehr-Standorts, Leopard (Turm, MG, Hauptkanone) oder Mörserpanzer M113; Vorgabe: keins.
 import { zaehle, fuegeHinzu } from '../client/stapel.mjs';
+import { aussehenMigriert } from '../client/figurbild.mjs';
 import { SpielRaum, Zustand, Spieler, sauberName } from './raum.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
@@ -92,7 +93,7 @@ export class SchiessstandRaum extends SpielRaum {
   onJoin(client, optionen = {}) {
     const p = new Spieler();
     p.name = sauberName(optionen.name); p.farbe = 0;
-    p.aussehen = AUSSEHEN.test(String(optionen.aussehen ?? '')) ? optionen.aussehen : 'h,0,0';
+    p.aussehen = AUSSEHEN.test(aussehenMigriert(optionen.aussehen)) ? aussehenMigriert(optionen.aussehen) : 'h,0,0';
     p.verbunden = true; p.unten = false; p.afk = false; p.hilfe = 0; p.richtung = Math.PI / 2;
     p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0; p.spricht = false;
     p.hp = 100; p.durst = 100; p.hunger = 100; p.besiegt = 0;
