@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.65.0 – 21.11.2026
+
+- Neu (Bildschirm): Waffentext ganz oben, darunter Balken, Mitspieler und nur noch zwei Waffenfelder mit großem Waffensymbol und Magazinanzeige. Doppeltipp lädt nach (der Nachladen-Knopf entfällt, Taste R bleibt). Die Granate hat ein festes Feld daneben und springt nicht mehr. Aktionen (Öffnen, Tür, Handel …) stehen als Text unten in der Mitte; unten links und rechts bleibt nur der Rucksack.
+- Neu: Uhrzeit, Tag und Zombiezahl stehen in der Eckkarte; Zählerfenster und Zoom-Knöpfe entfallen (Mausrad und Zwei-Finger-Zoom bleiben). „Alles durchsuchen“ sehen nur Superuser.
+- Geändert: Nur noch zwei Waffenplätze. Ein alter dritter Platz rückt beim Laden nach vorn oder in den Rucksack. Sind alle Waffen leer, greift der Held zur Nahkampfwaffe in Platz 2, sonst zur Faust.
+- Neu (Inventar): Bis zu 5 gleiche Dinge je Platz; Waffen einzeln, Messer und Handgranaten stapeln. Nur eine Tasche tragbar. Neue Munitionskiste (30 Schuss): Überschuss bei vollem Vorrat wird zu Kisten, unter 120 Schuss wird automatisch eine geöffnet.
+- Neu (Zombies): Menge je Level und Spielerzahl (Bots zählen halb), im Backend als Tabelle einstellbar, mit Vorschau für 1/2/4/6 Spieler.
+- Neu (Horden): Mehrere Horden mit eigener Lebensdauer. Danach bleibt etwa ein Drittel als Streuner, der Rest zieht zum Kartenrand ab. Nach der Pause kommt eine neue Horde von einer anderen Seite mit neuen Zielen; Dauer, Pause und Anzahl gleichzeitiger Horden je Level einstellbar.
+- Geändert (Backend): Jede Einstellung ist eine Zeile mit Zahlenfeld, −/+ und Vorgabe-Knopf; Min/Max-Paare zusammengefasst; Selteneres unter „Feinheiten“ eingeklappt. Alte Einstellungen werden übernommen.
+- Neu: Eigene Haltungsbilder des Helden und der Heldin für alle Waffen, Granate und Fäuste; die Heldin ist schlanker.
+- Behoben: Eine von Hand geschlossene Tür öffnet sich erst wieder automatisch, wenn man sich entfernt hat. Die Kofferraum-Markierung an Autos entfällt.
+
 ## 0.64.4 – 20.11.2026
 
 - Neu: Königsdorf hat eine breite befestigte Landebahn (ca. 44 m) mit Rand- und Mittellinien, Zebrastreifen, Aufsetzmarken, Pistennummern 10/28 und Rollweg zum Hangar; der A400M fliegt sie an.
