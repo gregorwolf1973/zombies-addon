@@ -1,14 +1,20 @@
 // Szene „Stau auf der B11“ (nur Karte geretsried2), zur Laufzeit am Weltstart aufgebaut – der geteilte Weltcode bleibt unberührt.
 // Auf der B 11 nordwestlich der Kreuzung beim Rathaus (Karl-Lederer-Platz) steht ein Stau: 14 Fahrzeuge auf beiden Spuren, davon 3 brennend
 // und 2 ausgebrannte Wracks; eine Feuerwehr mit Dauer-Blaulicht (Sirene aus, Fahrzeugfarbe 200 als Kennung) steht daneben. An der Kreuzung hält
-// ein Bundeswehr-Posten: 8 Infanteristen (Gewehr wie die Lager-Soldaten, Lebenspunkte, Zombies beißen sie), ein Puma (statisch, Turm dreht,
-// Kanone) und ein Mörserpanzer M113 (Fahrzeug 'moerser' über server/moerser.mjs, fest eingebaut). Gefallene lassen einen Munitionshaufen liegen und
+// ein Bundeswehr-Posten: 8 Infanteristen (Gewehr wie die Lager-Soldaten, Lebenspunkte, Zombies beißen sie), ein Mörserpanzer M113 (Fahrzeug
+// 'moerser' über server/moerser.mjs, fest eingebaut, abseits der Straße) sowie Puma und Leopard 2, die langsam im Bereich der Kreuzung/des Parkplatzes
+// streifen (server/szene_b11_fahrt.mjs), Zombies und geparkte Autos überrollen (Autos: state.platt) und mit Turm/Kanone schießen. Gefallene lassen einen Munitionshaufen liegen und
 // stehen nach der Verwandlungszeit als Zombie (Tarn-Typ 0) wieder auf. Sind alle Infanteristen tot, schweigen Puma und Mörser.
 // Darstellung: client/szene_b11.mjs (Nachrichten 'b11' = Zustand jede Sekunde, 'b11schuss' = Schüsse).
 import { Fahrzeug } from './verkehr.mjs';
 import { Feuer } from './feuer.mjs';
-import { sichtfrei } from '../client/welt.mjs';
+import { sichtfrei, frei } from '../client/welt.mjs';
 import { B11_KARTE, b11Geometrie, b11Punkt } from './szene_b11_geo.mjs';
+import { Streife, STREIFE, streifeRoute } from './szene_b11_fahrt.mjs';
+import { Leopard, leopardEinst } from './leopard.mjs';
+import { ueberrolleZombies, UEBERROLLEN_PAUSE } from './ueberrollen.mjs';
+import { imFussabdruck } from '../client/evak.mjs';
+import { plattKodieren, plattLesen, PLATT_MAX } from '../client/b11_platt.mjs';
 
 export const STAU = {
   abstand: 330, schritt: 80,          // erstes Auto, Abstand der Autos je Spur (px von der Kreuzung)
@@ -16,7 +22,7 @@ export const STAU = {
   feuerwehr: 6,                        // steht neben diesem Auto
 };
 const SOLDATEN = 8, SOLDAT_S = 130, SOLDAT_ABSTAND = 20;   // Linie quer zur Straße 130 px hinter der Kreuzung
-const PUMA_S = 190, PUMA_V = 18, MOERSER_S = 245, MOERSER_V = -18;
+const MOERSER_S = 250, MOERSER_V = -120;   // Mörser abseits der Straße (15 m seitlich), weit weg von den Streifen der Panzer
 const SOLDAT_HP = 100, SOLDAT_BISS = 26, SOLDAT_NAHSCHADEN = 18;
 const SOLDAT_REICHWEITE = 35 * 8, SOLDAT_PAUSE = 1.3, SOLDAT_SCHADEN = 100, SOLDAT_TREFFER = 0.75, SOLDAT_LAERM = 380;
 const PUMA_REICHWEITE = 60 * 8, PUMA_PAUSE = 3.5, PUMA_DREH = 2.4, KANONE_SCHADEN = 100, KANONE_FLAECHE = 60, KANONE_RADIUS = 30, PUMA_LAERM = 760;
@@ -29,6 +35,8 @@ export class SzeneB11 {
     this.raum = raum;
     this.geo = null;
     this.soldaten = []; this.puma = null; this.autos = []; this.feuerIds = [];
+    this.leopard = null; this.streifen = []; this.parkAutos = []; this.leopardLogik = null;
+    this.fahrT = 0; this.ueberT = 0;
     this.aufgegeben = false;
     this.schuetze = { name: 'Bundeswehr', x: 0, y: 0, besiegt: 0 };
     this.sendT = 0; this.nahT = 0;
@@ -66,8 +74,20 @@ export class SzeneB11 {
       const p = b11Punkt(g, SOLDAT_S + (i % 2) * 8, -SOLDAT_ABSTAND * (SOLDATEN - 1) / 2 + i * SOLDAT_ABSTAND);
       this.soldaten.push({ i, x: p.x, y: p.y, blick, hp: SOLDAT_HP, tot: 0, tZeit: 0, kuehl: 0.5 + (i % 5) * 0.2, scan: 0, ziel: null, zid: null });
     }
-    const pp = b11Punkt(g, PUMA_S, PUMA_V);
-    this.puma = { x: pp.x, y: pp.y, w: blick, turm: blick, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null };
+    // Puma und Leopard 2 streifen im Bereich der Kreuzung/des Parkplatzes (server/szene_b11_fahrt.mjs); ohne befahrbare Route stehen sie an der Kreuzung
+    this.puma = { x: 0, y: 0, richtung: blick, turm: blick, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null };
+    this.leopard = { x: 0, y: 0, richtung: blick, turm: blick };
+    this.leopardLogik = new Leopard(r, 'Leopard');
+    this.streifen = [];
+    for (const [art, k] of [['puma', this.puma], ['leopard', this.leopard]]) {
+      const def = STREIFE[art], route = streifeRoute(r.welt, g.kreuzung, def);
+      if (route) this.streifen.push(new Streife(r, k, def, route, { name: art === 'puma' ? 'Bundeswehr' : 'Leopard', x: 0, y: 0, besiegt: 0 }));
+      else { const pp = b11Punkt(g, art === 'puma' ? 190 : 330, art === 'puma' ? 18 : -60); k.x = pp.x; k.y = pp.y; }
+    }
+    // geparkte Autos im Streifenbereich (Behälter der Welt): die Ketten machen sie platt
+    s.platt.clear();
+    this.parkAutos = (r.welt.behaelter ?? []).filter(b => b.art === 'auto' && Math.hypot(b.x - g.kreuzung.x, b.y - g.kreuzung.y) < 800);
+    this.kontakt = new Map();
     const mp = b11Punkt(g, MOERSER_S, MOERSER_V);
     const m = new Fahrzeug();
     m.x = mp.x; m.y = mp.y; m.richtung = blick; m.art = 'moerser'; m.farbe = 0; m.haelt = true;
@@ -95,7 +115,9 @@ export class SzeneB11 {
     this.nahT += dt;
     if (!this.aufgegeben) {
       for (const q of this.soldaten) this.soldatSchritt(q, dt);
+      this.fahren(dt);
       this.pumaSchritt(dt);
+      this.leopardSchritt(dt);
     }
     if (this.nahT >= 0.25) { const d = this.nahT; this.nahT = 0; this.nahkampf(d); }
     // Gefallene stehen als Zombie wieder auf
@@ -224,13 +246,65 @@ export class SzeneB11 {
     this.sendT = 0;
   }
 
+  // ---------- Streifenfahrt, Überrollen, Plattmachen ----------
+  fahren(dt) {
+    const alle = this.streifen;
+    for (const st of alle) st.schritt(dt, alle.filter(o => o !== st));
+    // Zeitnehmer für Funk: bewegt sich ein Fahrzeug, geht die Position häufig an die Clients (b11f)
+    this.fahrT -= dt;
+    if (alle.some(st => st.bewegt) && this.fahrT <= 0) { this.fahrT = 0.2; this.sendeFahrzeuge(); }
+    this.ueberT -= dt;
+    if (this.ueberT > 0) return;
+    this.ueberT = UEBERROLLEN_PAUSE;
+    const ueber = this.raum.einstellungen?.()?.bundeswehr?.leopardUeberrollen !== false;
+    for (const st of alle) {
+      if (!st.faehrt) continue;
+      if (ueber) { st.von.x = st.k.x; st.von.y = st.k.y; ueberrolleZombies(this.raum, st.k, st.def.hl, st.def.hb, st.von); }
+      this.plattmachen(st);
+    }
+  }
+
+  // Autos unter der fahrenden Wanne: platt (state.platt), Kofferraum leer (nicht mehr durchsuchbar), beim ersten Überfahren je Durchgang
+  // ein Stück in Fahrtrichtung geschoben (höchstens PLATT_MAX Pixel insgesamt, nie in eine Wand: frei() am neuen Platz)
+  plattmachen(st) {
+    const r = this.raum, s = r.state, k = st.k, jetzt = new Set(), alt = this.kontakt.get(st) ?? new Set();
+    for (const b of this.parkAutos) {
+      if (!imFussabdruck(k, b.x, b.y, st.def.hl, st.def.hb, 6)) continue;
+      jetzt.add(b.id);
+      if (alt.has(b.id) || s.verbrannt.has('auto:' + b.id)) continue;   // schon in diesem Durchgang erfasst / ausgebrannt
+      const vor = s.platt.has(b.id) ? plattLesen(s.platt.get(b.id)) : { dx: 0, dy: 0 };
+      const schub = s.platt.has(b.id) ? 4 : 5 + 3 * zufall(parseInt(b.id.slice(1), 10) || 0);   // 5–8 Pixel beim ersten Mal, danach je 4
+      let dx = vor.dx + Math.cos(k.richtung) * schub, dy = vor.dy + Math.sin(k.richtung) * schub;
+      const l = Math.hypot(dx, dy);
+      if (l > PLATT_MAX) { dx *= PLATT_MAX / l; dy *= PLATT_MAX / l; }
+      if (!frei(r.welt, b.x + Math.round(dx), b.y + Math.round(dy), 14)) { dx = vor.dx; dy = vor.dy; }   // Wand/Zaun/Haus dahinter: bleibt liegen
+      const erste = !s.platt.has(b.id);
+      s.platt.set(b.id, plattKodieren(dx, dy));
+      if (erste) r.setzeInhalt(b.id, []);   // Kofferraum zerquetscht: nichts mehr zu finden
+      r.broadcast('b11platt', { x: b.x + dx, y: b.y + dy, w: k.richtung });
+    }
+    this.kontakt.set(st, jetzt);
+  }
+
+  leopardSchritt(dt) {
+    const l = this.leopard;
+    if (!l || !this.leopardLogik) return;
+    this.leopardLogik.schritt(l, dt, leopardEinst(this.raum.einstellungen?.()?.bundeswehr ?? {}, 0.8));
+  }
+
+  sendeFahrzeuge() {
+    const rund = a => Math.round(a * 10) / 10, w = a => Math.round(a * 100) / 100, k = f => (f ? [rund(f.x), rund(f.y), w(f.richtung), w(f.turm)] : 0);
+    this.raum.broadcast('b11f', { p: k(this.puma), l: k(this.leopard) });
+  }
+
   senden() {
     const rund = a => Math.round(a * 10) / 10;
     this.sendT = 1;
     const p = this.puma;
     this.raum.broadcast('b11', {
       s: this.soldaten.map(q => [q.i, rund(q.x), rund(q.y), Math.round(q.blick * 100) / 100, q.tot]),
-      p: p ? [rund(p.x), rund(p.y), Math.round(p.w * 100) / 100, Math.round(p.turm * 100) / 100] : 0,
+      p: p ? [rund(p.x), rund(p.y), Math.round(p.richtung * 100) / 100, Math.round(p.turm * 100) / 100] : 0,
+      l: this.leopard ? [rund(this.leopard.x), rund(this.leopard.y), Math.round(this.leopard.richtung * 100) / 100, Math.round(this.leopard.turm * 100) / 100] : 0,
       aus: this.aufgegeben ? 1 : 0,
     });
   }

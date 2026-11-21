@@ -3,6 +3,7 @@
 import { LEOPARD, A400M, HELI, TANKLASTER, M113, evakArtFuer } from './evak.mjs';
 import { fetzen } from './effekte.mjs';
 import * as ton from './ton.mjs';
+import { kettenSpur } from './ketten.mjs';
 
 const TAU = Math.PI * 2;
 const ABSTURZ_MS = 14000;   // wie ABSTURZ_DAUER im Server (Landeanflug bis zum Einschlag)
@@ -67,6 +68,7 @@ export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene, skalaSoldat = 
     // Kettenrasseln, solange er rollt (Ereignis „Panzer fährt“), draußen und in Hörweite
     const bewegt = o.letztPos !== undefined && Math.hypot(o.x - o.letztPos[0], o.y - o.letztPos[1]) > 0.05;
     o.letztPos = [o.x, o.y];
+    if (bewegt && !aktEbene) kettenSpur(scene, 'evak', o.x, o.y, o.r, LEOPARD.breite);   // Kettenabdrücke auf dem Boden (client/ketten.mjs)
     o.faehrtT = bewegt ? 0.6 : Math.max(0, (o.faehrtT ?? 0) - dt);
     const hoerbar = lokal && !aktEbene && Math.hypot(o.x - lokal.x, o.y - lokal.y) < 700;
     if (hoerbar && o.faehrtT > 0 && !o.kette) o.kette = ton.schleifeStarten('panzerFaehrt');
@@ -258,13 +260,13 @@ export function moerserSchuss(scene, m, s) {
     scene.tweens.add({ targets: r, x: r.x + (Math.random() - 0.5) * 30, y: r.y - 16 - Math.random() * 20, alpha: 0, scale: 2.4, duration: 900, onComplete: () => r.destroy() });
   }
   ton.kanone(m.x1, m.y1);
-  const schatten = scene.add.circle(m.x1, m.y1, 3, 0x000000, 0.35).setDepth(3.9);
-  const granate = scene.add.circle(m.x1, m.y1, 3.5, 0x37402b).setStrokeStyle(1, 0x12140d).setDepth(9);
+  const schatten = scene.add.circle(m.x1, m.y1, 1.5, 0x000000, 0.35).setDepth(3.9);
+  const granate = scene.add.circle(m.x1, m.y1, 1.8, 0x37402b).setStrokeStyle(0.6, 0x12140d).setDepth(9);   // klein: halbe Größe, wächst im Bogen höchstens auf das 1,6-fache
   const t0 = scene.time.now, flug = m.flug * 1000, hoch = Math.min(180, 40 + Math.hypot(m.x2 - m.x1, m.y2 - m.y1) * 0.35);
   const tick = () => {
     const k = Math.min(1, (scene.time.now - t0) / flug), x = m.x1 + (m.x2 - m.x1) * k, y = m.y1 + (m.y2 - m.y1) * k, h = Math.sin(k * Math.PI);
     schatten.setPosition(x, y).setScale(1 - 0.4 * h).setAlpha(0.35 - 0.15 * h);
-    granate.setPosition(x, y - h * hoch).setScale(1 + h * 1.4);
+    granate.setPosition(x, y - h * hoch).setScale(1 + h * 0.6);
     if (k >= 1) { scene.events.off('update', tick); schatten.destroy(); granate.destroy(); }
   };
   scene.events.on('update', tick);
