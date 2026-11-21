@@ -2,6 +2,8 @@
 // Lautstärke und Stereo-Seite richten sich nach der Entfernung zum eigenen Spieler.
 
 import { stimmeZuweisen } from './tonlogik.mjs';
+import { hordeEinstellung, zaehleHoerbare, hordeSchritt, einzelschreiOk, akzentSchritt, PIXEL_JE_METER } from './hordenlogik.mjs';
+import { musikSchritt, naechstesStueck } from './musiklogik.mjs';
 let ctx = null, haupt = null, rauschPuffer = null, stufe = 1;
 const BASIS = 0.36;                          // Grundpegel (früher 0.8 – war zu laut); die Stufe regelt darunter
 const STUFEN = [1, 0.5, 0.25, 0];            // 100 %, 50 %, 25 %, stumm
@@ -37,7 +39,7 @@ function laden(datei) {
   puffer.set(datei, p);
   return p;
 }
-function vorladen() { for (const t of Object.values(zuordnung)) for (const d of t.dateien ?? []) laden(d); hintergrundPruefen(); }
+function vorladen() { for (const [id, t] of Object.entries(zuordnung)) if (!id.startsWith('musik')) for (const d of t.dateien ?? []) laden(d); hintergrundPruefen(); }   // Spielmusik (musik…) wird erst bei Bedarf geladen
 const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer ? b : null; };
 
 // ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------
@@ -92,35 +94,59 @@ function probe(id, x, y, extra = 1) {
   return true;
 }
 
-// ---------- Horden-Grollen: viele Zombies in Hörweite → ein dauerndes tiefes Brummen statt vieler Einzellaute ----------
-const HORDE_AB = 35;            // ab so vielen Zombies in Hörweite
-let hordeKnoten = null, hordeAnzahl = 0, hordeStand = 0;
-export const hordeAktiv = () => hordeAnzahl > HORDE_AB;
-// n = Zahl der Zombies in Hörweite; wird vom Spiel regelmäßig gemeldet (bleibt es aus, verklingt das Grollen)
-// Grollen abgeschaltet (Gregor, 20.11.2026): Zahl wird nicht mehr übernommen, es bleibt still
-export function horde(n) {   // eslint-disable-line no-unused-vars
+// ---------- Hordengeräusch: viele Zombies in Hörweite → Schleife aus Dateien (Ereignis „horde“) statt vieler Einzelschreie ----------
+// Schwellen, Hysterese und Lautstärke: client/hordenlogik.mjs; Einstellungen kommen von /info (toeneHorde, musik)
+let hordeEin = hordeEinstellung(), musikEin = { laut: 35, blende: 3 };
+let hordeSt = { aktiv: false, pegel: 0, halb: false, nur: false, n: 0 }, akzentSt = null, hordeLoop = null, letzterNah = -1e9;
+export const hordeAktiv = () => hordeSt.aktiv;
+export function toneEinstellungen(i) {
+  hordeEin = hordeEinstellung(i?.toeneHorde);
+  const L = Number(i?.musik?.laut), B = Number(i?.musik?.blende);
+  musikEin = { laut: Number.isFinite(L) ? Math.max(0, Math.min(100, L)) : 35, blende: Number.isFinite(B) ? Math.max(1, Math.min(10, B)) : 3 };
 }
-function hordeLaut() {
+// darf dieser Einzelschrei (Zombie bei x, y) jetzt kommen? In der Horde seltener bzw. nur aus der Nähe
+function schreiErlaubt(x, y) {
+  const d = x == null ? 0 : Math.hypot(x - hx, y - hy) / PIXEL_JE_METER, jetzt = performance.now();
+  const ok = einzelschreiOk(hordeSt, { abstandMeter: d, jetzt, letzter: letzterNah });
+  if (ok && hordeSt.nur) letzterNah = jetzt;
+  return ok;
+}
+// zombies: Zombies der Karte, ich: { x, y, ebene }; etwa jede Sekunde vom Spiel aufgerufen
+export function hordeLage(zombies, ich) {
+  const z = zaehleHoerbare(zombies, ich, hordeEin.hoerweite);
+  hordeSt = hordeSchritt(hordeSt, z.n, hordeEin);
+  akzentSt = akzentSchritt(akzentSt, z.n, performance.now(), hordeEin);
+  if (akzentSt.spiele && ctx && stufe > 0 && !document.hidden) probe('hordeAkzent', null, null, drinnenJetzt ? 0.4 : 1);
+  hordeSchleife(z);
+}
+function hordeSchleife(z) {
   if (!ctx) return;
-  const an = stufe > 0 && !document.hidden && hordeAnzahl > HORDE_AB;
-  if (!hordeKnoten && !an) return;
-  if (!hordeKnoten) {
-    // Rauschen → Tiefpass, dazu zwei leicht verstimmte Sägezahn-Brummer; ein langsamer LFO lässt es wogen
-    const src = ctx.createBufferSource(); src.buffer = rauschPuffer; src.loop = true;
-    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220; f.Q.value = 1.5;
+  const t = zuordnung.horde, laut = (t?.laut ?? 80) / 100;
+  const an = hordeSt.aktiv && stufe > 0 && !document.hidden && !!t?.dateien?.length;
+  if (an && !hordeLoop) {
+    const bereit = t.dateien.map(geladen).filter(Boolean);
+    if (!bereit.length) { t.dateien.forEach(laden); return; }
+    const buf = bereit[Math.floor(Math.random() * bereit.length)];
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
     const g = ctx.createGain(); g.gain.value = 0;
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.23;
-    const lg = ctx.createGain(); lg.gain.value = 70; lfo.connect(lg); lg.connect(f.frequency);
-    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = o2.type = 'sawtooth'; o1.frequency.value = 52; o2.frequency.value = 55.5;
-    const og = ctx.createGain(); og.gain.value = 0.25; o1.connect(og); o2.connect(og); og.connect(f);
-    src.connect(f); f.connect(g); g.connect(haupt);
-    src.start(); lfo.start(); o1.start(); o2.start();
-    hordeKnoten = { g };
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    src.connect(g); if (pan) { g.connect(pan); pan.connect(haupt); } else g.connect(haupt);
+    src.start(0, Math.random() * buf.duration);
+    hordeLoop = { src, g, pan, timer: 0 };
   }
-  const ziel = an ? Math.min(0.32, 0.08 + (hordeAnzahl - HORDE_AB) / 120 * 0.24) * (drinnenJetzt ? 0.4 : 1) : 0;   // steigt mit der Zahl, gedeckelt
-  hordeKnoten.g.gain.setTargetAtTime(ziel, ctx.currentTime, 1.2);
+  const l = hordeLoop;
+  if (!l) return;
+  const jetzt = ctx.currentTime;
+  if (an) {
+    clearTimeout(l.timer); l.timer = 0;
+    l.g.gain.setTargetAtTime(hordeSt.pegel * laut * (drinnenJetzt ? 0.4 : 1), jetzt, 0.7);   // Einblenden ≈ 2 s
+    if (l.pan && z.sx != null) l.pan.pan.setTargetAtTime(Math.max(-0.8, Math.min(0.8, endlich((z.sx - hx) / (hordeEin.hoerweite * PIXEL_JE_METER)))), jetzt, 0.5);
+  } else if (!l.timer) {
+    l.g.gain.setTargetAtTime(0, jetzt, 1);   // Ausblenden ≈ 3 s, danach Schleife beenden
+    l.timer = setTimeout(() => { if (hordeLoop === l) { hordeLoop = null; try { l.src.stop(); } catch { /* schon aus */ } } }, 4500);
+  }
+  musikLautstaerke();
 }
-setInterval(() => { if (hordeKnoten && performance.now() - hordeStand > 6000) { hordeAnzahl = 0; } if (hordeKnoten) hordeLaut(); }, 2000);
 
 export function ereignis(id, x = null, y = null) { return probe(id, x, y); }
 
@@ -168,6 +194,7 @@ export function tonStarten() {
   if (!AC) return;
   ctx = new AC();
   haupt = ctx.createGain(); haupt.gain.value = pegel(); haupt.connect(ctx.destination);
+  musikBus = ctx.createGain(); musikBus.gain.value = musikEin.laut / 100; musikBus.connect(haupt);
   // 2 s weißes Rauschen als Grundstoff für Schuss, Wind, Schlurfen
   rauschPuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = rauschPuffer.getChannelData(0);
@@ -287,8 +314,8 @@ export function zombieWeg(x, y) {
 }
 
 // Stöhnen: tiefe Sägezahnstimme mit Formantfilter und Zittern
-export function stoehnen(x, y, laut = 0.5, kriecht = false) {
-  if (hordeAktiv() && Math.random() < 0.25) return;   // in der Horde: Einzellaute etwas seltener
+export function stoehnen(x, y, laut = 0.5, kriecht = false, pruefen = true) {
+  if (pruefen && !schreiErlaubt(x, y)) return;   // in der Horde: Einzelschreie seltener bzw. nur aus der Nähe
   if (probe(kriecht ? 'kriecher' : 'stoehnen', x, y, laut * 1.6)) return;
   if (!abstandOk('stoehnen')) return;
   const z = ort(x, y, laut); if (!z) return;
@@ -307,9 +334,10 @@ export function stoehnen(x, y, laut = 0.5, kriecht = false) {
 }
 
 export function entdeckt(x, y) {
+  if (!schreiErlaubt(x, y)) return;
   if (probe('entdeckt', x, y)) return;
   if (!abstandOk('entdeckt')) return; abstandMerken('entdeckt');
-  stoehnen(x, y, 0.9);
+  stoehnen(x, y, 0.9, false, false);
   const z = ort(x, y, 0.4); if (z) rauschen(z, 0.5, { typ: 'bandpass', freq: 1200, q: 2, laut: 0.4 });   // Fauchen
 }
 
@@ -534,6 +562,48 @@ export function brandRauschen(staerke) {
   }
   brand.g.gain.setTargetAtTime(stufe > 0 ? Math.min(0.35, staerke * 0.3) : 0, ctx.currentTime, 0.4);
   brand.f.frequency.setTargetAtTime(500 + Math.random() * 300, ctx.currentTime, 0.1);   // flackernd
+}
+
+// ---------- Spielmusik: Hauptlied je Level, Lager, Horde, Safe, Finale (Auswahl: client/musiklogik.mjs) ----------
+let musikBus = null, musikSt, musikLauf = null;
+const musikLetzt = new Map();
+const hatMusik = k => (zuordnung[k]?.dateien ?? []).some(d => puffer.get(d) !== null);   // undefined = noch nicht geladen, null = fehlt
+// lage: { level, lager, safe, finale }; etwa jede Sekunde vom Spiel aufgerufen
+export function musikLage(lage) {
+  if (!ctx) return;
+  musikSt = musikSchritt(musikSt, { ...lage, horde: hordeSt.aktiv }, hatMusik, performance.now());
+  musikAnwenden(musikSt.aktuell);
+  musikLautstaerke();
+}
+function musikLautstaerke() {
+  if (!ctx || !musikBus) return;
+  musikBus.gain.setTargetAtTime(musikEin.laut / 100 * (hordeSt.aktiv && hordeSt.pegel >= 0.6 ? 0.6 : 1), ctx.currentTime, 0.6);   // Ducking bei lautem Hordengeräusch
+}
+function musikAnwenden(kat) {
+  const l = musikLauf;
+  if ((l?.kat ?? null) === kat) return;
+  if (l?.g) {
+    const t = ctx.currentTime, b = musikEin.blende;
+    l.g.gain.cancelScheduledValues(t); l.g.gain.setValueAtTime(l.g.gain.value, t); l.g.gain.linearRampToValueAtTime(0, t + b);
+    try { l.src.stop(t + b + 0.1); } catch { /* schon aus */ }
+  }
+  musikLauf = null;
+  if (kat) musikStueck(kat);
+}
+function musikStueck(kat) {
+  const t = zuordnung[kat], liste = (t?.dateien ?? []).filter(d => puffer.get(d) !== null);
+  const datei = naechstesStueck(liste, musikLetzt.get(kat));
+  if (!datei) return;
+  const buf = geladen(datei);
+  if (!buf) { const w = { kat }; musikLauf = w; Promise.resolve(laden(datei)).then(() => { if (musikLauf === w) { musikLauf = null; musikStueck(kat); } }); return; }
+  musikLetzt.set(kat, datei);
+  const g = ctx.createGain(), src = ctx.createBufferSource(), jetzt = ctx.currentTime;
+  src.buffer = buf; src.connect(g); g.connect(musikBus);
+  g.gain.setValueAtTime(0, jetzt); g.gain.linearRampToValueAtTime((t.laut ?? 100) / 100, jetzt + musikEin.blende);
+  const l = { kat, g, src };
+  musikLauf = l;
+  src.onended = () => { if (musikLauf === l) { musikLauf = null; musikStueck(kat); } };   // nach dem Ende das nächste Stück
+  src.start();
 }
 
 // ---------- Startmusik: nach dem ersten Antippen der Startseite, blendet beim Spielbeginn aus ----------

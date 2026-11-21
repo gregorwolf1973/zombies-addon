@@ -20,7 +20,24 @@ export const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose',
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // ab 'kaminkehrer': Gemini-Bogen figuren3
 // je Waffe einstellbar: Schaden und Abklingzeit (Sekunden zwischen zwei Schlägen/Schüssen); Vorgabe = Werte aus WAFFEN
 export const WAFFEN_VORGABE = Object.fromEntries(Object.entries(WAFFEN).map(([w, v]) => [w, { schaden: v.schaden, pause: v.pause, ...(v.fern ? { magazin: v.magazin ?? 1, nachlade: v.nachlade ?? 4 } : {}) }]));
+export const HORDE_TON_VORGABE = { ab: 8, nurHorde: 20, voll: 40, aus: 5, hoerweite: 30 };   // Hordengeräusch: Zombies in Hörweite (Meter), siehe client/hordenlogik.mjs
+export const MUSIK_VORGABE = { laut: 35, blende: 3 };   // Musik-Lautstärke in %, Überblendzeit in Sekunden
+// Vorbelegung (nur wenn die Dateien im Tonordner liegen und dem Ereignis noch nichts zugeordnet ist, siehe server/index.mjs)
+export const TON_STANDARD = {
+  horde: { dateien: ['zombie-horde-growls-and-snarls-7c0b158d.mp3', 'alice_soundz-zombie-sound-224167.mp3'], laut: 80 },
+  hordeAkzent: { dateien: ['freesound_community-zombie-horde-87204.mp3'], laut: 80 },
+  musikLevel5: { dateien: ['franzian-deo-apocalypse-469581.mp3'], laut: 100 },
+};
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
+
+// Hintergrundmusik im Spiel: je Situation eine Dateiliste (nach Ende das nächste Stück, abwechselnd); Auswahl siehe client/musiklogik.mjs
+export const MUSIK_EREIGNISSE = [
+  ...[1, 2, 3, 4, 5].map(n => ({ id: 'musikLevel' + n, name: `Level ${n} – Hauptlied`, beschreibung: n === 1 ? 'Hauptlied in Level 1 (beide Geretsried-Karten)' : `Hauptlied in Level ${n}`, art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 })),
+  { id: 'musikLager', name: 'Im Bundeswehr-Lager', beschreibung: 'Solange du im Bundeswehr-Lager bist', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
+  { id: 'musikHorde', name: 'Kampf gegen Horde', beschreibung: 'Solange das Hordengeräusch läuft (bleibt danach noch 10 s)', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
+  { id: 'musikSafe', name: 'Im Safehouse', beschreibung: 'Solange du in einem Safe Room bist', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
+  { id: 'musikFinale', name: 'Finale', beschreibung: 'Wenn in Level 5 der Atomschlag-Countdown läuft', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
+];
 
 // Spielereignisse, denen auf der Einstellungsseite Tondateien zugeordnet werden
 export const EREIGNISSE = [
@@ -28,6 +45,8 @@ export const EREIGNISSE = [
   { id: 'kriecher', name: 'Kriecher', beschreibung: 'Stöhnen kriechender Zombies in der Nähe', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies'] },
   { id: 'stoehnen', name: 'Zombie stöhnt', beschreibung: 'Stöhnen gehender Zombies in der Nähe', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies'] },
   { id: 'entdeckt', name: 'Zombie entdeckt dich', beschreibung: 'Schrei, wenn ein Zombie zu jagen beginnt', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies'] },
+  { id: 'horde', name: 'Hordengeräusch', beschreibung: 'Schleife, sobald viele Zombies in Hörweite sind (Schwellen unten bei „Hordengeräusch“); es wird zufällig eine der Dateien gewählt und nahtlos wiederholt', art: 'schleife', gruppe: 'zombies', kategorien: ['zombies'] },
+  { id: 'hordeAkzent', name: 'Horde kommt (Akzent)', beschreibung: 'Kurzer Ton, wenn plötzlich eine neue Horde in Hörweite kommt (höchstens alle 30 s)', art: 'einmal', gruppe: 'zombies', kategorien: ['zombies'] },
   { id: 'stadt', name: 'Stadtgeräusche', beschreibung: 'Hintergrund draußen (Verkehr in der Ferne)', art: 'schleife', gruppe: 'umgebung', kategorien: ['umgebung', 'fahrzeuge'] },
   { id: 'zombielandTag', name: 'Zombieland (Tag)', beschreibung: 'Ferne Zombies tagsüber – kurze Töne kommen ab und zu aus wechselnder Richtung', art: 'schleife', gruppe: 'zombies', kategorien: ['zombies', 'umgebung'] },
   { id: 'zombielandNacht', name: 'Zombieland (Nacht)', beschreibung: 'Ferne Zombies und Schreie in der Nacht', art: 'schleife', gruppe: 'zombies', kategorien: ['zombies', 'umgebung'] },
@@ -56,11 +75,13 @@ export const EREIGNISSE = [
   { id: 'radio', name: 'Radio (Gegenstand)', beschreibung: 'Ein eingeschaltetes Radio spielt ca. 75 s und lockt Zombies an; ohne Zuordnung nimmt das Spiel das Autoradio, sonst erzeugte Musik', art: 'schleife', gruppe: 'musik', kategorien: ['musik', 'bundeswehr'] },
   { id: 'nachladen', name: 'Nachladen', beschreibung: 'Wenn eine Waffe nachgeladen wird (ohne Datei ein kurzer Klick)', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
   { id: 'huelse', name: 'Hülse fällt', beschreibung: 'In Räumen kurz nach einem Schuss', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
+  ...MUSIK_EREIGNISSE,
 ];
 
 // Gruppen der Ton-Übersicht (Reihenfolge = Anzeige) und Kategorien der Tondateien
 export const TON_GRUPPEN = [
   { id: 'musik', name: 'Musik', symbol: '🎵' },
+  { id: 'spielmusik', name: 'Musik im Spiel (Level, Lager, Horde …)', symbol: '🎼' },
   { id: 'zombies', name: 'Zombies', symbol: '🧟' },
   { id: 'waffen', name: 'Waffen', symbol: '🔫' },
   { id: 'fahrzeuge', name: 'Fahrzeuge & Sirenen', symbol: '🚗' },
@@ -116,6 +137,21 @@ export function migriereZombies(e = {}) {
   return { ...e, zombies: n };
 }
 
+// Hordengeräusch: Schwellen (Anzahl hörbarer Zombies) und Hörweite in Metern, jeweils in Grenzen
+export function bereinigeHordeTon(h = {}) {
+  const V = HORDE_TON_VORGABE;
+  return {
+    ab: Math.round(zahl(h.ab, 1, 100, V.ab)),
+    nurHorde: Math.round(zahl(h.nurHorde, 1, 200, V.nurHorde)),
+    voll: Math.round(zahl(h.voll, 2, 300, V.voll)),
+    aus: Math.round(zahl(h.aus, 0, 50, V.aus)),
+    hoerweite: Math.round(zahl(h.hoerweite, 10, 100, V.hoerweite)),
+  };
+}
+export function bereinigeMusik(m = {}) {
+  return { laut: Math.round(zahl(m.laut, 0, 100, MUSIK_VORGABE.laut)), blende: Math.round(zahl(m.blende, 1, 10, MUSIK_VORGABE.blende) * 2) / 2 };
+}
+
 // Tabelle „Zombies je Level“: fehlende oder ungültige Werte kommen aus der bisherigen Tabelle bzw. der Vorgabe
 function bereinigeLevel(neu, alt) {
   return LEVEL_VORGABE.map((v, i) => Object.fromEntries(Object.entries(v).map(([k, vorgabe]) => {
@@ -143,11 +179,11 @@ export function bereinige(e = {}, alt = {}) {
   for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10));
   const toene = {};
   for (const ev of EREIGNISSE) {
-    const alt = a.toene?.[ev.id] ?? { dateien: [], laut: 80 }, neu = e.toene?.[ev.id] ?? {};
+    const lv = ev.lautVorgabe ?? 80, alt = a.toene?.[ev.id] ?? { dateien: [], laut: lv }, neu = e.toene?.[ev.id] ?? {};
     const dateien = Array.isArray(neu.dateien) ? neu.dateien : alt.dateien;
     toene[ev.id] = {
       dateien: [...new Set((dateien ?? []).map(String).filter(d => TON_DATEI.test(d)))].slice(0, 12),
-      laut: Math.round(zahl(neu.laut ?? alt.laut, 0, 100, 80)),
+      laut: Math.round(zahl(neu.laut ?? alt.laut, 0, 100, lv)),
     };
   }
   // Superuser-Testzugang: nur der scrypt-Hash wird gespeichert; ein Klartext-Passwort (superuserPasswort) wird sofort gehasht,
@@ -259,6 +295,8 @@ export function bereinige(e = {}, alt = {}) {
     })(),
     funde,
     toene,
+    toeneHorde: bereinigeHordeTon({ ...a.toeneHorde, ...(e.toeneHorde ?? {}) }),
+    musik: bereinigeMusik({ ...a.musik, ...(e.musik ?? {}) }),
     test: {
       zeitraffer: ZEITRAFFER.includes(Number(t.zeitraffer)) ? Number(t.zeitraffer) : 1,
       moerser: typeof t.moerser === 'boolean' ? t.moerser : false,           // Test: Panzermörser (M113) neben den Start stellen
@@ -280,6 +318,8 @@ export function vorgaben() {
     test: { zeitraffer: 1, unsterblich: [], moerser: false },
     moerser: { ...MOERSER },
     toene: {},
+    toeneHorde: { ...HORDE_TON_VORGABE },
+    musik: { ...MUSIK_VORGABE },
   };
 }
 

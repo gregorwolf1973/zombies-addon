@@ -14,7 +14,7 @@ import { SpielRaum } from './raum.mjs';
 import { LEVEL1_KARTEN, level1Karte } from './aufgaben.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
-import { EinstellungsDatei, oeffentlich, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
+import { EinstellungsDatei, oeffentlich, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, TON_STANDARD, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
@@ -166,6 +166,26 @@ export async function starte({
     for (const o of tonOrdner) { const p = path.join(o.pfad, name); if (fs.existsSync(p)) return p; }
     return null;
   };
+
+  // Standardzuordnung (Hordengeräusch) und Übernahme alter Musik: je Ereignis einmal, nur wenn noch nichts zugeordnet ist.
+  // Fehlen die Dateien noch im Tonordner, wird später (nächster Start) erneut versucht.
+  {
+    const erledigt = new Set(datei.werte.toeneVorbelegt ?? []), neu = {};
+    for (const [id, t] of Object.entries(TON_STANDARD)) {
+      if (erledigt.has(id)) continue;
+      if (datei.werte.toene[id]?.dateien?.length) { erledigt.add(id); continue; }
+      const da = t.dateien.filter(d => tonPfad(d));
+      if (!da.length) continue;
+      erledigt.add(id); neu[id] = { dateien: da, laut: t.laut };
+    }
+    // alte Musik-Einstellung (Startmusik) wird einmal als Hauptlied von Level 1 übernommen
+    if (!erledigt.has('musikLevel1')) {
+      erledigt.add('musikLevel1');
+      const alt = datei.werte.toene.startmusik;
+      if (!datei.werte.toene.musikLevel1?.dateien?.length && alt?.dateien?.length) neu.musikLevel1 = { dateien: [...alt.dateien], laut: 100 };
+    }
+    if (Object.keys(neu).length || erledigt.size !== (datei.werte.toeneVorbelegt ?? []).length) { datei.aendern({ toene: neu, toeneVorbelegt: [...erledigt] }); anwenden(datei.werte); }
+  }
   app.get('/toene/:datei', (req, res) => {
     const p = tonPfad(req.params.datei);
     if (!p) return res.status(404).end();
@@ -255,6 +275,8 @@ export async function starte({
     wiki: String(optionen.wiki_adresse ?? '').trim(),
     extern: String(optionen.externe_adresse ?? '').trim(),   // https-Adresse, unter der das Mikrofon geht
     toene: datei.werte.toene,
+    toeneHorde: datei.werte.toeneHorde,   // Hordengeräusch: Schwellen und Hörweite (client/hordenlogik.mjs)
+    musik: datei.werte.musik,             // Musik: laut (%), blende (s)
   }));
   app.use(nocache, express.static(path.join(hier, '..', 'client'), { extensions: ['html'] }));
 
