@@ -7,7 +7,8 @@ import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
 import { laendlicheDetails, b11Ausduennen, freihalteKreise } from './laendlich.mjs';
 import { zaeuneGlaetten } from './zaunglatt.mjs';
 import { baueEinkaufswagen } from './einkaufswagen.mjs';
-import { luftbildBaeume, luftbildAcker } from './luftbild.mjs';
+import { luftbildBaeume, luftbildAcker, luftbildEinzelbaeume, imGebiet } from './luftbild.mjs';
+import { heckenEinfuegen, luftbildObjekte, feinFuellen, nebenPlatzieren } from './luftbildobjekte.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -161,7 +162,7 @@ function wasserGlaetten(k, hole, setze, durchgaenge = 3, R = 4) {
 
 // optionen.autos: Faktor für geparkte Autos (1 = normal)
 export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
-  const karte0 = zaeuneAusduennen(karteOrig);
+  const karte0 = zaeuneAusduennen(heckenEinfuegen(karteOrig));   // Hecken aus dem Luftbild (heckenLuftbild) zählen wie OSM-Hecken
   // veränderbare Kopie (ländliche Details ergänzen Zäune, Hecken und Feldwege); die Eingabekarte bleibt unberührt
   const karte = karte0.zaeune ? { ...karte0, zaeune: [...karte0.zaeune], strassen: karte0.strassen ? [...karte0.strassen] : karte0.strassen } : karte0;
   const autoFaktor = Number.isFinite(optionen.autos) ? Math.max(0, optionen.autos) : 1;
@@ -420,9 +421,11 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   // In jeder Bucht bleibt mindestens ein Platz frei; längere Buchten (b.extra) lassen entsprechend mehr Plätze frei
   // Karten mit erkannten Autos im Luftbild (autosLuftbild, tools/kulisse.py): diese Autos ersetzen die zufälligen Bucht-/Parkplatz-Autos (siehe unten)
   const fotoAutos = autoFaktor > 0 && Array.isArray(karte.autosLuftbild) && karte.autosLuftbild.length ? karte.autosLuftbild : null;
+  // gelesene Gebiete (autosLuftbildFenster, 80-m-Fenster in Spielpixeln): nur dort ersetzen die Foto-Autos die zufälligen; außerhalb bleibt es zufällig. Ohne Feld: ganze Karte.
+  const imFoto = (x, y) => !!fotoAutos && imGebiet(karte.autosLuftbildFenster, x, y);
   let nBucht = 0;
   for (const b of buchten) {
-    if (fotoAutos) { b.belegt = 0; continue; }
+    if (imFoto(b.x, b.y)) { b.belegt = 0; continue; }
     const belegt = b.plaetze.map(() => r() <= 0.7 * autoFaktor);
     let n = belegt.filter(Boolean).length;
     const hoechstens = b.plaetze.length - Math.max(1, b.extra ?? 0);
@@ -447,7 +450,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   // Längsachse = Buchtrichtung (winkel, quer zur Fahrgasse); nur Buchten, die ganz auf freiem Platz liegen; etwa 60 % belegt
   let nPark = 0;
   for (const f of karte.flaechen ?? []) {
-    if (f.a !== 'parkplatz' || autoFaktor <= 0 || fotoAutos) continue;
+    if (f.a !== 'parkplatz' || autoFaktor <= 0) continue;
     const pts = []; for (let i = 0; i < f.p.length; i += 2) pts.push([f.p[i] * KACHEL, f.p[i + 1] * KACHEL]);
     // gezeichnete Fahrgassen/Zufahrten (Straßenlinien nahe der Fläche): dort steht kein Auto
     const px0 = Math.min(...pts.map(q => q[0])) - 60, px1 = Math.max(...pts.map(q => q[0])) + 60, py0 = Math.min(...pts.map(q => q[1])) - 60, py1 = Math.max(...pts.map(q => q[1])) + 60;
@@ -465,7 +468,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
       return Math.hypot(x - ax - t * dx, y - ay - t * dy) < sb;
     });
     for (const bu of parkplatzBuchten(pts).buchten) {
-      if (r() > 0.6 * autoFaktor) continue;
+      if (imFoto(bu.x, bu.y) || r() > 0.6 * autoFaktor) continue;
       const punkte = [[bu.x, bu.y], ...bu.ecken];
       if (!punkte.every(([px, py]) => imPolygon(px / KACHEL, py / KACHEL, f.p) && (hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL)) === T.PLATZ || hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL)) === T.STRASSE))) continue;
       if (nahGasse(bu.x, bu.y)) continue;
@@ -708,7 +711,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   strassenDeko();
 
   // ---- Mehr Bäume: Alleen an Straßen, Gruppen auf Wiesen, in Gärten, Grünflächen und im Wald (ca. +50 % zu den OSM-Bäumen) ----
-  let luftbild = null;
+  let luftbild = null, baeumeEchtRoh = null;
   function mehrBaeume() {
     const WEG = new Set(['footway', 'path', 'cycleway', 'track', 'steps', 'pedestrian']);
     const nein = new Uint8Array(BREITE * HOEHE);   // 1 = hier darf kein Baum stehen
@@ -746,7 +749,11 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     };
     let n0 = 0; for (let i = 0; i < k.length; i++) if (k[i] === T.BAUM) n0++;
     // Luftbild (Paket H): Bäume dort, wo sie auf dem Luftbild stehen; ohne Luftbild-Feld der Karte der Zufalls-Rückfall unten
-    luftbild = luftbildBaeume({ karte: karte0, k, setze, darf: (x, y) => frei(x, y, false), start, KACHEL });
+    // Einzelbäume (baeumeLuftbild: Stamm + Kronengröße) haben Vorrang vor der Kachel-Klassifikation des Luftbilds
+    baeumeEchtRoh = luftbildEinzelbaeume({ karte: karte0, k, setze, darf: (x, y) => frei(x, y, false), start, KACHEL });
+    const baumFenster = karte0.baeumeLuftbildFenster;
+    luftbild = luftbildBaeume({ karte: karte0, k, setze, darf: (x, y) => frei(x, y, false), start, KACHEL,
+      ausser: baeumeEchtRoh ? (x, y) => imGebiet(baumFenster, (x + 0.5) * KACHEL, (y + 0.5) * KACHEL) : null }) ?? (baeumeEchtRoh ? { neu: 0 } : null);
     const ziel = luftbild ? 0 : Math.round(n0 * 0.5);
     let neu = 0;
     // Alleen: jede dritte freie Wiesenkachel am Straßenrand
@@ -791,12 +798,17 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [], zaeune: karte.zaeune ?? null } : null;
   const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details, muell, sperren };
   if (pisteInfo) welt.piste = pisteInfo;
-  if (karte.zaeune) welt.fein = baueFein(welt, karte);
+  // Weitere Luftbild-Objekte: Pools und Schuppen sind Hindernisse im feinen Raster, Beläge nur Darstellung (Zeichnung liest welt.poolsEcht, welt.schuppenEcht, welt.belaege)
+  const lbObj = luftbildObjekte(karte0);
+  welt.poolsEcht = lbObj.pools; welt.schuppenEcht = lbObj.schuppen; welt.belaege = lbObj.belaege;
+  if (karte.zaeune) welt.fein = baueFein(welt, karte, lbObj);
   welt.freihalten = freihalteKreise(karte);   // Landeplatz/Bunkertor-Gelände: kein Lager darauf
   baueStuetzpunkt(welt, seed, setze);   // Bundeswehr-Stützpunkt (eigener Zufall, nach allem anderen)
   baueFlugfeldDeko(welt, seed);         // Flugfeld-Deko neben der Landebahn (nur Karten mit 'piste'; eigener Seed-Zufall)
   tuerenFreihalten(welt, setze, abstandRechteck);   // LETZTER Schritt: Vorplätze leeren, Wege zur Straße öffnen
   baueEinkaufswagen(welt, karte, seed);             // nur Behälter ohne Kollision (eigener Seed-Zufall), ändert kein Raster
+  // Bäume in echter Größe fürs Zeichnen (Krone je Eintrag, d in m): nur Bäume, deren Stammkachel am Ende wirklich Baum ist (nach tuerenFreihalten)
+  if (baeumeEchtRoh) welt.baeumeEcht = baeumeEchtRoh.filter(b => welt.hole(Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL)) === T.BAUM);
   return welt;
 }
 
@@ -837,7 +849,7 @@ function pisteSetzen(pi, k, setze, hole, dinge) {
 // Feines Kollisionsraster (1 m) aus den echten Umrissen: Häuser nach ihrem OSM-Polygon, Gartenzäune und Hecken nach den
 // geglätteten Zaunlinien; alles andere (Wasser, Gartenhäuser, Kartenrand, Busse …) wie im groben Raster.
 // Wo das grobe Raster begehbar ist und der Kachelmittelpunkt frei liegt, bleibt der Weg offen (Wegsuche bleibt grob).
-function baueFein(welt, karte) {
+function baueFein(welt, karte, lbObj) {
   const fb = BREITE * FEIN, fh = HOEHE * FEIN, f = new Uint8Array(fb * fh);
   const hole = welt.hole, zaunart = welt.details?.zaunart ?? '';
   const grob = new Uint8Array(BREITE * HOEHE);   // 1 = Kachel wird grob übernommen
@@ -888,6 +900,8 @@ function baueFein(welt, karte) {
       }
     }
   }
+  // 3b. Pools und Schuppen aus dem Luftbild
+  if (lbObj) feinFuellen(f, fb, FEIN, hole, lbObj, BLOCKIERT);
   // 4. vor jeder Haustür einen Zugang freihalten (Türkachel und die zwei Kacheln davor)
   for (const h of welt.haeuser) {
     if (!h.tuer) continue;
@@ -900,6 +914,8 @@ function baueFein(welt, karte) {
   // 5. jede Tür muss ohne Klettern erreichbar sein: Durchgang mit Spielerbreite prüfen, sonst Zaun auf dem kürzesten Weg öffnen
   zugaengeOeffnen(f, fb, fh, welt);
   for (let i = 0; i < f.length; i++) if (f[i] === 3) f[i] = 1;
+  // Nebengebäude (LoD2): Hindernisse mit glattem Umriss; was ein Haus einsperren würde, fällt weg
+  if (lbObj?.neben?.length) welt.nebengebaeude = nebenPlatzieren(f, fb, FEIN, hole, lbObj.neben, welt.haeuser, ff => tuerenOhneWeg({ fein: ff, hole, haeuser: welt.haeuser }));
   return f;
 }
 

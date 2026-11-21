@@ -33,7 +33,8 @@ function nahPiste(piste, px, py) {
 
 // Setzt Bäume auf Wiesenkacheln, die im Luftbild Baum sind. darf(x, y) = Freihalte-Prüfung der Welt (Straßen, Wege, Türen, Objekte …).
 // Gibt { neu } zurück oder null, wenn die Karte kein Luftbild hat.
-export function luftbildBaeume({ karte, k, setze, darf, start, KACHEL }) {
+// ausser(x, y) = true: diese Kachel gehört zu einem Gebiet mit gelesenen Einzelbäumen (baeumeLuftbildFenster) und wird hier übersprungen.
+export function luftbildBaeume({ karte, k, setze, darf, start, KACHEL, ausser = null }) {
   const lb = luftbildFeld(karte);
   if (!lb) return null;
   const kreise = freihalteKreise(karte), b11 = b11Zone(karte), piste = karte.piste;
@@ -42,6 +43,7 @@ export function luftbildBaeume({ karte, k, setze, darf, start, KACHEL }) {
   for (let y = 2; y < HOEHE - 2; y++) for (let x = 2; x < BREITE - 2; x++) {
     const i = y * BREITE + x;
     if (lb.charCodeAt(i) - 48 !== LB_BAUM || k[i] !== T.WIESE) continue;
+    if (ausser && ausser(x, y)) continue;
     if (hsh(x, y, 91) >= DICHTE || !darf(x, y)) continue;
     if (kreise.some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r) || (b11 && b11(x, y)) ||
         Math.hypot(x + 0.5 - sx, y + 0.5 - sy) < 8 || (piste && nahPiste(piste, x + 0.5, y + 0.5))) continue;
@@ -75,4 +77,45 @@ export function luftbildAcker(karte, k) {
     offen.clear(); for (const [key, r] of jetzt) offen.set(key, r);
   }
   return aus.filter(r => (r.x1 - r.x0) * (r.y1 - r.y0) >= 6).map(r => ({ a: 'acker', p: [r.x0, r.y0, r.x1, r.y0, r.x1, r.y1, r.x0, r.y1] }));
+}
+
+// Liegt (x, y) in einem der gelesenen Gebiete? liste = [[x0, y0, x1, y1], …] in Spielpixeln; ohne Liste gilt die ganze Karte als gelesen.
+export function imGebiet(liste, x, y) {
+  if (!Array.isArray(liste)) return true;
+  for (const r of liste) if (x >= r[0] && x < r[2] && y >= r[1] && y < r[3]) return true;
+  return false;
+}
+
+// Einzelbäume aus dem Luftbild (Karten-Feld baeumeLuftbild: [{ x, y, d, art }], x/y Spielpixel, d Kronendurchmesser in m, art 'laub'|'nadel';
+// gelesen mit tools/luftbild_gemini.py). Eine Kachel wird Baum, wenn ein Stamm darin liegt oder die Krone mindestens die Hälfte der Kachel bedeckt
+// (4 × 4 Probepunkte, nur Quadratvergleiche, keine Winkelfunktionen). darf(x, y) = Freihalte-Prüfung der Welt; weitere Freihalteregeln wie luftbildBaeume.
+// Karten-Feld baeumeLuftbildFenster: die gelesenen 80-m-Fenster; außerhalb gilt weiter die Kachel-Klassifikation (luftbildBaeume).
+// Rückgabe: Liste der Bäume, deren Stammkachel am Ende Baum ist (fürs Zeichnen in echter Größe: welt.baeumeEcht), oder null ohne Feld.
+export function luftbildEinzelbaeume({ karte, k, setze, darf, start, KACHEL }) {
+  const liste = karte?.baeumeLuftbild;
+  if (!Array.isArray(liste) || !liste.length) return null;
+  const kreise = freihalteKreise(karte), b11 = b11Zone(karte), piste = karte.piste;
+  const sx = start.x / KACHEL, sy = start.y / KACHEL;
+  const ok = (x, y) => x >= 2 && y >= 2 && x < BREITE - 2 && y < HOEHE - 2 &&
+    !kreise.some(([cx, cy, r]) => (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= r * r) && !(b11 && b11(x, y)) &&
+    (x + 0.5 - sx) ** 2 + (y + 0.5 - sy) ** 2 >= 64 && !(piste && nahPiste(piste, x + 0.5, y + 0.5));
+  const gueltig = liste.filter(b => Number.isFinite(b.x) && Number.isFinite(b.y) && b.d > 0);
+  const setzeBaum = (x, y) => { if (k[y * BREITE + x] === T.WIESE && ok(x, y) && darf(x, y)) setze(x, y, T.BAUM); };
+  for (const b of gueltig) setzeBaum(Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL));   // Stämme zuerst
+  for (const b of gueltig) {
+    const r2 = (b.d * 4) * (b.d * 4);   // Kronenradius in Spielpixeln (8 px je m): d / 2 * 8
+    const x0 = Math.floor((b.x - b.d * 4) / KACHEL), x1 = Math.floor((b.x + b.d * 4) / KACHEL);
+    const y0 = Math.floor((b.y - b.d * 4) / KACHEL), y1 = Math.floor((b.y + b.d * 4) / KACHEL);
+    for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+      if (tx < 2 || ty < 2 || tx >= BREITE - 2 || ty >= HOEHE - 2 || k[ty * BREITE + tx] !== T.WIESE) continue;
+      let n = 0;
+      for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) {
+        const dx = tx * KACHEL + (i + 0.5) * KACHEL / 4 - b.x, dy = ty * KACHEL + (j + 0.5) * KACHEL / 4 - b.y;
+        if (dx * dx + dy * dy <= r2) n++;
+      }
+      if (n >= 8) setzeBaum(tx, ty);
+    }
+  }
+  return gueltig.filter(b => { const x = Math.floor(b.x / KACHEL), y = Math.floor(b.y / KACHEL); return x >= 0 && y >= 0 && x < BREITE && y < HOEHE && k[y * BREITE + x] === T.BAUM; })
+    .map(b => ({ x: b.x, y: b.y, d: b.d, art: b.art === 'nadel' ? 'nadel' : 'laub' }));
 }

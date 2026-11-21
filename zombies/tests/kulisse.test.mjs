@@ -97,6 +97,7 @@ test('Sonne und Schatten: Südost-Sonne wirft nach Nordwesten; nachts und im Neb
 const bauen = (k, seed, opt) => { setzeKartengroesse(k.breite, k.hoehe); return baueWeltAusKarte(k, seed, opt); };
 const polygon = f => { const p = []; for (let i = 0; i < f.p.length; i += 2) p.push([f.p[i] * KACHEL, f.p[i + 1] * KACHEL]); return p; };
 const basis = lade('geretsried2');
+for (const f of ['autosLuftbild', 'autosLuftbildFenster', 'baeumeLuftbild', 'baeumeLuftbildFenster', 'poolsLuftbild', 'nebengebaeude']) delete basis[f];   // echte Luftbild-Listen der Karte hier ausblenden: die Tests setzen künstliche
 const gute = [];
 for (const f of basis.flaechen.filter(f => f.a === 'parkplatz').slice(0, 12)) for (const b of parkplatzBuchten(polygon(f)).buchten) gute.push({ x: b.x, y: b.y, winkel: b.winkel, farbe: gute.length % 8 });
 const ohne = bauen(structuredClone(basis), 4711);
