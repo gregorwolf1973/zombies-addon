@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.68.0 – 21.11.2026
+
+- Neu: Kulisse nach amtlichen Luftbildern (Bayerische Vermessungsverwaltung CC BY 4.0, swisstopo) – Bäume, Äcker und Dachfarben wie in echt; Eckkarte und große Karte mit Luftbild und Straßen wie im Navi (im Zahnrad umschaltbar).
+- Neu: Maßstab – alle Fahrzeuge, Panzer und Deko in echter Größe (8 px = 1 m).
+- Neu: Begleiter-Hund – 1–2 Streuner je Level laufen einem zu, folgen, lenken Zombies ab, bellen bei Zombies vor der Tür (lockt nichts an), unverwundbar; im Zahnrad wegschicken.
+- Neu: Verkehr hält Abstand und Vorfahrt, wendet bei Stau, schiebt Hindernisse zur Seite; Unfälle mit Rauch, Feuer und Explosion (einstellbar, Superuser-Befehl „unfall“).
+- Neu: Einkaufswagen vor Läden (Wasser, Konserven); Zäune laufen glatt entlang Straße und Haus.
+- Neu: Autoradio als Live-Radio (Einstellung, Vorgabe Antenne Bayern, Stream direkt vom Sender); Sprache über Funk knackt.
+- Neu: Kameraflug für Superuser; Superuser-Menü zeigt An/Aus; Puma und Leopard fahren an der B11 bis vor das Rathaus.
+- Geändert: Aufgaben kürzer – höchstens 3 Gegenstände, Vorräte höchstens 5; Symbol und pulsierender Ring sitzen genau auf dem Gegenstand, die Liste nennt den Ort.
+- Geändert: Evakuierung startet 10 s, nachdem alle an Bord sind (Bunker: Tor schließt in 10 s). Alle Panzer klingen wie der Puma. Mörserpanzer entfernt. Anmeldung nur noch Held, Heldin, Survivor.
+- Geändert: Nebel lichter mit weicherem Rand, Lampen schneiden ihn auf; alle Lampenkegel gleich. Ausrufezeichen beim Entdecktwerden entfernt.
+- Behoben: Im Wald wird wieder geschossen (Bäume senken nur die Trefferchance); Scrollrad-Zoom verschluckt keine Raststufen mehr; Safehouse-Eingang unter großen Dächern (XXXLutz/Mömax) sichtbar.
+
 ## 0.67.0 – 21.11.2026
 
 - Neu: Nebel als Wetterlage – morgens und abends zufällig, ziehende Schwaden, Sicht ca. 20 m, Zombies sehen schlechter, die Taschenlampe streut im Nebel. Im Backend einstellbar (Tag/Nacht), Superuser-Befehl „nebel“.

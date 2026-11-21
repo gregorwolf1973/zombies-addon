@@ -97,11 +97,11 @@ test('Geretsried 2: Welt baut deterministisch, Start frei, Safe Rooms und Haust�
     const tueren = w.haeuser.filter(h => h.betretbar).slice(0, 40);
     const erreicht = tueren.filter(h => findeWeg(w, w.start.x, w.start.y, (h.tuer.x + 0.5) * KACHEL, (h.tuer.y + 0.5) * KACHEL, 11, 90000)).length;
     assert.ok(erreicht >= 30, `nur ${erreicht}/40 Haustüren erreichbar`);
-    // Missionen: alle fünf Gegenstände, weit auseinander, deterministisch
-    assert.deepEqual(missionListe('geretsried2').map(m => m.ding), ['m_funk', 'm_batterie', 'm_antenne', 'm_schluessel', 'm_diesel']);
+    // Missionen: höchstens drei Gegenstände je Level, weit auseinander, deterministisch
+    assert.deepEqual(missionListe('geretsried2').map(m => m.ding), ['m_funk', 'm_batterie', 'm_antenne']);
     const plan = missionsPlan(7, 1, 'geretsried2', w);
-    assert.equal(plan.length, 5, 'Gegenstände fehlen');
-    assert.equal(new Set(plan.map(m => m.nr)).size, 5);
+    assert.equal(plan.length, 3, 'Gegenstände fehlen');
+    assert.equal(new Set(plan.map(m => m.nr)).size, 3);
     assert.deepEqual(plan.map(m => m.nr), missionsPlan(7, 1, 'geretsried2', w).map(m => m.nr), 'Missionsplan nicht deterministisch');
     // Weltfingerabdruck: zweiter Aufbau ist identisch
     assert.equal(weltFingerabdruck(baueWeltAusKarte(karte, 7)), weltFingerabdruck(w), 'Fingerabdruck nicht deterministisch');
