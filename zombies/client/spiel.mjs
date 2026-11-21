@@ -11,14 +11,15 @@ import { laternen, tuerPose, zeichneSafeEingang } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt, aussehenMigriert } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
-import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
+import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
-import { ladeKulisse } from './kulisse.mjs';
+import { ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulSchatten, kulBaumAlpha, fotoStatus, fotoWunsch } from './kulisse.mjs';
+import { KUL_SCHLUESSEL, schattenFaktor } from './kulisse_regeln.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
 import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
@@ -462,6 +463,8 @@ function geraetEinstellungenEinrichten(markieren) {
   const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
   const merke = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
   const K = GERAET_SCHLUESSEL;
+  // Kulisse-Schalter nur auf Karten mit Kulisse-Daten sichtbar (je Schalter nur, wenn die Daten dafür da sind)
+  if (kulisseVorhanden()) { $('eg-kulisse').hidden = false; $('eg-kul-boden-z').hidden = !kulHatFoto(); $('eg-kul-daecher-z').hidden = !kulHatDaecher(); }
   schiessModus = schiessModusLesen(lies(K.schiessen));
   const stimmenAnzeige = () => { const pr = Math.round(stimmenFaktorLesen(lies(K.stimmen)) * 100); $('eg-stimmen').value = String(pr); $('eg-stimmen-wert').textContent = pr + ' %'; };
   const gruppe = (id, wert, setzen, schluessel) => {
@@ -471,6 +474,8 @@ function geraetEinstellungenEinrichten(markieren) {
   const marks = [
     gruppe('eg-schiessen', () => schiessModus, v => { schiessModus = schiessModusLesen(v); feuerUiAnwenden(); }, K.schiessen),
     gruppe('eg-kartenbild', () => kartenbildLesen(lies(K.kartenbild)), v => document.dispatchEvent(new CustomEvent('zob-kartenbild', { detail: kartenbildLesen(v) })), K.kartenbild),
+    ...['boden', 'daecher', 'schatten'].map(w => gruppe('eg-kul-' + w, () => (kulisse()?.an[w] ? 'an' : 'aus'),
+      v => { const k = kulisse(); if (!k) return; k.an[w] = anAusLesen(v); document.dispatchEvent(new CustomEvent('zob-kulisse')); }, KUL_SCHLUESSEL[w])),
     gruppe('eg-zombieton', () => (anAusLesen(lies(K.zombieTon)) ? 'an' : 'aus'), v => ton.zombieTonSetzen(anAusLesen(v)), K.zombieTon),
     gruppe('eg-musik', () => (anAusLesen(lies(K.musik)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.musikSetzen(anAusLesen(v)); }, K.musik),
   ];
@@ -504,7 +509,7 @@ async function starteSpiel() {
     try { KARTE = await (await fetch(`karten/${raum.state.karte}.json`)).json(); }
     catch (e) { console.error('Karte nicht geladen', e); }
   }
-  if (raum.state.karte) { try { await ladeKulisse(raum.state.karte); } catch (e) { console.error('Kulisse nicht geladen', e); } }   // Prototyp, nur mit ?kulisse=…
+  if (raum.state.karte) { try { await ladeKulisse(raum.state.karte); } catch (e) { console.error('Kulisse nicht geladen', e); } }   // Luftbild/Dächer/Schatten, falls die Karte Kulisse-Daten hat
   ladenZeigen(40, 'Generiere Welt … Karte geladen');
   $('start').style.display = 'none';
   $('hud').style.display = 'block';
@@ -1155,6 +1160,7 @@ class Ort extends Phaser.Scene {
     this.heldenListe = this.cache.json.get('heldenliste')?.bilder ?? {};
     this.buergerListe = this.cache.json.get('buergerliste')?.bilder ?? {};
     this.stuecke = new Map();
+    document.addEventListener('zob-kulisse', () => this.kulisseNeuBauen());
     this.torGrafik = this.add.graphics().setDepth(1.5);
     this.torStand = -1;
     this.add.text((this.welt.tor.x + (this.welt.tor.x === 0 ? 1 : 0)) * KACHEL + 4, (this.welt.tor.y + (this.welt.tor.y === 0 ? 1 : 0)) * KACHEL + 18, 'Ortsausgang', {
@@ -1395,8 +1401,17 @@ class Ort extends Phaser.Scene {
     // je Bild nur ein halbes Stück (Boden oder obere Ebene), sonst ruckelt es auf schwachen Handys
     let budget = alle || !this.stuecke.size ? 99 : 1;
     for (const st of this.stuecke.values()) if (!st.oben && budget > 0) { budget--; this.baueStueckOben(st); }
-    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
-      if (this.stuecke.has(cx + ',' + cy) || budget <= 0) continue;
+    // Kulisse „Luftbild-Boden“: Stücke erst bauen, wenn ihre Bildkacheln da sind (nächste zuerst anfordern); nicht ladbar → gezeichneter Boden
+    const fehlend = [];
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) if (!this.stuecke.has(cx + ',' + cy)) fehlend.push([cx, cy]);
+    if (kulBoden() && fehlend.length) {
+      const mx = (v.x + v.right) / 2, my = (v.y + v.bottom) / 2;
+      fehlend.sort((a, b) => Math.hypot((a[0] + 0.5) * K - mx, (a[1] + 0.5) * K - my) - Math.hypot((b[0] + 0.5) * K - mx, (b[1] + 0.5) * K - my));
+      fotoWunsch(fehlend.map(([cx, cy]) => ({ x0: cx * STUECK, y0: cy * STUECK, x1: Math.min(BREITE, (cx + 1) * STUECK), y1: Math.min(HOEHE, (cy + 1) * STUECK) })));
+    }
+    for (const [cx, cy] of fehlend) {
+      if (budget <= 0) break;
+      if (kulBoden() && fotoStatus({ x0: cx * STUECK, y0: cy * STUECK, x1: Math.min(BREITE, (cx + 1) * STUECK), y1: Math.min(HOEHE, (cy + 1) * STUECK) }) === 'laedt') continue;
       budget--; const st = this.baueStueck(cx, cy);
       if (budget > 0) { budget--; this.baueStueckOben(st); }
     }
@@ -1405,8 +1420,9 @@ class Ort extends Phaser.Scene {
     for (const [key, st] of this.stuecke) {
       // freigeben erst ab 640 px außerhalb des Bildes (kein Hin und Her an der Grenze, aber nicht zu viel Speicher)
       if ((st.cx + 1) * K > v.x - 640 && st.cx * K < v.right + 640 && (st.cy + 1) * K > v.y - 640 && st.cy * K < v.bottom + 640) continue;
-      st.boden.destroy(); st.oben?.destroy(); st.baum?.destroy();
+      st.boden.destroy(); st.oben?.destroy(); st.baum?.destroy(); st.schatten?.destroy();
       this.textures.remove('boden-' + key); this.textures.remove('oben-' + key); if (this.textures.exists('baum-' + key)) this.textures.remove('baum-' + key);
+      if (this.textures.exists('schatten-' + key)) this.textures.remove('schatten-' + key);
       this.stuecke.delete(key);
     }
   }
@@ -1417,8 +1433,9 @@ class Ort extends Phaser.Scene {
     const tb = this.textures.createCanvas('boden-' + key, B, H);
     zeichneBoden(tb.getContext(), this.welt, rect); tb.refresh(); this.kanteFesthalten(tb);
     const boden = this.add.image(rect.x0 * KACHEL, rect.y0 * KACHEL, 'boden-' + key).setOrigin(0).setDepth(0).setVisible(!this.aktEbene);
-    const st = { cx, cy, key, rect, B, H, boden, oben: null, baum: undefined };
+    const st = { cx, cy, key, rect, B, H, boden, oben: null, baum: undefined, schatten: null };
     this.stuecke.set(key, st);
+    if (kulSchatten()) this.baueStueckSchatten(st);
     return st;
   }
 
@@ -1436,6 +1453,30 @@ class Ort extends Phaser.Scene {
     if (vorher) gl.bindTexture(gl.TEXTURE_2D, vorher);
   }
 
+  // Kulisse „Schatten“: eigenes durchscheinendes Bild über dem Boden; die Deckkraft folgt Tageszeit und Nebel (schattenAlphaSetzen)
+  baueStueckSchatten(st) {
+    const ts = this.textures.createCanvas('schatten-' + st.key, st.B, st.H);
+    if (!zeichneSchattenStueck(ts.getContext(), st.B, st.H, this.welt, st.rect)) { this.textures.remove('schatten-' + st.key); return; }
+    ts.refresh(); this.kanteFesthalten(ts);
+    st.schatten = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'schatten-' + st.key).setOrigin(0).setDepth(0.5).setAlpha(this.schattenAlpha ?? 0.2).setVisible(!this.aktEbene);
+  }
+  schattenAlphaSetzen() {
+    const st = raum.state, uhr = st.uhr ?? 480;
+    const a = 0.2 * schattenFaktor(1 - helligkeit(uhr), st.nebel ?? 0);
+    if (Math.abs(a - (this.schattenAlpha ?? -1)) < 0.004) return;
+    this.schattenAlpha = a;
+    for (const s of this.stuecke.values()) s.schatten?.setAlpha(a);
+  }
+  // Kulisse-Schalter geändert: alle Stücke neu bauen (Boden, Dächer, Schatten, Kronen)
+  kulisseNeuBauen() {
+    for (const [key, st] of this.stuecke) {
+      st.boden.destroy(); st.oben?.destroy(); st.baum?.destroy(); st.schatten?.destroy();
+      for (const n of ['boden-', 'oben-', 'baum-', 'schatten-']) if (this.textures.exists(n + key)) this.textures.remove(n + key);
+    }
+    this.stuecke.clear();
+    this.chunksAktualisieren(true);
+  }
+
   baueStueckOben(st) {
     const to = this.textures.createCanvas('oben-' + st.key, st.B, st.H);
     const ctx = to.getContext();
@@ -1451,7 +1492,7 @@ class Ort extends Phaser.Scene {
     const tk = this.textures.createCanvas('baum-' + st.key, st.B, st.H);
     zeichneKronen(tk.getContext(), this.welt, this.bilder, st.rect);
     tk.refresh(); this.kanteFesthalten(tk);
-    st.baum = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'baum-' + st.key).setOrigin(0).setDepth(6.5).setAlpha(0.55).setVisible(!this.aktEbene);
+    st.baum = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'baum-' + st.key).setOrigin(0).setDepth(6.5).setAlpha(kulBaumAlpha()).setVisible(!this.aktEbene);
   }
 
   // Haustüren draußen: geschlossen = dunkler Balken, Barrikade = Bretter, zerbrochen = Splitter
@@ -3070,6 +3111,7 @@ class Ort extends Phaser.Scene {
     this.innenAktualisieren(ich);
     if (ich) this.aussenLicht(ich);
     this.nebelZeichnen(ich, dt);
+    if (kulSchatten()) this.schattenAlphaSetzen();
     this.chunksAktualisieren();
     this.abholstelleAktualisieren();
     heliAktualisieren(this, raum.state, dt, this.aktEbene);

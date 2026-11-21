@@ -2,7 +2,7 @@
 // Nur Aussehen – Kollision und Türen bleiben beim Kachelraster (osmwelt.mjs).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { KACHEL, BREITE, T } from './welt.mjs';
-import { kulisse, zeichneLod2Daecher } from './kulisse.mjs';
+import { kulDaecher, zeichneEchtesDach } from './kulisse.mjs';
 
 const K = KACHEL;
 
@@ -52,7 +52,7 @@ function bbox(pts, rand = 0) {
 const schneidet = (b, r) => b.x1 >= r.x0 && b.x0 <= r.x1 && b.y1 >= r.y0 && b.y0 <= r.y1;
 const pixelRect = rect => ({ x0: rect.x0 * K, y0: rect.y0 * K, x1: rect.x1 * K, y1: rect.y1 * K });
 
-// Gebäude (Pixel) für die Kulisse-Schatten
+// Gebäude (Pixel) für die Kulisse-Schatten und -Dächer
 export function vektorGebaeude(welt) { return vorbereiten(welt).gebaeude; }
 
 // einmal je Welt: Pixelkoordinaten, Begrenzungsrahmen, Stil
@@ -686,12 +686,11 @@ export function zeichneVektorDaecher(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect);
   const hier = v.gebaeude.filter(g => !g.safe && schneidet({ ...g.box, x1: g.box.x1 + 10, y1: g.box.y1 + 12 }, r));
   const begrenzt = (g, f) => { ctx.save(); ctx.beginPath(); ctx.rect(...g.clip); ctx.clip(); f(); ctx.restore(); };
-  const kul = kulisse();
-  const ersetzt = kul?.lod2 ? zeichneLod2Daecher(ctx, rect, v.gebaeude, g => g.farbe) : new Set();   // Prototyp: echte Dächer aus LoD2
-  for (const g of hier) if (!ersetzt.has(g) && !kul) begrenzt(g, () => schatten(ctx, g));
+  const echt = kulDaecher();   // Kulisse „Echte Dächer“: LoD2-Dach im OSM-Umriss; Häuser ohne Eintrag behalten die gezeichnete Dachfläche
+  for (const g of hier) begrenzt(g, () => schatten(ctx, g));
   ctx.imageSmoothingEnabled = true;
   hier.forEach(g => {
-    if (ersetzt.has(g)) return;
+    if (echt && zeichneEchtesDach(ctx, g, g.farbe)) return;
     const b = dachBild(g);
     if (b) begrenzt(g, () => { ctx.drawImage(b.bild, b.x, b.y, b.b, b.h); dachDetails(ctx, g); });
   });
