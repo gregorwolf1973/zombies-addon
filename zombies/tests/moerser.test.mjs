@@ -33,10 +33,11 @@ async function frisch() {
 const mitMoerser = (zusatz, fn) => async () => {
   await frisch();
   const alt = SpielRaum.einstellungen;
-  SpielRaum.einstellungen = { ...alt, test: { ...alt.test, moerser: true }, moerser: { ...MOERSER, ...zusatz } };
+  SpielRaum.einstellungen = { ...alt, moerser: { ...MOERSER, ...zusatz } };
   const c = await new Client(`http://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Beobachter', spielerId: crypto.randomBytes(16).toString('hex') });
   const raum = matchMaker.getLocalRoomById(c.roomId);
   try {
+    raum.moerser.erzwungen = true;   // fester Einsatz (wie Schießstand)
     raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
     const schuesse = []; c.onMessage('moerser', m => schuesse.push(m));
     assert.ok(await bis(() => raum.moerser.fahrzeug()), 'Mörserfahrzeug erscheint nicht');
@@ -57,16 +58,15 @@ const gruppe = (raum, f, meter, n = 4) => { const o = fleck(raum, f, meter), ids
 const fernhalten = (p, f) => { p.ebene = ''; p.x = f.x - 40; p.y = f.y + 300; };
 
 test('Mörser-Einstellungen: Vorgabe aus, Grenzen und Reichweitenreihenfolge', () => {
-  assert.equal(vorgaben().test.moerser, false);
+  assert.equal(vorgaben().test.moerser, undefined);
   assert.deepEqual(vorgaben().moerser, MOERSER);
   const m = bereinige({ moerser: { reichweiteMin: 90, reichweiteMax: 20, pause: 0, schaden: 99999, radius: 99, mindestZombies: 0, sicherheit: -4, tempo: 1 }, test: { moerser: true } });
-  assert.equal(m.test.moerser, true);
+  assert.equal(m.test.moerser, undefined, 'alter Test-Schalter wird verworfen');
   assert.ok(m.moerser.reichweiteMax >= m.moerser.reichweiteMin + 5, 'Höchstreichweite muss über der Mindestreichweite liegen');
   assert.deepEqual([m.moerser.pause, m.moerser.schaden, m.moerser.radius, m.moerser.mindestZombies, m.moerser.sicherheit, m.moerser.tempo], [1, 1000, 15, 1, 0, 10]);
-  assert.equal(bereinige({ test: { moerser: 'ja' } }).test.moerser, false);
 });
 
-test('Mörser: nur mit Test-Schalter, danach steht ein M113 am Start und verschwindet bei Schalter aus', async () => {
+test('Mörser: ohne festen Einsatz aus (auch bei altem Test-Schalter), erzwungen steht ein M113 am Start', async () => {
   await frisch();
   const c = await new Client(`http://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name: 'Aus', spielerId: crypto.randomBytes(16).toString('hex') });
   const raum = matchMaker.getLocalRoomById(c.roomId);
@@ -75,8 +75,12 @@ test('Mörser: nur mit Test-Schalter, danach steht ein M113 am Start und verschw
     assert.equal(raum.moerser.fahrzeug(), null, 'Mörser trotz Vorgabe aus');
     const alt = SpielRaum.einstellungen;
     SpielRaum.einstellungen = { ...alt, test: { ...alt.test, moerser: true } };
-    assert.ok(await bis(() => raum.moerser.fahrzeug()?.art === 'moerser'), 'Mörser erscheint nicht');
+    await warte(300);
+    assert.equal(raum.moerser.fahrzeug(), null, 'alter Test-Schalter darf nichts mehr bewirken');
     SpielRaum.einstellungen = alt;
+    raum.moerser.erzwungen = true;
+    assert.ok(await bis(() => raum.moerser.fahrzeug()?.art === 'moerser'), 'Mörser erscheint nicht');
+    raum.moerser.erzwungen = false;
     assert.ok(await bis(() => !raum.moerser.fahrzeug()), 'Mörser bleibt');
   } finally { await c.leave(); await bis(() => !SpielRaum.aktiv, 3000); }
 });

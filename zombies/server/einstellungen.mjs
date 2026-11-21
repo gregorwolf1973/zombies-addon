@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DINGE, WAFFEN } from '../client/welt.mjs';
 import { MOERSER } from './moerser.mjs';
+import { MUNITIONSGLUECK } from './munitionsglueck.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
 import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
 
@@ -171,6 +172,7 @@ export function bereinige(e = {}, alt = {}) {
   const sp = { ...a.sprache, ...(e.sprache ?? {}) };
   const ag = { ...a.aufgaben, ...(e.aufgaben ?? {}) };
   const bw = { ...a.bundeswehr, ...(e.bundeswehr ?? {}) };
+  const mgl = { ...a.munitionsglueck, ...(e.munitionsglueck ?? {}) }, MG = MUNITIONSGLUECK;
   const fk = { ...a.faehigkeiten, ...(e.faehigkeiten ?? {}) };
   const tu = { ...a.tueren, ...(e.tueren ?? {}) };
   const typen = Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, typeof z.typen?.[k] === 'boolean' ? z.typen[k] : (typeof a.zombies?.typen?.[k] === 'boolean' ? a.zombies.typen[k] : true)]));
@@ -294,12 +296,19 @@ export function bereinige(e = {}, alt = {}) {
       };
     })(),
     funde,
+    munitionsglueck: {                                                        // Munitionsglück (server/munitionsglueck.mjs), alles in %
+      schritt: Math.round(zahl(mgl.schritt, 0, 100, MG.schritt)),
+      max: Math.round(zahl(mgl.max, 100, 500, MG.max)),
+      lebenUnter: Math.round(zahl(mgl.lebenUnter, 0, 100, MG.lebenUnter)),
+      lebenFaktor: Math.round(zahl(mgl.lebenFaktor, 100, 300, MG.lebenFaktor)),
+      notUnter: Math.round(zahl(mgl.notUnter, 0, 100, MG.notUnter)),
+      notFaktor: Math.round(zahl(mgl.notFaktor, 100, 300, MG.notFaktor)),
+    },
     toene,
     toeneHorde: bereinigeHordeTon({ ...a.toeneHorde, ...(e.toeneHorde ?? {}) }),
     musik: bereinigeMusik({ ...a.musik, ...(e.musik ?? {}) }),
     test: {
       zeitraffer: ZEITRAFFER.includes(Number(t.zeitraffer)) ? Number(t.zeitraffer) : 1,
-      moerser: typeof t.moerser === 'boolean' ? t.moerser : false,           // Test: Panzermörser (M113) neben den Start stellen
       unsterblich: [...new Set((Array.isArray(t.unsterblich) ? t.unsterblich : []).map(n => String(n).trim().slice(0, 16)).filter(Boolean))].slice(0, 20),
     },
   };
@@ -315,8 +324,9 @@ export function vorgaben() {
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
     bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, mgMunition: 400, pumaMunition: 200 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
-    test: { zeitraffer: 1, unsterblich: [], moerser: false },
+    test: { zeitraffer: 1, unsterblich: [] },
     moerser: { ...MOERSER },
+    munitionsglueck: { ...MUNITIONSGLUECK },
     toene: {},
     toeneHorde: { ...HORDE_TON_VORGABE },
     musik: { ...MUSIK_VORGABE },

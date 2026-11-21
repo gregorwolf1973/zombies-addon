@@ -11,6 +11,7 @@ import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben, Mission, levelSchluessel } from './aufgaben.mjs';
 import { schwierigkeit, LEVEL_VORGABE } from './schwierigkeit.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
+import { mitMunitionsglueck, munitionsDinge, naechsteSerie } from './munitionsglueck.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
 import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
 import { Finale } from './finale.mjs';
@@ -445,7 +446,7 @@ export class SpielRaum extends Room {
     haengendStart(this);   // hängende Zombies im S-Draht (Lager, Flugfeld) und Tote am Flugfeld Königsdorf
     this.granaten = new Granaten(this);
     this.radios = new Radios(this);
-    this.moerser = new Moerser(this);   // Panzermörser (Test-Schalter test.moerser)
+    this.moerser = new Moerser(this);   // Panzermörser (feste Einsätze: B11-Szene, Schießstand)
     this.szeneB11 = new SzeneB11(this); this.szeneB11.start();   // „Stau auf der B11“ (nur geretsried2)
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     this.tuerAnteileUebernehmen();
@@ -603,6 +604,7 @@ export class SpielRaum extends Room {
       p.lampe = Math.max(0, Math.min(LAMPE_DAUER, Number(gespeichert.lampe) || 0));
       p.plaetze = [8, 12, 16].includes(Number(gespeichert.plaetze)) ? Number(gespeichert.plaetze) : RUCKSACK_PLAETZE;
       extra.fk = FK.normiere(gespeichert.fk);
+      extra.munSerie = Math.max(0, Math.min(50, Number(gespeichert.munSerie) || 0));
       WP.lade(p, extra, gespeichert);
       extra.startOffen = this.state.level === 1 && !!gespeichert.startOffen;   // Startwahl noch nicht getroffen
       p.plaetze += FK.wirkung.rucksack(extra.fk);
@@ -1175,7 +1177,7 @@ export class SpielRaum extends Room {
     if (!p || !x || x.bot || !this.speicher || (this.nichtSpeichern && !trotzdem)) return;
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
-      waffe: p.waffe, munition: p.munition, pfeile: p.pfeile, granaten: p.granaten, handgranaten: p.handgranaten, ...WP.speicherDaten(p, x), rucksack: [...p.rucksack], plaetze: p.plaetze - this.fkRucksack(p), besiegt: p.besiegt, fk: x.fk,
+      waffe: p.waffe, munition: p.munition, pfeile: p.pfeile, granaten: p.granaten, handgranaten: p.handgranaten, ...WP.speicherDaten(p, x), rucksack: [...p.rucksack], plaetze: p.plaetze - this.fkRucksack(p), besiegt: p.besiegt, fk: x.fk, munSerie: x.munSerie ?? 0,
       startOffen: !!x.startOffen, aussehen: p.aussehen, letzterSafe: x.letzterSafe, lager: p.sicher === 'lager' && p.zombie <= 0, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
     });
   }
@@ -1625,12 +1627,19 @@ export class SpielRaum extends Room {
     for (const [sid] of this.spielerHinterTuer(key)) this.clients.find(c => c.sessionId === sid)?.send('meldung', { text });
   }
 
+  // Gehört die Tür zu einem Safehouse (Haustür oder Tür innen)? Dann hält sie geschlossen/verbarrikadiert immer
+  tuerImSafe(key) {
+    const nr = this.hausNr(key) ?? Number(EBENE_MUSTER.exec(key.split(':')[0])?.[1] ?? NaN);
+    return Number.isFinite(nr) && !!this.welt?.safeRooms?.some(r => r.haus.nr === nr);
+  }
+
   // Ein Zombie schlägt gegen die Tür: erst die Barrikade, dann die Tür selbst
   tuerSchlag(key, dt, z) {
     const st = this.state.tueren.get(key);
     if (!st) return;
     const bar = this.tuerBarrikade(key);
-    if (bar > 0) this.setzeBarrikade(key, bar - dt * BARRIKADE_SCHADEN);
+    if (this.tuerImSafe(key)) { /* Safehouse: Tür und Barrikade nehmen keinen Schaden, die Zombies hämmern nur */ }
+    else if (bar > 0) this.setzeBarrikade(key, bar - dt * BARRIKADE_SCHADEN);
     else if (!st.kaputt) {
       st.hp = Math.max(0, st.hp - dt * (st.verschlossen ? TUER_SCHADEN_ZU : TUER_SCHADEN));
       if (st.hp <= 0) {
@@ -1912,7 +1921,7 @@ export class SpielRaum extends Room {
         if (b.art === 'auto' && !hat(p.rucksack, 'brechstange')) continue;
         if ((b.art === 'auto') && this.state.verbrannt.has('auto:' + b.id)) this.setzeInhalt(b.id, []);
         if (!this.inhalte.has(b.id) && this.ueberraschung(client, p, b)) break;   // Zombie springt heraus: Rest bleibt ungesucht
-        this.befuelle(b);
+        this.befuelle(b, p, x);
         this.setzeInhalt(b.id, this.inhalte.get(b.id));
       } else this.leicheDurchsucht(client, p, id, false);
     }
@@ -1987,7 +1996,7 @@ export class SpielRaum extends Room {
     if ((b.art === 'auto' || b.art === 'bus') && this.state.verbrannt.has((b.art === 'auto' ? 'auto:' : 'bus:') + b.id)) this.setzeInhalt(b.id, []);
     // Überraschungszombie: beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto springt selten einer heraus (nicht in Safe Rooms/Lager)
     if (!this.inhalte.has(b.id) && this.ueberraschung(client, p, b)) return;
-    this.befuelle(b);
+    this.befuelle(b, p, this.extra.get(client?.sessionId));
     const inhalt = this.inhalte.get(b.id);
     const genommen = this.einpacken(p, inhalt);
     this.setzeInhalt(b.id, inhalt);
@@ -1996,7 +2005,8 @@ export class SpielRaum extends Room {
   }
 
   // Inhalt eines Behälters auswürfeln (einmalig, danach liegt er in this.inhalte)
-  befuelle(b) {
+  // Mit Spieler p (und seinen extra-Daten x): Munitionsglück (server/munitionsglueck.mjs) hebt dessen Munitionsgewicht nach Pechserie/Lage
+  befuelle(b, p = null, x = null) {
     if (this.inhalte.has(b.id)) return;
     let art = b.art;
     // Belohnung: Schrank/Spind in einem Raum hinter einer Tür mit Rätsel-Schloss
@@ -2004,11 +2014,14 @@ export class SpielRaum extends Room {
     const tabelle = BEUTE[art] ?? [];
     const funde = [];
     const n = 1 + (this.rnd() < 0.45 ? 1 : 0);
-    const faktoren = this.fundFaktoren(b);
+    let faktoren = this.fundFaktoren(b);
+    const glueck = p && x && !x.bot ? SpielRaum.einstellungen.munitionsglueck : null;
+    if (glueck) faktoren = mitMunitionsglueck(faktoren, p, x.munSerie, glueck);
     for (let i = 0; i < n; i++) {
       const d = ziehe(tabelle, faktoren, this.rnd, BEUTE_BONUS[art]);
       if (d) funde.push(d);
     }
+    if (glueck) { const mun = munitionsDinge(p); x.munSerie = naechsteSerie(x.munSerie, funde.some(d => mun.includes(d))); }
     funde.push(...(this.aufgaben?.missionsFunde(b.id) ?? []));   // Missionsgegenstand dieses Behälters
     this.setzeInhalt(b.id, funde);
   }
