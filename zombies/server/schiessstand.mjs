@@ -3,6 +3,7 @@
 // Der Raum erbt Bewegung, Zombies, Schüsse und Nachladen von SpielRaum und nutzt dieselben Einstellungen (Waffen: Schaden, Pause,
 // Reichweite, Magazin, Zombie-Leben …), damit die Auswertung die echten Werte zeigt. Spieler: unsterblich, kein Hunger/Durst,
 // unbegrenzter Vorrat (Magazin und Nachladen wie im Spiel). Der Puma des Bundeswehr-Standorts schießt nur, wenn „Panzer“ an ist.
+import { zaehle, fuegeHinzu } from '../client/stapel.mjs';
 import { SpielRaum, Zustand, Spieler, sauberName } from './raum.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
@@ -88,7 +89,7 @@ export class SchiessstandRaum extends SpielRaum {
     p.hp = 100; p.durst = 100; p.hunger = 100; p.besiegt = 0;
     p.x = SS_START.x; p.y = SS_START.y;
     p.waffe = 'pistole'; p.munition = MUNITION_MAX; p.pfeile = PFEILE_MAX; p.granaten = GRANATEN_MAX;
-    for (let i = 0; i < 4; i++) p.rucksack.push('granate');
+    fuegeHinzu(p.rucksack, p.plaetze, 'granate', 4);
     const extra = { spielerId: 'schiessstand', letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null, letzteEingabe: Date.now() };
     WP.lade(p, extra, null);
     this.state.spieler.set(client.sessionId, p);
@@ -245,7 +246,7 @@ export class SchiessstandRaum extends SpielRaum {
       // unsterblich, satt, unbegrenzter Vorrat (Magazin wie im Spiel: der Vorrat füllt nach)
       p.hp = 100; p.unten = false; p.infektion = 0; p.zombie = 0; p.durst = 100; p.hunger = 100;
       p.munition = MUNITION_MAX; p.pfeile = PFEILE_MAX; p.granaten = GRANATEN_MAX;
-      while (p.rucksack.filter(d => d === 'granate').length < 4) p.rucksack.push('granate');
+      if (zaehle(p.rucksack, 'granate') < 4) fuegeHinzu(p.rucksack, p.plaetze, 'granate', 4 - zaehle(p.rucksack, 'granate'));
       this.spielerSchritt(id, p, x, dt);
       p.hp = 100; p.unten = false; p.infektion = 0;
     }

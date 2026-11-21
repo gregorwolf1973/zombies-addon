@@ -2,6 +2,7 @@
 // p.waffe ist immer die Waffe in der Hand = der Inhalt des aktiven Platzes p.wplatz; alter Code, der p.waffe setzt, bleibt
 // deshalb gültig – abgleich() übernimmt die Hand jeden Tick in den aktiven Platz und verwaltet das Magazin dazu.
 // p.munition / p.pfeile / p.granaten sind der Vorrat AUSSERHALB des Magazins (p.magazin = Schuss im Magazin der Hand).
+import { zaehle, entferne, fuegeHinzu, kannAufnehmen, dingId, nimmEins } from '../client/stapel.mjs';
 import { WAFFEN, DINGE, GRANATE, vorratFeld, vorratVon, magazinGroesse, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX } from '../client/welt.mjs';
 
 export const PLATZ_FELD = ['wp0', 'wp1'];   // wp2/mg2/mx2 im Schema sind aus der Zeit mit drei Plätzen übrig und bleiben leer
@@ -196,13 +197,12 @@ function ablegenRucksack(raum, p, ding) {
   const name = istHg(ding.name) ? 'granate' : ding.name;
   let boden = 0;
   for (let k = 0; k < ding.anzahl; k++) {
-    if (p.rucksack.length < p.plaetze) p.rucksack.push(name);
-    else { raum.legeHin(name, p.x, p.y, p.ebene); boden++; }
+    if (fuegeHinzu(p.rucksack, p.plaetze, name) < 1) { raum.legeHin(name, p.x, p.y, p.ebene); boden++; }
   }
   return boden;
 }
 // alle 'granate' aus dem Rucksack nehmen (ArraySchema: an Ort und Stelle ändern)
-function granatenEntfernen(p) { for (let k = p.rucksack.length - 1; k >= 0; k--) if (p.rucksack[k] === 'granate') p.rucksack.splice(k, 1); }
+function granatenEntfernen(p) { entferne(p.rucksack, 'granate', zaehle(p.rucksack, 'granate')); }
 const frage = (raum, p) => !p || p.unten || p.zombie > 0 || raum.state.phase !== 'spiel';
 
 // Nachricht 'platz_aktion' { platz, aktion: 'rucksack' | 'fallen' | 'tausch', rs? }
@@ -216,7 +216,7 @@ export function platzAktion(raum, client, p, x, m, einst) {
   if (!name) return false;
   const z = DINGE[name].zeichen, n = DINGE[name].name;
   if (m.aktion === 'rucksack') {
-    if (p.rucksack.length >= p.plaetze) { client?.send('meldung', { text: '🎒 Rucksack voll' }); return false; }
+    if (!kannAufnehmen(p.rucksack, p.plaetze, istHg(name) ? 'granate' : name)) { client?.send('meldung', { text: '🎒 Rucksack voll' }); return false; }
     const ding = entnehmen(p, x, i, einst);
     const boden = ablegenRucksack(raum, p, ding);
     client?.send('meldung', { text: `${z} ${n} in den Rucksack${boden ? ` (${boden} liegen am Boden)` : ''}` });
@@ -234,11 +234,11 @@ export function platzAktion(raum, client, p, x, m, einst) {
 // Rucksack-Eintrag rs (Waffe oder Handgranate) in Platz i; eine dort liegende Waffe geht in den Rucksack (Tausch)
 export function ausRucksack(raum, client, p, x, rs, i, einst) {
   if (frage(raum, p) || !Number.isInteger(rs) || rs < 0 || rs >= p.rucksack.length || !Number.isInteger(i) || i < 0 || i >= PLATZ_ANZAHL) return false;
-  const d = p.rucksack[rs];
+  const d = dingId(p.rucksack[rs]);
   if (d !== 'granate' && !(DINGE[d]?.waffe && !DINGE[d].intern)) return false;
   abgleich(p, x, einst);
   if (d === 'granate') {
-    const anzahl = p.rucksack.filter(q => q === 'granate').length;
+    const anzahl = zaehle(p.rucksack, 'granate');
     const hg = handgranatenPlatz(p);
     if (hg >= 0) {   // es gibt schon einen Handgranaten-Platz: alle Granaten dorthin
       granatenEntfernen(p);
@@ -254,7 +254,7 @@ export function ausRucksack(raum, client, p, x, rs, i, einst) {
     client?.send('meldung', { text: `💣 ${PLATZ_NAME[i]}: ${anzahl} Handgranate${anzahl > 1 ? 'n' : ''}` });
     return true;
   }
-  p.rucksack.splice(rs, 1);
+  nimmEins(p.rucksack, rs);
   const alt = entnehmen(p, x, i, einst);
   if (alt) ablegenRucksack(raum, p, alt);
   p[PLATZ_FELD[i]] = d;

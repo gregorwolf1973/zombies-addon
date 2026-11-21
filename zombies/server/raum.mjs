@@ -18,6 +18,8 @@ import { imLager } from '../client/stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
 import { Radios } from './radio.mjs';
 import * as WP from './waffenplaetze.mjs';
+import { hat, zaehle, flach, indexVon, entferne, nimmEins, nimmStapel, fuegeHinzu, kannAufnehmen, blockGrund, platzFuer, verschiebe, laden as stapelLaden, dingId, dingN, istTasche } from '../client/stapel.mjs';
+import { munitionGeben, kisteOeffnen, munitionPruefen } from './munition.mjs';
 import { Moerser } from './moerser.mjs';
 import * as FK from './faehigkeiten.mjs';
 import { alleKandidaten, NIMM_WEITE, ALLE_FRAGEN, ALLE_SPERRE } from '../client/durchsuche_alle.mjs';
@@ -31,7 +33,7 @@ import {
   KACHEL, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zombieSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, setzeTageszeiten,
   WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
-  BLOCKIERT, ziehe, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
+  BLOCKIERT, ziehe, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
 
 export const Spieler = schema({
   name: t.string(),
@@ -225,7 +227,7 @@ const CHAT_MAX = 300, CHAT_VERLAUF = 100, CHAT_ANZAHL = 5, CHAT_FENSTER = 10000;
 const blassStufe = rest => rest >= 20 ? 0 : Math.max(0, Math.min(10, Math.ceil((20 - rest) / 2)));
 
 // Spielerdaten in der Form, die lautstaerke() erwartet
-const sprachDaten_ = p => ({ x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: [...(p.rucksack ?? [])] });
+const sprachDaten_ = p => ({ x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: flach(p.rucksack) });
 
 export class SpielRaum extends Room {
   maxClients = 10;
@@ -407,7 +409,7 @@ export class SpielRaum extends Room {
         const safe = this.state.safes.get(id);
         if (!safe) continue;
         safe.barrikade = Math.max(0, Math.min(100, Number(s.barrikade) || 0));
-        for (const d of (s.kiste ?? []).slice(0, KISTE_PLAETZE)) if (DINGE[d]) safe.kiste.push(d);
+        stapelLaden(safe.kiste, s.kiste, KISTE_PLAETZE, true);
       }
     }
     this.spiegleSafeTueren();
@@ -598,8 +600,8 @@ export class SpielRaum extends Room {
       WP.lade(p, extra, gespeichert);
       extra.startOffen = this.state.level === 1 && !!gespeichert.startOffen;   // Startwahl noch nicht getroffen
       p.plaetze += FK.wirkung.rucksack(extra.fk);
-      for (const d of (gespeichert.rucksack ?? []).slice(0, p.plaetze)) if (DINGE[d]) p.rucksack.push(d);
-      for (const d of extra.ueberlauf ?? []) if (p.rucksack.length < p.plaetze) p.rucksack.push(d);   // ehemaliger dritter Waffenplatz
+      stapelLaden(p.rucksack, gespeichert.rucksack, p.plaetze);
+      for (const d of extra.ueberlauf ?? []) fuegeHinzu(p.rucksack, p.plaetze, d);   // ehemaliger dritter Waffenplatz
       delete extra.ueberlauf;
       extra.letzterSafe = gespeichert.letzterSafe ?? '';
       // gespeichert wird nur im Safe Room: dort (im Innenraum) geht es weiter; sonst im letzten Safe Room
@@ -1199,7 +1201,7 @@ export class SpielRaum extends Room {
         // ein toter Zombie in der Tür muss erst weg
         const imWeg = this.leicheInTuer(safe);
         if (imWeg) return { art: 'wegziehen', leiche: imWeg, safe, dauer: 1.5 };
-        if (p.rucksack.includes('bretter') && zustand.barrikade < 100) return { art: 'barrikade', safe, key: 'haus:' + safe.haus.nr, dauer: 3 };
+        if (hat(p.rucksack, 'bretter') && zustand.barrikade < 100) return { art: 'barrikade', safe, key: 'haus:' + safe.haus.nr, dauer: 3 };
       }
       const funk = this.aufgaben?.funkKontext(p);
       if (funk) return funk;
@@ -1214,7 +1216,7 @@ export class SpielRaum extends Room {
       const d = Math.hypot(b.x - p.x, b.y - p.y);
       if (d < nd) { nd = d; nahDing = id; }
     }
-    if (nahDing && p.rucksack.length < p.plaetze) return { art: 'aufheben', id: nahDing, dauer: 0.4 };
+    if (nahDing && (!this.bodenBrauchtPlatz(p, this.state.boden.get(nahDing).ding) || kannAufnehmen(p.rucksack, p.plaetze, this.state.boden.get(nahDing).ding))) return { art: 'aufheben', id: nahDing, dauer: 0.4 };
     const mensch = this.stadt?.ansprechbar?.(p);
     if (mensch) return { art: 'ansprechen', id: mensch, dauer: 0.6 };
     if (!p.ebene && this.state.torGeloest < TOR_RAETSEL && this.amTor(p)) return { art: 'raetsel' };
@@ -1550,10 +1552,10 @@ export class SpielRaum extends Room {
       if (art === 'frei') return { ...basis, art: 'tuer_auf', dauer: 0.25 };
       if (art === 'raetsel') return { ...basis, art: 'schlossraetsel' };
       // nur mit Schlüsselbund; die Brechstange hilft hier nicht
-      if (p.rucksack.includes('schluessel')) return { ...basis, art: 'aufschliessen', dauer: 1 };
+      if (hat(p.rucksack, 'schluessel')) return { ...basis, art: 'aufschliessen', dauer: 1 };
       return { ...basis, art: 'schluessel_noetig' };
     };
-    const brett = () => p.rucksack.includes('bretter') && bar < 100 ? { ...basis, art: 'barrikade', dauer: 3 } : null;
+    const brett = () => hat(p.rucksack, 'bretter') && bar < 100 ? { ...basis, art: 'barrikade', dauer: 3 } : null;
     const umschalten = () => offen ? schliessen() : oeffnen();
     if (modus === 'auf') return offen ? null : oeffnen();
     if (modus === 'zu') return offen ? (brett() ?? schliessen()) : null;
@@ -1653,9 +1655,9 @@ export class SpielRaum extends Room {
       if (!this.istBot(s) || this.istBot(andere)) { t.ok[s] = this.istBot(s); continue; }
       const bot = this.state.spieler.get(s), mensch = this.state.spieler.get(andere);
       if (!bot || !mensch) { t.ok[s] = false; continue; }
-      for (const d of t.angebot[s]) bot.rucksack.push(d);   // altes Gegenangebot zurücklegen und neu zusammenstellen
+      for (const d of t.angebot[s]) fuegeHinzu(bot.rucksack, bot.plaetze, d);   // altes Gegenangebot zurücklegen und neu zusammenstellen
       t.angebot[s] = botGegenangebot(bot, mensch, t.angebot[andere]);
-      for (const d of t.angebot[s]) bot.rucksack.splice(bot.rucksack.indexOf(d), 1);
+      for (const d of t.angebot[s]) entferne(bot.rucksack, d, 1);
       t.ok[s] = botEinverstanden(bot, t.angebot[andere], t.angebot[s]);
     }
     for (const s of t.seiten) if (!this.istBot(s)) t.ok[s] = false;
@@ -1666,15 +1668,15 @@ export class SpielRaum extends Room {
     const t = this.tausche.get(client.sessionId), p = this.state.spieler.get(client.sessionId);
     const i = Number(m?.platz);
     if (!t || !p || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
-    t.angebot[client.sessionId].push(p.rucksack[i]); p.rucksack.splice(i, 1);
+    t.angebot[client.sessionId].push(nimmEins(p.rucksack, i));
     this.tauschGeaendert(t);
   }
 
   tauschZurueck(client, m) {
     const t = this.tausche.get(client.sessionId), p = this.state.spieler.get(client.sessionId);
     const i = Number(m?.index), liste = t?.angebot[client.sessionId];
-    if (!t || !p || !Number.isInteger(i) || i < 0 || i >= liste.length || p.rucksack.length >= p.plaetze) return;
-    p.rucksack.push(liste[i]); liste.splice(i, 1);
+    if (!t || !p || !Number.isInteger(i) || i < 0 || i >= liste.length || !kannAufnehmen(p.rucksack, p.plaetze, liste[i])) return;
+    fuegeHinzu(p.rucksack, p.plaetze, liste[i]); liste.splice(i, 1);
     this.tauschGeaendert(t);
   }
 
@@ -1688,18 +1690,18 @@ export class SpielRaum extends Room {
       if (bs) {
         const bot = this.state.spieler.get(bs), name = bot?.name ?? 'Der Bot';
         const H = t.angebot[t.seiten.find(q => q !== bs)] ?? [], B = t.angebot[bs] ?? [];
-        const voll = bot && bot.rucksack.length - B.length + H.length > bot.plaetze;
+        const voll = bot && !this.tauschPasst(bot, H);
         this.clients.find(k => k.sessionId === client.sessionId)?.send('meldung', { text: voll ? `${name}: Mein Rucksack ist voll` : `${name} will das so nicht tauschen` });
       }
       return this.tauschSenden(t);
     }
     const pa = this.state.spieler.get(a), pb = this.state.spieler.get(b);
-    if (pa.rucksack.length + t.angebot[b].length > pa.plaetze || pb.rucksack.length + t.angebot[a].length > pb.plaetze) {
+    if (!this.tauschPasst(pa, t.angebot[b]) || !this.tauschPasst(pb, t.angebot[a])) {
       for (const s of t.seiten) this.clients.find(k => k.sessionId === s)?.send('meldung', { text: 'Für den Tausch ist im Rucksack nicht genug Platz' });
       return this.tauschGeaendert(t);
     }
-    for (const d of t.angebot[b]) pa.rucksack.push(d);
-    for (const d of t.angebot[a]) pb.rucksack.push(d);
+    for (const d of t.angebot[b]) fuegeHinzu(pa.rucksack, pa.plaetze, d);
+    for (const d of t.angebot[a]) fuegeHinzu(pb.rucksack, pb.plaetze, d);
     t.angebot[a] = []; t.angebot[b] = [];
     this.tauschEnde(t, 'fertig');
   }
@@ -1708,7 +1710,7 @@ export class SpielRaum extends Room {
     for (const s of t.seiten) {
       const p = this.state.spieler.get(s);
       for (const d of t.angebot[s] ?? []) {
-        if (p && p.rucksack.length < p.plaetze) p.rucksack.push(d);
+        if (p && fuegeHinzu(p.rucksack, p.plaetze, d) > 0) { /* zurück im Rucksack */ }
         else if (p) this.legeHin(d, p.x, p.y, p.ebene);
       }
       t.angebot[s] = [];
@@ -1753,7 +1755,7 @@ export class SpielRaum extends Room {
       if (fehlt.length) return client.send('meldung', { text: `📻 Der Funkspruch geht noch nicht – es fehlt: ${fehlt.join(', ')} (in die Safe-Room-Kiste legen)`, lang: true });
     }
     // Kofferräume gehen nur mit Brechstange auf
-    if (k.art === 'durchsuchen' && k.behaelter?.art === 'auto' && !p.rucksack.includes('brechstange')) {
+    if (k.art === 'durchsuchen' && k.behaelter?.art === 'auto' && !hat(p.rucksack, 'brechstange')) {
       return client.send('meldung', { text: '🔒 Der Kofferraum ist zu – dafür brauchst du eine ⚒️ Brechstange' });
     }
     p.aktion = k.art; p.fortschritt = 0;
@@ -1796,7 +1798,7 @@ export class SpielRaum extends Room {
     else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; this.broadcast('klettern', { x: p.x, y: p.y, id: sid }); }
     else if (k.art === 'aufheben') {
       const b = this.state.boden.get(k.id);
-      if (!b || (p.rucksack.length >= p.plaetze && b.ding !== 'pfeil' && b.ding !== 'granate40' && b.ding !== 'munition')) return;
+      if (!b || (this.bodenBrauchtPlatz(p, b.ding) && !kannAufnehmen(p.rucksack, p.plaetze, b.ding))) return;
       this.nimmAuf(client, p, k.id, b);
     }
     else if (k.art === 'wegziehen') {
@@ -1811,10 +1813,9 @@ export class SpielRaum extends Room {
     }
     else if (k.art === 'barrikade') {
       if (k.safe && this.leicheInTuer(k.safe)) return client?.send('meldung', { text: 'Ein toter Zombie liegt in der Tür – erst wegziehen' });
-      const i = p.rucksack.indexOf('bretter');
-      if (i < 0) return;
+      if (!hat(p.rucksack, 'bretter')) return;
       if (this.tuerBarrikade(k.key) >= 100) return;
-      p.rucksack.splice(i, 1);
+      entferne(p.rucksack, 'bretter', 1);
       this.setzeBarrikade(k.key, this.tuerBarrikade(k.key) + BRETT_STAERKE);
       client?.send('meldung', { text: `Tür verbarrikadiert (${Math.round(this.tuerBarrikade(k.key))} %)` });
     }
@@ -1835,7 +1836,7 @@ export class SpielRaum extends Room {
   }
 
   beginneAlle(client, p, x) {
-    const { liste, dauer, autoZu } = alleKandidaten(this.wv(p.ebene), this.state.behaelter, this.state.leichen, p, p.rucksack.includes('brechstange'));
+    const { liste, dauer, autoZu } = alleKandidaten(this.wv(p.ebene), this.state.behaelter, this.state.leichen, p, hat(p.rucksack, 'brechstange'));
     if (!liste.length) return void client.send('meldung', { text: autoZu ? '🔒 Die Kofferräume sind zu – dafür brauchst du eine ⚒️ Brechstange' : 'Hier gibt es nichts mehr zu durchsuchen' });
     p.aktion = 'durchsuchen'; p.fortschritt = 0;
     x.aktionZiel = { art: 'durchsuchen_alle', ids: liste.map(e => e.id), dauer };
@@ -1881,7 +1882,7 @@ export class SpielRaum extends Room {
       if (!b || (l && ((l.ebene ?? '') !== (p.ebene ?? '') || l.rest === 0))) continue;
       if (!l) {
         if (this.state.behaelter.get(id)) continue;
-        if (b.art === 'auto' && !p.rucksack.includes('brechstange')) continue;
+        if (b.art === 'auto' && !hat(p.rucksack, 'brechstange')) continue;
         if ((b.art === 'auto') && this.state.verbrannt.has('auto:' + b.id)) this.setzeInhalt(b.id, []);
         if (!this.inhalte.has(b.id) && this.ueberraschung(client, p, b)) break;   // Zombie springt heraus: Rest bleibt ungesucht
         this.befuelle(b);
@@ -1947,7 +1948,7 @@ export class SpielRaum extends Room {
         const sel = this.rnd();
         const waffe = sel < 0.25 ? 'mg' : sel < 0.33 ? 'scharfschuetze' : waffen[Math.floor(this.rnd() * waffen.length)];
         this.inhalte.set(schluessel, [waffe, 'taschenlampe']);
-        p.munition = Math.min(MUNITION_MAX, p.munition + 100);
+        this.munitionNehmen(p, 100);
         extraGenommen = ['munition'];
       }
       const inhalt = this.inhalte.get(schluessel);
@@ -2014,9 +2015,10 @@ export class SpielRaum extends Room {
   // Gegenstände in den Rucksack (Munition direkt zur Pistole); Rest bleibt liegen
   einpacken(p, inhalt) {
     const genommen = [];
+    let tascheZu = false;
     for (let i = 0; i < inhalt.length;) {
       const d = inhalt[i];
-      if (d === 'munition') { p.munition = Math.min(MUNITION_MAX, p.munition + MUNITION_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (d === 'munition') { this.munitionNehmen(p, MUNITION_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'pfeil') { p.pfeile = Math.min(PFEILE_MAX, p.pfeile + PFEILE_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'granate40') { p.granaten = Math.min(GRANATEN_MAX, (p.granaten ?? 0) + GRANATEN_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
       // in die Hand bzw. anziehen, wenn frei – das braucht keinen Rucksackplatz
@@ -2024,12 +2026,14 @@ export class SpielRaum extends Room {
       if (DINGE[d]?.waffe && !p.waffe && !p.faust) { p.waffe = d; genommen.push(d); inhalt.splice(i, 1); continue; }
       // Maschinengewehr schlägt jede andere Waffe: sofort in die Hand (die bisherige wandert in den Rucksack, wenn Platz ist),
       // sonst liegt es unbemerkt im Rucksack und „schießt nicht“, weil nur die Waffe in der Hand feuert
-      if (d === 'mg' && p.waffe && p.waffe !== 'mg' && p.rucksack.length < p.plaetze) { p.rucksack.push(p.waffe); p.waffe = 'mg'; genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (d === 'mg' && p.waffe && p.waffe !== 'mg' && kannAufnehmen(p.rucksack, p.plaetze, p.waffe)) { fuegeHinzu(p.rucksack, p.plaetze, p.waffe); p.waffe = 'mg'; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'taschenlampe' && !(p.lampe > 0)) { p.lampe = LAMPE_DAUER; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'kleidung' && !(p.kleidung > 0)) { p.kleidung = 100; genommen.push(d); inhalt.splice(i, 1); continue; }
-      if (p.rucksack.length < p.plaetze) { p.rucksack.push(d); genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (fuegeHinzu(p.rucksack, p.plaetze, d) > 0) { genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (istTasche(d) && blockGrund(p.rucksack, p.plaetze, d) === 'tasche') tascheZu = true;
       i++;
     }
+    if (tascheZu) this.clients.find(c => this.state.spieler.get(c.sessionId) === p)?.send('meldung', { text: '🎒 Du trägst schon eine Tasche – eine zweite geht nicht' });
     return genommen;
   }
 
@@ -2106,26 +2110,44 @@ export class SpielRaum extends Room {
     }
   }
 
+  // Braucht ein Bodengegenstand einen Rucksackplatz? (Waffe in leere Hand, Handgranaten-Platz, Munition/Pfeile/Granaten, Lampe, Kleidung gehen direkt)
+  bodenBrauchtPlatz(p, d) {
+    return !((DINGE[d]?.waffe && !p.waffe && !p.faust) || (d === 'granate' && WP.handgranatenPlatz(p) >= 0) || d === 'munition' || d === 'pfeil' || d === 'granate40' || (d === 'taschenlampe' && !(p.lampe > 0)) || (d === 'kleidung' && !(p.kleidung > 0)));
+  }
+
+  // Passt das Angebot 'an' (Liste einzelner Dinge) noch in den Rucksack? (Das eigene Angebot ist schon herausgenommen.)
+  tauschPasst(p, an) {
+    const t = [...p.rucksack];
+    for (const d of an) if (fuegeHinzu(t, p.plaetze, d) < 1) return false;
+    return true;
+  }
+
+  // Munition aufnehmen: in den Zähler, Überschuss als Munitionskisten (server/munition.mjs)
+  munitionNehmen(p, n, client = null) {
+    const { kisten } = munitionGeben(p, n);
+    if (kisten > 0) client?.send('meldung', { text: `📦 Munition voll – ${kisten} Munitionskiste${kisten > 1 ? 'n' : ''} eingepackt` });
+  }
+
   benutze(client, m) {
     const p = this.state.spieler.get(client.sessionId);
     const i = Number(m?.platz);
     if (!p || p.unten || p.zombie > 0 || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
-    const d = p.rucksack[i];
+    const d = dingId(p.rucksack[i]);
     if (d === 'spritze') return this.spritze(client, p, i);
     if (d === 'radio') { if (!this.radios.aufstellen(client, i)) client.send('meldung', { text: '📻 Das Radio geht jetzt nicht an' }); return; }
     if (d === 'granate') { if (!this.granaten.werfen(client)) client.send('meldung', { text: '💣 Jetzt geht kein Wurf' }); return; }
-    if (d === 'wasser') { p.durst = Math.min(100, p.durst + 45); p.rucksack.splice(i, 1); }
-    else if (d === 'essen') { p.hunger = Math.min(100, p.hunger + 45); p.rucksack.splice(i, 1); }
-    else if (d === 'schokoriegel') { p.hunger = Math.min(100, p.hunger + 20); p.rucksack.splice(i, 1); }
+    if (d === 'wasser') { p.durst = Math.min(100, p.durst + 45); nimmEins(p.rucksack, i); }
+    else if (d === 'essen') { p.hunger = Math.min(100, p.hunger + 45); nimmEins(p.rucksack, i); }
+    else if (d === 'schokoriegel') { p.hunger = Math.min(100, p.hunger + 20); nimmEins(p.rucksack, i); }
     else if (DINGE[d]?.plaetze) {
       const bonus = this.fkRucksack(p);
       if (DINGE[d].plaetze <= p.plaetze - bonus) return client.send('meldung', { text: 'Dein Rucksack ist schon so groß' });
-      p.plaetze = DINGE[d].plaetze + bonus; p.rucksack.splice(i, 1);
+      p.plaetze = DINGE[d].plaetze + bonus; nimmEins(p.rucksack, i);
       client.send('meldung', { text: `${DINGE[d].zeichen} Umgepackt – jetzt ${p.plaetze} Plätze` });
     }
     else if (d === 'kleidung') {
       if (p.kleidung >= 100) return client.send('meldung', { text: 'Du trägst schon feste Kleidung' });
-      p.kleidung = 100; p.rucksack.splice(i, 1);
+      p.kleidung = 100; nimmEins(p.rucksack, i);
       client.send('meldung', { text: '🧥 Feste Kleidung angezogen – Bisse gehen seltener durch' });
     }
     else if (d === 'seil') { client.send('meldung', { text: '🪢 Ein Seil – brauchst du später am Fluss' }); }
@@ -2133,11 +2155,17 @@ export class SpielRaum extends Room {
     else if (d === 'funkgeraet') { client.send('meldung', { text: '📻 Mit einem zweiten Funkgerät im Rucksack hörst du die Mitspieler überall' }); }
     else if (d === 'verband') {
       if (p.hp >= 100) return client.send('meldung', { text: 'Du bist nicht verletzt' });
-      p.hp = Math.min(100, p.hp + 45 * this.fkWert(p, 'heilen')); p.rucksack.splice(i, 1);
+      p.hp = Math.min(100, p.hp + 45 * this.fkWert(p, 'heilen')); nimmEins(p.rucksack, i);
     } else if (DINGE[d]?.waffe) {
       const alt = WP.inDieHand(this, client, p, this.extra.get(client.sessionId), d, SpielRaum.einstellungen);   // freier Waffenplatz, sonst Tausch mit der Hand
-      if (alt) p.rucksack[i] = alt; else p.rucksack.splice(i, 1);
+      // Hand ↔ Rucksack: ein Messer vom Stapel nehmen; die bisherige Waffe kommt in den Rucksack (nicht auf den Stapel, wenn dort kein Platz frei ist)
+      nimmEins(p.rucksack, i);
+      if (alt && fuegeHinzu(p.rucksack, p.plaetze, alt) < 1) this.legeHin(alt, p.x, p.y, p.ebene);
       client.send('meldung', { text: `${DINGE[d].name} in der Hand` });
+    } else if (d === 'munitionskiste') {
+      if (p.munition >= MUNITION_MAX) return client.send('meldung', { text: '📦 Deine Munition ist schon voll' });
+      kisteOeffnen(p);
+      client.send('meldung', { text: `📦 Munitionskiste geöffnet: +${MUNITIONSKISTE_SCHUSS} Schuss` });
     } else if (d === 'bretter') {
       client.send('meldung', { text: 'Bretter: an einer Tür verbarrikadieren (Taste an der Tür)' });
     }
@@ -2155,7 +2183,7 @@ export class SpielRaum extends Room {
       }
     }
     if (!ziel) return client.send('meldung', { text: 'Niemand hier ist infiziert – hebe die Spritze auf' });
-    p.rucksack.splice(i, 1);
+    nimmEins(p.rucksack, i);
     ziel.infektion = 0;
     this.broadcast('meldung', {
       text: ziel === p ? `💉 ${p.name} hat sich die Rettungsspritze gesetzt` : `💉 ${p.name} hat ${ziel.name} die Rettungsspritze gesetzt`,
@@ -2167,13 +2195,18 @@ export class SpielRaum extends Room {
     const d = b.ding;
     if (DINGE[d]?.waffe && !p.waffe && !p.faust) p.waffe = d;
     else if (d === 'granate' && WP.handgranatenPlatz(p) >= 0) p.handgranaten = Math.min(HANDGRANATEN_MAX, (p.handgranaten ?? 0) + 1);   // Handgranaten-Platz: gleich in den Vorrat
-    else if (d === 'mg' && p.waffe && p.waffe !== 'mg' && p.rucksack.length < p.plaetze) { p.rucksack.push(p.waffe); p.waffe = 'mg'; }   // MG sofort in die Hand
-    else if (d === 'munition') p.munition = Math.min(MUNITION_MAX, p.munition + MUNITION_PRO_FUND);
+    else if (d === 'mg' && p.waffe && p.waffe !== 'mg' && kannAufnehmen(p.rucksack, p.plaetze, p.waffe)) { fuegeHinzu(p.rucksack, p.plaetze, p.waffe); p.waffe = 'mg'; }   // MG sofort in die Hand
+    else if (d === 'munition') this.munitionNehmen(p, MUNITION_PRO_FUND, client);
     else if (d === 'pfeil') p.pfeile = Math.min(PFEILE_MAX, p.pfeile + 1);   // einzelner Pfeil vom Boden
     else if (d === 'granate40') p.granaten = Math.min(GRANATEN_MAX, (p.granaten ?? 0) + 1);
     else if (d === 'taschenlampe' && !(p.lampe > 0)) p.lampe = LAMPE_DAUER;
     else if (d === 'kleidung' && !(p.kleidung > 0)) p.kleidung = 100;
-    else p.rucksack.push(d);
+    else {
+      const grund = blockGrund(p.rucksack, p.plaetze, d);
+      if (grund === 'tasche') return client?.send('meldung', { text: '🎒 Du trägst schon eine Tasche – eine zweite geht nicht' });
+      if (grund) return client?.send('meldung', { text: '🎒 Rucksack voll' });
+      fuegeHinzu(p.rucksack, p.plaetze, d);
+    }
     this.state.boden.delete(id);
     client?.send('meldung', { text: `Aufgehoben: ${DINGE[d]?.zeichen ?? ''} ${DINGE[d]?.name ?? d}` });
   }
@@ -2186,13 +2219,16 @@ export class SpielRaum extends Room {
     if (!b || (b.ebene ?? '') !== p.ebene || Math.hypot(b.x - p.x, b.y - p.y) >= AKTION_ABSTAND) return;
     const d = b.ding;
     // wandert der Gegenstand nicht in den Rucksack (Waffe/Munition/Lampe/Kleidung), braucht er keinen Platz
-    const direkt = (DINGE[d]?.waffe && !p.waffe && !p.faust) || (d === 'granate' && WP.handgranatenPlatz(p) >= 0) || d === 'munition' || d === 'pfeil' || d === 'granate40' || (d === 'taschenlampe' && !(p.lampe > 0)) || (d === 'kleidung' && !(p.kleidung > 0));
-    if (!direkt && p.rucksack.length >= p.plaetze) {
-      const i = Number(m.platz);
-      if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return client.send('meldung', { text: '🎒 Rucksack voll – wähle, was du ablegst' });
-      if (DINGE[p.rucksack[i]]?.mission) return client.send('meldung', { text: '🧩 Missionsgegenstände lassen sich nur in die Safe-Room-Kiste legen' });
-      const [alt] = p.rucksack.splice(i, 1);
-      this.legeHin(alt, p.x, p.y, p.ebene);
+    if (this.bodenBrauchtPlatz(p, d)) {
+      if (blockGrund(p.rucksack, p.plaetze, d) === 'tasche') return client.send('meldung', { text: '🎒 Du trägst schon eine Tasche – eine zweite geht nicht' });
+      if (!kannAufnehmen(p.rucksack, p.plaetze, d)) {
+        const i = Number(m.platz);
+        if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return client.send('meldung', { text: '🎒 Rucksack voll – wähle, was du ablegst' });
+        if (DINGE[dingId(p.rucksack[i])]?.mission) return client.send('meldung', { text: '🧩 Missionsgegenstände lassen sich nur in die Safe-Room-Kiste legen' });
+        // ein volles Fach wird zum Platzmachen ganz geleert (ein Stück allein würde das Fach nicht freigeben)
+        const alt = nimmStapel(p.rucksack, i);
+        for (let k = 0; k < alt.n; k++) this.legeHin(alt.id, p.x, p.y, p.ebene);
+      }
     }
     this.nimmAuf(client, p, m.id, b);
   }
@@ -2200,10 +2236,7 @@ export class SpielRaum extends Room {
   // Rucksack umsortieren: Fach „von“ mit Fach „nach“ vertauschen (ein leeres Ziel hinter den Gegenständen = ans Ende schieben)
   rucksackTausch(client, m) {
     const p = this.state.spieler.get(client.sessionId);
-    const von = m?.von, nach = m?.nach, n = p?.rucksack.length ?? 0;
-    if (!p || !Number.isInteger(von) || !Number.isInteger(nach) || von < 0 || von >= n || nach < 0 || nach >= p.plaetze || von === nach) return;
-    if (nach >= n) { const [d] = p.rucksack.splice(von, 1); p.rucksack.push(d); }
-    else { const a = p.rucksack[von], b = p.rucksack[nach]; p.rucksack[von] = b; p.rucksack[nach] = a; }
+    if (!p || !verschiebe(p.rucksack, m?.von, m?.nach, p.plaetze)) return;
     this.speichereSpieler(client.sessionId);
   }
 
@@ -2211,8 +2244,9 @@ export class SpielRaum extends Room {
     const p = this.state.spieler.get(client.sessionId);
     const i = Number(m?.platz);
     if (!p || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
-    if (DINGE[p.rucksack[i]]?.mission) return client.send('meldung', { text: `${DINGE[p.rucksack[i]].zeichen} ${DINGE[p.rucksack[i]].name} ist für die Mission wichtig – nur in die Safe-Room-Kiste legen` });
-    const [ding] = p.rucksack.splice(i, 1);
+    const dd = dingId(p.rucksack[i]);
+    if (DINGE[dd]?.mission) return client.send('meldung', { text: `${DINGE[dd].zeichen} ${DINGE[dd].name} ist für die Mission wichtig – nur in die Safe-Room-Kiste legen` });
+    const ding = nimmEins(p.rucksack, i);
     this.legeHin(ding, p.x, p.y, p.ebene);
   }
 
@@ -2250,9 +2284,9 @@ export class SpielRaum extends Room {
       return sage(`🧊 Du hast gerade erst etwas genommen – in ${Math.ceil((stunde - (this.state.zeit - letzte)) / 60)} Min. wieder`);
     }
     if (p.durst >= 30 && p.hunger >= 30) return sage('🧊 Der Kühlschrank ist für den Notfall: erst bei unter 30 % Wasser oder Hunger');
-    if (p.rucksack.length >= p.plaetze) return sage('Dein Rucksack ist voll');
     const ding = p.durst <= p.hunger ? 'wasser' : 'essen';
-    p.rucksack.push(ding);
+    if (!kannAufnehmen(p.rucksack, p.plaetze, ding)) return sage('Dein Rucksack ist voll');
+    fuegeHinzu(p.rucksack, p.plaetze, ding);
     this.kuehlLetzte.set(schluessel, this.state.zeit);
     sage(`🧊 Aus dem Kühlschrank: ${DINGE[ding].zeichen} ${DINGE[ding].name}`);
   }
@@ -2287,11 +2321,18 @@ export class SpielRaum extends Room {
     }
     const i = Number(m?.platz);
     if (m?.richtung === 'rein') {
-      if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length || kiste.length >= KISTE_PLAETZE) return;
-      kiste.push(p.rucksack[i]); p.rucksack.splice(i, 1);
+      // ganzer Stapel (so viel, wie in die Kiste passt)
+      if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
+      const id = dingId(p.rucksack[i]), n = dingN(p.rucksack[i]);
+      const rein = Math.min(n, platzFuer(kiste, KISTE_PLAETZE, id, true));
+      if (rein < 1) return;
+      fuegeHinzu(kiste, KISTE_PLAETZE, id, rein, true); nimmEins(p.rucksack, i, rein);
     } else if (m?.richtung === 'raus') {
-      if (!Number.isInteger(i) || i < 0 || i >= kiste.length || p.rucksack.length >= p.plaetze) return;
-      p.rucksack.push(kiste[i]); kiste.splice(i, 1);
+      if (!Number.isInteger(i) || i < 0 || i >= kiste.length) return;
+      const id = dingId(kiste[i]), n = dingN(kiste[i]);
+      const raus = Math.min(n, platzFuer(p.rucksack, p.plaetze, id));
+      if (raus < 1) { if (blockGrund(p.rucksack, p.plaetze, id) === 'tasche') client.send('meldung', { text: '🎒 Du trägst schon eine Tasche – eine zweite geht nicht' }); return; }
+      fuegeHinzu(p.rucksack, p.plaetze, id, raus); nimmEins(kiste, i, raus);
     }
   }
 
@@ -2548,6 +2589,7 @@ export class SpielRaum extends Room {
     // automatischer Angriff (nicht während man durchsucht)
     // Magazin, Nachladen und Waffenwechsel bei leerer Waffe (Server ist maßgeblich; Bots wie Spieler)
     WP.schritt(this, x.bot ? null : this.clients.find(c => c.sessionId === id), p, x, dt, SpielRaum.einstellungen);
+    if (p.munition <= MUNITION_KISTE_AB) munitionPruefen(p, x.bot ? null : t => this.clients.find(c => c.sessionId === id)?.send('meldung', { text: t }));   // Reserve-Kiste öffnen
     let pause = x.pause - dt;
     if (pause <= 0 && !p.aktion) {
       const [name, wf0] = aktiveWaffe(p);
@@ -2652,8 +2694,7 @@ export class SpielRaum extends Room {
     if (!p.verbunden) { p.ruht = false; return; }
     if (this.brauchtLicht(p)) {
       if (p.lampe <= 0) {
-        const i = p.rucksack.indexOf('taschenlampe');
-        if (i >= 0) { p.rucksack.splice(i, 1); p.lampe = LAMPE_DAUER; }
+        if (entferne(p.rucksack, 'taschenlampe', 1) > 0) p.lampe = LAMPE_DAUER;
       } else p.lampe = Math.max(0, p.lampe - dt);
     }
     if (p.zombie > 0) {
@@ -3080,10 +3121,10 @@ export class SpielRaum extends Room {
       });
       if (helfer) {
         const h = helfer[1];
-        const mitVerband = h.rucksack.includes('verband');
+        const mitVerband = hat(h.rucksack, 'verband');
         p.hilfe = Math.min(1, p.hilfe + dt * this.fkWert(h, 'heilen') / (mitVerband ? W.aufhelfenDauer : 8));
         if (p.hilfe >= 1) {
-          if (mitVerband) h.rucksack.splice(h.rucksack.indexOf('verband'), 1);
+          if (mitVerband) entferne(h.rucksack, 'verband', 1);
           p.unten = false; p.hp = mitVerband ? 70 : 25; p.hilfe = 0;
           this.xpGeben(helfer[0], 'wiederbelebt');
           this.broadcast('meldung', {
@@ -3140,7 +3181,7 @@ export class SpielRaum extends Room {
 
   // Tod: Rucksack, Waffe, Munition, Kleidung und Lampe fallen als Einzelgegenstände an den Sterbeort und bleiben einen Spieltag liegen
   sterbeHaufen(p) {
-    const dinge = [...p.rucksack];
+    const dinge = flach(p.rucksack);
     if (p.waffe) dinge.push(p.waffe);
     dinge.push(...WP.alleWaffen(p));
     const hg = dinge.indexOf('handgranate');   // Handgranaten-Platz: einzelne Granaten statt der internen „Waffe“

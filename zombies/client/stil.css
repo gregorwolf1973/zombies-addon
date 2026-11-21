@@ -445,3 +445,6 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 #aufheben-wahl.fundliste { max-height: 55vh; overflow-y: auto; }
 #aufheben-wahl .fund-zeile { margin-bottom: 6px; }
 #aufheben-wahl .fund-name { font-size: 12px; opacity: .75; margin: 2px 4px; }
+/* Stapel: Anzahl unten rechts im Platz */
+.platz { position: relative; }
+.platz .stapelzahl { position: absolute; right: 2px; bottom: 0; font-size: 11px; font-weight: 700; line-height: 1; color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000; pointer-events: none; }
