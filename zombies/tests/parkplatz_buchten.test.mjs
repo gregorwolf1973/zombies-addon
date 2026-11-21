@@ -30,6 +30,7 @@ const ueberlappt = (A, B) => {
 
 for (const name of ['geretsried2', 'geretsried', 'andermatt']) {
   const karte = lade(name);
+  delete karte.autosLuftbild;   // hier gilt die zufällige Verteilung in den Buchten (Foto-Autos: tests/kulisse.test.mjs)
   const welt = bauen(karte, 4711);
   const autos = welt.behaelter.filter(b => b.art === 'auto' && b.platz === 'parkplatz');
   const lots = (karte.flaechen ?? []).filter(f => f.a === 'parkplatz').map(f => ({ pts: polygon(f) }));

@@ -418,8 +418,11 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   }
   // Autos auf Buchtplätzen: etwa 70 % belegt, Lücken dazwischen
   // In jeder Bucht bleibt mindestens ein Platz frei; längere Buchten (b.extra) lassen entsprechend mehr Plätze frei
+  // Karten mit erkannten Autos im Luftbild (autosLuftbild, tools/kulisse.py): diese Autos ersetzen die zufälligen Bucht-/Parkplatz-Autos (siehe unten)
+  const fotoAutos = autoFaktor > 0 && Array.isArray(karte.autosLuftbild) && karte.autosLuftbild.length ? karte.autosLuftbild : null;
   let nBucht = 0;
   for (const b of buchten) {
+    if (fotoAutos) { b.belegt = 0; continue; }
     const belegt = b.plaetze.map(() => r() <= 0.7 * autoFaktor);
     let n = belegt.filter(Boolean).length;
     const hoechstens = b.plaetze.length - Math.max(1, b.extra ?? 0);
@@ -444,7 +447,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   // Längsachse = Buchtrichtung (winkel, quer zur Fahrgasse); nur Buchten, die ganz auf freiem Platz liegen; etwa 60 % belegt
   let nPark = 0;
   for (const f of karte.flaechen ?? []) {
-    if (f.a !== 'parkplatz' || autoFaktor <= 0) continue;
+    if (f.a !== 'parkplatz' || autoFaktor <= 0 || fotoAutos) continue;
     const pts = []; for (let i = 0; i < f.p.length; i += 2) pts.push([f.p[i] * KACHEL, f.p[i + 1] * KACHEL]);
     // gezeichnete Fahrgassen/Zufahrten (Straßenlinien nahe der Fläche): dort steht kein Auto
     const px0 = Math.min(...pts.map(q => q[0])) - 60, px1 = Math.max(...pts.map(q => q[0])) + 60, py0 = Math.min(...pts.map(q => q[1])) - 60, py1 = Math.max(...pts.map(q => q[1])) + 60;
@@ -469,6 +472,25 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
       if (Math.hypot(bu.x - start.x, bu.y - start.y) < KACHEL * 3) continue;
       if (behaelter.some(b => Math.hypot(b.x - bu.x, b.y - bu.y) < 40)) continue;   // nie übereinander
       behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'parkplatz', x: bu.x, y: bu.y, winkel: bu.winkel, farbe: Math.floor(r() * 6) });
+      nPark++;
+    }
+  }
+
+  // Autos aus dem Luftbild: dort, wo sie auf dem Foto stehen (Parkplätze, Parkbuchten, Einfahrten, Höfe). Keine Winkelfunktionen: Winkel kommt fertig aus der Karte.
+  // Nicht auf Wasser, Gebäude, Türen, Zäune, Bäume; nie übereinander; Startplatz frei. Weitere Freihalteregeln (Türvorplätze) greift tuerenFreihalten.
+  if (fotoAutos) {
+    const GESPERRT = new Set([T.WAND, T.LEER, T.TUER, T.WASSER, T.BAUM, T.ZAUN, T.TOR, T.DEKO, T.BODEN]);
+    const anteil = Math.min(1, autoFaktor);
+    for (let i = 0; i < fotoAutos.length; i++) {
+      const fa = fotoAutos[i];
+      if (!(fa.x > 0 && fa.y > 0) || (i * 0.6180339887) % 1 >= anteil) continue;
+      const wk = fa.winkel;
+      if (!Number.isFinite(wk)) continue;
+      if (GESPERRT.has(hole(Math.floor(fa.x / KACHEL), Math.floor(fa.y / KACHEL)))) continue;
+      const ddx = fa.x - start.x, ddy = fa.y - start.y;
+      if (ddx * ddx + ddy * ddy < (KACHEL * 3) * (KACHEL * 3)) continue;
+      if (behaelter.some(b => b.art === 'auto' && (b.x - fa.x) * (b.x - fa.x) + (b.y - fa.y) * (b.y - fa.y) < 13 * 13)) continue;   // nie übereinander (Autos stehen mindestens 1,6 m auseinander)
+      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'foto', x: fa.x, y: fa.y, winkel: wk, farbe: (fa.farbe | 0) % 8 });
       nPark++;
     }
   }
