@@ -2,7 +2,7 @@
 // lenken Zombies ab und bellen, wenn ein Zombie vor der Haustür steht. Der Hund ist unverwundbar, braucht nichts
 // und wird mit dem Spieler gespeichert (extra.hund -> speichereSpieler). Maße in Pixeln (8 px = 1 m).
 import { schema, t } from '@colyseus/schema';
-import { BREITE, HOEHE, KACHEL, T, WERTE as W, bewege, frei, findeWeg, sichtfrei } from '../client/welt.mjs';
+import { BREITE, HOEHE, KACHEL, tempoVon, T, WERTE as W, bewege, frei, findeWeg, sichtfrei } from '../client/welt.mjs';
 
 export const Hund = schema({
   x: t.number(), y: t.number(),
@@ -126,7 +126,7 @@ export class Hunde {
     const w = this.raum.wv(p.ebene ?? '');
     for (let j = 0; j < 18; j++) {
       const a = hinten ? (p.richtung ?? 0) + Math.PI + (j % 2 ? 1 : -1) * Math.floor((j + 1) / 2) * 0.35 : j * 0.9 + 1;
-      const rr = (hinten ? 18 : 20) + j * 3;
+      const rr = ((hinten ? 18 : 20) + j * 3) * (w.reich ?? 1);
       const x = p.x + Math.cos(a) * rr, y = p.y + Math.sin(a) * rr;
       if (frei(w, x, y, RAD)) return { x, y };
     }
@@ -190,7 +190,7 @@ export class Hunde {
 
   // im Bogen davonrennen (fluchtW dreht sich langsam); steckt er fest, dreht er stärker ab
   renne(h, inf, dt, faktor) {
-    const w = this.raum.wv(h.ebene ?? ''), v = W.tempoGehen * faktor * dt, x0 = h.x, y0 = h.y;
+    const w = this.raum.wv(h.ebene ?? ''), v = W.tempoGehen * faktor * dt * tempoVon(w), x0 = h.x, y0 = h.y;
     inf.fluchtW += inf.bogen * dt;
     gehe(w, h, Math.cos(inf.fluchtW) * v, Math.sin(inf.fluchtW) * v);
     if (Math.hypot(h.x - x0, h.y - y0) < v * 0.3) inf.fluchtW += 1.2 * (inf.bogen < 0 ? -1 : 1);
@@ -199,17 +199,17 @@ export class Hunde {
 
   // dem Besitzer folgen: wartet, wenn dieser steht; geht mit durch Türen und Treppen; weit weg = hinter ihn springen
   folgen(id, h, inf, p, dt) {
-    const d = Math.hypot(p.x - h.x, p.y - h.y);
+    const d = Math.hypot(p.x - h.x, p.y - h.y), R = this.raum.wv(h.ebene ?? '').reich ?? 1;   // R: drinnen im Feinraster kleinere Abstände
     if ((h.ebene ?? '') !== (p.ebene ?? '') || d > TELEPORT) { this.teleport(h, inf, p); return; }
     if (inf.fluchtT > 0) {
       inf.fluchtT -= dt;
-      if (d > 20 * PX) inf.fluchtT = 0;
+      if (d > 20 * PX * R) inf.fluchtT = 0;
       else { this.renne(h, inf, dt, 1.5); return; }
     }
-    inf.geht = d > FOLGE_FERN || (inf.geht && d > FOLGE_NAH);
+    inf.geht = d > FOLGE_FERN * R || (inf.geht && d > FOLGE_NAH * R);
     h.laeuft = false;
     if (!inf.geht) { inf.weg = null; return; }
-    const welt = this.raum.wv(h.ebene ?? ''), v = W.tempoGehen * (d > 90 ? 1.4 : d > 40 ? 1.15 : 0.8) * dt;
+    const welt = this.raum.wv(h.ebene ?? ''), v = W.tempoGehen * (d > 90 * R ? 1.4 : d > 40 * R ? 1.15 : 0.8) * dt * tempoVon(welt);
     if (sichtfrei(welt, h.x, h.y, p.x, p.y)) {
       const a = Math.atan2(p.y - h.y, p.x - h.x), x0 = h.x, y0 = h.y;
       gehe(welt, h, Math.cos(a) * v, Math.sin(a) * v);

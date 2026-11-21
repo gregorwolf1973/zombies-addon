@@ -1,10 +1,10 @@
-// PROTOTYP: Innenräume im Feinraster (Schalter INNEN_FEIN in welt.mjs, Standard aus).
+// Maßstäbliche Innenräume im Feinraster (Schalter INNEN_FEIN in welt.mjs, Standard aus).
 // Eine Zelle = INNEN_Z px = 0,25 m (8 px = 1 m). Der Grundriss ist der echte OSM-Umriss des Hauses (an der längsten Kante
 // ausgerichtet, damit das Raster achsparallel bleibt), Wände sind eine Zelle dick (innen 0,25 m, außen 2 Zellen = 0,5 m),
 // Türen 5 Zellen (1,25 m), Möbel in Zellen nach echten Maßen. Die Ergebnisstruktur entspricht baueInnenraum() aus innen.mjs,
 // dazu: kachel (px je Zelle), breite/hoehe (eigenes Raster), rs/radMax (Figurenradius drinnen), zellen-Listen bei Türen und Treppen.
 // Weltcode: Server und Browser bauen getrennt, daher nur + − × ÷ Math.sqrt und Ganzzahlen, keine Winkelfunktionen.
-import { T, zufall, ladenArt, seiteVon } from './welt.mjs';
+import { T, zufall, ladenArt, seiteVon, INNEN_TEMPO, INNEN_REICH } from './welt.mjs';
 
 export const INNEN_Z = 2;          // px je Zelle
 const ZM = 4;                      // Zellen je Meter
@@ -19,8 +19,11 @@ const M = {
   bett: [8, 6], einzelbett: [8, 4], sofa: [8, 4], couchtisch: [4, 2], schrank: [5, 2], regal: [4, 1], kommode: [4, 2],
   herd: [2, 2], kuehlschrank: [2, 2], spuele: [4, 2], esstisch: [5, 3], badewanne: [7, 3], waschbecken: [2, 2], klo: [2, 3],
   garderobe: [4, 2], kiste: [2, 2], heizung: [4, 1], alter_schrank: [5, 2], kasse: [5, 2], regal_lang: [4, 2],
+  // Safe Room (Notlager): Funktisch 1,5 × 0,75 m, Feldbett 2 × 0,75 m, Vorratsregal 2 × 0,5 m, Vorratskiste 1,25 × 0,75 m
+  funktisch: [6, 3], feldbett: [8, 3], vorratsregal: [8, 2], erstehilfe: [2, 2], safe_kuehlschrank: [3, 3], generator: [4, 3], kanister: [2, 2], vorratskiste: [5, 3],
 };
-const BEHAELTER = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang', 'klo', 'waschbecken', 'herd', 'spuele']);
+const BEHAELTER = new Set(['schrank', 'kuehlschrank', 'kommode', 'kiste', 'alter_schrank', 'garderobe', 'regal_lang', 'klo', 'waschbecken', 'herd', 'spuele', 'vorratsregal', 'erstehilfe']);
+const ZUGANG_NOETIG = new Set(['funktisch', 'vorratskiste', 'safe_kuehlschrank']);   // Safe-Room-Stücke, die man benutzt: müssen erreichbar bleiben
 const GEHBAR = new Set([T.BODEN, T.TUER_OFFEN, T.INNENTUER, T.AUSGANG, T.TREPPE_RUNTER, T.TREPPE_HOCH]);
 const SEITE_NACH = { oben: [0, 1], unten: [0, -1], links: [1, 0], rechts: [-1, 0] };
 
@@ -62,11 +65,11 @@ function grundriss(haus) {
   }
   // Lage der Außentür im Raster (für die Wahl der Haustür-Stelle)
   const [tu, tv] = rot((haus.tuer.x + 0.5) * MPK, (haus.tuer.y + 0.5) * MPK);
-  return { GB, GH, mask, tuer: { x: Math.round((tu - u0) * ZM) + RAND, y: Math.round((tv - v0) * ZM) + RAND }, breiteM: (u1 - u0), hoeheM: (v1 - v0) };
+  return { GB, GH, mask, tuer: { x: Math.round((tu - u0) * ZM) + RAND, y: Math.round((tv - v0) * ZM) + RAND }, breiteM: (u1 - u0), hoeheM: (v1 - v0), abb: { c, s, u0, v0 } };
 }
 
 // ---------- Generator ----------
-export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unten') {
+export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unten', safe = false) {
   const rng = zufall(seed ^ Math.imul(nr + 1, 7919) ^ (stock === 'eg' ? 0 : stock === 'keller' ? 0x51ed : 0xa77e) ^ 0x1f1e);
   const g = grundriss(haus), GB = g.GB, GH = g.GH;
   const k = new Uint8Array(GB * GH).fill(T.LEER);
@@ -207,7 +210,8 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
       const { a0, d0 } = kandidaten[0], zellen = [];
       for (let a = a0; a < a0 + TUER; a++) for (let d = d0; d < d0 + AUSSEN; d++) { const [x, y] = zelle(s, a, d); k[idx(x, y)] = T.AUSGANG; zellen.push([x, y]); }
       const [mx, my] = zelle(s, a0 + Math.floor(TUER / 2), d0 + AUSSEN - 1);
-      ausgang = { x: mx, y: my, nach, zellen, seite: s, a0, d0 };
+      const xs = zellen.map(c => c[0]), ys = zellen.map(c => c[1]), rx = Math.min(...xs), ry = Math.min(...ys);
+      ausgang = { x: mx, y: my, nach, zellen, seite: s, a0, d0, rect: { x: rx, y: ry, b: Math.max(...xs) - rx + 1, h: Math.max(...ys) - ry + 1 } };
       const [fx, fy] = zelle(s, a0 + Math.floor(TUER / 2), d0 + AUSSEN + 1);
       flurIndex = Math.max(0, raumAn(fx, fy));
       break suche;
@@ -216,7 +220,8 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
 
   // Zimmerarten
   const typ = new Array(raeume.length).fill('');
-  if (stock === 'eg' && laden) raeume.forEach((_, i) => { typ[i] = i === flurIndex ? 'verkaufsraum' : 'lager'; });
+  if (safe) raeume.forEach((_, i) => { typ[i] = 'notlager'; });
+  else if (stock === 'eg' && laden) raeume.forEach((_, i) => { typ[i] = i === flurIndex ? 'verkaufsraum' : 'lager'; });
   else if (stock === 'eg') {
     typ[flurIndex] = 'flur';
     // größte Zimmer zuerst, das kleinste Zimmer ist das Bad
@@ -273,7 +278,8 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
   let hatKeller = false, hatDach = false;
   const alleRaeume = raeume.map((_, i) => i);
   const nahFlur = stock === 'eg' ? alleRaeume.filter(i => i === flurIndex || adj[flurIndex]?.some(a => a.j === i)) : alleRaeume;
-  if (stock === 'eg') {
+  if (safe) { /* Safe Room: keine Treppen, nur das Erdgeschoss */ }
+  else if (stock === 'eg') {
     hatKeller = rng() < 0.5; hatDach = rng() < 0.4;
     if (hatKeller && !treppeSetzen('runter', 'keller', nahFlur) && !treppeSetzen('runter', 'keller', alleRaeume)) hatKeller = false;
     if (hatDach && !treppeSetzen('hoch', 'dach', nahFlur) && !treppeSetzen('hoch', 'dach', alleRaeume)) hatDach = false;
@@ -321,7 +327,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     if (!schnell) for (const t of tueren) { if (!ok) break; const [cx, cy] = t.zellen[Math.floor(TUER / 2)]; ok = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => s[idx(cx + a, cy + c)]) || t.zellen.some(([zx, zy]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => s[idx(zx + a, zy + c)])); }
     if (ok && !schnell) for (const tr of treppen) if (!tr.zellen.some(([zx, zy]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => s[idx(zx + a, zy + c)]))) { ok = false; break; }
     if (ok && !schnell) for (const mm of moebel.concat([{ art, x, y, b, h }])) {
-      if (!BEHAELTER.has(mm.art)) continue;
+      if (!BEHAELTER.has(mm.art) && !ZUGANG_NOETIG.has(mm.art)) continue;
       let zug = false;
       for (let dy = -3; dy < mm.h + 3 && !zug; dy++) for (let dx = -3; dx < mm.b + 3; dx++) if (s[idx(mm.x + dx, mm.y + dy)]) { zug = true; break; }
       if (!zug) { ok = false; break; }
@@ -366,8 +372,9 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
       }
     }
     for (const liste of stufen) {
+      if (opt.fern) liste.sort((p, q) => ((q.x + q.b / 2 - opt.fern.x) ** 2 + (q.y + q.h / 2 - opt.fern.y) ** 2) - ((p.x + p.b / 2 - opt.fern.x) ** 2 + (p.y + p.h / 2 - opt.fern.y) ** 2));   // am weitesten von der Haustür weg
       for (let v = 0; v < 6 && liste.length; v++) {
-        const i = Math.floor(rng() * liste.length), p = liste.splice(i, 1)[0];
+        const i = opt.fern ? 0 : Math.floor(rng() * liste.length), p = liste.splice(i, 1)[0];
         if (platzieren(art, p.x, p.y, p.b, p.h)) return true;
       }
     }
@@ -424,6 +431,30 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     const kram = [['alter_schrank'], ...Array(8).fill(['kiste'])];
     kram.forEach(([art], i) => setze(i % raeume.length, art));
   }
+  // Safe Room als Notlager: Funktisch, Vorratsregale, Feldbetten, Erste Hilfe, Kühlschrank, Generator, Kanister und die Vorratskiste (möglichst weit
+  // von der Haustür). Reihum auf die Zimmer verteilt, größte zuerst; jedes Stück nur, wenn alles erreichbar bleibt.
+  let kiste = null, kuehlschrank = null;
+  if (safe) {
+    const aus = ausgang ? { x: (ausgang.x + 0.5), y: (ausgang.y + 0.5) } : { x: (ix0 + ix1) / 2, y: (iy0 + iy1) / 2 };
+    const rIdx = raeume.map((_, i) => i);
+    let reihum = 0;
+    const setzeSafe = (art, opt = {}) => {
+      const reihe = opt.fern ? [...rIdx].sort((a, c) => (((raeume[c].x + raeume[c].b / 2) - aus.x) ** 2 + ((raeume[c].y + raeume[c].h / 2) - aus.y) ** 2) - (((raeume[a].x + raeume[a].b / 2) - aus.x) ** 2 + ((raeume[a].y + raeume[a].h / 2) - aus.y) ** 2)) : rIdx.map((_, j) => rIdx[(reihum + j) % rIdx.length]);
+      for (const ri of reihe) if (setze(ri, art, opt)) { if (!opt.fern) reihum = (rIdx.indexOf(ri) + 1) % rIdx.length; return true; }
+      return false;
+    };
+    setzeSafe('funktisch'); setzeSafe('vorratskiste', { fern: aus }); setzeSafe('vorratsregal'); setzeSafe('feldbett'); setzeSafe('feldbett');
+    setzeSafe('erstehilfe'); setzeSafe('safe_kuehlschrank'); setzeSafe('generator'); setzeSafe('kanister');
+    const betten = Math.max(2, Math.min(6, Math.floor(flaecheM2 / 25))), regale = Math.max(2, Math.min(4, Math.floor(flaecheM2 / 40)));
+    for (let i = 2; i < betten; i++) setzeSafe('feldbett');
+    for (let i = 1; i < regale; i++) setzeSafe('vorratsregal');
+    if (rng() < 0.7) setzeSafe('kanister');
+    const mk = moebel.find(m => m.art === 'vorratskiste'), mc = moebel.find(m => m.art === 'safe_kuehlschrank');
+    // ohne Kiste ist der Safe Room unbrauchbar: notfalls ein beliebiger freier Platz an der Wand
+    if (mk) kiste = { x: (mk.x + mk.b / 2) * INNEN_Z, y: (mk.y + mk.h / 2) * INNEN_Z };
+    if (mc) kuehlschrank = { x: (mc.x + mc.b / 2) * INNEN_Z, y: (mc.y + mc.h / 2) * INNEN_Z };
+  }
+
   // Behälter nur halten, wenn sie nicht zu viele Läden-Regale sind (höchstens 10 Ladenbehälter, gleichmäßig gewählt)
   {
     const laeden = behaelter.filter(b => b.art === 'laden');
@@ -433,7 +464,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
   // Türen verschließen (30 %, am Flur bleibt eine offen) und Belohnungstür der Behälter dahinter
   const amFlur = t => stock === 'eg' && t.zellen.some(([x, y]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => raumAn(x + a, y + c) === flurIndex && k[idx(x + a, y + c)] === T.BODEN));
   let offeneAmFlur = tueren.filter(amFlur).length;
-  for (const t of tueren) { if (rng() >= 0.3) continue; if (amFlur(t)) { if (offeneAmFlur <= 1) continue; offeneAmFlur--; } t.verschlossen = true; }
+  for (const t of tueren) { if (safe) { t.offen = true; continue; } if (rng() >= 0.3) continue; if (amFlur(t)) { if (offeneAmFlur <= 1) continue; offeneAmFlur--; } t.verschlossen = true; }   // Safe Room: alle Türen offen
   for (const t of tueren) {
     if (!t.verschlossen) continue;
     const ns = new Set();
@@ -445,7 +476,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
 
   // Zombieplätze: freie Zellen in Zimmern (nicht Flur), mit echtem Figurenradius passend
   const zombiePlaetze = [];
-  raeume.forEach((r, ri) => {
+  if (!safe) raeume.forEach((r, ri) => {
     if (stock === 'eg' && ri === flurIndex) return;
     if (rng() >= 0.45) return;
     const kand = [];
@@ -457,8 +488,14 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     seed, nr, stock, ox: 0, oy: 0, b: GB, h: GH, kacheln: k, hole, start, ausgang, hatKeller, hatDach, treppen, tueren,
     raeume: raeume.map((r, i) => ({ x: r.x, y: r.y, b: r.b, h: r.h, typ: typ[i] })), moebel, behaelter, zombiePlaetze,
     // Feinraster-Kennung: eigene Kachelgröße und Rastergröße, Figurenradius drinnen
-    kachel: INNEN_Z, breite: GB, hoehe: GH, rs: R / 7, radMax: R, einrasten: 8,
+    kachel: INNEN_Z, breite: GB, hoehe: GH, rs: R / 7, radMax: R, einrasten: 8, tempo: INNEN_TEMPO, reich: INNEN_REICH,
     grundriss: { b: g.breiteM, h: g.hoeheM, flaeche: flaecheM2 },
+    kiste, kuehlschrank,
+    // Zelle/Pixel des Innenraums → Weltpixel auf der Karte (für Missionsorte): Umkehrung der Drehung und Verschiebung aus grundriss()
+    zuKarte: (px, py) => {
+      const u = g.abb.u0 + (px / INNEN_Z - RAND) / ZM, v = g.abb.v0 + (py / INNEN_Z - RAND) / ZM;
+      return [Math.round((u * g.abb.c - v * g.abb.s) * 8), Math.round((u * g.abb.s + v * g.abb.c) * 8)];
+    },
   };
 }
 
@@ -468,10 +505,11 @@ export function innenraumFein(seed, welt, ebene, muster) {
   if (!m) return null;
   const nr = Number(m[1]), haus = welt.haeuser[nr];
   if (!haus) return null;
-  const kat = ladenArt(haus);
-  const w = baueInnenFein(seed, nr, m[2], haus, !!kat, seiteVon(haus));
-  if (kat) w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; });
+  const safe = !!haus.safe, kat = safe ? '' : ladenArt(haus);
+  const w = baueInnenFein(seed, nr, safe ? 'eg' : m[2], haus, !!kat, seiteVon(haus), safe);
+  if (kat) { w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; }); w.moebel.forEach(q => { if (q.art === 'regal_lang') q.kat = kat; }); w.laden = kat; }
   w.ebene = ebene; w.nr = nr; w.stock = m[2];
   w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
+  if (safe) { w.safe = haus.safeId; w.safeName = haus.safe; w.zombiePlaetze = []; w.hatKeller = false; w.hatDach = false; for (const t of w.tueren) { t.verschlossen = false; t.offen = true; } }
   return w;
 }

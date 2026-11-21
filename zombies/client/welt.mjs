@@ -10,13 +10,19 @@ export const KACHEL = 32;
 export let BREITE = 64;
 export let HOEHE = 48;
 export function setzeKartengroesse(b, h) { BREITE = b; HOEHE = h; }
-// PROTOTYP „Innenräume im Feinraster“ (Schalter, Standard aus): Innenräume mit eigener Kachelgröße (INNEN_Z px, 4 Zellen = 1 m),
-// eigener Rastergröße (w.breite/w.hoehe) und kleinerem Figurenradius (w.rs). Ohne Schalter bleibt alles beim Alten.
+// „Maßstäbliche Innenräume“ (Schalter, Standard aus): Innenräume mit eigener Kachelgröße (INNEN_Z px, 4 Zellen = 1 m),
+// eigener Rastergröße (w.breite/w.hoehe), kleinerem Figurenradius (w.rs) und eigenen Faktoren für Tempo und Reichweiten (w.tempo, w.reich).
+// Ohne Schalter bleibt alles beim Alten. Der Server gibt den Schalter vor (Einstellung oder ZOMBIES_INNEN1M), der Client folgt ihm.
 export let INNEN_FEIN = false;
 export function setzeInnenFein(an) { INNEN_FEIN = !!an; }
-export const INNEN_VERSION = 1;
-// Spielstand-Version: im Schalter-Modus anders, damit gespeicherte Innen-Positionen (Pixel) nicht in die andere Raumgröße fallen
-export const weltVersion = () => (INNEN_FEIN ? 1000 + INNEN_VERSION : 0) + WELT_VERSION;
+export const INNEN_VERSION = 2;
+// Tempo und Reichweiten drinnen: Figuren erscheinen drinnen halb so groß (INNEN_FIGUR) und die Kamera ist 3,4-fach näher;
+// 8 px = 1 m gilt drinnen wie draußen, aber das Bild läuft sonst 3,4-mal schneller vorbei. Faktor so, dass das Vorbeilaufen des Bildes
+// etwa wie draußen aussieht (ein Haus von 14 m durchquert man in gut 2 s).
+export const INNEN_TEMPO = 0.35;
+export const INNEN_REICH = 0.35;        // Aktionsreichweiten (Durchsuchen, Türen, Aufheben …): 40 px (5 m) draußen → 14 px (1,75 m) drinnen
+export const tempoVon = w => w?.tempo ?? 1;
+export const reichVon = (w, wert) => (w?.reich ? Math.round(wert * w.reich) : wert);
 export const kachelVon = w => w?.kachel ?? KACHEL;      // Pixel je Kachel dieser Welt/Ebene
 export const breiteVon = w => w?.breite ?? BREITE;      // Kacheln je Zeile
 export const hoeheVon = w => w?.hoehe ?? HOEHE;

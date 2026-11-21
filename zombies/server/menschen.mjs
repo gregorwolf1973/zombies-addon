@@ -2,7 +2,7 @@
 // Menschen gehen von zu Hause zum Einkaufen, zum Platz und zur Bushaltestelle, ein Bus fährt die Haltestellen ab.
 // Zombies wittern Menschen und beißen sie; Gebissene werden nach einer einstellbaren Zeit selbst zu Zombies.
 import { schema, t } from '@colyseus/schema';
-import { KACHEL, BREITE, HOEHE, T, findeWeg, sichtfrei, bewege, frei, ladenArt, zufall, DINGE, WERTE as W } from '../client/welt.mjs';
+import { KACHEL, BREITE, HOEHE, kachelVon, tempoVon, T, findeWeg, sichtfrei, bewege, frei, ladenArt, zufall, DINGE, WERTE as W } from '../client/welt.mjs';
 
 export const Mensch = schema({
   x: t.int16(), y: t.int16(),   // Position übertragen in ganzen Pixeln (Server rechnet genau)
@@ -221,7 +221,7 @@ export class Stadtleben {
 
   // nächster ansprechbarer Mensch (gleiche Ebene, höchstens 56 px, nicht gebissen, folgt noch niemandem)
   ansprechbar(p) {
-    let best = null, bd = 56;
+    let best = null, bd = 56 * (this.raum.wv(p.ebene).reich ?? 1);   // drinnen im Feinraster: Reichweite im Maßstab des Raums
     for (const [id, m] of this.raum.state.menschen) {
       const inf = this.info.get(id);
       if (!inf || !m.sichtbar || m.infiziert || inf.folgt || (m.ebene ?? '') !== (p.ebene ?? '')) continue;
@@ -256,7 +256,7 @@ export class Stadtleben {
   naehe(p, ebene) {
     const w = this.raum.wv(ebene);
     for (let j = 0; j < 12; j++) {
-      const a = j * 0.9 + 1, rr = 26 + j * 3;
+      const a = j * 0.9 + 1, rr = (26 + j * 3) * (w.reich ?? 1);
       const x = p.x + Math.cos(a) * rr, y = p.y + Math.sin(a) * rr;
       if (frei(w, x, y, RAD)) return { x, y };
     }
@@ -271,8 +271,8 @@ export class Stadtleben {
     }
     const dp = Math.hypot(p.x - m.x, p.y - m.y);
     if (p.sicher && dp < 240) return this.retten(id, m, inf, p);
-    if (dp <= FOLGE_ABSTAND) { m.richtung = Math.atan2(p.y - m.y, p.x - m.x); return; }
-    const v = (dp > 180 ? W.tempoGehen * 0.95 : W.tempoGehen * 0.62) * (TYPEN[m.typ]?.tempo ?? 1) * d;
+    if (dp <= FOLGE_ABSTAND * (welt.reich ?? 1)) { m.richtung = Math.atan2(p.y - m.y, p.x - m.x); return; }
+    const v = (dp > 180 ? W.tempoGehen * 0.95 : W.tempoGehen * 0.62) * (TYPEN[m.typ]?.tempo ?? 1) * d * tempoVon(welt);
     if (sichtfrei(welt, m.x, m.y, p.x, p.y)) {
       const w = Math.atan2(p.y - m.y, p.x - m.x);
       gehe(welt, m, Math.cos(w) * v, Math.sin(w) * v); m.richtung = w; inf.weg = null;
@@ -314,12 +314,15 @@ export class Stadtleben {
     for (let i = 0; i < ebene.length; i++) h = Math.imul(h ^ ebene.charCodeAt(i), 16777619) >>> 0;
     const rng = zufall(h ^ 0x3c1d9a);
     if (rng() >= HAUS_VERSTECKT) return null;
-    const sperr = [...(w.tueren ?? []), ...(w.treppen ?? []), ...(w.ausgang ? [w.ausgang] : []), ...(w.start ? [{ x: Math.floor(w.start.x / KACHEL), y: Math.floor(w.start.y / KACHEL) }] : [])];
+    const K = kachelVon(w), nahe = w.kachel ? 6 : 1;   // Feinraster: Abstand zu Türen und Treppen in Zellen (1,5 m)
+    const zellen = q => q.zellen ?? [[q.x, q.y]];
+    const sperr = [...(w.tueren ?? []), ...(w.treppen ?? []), ...(w.ausgang ? [w.ausgang] : [])].flatMap(zellen).map(([x, y]) => ({ x, y }));
+    if (w.start) sperr.push({ x: Math.floor(w.start.x / K), y: Math.floor(w.start.y / K) });
     const platz = [];
     for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++) {
       if (w.hole(x, y) !== T.BODEN || ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => w.hole(x + a, y + c) === T.MOEBEL)) continue;   // hinter Schrank/Möbel
-      if (sperr.some(q => Math.abs(q.x - x) <= 1 && Math.abs(q.y - y) <= 1) || !frei(w, (x + 0.5) * KACHEL, (y + 0.5) * KACHEL, 12)) continue;
-      platz.push({ x: (x + 0.5) * KACHEL, y: (y + 0.5) * KACHEL });
+      if (sperr.some(q => Math.abs(q.x - x) <= nahe && Math.abs(q.y - y) <= nahe) || !frei(w, (x + 0.5) * K, (y + 0.5) * K, 12)) continue;
+      platz.push({ x: (x + 0.5) * K, y: (y + 0.5) * K });
     }
     if (!platz.length) return null;
     const ort = platz[Math.floor(rng() * platz.length)];

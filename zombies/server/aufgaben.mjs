@@ -4,7 +4,7 @@
 // die nächste Karte (Level), sonst fährt er ohne die Gruppe ab und kommt am nächsten Spieltag wieder.
 import { flach, hat, indexVon, zaehle as zaehleStapel } from '../client/stapel.mjs';
 import { schema, t } from '@colyseus/schema';
-import { KACHEL, weltVersion, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
+import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei, kachelVon, reichVon } from '../client/welt.mjs';
 import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
 import { ueberrolleZombies } from './ueberrollen.mjs';
@@ -414,8 +414,8 @@ export class Aufgaben {
     if (!safe) return null;
     const m = this.raum.wv(p.ebene).moebel?.find(q => q.art === 'funktisch');
     if (!m) return null;
-    const nx = Math.max(m.x * KACHEL, Math.min((m.x + m.b) * KACHEL, p.x)), ny = Math.max(m.y * KACHEL, Math.min((m.y + m.h) * KACHEL, p.y));
-    return Math.hypot(p.x - nx, p.y - ny) < 44 ? { art: 'funk', safe, dauer: 4 } : null;
+    const wf = this.raum.wv(p.ebene), K = kachelVon(wf), nx = Math.max(m.x * K, Math.min((m.x + m.b) * K, p.x)), ny = Math.max(m.y * K, Math.min((m.y + m.h) * K, p.y));
+    return Math.hypot(p.x - nx, p.y - ny) < reichVon(wf, 44) ? { art: 'funk', safe, dauer: 4 } : null;
   }
 
   // ---------- Takt ----------
@@ -950,7 +950,7 @@ export class Aufgaben {
     this.eingestiegen.clear(); this.folgenId = null;
     if (ziel?.frisch) return r.weltNeuStarten(false);
     r.weltNeuStarten(false, {
-      version: weltVersion(), karte, seed: Math.floor(Math.random() * 2 ** 31), zeit: 0, uhr: 8 * 60,
+      version: WELT_VERSION, karte, seed: Math.floor(Math.random() * 2 ** 31), zeit: 0, uhr: 8 * 60,
       besiegt: s.besiegt, level: ziel?.level ?? s.level + 1, chat: [...r.chatVerlauf],
     });
   }

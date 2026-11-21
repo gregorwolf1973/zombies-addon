@@ -1,15 +1,15 @@
 // Fundliste nach „Alles durchsuchen“: alle Funde der Behälter, „Alles nehmen“ und einzeln nehmen
 import { DINGE, BEHAELTER_NAME } from './welt.mjs';
 import { dingIcon } from './dingbild.mjs';
-import { NIMM_WEITE } from './durchsuche_alle.mjs';
+import { NIMM_WEITE, nimmWeite } from './durchsuche_alle.mjs';
 
 let feld = null, ursprung = null;
 function escZu(e) { if (e.key === 'Escape') fundZu(); }
 export function fundZu() { if (feld) { feld.remove(); feld = null; ursprung = null; } document.removeEventListener('keydown', escZu); }
 
 // Schließt die Liste, wenn man sich weit entfernt hat (der Server nimmt dann ohnehin nichts mehr heraus)
-export function fundPruefen(lok) {
-  if (feld && ursprung && lok && Math.hypot(lok.x - ursprung.x, lok.y - ursprung.y) > NIMM_WEITE + 40) fundZu();
+export function fundPruefen(lok, w = null) {
+  if (feld && ursprung && lok && Math.hypot(lok.x - ursprung.x, lok.y - ursprung.y) > nimmWeite(w) + (w?.kachel ? 12 : 40)) fundZu();
 }
 
 const sicher = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

@@ -2243,7 +2243,7 @@ class Ort extends Phaser.Scene {
         f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'zombie_' + typ) * (angriff ? 1.06 : 1));
       }
       f.bild.setTint(z.jagt ? 0xffd2c8 : 0xffffff);
-      if (s.kegel && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
+      if ((s.optionen & 1) && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
         if (z.kriecht) {
           // Kriecher sehen nicht, sie spüren ringsum
           this.kegel.lineStyle(1, 0xff8a65, 0.35).strokeCircle(f.x, f.y, 110);
@@ -3304,7 +3304,7 @@ class Ort extends Phaser.Scene {
       ak.style.display = zeige && suAn ? 'block' : 'none';   // nur für Superuser
       const sperre = Math.ceil(((this.alleSperreBis ?? 0) - Date.now()) / 1000);
       if (zeige) { const t = sperre > 0 && ich.ebene ? `Alles durchsuchen in ${sperre} s` : kand.drinnen ? 'Alles durchsuchen (3 Rätsel)' : `Alles durchsuchen (${kand.liste.length}, ${Math.round(kand.dauer * 10) / 10} s)`; if (ak.textContent !== t) ak.textContent = t; }
-      fundPruefen(this.lokal);
+      fundPruefen(this.lokal, this.aktEbene ? this.wv(this.aktEbene) : null);
     }
     if (zweit && knopf2.__text !== zweit.text) { knopf2.__text = zweit.text; knopf2.textContent = nurText(zweit.text); }
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
