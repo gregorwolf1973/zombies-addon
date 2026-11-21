@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.65.1 – 21.11.2026
+
+- Neu: Zweite Level-1-Karte „Geretsried 2 (Level 1)“ – Geretsried-Nord vom Veilchenweg bis zum Karl-Lederer-Platz mit Rathaus, B11 und Gewerbegebiet (1,4 × 1,7 km). Level 1 wählt bei jedem Start zufällig Geretsried oder Geretsried 2; im Backend lässt sich auch eine feste Karte wählen.
+
 ## 0.65.0 – 21.11.2026
 
 - Neu (Bildschirm): Waffentext ganz oben, darunter Balken, Mitspieler und nur noch zwei Waffenfelder mit großem Waffensymbol und Magazinanzeige. Doppeltipp lädt nach (der Nachladen-Knopf entfällt, Taste R bleibt). Die Granate hat ein festes Feld daneben und springt nicht mehr. Aktionen (Öffnen, Tür, Handel …) stehen als Text unten in der Mitte; unten links und rechts bleibt nur der Rucksack.
