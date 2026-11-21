@@ -3,6 +3,7 @@
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
+import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -694,6 +695,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   if (pisteInfo) welt.piste = pisteInfo;
   if (karte.zaeune) welt.fein = baueFein(welt, karte);
   baueStuetzpunkt(welt, seed, setze);   // Bundeswehr-Stützpunkt (eigener Zufall, nach allem anderen)
+  baueFlugfeldDeko(welt, seed);         // Flugfeld-Deko neben der Landebahn (nur Karten mit 'piste'; eigener Seed-Zufall)
   tuerenFreihalten(welt, setze, abstandRechteck);   // LETZTER Schritt: Vorplätze leeren, Wege zur Straße öffnen
   return welt;
 }

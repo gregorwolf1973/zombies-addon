@@ -11,6 +11,7 @@ import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
 import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
+import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
@@ -1038,6 +1039,7 @@ class Ort extends Phaser.Scene {
       this.behaelterObj.set(b.id, c);
     }
     this.baueStuetzpunktFiguren();
+    zeichneFlugfeldDeko(this);   // Königsdorf: verlassene Panzer und Drahtrollen am Flugfeld
 
     // Dächer der Safe Rooms als eigene Bilder (grau, mit Schild); die übrigen Dächer stecken in den Kartenstücken
     this.daecher = this.welt.safeRooms.map(s => {
@@ -1937,8 +1939,8 @@ class Ort extends Phaser.Scene {
       const tex = gem ? 'figuren3' : neu ? 'figuren2' : 'figuren';
       if (f.bild.texture.key !== tex) f.bild.setTexture(tex, 0);
       if (z.kriecht) {
-        f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
-        f.bild.setRotation(0).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'kriecher_' + 'abcd'[(z.variante ?? 0) % 4]));
+        f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], z.haengt ? Math.floor(this.time.now / 170 + z.x) : bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
+        f.bild.setRotation(z.haengt ? Math.sin(this.time.now / 80 + z.x * 0.7) * 0.16 : 0).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'kriecher_' + 'abcd'[(z.variante ?? 0) % 4]));
       } else if (gem) {
         // Einzelbild (Gemini): beim Gehen leicht wanken, Maßstab wie die übrigen Zombies
         const l3 = this.figurListe3[typ];
@@ -1990,7 +1992,7 @@ class Ort extends Phaser.Scene {
       o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * zg());   // Leichen folgen der Zombiegröße
       o.setVisible((l.ebene ?? '') === this.aktEbene);
       const ausblenden = l.fest ? 1 : 1 - (l.blass ?? 0) / 10;   // Server: blass 0..10 in den letzten 20 s
-      o.setAlpha((l.rest === 0 ? 0.5 : 1) * Math.max(0, ausblenden));
+      o.setAlpha((l.rest === 0 && !l.deko ? 0.5 : 1) * Math.max(0, ausblenden));   // deko: Tote am Flugfeld, voll sichtbar
     }
     for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.destroy(); this.leichen.delete(id); }
     // Bewohner: gehen umher, fliehen, verschwinden in Häusern und im Bus; Gebissene werden grünlich

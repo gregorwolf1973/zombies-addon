@@ -113,10 +113,21 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
     return [x, y];
   };
 
-  // ---- (a) Sperrlinie aus S-Draht mit einer Durchfahrt (3 Kacheln), Puma an der Durchfahrt ----
-  const DU0 = 14, DU1 = 17;
-  for (const [u0, u1] of [[0.5, DU0], [DU1, SP_BREITE - 0.5]]) {
-    const t = teil('sdraht', u0, 1.25, u1, 1.75);
+  // ---- (a) Flandernzaun rundum (Holzböcke mit Stacheldraht) mit Tor (3 Kacheln), S-Draht-Rollen vor dem Tor und hinter dem Lager ----
+  // Der Zaun steht im Feinraster als Wert 4: Spieler kommen nicht durch, Zombies waten stark gebremst hindurch (tierGelaende, FLANDERN_TEMPO).
+  const DU0 = 14, DU1 = 17, ZV = 1.5, ZH = 21.9, ZU0 = 0.5, ZU1 = SP_BREITE - 0.5, ZD = 0.3;
+  const zaun = [];
+  for (const [u0, v0, u1, v1] of [
+    [ZU0 - ZD / 2, ZV - ZD / 2, DU0, ZV + ZD / 2], [DU1, ZV - ZD / 2, ZU1 + ZD / 2, ZV + ZD / 2],   // Front links und rechts vom Tor
+    [ZU0 - ZD / 2, ZV - ZD / 2, ZU0 + ZD / 2, ZH + ZD / 2], [ZU1 - ZD / 2, ZV - ZD / 2, ZU1 + ZD / 2, ZH + ZD / 2],   // Seiten
+    [ZU0 - ZD / 2, ZH - ZD / 2, ZU1 + ZD / 2, ZH + ZD / 2],   // Rückseite
+  ]) {
+    const t = teil('flandern', u0, v0, u1, v1);
+    zaun.push({ x0: t.x - t.b / 2, y0: t.y - t.h / 2, x1: t.x + t.b / 2, y1: t.y + t.h / 2 });
+  }
+  // S-Draht-Rollen (je 0,4 Kachel tief, im Feinraster fest): 2 + 3 vor dem Tor links/rechts, 1 hinter dem Lager außerhalb des Zauns
+  for (const [u0, u1, v] of [[4.5, 12.5, 0.35], [18.5, 26.5, 0.35], [3, 27, 22.5]]) {
+    const t = teil('sdraht', u0, v - 0.2, u1, v + 0.2);
     sperre(t.x, t.y, -t.w / 2, -t.d / 2, t.w / 2, t.d / 2);
   }
   {
@@ -227,6 +238,11 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
       }
     }
   }
+  for (const z of zaun) {   // Flandernzaun: Wert 4 (nur wo noch frei)
+    for (let fy = Math.max(0, Math.floor(z.y0 / FEIN_PX)); fy <= Math.min(fh - 1, Math.floor((z.y1 - 0.01) / FEIN_PX)); fy++) {
+      for (let fx = Math.max(0, Math.floor(z.x0 / FEIN_PX)); fx <= Math.min(fb - 1, Math.floor((z.x1 - 0.01) / FEIN_PX)); fx++) if (!f[fy * fb + fx]) f[fy * fb + fx] = 4;
+    }
+  }
   for (const bh of behaelter) welt.behaelter.push(bh);
   // Ersatz für die gefällten Bäume: an Waldrändern und in Baumgruppen der Karte (nicht nahe dem Baufeld), damit die Waldmenge gleich bleibt
   if (entfernt) {
@@ -254,7 +270,7 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
       setze(x, y, T.BAUM); entfernt--;
     }
   }
-  welt.stuetzpunkt = { x: x0, y: y0, b, h, richtung, winkel: th, teile, sperren, behaelter: behaelter.map(q => q.id) };
+  welt.stuetzpunkt = { x: x0, y: y0, b, h, richtung, winkel: th, teile, sperren, zaun, behaelter: behaelter.map(q => q.id) };
 }
 
 // Wandrechtecke der U-förmigen Sandsackstellung (Rahmen um die Mitte, Öffnung nach vorn = −y)
@@ -478,11 +494,11 @@ export function zeichneStuetzpunktOben(ctx, welt, rect) {
     if (!sichtbar(t, rect, 100)) continue;
     const f = {
       sanizelt: () => zeltWaende(ctx, t), zelt: () => zeltWaende(ctx, t), funkzelt: () => zeltWaende(ctx, t),
-      sdraht: () => sDraht(ctx, t), sandsack: () => sandsackStellung(ctx, t), mgnest: () => mgNest(ctx, t),
+      sdraht: () => sDraht(ctx, t), flandern: () => flandernZaun(ctx, t), sandsack: () => sandsackStellung(ctx, t), mgnest: () => mgNest(ctx, t),
       lkw: () => lkw(ctx, t), container: () => bwContainer(ctx, t), kiste: () => munKiste(ctx, t), vorratskiste: () => vorratsKiste(ctx, t),
       antenne: () => antenne(ctx, t), flagge: () => flagge(ctx, t),
     }[t.art];
-    if (f) dinge.push([t.art === 'sdraht' ? t.y - 4000 : t.y, f]);
+    if (f) dinge.push([t.art === 'sdraht' ? t.y - 4000 : t.art === 'flandern' ? t.y - 3000 : t.y, f]);
   }
   for (const b of welt.behaelter) if (b.art === 'sanikiste' && sp.behaelter.includes(b.id)) dinge.push([b.y, () => saniKiste(ctx, b)]);
   dinge.sort((a, c) => a[0] - c[0]);
@@ -514,7 +530,33 @@ function zeltWaende(ctx, t) {
   });
 }
 
+// Flandernzaun: Holzböcke (gekreuzte Balken) alle 22 px, oben ein Längsbalken und drei Stacheldrahtlitzen mit Zacken
+function flandernZaun(ctx, t) {
+  mitRahmen(ctx, t, () => {
+    const lang = t.w >= t.d, L = lang ? t.w : t.d;
+    if (!lang) ctx.rotate(Math.PI / 2);
+    const hl = L / 2, n = Math.max(1, Math.round(L / 22)), sch = L / n, saat = Math.round(t.x * 3 + t.y * 5);
+    ctx.fillStyle = 'rgba(0,0,0,.24)'; ctx.fillRect(-hl + 2, -3, L, 10);   // Schatten
+    ctx.lineCap = 'round';
+    for (let i = 0; i < n; i++) {   // Böcke: zwei gekreuzte Balken quer zum Zaun
+      const x = -hl + (i + 0.5) * sch;
+      ctx.strokeStyle = '#4e342e'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(x - 3.2, -5); ctx.lineTo(x + 3.2, 5); ctx.moveTo(x + 3.2, -5); ctx.lineTo(x - 3.2, 5); ctx.stroke();
+      ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x - 3.2, -5); ctx.lineTo(x + 3.2, 5); ctx.moveTo(x + 3.2, -5); ctx.lineTo(x - 3.2, 5); ctx.stroke();
+    }
+    ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(-hl, 0); ctx.lineTo(hl, 0); ctx.stroke();   // Längsbalken
+    ctx.strokeStyle = '#a1887f'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-hl, -0.7); ctx.lineTo(hl, -0.7); ctx.stroke();
+    for (const [y, f] of [[-3.6, 0], [0, 1], [3.6, 2]]) {   // Stacheldraht (wellig) mit kurzen Zacken
+      ctx.strokeStyle = '#4a4d50'; ctx.lineWidth = 1.2; ctx.beginPath();
+      for (let x = -hl; x <= hl; x += 3) { const yy = y + Math.sin(x * 0.55 + f * 2) * 1.1; if (x === -hl) ctx.moveTo(x, yy); else ctx.lineTo(x, yy); }
+      ctx.stroke();
+      ctx.strokeStyle = '#b0b7ba'; ctx.lineWidth = 0.9;
+      for (let x = -hl + 4 + hash(saat, f) * 4; x < hl; x += 9) { ctx.beginPath(); ctx.moveTo(x - 1.5, y - 2.2); ctx.lineTo(x + 1.5, y + 2.2); ctx.moveTo(x + 1.5, y - 2.2); ctx.lineTo(x - 1.5, y + 2.2); ctx.stroke(); }
+    }
+  });
+}
+
 // S-Draht (NATO-Draht): Rollen nebeneinander, mit Schatten
+export function zeichneSDrahtRolle(ctx, w, d) { sDraht(ctx, { x: 0, y: 0, w, d, winkel: 0 }); }   // für Flugfeld-Deko (flugfeld_deko.mjs), um den Ursprung
 function sDraht(ctx, t) {
   mitRahmen(ctx, t, () => {
     const hw = t.w / 2, n = Math.max(2, Math.round(t.w / 12)), s = t.w / n;

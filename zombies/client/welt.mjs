@@ -352,7 +352,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 19;   // 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 20;   // 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -547,6 +547,7 @@ export function frei(welt, x, y, rad) {
 
 // ---------- Hecken und niedrige Zäune für Zombies und Bots (Menschen klettern bewusst, siehe zaunUeberstieg) ----------
 export const ZAUN_TEMPO = { h: 0.35, z: 0.45 };   // Tempo-Faktor, solange Zombie/Bot im Zaunfeld steht
+export const FLANDERN_TEMPO = 0.12;   // Flandernzaun des Bundeswehr-Lagers (Feinwert 4): Zombies waten nur sehr langsam hindurch, Spieler gar nicht
 // Art des durchquerbaren Zauns ('h' Hecke, 'z' Holzzaun – im Dorf alle Rasterzäune) auf Kachel kx,ky oder null
 function tierZaunArt(welt, kx, ky) {
   if (kx <= 0 || ky <= 0 || kx >= BREITE - 1 || ky >= HOEHE - 1) return null;   // Kartenrand bleibt zu
@@ -588,6 +589,7 @@ export function tierGelaende(welt, x, y, rad) {
     for (let fy = y0; fy <= y1; fy++) for (let fx = x0; fx <= x1; fx++) {
       const w = f[fy * fb + fx];
       if (!w) continue;
+      if (w === 4) { faktor = Math.min(faktor, FLANDERN_TEMPO); continue; }
       if (w !== 2) return 0;
       const kx = Math.floor(fx / FEIN), ky = Math.floor(fy / FEIN);
       if (kx <= 0 || ky <= 0 || kx >= BREITE - 1 || ky >= HOEHE - 1) return 0;
