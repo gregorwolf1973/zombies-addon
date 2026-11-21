@@ -352,7 +352,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 21;   // 21: ländliche Details (Alleen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen), B-11-Kreuzung ausgedünnt, feste Safehouses per Kachel, 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 22;   // 22: Einkaufswagen vor Läden (durchsuchbar), geglättete Zaunlinien (zaunglatt.mjs), 21: ländliche Details (Alleen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen), B-11-Kreuzung ausgedünnt, feste Safehouses per Kachel, 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -415,7 +415,7 @@ export const KISTE_PLAETZE = 24;
 export const STAPEL_MAX = 5;   // je Platz bis zu 5 Stück derselben Art (client/stapel.mjs); Waffen (außer Messer), Taschen und Missionsgegenstände: 1
 export const MUNITIONSKISTE_SCHUSS = 30;   // Schuss je Munitionskiste
 export const MUNITION_KISTE_AB = 120;      // fällt der Munitionszähler auf diesen Wert oder weniger, wird eine Kiste geöffnet
-export const BEHAELTER_NAME = { bad: 'Toilette / Waschbecken', muelltonne: 'Mülltonnen', container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', herd: 'Herd', spuele: 'Spüle', spind_belohnung: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
+export const BEHAELTER_NAME = { bad: 'Toilette / Waschbecken', muelltonne: 'Mülltonnen', container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', herd: 'Herd', spuele: 'Spüle', spind_belohnung: 'Spind', auto: 'Kofferraum', einkaufswagen: 'Einkaufswagen', leiche: 'Zombie', bus: 'Bus',
   vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal', laden_polizei: 'Waffenschrank' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
@@ -444,6 +444,8 @@ export const BEUTE = {
   sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', 'radio', null],
   bad: ['wasser', 'wasser', 'wasser', 'verband', 'schokoriegel', null, null],   // Bad: oft Wasser (Spülkasten, Hahn)
+  // Einkaufswagen vor Läden: vergessene Einkäufe, überwiegend Wasser und Konserven, selten Schokolade, ab und zu leer
+  einkaufswagen: ['wasser', 'wasser', 'wasser', 'wasser', 'essen', 'essen', 'essen', 'essen', 'schokoriegel', null],
   muelltonne: ['essen', 'wasser', 'seil', 'schokoriegel', null, null, null, null, null],   // Hausmüll: meist leer, selten etwas Brauchbares
   container: ['essen', 'essen', 'schokoriegel', 'schokoriegel', 'bretter', 'bretter', 'kleidung', 'kleidung', 'tasche', null, null, null],   // Müll: meist Krempel, selten eine Tasche
 };

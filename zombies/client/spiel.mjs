@@ -1106,7 +1106,7 @@ class Ort extends Phaser.Scene {
     this.behaelterObj = new Map();
     for (const b of this.welt.behaelter) {
       const c = this.add.container(b.x, b.y).setDepth(1);
-      if (b.art === 'bus' || b.art === 'container' || b.art === 'muelltonne' || b.art === 'sanikiste' || b.art.startsWith('bw_')) { /* Bus: obere Ebene, Container und Stützpunkt-Kisten: Kartenstücke (aussehen.mjs, stuetzpunkt.mjs) */ }
+      if (b.art === 'bus' || b.art === 'container' || b.art === 'einkaufswagen' || b.art === 'muelltonne' || b.art === 'sanikiste' || b.art.startsWith('bw_')) { /* Bus: obere Ebene, Container und Stützpunkt-Kisten: Kartenstücke (aussehen.mjs, stuetzpunkt.mjs) */ }
       else if (b.art === 'auto') { /* geparkte Autos sind in die Kartenstücke gezeichnet (aussehen.mjs) */
       } else {
         const f = { schrank: 0x8d6e63, kuehlschrank: 0xeceff1, spind: 0x78909c }[b.art];

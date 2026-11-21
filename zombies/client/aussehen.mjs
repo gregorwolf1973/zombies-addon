@@ -7,6 +7,7 @@ import { zeichneSafeMoebel } from './safe_moebel.mjs';
 import { zeichneWasser } from './wasser.mjs';
 import { zeichneMoebelBild } from './moebel_bilder.mjs';
 import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
+import { zeichneEinkaufswagen } from './einkaufswagen.mjs';
 import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach } from './vektor.mjs';
 
 const TAU = Math.PI * 2;
@@ -744,6 +745,7 @@ function zeichneMuell(ctx, welt, rect) {
     ctx.restore();
   }
   for (const b of welt.behaelter ?? []) {
+    if (b.art === 'einkaufswagen' && b.x >= x0 && b.x <= x1 && b.y >= y0 && b.y <= y1) { zeichneEinkaufswagen(ctx, b); continue; }
     if (b.art !== 'container' || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
     ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.winkel ?? 0);
     if (b.typ === 'glas') {          // Altglas-Iglu: Kuppel mit Einwurfloch
