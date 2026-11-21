@@ -883,23 +883,6 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="tnLeoKanoneMin" min="3" max="50" step="1"><span id="tnLeoKanoneMinWert">10</span></div>
   <p class="tn-leise">Der Turm dreht gleichmäßig (ca. 40 °/s) und feuert erst, wenn das Rohr auf dem Ziel steht. Kanone: Reichweite 15–60 m, Explosion 5 m Radius.</p>
   <p class="tn-leise" id="bwInfoLeo"></p>
-  <label for="tnMoMin">Mörser: Mindestreichweite</label>
-  <div class="tn-zeile"><input type="range" id="tnMoMin" min="5" max="100" step="1"><span id="tnMoMinWert">15 m</span></div>
-  <label for="tnMoMax">Mörser: Höchstreichweite</label>
-  <div class="tn-zeile"><input type="range" id="tnMoMax" min="10" max="150" step="1"><span id="tnMoMaxWert">80 m</span></div>
-  <label for="tnMoPause">Mörser: Pause zwischen zwei Granaten</label>
-  <div class="tn-zeile"><input type="range" id="tnMoPause" min="1" max="60" step="0.5"><span id="tnMoPauseWert">6 s</span></div>
-  <label for="tnMoSchaden">Mörser: Schaden in der Einschlagmitte (am Rand die Hälfte)</label>
-  <div class="tn-zeile"><input type="range" id="tnMoSchaden" min="10" max="1000" step="10"><span id="tnMoSchadenWert">200 </span></div>
-  <label for="tnMoRadius">Mörser: Splitterradius</label>
-  <div class="tn-zeile"><input type="range" id="tnMoRadius" min="2" max="15" step="0.5"><span id="tnMoRadiusWert">6 m</span></div>
-  <label for="tnMoMind">Mörser: schießt erst ab so vielen Zombies im Radius</label>
-  <div class="tn-zeile"><input type="range" id="tnMoMind" min="1" max="30" step="1"><span id="tnMoMindWert">3 </span></div>
-  <label for="tnMoSicher">Mörser: Sicherheitsabstand (kein Schuss, wenn ein Spieler so nah am Einschlag steht)</label>
-  <div class="tn-zeile"><input type="range" id="tnMoSicher" min="0" max="30" step="1"><span id="tnMoSicherWert">6 m</span></div>
-  <label for="tnMoTempo">Mörser: Granatengeschwindigkeit (bestimmt die Flugzeit)</label>
-  <div class="tn-zeile"><input type="range" id="tnMoTempo" min="10" max="80" step="1"><span id="tnMoTempoWert">30 m/s</span></div>
-  <p class="tn-leise" id="bwInfoMo"></p>
   <p class="tn-leise" id="bwInfoMg"></p>
   <label for="tnMgSchritt">Munitionsglück: Zuschlag je Durchsuchung ohne Munition (multiplikativ)</label>
   <div class="tn-zeile"><input type="range" id="tnMgSchritt" min="0" max="100" step="5"><span id="tnMgSchrittWert">20 %</span></div>
@@ -1026,7 +1009,6 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     feld('rwScharf', rw.scharfschuetze || 75, function (v) { return v + ' m'; });
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
-    var mo = e.moerser || {};
     var mg = e.munitionsglueck || {};
     feld('tnMgSchritt', mg.schritt === undefined ? 20 : mg.schritt, function (v) { return v + ' %'; });
     feld('tnMgMax', mg.max === undefined ? 300 : mg.max, function (v) { return v + ' %'; });
@@ -1034,14 +1016,6 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     feld('tnMgLebenF', mg.lebenFaktor === undefined ? 150 : mg.lebenFaktor, function (v) { return v + ' %'; });
     feld('tnMgNot', mg.notUnter === undefined ? 25 : mg.notUnter, function (v) { return v + ' %'; });
     feld('tnMgNotF', mg.notFaktor === undefined ? 130 : mg.notFaktor, function (v) { return v + ' %'; });
-    feld('tnMoMin', mo.reichweiteMin === undefined ? 15 : mo.reichweiteMin, function (v) { return String(v).replace('.', ',') + ' m'; });
-    feld('tnMoMax', mo.reichweiteMax === undefined ? 80 : mo.reichweiteMax, function (v) { return String(v).replace('.', ',') + ' m'; });
-    feld('tnMoPause', mo.pause === undefined ? 6 : mo.pause, function (v) { return String(v).replace('.', ',') + ' s'; });
-    feld('tnMoSchaden', mo.schaden === undefined ? 200 : mo.schaden, function (v) { return String(v); });
-    feld('tnMoRadius', mo.radius === undefined ? 6 : mo.radius, function (v) { return String(v).replace('.', ',') + ' m'; });
-    feld('tnMoMind', mo.mindestZombies === undefined ? 3 : mo.mindestZombies, function (v) { return String(v); });
-    feld('tnMoSicher', mo.sicherheit === undefined ? 6 : mo.sicherheit, function (v) { return String(v).replace('.', ',') + ' m'; });
-    feld('tnMoTempo', mo.tempo === undefined ? 30 : mo.tempo, function (v) { return String(v).replace('.', ',') + ' m/s'; });
     feld('tnLeoReich', bwe.leopardReichweite === undefined ? 29 : bwe.leopardReichweite, function (v) { return v + ' m'; });
     feld('tnLeoPause', bwe.leopardPause === undefined ? 0.4 : bwe.leopardPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnLeoSchaden', bwe.leopardSchaden === undefined ? 100 : bwe.leopardSchaden, function (v) { return String(v); });
@@ -1144,14 +1118,6 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   regler('tnMgLebenF', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { lebenFaktor: v } }; });
   regler('tnMgNot', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { notUnter: v } }; });
   regler('tnMgNotF', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { notFaktor: v } }; });
-  regler('tnMoMin', function (v) { return String(v).replace('.', ',') + ' m'; }, function (v) { return { moerser: { reichweiteMin: v } }; });
-  regler('tnMoMax', function (v) { return String(v).replace('.', ',') + ' m'; }, function (v) { return { moerser: { reichweiteMax: v } }; });
-  regler('tnMoPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { moerser: { pause: v } }; });
-  regler('tnMoSchaden', function (v) { return String(v); }, function (v) { return { moerser: { schaden: v } }; });
-  regler('tnMoRadius', function (v) { return String(v).replace('.', ',') + ' m'; }, function (v) { return { moerser: { radius: v } }; });
-  regler('tnMoMind', function (v) { return String(v); }, function (v) { return { moerser: { mindestZombies: v } }; });
-  regler('tnMoSicher', function (v) { return String(v).replace('.', ',') + ' m'; }, function (v) { return { moerser: { sicherheit: v } }; });
-  regler('tnMoTempo', function (v) { return String(v).replace('.', ',') + ' m/s'; }, function (v) { return { moerser: { tempo: v } }; });
   regler('tnLeoReich', function (v) { return v + ' m'; }, function (v) { return { bundeswehr: { leopardReichweite: v } }; });
   regler('tnLeoPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { leopardPause: v } }; });
   regler('tnLeoSchaden', function (v) { return String(v); }, function (v) { return { bundeswehr: { leopardSchaden: v } }; });
@@ -3124,12 +3090,11 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     var rw = unter('🎯 Automatische Schussreichweite');
     ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwGranat', 'rwHandgranate', 'rwScharf'].forEach(function (id) { zeile(rw.inhalt, id); });
     gruppe(rw);
-    var bw = unter('🎖 Bundeswehr, Panzer, Mörser');
+    var bw = unter('🎖 Bundeswehr, Panzer');
     schalter(bw.inhalt, 'tnBwAktiv');
     zeile(bw.inhalt, 'tnBwTage'); zeile(bw.inhalt, 'tnPumaPause'); zeile(bw.inhalt, 'tnMgMunition'); zeile(bw.inhalt, 'tnPumaMunition'); rein(bw.inhalt, $('bwInfoPuma'));
     ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden', 'tnLeoKanonePause', 'tnLeoKanoneMin'].forEach(function (id) { zeile(bw.inhalt, id); });
-    ['tnMoMin', 'tnMoMax', 'tnMoPause', 'tnMoSchaden', 'tnMoRadius', 'tnMoMind', 'tnMoSicher', 'tnMoTempo'].forEach(function (id) { zeile(bw.inhalt, id); });
-    rein(bw.inhalt, $('bwInfoMo')); schalter(bw.inhalt, 'tnLeoUeberroll'); schalter(bw.inhalt, 'tnLeoKanone'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
+    schalter(bw.inhalt, 'tnLeoUeberroll'); schalter(bw.inhalt, 'tnLeoKanone'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
     gruppe(bw);
   }
   var fundeGr = ausKarte(karteVon('titelFunde'), '🎒 Fundhäufigkeit');
@@ -3151,7 +3116,6 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin',
     tnMgSchritt: 'munitionsglueck.schritt', tnMgMax: 'munitionsglueck.max', tnMgLeben: 'munitionsglueck.lebenUnter', tnMgLebenF: 'munitionsglueck.lebenFaktor', tnMgNot: 'munitionsglueck.notUnter', tnMgNotF: 'munitionsglueck.notFaktor',
-    tnMoMin: 'moerser.reichweiteMin', tnMoMax: 'moerser.reichweiteMax', tnMoPause: 'moerser.pause', tnMoSchaden: 'moerser.schaden', tnMoRadius: 'moerser.radius', tnMoMind: 'moerser.mindestZombies', tnMoSicher: 'moerser.sicherheit', tnMoTempo: 'moerser.tempo',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
     agStunde: 'aufgaben.stunde', agWarteEcht: 'aufgaben.wartenEchtMin', agWarte: 'aufgaben.wartezeit', agFinale: 'aufgaben.finaleMinuten', agAnzahl: 'aufgaben.anzahl', fkFaktor: 'faehigkeiten.xpFaktor',
@@ -3404,7 +3368,6 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     if ($('bwInfoMg')) $('bwInfoMg').textContent = 'MG-Nest (Gewehrschaden ' + g + '): tötet einen Zombie mit ' + tDat(treffer(hp, g)) + ' (80 % der Schüsse treffen, Salven à 3 Schuss, im Mittel ca. ' + kommaZahl(g * 0.8 * 3 / 1.4, 0) + ' Schaden/s). Soldaten an den Posten: fest ' + SOLDAT + ' Schaden, ' + tDat(treffer(hp, SOLDAT)) + '.';
     var pp = wert('tnPumaPause', 2.5);
     if ($('bwInfoPuma')) $('bwInfoPuma').textContent = 'Panzer (Puma): Kanone ' + KANONE + ' Schaden, tötet einen Zombie mit ' + treffer(hp, KANONE) + (treffer(hp, KANONE) === 1 ? ' Schuss' : ' Schüssen') + ' (' + kommaZahl(KANONE / pp, 1) + ' Schaden/s); Splitterschaden ' + FLAECHE + ' im Umkreis ca. 4 m, ' + tText(treffer(hp, FLAECHE)) + '. Kanonen- und Soldatenschaden sind fest.';
-    if ($('bwInfoMo')) { var ms = wert('tnMoSchaden', 200), mm = wert('tnMoMind', 3); $('bwInfoMo').textContent = 'Panzermörser: Granate im hohen Bogen, Flächenschaden ' + ms + ' in der Mitte, ' + kommaZahl(ms / 2, 0) + ' am Rand – ' + treffer(hp, ms) + (treffer(hp, ms) === 1 ? ' Einschlag' : ' Einschläge') + ' bis ein Zombie in der Mitte fällt; schießt erst ab ' + mm + ' Zombies im Radius und nie, wenn ein Spieler in der Nähe des Einschlags steht (Spieler nehmen nie Schaden). Läuft nur bei den festen Einsätzen (Stau auf der B11, Schießstand).'; }
     if ($('bwInfoLeo')) { var ls = wert('tnLeoSchaden', 100), lp = wert('tnLeoPause', 0.4); $('bwInfoLeo').textContent = 'Leopard-MG: Schaden ' + ls + ', tötet einen Zombie mit ' + treffer(hp, ls) + (treffer(hp, ls) === 1 ? ' Treffer' : ' Treffern') + ' (80 % der Schüsse treffen, ca. ' + kommaZahl(ls * 0.8 / lp, 0) + ' Schaden/s). Überrollte Zombies sind sofort tot.'; }
     if ($('wfHinweis')) $('wfHinweis').textContent = 'Zombie-Leben: ' + hp + ' (Einstellung im Reiter Zombies). Überrascht = der Zombie hat noch niemanden bemerkt (von hinten anschleichen). Fähigkeiten ändern den Waffenschaden nicht. Schaden/s = Schaden ÷ Abklingzeit (echte Sekunden). Ein Viertel der Zombies kriecht nach dem Tod mit '
       + kh + ' Leben weiter. Granaten (150 Schaden) sind fest.';
@@ -3428,8 +3391,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
       ['agWarte', 'Spielminuten · ' + wert('agWarte', 60) + ' Spielminuten ≈ ' + dauer(wert('agWarte', 60) * pro) + ' echt bei ' + tm + ' min/Spieltag'],
       ['tnBwTage', 'Spieltage ab Weltbeginn · ' + (wert('tnBwTage', 3) ? wert('tnBwTage', 3) + ' Spieltage = ' + dauer(wert('tnBwTage', 3) * tm) + ' echt bei ' + tm + ' min/Spieltag' : 'nie')],
       ['tnPumaPause', 'echte Sekunden'],
-      ['tnLeoPause', 'echte Sekunden'],
-      ['tnMoPause', 'echte Sekunden']
+      ['tnLeoPause', 'echte Sekunden']
     ];
     Object.keys(UEB).forEach(function (k) { liste.push(['wfP_' + k, 'echte Sekunden']); });
     liste.forEach(function (z) {

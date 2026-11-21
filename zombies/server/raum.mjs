@@ -22,7 +22,6 @@ import { Radios } from './radio.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { hat, zaehle, flach, indexVon, entferne, nimmEins, nimmStapel, fuegeHinzu, kannAufnehmen, blockGrund, platzFuer, verschiebe, laden as stapelLaden, dingId, dingN, istTasche } from '../client/stapel.mjs';
 import { munitionGeben, kisteOeffnen, munitionPruefen } from './munition.mjs';
-import { Moerser } from './moerser.mjs';
 import { SzeneB11 } from './szene_b11.mjs';
 import * as FK from './faehigkeiten.mjs';
 import { alleKandidaten, NIMM_WEITE, ALLE_FRAGEN, ALLE_SPERRE } from '../client/durchsuche_alle.mjs';
@@ -451,7 +450,6 @@ export class SpielRaum extends Room {
     haengendStart(this);   // hängende Zombies im S-Draht (Lager, Flugfeld) und Tote am Flugfeld Königsdorf
     this.granaten = new Granaten(this);
     this.radios = new Radios(this);
-    this.moerser = new Moerser(this);   // Panzermörser (feste Einsätze: B11-Szene, Schießstand)
     this.szeneB11 = new SzeneB11(this); this.szeneB11.start();   // „Stau auf der B11“ (nur geretsried2)
     this.state.kegel = !!SpielRaum.einstellungen.sichtkegel;
     this.tuerAnteileUebernehmen();
@@ -2557,7 +2555,6 @@ export class SpielRaum extends Room {
     this.stuetzpunkt?.schritt(dt);
     this.granaten?.schritt(dt);
     this.radios?.schritt(dt);
-    this.moerser?.schritt(dt);
     this.szeneB11?.schritt(dt);
     this.messen('stuetzpunkt', t0);
     this.sprachSchritt(dt);

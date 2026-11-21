@@ -55,8 +55,8 @@ test('Puma und Leopard streifen im Bereich, halten Abstand zu allen Fahrzeugen, 
   const sz = raum.szeneB11, K = b11Geometrie(raum.welt).kreuzung;
   assert.equal(sz.streifen.length, 2, 'beide Streifen aktiv');
   const [sp, sl] = sz.streifen;
-  const fz = [...raum.state.fahrzeuge.values()].filter(f => f.art === 'moerser' || f.art === 'feuerwehr');
-  assert.ok(fz.length >= 2);
+  const fz = [...raum.state.fahrzeuge.values()].filter(f => f.art === 'feuerwehr');
+  assert.ok(fz.length >= 1);
   let minAbstand = Infinity, minFremd = Infinity, weg = [0, 0], maxK = 0;
   const enden = [new Set(), new Set()], alt = [{ x: sp.k.x, y: sp.k.y }, { x: sl.k.x, y: sl.k.y }];
   for (let t = 0; t < 1500; t += 0.1) {   // 25 Minuten
@@ -74,13 +74,13 @@ test('Puma und Leopard streifen im Bereich, halten Abstand zu allen Fahrzeugen, 
   assert.ok(enden[0].size === 3 && enden[1].size === 3, 'alle Wegpunkte angefahren (hin und zurück)');
   assert.ok(maxK < 650, 'bleibt im Bereich der Kreuzung/des Parkplatzes: ' + maxK);
   assert.ok(minAbstand >= MIN_ABSTAND - 1, 'Abstand Puma–Leopard ' + minAbstand);
-  assert.ok(minFremd >= 15 * 8, 'Abstand zu Mörser/Feuerwehr unter 15 m: ' + minFremd);
+  assert.ok(minFremd >= 15 * 8, 'Abstand zur Feuerwehr unter 15 m: ' + minFremd);
   assert.ok(STREIFE.puma.tempo <= 30 && STREIFE.leopard.tempo <= 30, 'langsam');
 }));
 
-test('Mörser, Puma, Leopard und Feuerwehr stehen am Start mindestens 15 m auseinander', mitSzene(async ({ raum }) => {
+test('Puma, Leopard und Feuerwehr stehen am Start mindestens 15 m auseinander', mitSzene(async ({ raum }) => {
   const sz = raum.szeneB11;
-  const pk = [['puma', sz.puma], ['leopard', sz.leopard], ...['moerserB11', 'stauFeuerwehr'].map(id => [id, raum.state.fahrzeuge.get(id)])];
+  const pk = [['puma', sz.puma], ['leopard', sz.leopard], ...['stauFeuerwehr'].map(id => [id, raum.state.fahrzeuge.get(id)])];
   for (let i = 0; i < pk.length; i++) for (let j = i + 1; j < pk.length; j++) {
     const d = Math.hypot(pk[i][1].x - pk[j][1].x, pk[i][1].y - pk[j][1].y);
     assert.ok(d >= 15 * 8, `${pk[i][0]}–${pk[j][0]} nur ${(d / 8).toFixed(1)} m`);

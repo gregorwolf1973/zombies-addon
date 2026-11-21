@@ -1,5 +1,5 @@
 // Szene „Stau auf der B11“ (nur geretsried2): Autos auf der B 11, 3 brennend, Wracks, Feuerwehr, Posten mit 8 Soldaten,
-// Gefallene lassen Munition liegen und stehen als Zombie auf, ohne Soldaten schweigen Puma und Mörser (server/szene_b11.mjs)
+// Gefallene lassen Munition liegen und stehen als Zombie auf, ohne Soldaten schweigen Puma und Leopard (server/szene_b11.mjs)
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -83,8 +83,6 @@ test('geretsried2: Kreuzung beim Rathaus (Karl-Lederer-Platz), Stau auf der B 11
   // Feuerwehr mit Blaulicht-Kennung daneben
   const fw = raum.state.fahrzeuge.get('stauFeuerwehr');
   assert.equal(fw.art, 'feuerwehr'); assert.equal(fw.haelt, true);
-  // Mörser fest eingebaut, kein Test-Schalter nötig
-  assert.equal(raum.moerser.fahrzeug()?.art, 'moerser');
   // Verkehr: keine Kante der Stau-Strecke im Straßengraph
   const nah = (a, b) => Math.abs(a - b) < 1;
   for (const kn of raum.verkehr.graph.knoten) for (const e of kn.nach) {
@@ -116,7 +114,7 @@ test('Posten: 8 Infanteristen, Puma, schießen auf Zombies in Reichweite', mitSz
   assert.ok(await bis(() => schuesse.some(s => s.art === 'gewehr') || !raum.state.zombies.has(id), 4000), 'Soldaten schießen nicht');
 }));
 
-test('Soldat fällt: Munitionshaufen, nach der Verwandlungszeit steht er als Zombie auf; alle tot: Puma und Mörser schweigen', mitSzene(async ({ raum }) => {
+test('Soldat fällt: Munitionshaufen, nach der Verwandlungszeit steht er als Zombie auf; alle tot: Puma und Leopard schweigen', mitSzene(async ({ raum }) => {
   const sz = raum.szeneB11;
   const q = sz.soldaten[0];
   const vorher = raum.state.boden.size;
@@ -135,11 +133,9 @@ test('Soldat fällt: Munitionshaufen, nach der Verwandlungszeit steht er als Zom
   const z = raum.state.zombies.get(q.zid);
   assert.ok(z && z.variante === 0, 'Tarn-Zombie erwartet');
   // alle übrigen fallen: der Posten ist aufgegeben
-  assert.equal(raum.moerser.schweigt, false);
   for (const s of sz.soldaten) if (!s.tot) { s.hp = 0; }
   sz.nahkampf(0.25); sz.schritt(0.1);
   assert.equal(sz.aufgegeben, true);
-  assert.equal(raum.moerser.schweigt, true);
   // Puma schießt nicht mehr
   const id = zombie(raum, sz.puma.x + 100, sz.puma.y);
   sz.puma.kuehl = 0; sz.puma.turm = 0;
@@ -147,20 +143,4 @@ test('Soldat fällt: Munitionshaufen, nach der Verwandlungszeit steht er als Zom
   sz.schritt(1); sz.schritt(1);
   assert.equal(geschossen, false);
   assert.ok(raum.state.zombies.has(id) || true);
-}));
-
-test('Mörser auf der B 11 feuert auf Zombiegruppen im Bereich', mitSzene(async ({ c, raum }) => {
-  const sz = raum.szeneB11, m = raum.moerser.fahrzeug();
-  const gesehen = []; c.onMessage('moerser', x => gesehen.push(x)); c.onMessage('b11', () => {});
-  raum.moerser.kuehl = 0;
-  // Gruppe 40 m entfernt (freier Fleck suchen), Spieler weit weg
-  for (let k = 0; k < 36 && !gesehen.length; k++) {
-    const w = k * Math.PI / 18, x = m.x + Math.cos(w) * 320, y = m.y + Math.sin(w) * 320;
-    for (let i = 0; i < 4; i++) zombie(raum, x + (i % 2) * 6, y + (i >> 1) * 6);
-    raum.moerser.kuehl = 0; raum.moerser.schritt(0.1);
-    if (!gesehen.length) { raum.state.zombies.clear(); raum.zombieInfo.clear(); }
-    await warte(30);
-  }
-  assert.ok(await bis(() => gesehen.length > 0, 1000), 'Mörser schießt nicht');
-  assert.ok(sz.aktiv());
 }));

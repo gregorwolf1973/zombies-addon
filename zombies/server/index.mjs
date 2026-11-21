@@ -129,7 +129,6 @@ export async function starte({
       ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,
       munitionsglueck: w.munitionsglueck,           // { schritt, max, lebenUnter, lebenFaktor, notUnter, notFaktor } in %
-      moerser: w.moerser,                           // { reichweiteMin, reichweiteMax, pause, schaden, radius, mindestZombies, sicherheit, tempo }
       unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),
     };
     SpielRaum.aktiv?.einstellungenGeaendert?.();

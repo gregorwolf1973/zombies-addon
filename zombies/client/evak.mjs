@@ -35,5 +35,3 @@ export const HELI = { skala: 0.6667, rumpfX: -23.0, rumpfY: 3.65, rotorRadius: 6
 // Tanklaster als Kulisse neben der Nase des gelandeten A400M (Container-Rahmen des Flugzeugs: nach vorn / nach rechts), 100 px lang
 export const TANKLASTER = { skala: 0.6667, x: 178, y: 72 };
 
-// Panzermörser M113 (Bild 217×128, 3 Bildpunkte je Spielpixel): Wanne 71 px lang; Mörserlager 16,2 px hinter der Mitte, Soldat dahinter, Rohr 24 px
-export const M113 = { skala: 0.3333, lagerX: -16.2, soldatX: -27, rohr: 24, laenge: 71, breite: 42 };

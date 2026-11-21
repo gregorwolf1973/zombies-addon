@@ -38,7 +38,7 @@ const mitBus = (aufgaben, fn, extra = {}) => async () => {
   try {
     raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
     const meldungen = []; c.onMessage('meldung', m => meldungen.push(m.text));
-    const ag = raum.aufgaben;
+    const ag = raum.aufgaben; ag.alleBordSek = 0.3;   // sonst 10 s Restwartezeit, wenn alle an Bord sind
     raum.state.aufgaben.clear(); for (const id of aufgaben) ag.neu(id, false); ag.aktualisieren(false);
     const p = raum.state.spieler.get(c.sessionId);
     ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
@@ -152,3 +152,19 @@ test('Gregors Fall: Spieler an Bord, Aufgaben offen, Bots tot → wartet, nach A
   assert.ok(await bis(() => !raum.state.busDa && !p.anBord, 3000), 'fährt nach Ablauf der Wartezeit nicht ab / setzt nicht ab');
   assert.ok(await bis(() => meldungen.some(m => m.includes('fehlte'))));
 }, { bots: 3 }));
+
+test('Alle an Bord und Aufgaben geschafft: Wartezeit läuft auf höchstens 10 s herunter, Meldung an alle, dann fährt er sofort', mitBus(['funk'], async ({ raum, p, bus, ag, meldungen }) => {
+  ag.alleBordSek = 10;
+  for (const [sid, q] of raum.state.spieler) if (raum.extra.get(sid)?.bot) { q.unten = true; q.hp = 0; q.x = bus.x + 900; q.y = bus.y; }
+  assert.ok(ag.busRest > 30, 'Wartezeit schon kurz: ' + ag.busRest);
+  assert.equal(ag.fahrtGelingt(), true);
+  let gewechselt = false; raum.weltNeuStarten = () => { gewechselt = true; }; ag.wechselVerzoegerung = 100;
+  p.ebene = ''; p.x = bus.x; p.y = bus.y;
+  assert.ok(await bis(() => p.anBord), 'steigt nicht ein');
+  assert.ok(await bis(() => meldungen.some(m => m.includes('Alle an Bord – Abfahrt in 10 s'))), 'Meldung fehlt: ' + meldungen.join(' | '));
+  assert.ok(ag.busRest <= 10, 'Wartezeit nicht gekürzt: ' + ag.busRest);
+  assert.equal(raum.state.busDa, true, 'fährt ohne die 10 s los');
+  ag.busRest = 0.05;   // die 10 s „abgelaufen“
+  assert.ok(await bis(() => ag.wechselLaeuft, 3000), 'fährt nach Ablauf nicht los');
+  assert.equal(meldungen.filter(m => m.includes('Alle an Bord')).length, 1, 'Meldung mehrfach');
+}, { bots: 2 }));

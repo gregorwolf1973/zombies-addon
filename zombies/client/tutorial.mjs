@@ -100,7 +100,7 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
       <div class="ss-titel">Zombies</div>
       <div class="ss-reihe">${[5, 20, 50].map(n => `<button class="ss-b" type="button" data-z="${n}">🧟 ${n} starten</button>`).join('')}</div>
       <div class="ss-titel">Fahrzeug am Lager</div>
-      <div class="ss-reihe" id="ss-fahrzeuge">${[['', '🚫 Keins'], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard'], ['moerser', '💥 Mörser']].map(([a, t]) => `<button class="ss-b" type="button" data-f="${a}">${t}</button>`).join('')}</div>
+      <div class="ss-reihe" id="ss-fahrzeuge">${[['', '🚫 Keins'], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard']].map(([a, t]) => `<button class="ss-b" type="button" data-f="${a}">${t}</button>`).join('')}</div>
       <div class="ss-reihe" style="margin-top:4px"><button class="ss-b" type="button" id="ss-reset">↺ Zurücksetzen</button></div>
       <div id="ss-info"></div>
       <div class="ss-titel">Auswertung je Waffe</div>

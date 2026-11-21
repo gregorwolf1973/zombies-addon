@@ -6,7 +6,7 @@ import {
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
 import { dingId, dingN, hat, zaehle, flach, kannAufnehmen, entferne as entferneStueck } from './stapel.mjs';
-import { laternen, tuerPose } from './vektor.mjs';
+import { laternen, tuerPose, zeichneSafeEingang } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
@@ -15,7 +15,7 @@ import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
-import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
+import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
@@ -942,7 +942,6 @@ class Ort extends Phaser.Scene {
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
     raum.onMessage('leopardkanone', m => leopardKanone(this, m, raum.state));   // Leopard-Hauptkanone: Mündungsfeuer, Rückstoß, Knall
     raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
-    raum.onMessage('moerser', m => moerserSchuss(this, m, raum.state));   // Panzermörser: Granate im hohen Bogen
     b11Registrieren(this, raum, { skala: () => BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg() });   // Szene „Stau auf der B11“
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
@@ -1130,6 +1129,14 @@ class Ort extends Phaser.Scene {
       const bild = this.add.image(h.x * KACHEL - DACH_RAND, h.y * KACHEL - DACH_RAND, schluessel).setOrigin(0).setDepth(5.2);
       return { haus: h, grafik: bild };
     });
+    // Eingang jedes Safe Rooms über dem Dach: Tür, grüner Leuchtfleck und Schild „SAFE“ (bei großen/unregelmäßigen Gebäuden liegt die Rastertür unter dem Dach)
+    for (const s of this.welt.safeRooms) {
+      const h = s.haus, r = h.raus ?? { dx: 0, dy: 1 }, pose = this.welt.vektor ? tuerPose(this.welt, h) : null;
+      const x = pose ? pose.x : (h.tuer.x + 0.5 + r.dx * 0.5) * KACHEL, y = pose ? pose.y : (h.tuer.y + 0.5 + r.dy * 0.5) * KACHEL;
+      const schluessel = 'eingang-' + s.id, tex = this.textures.createCanvas(schluessel, 160, 160), c3 = tex.getContext();
+      c3.translate(80, 80); zeichneSafeEingang(c3, pose ? pose.w : Math.atan2(r.dy, r.dx) - Math.PI / 2); tex.refresh();
+      this.add.image(x, y, schluessel).setDepth(5.3);   // gehört zur Außenwelt (aussenObjekte entsteht danach)
+    }
     // Sandsack-Wall links und rechts der Haustür jedes Safe Rooms (nur Grafik, die Tür bleibt frei)
     for (const s of this.welt.safeRooms) {
       const h = s.haus, r = h.raus ?? { dx: 0, dy: 1 }, schluessel = 'sand-' + s.id;
@@ -1456,7 +1463,6 @@ class Ort extends Phaser.Scene {
   // anim: Blaulicht-Bild 1..3 der Polizei (nur mit Bild-Sprite)
   fahrzeugTextur(art, farbe = 0, anim = 0) {
     // Bild-Sprites (autos.webp): Laster je nach Farbe truck/Mini_truck, Polizei mit wechselnden Blaulichtbildern
-    if (art === 'moerser') { const mb = moerserBild(this); if (mb) return mb; }   // M113 mit offener Dachluke
     if (art === 'evakuierung') { const eb = evakFahrzeugBild(this, raum.state); if (eb) return eb; }   // Leopard-Wanne / A400M-Rumpf
     const sprite = art === 'laster' ? autoEintraege('laster') : art === 'polizei' ? autoEintraege('polizei') : [];
     const sp = sprite.length ? sprite[farbe % sprite.length] : null;
@@ -2172,7 +2178,6 @@ class Ort extends Phaser.Scene {
         }
         o.vorher = d;
       }
-      if (f.art === 'moerser') moerserFahrzeug(this, o, dt, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
       if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg())) {
         // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
         const pz = evakArtVon(s) === 'panzer', lx = pz ? -22 : -8, an = Math.floor(this.time.now / 260) % 2;

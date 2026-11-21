@@ -1,10 +1,9 @@
 // Szene „Stau auf der B11“ (nur Karte geretsried2), zur Laufzeit am Weltstart aufgebaut – der geteilte Weltcode bleibt unberührt.
 // Auf der B 11 nordwestlich der Kreuzung beim Rathaus (Karl-Lederer-Platz) steht ein Stau: 14 Fahrzeuge auf beiden Spuren, davon 3 brennend
 // und 2 ausgebrannte Wracks; eine Feuerwehr mit Dauer-Blaulicht (Sirene aus, Fahrzeugfarbe 200 als Kennung) steht daneben. An der Kreuzung hält
-// ein Bundeswehr-Posten: 8 Infanteristen (Gewehr wie die Lager-Soldaten, Lebenspunkte, Zombies beißen sie), ein Mörserpanzer M113 (Fahrzeug
-// 'moerser' über server/moerser.mjs, fest eingebaut, abseits der Straße) sowie Puma und Leopard 2, die langsam im Bereich der Kreuzung/des Parkplatzes
+// ein Bundeswehr-Posten: 8 Infanteristen (Gewehr wie die Lager-Soldaten, Lebenspunkte, Zombies beißen sie), sowie Puma und Leopard 2, die langsam im Bereich der Kreuzung/des Parkplatzes
 // streifen (server/szene_b11_fahrt.mjs), Zombies und geparkte Autos überrollen (Autos: state.platt) und mit Turm/Kanone schießen. Gefallene lassen einen Munitionshaufen liegen und
-// stehen nach der Verwandlungszeit als Zombie (Tarn-Typ 0) wieder auf. Sind alle Infanteristen tot, schweigen Puma und Mörser.
+// stehen nach der Verwandlungszeit als Zombie (Tarn-Typ 0) wieder auf. Sind alle Infanteristen tot, schweigen Puma und Leopard.
 // Darstellung: client/szene_b11.mjs (Nachrichten 'b11' = Zustand jede Sekunde, 'b11schuss' = Schüsse).
 import { Fahrzeug } from './verkehr.mjs';
 import { Feuer } from './feuer.mjs';
@@ -22,7 +21,6 @@ export const STAU = {
   feuerwehr: 6,                        // steht neben diesem Auto
 };
 const SOLDATEN = 8, SOLDAT_S = 130, SOLDAT_ABSTAND = 20;   // Linie quer zur Straße 130 px hinter der Kreuzung
-const MOERSER_S = 250, MOERSER_V = -120;   // Mörser abseits der Straße (15 m seitlich), weit weg von den Streifen der Panzer
 const SOLDAT_HP = 100, SOLDAT_BISS = 26, SOLDAT_NAHSCHADEN = 18;
 const SOLDAT_REICHWEITE = 35 * 8, SOLDAT_PAUSE = 1.3, SOLDAT_SCHADEN = 100, SOLDAT_TREFFER = 0.75, SOLDAT_LAERM = 380;
 const PUMA_REICHWEITE = 60 * 8, PUMA_PAUSE = 3.5, PUMA_DREH = 2.4, KANONE_SCHADEN = 100, KANONE_FLAECHE = 60, KANONE_RADIUS = 30, PUMA_LAERM = 760;
@@ -88,11 +86,6 @@ export class SzeneB11 {
     s.platt.clear();
     this.parkAutos = (r.welt.behaelter ?? []).filter(b => b.art === 'auto' && Math.hypot(b.x - g.kreuzung.x, b.y - g.kreuzung.y) < 800);
     this.kontakt = new Map();
-    const mp = b11Punkt(g, MOERSER_S, MOERSER_V);
-    const m = new Fahrzeug();
-    m.x = mp.x; m.y = mp.y; m.richtung = blick; m.art = 'moerser'; m.farbe = 0; m.haelt = true;
-    s.fahrzeuge.set('moerserB11', m);
-    r.moerser.id = 'moerserB11'; r.moerser.fest = true; r.moerser.richtung = blick; r.moerser.schweigt = false;
     this.sendT = 0;
   }
 
@@ -238,11 +231,10 @@ export class SzeneB11 {
     this.sendT = 0;
   }
 
-  // alle Infanteristen tot: Posten aufgegeben, Puma und Mörser schweigen
+  // alle Infanteristen tot: Posten aufgegeben
   aufgeben() {
     this.aufgegeben = true;
-    if (this.raum.moerser) this.raum.moerser.schweigt = true;
-    this.raum.broadcast('meldung', { text: '📻 Der Bundeswehr-Posten an der B 11 ist gefallen – Puma und Mörser schweigen.', lang: true });
+    this.raum.broadcast('meldung', { text: '📻 Der Bundeswehr-Posten an der B 11 ist gefallen – Puma und Leopard schweigen.', lang: true });
     this.sendT = 0;
   }
 
