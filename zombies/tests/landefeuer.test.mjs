@@ -4,33 +4,26 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { setzeKartengroesse } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
-import { missionsPlan, LANDEFEUER_RADIUS, SUCH_RADIUS } from '../server/mission.mjs';
+import { missionsPlan, LANDEFEUER_RADIUS, SUCH_RADIUS, LANDEFEUER_MAX } from '../server/mission.mjs';
 import { Aufgaben } from '../server/aufgaben.mjs';
 
 const karte = n => JSON.parse(fs.readFileSync(new URL(`../client/karten/${n}.json`, import.meta.url)));
 
-test('Landefeuer-Anzahl, Ids, Radien und stabile Orte', () => {
+test('Landefeuer: höchstens eins (Obergrenze 3 Gegenstände je Level), unabhängig von der Spielerzahl, Position exakt', () => {
   const k = karte('isarauen');
   setzeKartengroesse(k.breite, k.hoehe);
   try {
     const w = baueWeltAusKarte(k, 5);
-    const lf = n => missionsPlan(5, 1, 'isarauen', w, n).filter(m => m.ding === 'm_landefeuer');
-    assert.equal(lf(1).length, 1);
-    assert.equal(lf(3).length, 3);
-    assert.equal(lf(7).length, 5);
-    assert.deepEqual(lf(3).map(m => m.id), ['m_landefeuer', 'm_landefeuer#2', 'm_landefeuer#3']);
-    assert.equal(new Set(lf(5).map(m => m.nr)).size, 5, 'Landefeuer im selben Haus');
-    // gleiche Orte bei gleicher Zahl, und die ersten bleiben beim Nachwachsen
-    assert.deepEqual(lf(3).map(m => m.nr), lf(3).map(m => m.nr));
-    assert.deepEqual(lf(2).map(m => m.nr), lf(5).slice(0, 2).map(m => m.nr));
-    const ganz = missionsPlan(5, 1, 'isarauen', w, 4);
-    assert.equal(ganz.length, 4 + 4, 'übrige Gegenstände + 4 Landefeuer');
-    for (const m of ganz) {
-      assert.equal(m.r, m.ding === 'm_landefeuer' ? LANDEFEUER_RADIUS : SUCH_RADIUS);
-      assert.ok(Math.hypot(m.kx - m.x, m.ky - m.y) < m.r, 'Ziel nicht im Kreis');
+    assert.equal(LANDEFEUER_MAX, 1);
+    for (const n of [1, 3, 7]) {
+      const plan = missionsPlan(5, 1, 'isarauen', w, n);
+      assert.equal(plan.filter(m => m.ding === 'm_landefeuer').length, 1);
+      assert.ok(plan.length <= 3);
+      assert.equal(new Set(plan.map(m => m.id)).size, plan.length);
+      for (const m of plan) { assert.equal(m.r, LANDEFEUER_RADIUS); assert.equal(m.kx, m.x); assert.equal(m.ky, m.y); }
     }
-    assert.equal(LANDEFEUER_RADIUS, 560); assert.equal(SUCH_RADIUS, 800);
-    assert.equal(new Set(ganz.map(m => m.id)).size, ganz.length);
+    assert.deepEqual(missionsPlan(5, 1, 'isarauen', w, 1).map(m => m.nr), missionsPlan(5, 1, 'isarauen', w, 5).map(m => m.nr), 'Orte nicht stabil');
+    assert.equal(LANDEFEUER_RADIUS, 150); assert.equal(SUCH_RADIUS, 150);
   } finally { setzeKartengroesse(64, 48); }
 });
 

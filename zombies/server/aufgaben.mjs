@@ -13,8 +13,8 @@ import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplat
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
 
-// Suchkreis eines Missionsgegenstands für die Clients (Karte): Mitte, Radius, abgegeben
-export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean() }, 'Mission');
+// Missionsgegenstand für die Clients (Karte): exakte Position (x, y), Radius des animierten Auffindkreises, abgegeben, Ortsbeschreibung
+export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
 
 export const Aufgabe = schema({
   id: t.string(),
@@ -43,6 +43,10 @@ const WARTE_RADIUS = 800;   // 100 m um den Abholpunkt: stehen dort alle Lebende
 const kisten = raum => [...raum.state.safes.values()].flatMap(s => flach(s.kiste));
 const anzahl = (liste, ding) => liste.filter(d => d === ding).length;   // Listen hier sind flach (einzelne Dinge)
 
+// Sammelaufgaben: höchstens 2 je Level (Wasser, Essen), jede mit höchstens VORRAT_MAX Stück (Paket N)
+export const VORRAT_MAX = 5;
+const vorrat = n => Math.min(VORRAT_MAX, 2 + n);
+
 // Aufgabenvorrat. ziel(n) und text(n) bekommen die Spielerzahl; stand(a) liefert den aktuellen Fortschritt.
 const ARTEN = {
   funk: {
@@ -52,8 +56,8 @@ const ARTEN = {
   },
   vorraete: {
     symbol: '📦',
-    text: n => `Vorräte sichern: ${2 + n} Wasser + ${2 + n} Essen in Safe-Room-Kisten`, ziel: n => 2 * (2 + n),
-    stand: (a, n) => { const k = kisten(a.raum); return Math.min(anzahl(k, 'wasser'), 2 + n) + Math.min(anzahl(k, 'essen'), 2 + n); },
+    text: n => `Vorräte sichern: ${vorrat(n)} Wasser + ${vorrat(n)} Essen in Safe-Room-Kisten`, ziel: n => 2 * vorrat(n),
+    stand: (a, n) => { const k = kisten(a.raum); return Math.min(anzahl(k, 'wasser'), vorrat(n)) + Math.min(anzahl(k, 'essen'), vorrat(n)); },
   },
   medizin: {
     symbol: '💊',
@@ -78,7 +82,7 @@ const ARTEN = {
   // Missionsgegenstände (server/mission.mjs): jeder liegt in einem weit entfernten Gebäude und wird in eine Safe-Room-Kiste gelegt
   mission: {
     symbol: '🧩', pflicht: true,
-    text: (n, a) => 'Missionsgegenstände finden und in die Safe-Room-Kiste legen: ' + a.mission.map(m => `${a.abgegeben.has(m.id) ? '✅' : '⬜'} ${a.missionName(m)}`).join(' · '),
+    text: (n, a) => 'Missionsgegenstände finden und in die Safe-Room-Kiste legen: ' + a.mission.map(m => `${a.abgegeben.has(m.id) ? '✅' : `⬜`} ${a.missionName(m)}${a.abgegeben.has(m.id) || !m.ort ? '' : ` – ${m.ort}`}`).join(' · '),
     ziel: (n, a) => Math.max(1, a.mission.length),
     stand: a => a.abgegeben.size,
   },
@@ -287,7 +291,7 @@ export class Aufgaben {
     for (let i = 0; i < h; i++) kreisSchrumpfen(m);
     this.hinweise[m.id] = h;
     const q = new Mission(); q.id = m.id; q.ding = m.ding; q.nummer = m.nummer ?? 0; q.von = m.von ?? 0;
-    q.x = Math.round(m.kx); q.y = Math.round(m.ky); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.id);
+    q.x = Math.round(m.x); q.y = Math.round(m.y); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.id); q.ort = m.ort ?? ''; q.behaelter = m.behaelter ?? '';
     s.missionen?.set(m.id, q);
   }
 
@@ -350,16 +354,8 @@ export class Aufgaben {
     if (melden && (this.fehlPruef -= 0.5) <= 0) { this.fehlPruef = 10; this.verlorenPruefen(); }
   }
 
-  // Hinweis (Zettel, geretteter Mensch): Suchkreis des Gegenstands halbieren; ohne Angabe ein zufällig gewählter offener
-  missionHinweis(ding) {
-    const offen = this.mission.filter(m => !this.abgegeben.has(m.id) && m.r > 150);
-    const m = ding ? this.mission.find(q => (q.id === ding || q.ding === ding) && !this.abgegeben.has(q.id)) : offen[Math.floor(this.raum.rnd() * offen.length)];
-    if (!m || !kreisSchrumpfen(m)) return null;
-    this.hinweise[m.id] = (this.hinweise[m.id] ?? 0) + 1;
-    const q = this.raum.state.missionen.get(m.id);
-    if (q) { q.x = Math.round(m.kx); q.y = Math.round(m.ky); q.r = Math.round(m.r); }
-    return m.ding;
-  }
+  // Hinweise (Zettel, geretteter Mensch) gibt es nicht mehr: Die Position der Gegenstände steht exakt auf der Karte (null = kein Hinweis)
+  missionHinweis() { return null; }
 
   // Gegenstand weg (Spieler abgemeldet, Behälter schon früher geleert …)? Dann liegt er wieder im Behälter
   verlorenPruefen() {

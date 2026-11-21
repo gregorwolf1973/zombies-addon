@@ -6,6 +6,7 @@ import { kartenbildLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
 const S = 4;   // Pixel je Kachel im Grundbild
 
 // Eigene Position pulsiert nach Spielbeitritt/Levelstart und nach dem Öffnen der großen Karte: wachsender, verblassender Ring.
+export const MISSION_PERIODE_MS = 1500;   // Ring um Missionsgegenstände: Periode
 export const PULS_DAUER_MS = 5000, PULS_PERIODE_MS = 1100;
 // Phase 0..1 des Rings (0 = klein/deckend, 1 = groß/verblasst) oder -1, wenn das Pulsieren vorbei ist
 export function pulsPhase(jetzt, bis, periode = PULS_PERIODE_MS) {
@@ -302,17 +303,24 @@ export class Uebersicht {
         c.strokeText('SAFE', x, y + R + 8 * dpr); c.fillStyle = '#a5ff9e'; c.fillText('SAFE', x, y + R + 8 * dpr);
       }
     }
-    // Suchkreise der offenen Missionsgegenstände (Mitte und Radius in Kacheln): nie der genaue Ort, wird mit Hinweisen kleiner
+    // Offene Missionsgegenstände: Symbol (Gegenstandsbild) GENAU auf dem Gegenstand, darum ein gelber Kreis zur Auffindbarkeit;
+    // ein sanfter Ring wächst alle 1,5 s und verblasst (Mitte und Radius in Kacheln)
     for (const k of this.kreise ?? []) {
-      const [x, y] = pos(k.x, k.y), R = k.r * m;
-      if (x + R < 0 || y + R < 0 || x - R > W || y - R > H) continue;
+      const [x, y] = pos(k.x, k.y), sym = (this.gross ? 12 : 9) * dpr;   // Radius des Symbols
+      const R = Math.max(k.r * m, sym + (this.gross ? 9 : 6) * dpr);       // gelber Grundkreis: Auffindkreis, mindestens um das Symbol
+      if (x + R * 1.6 < 0 || y + R * 1.6 < 0 || x - R * 1.6 > W || y - R * 1.6 > H) continue;
+      const ph = (Date.now() % MISSION_PERIODE_MS) / MISSION_PERIODE_MS;
       c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fillStyle = 'rgba(255,193,7,.16)'; c.fill();
-      c.setLineDash([7 * dpr, 5 * dpr]); c.lineWidth = 2 * dpr; c.strokeStyle = 'rgba(255,193,7,.95)'; c.stroke(); c.setLineDash([]);
-      if (!this.gross && this.zoom < 3 && R < 14 * dpr) continue;
-      c.font = `${Math.round((this.gross ? 18 : 13) * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText(k.symbol, x, y);
+      c.lineWidth = 2 * dpr; c.strokeStyle = 'rgba(255,193,7,.95)'; c.stroke();
+      const Rp = sym + (R * 1.5 - sym) * ph;
+      c.beginPath(); c.arc(x, y, Rp, 0, Math.PI * 2); c.lineWidth = 2.5 * dpr; c.strokeStyle = `rgba(255,214,0,${(1 - ph) * 0.85})`; c.stroke();
+      c.beginPath(); c.arc(x, y, sym, 0, Math.PI * 2); c.fillStyle = 'rgba(255,246,205,.95)'; c.fill();
+      c.lineWidth = 1.8 * dpr; c.strokeStyle = '#ffd600'; c.stroke();
+      if (k.bild) { const d = sym * 1.5; c.drawImage(k.bild.img, k.bild.sx, k.bild.sy, k.bild.s, k.bild.s, x - d / 2, y - d / 2, d, d); }
+      else { c.font = `${Math.round(sym * 1.4)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText(k.symbol, x, y + dpr * 0.5); }
       if (this.gross) {
-        c.font = `bold ${Math.round(11 * dpr)}px sans-serif`; c.lineWidth = 3.5 * dpr; c.strokeStyle = '#000';
-        c.strokeText(k.name, x, y + 16 * dpr); c.fillStyle = '#ffe082'; c.fillText(k.name, x, y + 16 * dpr);
+        c.font = `bold ${Math.round(11 * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineWidth = 3.5 * dpr; c.strokeStyle = '#000';
+        c.strokeText(k.name, x, y + sym + 10 * dpr); c.fillStyle = '#ffe082'; c.fillText(k.name, x, y + sym + 10 * dpr);
       }
     }
     // Zielorte der offenen Aufgaben: orangefarbene Raute mit Symbol; auf der großen Karte mit Namen, in der Ecke nur als Punkt

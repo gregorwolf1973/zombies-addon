@@ -1,58 +1,38 @@
-// Missionsgegenstände quer über die Karte (Aufgabe A1/A2): Je Welt (Seed) und Level werden einige Gegenstände in WEIT
-// auseinanderliegenden Gebäuden versteckt (in einem Behälter des Innenraums). Auf der Karte erscheint nur ein Suchkreis
-// (~150 m), der durch Hinweise kleiner wird. Alles deterministisch aus Seed + Level + Karte; nur der Server braucht es.
+// Missionsgegenstände quer über die Karte (Aufgabe A1/A2): Je Welt (Seed) und Level werden höchstens MISSION_MAX (3)
+// Gegenstände in WEIT auseinanderliegenden Gebäuden versteckt (in einem Behälter des Erdgeschosses). Auf der Karte sitzt
+// das Symbol GENAU am Gebäude (Paket N); der Kreis darum ist nur eine animierte Auffindhilfe. Hinweise (Zettel, Gerettete)
+// gibt es deshalb nicht mehr. Alles deterministisch aus Seed + Level + Karte; nur der Server braucht es.
 import { KACHEL, BREITE, zufall, ladenArt } from '../client/welt.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { waehleOrte } from './mission_orte.mjs';
 
-export const SUCH_RADIUS = 800;    // 100 m (8 px je m): Suchkreis der Missionsgegenstände
-export const LANDEFEUER_RADIUS = 560;   // 70 m: Suchkreis der Landefeuer
-export const LANDEFEUER_MAX = 5;   // höchstens so viele Landefeuer (eins je echtem Mitspieler, Bots zählen nicht)
-export const SUCH_MIN = 150;       // kleiner wird der Kreis nie (~19 m)
-const KREIS_VERSATZ = 0.8;         // Kreismitte höchstens so weit (Anteil vom Radius) vom Ziel entfernt: das Ziel liegt sicher drin
+export const MISSION_MAX = 3;      // höchstens so viele Missionsgegenstände je Level (Gregor: nicht zu langwierig)
+export const SUCH_RADIUS = 150;    // Auffindkreis um den Gegenstand (~19 m, zentriert, pulsiert auf der Karte)
+export const LANDEFEUER_RADIUS = 150;
+export const LANDEFEUER_MAX = 1;   // Landefeuer: nur eins (die Obergrenze MISSION_MAX gilt für alle Gegenstände zusammen)
+export const SUCH_MIN = 150;
 const BEHAELTER_OK = new Set(['schrank', 'spind', 'laden', 'laden_lebensmittel', 'laden_apotheke', 'laden_kaufhaus', 'laden_gaststaette', 'laden_polizei']);
 
 // Missionsgegenstände je Level; typen = passende Gebäudearten (OSM shop/amenity) in Rangfolge, 'gross' = größeres Gebäude
-const FUNK = [
-  { ding: 'm_funk', typen: ['electronics', 'hardware', 'doityourself', 'car_repair', 'police', 'fire_station', 'school', 'sports', 'motorcycle', 'gross'] },
-  { ding: 'm_batterie', typen: ['car_repair', 'car', 'motorcycle', 'hardware', 'doityourself', 'variety_store', 'department_store', 'car_wash'] },
-  { ding: 'm_antenne', typen: ['hardware', 'doityourself', 'electronics', 'caravan', 'variety_store', 'sports', 'motorcycle', 'car'] },
-];
+const T_FUNK = { ding: 'm_funk', typen: ['electronics', 'hardware', 'doityourself', 'car_repair', 'police', 'fire_station', 'school', 'sports', 'motorcycle', 'gross'] };
+const T_BATTERIE = { ding: 'm_batterie', typen: ['car_repair', 'car', 'motorcycle', 'hardware', 'doityourself', 'variety_store', 'department_store', 'car_wash'] };
+const T_ANTENNE = { ding: 'm_antenne', typen: ['hardware', 'doityourself', 'electronics', 'caravan', 'variety_store', 'sports', 'motorcycle', 'car'] };
+const schluessel = typen => ({ ding: 'm_schluessel', typen });
+const T_DIESEL = { ding: 'm_diesel', typen: ['fuel', 'car_repair', 'car', 'caravan', 'car_wash'] };
+const treibstoff = typen => ({ ding: 'm_treibstoff', typen });
+const landefeuer = typen => ({ ding: 'm_landefeuer', typen });
+// Je Level genau 3 Gegenstände; der Funkspruch braucht die vorhandenen Funkteile (m_funk, m_batterie, m_antenne) in der Kiste
 export const MISSIONEN = {
-  geretsried: [
-    ...FUNK,
-    { ding: 'm_schluessel', typen: ['townhall', 'police', 'bank', 'school', 'social_facility', 'place_of_worship', 'gross'] },
-    { ding: 'm_diesel', typen: ['fuel', 'car_repair', 'car', 'caravan', 'car_wash'] },
-  ],
-  // Level 1, zweite Karte (Geretsried Nord/Ost, größer, viele benannte Läden): gleiche Gegenstände wie Geretsried, die Orte wählt der Plan nach Gebäudeart
-  geretsried2: [
-    ...FUNK,
-    { ding: 'm_schluessel', typen: ['townhall', 'police', 'bank', 'school', 'social_facility', 'place_of_worship', 'gross'] },
-    { ding: 'm_diesel', typen: ['fuel', 'car_repair', 'car', 'caravan', 'car_wash'] },
-  ],
-  isarauen: [
-    ...FUNK,
-    { ding: 'm_treibstoff', typen: ['fuel', 'car_wash', 'car_repair', 'motorcycle', 'car'] },
-    { ding: 'm_landefeuer', typen: ['sports', 'fast_food', 'kitchen', 'furniture', 'gross'] },
-  ],
+  geretsried: [T_FUNK, T_BATTERIE, T_ANTENNE],
+  // Level 1, zweite Karte (Geretsried Nord/Ost): gleiche Gegenstände, die Orte wählt der Plan nach Gebäudeart
+  geretsried2: [T_FUNK, T_BATTERIE, T_ANTENNE],
+  isarauen: [T_FUNK, T_ANTENNE, landefeuer(['sports', 'fast_food', 'kitchen', 'furniture', 'gross'])],
   // Level 3: Segelflugplatz Königsdorf (keine Tankstelle in der Karte: Hangars/große Gebäude als Rückfall)
-  koenigsdorf: [
-    ...FUNK,
-    { ding: 'm_treibstoff', typen: ['fuel', 'car_wash', 'car_repair', 'car', 'motorcycle', 'gross'] },
-    { ding: 'm_landefeuer', typen: ['events_venue', 'stationery', 'sports', 'gross'] },
-  ],
+  koenigsdorf: [T_FUNK, treibstoff(['fuel', 'car_wash', 'car_repair', 'car', 'motorcycle', 'gross']), landefeuer(['events_venue', 'stationery', 'sports', 'gross'])],
   // Level 4: Kochel am See (NH90 steht schon da: Treibstoff und der Schlüssel zum Hubschrauber)
-  kochel: [
-    ...FUNK,
-    { ding: 'm_treibstoff', typen: ['fuel', 'car_wash', 'car_repair', 'car', 'wholesale', 'gross'] },
-    { ding: 'm_schluessel', typen: ['townhall', 'school', 'bank', 'place_of_worship', 'kindergarten', 'gross'] },
-  ],
-  // Level 5: Andermatt, Finale am Bunkertor (Schlüssel + Diesel für den Notstrom, das Tor öffnet erst, wenn alles da ist)
-  andermatt: [
-    ...FUNK,
-    { ding: 'm_schluessel', typen: ['public_building', 'townhall', 'bank', 'school', 'post_office', 'fire_station', 'place_of_worship', 'gross'] },
-    { ding: 'm_diesel', typen: ['fuel', 'car_repair', 'car', 'recycling', 'fire_station', 'sports', 'gross'] },
-  ],
+  kochel: [T_FUNK, treibstoff(['fuel', 'car_wash', 'car_repair', 'car', 'wholesale', 'gross']), schluessel(['townhall', 'school', 'bank', 'place_of_worship', 'kindergarten', 'gross'])],
+  // Level 5: Andermatt, Finale am Bunkertor (Schlüssel + Diesel für den Notstrom)
+  andermatt: [T_FUNK, schluessel(['public_building', 'townhall', 'bank', 'school', 'post_office', 'fire_station', 'place_of_worship', 'gross']), T_DIESEL],
 };
 export const FUNK_TEILE = ['m_funk', 'm_batterie', 'm_antenne'];   // zusammen am Funktisch = Funkspruch
 export const landefeuerId = i => i <= 1 ? 'm_landefeuer' : `m_landefeuer#${i}`;   // eindeutige Missions-Id (Gegenstandsart bleibt m_landefeuer)
@@ -65,6 +45,25 @@ const hash = s => { let h = 2166136261; for (const c of String(s)) h = Math.imul
 export function missionsBehaelter(seed, welt, nr) {
   const w = innenraumFuer(seed, welt, `h${nr}eg`);
   return (w?.behaelter ?? []).filter(b => BEHAELTER_OK.has(b.art) && !b.tuer);
+}
+
+const ART_NAMEN = { electronics: 'Elektrogeschäft', hardware: 'Baumarkt', doityourself: 'Baumarkt', car_repair: 'Autowerkstatt', police: 'Polizei', fire_station: 'Feuerwehr', school: 'Schule', sports: 'Sportgeschäft', motorcycle: 'Motorradhändler', car: 'Autohaus',
+  variety_store: 'Gemischtwaren', department_store: 'Kaufhaus', car_wash: 'Waschanlage', caravan: 'Wohnwagenhändler', townhall: 'Rathaus', bank: 'Bank', social_facility: 'Sozialeinrichtung', place_of_worship: 'Kirche', fuel: 'Tankstelle',
+  recycling: 'Wertstoffhof', public_building: 'Amtsgebäude', post_office: 'Post', kindergarten: 'Kindergarten', wholesale: 'Großhandel', fast_food: 'Imbiss', kitchen: 'Küchenstudio', furniture: 'Möbelhaus', events_venue: 'Veranstaltungshalle', stationery: 'Schreibwaren' };
+// „Autohaus Müller, Erdgeschoss“ bzw. „Baumarkt, Erdgeschoss“ (nur das Erdgeschoss, siehe missionsBehaelter)
+export function ortText(haus) {
+  const art = ART_NAMEN[haus?.art];
+  const wo = haus?.name ? (art && !haus.name.toLowerCase().includes(art.toLowerCase()) ? `${art} ${haus.name}` : haus.name) : art ?? 'größeres Gebäude';
+  return `${wo}, Erdgeschoss`;
+}
+
+// Position des Behälters auf der Karte: Der Innenraum hat eigene Maße (nicht deckungsgleich mit dem Grundriss), also wird die relative
+// Lage im Innenraum (ohne Außenrand ox/oy) auf das Hausrechteck abgebildet; Rückfall Hausmitte
+export function behaelterAufKarte(seed, welt, nr, b) {
+  const h = welt.haeuser[nr], w = innenraumFuer(seed, welt, `h${nr}eg`);
+  if (!h || !w?.b || !w?.h) return [((h?.x ?? 0) + (h?.b ?? 0) / 2) * KACHEL, ((h?.y ?? 0) + (h?.h ?? 0) / 2) * KACHEL];
+  const rx = Math.max(0, Math.min(1, (b.x / KACHEL - w.ox) / w.b)), ry = Math.max(0, Math.min(1, (b.y / KACHEL - w.oy) / w.h));
+  return [Math.round((h.x + rx * h.b) * KACHEL), Math.round((h.y + ry * h.h) * KACHEL)];
 }
 
 // Plan der Missionsorte: [{ id (eindeutig), ding (Gegenstandsart), nr, behaelter, x, y (Hausmitte), kx, ky, r (Suchkreis) }]
@@ -95,11 +94,12 @@ export function missionsPlan(seed, level, karte, welt, landefeuer = 1) {
     const b = bh[Math.floor(rng() * bh.length)];
     const ding = dingVon(o.id), lf = ding === 'm_landefeuer', nummer = lf ? Number(o.id.split('#')[1] ?? 1) : 0;
     const r = lf ? LANDEFEUER_RADIUS : SUCH_RADIUS;
-    const a = rng() * Math.PI * 2, d = r * KREIS_VERSATZ * Math.sqrt(rng());
     if (lf && nummer > nLF) continue;
-    plan.push({ id: o.id, ding, nummer, von: lf ? nLF : 0, nr: o.nr, behaelter: b.id, x: o.x, y: o.y, kx: o.x + Math.cos(a) * d, ky: o.y + Math.sin(a) * d, r });
+    // Position exakt (Gebäudemitte), kx/ky = Kreismitte = Ziel; ort = Beschreibung für die Aufgabenliste (Erdgeschoss: nur dort liegen Gegenstände)
+    const [px, py] = behaelterAufKarte(seed, welt, o.nr, b);
+    plan.push({ id: o.id, ding, nummer, von: lf ? nLF : 0, nr: o.nr, behaelter: b.id, x: px, y: py, kx: px, ky: py, r, ort: ortText(welt.haeuser?.[o.nr]) });
   }
-  return plan;
+  return plan.slice(0, MISSION_MAX);
 }
 
 // Hinweis: Suchkreis halbieren, das Ziel (x, y) bleibt drin (Mitte rückt im gleichen Verhältnis zum Ziel)
