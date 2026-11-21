@@ -9,6 +9,7 @@ export const Fahrzeug = schema({
   art: t.string(),          // 'bus' | 'auto' | 'laster' | 'polizei' | 'feuerwehr' | 'wrack' | 'evakuierung' (stehender Bus am Tor, server/aufgaben.mjs)
   farbe: t.uint8(),
   haelt: t.boolean(),
+  turm: t.number(),         // Leopard (Evakuierungspanzer): Turmrichtung in Weltkoordinaten (Server dreht ihn mit begrenztem Tempo)
 }, 'Fahrzeug');
 
 const FAHRBAR = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service']);
