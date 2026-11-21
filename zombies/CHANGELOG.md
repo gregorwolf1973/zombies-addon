@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.69.2 – 21.11.2026
+
+- Bäume: mit Luftbild-Boden keine gezeichneten Kronen mehr (das Foto zeigt die echten), nur ein dezenter Stammpunkt; im gezeichneten Modus eine Krone je Baum (4–7,5 m) statt überlappender Riesenkronen.
+- Unsichtbare Hindernisse sichtbar gemacht: Mauersockel um Häuser, Stellflächen für Container, Grundstreifen für Zäune in Blockierbreite, Bäche/Wasser im Luftbild blau getönt, Kartenrand markiert.
+- Superuser: „🧱 Hindernisse zeigen“ färbt alles, wo man nicht durchkommt.
+
 ## 0.69.1 – 21.11.2026
 
 - Behoben: Die Kulisse-Schalter (Luftbild-Boden, Echte Dächer, Schatten) erschienen nicht im Zahnrad, weil beim Seitenstart die Karte noch nicht geladen war.
