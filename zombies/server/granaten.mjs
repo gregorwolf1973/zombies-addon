@@ -64,7 +64,7 @@ export class Granaten {
     else p.handgranaten--;
     x.wurfPause = this.zeit + (slot ? Math.max(0.2, einst.waffen?.handgranate?.pause ?? 0.6) : 0.6);
     this.liste.push({ x: zx, y: zy, ebene: p.ebene ?? '', t: 0, von: client.sessionId, name: p.name, zuender: gezielt ? zuender : undefined, schaden: slot ? schaden : undefined });
-    r.broadcast('granate', { x1: p.x, y1: p.y, x2: zx, y2: zy, flug, zeit: gezielt ? zuender : GRANATE.zuender, ebene: p.ebene ?? '' });
+    r.broadcast('granate', { x1: p.x, y1: p.y, x2: zx, y2: zy, flug, zeit: gezielt ? zuender : GRANATE.zuender, ebene: p.ebene ?? '', wer: client.sessionId });
     return true;
   }
 
@@ -73,7 +73,7 @@ export class Granaten {
   abfeuern(p, sid, zx, zy, schaden = GRANATE.schadenZombie) {
     const r = this.raum, flug = Math.max(0.08, Math.hypot(zx - p.x, zy - p.y) / GRANATE.tempoWerfer);
     this.liste.push({ x: zx, y: zy, ebene: p.ebene ?? '', t: 0, von: sid, name: p.name, zuender: flug, schaden });
-    r.broadcast('granate', { x1: p.x, y1: p.y, x2: zx, y2: zy, flug, zeit: flug, ebene: p.ebene ?? '', werfer: true });
+    r.broadcast('granate', { x1: p.x, y1: p.y, x2: zx, y2: zy, flug, zeit: flug, ebene: p.ebene ?? '', werfer: true, wer: sid });
   }
 
   schritt(dt) {

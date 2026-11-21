@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.68.2 – 21.11.2026
+
+- Behoben: Handgranaten (und Granatwerfer) flogen bei langsamer Verbindung scheinbar aus der falschen Richtung – sie starten jetzt an der Figur, wie sie auf dem Bildschirm steht.
+
 ## 0.68.1 – 21.11.2026
 
 - Behoben: Lautstärke des Live-Radios (und Musik-/Hordeneinstellungen) wirkt sofort im laufenden Spiel, auch bei schon spielenden Autoradios – vorher erst nach Neuladen.

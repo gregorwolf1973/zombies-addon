@@ -2532,6 +2532,10 @@ class Ort extends Phaser.Scene {
   // Handgranate: fliegt in einem Bogen (0,6 s), liegt dann blinkend bis zur Explosion
   granateFliegt(m) {
     if ((m.ebene ?? '') !== this.aktEbene) return;
+    // Start an der Figur, wie sie auf dem Bildschirm steht (die Serverposition hängt bei langsamer Leitung hinterher –
+    // sonst kam die Granate beim Laufen scheinbar von hinten/der Seite)
+    const werfer = m.wer === meineId ? this.lokal : this.figuren?.get(m.wer)?.box;
+    if (werfer && Math.hypot(werfer.x - m.x1, werfer.y - m.y1) < 160) m = { ...m, x1: werfer.x, y1: werfer.y };
     const schatten = this.add.circle(m.x1, m.y1, 4, 0x000000, 0.3).setDepth(3.9);
     const bild = this.add.circle(m.x1, m.y1, 4.5, 0x4b5320).setStrokeStyle(1, 0x1d2112).setDepth(7.5);
     const t0 = this.time.now, flug = m.flug * 1000;
