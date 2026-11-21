@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.68.3 – 21.11.2026
+
+- Behoben: Live-Radio wurde bei vielen Autos (z. B. Stau an der B11) sehr laut, weil sich derselbe Sender je Auto addierte – jetzt ist nur das nächste Autoradio zu hören.
+
 ## 0.68.2 – 21.11.2026
 
 - Behoben: Handgranaten (und Granatwerfer) flogen bei langsamer Verbindung scheinbar aus der falschen Richtung – sie starten jetzt an der Figur, wie sie auf dem Bildschirm steht.

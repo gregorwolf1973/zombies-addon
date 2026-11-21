@@ -581,6 +581,15 @@ function radioPausieren(sofort = false) {
   const aus = () => { if (radioNutzer > 0 || !radioEl) return; try { radioEl.pause(); radioEl.removeAttribute('src'); radioEl.load(); } catch { /* egal */ } };
   if (sofort) { radioNutzer = Math.min(radioNutzer, 0); aus(); } else radioAusTimer = setTimeout(aus, 5000);
 }
+// Alle Autos spielen denselben Live-Sender exakt gleichzeitig – mehrere Zweige würden sich voll addieren (viele Autos = sehr laut).
+// Deshalb klingt nur der lauteste (nächste) Zweig, die anderen sind stumm.
+const liveZweige = new Set();
+function liveMischen() {
+  const jetzt = performance.now();
+  let best = null;
+  for (const h of liveZweige) if (jetzt - (h.zeit ?? 0) < 1500 && (!best || (h.ziel ?? 0) > (best.ziel ?? 0))) best = h;
+  for (const h of liveZweige) h.g.gain.setTargetAtTime(h === best ? (h.ziel ?? 0) : 0, ctx.currentTime, 0.15);
+}
 function radioHandle() {
   if (!radioEin.an || !musikAn || !radioAnlegen()) return null;
   clearTimeout(radioAusTimer);
@@ -593,8 +602,11 @@ function radioHandle() {
   radioQuelle.connect(g);
   radioNutzer++;
   let weg = false;
-  const ende = { stop() { if (weg) return; weg = true; try { radioQuelle.disconnect(g); } catch { /* schon getrennt */ } radioNutzer--; if (radioNutzer <= 0) radioPausieren(); } };
-  return { g, pan, laut: 1, quellen: [ende], rate: null, live: true };   // Lautstärke regelt radioBus (radioPegel)
+  const h = { g, pan, laut: 1, quellen: null, rate: null, live: true };   // Lautstärke regelt radioBus (radioPegel)
+  const ende = { stop() { if (weg) return; weg = true; liveZweige.delete(h); try { radioQuelle.disconnect(g); } catch { /* schon getrennt */ } radioNutzer--; if (radioNutzer <= 0) radioPausieren(); } };
+  h.quellen = [ende];
+  liveZweige.add(h);
+  return h;
 }
 
 // allgemeine Schleife an einem bewegten Ding (z. B. Autoradio); ohne zugeordnete Datei: null
@@ -664,7 +676,8 @@ export function sireneLage(h, x, y, naeher, weite = 1400, stumm = false) {
   if (!h || !ctx) return;
   const d = Math.hypot(x - hx, y - hy);
   const v = endlich(stufe > 0 && !stumm ? Math.max(0, 1 - d / weite) ** 1.5 * h.laut : 0);
-  h.g.gain.setTargetAtTime(v, ctx.currentTime, stumm ? 0.2 : 0.12);       // sanft ein- und ausblenden (kurz)
+  if (h.live) { h.ziel = v; h.zeit = performance.now(); liveMischen(); }   // Live-Radio: nur das lauteste Auto ist zu hören (sonst addiert sich derselbe Sender)
+  else h.g.gain.setTargetAtTime(v, ctx.currentTime, stumm ? 0.2 : 0.12);       // sanft ein- und ausblenden (kurz)
   if (h.pan) h.pan.pan.setTargetAtTime(endlich(Math.max(-1, Math.min(1, (x - hx) / 500))), ctx.currentTime, 0.1);
   const doppler = endlich(Math.max(0.9, Math.min(1.1, 1 + naeher / 1600)), 1);          // kommt näher: höher, fährt weg: tiefer
   if (h.rate) h.rate.setTargetAtTime(doppler, ctx.currentTime, 0.2);
