@@ -213,7 +213,36 @@ export function starte({ raum, meineId, welt, meldung }) {
     const hoch = ac.createBiquadFilter(); hoch.type = 'highpass'; hoch.frequency.value = 300;
     const tief = ac.createBiquadFilter(); tief.type = 'lowpass'; tief.frequency.value = 3000;
     quelle.connect(hoch); hoch.connect(tief); tief.connect(funk); funk.connect(ac.destination);
-    return { quelle, nah, funk, panner, hoch, tief };
+    // Funk-Knacken: eigenes Rauschen (Bandpass wie ein Funkgerät), nur hörbar, wenn über Funk gesprochen wird
+    let knack = null;
+    try {
+      const src = ac.createBufferSource(); src.buffer = funkRauschen(); src.loop = true;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 0.8;
+      const g = ac.createGain(); g.gain.value = 0;
+      src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start();
+      knack = { src, g, disconnect() { try { src.stop(); } catch { /* schon aus */ } src.disconnect(); bp.disconnect(); g.disconnect(); } };   // beim Schließen der Verbindung mit aufgeräumt
+    } catch { /* ohne Knacken */ }
+    return { quelle, nah, funk, panner, hoch, tief, knack };
+  }
+  // 2 s Rauschen mit eingestreuten Knacksern (gemeinsamer Puffer für alle Verbindungen)
+  let funkPuffer = null;
+  function funkRauschen() {
+    if (funkPuffer) return funkPuffer;
+    const n = ac.sampleRate * 2, b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.5;
+    for (let k = 0; k < 14; k++) { const s = Math.floor(Math.random() * (n - 400)); for (let i = 0; i < 60 + Math.random() * 300; i++) d[s + i] = (Math.random() < 0.5 ? -1 : 1) * (0.7 + Math.random() * 0.3); }
+    return (funkPuffer = b);
+  }
+  // je Takt (100 ms): spricht jemand über Funk, leises Rauschen; selten ein lautes Knacken mit kurzem Aussetzer der Stimme
+  function funkKnacken(p, pegel, spricht, t) {
+    const k = p.knoten?.knack; if (!k) return;
+    if (!(pegel > 0.02) || !spricht) { k.g.gain.setTargetAtTime(0, t, 0.05); return; }
+    k.g.gain.setTargetAtTime(0.025 * pegel, t, 0.05);   // Grundrauschen
+    if (Math.random() < 0.06) {                          // ≈ alle 1,5 s ein Knacken
+      const dauer = 0.04 + Math.random() * 0.12, stark = 0.25 + Math.random() * 0.35;
+      k.g.gain.cancelScheduledValues(t); k.g.gain.setValueAtTime(stark * pegel, t); k.g.gain.setTargetAtTime(0.025 * pegel, t + dauer, 0.03);
+      if (Math.random() < 0.5) { const f = p.knoten.funk.gain; f.cancelScheduledValues(t); f.setValueAtTime(f.value * 0.15, t); f.setTargetAtTime(pegel * stimmenFaktor, t + dauer, 0.03); }
+    }
   }
 
   // Mikrofon kam erst nach dem Verbindungsaufbau (Abfrage spät beantwortet): in alle Verbindungen einhängen, neu aushandeln
@@ -269,6 +298,7 @@ export function starte({ raum, meineId, welt, meldung }) {
       p.knoten.nah.gain.setTargetAtTime(l.nah * stimmenFaktor, t, 0.08);
       p.knoten.funk.gain.setTargetAtTime(l.funk * stimmenFaktor, t, 0.08);
       p.knoten.panner?.pan.setTargetAtTime(l.pan, t, 0.08);
+      funkKnacken(p, l.funk * stimmenFaktor, !!raum.state.spieler.get(sid)?.spricht, t);
     }
   }
 
