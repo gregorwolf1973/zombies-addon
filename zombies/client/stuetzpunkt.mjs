@@ -36,6 +36,7 @@ function platzSuchen(welt, start) {
   for (const bu of welt.parkbuchten ?? []) hindernisse.push([bu.x, bu.y, (bu.laenge ?? 100) / 2 + 30]);
   for (const d of welt.deko ?? []) if (d.art !== 'busch') hindernisse.push([d.x, d.y, 60]);
   for (const h of welt.haeuser) if (h.tuer) hindernisse.push([(h.tuer.x + 0.5 + h.raus.dx) * K, (h.tuer.y + 0.5 + h.raus.dy) * K, 50]);
+  for (const [cx, cy, r] of welt.freihalten ?? []) hindernisse.push([(cx + 0.5) * K, (cy + 0.5) * K, r * K]);   // feste Level-Orte (Heliplatz, Bunkertor)
   hindernisse.push([start.x, start.y, 10 * K], [(welt.tor.x + 0.5) * K, (welt.tor.y + 0.5) * K, 6 * K]);
   const NUR = new Set([T.WIESE, T.BAUM, T.PLATZ]);
   const RAND_NEIN = new Set([T.WAND, T.WASSER, T.ZAUN, T.TOR, T.LEER, T.TUER, T.DEKO]);

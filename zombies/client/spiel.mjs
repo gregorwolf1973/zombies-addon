@@ -5,7 +5,7 @@ import {
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { dingId, dingN, hat, zaehle, flach, kannAufnehmen, entferne as entferneStueck } from './stapel.mjs';
-import { laternen } from './vektor.mjs';
+import { laternen, tuerPose } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
@@ -1081,9 +1081,11 @@ class Ort extends Phaser.Scene {
     for (const s of this.welt.safeRooms) {
       const h = s.haus, r = h.raus ?? { dx: 0, dy: 1 }, schluessel = 'sand-' + s.id;
       const tex = this.textures.createCanvas(schluessel, 160, 160), c2 = tex.getContext();
-      c2.translate(80, 80); c2.rotate(Math.atan2(r.dy, r.dx) - Math.PI / 2);
+      // bei schräg stehenden Häusern parallel zur echten Hauswand an der Tür (Winkel aus dem Gebäudeumriss), sonst am Raster
+      const pose = this.welt.vektor ? tuerPose(this.welt, h) : null;
+      c2.translate(80, 80); c2.rotate(pose ? pose.w : Math.atan2(r.dy, r.dx) - Math.PI / 2);
       zeichneSandsaecke(c2); tex.refresh();
-      this.add.image((h.tuer.x + 0.5 + r.dx * 0.5) * KACHEL, (h.tuer.y + 0.5 + r.dy * 0.5) * KACHEL, schluessel).setDepth(0.9);   // gehört zur Außenwelt (aussenObjekte entsteht danach)
+      this.add.image(pose ? pose.wx : (h.tuer.x + 0.5 + r.dx * 0.5) * KACHEL, pose ? pose.wy : (h.tuer.y + 0.5 + r.dy * 0.5) * KACHEL, schluessel).setDepth(0.9);   // gehört zur Außenwelt (aussenObjekte entsteht danach)
     }
     // Namen der Geschäfte und Einrichtungen auf den Dächern (OSM)
     for (const h of this.welt.haeuser) {
