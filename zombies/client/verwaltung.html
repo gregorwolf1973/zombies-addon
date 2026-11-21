@@ -2282,6 +2282,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
 
   function karteName(s) {
     if (!s) return "";
+    if (s === "level1") return "Level 1 (Zufall: Geretsried oder Geretsried 2)";
+    if (s === "geretsried") return "Geretsried (Level 1)";
+    if (s === "geretsried2") return "Geretsried 2 (Level 1)";
     if (s === "isarauen") return "Isarauen (Level 2)";
     if (s === "koenigsdorf") return "Flugplatz Königsdorf (Level 3)";
     if (s === "kochel") return "Kochel am See (Level 4)";
@@ -2616,7 +2619,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
 
   function aktualisiereKarteHinweis(d, gewaehlt) {
     var hinweis = $("karteHinweis");
-    if (d && d.laufendeKarte && gewaehlt && gewaehlt !== d.laufendeKarte) {
+    var zufallPasst = gewaehlt === "level1" && (d.laufendeKarte === "geretsried" || d.laufendeKarte === "geretsried2");
+    if (d && d.laufendeKarte && gewaehlt && gewaehlt !== d.laufendeKarte && !zufallPasst) {
       hinweis.classList.remove("versteckt");
     } else {
       hinweis.classList.add("versteckt");

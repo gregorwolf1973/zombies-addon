@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { KACHEL, BREITE, HOEHE, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX, WAFFEN } from '../client/welt.mjs';
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import * as WP from './waffenplaetze.mjs';
-import { LEVEL_KARTEN, KARTEN_NAMEN } from './aufgaben.mjs';
+import { LEVEL_KARTEN, KARTEN_NAMEN, level1Karte } from './aufgaben.mjs';
 
 // ---------- Hash ----------
 export const SU_MAX_LAENGE = 200;
@@ -217,11 +217,11 @@ export function befehl(raum, client, m) {
     case 'level': {
       const n = Math.round(Number(m.level));
       if (!(n >= 1 && n <= LEVEL_KARTEN.length)) return 'Unbekanntes Level';
-      const a = raum.aufgaben, karte = LEVEL_KARTEN[n - 1];
+      const a = raum.aufgaben, karte = n === 1 ? level1Karte() : LEVEL_KARTEN[n - 1];   // Level 1: zufällig Geretsried oder Geretsried 2
       if (a.wechselLaeuft) return 'Ein Levelwechsel läuft schon';
       a.wechselLaeuft = true;
       raum.broadcast('meldung', { text: `🧪 Testsprung: Level ${n} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
-      raum.clock.setTimeout(() => a.levelWechsel({ karte, level: n }), 1500);
+      raum.clock.setTimeout(() => a.levelWechsel({ karte, level: n, fest: true }), 1500);
       return `🧪 Wechsel zu Level ${n} (${KARTEN_NAMEN[karte] ?? karte}) …`;
     }
     case 'countdown': {

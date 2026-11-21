@@ -11,6 +11,7 @@ import { Encoder } from '@colyseus/schema';
 // Große Horden (bis 1000 Zombies): Zustandspuffer gleich groß genug anlegen, statt bei jedem Wachsen zu warnen
 Encoder.BUFFER_SIZE = 256 * 1024;
 import { SpielRaum } from './raum.mjs';
+import { LEVEL1_KARTEN, level1Karte } from './aufgaben.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
 import { EinstellungsDatei, oeffentlich, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, ZOMBIE_TYPEN } from './einstellungen.mjs';
@@ -76,11 +77,21 @@ export async function starte({
   const datei = new EinstellungsDatei(einstellungsDatei, optionen);
   // Levelwechsel (Evakuierungsbus): die nächste Karte einstellen, die Welt startet der Raum selbst neu
   // (die in der Verwaltung erzwungene Evakuierungsart gilt nur für die aktuelle Karte und wird beim Kartenwechsel zurückgesetzt – sonst käme z. B. der Leopard auch in Königsdorf)
-  SpielRaum.kartenWechsel = karte => { anwenden(datei.aendern({ karte, aufgaben: { evakArt: '' } })); };
+  // Level 1 hat zwei Karten: Backend-Wahl 'level1' = Zufall (bei jedem Start und Levelwechsel auf Level 1 neu gewürfelt), 'geretsried'/'geretsried2' = fest
+  let level1Gewuerfelt = null;   // aufgelöste Karte der laufenden Zufallswahl
+  const level1Merken = k => { SpielRaum.level1Wahl = LEVEL1_KARTEN.includes(k) ? k : ''; };   // '' = Zufall (auch nach Wechsel in andere Level)
+  level1Merken(datei.werte.karte);
+  SpielRaum.kartenWechsel = karte => {
+    const zufall = !SpielRaum.level1Wahl;
+    if (zufall && LEVEL1_KARTEN.includes(karte)) { level1Gewuerfelt = karte; anwenden(datei.aendern({ karte: 'level1', aufgaben: { evakArt: '' } })); }   // Zufallswahl bleibt gespeichert
+    else anwenden(datei.aendern({ karte, aufgaben: { evakArt: '' } }));
+  };
   SpielRaum.testSetzen = test => { anwenden(datei.aendern({ test })); return datei.werte.test; };   // Testmenü (Superuser): wie die Verwaltung speichern und für alle Räume übernehmen
   let geladeneKarte = null;
   const anwenden = w => {
-    if (!geladeneKarte || geladeneKarte.wahl !== w.karte) geladeneKarte = { wahl: w.karte, karte: ladeKarte(w.karte) };
+    if (w.karte === 'level1' && !level1Gewuerfelt) level1Gewuerfelt = level1Karte();
+    const wahl = w.karte === 'level1' ? level1Gewuerfelt : w.karte;
+    if (!geladeneKarte || geladeneKarte.wahl !== wahl) geladeneKarte = { wahl, karte: ladeKarte(wahl) };
     SpielRaum.einstellungen = {
       zugangscode: w.zugangscode,
       superuserHash: w.superuserHash,              // nur Hash; ohne Hash kein Superuser
@@ -189,7 +200,10 @@ export async function starte({
   };
   app.get('/verwaltung/api', nurIngress, (req, res) => res.json(lage()));
   app.post('/verwaltung/api', nurIngress, express.json({ limit: '20kb' }), (req, res) => {
-    anwenden(datei.aendern(req.body ?? {}));
+    const vorher = datei.werte.karte;
+    const neu = datei.aendern(req.body ?? {});
+    if (neu.karte !== vorher) { level1Merken(neu.karte); level1Gewuerfelt = null; }   // Backend-Wahl geändert: Zufall neu würfeln bzw. feste Karte
+    anwenden(neu);
     res.json(lage());
   });
   // Testwerkzeug: Uhrzeit setzen (Spielminuten 0–1439)
@@ -224,6 +238,7 @@ export async function starte({
   });
   app.post('/verwaltung/neustart', nurIngress, express.json({ limit: '2kb' }), (req, res) => {
     const raum = SpielRaum.aktiv;
+    if (datei.werte.karte === 'level1') { level1Gewuerfelt = null; anwenden(datei.werte); }   // neue Welt in Level 1: Zufallskarte neu würfeln
     if (raum) raum.weltNeuStarten(!!req.body?.spielerLoeschen);
     else { SpielRaum.speicher?.loescheWelt(); if (req.body?.spielerLoeschen) SpielRaum.speicher?.loescheSpieler(); }
     res.json({ ok: true });

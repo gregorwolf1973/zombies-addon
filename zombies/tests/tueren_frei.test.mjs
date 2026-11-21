@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { setzeKartengroesse } from '../client/welt.mjs';
 import { baueWeltAusKarte, tuerenOhneWeg } from '../client/osmwelt.mjs';
 
-for (const name of ['geretsried', 'isarauen']) {
+for (const name of ['geretsried', 'geretsried2', 'isarauen']) {
   test(`${name}: keine Tür ohne freien Weg zur Straße`, () => {
     const karte = JSON.parse(fs.readFileSync(new URL(`../client/karten/${name}.json`, import.meta.url)));
     setzeKartengroesse(karte.breite, karte.hoehe);

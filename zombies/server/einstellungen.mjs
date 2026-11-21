@@ -7,7 +7,8 @@ import { MOERSER } from './moerser.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
 import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
 
-export const KARTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt', 'dorf'];
+// 'level1' = Zufallswahl für Level 1: bei jedem Start/Levelwechsel auf Level 1 wird Geretsried oder Geretsried 2 gewürfelt (server/aufgaben.mjs, level1Karte)
+export const KARTEN = ['level1', 'geretsried', 'geretsried2', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt', 'dorf'];
 export const LEVEL_WELTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
 export const BISS_LEVEL_VORGABE = { geretsried: 12, isarauen: 12, koenigsdorf: 14, kochel: 16, andermatt: 18 };   // Ansteckung der Spieler in % je Sekunde Biss, steigend   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
 export const EVAK_ARTEN = ['bus', 'panzer', 'flugzeug', 'absturz', 'heli', 'bunker'];   // Evakuierungsarten (server/aufgaben.mjs); '' in den Einstellungen = je Karte
@@ -265,7 +266,7 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    superuserHash: '', zugangscode: '', karte: 'geretsried', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', karte: 'level1', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
@@ -283,7 +284,7 @@ export function vorgaben() {
 export function ausOptionen(o = {}) {
   const dichte = o.zombies !== undefined && o.zombies !== null ? Number(o.zombies) : (Number(o.zombie_faktor) || 1) * 10;
   return bereinige({
-    zugangscode: o.zugangscode, karte: o.karte ?? 'geretsried', bots: o.bots ?? 0,
+    zugangscode: o.zugangscode, karte: o.karte ?? 'level1', bots: o.bots ?? 0,
     zombies: { dichte }, funde: o.funde ?? {},
   });
 }

@@ -19,3 +19,8 @@ Daten © OpenStreetMap-Mitwirkende, ODbL 1.0 (wie geretsried/isarauen; Feld "que
 - Bunkertor-Platz: offene Wiese (12x12 frei) am Nordrand/Hang bei 222,9 (erreichbar); Alternativen: 271,9 (NO-Ecke), 198,52 (näher am Ort), 58,27 / 73,15 (NW).
 - Südrand: 30,198 oder 267,198. Weltstart (Seed 7): Kachel 125,115.
 - Höhenlinien gibt es im Spiel nicht; "Hang" ist nur nach Lage (Nordrand, Gütsch-Seite) gewählt.
+
+## geretsried2 (zweite Level-1-Karte, Geretsried Nord/Ost, bbox 47.872 11.4584 47.8872 11.4766)
+- 340x421 Kacheln, OSM-Rohdaten wie bei den anderen Karten nur lokal (tools/osm/roh_*.json ist ignoriert; Neuaufbau: `python3 tools/osm_karte.py 47.872 11.4584 47.8872 11.4766 4 zombies/client/karten/geretsried2.json`).
+- Level 1 wählt bei jedem Start/Levelwechsel zufällig Geretsried oder Geretsried 2 (Backend „Karte“ = Level 1 Zufall; feste Wahl möglich). Missionen, Biss-Werte, Evakuierung (Bus zum Ortsausgang) wie Geretsried.
+- Weltstart (Seed 7): Pixel 5168,6288; 3 Safe Rooms, Bundeswehr-Stützpunkt vorhanden.
