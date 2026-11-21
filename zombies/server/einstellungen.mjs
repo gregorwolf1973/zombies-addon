@@ -6,6 +6,7 @@ import { DINGE, WAFFEN } from '../client/welt.mjs';
 import { MOERSER } from './moerser.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
 import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
+import { NEBEL_VORGABE, bereinigeNebel } from './nebel.mjs';
 
 // 'level1' = Zufallswahl für Level 1: bei jedem Start/Levelwechsel auf Level 1 wird Geretsried oder Geretsried 2 gewürfelt (server/aufgaben.mjs, level1Karte)
 export const KARTEN = ['level1', 'geretsried', 'geretsried2', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt', 'dorf'];
@@ -240,6 +241,7 @@ export function bereinige(e = {}, alt = {}) {
       ueberraschung: Math.round(zahl(z.ueberraschung, 0, 100, 3)),   // % Chance, dass beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto ein Zombie herausspringt
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
+    nebel: bereinigeNebel(e.nebel, a.nebel),   // Nebel als Wetterlage (server/nebel.mjs)
     sprache: {
       an: typeof sp.an === 'boolean' ? sp.an : true,                          // Sprachübertragung zwischen Mitspielern
       hoerweite: Math.round(zahl(sp.hoerweite, 10, 100, 40)),                 // Meter, ab hier ist man draußen nicht mehr zu hören
@@ -314,6 +316,7 @@ export function vorgaben() {
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
     bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, mgMunition: 400, pumaMunition: 200 },
+    nebel: { ...NEBEL_VORGABE },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [], moerser: false },
     moerser: { ...MOERSER },

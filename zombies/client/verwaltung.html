@@ -649,6 +649,15 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="tnNachtAb" min="1080" max="1425" step="15"><span id="tnNachtAbWert">21:30</span></div>
   <label for="tnNachtDunkel">Nachtdunkelheit (100 % = fast schwarz, Lichtquellen bleiben sichtbar)</label>
   <div class="tn-zeile"><input type="range" id="tnNachtDunkel" min="30" max="100" step="1"><span id="tnNachtDunkelWert">92 %</span></div>
+  <label class="tn-schalter"><input type="checkbox" id="tnNebelAn"> Nebel als Wetterlage (morgens und abends, zufällig, 20–60 Spielminuten)</label>
+  <label for="tnNebelMorgen">Nebel am Morgen: Wahrscheinlichkeit</label>
+  <div class="tn-zeile"><input type="range" id="tnNebelMorgen" min="0" max="100" step="5"><span id="tnNebelMorgenWert">35 %</span></div>
+  <label for="tnNebelAbend">Nebel am Abend: Wahrscheinlichkeit</label>
+  <div class="tn-zeile"><input type="range" id="tnNebelAbend" min="0" max="100" step="5"><span id="tnNebelAbendWert">35 %</span></div>
+  <label for="tnNebelSicht">Sichtweite im dichten Nebel</label>
+  <div class="tn-zeile"><input type="range" id="tnNebelSicht" min="5" max="60" step="1"><span id="tnNebelSichtWert">20 m</span></div>
+  <label for="tnNebelZombie">Sicht der Zombies im dichten Nebel (Hören bleibt gleich)</label>
+  <div class="tn-zeile"><input type="range" id="tnNebelZombie" min="10" max="100" step="5"><span id="tnNebelZombieWert">50 %</span></div>
   <label for="tnNacht">Zombies nachts draußen</label>
   <div class="tn-zeile"><input type="range" id="tnNacht" min="10" max="30" step="1"><span id="tnNachtWert">×1,5</span></div>
   <label for="tnAutos">Geparkte Autos</label>
@@ -985,6 +994,12 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     feld('tnFeuerPhase', e.feuerPhase === undefined ? 20 : e.feuerPhase, function (v) { return v + ' min'; });
     feld('tnVerkehr', e.verkehr === undefined ? 6 : e.verkehr, function (v) { return String(v); });
     feld('tnVerkehrPhase', e.verkehrPhase === undefined ? 25 : e.verkehrPhase, function (v) { return v + ' min'; });
+    var nb = e.nebel || {};
+    if (document.activeElement !== $('tnNebelAn')) $('tnNebelAn').checked = nb.an !== false;
+    feld('tnNebelMorgen', nb.morgen === undefined ? 35 : nb.morgen, function (v) { return v + ' %'; });
+    feld('tnNebelAbend', nb.abend === undefined ? 35 : nb.abend, function (v) { return v + ' %'; });
+    feld('tnNebelSicht', nb.sicht === undefined ? 20 : nb.sicht, function (v) { return v + ' m'; });
+    feld('tnNebelZombie', nb.zombie === undefined ? 50 : nb.zombie, function (v) { return v + ' %'; });
     if (document.activeElement !== $('tnBlaulicht')) $('tnBlaulicht').value = e.blaulicht || 'selten';
     if (document.activeElement !== $('tnKegel')) $('tnKegel').checked = !!e.sichtkegel;
     var rw = e.reichweite || {};
@@ -1053,6 +1068,13 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   regler('tnTagAb', uhrText, function (v) { return { tagAb: v }; });
   regler('tnNachtDunkel', function (v) { return v + ' %'; }, function (v) { return { nachtDunkel: v }; });
   regler('tnNachtAb', uhrText, function (v) { return { nachtAb: v }; });
+  regler('tnNebelMorgen', function (v) { return v + ' %'; }, function (v) { return { nebel: { morgen: v } }; });
+  regler('tnNebelAbend', function (v) { return v + ' %'; }, function (v) { return { nebel: { abend: v } }; });
+  regler('tnNebelSicht', function (v) { return v + ' m'; }, function (v) { return { nebel: { sicht: v } }; });
+  regler('tnNebelZombie', function (v) { return v + ' %'; }, function (v) { return { nebel: { zombie: v } }; });
+  $('tnNebelAn').addEventListener('change', function () {
+    anfrage('verwaltung/api', { nebel: { an: $('tnNebelAn').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
   regler('tnNacht', komma, function (v) { return { zombies: { nacht: v } }; });
   regler('tnAutos', komma, function (v) { return { autos: v }; });
   regler('tnMenschen', function (v) { return String(v); }, function (v) { return { menschen: v }; });
@@ -3034,6 +3056,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     var hinweis = [].filter.call(tn.querySelectorAll('p.tn-leise'), function (p) { return /Uhrzeit setzen/.test(p.textContent); })[0];
     if (hinweis) { hinweis.textContent = 'Uhrzeit setzen geht nur, solange jemand spielt. Sanfter Übergang über eine Spielstunde vor Tag- und Nachtbeginn.'; zeit.appendChild(hinweis); }
     ['tnTag', 'tnTagAb', 'tnNachtAb', 'tnNachtDunkel'].forEach(function (id) { zeile(zeit, id); });
+    schalter(zeit, 'tnNebelAn');
+    ['tnNebelMorgen', 'tnNebelAbend', 'tnNebelSicht', 'tnNebelZombie'].forEach(function (id) { zeile(zeit, id); });
     hinein(zeit);
   }
   // ---------- Aufgaben, Türen ----------
@@ -3099,7 +3123,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   // ---------- Zahlenfelder statt Schieber ----------
   var ORIG = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
   var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
-    tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
+    tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnNebelMorgen: 'nebel.morgen', tnNebelAbend: 'nebel.abend', tnNebelSicht: 'nebel.sicht', tnNebelZombie: 'nebel.zombie', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrPhase: 'verkehrPhase', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',

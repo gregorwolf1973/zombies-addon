@@ -29,6 +29,7 @@ import { innenraumFuer } from '../client/innen.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
+import { Nebel, NEBEL_VORGABE, zombieSichtFaktor } from './nebel.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
@@ -143,6 +144,8 @@ export const Zustand = schema({
   tagAb: t.number(),        // ab hier ganz hell (Einstellung, für die Clients)
   nachtAb: t.number(),      // ab hier ganz dunkel
   nachtDunkel: t.number(),  // Nachtdunkelheit in % (Einstellung, für die Clients)
+  nebel: t.number(),        // Nebeldichte 0..1 (Wetterlage, server/nebel.mjs), in 0,02-Stufen
+  nebelSicht: t.number(),   // Sichtweite im Nebel in Metern bei voller Dichte (Einstellung)
   menschenGroesse: t.number(),   // Menschengröße in % (Einstellung, für die Clients)
   zombieGroesse: t.number(),   // Zombiegröße in % im Verhältnis zu den Menschen (Leichen folgen)
   groesseGesamt: t.number(),  // Gesamtgröße (alles) in %
@@ -1028,6 +1031,22 @@ export class SpielRaum extends Room {
     return !m || !hausHell(Number(m[1]), m[2], this.state.uhr);
   }
 
+  // Nebel (Wetterlage): würfelt morgens/abends, schreibt die Dichte in den Zustand (nur in 0,02-Stufen, damit nicht jeder Takt übertragen wird)
+  nebelSchritt() {
+    const s = this.state, e = SpielRaum.einstellungen?.nebel ?? NEBEL_VORGABE;
+    this.nebel ??= new Nebel();
+    const d = this.nebel.schritt(s.uhr, e, s.tagAb, s.nachtAb);
+    const q = Math.round(d * 50) / 50;
+    if (q !== s.nebel) {
+      const kam = s.nebel < 0.05 && q >= 0.05;
+      s.nebel = q;
+      if (kam && q < 0.2) this.broadcast('meldung', { text: '🌫 Nebel zieht auf – die Sicht wird schlecht', lang: true });
+    }
+  }
+
+  // Sicht der Zombies im Nebel (1 = unverändert); Hören bleibt gleich
+  nebelSichtFaktor() { return zombieSichtFaktor(this.state.nebel, (SpielRaum.einstellungen?.nebel ?? NEBEL_VORGABE).zombie); }
+
   // Tag/Nacht-Zeiten aus den Einstellungen: für die Regeln auf dem Server und im Zustand für die Clients
   tageszeitenUebernehmen() {
     const e = SpielRaum.einstellungen ?? {};
@@ -1036,7 +1055,7 @@ export class SpielRaum extends Room {
     const f = this.state ? this.schwierigkeit().nacht : 1;
     const nachtAb = f === 1 ? nachtAb0 : Math.max(tagAb + 360, Math.round(nachtAb0 - (f - 1) * (1440 - nachtAb0 + tagAb)));
     setzeTageszeiten(tagAb, nachtAb);
-    if (this.state) { this.state.tagAb = tagAb; this.state.nachtAb = nachtAb; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.menschenGroesse = e.menschenGroesse ?? 100; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.groesseGesamt = e.groesseGesamt ?? 70; }
+    if (this.state) { this.state.tagAb = tagAb; this.state.nachtAb = nachtAb; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.nebelSicht = (e.nebel ?? NEBEL_VORGABE).sicht; this.state.menschenGroesse = e.menschenGroesse ?? 100; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.groesseGesamt = e.groesseGesamt ?? 70; }
   }
 
   einstellungenGeaendert() {
@@ -2460,6 +2479,7 @@ export class SpielRaum extends Room {
     const vorher = istNacht(s.uhr);
     const raffer = this.aufgaben?.warteRaffer?.() ?? 1;   // Warten am Abholpunkt: nur die Uhr läuft schneller
     s.uhr = (s.uhr + dt * zr * raffer * 1440 / ((SpielRaum.einstellungen.tagMinuten || 48) * 60)) % 1440;
+    this.nebelSchritt();
     if (istNacht(s.uhr) !== vorher) this.broadcast('meldung', { text: istNacht(s.uhr) ? '🌙 Die Nacht bricht herein – Zombies werden mehr. Taschenlampe bereit?' : '🌅 Es wird Tag', lang: true });
     this.feldZeit -= dt; this.feldAlter = (this.feldAlter ?? 0) + dt;
     if (this.feldZeit <= 0) {
@@ -2946,7 +2966,7 @@ export class SpielRaum extends Room {
         const d = Math.hypot(p.x - z.x, p.y - z.y);
         let weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
         const gute = d < 200 ? sichtGuete(welt, z.x, z.y, p.x, p.y) : 0;   // Bäume mindern die Sicht, verdecken sie aber nie ganz
-        weite *= gute;
+        weite *= gute * this.nebelSichtFaktor();
         const imKegel = winkelDiff(Math.atan2(p.y - z.y, p.x - z.x), z.richtung) < W.sichtWinkel / 2;
         // wer schleicht oder still steht, kann sich von hinten bis zum ersten Schlag heranpirschen
         const e = this.extra.get(sid)?.eingabe;
@@ -2988,7 +3008,7 @@ export class SpielRaum extends Room {
     if (ziel) {
       const d = Math.hypot(ziel.x - z.x, ziel.y - z.y);
       const gute = sichtGuete(welt, z.x, z.y, ziel.x, ziel.y);
-      const sieht = gute > 0 && (d < 40 || d < W.sichtWeite * 1.6 * gute);
+      const sieht = gute > 0 && (d < 40 || d < W.sichtWeite * 1.6 * gute * this.nebelSichtFaktor());
       info.verloren = sieht ? 0 : info.verloren + dt;
       if (info.verloren > 10 || d > W.sichtWeite * 3) {
         info.ziel = null; info.punkt = { x: ziel.x, y: ziel.y }; info.suche = true; z.jagt = false;
