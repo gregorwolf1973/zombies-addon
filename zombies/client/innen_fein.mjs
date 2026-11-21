@@ -4,7 +4,7 @@
 // Türen 5 Zellen (1,25 m), Möbel in Zellen nach echten Maßen. Die Ergebnisstruktur entspricht baueInnenraum() aus innen.mjs,
 // dazu: kachel (px je Zelle), breite/hoehe (eigenes Raster), rs/radMax (Figurenradius drinnen), zellen-Listen bei Türen und Treppen.
 // Weltcode: Server und Browser bauen getrennt, daher nur + − × ÷ Math.sqrt und Ganzzahlen, keine Winkelfunktionen.
-import { T, zufall, ladenArt, seiteVon, INNEN_TEMPO, INNEN_REICH } from './welt.mjs';
+import { T, zufall, ladenArt, seiteVon, INNEN_REICH } from './welt.mjs';
 
 export const INNEN_Z = 2;          // px je Zelle
 const ZM = 4;                      // Zellen je Meter
@@ -525,7 +525,8 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     seed, nr, stock, ox: 0, oy: 0, b: GB, h: GH, kacheln: k, hole, start, ausgang, hatKeller, hatDach, treppen, tueren,
     raeume: raeume.map((r, i) => ({ x: r.x, y: r.y, b: r.b, h: r.h, typ: typ[i] })), moebel, behaelter, zombiePlaetze,
     // Feinraster-Kennung: eigene Kachelgröße und Rastergröße, Figurenradius drinnen
-    kachel: INNEN_Z, breite: GB, hoehe: GH, rs: R / 7, radMax: R, einrasten: 8, tempo: INNEN_TEMPO, reich: INNEN_REICH,
+    kachel: INNEN_Z, breite: GB, hoehe: GH, rs: R / 7, radMax: R, einrasten: 8, reich: INNEN_REICH,   // tempo drinnen: welt.mjs tempoVon() (einstellbar)
+   
     grundriss: { b: g.breiteM, h: g.hoeheM, flaeche: flaecheM2 },
     kiste, kuehlschrank,
     // Zelle/Pixel des Innenraums → Weltpixel auf der Karte (für Missionsorte): Umkehrung der Drehung und Verschiebung aus grundriss()

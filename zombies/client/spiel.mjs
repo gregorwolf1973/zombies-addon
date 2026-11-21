@@ -2,7 +2,7 @@
 import { fzPx } from './masse.mjs';
 import { groesse } from './groessen.mjs';
 import {
-  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, INNEN_FEIN, INNEN_TEMPO, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
+  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
@@ -801,7 +801,7 @@ const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   //
 const LEERE_KARTE = new Map();
 const zombieKarte = () => raum?.state?.zombies ?? LEERE_KARTE;
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
-// PROTOTYP Feinraster: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
+// Maßstäbliche Innenräume: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
 const INNEN_FIGUR = 0.5;
 let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
 const innenFigur = () => (szeneRef?.feinInnen() ? INNEN_FIGUR : 1);
@@ -872,8 +872,11 @@ class Ort extends Phaser.Scene {
     const s = raum.state;
     // „Maßstäbliche Innenräume“: der Server gibt den Schalter vor (Einstellung); wird er umgeschaltet, lädt der Client neu
     if (!TUT.an) {
-      setzeInnenFein(!!((s.optionen ?? 0) & 2));
-      raum.onStateChange(st => { if (this.bereit && !!((st?.optionen ?? 0) & 2) !== INNEN_FEIN) setTimeout(() => location.reload(), 300); });
+      setzeInnenFein(!!((s.optionen ?? 0) & 2)); setzeInnenTempo((((s.optionen ?? 0) >> 2) & 63) * 2 / 100);
+      raum.onStateChange(st => {
+        if (this.bereit && !!((st?.optionen ?? 0) & 2) !== INNEN_FEIN) setTimeout(() => location.reload(), 300);
+        else setzeInnenTempo((((st?.optionen ?? 0) >> 2) & 63) * 2 / 100);   // Tempo drinnen kann im Spiel geändert werden
+      });
     }
     if (TUT.an) { setzeKartengroesse(SS_B, SS_H); this.welt = baueSchiessstandWelt(); }   // Schießstand: kleine erzeugte Übungswelt
     else if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }

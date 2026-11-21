@@ -227,16 +227,14 @@ function tuerRang(raum, sid, p, ziel) {
   return rang;
 }
 
-// nächster begehbarer Punkt um ein nicht begehbares Ziel (Möbelmitte), vom Bot aus gesehen der nächste (Ringe 5–13 px, 16 Richtungen)
-function zugangsPunkt(welt, p, ziel) {
-  let best = null, bd = Infinity;
-  for (let r = 5; r <= 13 && !best; r += 2) for (let i = 0; i < 16; i++) {
+// begehbare Punkte um ein nicht begehbares Ziel (Möbelmitte), vom Bot aus gesehen die nächsten zuerst (Ringe 5–11 px, 16 Richtungen)
+function zugangsPunkte(welt, p, ziel) {
+  const l = [];
+  for (let r = 5; r <= 11; r += 2) for (let i = 0; i < 16; i++) {
     const q = { x: ziel.x + Math.cos(i * Math.PI / 8) * r, y: ziel.y + Math.sin(i * Math.PI / 8) * r };
-    if (!frei(welt, q.x, q.y, RAD)) continue;
-    const d = abstand(p, q);
-    if (d < bd) { bd = d; best = q; }
+    if (frei(welt, q.x, q.y, RAD)) l.push({ q, d: abstand(p, q) });
   }
-  return best;
+  return l.sort((a, b) => a.d - b.d).map(e => e.q);
 }
 // zum Ziel gehen: Weg berechnen (gelegentlich neu), Wegpunkten folgen, Abstand zu anderen halten
 function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
@@ -266,15 +264,19 @@ function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
   const neu = !b.weg || jetzt - b.wegZeit > 0.8 || !b.wegZiel || abstand(b.wegZiel, ziel) > 40 * R;
   if (neu) {
     let weg = findeWeg(welt, p.x, p.y, ziel.x, ziel.y, RAD, 40000, true);
+    b.wegIstZugang = false;
     if (!weg && welt.kachel) {   // maßstäbliche Innenräume: Ziel ist oft die Mitte eines Möbelstücks (nicht begehbar) – an den nächsten freien Punkt davor gehen
-      const q = zugangsPunkt(welt, p, ziel);
-      if (q) weg = findeWeg(welt, p.x, p.y, q.x, q.y, RAD, 40000, true);
+      for (const q of zugangsPunkte(welt, p, ziel).slice(0, 8)) {   // der erste Punkt mit Weg (ein Punkt in einer abgeschlossenen Lücke zwischen Möbeln hat keinen)
+        weg = findeWeg(welt, p.x, p.y, q.x, q.y, RAD, 40000, true);
+        if (weg) { b.wegIstZugang = true; break; }
+      }
     }
     b.weg = weg ?? [{ x: ziel.x, y: ziel.y }];
     b.wegZeit = jetzt; b.wegZiel = { x: ziel.x, y: ziel.y };
   }
   while (b.weg.length > 1 && abstand(p, b.weg[0]) < 10 * R) b.weg.shift();
   const wp = b.weg[0];
+  if (b.wegIstZugang && b.weg.length === 1 && abstand(p, wp) < 2.5 * R) { x.eingabe = { dx: 0, dy: 0, s: false }; b.messPos = null; return true; }   // am Zugangspunkt vor dem Möbelstück angekommen
   let dx = wp.x - p.x, dy = wp.y - p.y;
   const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
   // Abstand zu anderen Figuren (nicht durch Mitspieler hindurchdrängeln)

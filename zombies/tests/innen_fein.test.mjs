@@ -1,4 +1,4 @@
-// PROTOTYP Innenräume im Feinraster (client/innen_fein.mjs, Schalter INNEN_FEIN): Aufbau deterministisch, Wände dünn,
+// Maßstäbliche Innenräume im Feinraster (client/innen_fein.mjs, Schalter INNEN_FEIN): Aufbau deterministisch, Wände dünn,
 // Türen/Treppen/Behälter/Ausgang für die echte Spielerfigur (frei() mit Innenradius) erreichbar.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -144,7 +144,7 @@ test('Außerhalb des Schalters bleibt alles beim Alten: ohne Schalter kein kache
   try {
     const h = welt.haeuser.find(h => h.betretbar && !h.safe);
     const w = innenraumFuer(3, welt, `h${h.nr}eg`);
-    assert.equal(w.kachel, undefined); assert.equal(w.tempo, undefined); assert.equal(w.reich, undefined);
+    assert.equal(w.kachel, undefined); assert.equal(w.reich, undefined);
     assert.equal(weltFingerabdruck(welt), fpAus);
   } finally { setzeInnenFein(true); }
 });

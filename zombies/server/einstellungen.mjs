@@ -247,6 +247,7 @@ export function bereinige(e = {}, alt = {}) {
     blaulicht: ['aus', 'selten', 'normal'].includes(e.blaulicht) ? e.blaulicht : (['aus', 'selten', 'normal'].includes(a.blaulicht) ? a.blaulicht : 'selten'),   // Polizei/Feuerwehr-Durchfahrten
     schwierigkeit: SCHWIERIGKEITEN.includes(e.schwierigkeit) ? e.schwierigkeit : SCHWIERIGKEITEN.includes(a.schwierigkeit) ? a.schwierigkeit : 'normal',   // Regler leicht/normal/schwer (×0,75/1/1,3, siehe schwierigkeit.mjs)
     sichtkegel: typeof e.sichtkegel === 'boolean' ? e.sichtkegel : !!a.sichtkegel,   // Sichtkegel der Zombies anzeigen
+    innenTempo: Math.round(zahl(e.innenTempo ?? a.innenTempo, 10, 100, 35)),   // Tempo in maßstäblichen Innenräumen in % vom Tempo draußen (Figuren sind drinnen halb so groß, die Kamera 3,4-fach näher)
     innenMassstab: typeof e.innenMassstab === 'boolean' ? e.innenMassstab : !!a.innenMassstab,   // Innenräume maßstäblich (0,25-m-Raster, echter Grundriss, siehe client/innen_fein.mjs); Standard aus
     reichweite: Object.fromEntries(Object.entries(REICHWEITE_VORGABE).map(([w, v]) => [w, Math.round(zahl(e.reichweite?.[w] ?? a.reichweite?.[w], 5, w === 'granatwerfer' ? 100 : 80, v))])),   // automatische Schussreichweite in Metern
     waffen: Object.fromEntries(Object.entries(WAFFEN_VORGABE).map(([w, v]) => [w, {
@@ -333,7 +334,7 @@ export function bereinige(e = {}, alt = {}) {
 
 export function vorgaben() {
   return {
-    superuserHash: '', zugangscode: '', karte: 'level1', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, innenMassstab: false, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', karte: 'level1', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, innenMassstab: false, innenTempo: 35, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },

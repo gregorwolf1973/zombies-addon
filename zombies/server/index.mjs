@@ -112,7 +112,7 @@ export async function starte({
       bissSpielerLevel: Object.fromEntries(Object.entries(w.bissSpielerLevel ?? {}).map(([k, v]) => [k, v / 100])),   // je Karte/Level
       waffen: w.waffen,                            // je Waffe { schaden, pause }
       zombieTypen: ZOMBIE_TYPEN.filter(k => w.zombies.typen[k]).map(k => ZOMBIE_TYPEN.indexOf(k)),
-      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, unfallMinuten: w.unfall, unfallExplosion: w.unfallExplosion, unfallSchaden: w.unfallSchaden, blaulicht: w.blaulicht, hordeZiel: w.zombies.hordeZiel, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTrupp: w.zombies.hordeTrupp, hordeReichweite: w.zombies.hordeReichweite, ueberraschung: w.zombies.ueberraschung, sichtkegel: w.sichtkegel, innenMassstab: w.innenMassstab,
+      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, unfallMinuten: w.unfall, unfallExplosion: w.unfallExplosion, unfallSchaden: w.unfallSchaden, blaulicht: w.blaulicht, hordeZiel: w.zombies.hordeZiel, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTrupp: w.zombies.hordeTrupp, hordeReichweite: w.zombies.hordeReichweite, ueberraschung: w.zombies.ueberraschung, sichtkegel: w.sichtkegel, innenMassstab: w.innenMassstab, innenTempo: w.innenTempo,
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,

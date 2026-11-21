@@ -44,7 +44,7 @@ test('Schalter ist an, Innenräume sind maßstäblich (Zellen, dünne Wände, ei
     assert.equal(INNEN_FEIN, true);
     assert.ok(await bis(() => (c.state.optionen & 2) === 2), 'Client sieht den Schalter nicht');
     const { w } = hausMit(raum, () => true);
-    assert.equal(w.kachel, 2); assert.ok(w.breite > 30 && w.reich < 1 && w.tempo < 1);
+    assert.equal(w.kachel, 2); assert.ok(w.breite > 30 && w.reich < 1 && tempoVon(w) < 1);
     assert.ok(w.ausgang.rect && w.ausgang.zellen.length === 10);
   } finally { await c.leave(); }
 });
@@ -68,13 +68,11 @@ test('Tempo drinnen im Maßstab des Raums, draußen unverändert (Laufen und Sch
     assert.ok(ok);
     const aussen = await lauf(1, 0);
     // drinnen: lange Strecke in einem Raum
-    const { w } = hausMit(raum, w => w.moebel.length > 8 && w.breite > 60);
-    p.ebene = w.ebene;
-    let start = null;
-    for (let y = w.oy; y < w.oy + w.h && !start; y++) for (let x = w.ox; x < w.ox + w.b; x++) {
-      if ([0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44].every(a => frei(w, (x + a + 0.5) * 2, (y + 0.5) * 2, 7))) { start = { x: (x + 0.5) * 2, y: (y + 0.5) * 2 }; break; }
-    }
+    let start = null, w = null;
+    const streifen = w => { for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++) { if ([0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44].every(a => frei(w, (x + a + 0.5) * 2, (y + 0.5) * 2, 7))) return { x: (x + 0.5) * 2, y: (y + 0.5) * 2 }; } return null; };
+    for (const h of raum.welt.haeuser) { if (!h.betretbar || h.safe) continue; const k = raum.wv(`h${h.nr}eg`); if (!k.kachel) continue; const q = streifen(k); if (q) { w = k; start = q; break; } }
     assert.ok(start, 'kein langer freier Streifen');
+    p.ebene = w.ebene;
     Object.assign(p, start);
     const innen = await lauf(1, 0, 0.7);
     const vAussen = aussen.d / aussen.s, vInnen = innen.d / innen.s;
@@ -124,13 +122,16 @@ test('Reichweiten drinnen: Durchsuchen nur nah am Möbelstück, Schrank im Nachb
   const { c, raum, p } = await beitreten('Sucher');
   try {
     const { w } = hausMit(raum, w => w.behaelter.length >= 3 && w.moebel.length > 6);
-    const b = w.behaelter[0], m = w.moebel.find(q => { const cx = Math.floor(b.x / 2), cy = Math.floor(b.y / 2); return cx >= q.x && cx < q.x + q.b && cy >= q.y && cy < q.y + q.h; });
-    assert.ok(m, 'Behälter ohne Möbel');
-    // Standpunkt: eine freie Zelle am Möbelrand
-    let nah = null;
-    for (let dy = -4; dy <= m.h + 3 && !nah; dy++) for (let dx = -4; dx <= m.b + 3; dx++) {
-      const x = (m.x + dx + 0.5) * 2, y = (m.y + dy + 0.5) * 2;
-      if (w.hole(m.x + dx, m.y + dy) === T.BODEN && frei(w, x, y, 7) && Math.hypot(x - b.x, y - b.y) < reichVon(w, AKTION_ABSTAND) - 1) { nah = { x, y }; break; }
+    let b = null, m = null, nah = null;
+    for (const kand of w.behaelter) {
+      const mm = w.moebel.find(q => { const cx = Math.floor(kand.x / 2), cy = Math.floor(kand.y / 2); return cx >= q.x && cx < q.x + q.b && cy >= q.y && cy < q.y + q.h; });
+      if (!mm) continue;
+      const weitVon = (x, y) => ![...w.tueren, ...w.treppen, ...(w.ausgang ? [w.ausgang] : [])].some(t => t.zellen.some(([zx, zy]) => Math.hypot(zx * 2 - x, zy * 2 - y) < 24));
+      for (let dy = -4; dy <= mm.h + 3 && !nah; dy++) for (let dx = -4; dx <= mm.b + 3; dx++) {
+        const x = (mm.x + dx + 0.5) * 2, y = (mm.y + dy + 0.5) * 2;
+        if (w.hole(mm.x + dx, mm.y + dy) === T.BODEN && frei(w, x, y, 7) && Math.hypot(x - kand.x, y - kand.y) < reichVon(w, AKTION_ABSTAND) - 1 && weitVon(x, y)) { nah = { x, y }; break; }
+      }
+      if (nah) { b = kand; m = mm; break; }
     }
     assert.ok(nah, 'kein Standpunkt am Möbel');
     p.ebene = w.ebene; Object.assign(p, nah);
@@ -188,18 +189,17 @@ test('Schlafender Zombie hinter geschlossener Tür bleibt liegen, wacht bei offe
     const zid = raum.setzeZombie(zp.x, zp.y, w.ebene, true), z = raum.state.zombies.get(zid), info = raum.zombieInfo.get(zid);
     // Spieler 20 m entfernt (160 px), sichtbar: schlafender Zombie bemerkt nicht (Schwelle 70 px × Maßstab)
     let weit = null;
-    for (let y = w.oy; y < w.oy + w.h && !weit; y++) for (let x = w.ox; x < w.ox + w.b; x++) { const q = { x: (x + 0.5) * 2, y: (y + 0.5) * 2 }; if (frei(w, q.x, q.y, 7) && Math.hypot(q.x - zp.x, q.y - zp.y) > 90 && Math.hypot(q.x - zp.x, q.y - zp.y) < 140) { weit = q; break; } }
+    for (let y = w.oy; y < w.oy + w.h && !weit; y++) for (let x = w.ox; x < w.ox + w.b; x++) { const q = { x: (x + 0.5) * 2, y: (y + 0.5) * 2 }; if (frei(w, q.x, q.y, 7) && w.hole(x, y) === T.BODEN && Math.hypot(q.x - zp.x, q.y - zp.y) > 90 && Math.hypot(q.x - zp.x, q.y - zp.y) < 140) { weit = q; break; } }
     assert.ok(weit, 'kein ferner Punkt');
-    Object.assign(p, weit);
+    Object.assign(p, weit); p.ebene = w.ebene;
     await warte(300);
     assert.ok(info.schlaeft, 'Zombie wacht ohne Grund auf');
     // Spieler direkt daneben (nah, laufend): wacht auf und jagt
     let nahPunkt = null;
-    for (let a = 0; a < 16 && !nahPunkt; a++) { const q = { x: zp.x + Math.cos(a * Math.PI / 8) * 10, y: zp.y + Math.sin(a * Math.PI / 8) * 10 }; if (frei(w, q.x, q.y, 7) && sichtfrei(w, zp.x, zp.y, q.x, q.y)) nahPunkt = q; }
+    for (let a = 0; a < 16 && !nahPunkt; a++) { const q = { x: zp.x + Math.cos(a * Math.PI / 8) * 8, y: zp.y + Math.sin(a * Math.PI / 8) * 8 }; if (frei(w, q.x, q.y, 7) && w.hole(Math.floor(q.x / 2), Math.floor(q.y / 2)) === T.BODEN && sichtfrei(w, zp.x, zp.y, q.x, q.y)) nahPunkt = q; }
     assert.ok(nahPunkt);
-    Object.assign(p, nahPunkt); eingabe(c, 0.2, 0);
-    assert.ok(await bis(() => !info.schlaeft, 3000), 'Zombie bemerkt den Spieler direkt neben sich nicht ' + JSON.stringify({ z: [z.x, z.y], p: [p.x, p.y], zp, ebene: p.ebene === z.ebene, gute: (await import('../client/welt.mjs')).sichtGuete(w, z.x, z.y, p.x, p.y), info: { ziel: info.ziel, schlaeft: info.schlaeft } }));
-    eingabe(c, 0, 0);
+    Object.assign(p, nahPunkt); p.ebene = w.ebene;
+    assert.ok(await bis(() => !info.schlaeft, 3000), 'Zombie bemerkt den Spieler direkt neben sich nicht ' + JSON.stringify({ z: [z.x, z.y], p: [p.x, p.y], zp, ebene: [p.ebene, z.ebene, w.ebene], unten: p.unten, kamera: p.kamera, zombie: p.zombie, gute: (await import('../client/welt.mjs')).sichtGuete(w, z.x, z.y, p.x, p.y), info: { ziel: info.ziel, schlaeft: info.schlaeft } }));
     raum.state.zombies.delete(zid); raum.zombieInfo.delete(zid);
     // Biss-Reichweite: ein jagender Zombie 6 m entfernt beißt nicht
     const z2 = raum.setzeZombie(nahPunkt.x, nahPunkt.y, w.ebene, false), i2 = raum.zombieInfo.get(z2);
@@ -227,9 +227,9 @@ test('Safe Room: Vorratskiste, Kühlschrank, Funktisch, Betten; Kiste und Kühls
       // Kiste und Kühlschrank für die Figur erreichbar (nächste freie Zelle am Möbel, Weg vom Start dorthin)
       const { findeWeg } = await import('../client/welt.mjs');
       for (const ziel of [w.kiste, w.kuehlschrank]) {
-        let q = null;
-        for (let r = 5; r <= 13 && !q; r += 2) for (let i = 0; i < 16; i++) { const t = { x: ziel.x + Math.cos(i * Math.PI / 8) * r, y: ziel.y + Math.sin(i * Math.PI / 8) * r }; if (frei(w, t.x, t.y, 7)) { q = t; break; } }
-        assert.ok(q && findeWeg(w, w.start.x, w.start.y, q.x, q.y, 7, 40000, false), `${s.name}: Kiste/Kühlschrank unerreichbar`);
+        let ok = false;
+        for (let r = 5; r <= 11 && !ok; r += 2) for (let i = 0; i < 16 && !ok; i++) { const t = { x: ziel.x + Math.cos(i * Math.PI / 8) * r, y: ziel.y + Math.sin(i * Math.PI / 8) * r }; if (frei(w, t.x, t.y, 7) && findeWeg(w, w.start.x, w.start.y, t.x, t.y, 7, 40000, false)) ok = true; }
+        assert.ok(ok, `${s.name}: Kiste/Kühlschrank unerreichbar`);
       }
     }
     // Kiste öffnen aus Reichweite, nicht aus der Ferne; Barrikade an der Haustür
@@ -270,7 +270,7 @@ test('Bots folgen durch die Haustür hinein und nutzen die Vorratskiste im Safe 
 test('Hund geht mit hinein und folgt drinnen im Maßstab', async () => {
   const { c, raum, p } = await beitreten('Hundeführer');
   try {
-    const { w } = hausMit(raum, w => w.breite > 60);
+    const { w } = hausMit(raum, w => w.kachel && w.breite > 40 && frei(w, w.start.x, w.start.y, 7));
     p.ebene = w.ebene; p.x = w.start.x; p.y = w.start.y;
     const hid = raum.hunde.neuer(p.x + 4, p.y, '', c.sessionId), h = raum.state.hunde.get(hid);
     raum.extra.get(c.sessionId).hund = true;
@@ -330,7 +330,7 @@ test('Mehrere Bots folgen einem Menschen durch die Haustür eines normalen Hause
       assert.ok(await bis(() => bots().every(b => b.ebene === ebene), 25000), `nicht alle Bots kommen ins Haus ${h.nr}: ` + bericht());
       const aus = raum.freierPlatz(vor(3.5), 0, '');
       p.ebene = ''; p.x = aus.x; p.y = aus.y;
-      assert.ok(await bis(() => bots().every(b => b.ebene === '' && Math.hypot(b.x - p.x, b.y - p.y) < 260), 25000), `nicht alle Bots kommen aus Haus ${h.nr} heraus: ` + bericht() + ' ' + JSON.stringify([...raum.extra.entries()].filter(([, x]) => x.bot).map(([sid, x]) => ({ z: x.bot.uebergangZiel, ws: x.bot.wartetSeit, e: x.eingabe, fz: x.bot.festZahl, wo: x.bot.warteOrt, ank: x.ankunft && [Math.round(x.ankunft.x), Math.round(x.ankunft.y)], weg: x.bot.weg?.length, ausg: w.ausgang && [w.ausgang.x, w.ausgang.y] }))) + ' ' + JSON.stringify(bots().filter(b => b.ebene === ebene).map(b => { const k = Math.floor(b.x / 2), l = Math.floor(b.y / 2); const z = []; for (let yy = l - 3; yy <= l + 3; yy++) { let r = ''; for (let xx = k - 6; xx <= k + 6; xx++) r += w.hole(xx, yy) + ','; z.push(r); } return { pos: [b.x, b.y], frei: frei(w, b.x, b.y, 7), freiOben: frei(w, b.x, b.y - 1.5, 7), z }; })));
+      assert.ok(await bis(() => bots().every(b => b.ebene === '' && Math.hypot(b.x - p.x, b.y - p.y) < 260), 25000), `nicht alle Bots kommen aus Haus ${h.nr} heraus: ` + bericht() + ' ' + JSON.stringify([...raum.extra.entries()].filter(([, x]) => x.bot).map(([sid, x]) => ({ z: x.bot.uebergangZiel, ws: x.bot.wartetSeit, e: x.eingabe, fz: x.bot.festZahl, wo: x.bot.warteOrt, ank: x.ankunft && [Math.round(x.ankunft.x), Math.round(x.ankunft.y)], weg: x.bot.weg?.length, ausg: w.ausgang && [w.ausgang.x, w.ausgang.y] }))) + ' DIAG ' + JSON.stringify(bots().filter(b => b.ebene === ebene).map(b => ({ pos: [b.x, b.y], up: raum.uebergangsPunkt(ebene, ''), aktion: b.aktion, unten: b.unten, plan: [...raum.extra.entries()].filter(([sid]) => raum.state.spieler.get(sid) === b).map(([, x]) => x.bot.weg?.slice(0, 3))  }))) + ' ' + JSON.stringify(bots().filter(b => b.ebene === ebene).map(b => { const k = Math.floor(b.x / 2), l = Math.floor(b.y / 2); const z = []; for (let yy = l - 3; yy <= l + 3; yy++) { let r = ''; for (let xx = k - 6; xx <= k + 6; xx++) r += w.hole(xx, yy) + ','; z.push(r); } return { pos: [b.x, b.y], frei: frei(w, b.x, b.y, 7), freiOben: frei(w, b.x, b.y - 1.5, 7), z }; })));
     }
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });

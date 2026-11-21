@@ -19,9 +19,10 @@ export const INNEN_VERSION = 2;
 // Tempo und Reichweiten drinnen: Figuren erscheinen drinnen halb so groß (INNEN_FIGUR) und die Kamera ist 3,4-fach näher;
 // 8 px = 1 m gilt drinnen wie draußen, aber das Bild läuft sonst 3,4-mal schneller vorbei. Faktor so, dass das Vorbeilaufen des Bildes
 // etwa wie draußen aussieht (ein Haus von 14 m durchquert man in gut 2 s).
-export const INNEN_TEMPO = 0.35;
+export let INNEN_TEMPO = 0.35;   // Vorgabe 35 %; einstellbar in der Verwaltung (Server → state.optionen → Client)
+export function setzeInnenTempo(faktor) { INNEN_TEMPO = Math.max(0.1, Math.min(1.5, Number(faktor) || 0.35)); }
 export const INNEN_REICH = 0.35;        // Aktionsreichweiten (Durchsuchen, Türen, Aufheben …): 40 px (5 m) draußen → 14 px (1,75 m) drinnen
-export const tempoVon = w => w?.tempo ?? 1;
+export const tempoVon = w => (w?.kachel ? INNEN_TEMPO : 1);
 export const reichVon = (w, wert) => (w?.reich ? Math.round(wert * w.reich) : wert);
 export const kachelVon = w => w?.kachel ?? KACHEL;      // Pixel je Kachel dieser Welt/Ebene
 export const breiteVon = w => w?.breite ?? BREITE;      // Kacheln je Zeile
