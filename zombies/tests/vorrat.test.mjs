@@ -147,7 +147,7 @@ test('Safe Room: Barrikade mit Brettern, Kiste, Zombie kommt nicht durch – ohn
     const info = raum.zombieInfo.get(id), rein = Math.atan2(-r.dy, -r.dx);
     for (let i = 0; i < 60; i++) { info.ziel = c.sessionId; raum.zombieGehen(z, rein, 5, 0.05); }
     assert.equal(z.ebene, '', 'Zombie ist durch die Barrikade gekommen');
-    assert.ok(raum.state.safes.get(s.id).barrikade < vorher, 'Barrikade nutzt sich nicht ab');
+    assert.equal(raum.state.safes.get(s.id).barrikade, vorher, 'Safe-Barrikade darf sich nicht abnutzen (Zombies hämmern nur)');
 
     // ohne Barrikade dringt er ein, wenn jemand drin ist
     raum.state.safes.get(s.id).barrikade = 0;

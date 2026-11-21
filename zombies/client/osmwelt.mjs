@@ -27,9 +27,8 @@ const SAFE_ZUSATZ = [
 // Schlüssel = Kartenbereich (bbox, kommagetrennt) oder die Karte selbst mit dem Feld "festeSafes": [{ x, y, name }].
 // Sie kommen zusätzlich zur Namenswahl (SAFE_WUNSCH), insgesamt höchstens SAFE_MAX Safe Rooms.
 export const SAFE_MAX = 5;
-// geretsried2: ein Wohnhaus (Linie etwa Kachel x 206–226, y 12–87; OSM kennt dort keine Hausnummern).
-// Die Auswahl der Kachel steht in safehouse_auswahl.json/-png (Nummer → Kachel); hier eintragen, z. B. { x: 212, y: 40, name: 'Wohnhaus' }
-export const FESTES_SAFEHOUSE_G2 = null;
+// geretsried2: ein fest gewähltes Wohnhaus als zusätzliches Safehouse (Kachel im Haus; OSM kennt dort keine Hausnummern).
+export const FESTES_SAFEHOUSE_G2 = { x: 220, y: 38, name: 'Wohnhaus' };
 export const FESTE_SAFES = {
   '47.872,11.4584,47.8872,11.4766': [FESTES_SAFEHOUSE_G2].filter(Boolean),   // geretsried2
 };

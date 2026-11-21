@@ -83,15 +83,16 @@ test('B-11-Kreuzung (geretsried2): Bäume im Umkreis von 40 Kacheln stark ausged
 test('Feste Safehouses per Kachel: Haus wird Safe Room, höchstens SAFE_MAX, ohne Eintrag bleibt alles wie zuvor', () => {
   const karte = lade('geretsried2');
   const ohne = baue(karte);
-  assert.deepEqual(festeSafesVon(karte), [], 'Vorbelegung leer, bis Gregor das Haus wählt');
-  // Haus 9 der Wohnstraße-Auswahl: Kachel (216, 22) liegt im Umriss des Hauses (213, 19)
-  const mit = baue({ ...karte, festeSafes: [{ x: 216, y: 22, name: 'Wohnhaus' }] });
-  assert.equal(mit.safeRooms.length, ohne.safeRooms.length + 1);
-  const s = mit.safeRooms.find(s => s.name === 'Wohnhaus');
+  assert.deepEqual(festeSafesVon(karte).map(f => f.name), ['Wohnhaus'], 'Vorbelegung: ein festes Wohnhaus');
+  assert.ok(ohne.safeRooms.some(s => s.name === 'Wohnhaus'), 'festes Wohnhaus ist Safe Room');
+  // zusätzliches Haus per Kartenfeld: Kachel (216, 22) liegt im Umriss des Hauses (213, 19)
+  const mit = baue({ ...karte, festeSafes: [{ x: 216, y: 22, name: 'Testhaus' }] });
+  assert.ok(mit.safeRooms.length >= ohne.safeRooms.length && mit.safeRooms.length <= SAFE_MAX);
+  const s = mit.safeRooms.find(s => s.name === 'Testhaus');
   assert.ok(s && s.haus.safe && s.haus.x === 213 && s.haus.y === 19);
   assert.ok(mit.safeRooms.length <= SAFE_MAX);
   // Kachel in einer Wiese ohne Haus in Reichweite: nichts passiert
-  assert.equal(baue({ ...karte, festeSafes: [{ x: 300, y: 300 }] }).safeRooms.length, ohne.safeRooms.length);
+  assert.equal(baue({ ...karte, festeSafes: [...festeSafesVon(karte), { x: 300, y: 300 }] }).safeRooms.length, ohne.safeRooms.length);
   // Obergrenze
   const viele = baue({ ...karte, festeSafes: Array.from({ length: 12 }, (_, i) => ({ x: 216 + (i % 2) * 4, y: 22 + i * 2 })) });
   assert.ok(viele.safeRooms.length <= SAFE_MAX);

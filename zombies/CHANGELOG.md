@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.67.0 – 21.11.2026
+
+- Neu: Nebel als Wetterlage – morgens und abends zufällig, ziehende Schwaden, Sicht ca. 20 m, Zombies sehen schlechter, die Taschenlampe streut im Nebel. Im Backend einstellbar (Tag/Nacht), Superuser-Befehl „nebel“.
+- Neu: Feuerknopf als Option im Zahnrad (gedrückt halten = automatisch schießen), Regler für die Stimmen der Mitspieler, Schalter für Zombiegeräusche (Horde und Entdeckt bleiben) und Musik; Spielgeräusche 25 % leiser.
+- Neu: Taschenlampenkegel der Mitspieler sichtbar; eigene Position pulsiert in der Eckkarte; Atomschlag-Countdown in der Eckkarte statt über den Knöpfen.
+- Neu: Munitionsglück – jede Durchsuchung ohne Munition erhöht die Chance (+20 %, bis ×3), dazu mehr bei wenig Leben, Durst oder Hunger (im Backend einstellbar).
+- Neu: Level 2–5 mit deutlich mehr Bäumen, Alleen, Hecken, Weidezäunen, Heuballen und Feldwegen; kräftigere Haustüren mit Rahmen und Stufe; Sandsäcke parallel zur Wand.
+- Neu: B11 – Puma und Leopard 2 patrouillieren, walzen geparkte Autos platt und schieben sie zusammen, Kettenspuren; Mörser weiter abseits, kleinere Granaten, weniger Bäume an der Kreuzung.
+- Neu: Geretsried 2 hat ein festes zusätzliches Safehouse (Wohnhaus).
+- Geändert: Safehouse-Türen – geschlossen oder verbarrikadiert kommen Zombies nie hinein, sie hämmern nur. Sprach-Hörweite: volle Lautstärke bis zur eingestellten Weite, dann leiser bis +50 %. Mörser ist kein Testwerkzeug mehr.
+- Behoben: Superuser-Passwort wirkte nach dem Neuladen nicht; Kofferraum-Zeichen über Autos entfernt.
+
 ## 0.66.3 – 21.11.2026
 
 - Musik wird jetzt gestreamt statt komplett entpackt: Lieder starten sofort und belegen kaum Arbeitsspeicher, egal wie lang (vorher bis zu 115 MB je Lied). Auf iPhone/iPad werden die Abspieler bei der ersten Berührung freigeschaltet.
