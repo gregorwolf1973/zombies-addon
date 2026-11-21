@@ -278,6 +278,7 @@ export async function starte({
     toene: datei.werte.toene,
     toeneHorde: datei.werte.toeneHorde,   // Hordengeräusch: Schwellen und Hörweite (client/hordenlogik.mjs)
     musik: datei.werte.musik,             // Musik: laut (%), blende (s)
+    radioStream: datei.werte.radioStream, // Autoradio als Live-Radio (Stream direkt vom Sender)
   }));
   app.use(nocache, express.static(path.join(hier, '..', 'client'), { extensions: ['html'] }));
 

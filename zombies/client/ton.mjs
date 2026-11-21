@@ -38,6 +38,7 @@ const zombieStumm = id => !zombieTonAn && ZOMBIE_IDS.has(id) && id !== 'entdeckt
 export function musikSetzen(an) {
   musikAn = !!an;
   if (!ctx) return;
+  if (radioBus) radioBus.gain.setTargetAtTime(musikAn ? 1 : 0, ctx.currentTime, 0.3);   // Live-Radio zählt als Musik
   if (!musikAn) {
     musikAnwenden(null);   // Spielmusik ausblenden; kommt bei „an“ mit der nächsten Lage (≈1 s) wieder
     if (musik) { const m = musik; musik = null; if (m.strom) m.strom.stop(1); else { m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); setTimeout(() => { try { m.src.stop(); } catch { /* schon aus */ } }, 1500); } }
@@ -154,6 +155,10 @@ let hordeSt = { aktiv: false, pegel: 0, halb: false, nur: false, n: 0 }, akzentS
 export const hordeAktiv = () => hordeSt.aktiv;
 export function toneEinstellungen(i) {
   hordeEin = hordeEinstellung(i?.toeneHorde);
+  const r = i?.radioStream ?? {}, rl = Number(r.laut);
+  const url = typeof r.url === 'string' && r.url.startsWith('https://') ? r.url : '';
+  if (radioEl && radioEin.url !== url) radioPausieren(true);   // Senderwechsel: beim nächsten Auto neu verbinden
+  radioEin = { an: r.an === true && !!url, url, laut: Number.isFinite(rl) ? Math.max(0, Math.min(100, rl)) : 60 };
   const L = Number(i?.musik?.laut), B = Number(i?.musik?.blende);
   musikEin = { laut: Number.isFinite(L) ? Math.max(0, Math.min(100, L)) : 35, blende: Number.isFinite(B) ? Math.max(1, Math.min(10, B)) : 3 };
 }
@@ -528,9 +533,50 @@ export function knistern(x, y, staerke = 1) {
 
 // ---------- Sirene: läuft dauernd, solange das Fahrzeug da ist; Lautstärke, Richtung und Tonhöhe folgen der Entfernung ----------
 // Mit zugeordneter Datei (Ereignis „Sirene“) als Schleife, sonst ein erzeugtes Martinshorn (a' 440 Hz / d'' 587 Hz).
+// ---------- Autoradio als Live-Radio (Einstellung radioStream, z. B. Antenne Bayern) ----------
+// Ein gemeinsames <audio> holt den Stream direkt beim Sender (CORS erlaubt); jedes Auto mit Radio bekommt einen eigenen
+// Lautstärke-/Richtungszweig (wie die Sirene). Ohne Autos mit Radio wird der Stream nach 5 s getrennt (spart Datenvolumen).
+let radioEin = { an: false, url: '', laut: 60 };
+let radioEl = null, radioQuelle = null, radioBus = null, radioFrei = false, radioNutzer = 0, radioAusTimer = null;
+function radioAnlegen() {
+  if (radioEl || !ctx?.createMediaElementSource) return !!radioEl;
+  try {
+    radioEl = new Audio(); radioEl.crossOrigin = 'anonymous'; radioEl.preload = 'none'; radioEl.setAttribute('playsinline', '');
+    radioQuelle = ctx.createMediaElementSource(radioEl);
+    radioBus = ctx.createGain(); radioBus.gain.value = musikAn ? 1 : 0; radioBus.connect(haupt);
+    radioEl.onerror = () => { radioPausieren(true); };
+    return true;
+  } catch { radioEl = null; return false; }
+}
+function radioFreischalten() {   // iOS: einmal in einer Nutzergeste kurz (stumm) abspielen
+  if (!radioEin.an || radioFrei || !radioAnlegen() || radioNutzer > 0) return;
+  try { radioEl.src = stille(); Promise.resolve(radioEl.play()).then(() => { radioFrei = true; if (radioNutzer <= 0) radioEl.pause(); }).catch(() => {}); } catch { /* nächste Geste */ }
+}
+function radioPausieren(sofort = false) {
+  clearTimeout(radioAusTimer);
+  const aus = () => { if (radioNutzer > 0 || !radioEl) return; try { radioEl.pause(); radioEl.removeAttribute('src'); radioEl.load(); } catch { /* egal */ } };
+  if (sofort) { radioNutzer = Math.min(radioNutzer, 0); aus(); } else radioAusTimer = setTimeout(aus, 5000);
+}
+function radioHandle() {
+  if (!radioEin.an || !musikAn || !radioAnlegen()) return null;
+  clearTimeout(radioAusTimer);
+  if (radioEl.paused || !radioEl.src || !radioEl.src.startsWith(radioEin.url)) {
+    try { radioEl.src = radioEin.url; Promise.resolve(radioEl.play()).catch(() => {}); } catch { return null; }
+  }
+  const g = ctx.createGain(); g.gain.value = 0;
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  if (pan) { g.connect(pan); pan.connect(radioBus); } else g.connect(radioBus);
+  radioQuelle.connect(g);
+  radioNutzer++;
+  let weg = false;
+  const ende = { stop() { if (weg) return; weg = true; try { radioQuelle.disconnect(g); } catch { /* schon getrennt */ } radioNutzer--; if (radioNutzer <= 0) radioPausieren(); } };
+  return { g, pan, laut: radioEin.laut / 100, quellen: [ende], rate: null, live: true };
+}
+
 // allgemeine Schleife an einem bewegten Ding (z. B. Autoradio); ohne zugeordnete Datei: null
 export function schleifeStarten(id) {
   if (!ctx) return null;
+  if (id === 'autoradio' && radioEin.an) { const h = radioHandle(); if (h) return h; }
   const t = zuordnung[id], liste = (t?.dateien ?? []).map(geladen).filter(Boolean);
   if (!liste.length) { (t?.dateien ?? []).forEach(laden); return null; }
   const g = ctx.createGain(); g.gain.value = 0;
@@ -654,6 +700,7 @@ function stromAnlegen() {
 // in jeder Nutzergeste aufrufen: legt die Elemente an und spielt einmal kurz Stille (iOS-Freischaltung)
 export function audioFreischalten() {
   if (!ctx) return;
+  radioFreischalten();
   while (stromSpieler.length < 3 && stromAnlegen());
   for (const sp of stromSpieler) {
     if (sp.frei || sp.belegt) continue;

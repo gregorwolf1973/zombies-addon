@@ -23,7 +23,9 @@ export const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose',
 // je Waffe einstellbar: Schaden und Abklingzeit (Sekunden zwischen zwei Schlägen/Schüssen); Vorgabe = Werte aus WAFFEN
 export const WAFFEN_VORGABE = Object.fromEntries(Object.entries(WAFFEN).map(([w, v]) => [w, { schaden: v.schaden, pause: v.pause, ...(v.fern ? { magazin: v.magazin ?? 1, nachlade: v.nachlade ?? 4 } : {}) }]));
 export const HORDE_TON_VORGABE = { ab: 8, nurHorde: 20, voll: 40, aus: 5, hoerweite: 30 };   // Hordengeräusch: Zombies in Hörweite (Meter), siehe client/hordenlogik.mjs
-export const MUSIK_VORGABE = { laut: 35, blende: 3 };   // Musik-Lautstärke in %, Überblendzeit in Sekunden
+export const MUSIK_VORGABE = { laut: 35, blende: 3 };
+// Autoradio als Live-Radio: Jedes Gerät holt den Stream direkt beim Sender (nicht über diesen Server); an = statt der Autoradio-Datei
+export const RADIO_STREAM_VORGABE = { an: false, url: 'https://stream.antenne.de/antenne', name: 'Antenne Bayern', laut: 60 };   // Musik-Lautstärke in %, Überblendzeit in Sekunden
 // Vorbelegung (nur wenn die Dateien im Tonordner liegen und dem Ereignis noch nichts zugeordnet ist, siehe server/index.mjs)
 export const TON_STANDARD = {
   horde: { dateien: ['zombie-horde-growls-and-snarls-7c0b158d.mp3', 'alice_soundz-zombie-sound-224167.mp3'], laut: 80 },
@@ -150,6 +152,15 @@ export function bereinigeHordeTon(h = {}) {
     voll: Math.round(zahl(h.voll, 2, 300, V.voll)),
     aus: Math.round(zahl(h.aus, 0, 50, V.aus)),
     hoerweite: Math.round(zahl(h.hoerweite, 10, 100, V.hoerweite)),
+  };
+}
+export function bereinigeRadioStream(r = {}) {
+  const url = String(r.url ?? '').trim();
+  return {
+    an: r.an === true,
+    url: /^https:\/\/[^\s"'<>]{4,300}$/.test(url) ? url : RADIO_STREAM_VORGABE.url,
+    name: String(r.name ?? RADIO_STREAM_VORGABE.name).trim().slice(0, 40) || RADIO_STREAM_VORGABE.name,
+    laut: Math.round(zahl(r.laut, 0, 100, RADIO_STREAM_VORGABE.laut)),
   };
 }
 export function bereinigeMusik(m = {}) {
@@ -314,6 +325,7 @@ export function bereinige(e = {}, alt = {}) {
     toene,
     toeneHorde: bereinigeHordeTon({ ...a.toeneHorde, ...(e.toeneHorde ?? {}) }),
     musik: bereinigeMusik({ ...a.musik, ...(e.musik ?? {}) }),
+    radioStream: bereinigeRadioStream({ ...a.radioStream, ...(e.radioStream ?? {}) }),
     test: {
       zeitraffer: ZEITRAFFER.includes(Number(t.zeitraffer)) ? Number(t.zeitraffer) : 1,
       unsterblich: [...new Set((Array.isArray(t.unsterblich) ? t.unsterblich : []).map(n => String(n).trim().slice(0, 16)).filter(Boolean))].slice(0, 20),
@@ -338,6 +350,7 @@ export function vorgaben() {
     toene: {},
     toeneHorde: { ...HORDE_TON_VORGABE },
     musik: { ...MUSIK_VORGABE },
+    radioStream: { ...RADIO_STREAM_VORGABE },
   };
 }
 

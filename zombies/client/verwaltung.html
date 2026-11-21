@@ -1599,6 +1599,36 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     <label for="muBlende">Überblendzeit (Sekunden)</label>
     <div class="th-zeile"><input type="range" id="muBlende" min="1" max="10" step="0.5"><span id="muBlendeWert"></span></div>
   </div>
+  <h3 class="tk-abschnitt">Autoradio als Live-Radio</h3>
+  <p class="tk-hinweis">Statt der Autoradio-Datei spielen die Autos mit Radio einen echten Radiosender. Jedes Gerät holt den Stream direkt beim Sender (rund 1 MB pro Minute, nicht über deinen Server); wer im Zahnrad die Musik ausschaltet, hört ihn nicht.</p>
+  <label class="tn-schalter"><input type="checkbox" id="rsAn"> Autoradio spielt Live-Radio</label>
+  <label for="rsName">Sender</label>
+  <input type="text" id="rsName" maxlength="40">
+  <label for="rsUrl">Stream-Adresse (https)</label>
+  <input type="url" id="rsUrl" maxlength="300" style="width:100%">
+  <label for="rsLaut">Lautstärke Live-Radio (%)</label>
+  <div class="th-zeile"><input type="range" id="rsLaut" min="0" max="100" step="1"><span id="rsLautWert"></span></div>
+  <script>
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    function zeige(d) {
+      var r = (d.einstellungen || {}).radioStream || (d.vorgaben || {}).radioStream || {};
+      if (document.activeElement !== $('rsAn')) $('rsAn').checked = r.an === true;
+      if (document.activeElement !== $('rsName')) $('rsName').value = r.name || '';
+      if (document.activeElement !== $('rsUrl')) $('rsUrl').value = r.url || '';
+      if (document.activeElement !== $('rsLaut')) { $('rsLaut').value = r.laut === undefined ? 60 : r.laut; if ($('rsLautWert')) $('rsLautWert').textContent = $('rsLaut').value + ' %'; }
+    }
+    function senden(teil) {
+      return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ radioStream: teil }) })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function () {});
+    }
+    $('rsAn').addEventListener('change', function () { senden({ an: $('rsAn').checked }); });
+    $('rsName').addEventListener('change', function () { senden({ name: $('rsName').value }); });
+    $('rsUrl').addEventListener('change', function () { senden({ url: $('rsUrl').value }); });
+    $('rsLaut').addEventListener('change', function () { senden({ laut: Number($('rsLaut').value) }); });
+    fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {});
+  })();
+  </script>
 
   <div class="tk-status" id="tkStatus" role="status" aria-live="polite"></div>
   <div class="tk-lade" id="tkLade">Wird geladen …</div>
