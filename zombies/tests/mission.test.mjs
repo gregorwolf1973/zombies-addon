@@ -11,7 +11,7 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, DINGE, setzeKartengroesse } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
-import { missionsPlan, missionListe, kreisSchrumpfen, SUCH_MIN, FUNK_TEILE, MISSION_MAX, MISSIONEN, ortText } from '../server/mission.mjs';
+import { missionsPlan, missionListe, kreisSchrumpfen, SUCH_MIN, FUNK_TEILE, MISSION_MAX, MISSIONEN, ortText, missionsBehaelter, behaelterAufKarte } from '../server/mission.mjs';
 import { schwierigkeit, LEVEL_TABELLE } from '../server/schwierigkeit.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
 
@@ -59,7 +59,7 @@ test('Obergrenze: höchstens 3 Missionsgegenstände je Level, in jeder Karte und
   }
 });
 
-test('Position exakt: Kreismitte = Gegenstandsort (Gebäudemitte), Hinweisfeld nennt Gebäude und Stockwerk', () => {
+test('Position exakt: Kreismitte = Behälter (Gegenstandsort), Hinweisfeld nennt Gebäude und Stockwerk', () => {
   const k = karte('geretsried');
   setzeKartengroesse(k.breite, k.hoehe);
   try {
@@ -67,7 +67,9 @@ test('Position exakt: Kreismitte = Gegenstandsort (Gebäudemitte), Hinweisfeld n
     for (const m of missionsPlan(11, 1, 'geretsried', w)) {
       const h = w.haeuser[m.nr];
       assert.equal(m.kx, m.x); assert.equal(m.ky, m.y, 'Kreismitte nicht genau auf dem Gegenstand');
-      assert.equal(m.x, (h.x + h.b / 2) * KACHEL); assert.equal(m.y, (h.y + h.h / 2) * KACHEL);
+      const bh = missionsBehaelter(11, w, m.nr).find(q => q.id === m.behaelter);
+      assert.deepEqual([m.x, m.y], behaelterAufKarte(11, w, m.nr, bh), 'Position nicht die des Behälters');
+      assert.ok(m.x >= h.x * KACHEL && m.x <= (h.x + h.b) * KACHEL && m.y >= h.y * KACHEL && m.y <= (h.y + h.h) * KACHEL, 'Behälterposition außerhalb des Hauses');
       assert.equal(m.r, SUCH_MIN);
       assert.match(m.ort, /, Erdgeschoss$/);
       assert.equal(kreisSchrumpfen(m), false, 'Kreis darf nicht mehr schrumpfen');

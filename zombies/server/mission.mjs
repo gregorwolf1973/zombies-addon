@@ -57,6 +57,15 @@ export function ortText(haus) {
   return `${wo}, Erdgeschoss`;
 }
 
+// Position des Behälters auf der Karte: Der Innenraum hat eigene Maße (nicht deckungsgleich mit dem Grundriss), also wird die relative
+// Lage im Innenraum (ohne Außenrand ox/oy) auf das Hausrechteck abgebildet; Rückfall Hausmitte
+export function behaelterAufKarte(seed, welt, nr, b) {
+  const h = welt.haeuser[nr], w = innenraumFuer(seed, welt, `h${nr}eg`);
+  if (!h || !w?.b || !w?.h) return [((h?.x ?? 0) + (h?.b ?? 0) / 2) * KACHEL, ((h?.y ?? 0) + (h?.h ?? 0) / 2) * KACHEL];
+  const rx = Math.max(0, Math.min(1, (b.x / KACHEL - w.ox) / w.b)), ry = Math.max(0, Math.min(1, (b.y / KACHEL - w.oy) / w.h));
+  return [Math.round((h.x + rx * h.b) * KACHEL), Math.round((h.y + ry * h.h) * KACHEL)];
+}
+
 // Plan der Missionsorte: [{ id (eindeutig), ding (Gegenstandsart), nr, behaelter, x, y (Hausmitte), kx, ky, r (Suchkreis) }]
 export function missionsPlan(seed, level, karte, welt, landefeuer = 1) {
   const nLF = Math.max(1, Math.min(LANDEFEUER_MAX, Math.floor(Number(landefeuer)) || 1));
@@ -87,7 +96,8 @@ export function missionsPlan(seed, level, karte, welt, landefeuer = 1) {
     const r = lf ? LANDEFEUER_RADIUS : SUCH_RADIUS;
     if (lf && nummer > nLF) continue;
     // Position exakt (Gebäudemitte), kx/ky = Kreismitte = Ziel; ort = Beschreibung für die Aufgabenliste (Erdgeschoss: nur dort liegen Gegenstände)
-    plan.push({ id: o.id, ding, nummer, von: lf ? nLF : 0, nr: o.nr, behaelter: b.id, x: o.x, y: o.y, kx: o.x, ky: o.y, r, ort: ortText(welt.haeuser?.[o.nr]) });
+    const [px, py] = behaelterAufKarte(seed, welt, o.nr, b);
+    plan.push({ id: o.id, ding, nummer, von: lf ? nLF : 0, nr: o.nr, behaelter: b.id, x: px, y: py, kx: px, ky: py, r, ort: ortText(welt.haeuser?.[o.nr]) });
   }
   return plan.slice(0, MISSION_MAX);
 }
