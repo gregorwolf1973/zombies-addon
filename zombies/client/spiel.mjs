@@ -2411,7 +2411,7 @@ class Ort extends Phaser.Scene {
     }
     this.feuerDarstellen(s);
     this.spurenDarstellen(s);
-    this.behaelterSymbole(s);
+    // (kein Kistensymbol 📦/∅ über Behältern – bewusst keine „noch nicht durchsucht“-Anzeige)
     this.missionGlanz(s);
     // liegende Gegenstände
     for (const [id, b] of s.boden) {

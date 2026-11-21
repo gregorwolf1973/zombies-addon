@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.69.3 – 21.11.2026
+
+- Entfernt: Kistensymbol (📦/∅) über Schränken und Behältern – nirgends mehr eine „noch nicht durchsucht“-Anzeige.
+
 ## 0.69.2 – 21.11.2026
 
 - Bäume: mit Luftbild-Boden keine gezeichneten Kronen mehr (das Foto zeigt die echten), nur ein dezenter Stammpunkt; im gezeichneten Modus eine Krone je Baum (4–7,5 m) statt überlappender Riesenkronen.
