@@ -2,6 +2,8 @@
 // Aus demselben Seed entsteht auf beiden Seiten dieselbe Karte, deshalb muss
 // der Server die Karte nicht übertragen.
 
+import { zaehle } from './stapel.mjs';   // nur Hilfsfunktion, Aufruf erst zur Laufzeit (stapel.mjs importiert DINGE zurück)
+
 export const KACHEL = 32;
 // Kartengröße in Kacheln. Für Karten aus OpenStreetMap wird sie vor dem Bauen der Welt gesetzt
 // (live gebundene Exporte: alle Module sehen den neuen Wert).
@@ -387,6 +389,8 @@ export const DINGE = {
   radio: { name: 'Radio', zeichen: '📻', radio: true },   // Lockmittel: einschalten und ablegen, spielt ~75 s und macht weithin Lärm (server/radio.mjs)
   funkgeraet: { name: 'Funkgerät', zeichen: '📻' },   // Sprachfunk: mit zwei Funkgeräten hört man sich überall (client/sprache_regeln.mjs)
   schokoriegel: { name: 'Schokoriegel', zeichen: '🍫' },
+  // Reserve-Munition: 30 Schuss; füllt den Munitionszähler automatisch auf, wenn er auf MUNITION_KISTE_AB fällt (server/munition.mjs)
+  munitionskiste: { name: 'Munitionskiste', zeichen: '📦' },
   tasche: { name: 'Sporttasche (12 Plätze)', zeichen: '👜', plaetze: 12 },
   trekking: { name: 'Trekkingrucksack (16 Plätze)', zeichen: '🎒', plaetze: 16 },
   // Missionsgegenstände (server/mission.mjs): nie in Beutetabellen, nicht wegwerfbar (nur in die Safe-Room-Kiste legen), verschwinden nie vom Boden
@@ -408,19 +412,22 @@ export const LEICHEN_MAX = 30;
 export const LEICHE_WOHNUNG = 0.2;   // Anteil der Wohnhaus-Ebenen mit einer Leiche (deterministisch aus Seed und Ebene, nicht in Safe Rooms und Läden)
 export const RUCKSACK_PLAETZE = 8;   // Grundausstattung; größere Taschen erhöhen p.plaetze
 export const KISTE_PLAETZE = 24;
+export const STAPEL_MAX = 5;   // je Platz bis zu 5 Stück derselben Art (client/stapel.mjs); Waffen (außer Messer), Taschen und Missionsgegenstände: 1
+export const MUNITIONSKISTE_SCHUSS = 30;   // Schuss je Munitionskiste
+export const MUNITION_KISTE_AB = 120;      // fällt der Munitionszähler auf diesen Wert oder weniger, wird eine Kiste geöffnet
 export const BEHAELTER_NAME = { bad: 'Toilette / Waschbecken', muelltonne: 'Mülltonnen', container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', herd: 'Herd', spuele: 'Spüle', spind_belohnung: 'Spind', auto: 'Kofferraum', leiche: 'Zombie', bus: 'Bus',
   vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal', laden_polizei: 'Waffenschrank' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
-  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', 'pfeil', 'radio', null, null],
-  spind: ['munition', 'munition', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', 'gewehr', 'schrotflinte', 'funkgeraet', 'armbrust', 'pfeil', null, null],
+  schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'munitionskiste', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', 'pfeil', 'radio', null, null],
+  spind: ['munition', 'munition', 'munitionskiste', 'verband', 'schlaeger', 'bretter', 'pistole', 'spritze', 'tasche', 'trekking', 'brechstange', 'seil', 'gewehr', 'schrotflinte', 'funkgeraet', 'armbrust', 'pfeil', null, null],
   // Herd und Spüle der Küche: oft ein Messer (je Küche ca. 60-70 %)
   herd: ['messer', 'messer', 'essen', 'wasser', 'wasser', null],
   spuele: ['messer', 'messer', 'wasser', 'wasser', 'essen', null],
   // Belohnung für Rätsel-Türen: Schrank/Spind im Raum dahinter, viel Waffen, Munition und Medizin
-  spind_belohnung: ['pistole', 'gewehr', 'gewehr', 'schrotflinte', 'armbrust', 'munition', 'munition', 'pfeil', 'verband', 'verband', 'spritze', null],
+  spind_belohnung: ['pistole', 'gewehr', 'gewehr', 'schrotflinte', 'armbrust', 'munition', 'munition', 'munitionskiste', 'pfeil', 'verband', 'verband', 'spritze', null],
   // Kofferraum geht nur mit Brechstange auf – darum liegt drin keine, dafür etwas mehr Gutes
-  auto: ['wasser', 'verband', 'munition', 'munition', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', 'funkgeraet', null],
+  auto: ['wasser', 'verband', 'munition', 'munition', 'munitionskiste', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', 'funkgeraet', null],
   laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
   laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
   laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', 'armbrust', 'pfeil', 'pfeil', 'radio', null],
@@ -431,9 +438,9 @@ export const BEUTE = {
   // Bundeswehr-Stützpunkt (Teil 2 ergänzt hier die neuen Waffen)
   // Handgranaten häufiger, Maschinenpistole und Maschinengewehr selten (nur hier zu finden)
   bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', 'pfeil', 'granate40', null],   // MG/Scharfschütze der Kiste: raum.mjs (durchsucht), nicht hier
-  bw_container: ['munition', 'munition', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', 'granatwerfer', 'granate40', 'granate40', null],
+  bw_container: ['munition', 'munition', 'munitionskiste', 'munitionskiste', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', 'granatwerfer', 'granate40', 'granate40', null],
   // Polizeiwache (OSM amenity=police): Pistolen, Schrot, selten Maschinenpistole, Maschinengewehr, Scharfschützengewehr
-  laden_polizei: ['munition', 'munition', 'verband', 'taschenlampe', 'pistole', 'pistole', 'schrotflinte', 'mp', 'mg', 'mg', 'scharfschuetze', 'funkgeraet', null],
+  laden_polizei: ['munition', 'munition', 'munitionskiste', 'verband', 'taschenlampe', 'pistole', 'pistole', 'schrotflinte', 'mp', 'mg', 'mg', 'scharfschuetze', 'funkgeraet', null],
   sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],
   bus: ['wasser', 'wasser', 'essen', 'schokoriegel', 'tasche', 'trekking', 'kleidung', 'verband', 'taschenlampe', 'radio', null],
   bad: ['wasser', 'wasser', 'wasser', 'verband', 'schokoriegel', null, null],   // Bad: oft Wasser (Spülkasten, Hahn)
@@ -472,7 +479,7 @@ export const HANDEL_RAETSEL = 6;   // so viele Rätsel in Folge richtig = Bezahl
 export const HANDEL_ABSTAND = 56;   // so nah muss man an Arzt bzw. Soldat stehen (Pixel; 2,5 m wären nur 20 px – kleiner als die Figuren selbst)
 // Womit bezahlt wird: Liste der abzugebenden Dinge (zuerst das, wovon man am meisten hat) oder null, wenn der Rucksack nicht reicht
 export function bezahlung(rucksack, kostet) {
-  const n = new Map(kostet.aus.map(d => [d, rucksack.filter(q => q === d).length]));
+  const n = new Map(kostet.aus.map(d => [d, zaehle(rucksack, d)]));
   const zahl = [];
   for (let i = 0; i < kostet.anzahl; i++) {
     let best = null;
@@ -486,7 +493,7 @@ export function bezahlung(rucksack, kostet) {
 export const GRANATE = { flug: 0.6, flugWerfer: 0.8, tempo: 330, tempoWerfer: 1500, bogen: Math.PI / 3, zuender: 2.0, radius: 60, schadenZombie: 220, schadenSpieler: 70, wurfWeite: 200, blickWeite: 136, laerm: 600 };   // Wurfweite +67 %, Radius +50 %, mehr Schaden
 // Wer ein Maschinengewehr trägt (in der Hand oder im Rucksack), läuft 15 % langsamer
 export const TEMPO_MG = 0.85;
-export const traegtMg = p => p.waffe === 'mg' || (p.rucksack ?? []).includes('mg');
+export const traegtMg = p => p.waffe === 'mg' || zaehle(p.rucksack ?? [], 'mg') > 0;
 
 // Fundhäufigkeit je Gegenstand einstellbar: 10 = normal, 0 = nie, 20 = doppelt so oft.
 // Zieht aus einer Beutetabelle (Einträge mit Wiederholungen, null = nichts) mit Gewichten.

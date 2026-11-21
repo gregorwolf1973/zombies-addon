@@ -1,4 +1,5 @@
 // Rucksack, Durchsuchen, Safe Rooms, Barrikade und Speichern
+import { zaehle, hat } from '../client/stapel.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as W from '../client/welt.mjs';
@@ -56,12 +57,12 @@ test('Durchsuchen füllt den Rucksack, leerer Behälter bleibt leer', async () =
     assert.ok(b, 'kein freistehender Behälter im Safe Room');
     p.x = b.x; p.y = b.y + 1;
     raum.setzeInhalt(b.id, ['wasser', 'munition', 'verband']);
-    const m0 = p.munition + p.magazin, r0 = p.rucksack.length;   // Magazin + Vorrat
+    const m0 = p.munition + p.magazin, r0 = zaehle(p.rucksack);   // Magazin + Vorrat; Stücke im Rucksack
     c.send('aktion');
     assert.ok(await bis(() => p.aktion === 'durchsuchen'), 'Aktion startet nicht');
     assert.ok(await bis(() => p.aktion === '' && raum.state.behaelter.get(b.id).rest === 0, 4000), 'nicht fertig');
     assert.equal(p.munition + p.magazin, m0 + 12);
-    assert.equal(p.rucksack.length, r0 + 2);
+    assert.equal(zaehle(p.rucksack), r0 + 2);
     assert.ok(await bis(() => c.state.behaelter.get(b.id)?.rest === 0), 'Client sieht leeren Behälter nicht');
     // Bewegen bricht ab
     const b2 = iw.behaelter.find(x => { if (x.id === b.id) return false; p.x = x.x; p.y = x.y + 1; const k = raum.kontext(p); return k?.art === 'durchsuchen' && k.behaelter?.id === x.id; });
@@ -516,7 +517,7 @@ test('Aufheben mit Auswahl: gewählter Gegenstand, voller Rucksack tauscht Platz
     assert.ok(raum.state.boden.has(i1) && raum.state.boden.has(weit) && !raum.state.boden.has(i2));
     // voller Rucksack: ohne Platz nichts, mit Platz Tausch
     while (a.p.rucksack.length < a.p.plaetze) a.p.rucksack.push('bretter');
-    a.p.rucksack[1] = 'seil';
+    a.p.rucksack[1] = 'brechstange';   // anderes Ding als das Seil, sonst würde es auf den Seil-Stapel passen
     const vorher = raum.state.boden.size;
     a.c.send('aufheben_wahl', { id: i1 });
     await new Promise(r => setTimeout(r, 150));
@@ -678,14 +679,14 @@ test('Bots nutzen die Vorratskiste im Safe Room', async () => {
     inDenSafeRoom(raum, bot, s, 'tuer');
     bot.rucksack.clear(); for (let i = 0; i < 5; i++) bot.rucksack.push('wasser');
     bot.durst = 100; bot.hp = 45;   // verletzt: braucht einen Verband, sonst nichts
-    assert.ok(await bis(() => !kiste.includes('verband') && bot.rucksack.filter(d => d === 'wasser').length === 3, 12000),   // Verband genommen (evtl. gleich benutzt)
+    assert.ok(await bis(() => !hat(kiste, 'verband') && zaehle(bot.rucksack, 'wasser') === 3, 12000),   // Verband genommen (evtl. gleich benutzt)
       'Bot nutzt die Kiste nicht: ' + JSON.stringify([...bot.rucksack]) + ' Kiste ' + JSON.stringify([...kiste]));
-    assert.equal([...kiste].filter(d => d === 'wasser').length, 2, 'Überzähliges liegt nicht in der Kiste');
+    assert.equal(zaehle(kiste, 'wasser'), 2, 'Überzähliges liegt nicht in der Kiste');
     assert.equal(raum.state.boden.size, 0, 'Bot wirft im Safe Room auf den Boden statt in die Kiste');
     // was er nicht dringend braucht, lässt er für die Gruppe liegen (auch sein eigenes Wasser, er ist nicht durstig)
     await warte(3000);
-    assert.ok(kiste.includes('bretter') && kiste.includes('taschenlampe'), 'Bot räumt die Kiste aus: ' + JSON.stringify([...kiste]));
-    assert.equal([...kiste].filter(d => d === 'wasser').length, 2, 'Bot nimmt Wasser, obwohl er nicht durstig ist');
+    assert.ok(hat(kiste, 'bretter') && hat(kiste, 'taschenlampe'), 'Bot räumt die Kiste aus: ' + JSON.stringify([...kiste]));
+    assert.equal(zaehle(kiste, 'wasser'), 2, 'Bot nimmt Wasser, obwohl er nicht durstig ist');
   } finally { await a.c.leave(); SpielRaum.einstellungen = vorher; }
 });
 
@@ -839,7 +840,7 @@ test('Schenken: Bot nimmt Geschenke an (auch eine Ersatz-Taschenlampe), nur bei 
     a.c.send('tausch_anbieten', { platz: 0 });
     assert.ok(await bis(() => fenster?.meins?.length === 1 && fenster.seinOk === true), 'Bot nimmt die Taschenlampe nicht');
     a.c.send('tausch_ok');
-    assert.ok(await bis(() => bot.rucksack.filter(d => d === 'taschenlampe').length === 2), 'Taschenlampe kommt nicht an');
+    assert.ok(await bis(() => zaehle(bot.rucksack, 'taschenlampe') === 2), 'Taschenlampe kommt nicht an');
     // voller Rucksack: kein Platz für ein Geschenk
     fenster = null;
     while (bot.rucksack.length < bot.plaetze) bot.rucksack.push('bretter');
@@ -913,4 +914,39 @@ test('Zombies und Bots: durch Hecke und Holzzaun langsam, Metallzaun bleibt zu',
     await c.leave();
     SpielRaum.einstellungen = vorher;
   }
+});
+
+test('Stapel im Rucksack: Benutzen/Wegwerfen nehmen 1 Stück, Aufheben stapelt, zweite Tasche geht nicht, Munitionskiste öffnet sich', async () => {
+  const a = await beitreten('Stapler');
+  try {
+    const { raum, p, c } = a;
+    p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.ebene = '';
+    raum.state.boden.clear();
+    p.rucksack.clear(); p.rucksack.push('wasser*3'); p.durst = 10;
+    c.send('benutze', { platz: 0 });
+    assert.ok(await bis(() => p.durst > 30), 'Wasser nicht getrunken');
+    assert.deepEqual([...p.rucksack], ['wasser*2']);
+    c.send('wegwerfen', { platz: 0 });
+    assert.ok(await bis(() => raum.state.boden.size === 1), 'Wegwerfen legt nichts hin');
+    assert.deepEqual([...p.rucksack], ['wasser']);
+    // Aufheben: gleiche Dinge landen auf dem vorhandenen Stapel
+    const id = [...raum.state.boden.keys()][0];
+    c.send('aufheben_wahl', { id });
+    assert.ok(await bis(() => raum.state.boden.size === 0), 'nicht aufgehoben');
+    assert.deepEqual([...p.rucksack], ['wasser*2']);
+    // nur eine Tasche tragbar: die zweite bleibt liegen
+    p.rucksack.clear(); p.rucksack.push('tasche');
+    const t2 = raum.legeHin('trekking', p.x, p.y);
+    c.send('aufheben_wahl', { id: t2 });
+    await new Promise(r => setTimeout(r, 200));
+    assert.ok(raum.state.boden.has(t2), 'zweite Tasche aufgehoben');
+    assert.deepEqual([...p.rucksack], ['tasche']);
+    // Munitionskiste: bei Vorrat <= 120 öffnet sie sich von selbst (+30)
+    p.rucksack.clear(); p.rucksack.push('munitionskiste*2'); p.munition = 100;
+    assert.ok(await bis(() => p.munition + p.magazin >= 130 && zaehle(p.rucksack, 'munitionskiste') === 1), 'Kiste öffnet sich nicht: ' + p.munition + ' ' + JSON.stringify([...p.rucksack]));
+    // von Hand benutzen
+    p.munition = 140;
+    c.send('benutze', { platz: 0 });
+    assert.ok(await bis(() => p.munition === 150 && zaehle(p.rucksack, 'munitionskiste') === 0), 'Benutzen öffnet die Kiste nicht');
+  } finally { await a.c.leave(); }
 });

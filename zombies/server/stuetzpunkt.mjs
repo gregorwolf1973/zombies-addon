@@ -2,6 +2,7 @@
 // MG-Nester und Puma schießen auf Zombies draußen, Ärzte heilen, Ärzte und Soldaten handeln, nach N Spieltagen fällt das Lager.
 // Zustand in state.stuetzpunkt: '' = kein Stützpunkt auf der Karte, 'steht', 'gefallen' (wird mit der Welt gespeichert) oder
 // 'aus' (Schalter „Stützpunkt aktiv“ aus: Figuren weg, nichts schießt, kein Handel – ohne Zombies und ohne Fall).
+import { entferne, fuegeHinzu, kannAufnehmen, blockGrund } from '../client/stapel.mjs';
 import { KACHEL, WAFFEN, sichtfrei, HANDEL, HANDEL_ABSTAND, HANDEL_RAETSEL, bezahlung, MUNITION_MAX, DINGE } from '../client/welt.mjs';
 import { imLager, planKoord, handelPartner, zeltWandImWeg, rahmen, fahrFlaeche, FAHR_SCHRITT, PUMA_PARK, SP_BREITE, SP_TIEFE } from '../client/stuetzpunkt.mjs';
 
@@ -639,10 +640,14 @@ export class Stuetzpunkt {
     if (!zahl) return sag('Dafür fehlt dir etwas im Rucksack');
     if (a.gibt === 'munition') {
       if (p.munition >= MUNITION_MAX) return sag('Deine Munition ist schon voll');
-    } else if (p.rucksack.length - zahl.length + a.menge > p.plaetze) return sag('Dein Rucksack ist zu voll');
-    for (const d of zahl) p.rucksack.splice(p.rucksack.indexOf(d), 1);
+    } else {
+      const probe = [...p.rucksack];   // passt es, nachdem bezahlt wurde?
+      for (const d of zahl) entferne(probe, d, 1);
+      if (!kannAufnehmen(probe, p.plaetze, a.gibt, a.menge)) return sag(blockGrund(probe, p.plaetze, a.gibt, a.menge) === 'tasche' ? 'Du trägst schon eine Tasche' : 'Dein Rucksack ist zu voll');
+    }
+    for (const d of zahl) entferne(p.rucksack, d, 1);
     if (a.gibt === 'munition') p.munition = Math.min(MUNITION_MAX, p.munition + a.menge);
-    else for (let i = 0; i < a.menge; i++) p.rucksack.push(a.gibt);
+    else fuegeHinzu(p.rucksack, p.plaetze, a.gibt, a.menge);
     const was = a.gibt === 'munition' ? `🧰 ${a.menge} Schuss` : `${DINGE[a.gibt].zeichen} ${DINGE[a.gibt].name}`;
     client.send('handel', { ok: true, text: `${h.zeichen} Getauscht: ${was}` });
   }
@@ -653,8 +658,8 @@ export class Stuetzpunkt {
       if (p.munition >= MUNITION_MAX) return 'Deine Munition ist schon voll';
       p.munition = Math.min(MUNITION_MAX, p.munition + a.menge);
     } else {
-      if (p.rucksack.length + a.menge > p.plaetze) return 'Dein Rucksack ist zu voll';
-      for (let i = 0; i < a.menge; i++) p.rucksack.push(a.gibt);
+      if (!kannAufnehmen(p.rucksack, p.plaetze, a.gibt, a.menge)) return 'Dein Rucksack ist zu voll';
+      fuegeHinzu(p.rucksack, p.plaetze, a.gibt, a.menge);
     }
     return null;
   }
@@ -669,7 +674,7 @@ export class Stuetzpunkt {
     this.serien ??= new Map();
     const alt = this.serien.get(client.sessionId);
     const nr = m?.weiter && alt && alt.wer === wer && alt.angebot === a.id ? alt.nr : 0;
-    if (a.gibt === 'munition' ? p.munition >= MUNITION_MAX : p.rucksack.length + a.menge > p.plaetze) return sag(a.gibt === 'munition' ? 'Deine Munition ist schon voll' : 'Dein Rucksack ist zu voll');
+    if (a.gibt === 'munition' ? p.munition >= MUNITION_MAX : !kannAufnehmen(p.rucksack, p.plaetze, a.gibt, a.menge)) return sag(a.gibt === 'munition' ? 'Deine Munition ist schon voll' : 'Dein Rucksack ist zu voll');
     this.serien.set(client.sessionId, { wer, angebot: a.id, nr });
     r.stelleRaetsel(client, { art: 'handel', nr, von: HANDEL_RAETSEL });
   }

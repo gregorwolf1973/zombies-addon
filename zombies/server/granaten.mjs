@@ -1,5 +1,6 @@
 // Handgranaten (nur bei der Bundeswehr zu finden): werfen, 0,6 s fliegen, nach 2 s Zünder explodieren.
 // Hoher Schaden für Zombies im Radius, halber Schaden für Spieler, sehr laut (lockt Zombies aus 600 px).
+import { indexVon, nimmEins } from '../client/stapel.mjs';
 import { GRANATE, sichtfrei, frei } from '../client/welt.mjs';
 
 export class Granaten {
@@ -18,7 +19,7 @@ export class Granaten {
     if ((x.wurfPause ?? 0) > this.zeit) return false;
     const einst = r.constructor.einstellungen ?? {};
     const hand = p.waffe === 'handgranate' && !p.faust;
-    const i = p.rucksack.indexOf('granate');
+    const i = indexVon(p.rucksack, 'granate');
     let quelle;
     if (hand && p.magazin > 0 && !(p.nachladen > 0)) quelle = 'magazin';
     else if (hand && p.nachladen > 0 && i < 0) return false;
@@ -58,7 +59,7 @@ export class Granaten {
         }
       }
     }
-    if (quelle === 'rucksack') p.rucksack.splice(i, 1);
+    if (quelle === 'rucksack') nimmEins(p.rucksack, i);
     else if (quelle === 'magazin') p.magazin--;
     else p.handgranaten--;
     x.wurfPause = this.zeit + (slot ? Math.max(0.2, einst.waffen?.handgranate?.pause ?? 0.6) : 0.6);

@@ -1,6 +1,7 @@
 // Radio als Lockmittel: „Benutzen“ schaltet es ein und stellt es vor die Füße. Es spielt RADIO.dauer Sekunden Musik/Rauschen
 // und macht dabei alle RADIO.takt Sekunden weithin Lärm (laerm mit großer Weite): normale Zombies laufen hin, die Horde
 // (welle.laermHoeren, Schwelle weite >= 600) kann umgelenkt werden. Danach ist das Radio kaputt und liegt noch kurz da.
+import { dingId, nimmEins } from '../client/stapel.mjs';
 import { frei } from '../client/welt.mjs';
 
 export const RADIO = { dauer: 75, takt: 4, weite: 700, kaputt: 25, abstand: 22 };
@@ -16,11 +17,11 @@ export class Radios {
   // Nachricht 'benutze' mit einem Radio im Rucksack (Platz i): einschalten und ablegen; false = geht gerade nicht
   aufstellen(client, i) {
     const r = this.raum, p = r.state.spieler.get(client.sessionId);
-    if (!p || p.unten || p.zombie > 0 || p.aktion || r.state.phase !== 'spiel' || p.rucksack[i] !== 'radio') return false;
+    if (!p || p.unten || p.zombie > 0 || p.aktion || r.state.phase !== 'spiel' || dingId(p.rucksack[i]) !== 'radio') return false;
     const welt = r.wv(p.ebene);
     let x = p.x + Math.cos(p.richtung) * RADIO.abstand, y = p.y + Math.sin(p.richtung) * RADIO.abstand;
     if (!frei(welt, x, y, 4)) { x = p.x; y = p.y; }
-    p.rucksack.splice(i, 1);
+    nimmEins(p.rucksack, i);
     const radio = { id: 'r' + this.naechste++, x, y, ebene: p.ebene ?? '', t: 0, laermT: 0, aus: false, kaputtT: 0, von: p.name };
     this.liste.push(radio);
     r.broadcast('radio', this.paket(radio));

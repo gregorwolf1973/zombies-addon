@@ -2,6 +2,7 @@
 // Der Funkspruch am Funktisch eines Safe Rooms ist immer Pflicht und meldet die Gruppe für den Bus an.
 // Der Bus steht zur eingestellten Zeit am Ortsausgang; sind bei der Abfahrt genug Aufgaben erledigt, geht es in
 // die nächste Karte (Level), sonst fährt er ohne die Gruppe ab und kommt am nächsten Spieltag wieder.
+import { flach, hat, indexVon, zaehle as zaehleStapel } from '../client/stapel.mjs';
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
 import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
@@ -32,8 +33,8 @@ const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
 const WARNUNG_MIN = 30;     // so viele Spielminuten vor der Ankunft kommt die Funkmeldung
 const WARTE_RADIUS = 800;   // 100 m um den Abholpunkt: stehen dort alle Lebenden, läuft die Uhr schneller (warteRaffer)
 
-const kisten = raum => [...raum.state.safes.values()].flatMap(s => [...s.kiste]);
-const anzahl = (liste, ding) => liste.filter(d => d === ding).length;
+const kisten = raum => [...raum.state.safes.values()].flatMap(s => flach(s.kiste));
+const anzahl = (liste, ding) => liste.filter(d => d === ding).length;   // Listen hier sind flach (einzelne Dinge)
 
 // Aufgabenvorrat. ziel(n) und text(n) bekommen die Spielerzahl; stand(a) liefert den aktuellen Fortschritt.
 const ARTEN = {
@@ -65,7 +66,7 @@ const ARTEN = {
   lampen: {
     symbol: '🔦',
     text: () => 'Taschenlampen: jeder hat eine', ziel: n => n,
-    stand: a => [...a.raum.state.spieler.values()].filter(p => p.lampe > 0 || p.rucksack.includes('taschenlampe')).length,
+    stand: a => [...a.raum.state.spieler.values()].filter(p => p.lampe > 0 || hat(p.rucksack, 'taschenlampe')).length,
   },
   // Missionsgegenstände (server/mission.mjs): jeder liegt in einem weit entfernten Gebäude und wird in eine Safe-Room-Kiste gelegt
   mission: {
@@ -327,7 +328,7 @@ export class Aufgaben {
     for (const m of this.mission) {
       if (this.abgegeben.has(m.id)) continue;
       for (const safe of s.safes.values()) {
-        const i = safe.kiste.indexOf(m.ding);
+        const i = indexVon(safe.kiste, m.ding);
         if (i < 0) continue;
         safe.kiste.splice(i, 1);
         this.abgegeben.add(m.id);
@@ -364,11 +365,11 @@ export class Aufgaben {
         if (inh && !inh.includes(ding)) fehlend.push([m, inh]);
       }
       if (!fehlend.length) continue;
-      const zaehle = l => l.filter(d => d === ding).length;
+      const zaehle = l => l.filter(d => d === ding).length;   // flache Listen (Tausch-Angebote)
       let woanders = 0;
-      for (const p of s.spieler.values()) woanders += zaehle(p.rucksack);
+      for (const p of s.spieler.values()) woanders += zaehleStapel(p.rucksack, ding);
       for (const b of s.boden.values()) if (b.ding === ding) woanders++;
-      for (const sf of s.safes.values()) woanders += zaehle(sf.kiste);
+      for (const sf of s.safes.values()) woanders += zaehleStapel(sf.kiste, ding);
       for (const tt of r.tausche?.values?.() ?? []) for (const l of Object.values(tt.angebot ?? {})) woanders += zaehle(l);
       for (const [m, inh] of fehlend.slice(woanders)) { inh.push(ding); r.setzeInhalt(m.behaelter, inh); }
     }
