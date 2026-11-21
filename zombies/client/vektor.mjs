@@ -177,17 +177,36 @@ function basketballfeld(ctx, b) {
     for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(s * l, 0, Math.min(br * 0.8, 6.75 * METER), s > 0 ? Math.PI / 2 : -Math.PI / 2, s > 0 ? Math.PI * 1.5 : Math.PI / 2); ctx.stroke(); }
   });
 }
-function parkbuchten(ctx, b) {
-  // Reihen quer zur langen Seite: 5 m tiefe Buchten, 6 m Fahrgasse, Buchten 2,5 m breit
-  imRechteck(ctx, b, (L, Bt) => {
-    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.5;
-    const tiefe = 5 * METER, gasse = 6 * METER, breit = 2.5 * METER;
-    for (let y = -Bt + 2; y + tiefe <= Bt; y += tiefe * 2 + gasse) {
-      for (const [y0, y1] of [[y, y + tiefe], [y + tiefe + gasse, y + tiefe * 2 + gasse]]) {
-        if (y1 > Bt) continue;
-        for (let x = -L + 2; x <= L - 2; x += breit) { ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke(); }
+// Buchtgeometrie eines Parkplatzes (EINE Quelle für Buchtlinien und geparkte Autos). pts = Polygon in Pixeln.
+// Reihen quer zur langen Seite des Umschließenden Rechtecks: je Doppelreihe 5 m tiefe Buchten, 6 m Fahrgasse, 5 m tiefe Buchten,
+// Buchten 2,5 m breit. Deterministisch (nur Geometrie, kein Zufall). Ergebnis (zwischengespeichert):
+// { box, reihen: [{ y0, y1, xs: [Buchtlinien-x] }] (Eigenkoordinaten des Rechtecks: Ursprung = Mitte, x entlang der langen Seite),
+//   buchten: [{ x, y, winkel, ecken: [[x, y] ×4] }] (Weltpixel; winkel = Buchtrichtung = Fahrzeug-Längsachse, quer zur Fahrgasse) }
+export const PARK_TIEFE = 5 * K / 4, PARK_GASSE = 6 * K / 4, PARK_BREIT = 2.5 * K / 4;   // 5 m, 6 m, 2,5 m
+export function parkplatzBuchten(pts) {
+  if (pts._buchten) return pts._buchten;
+  const b = orientierteBox(pts), L = b.lang / 2, Bt = b.breit / 2;
+  const c = Math.cos(b.w), sn = Math.sin(b.w), welt = (u, v) => [b.cx + u * c - v * sn, b.cy + u * sn + v * c];
+  const reihen = [], buchten = [], winkel = b.w + Math.PI / 2;
+  for (let y = -Bt + 2; y + PARK_TIEFE <= Bt; y += PARK_TIEFE * 2 + PARK_GASSE) {
+    for (const [y0, y1] of [[y, y + PARK_TIEFE], [y + PARK_TIEFE + PARK_GASSE, y + PARK_TIEFE * 2 + PARK_GASSE]]) {
+      if (y1 > Bt) continue;
+      const xs = [];
+      for (let x = -L + 2; x <= L - 2; x += PARK_BREIT) xs.push(x);
+      reihen.push({ y0, y1, xs });
+      for (let i = 0; i + 1 < xs.length; i++) {
+        const [x0, x1] = [xs[i], xs[i + 1]], [mx, my] = welt((x0 + x1) / 2, (y0 + y1) / 2);
+        buchten.push({ x: mx, y: my, winkel, ecken: [welt(x0, y0), welt(x1, y0), welt(x1, y1), welt(x0, y1)] });
       }
     }
+  }
+  return (pts._buchten = { box: b, reihen, buchten });
+}
+function parkbuchten(ctx, f) {
+  const g = parkplatzBuchten(f.pts);
+  imRechteck(ctx, g.box, () => {
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.5;
+    for (const r of g.reihen) for (const x of r.xs) { ctx.beginPath(); ctx.moveTo(x, r.y0); ctx.lineTo(x, r.y1); ctx.stroke(); }
   });
 }
 function spielplatz(ctx, f, i) {
@@ -235,7 +254,7 @@ export function zeichneFlaechen(ctx, welt, rect) {
     const b = orientierteBox(f.pts);
     if (f.a === 'sport' && f.s === 'basketball') basketballfeld(ctx, b);
     else if (f.a === 'sport' && (f.s === 'soccer' || !f.s) && b.lang > 30 * METER) fussballfeld(ctx, b);
-    else if (f.a === 'parkplatz') parkbuchten(ctx, b);
+    else if (f.a === 'parkplatz') parkbuchten(ctx, f);
     else if (f.a === 'spielplatz') spielplatz(ctx, f, i);
     else if (f.a === 'friedhof') friedhof(ctx, f, i);
     else if (f.a === 'laufbahn') imRechteck(ctx, b, (L, Bt) => { ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; for (let k = 1; k < 5; k++) ctx.strokeRect(-L + k * 4, -Bt + k * 4, (L - k * 4) * 2, (Bt - k * 4) * 2); });

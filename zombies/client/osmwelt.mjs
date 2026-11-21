@@ -1,7 +1,7 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
-import { randParkplaetze, strassenBuchten, fahrbahnBreite } from './vektor.mjs';
+import { randParkplaetze, strassenBuchten, fahrbahnBreite, parkplatzBuchten } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
 import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
 import { laendlicheDetails, b11Ausduennen, freihalteKreise } from './laendlich.mjs';
@@ -440,22 +440,35 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     }
     return drin;
   };
+  // Autos stehen IN den Buchten, die vektor.mjs zeichnet (parkplatzBuchten: eine Quelle für Linien und Autos): Mitte der Bucht,
+  // Längsachse = Buchtrichtung (winkel, quer zur Fahrgasse); nur Buchten, die ganz auf freiem Platz liegen; etwa 60 % belegt
   let nPark = 0;
   for (const f of karte.flaechen ?? []) {
     if (f.a !== 'parkplatz' || autoFaktor <= 0) continue;
-    const xs = f.p.filter((_, i) => i % 2 === 0), ys = f.p.filter((_, i) => i % 2 === 1);
-    const x0 = Math.floor(Math.min(...xs)), x1 = Math.ceil(Math.max(...xs)), y0 = Math.floor(Math.min(...ys)), y1 = Math.ceil(Math.max(...ys));
-    const quer = x1 - x0 >= y1 - y0;   // breiter Platz: Autos stehen nebeneinander (senkrecht)
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      if ((quer ? y % 3 : x % 3) === 2) continue;                 // Fahrgasse
-      if ((quer ? x : y) % 1 !== 0 || r() > 0.42 * autoFaktor) continue;
-      if (hole(x, y) !== T.PLATZ && hole(x, y) !== T.STRASSE) continue;
-      if (!imPolygon(x + 0.5, y + 0.5, f.p)) continue;
-      const px = (x + 0.5) * KACHEL, py = (y + 0.5) * KACHEL;
-      if (Math.hypot(px - start.x, py - start.y) < KACHEL * 3) continue;
-      if (behaelter.some(b => Math.abs(b.x - px) < KACHEL * (quer ? 0.9 : 1.6) && Math.abs(b.y - py) < KACHEL * (quer ? 1.6 : 0.9))) continue;
-      if (behaelter.some(b => Math.hypot(b.x - px, b.y - py) < 40)) continue;   // nie übereinander
-      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'parkplatz', x: px, y: py, senkrecht: quer, farbe: Math.floor(r() * 6) });
+    const pts = []; for (let i = 0; i < f.p.length; i += 2) pts.push([f.p[i] * KACHEL, f.p[i + 1] * KACHEL]);
+    // gezeichnete Fahrgassen/Zufahrten (Straßenlinien nahe der Fläche): dort steht kein Auto
+    const px0 = Math.min(...pts.map(q => q[0])) - 60, px1 = Math.max(...pts.map(q => q[0])) + 60, py0 = Math.min(...pts.map(q => q[1])) - 60, py1 = Math.max(...pts.map(q => q[1])) + 60;
+    const gassen = [];
+    for (const s of karte.strassen ?? []) {
+      const sb = fahrbahnBreite({ t: s.t, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0 }) / 2 + 14;
+      for (let i = 0; i + 3 < s.p.length; i += 2) {
+        const a = [s.p[i] * KACHEL, s.p[i + 1] * KACHEL, s.p[i + 2] * KACHEL, s.p[i + 3] * KACHEL];
+        if (Math.max(a[0], a[2]) < px0 || Math.min(a[0], a[2]) > px1 || Math.max(a[1], a[3]) < py0 || Math.min(a[1], a[3]) > py1) continue;
+        gassen.push([...a, sb]);
+      }
+    }
+    const nahGasse = (x, y) => gassen.some(([ax, ay, bx, by, sb]) => {
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2));
+      return Math.hypot(x - ax - t * dx, y - ay - t * dy) < sb;
+    });
+    for (const bu of parkplatzBuchten(pts).buchten) {
+      if (r() > 0.6 * autoFaktor) continue;
+      const punkte = [[bu.x, bu.y], ...bu.ecken];
+      if (!punkte.every(([px, py]) => imPolygon(px / KACHEL, py / KACHEL, f.p) && (hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL)) === T.PLATZ || hole(Math.floor(px / KACHEL), Math.floor(py / KACHEL)) === T.STRASSE))) continue;
+      if (nahGasse(bu.x, bu.y)) continue;
+      if (Math.hypot(bu.x - start.x, bu.y - start.y) < KACHEL * 3) continue;
+      if (behaelter.some(b => Math.hypot(b.x - bu.x, b.y - bu.y) < 40)) continue;   // nie übereinander
+      behaelter.push({ id: 'b' + behaelter.length, art: 'auto', platz: 'parkplatz', x: bu.x, y: bu.y, winkel: bu.winkel, farbe: Math.floor(r() * 6) });
       nPark++;
     }
   }
