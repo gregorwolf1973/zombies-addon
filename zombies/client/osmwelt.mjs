@@ -5,6 +5,8 @@ import { randParkplaetze, strassenBuchten, fahrbahnBreite } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
 import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
 import { laendlicheDetails, b11Ausduennen, freihalteKreise } from './laendlich.mjs';
+import { zaeuneGlaetten } from './zaunglatt.mjs';
+import { baueEinkaufswagen } from './einkaufswagen.mjs';
 
 // Gebäude, die Safe Rooms werden (erster Treffer je Eintrag), mit Anzeigenamen
 const SAFE_WUNSCH = [
@@ -52,7 +54,8 @@ function mischen(liste, r) {
   for (let i = liste.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [liste[i], liste[j]] = [liste[j], liste[i]]; }
   return liste;
 }
-export function zaeuneAusduennen(karte) {
+export function zaeuneAusduennen(karte0) {
+  const karte = zaeuneGlaetten(karte0);   // erst Treppen glätten (zaunglatt.mjs), dann Lücken setzen
   if (!karte.zaeune?.length) return karte;
   const geb = karte.gebaeude.map(g => ({ x0: g.x, y0: g.y, x1: g.x + g.b, y1: g.y + g.h }));
   const abstand = (b, px, py) => Math.hypot(Math.max(b.x0 - px, 0, px - b.x1), Math.max(b.y0 - py, 0, py - b.y1));
@@ -67,6 +70,12 @@ export function zaeuneAusduennen(karte) {
   } });
   const nahe = (px, py, r) => { let n = 0; for (const b of geb) if (abstand(b, px, py) <= r && ++n >= 2) break; return n; };
   for (const sg of segs) sg.weg = posHash(sg.mx, sg.my) < (nahe(sg.mx, sg.my, 3) >= 2 ? LUECKE_ENG : LUECKE_BASIS);
+  // Lücken nie in Ecken der (geglätteten) Linien: dort würde der zweite Zaunarm die Lücke wieder verengen
+  const ecken = karte.zaeune.map(z => { const e = []; for (let i = 2; i + 3 < z.p.length; i += 2) {
+    const ux = z.p[i] - z.p[i - 2], uy = z.p[i + 1] - z.p[i - 1], vx = z.p[i + 2] - z.p[i], vy = z.p[i + 3] - z.p[i + 1];
+    if ((ux * vx + uy * vy) / ((Math.hypot(ux, uy) * Math.hypot(vx, vy)) || 1) < 0.9) e.push(z.p[i], z.p[i + 1]);
+  } return e; });
+  for (const sg of segs) if (sg.weg && ecken[sg.li].some((v, j, a) => j % 2 === 0 && Math.hypot(v - sg.mx, a[j + 1] - sg.my) < 1.6)) sg.weg = false;
   // benachbarte Häuser (Abstand 0,3–4 Kacheln, sich gegenüberstehend): mindestens ein Stück je Zaunlinie im Zwischenraum frei
   for (let a = 0; a < geb.length; a++) for (let c = a + 1; c < geb.length; c++) {
     const A = geb[a], B = geb[c];
@@ -747,6 +756,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   baueStuetzpunkt(welt, seed, setze);   // Bundeswehr-Stützpunkt (eigener Zufall, nach allem anderen)
   baueFlugfeldDeko(welt, seed);         // Flugfeld-Deko neben der Landebahn (nur Karten mit 'piste'; eigener Seed-Zufall)
   tuerenFreihalten(welt, setze, abstandRechteck);   // LETZTER Schritt: Vorplätze leeren, Wege zur Straße öffnen
+  baueEinkaufswagen(welt, karte, seed);             // nur Behälter ohne Kollision (eigener Seed-Zufall), ändert kein Raster
   return welt;
 }
 
