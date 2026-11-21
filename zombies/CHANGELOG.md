@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.66.1 – 21.11.2026
+
+- Neu: Hordengeräusch – sind viele Zombies in Hörweite, blendet ein Horden-Teppich ein (aus Richtung der Zombies, lauter je mehr), Einzelschreie werden seltener; bei schnell wachsender Horde ein kurzer Akzent. Schwellen (ab, nur noch Horde, voll, aus) und Hörweite im Backend einstellbar.
+- Neu: Spielmusik mit Überblendung – Hauptlied je Level sowie eigene Musik im Bundeswehr-Lager, im Kampf gegen eine Horde, im Safehouse und im Finale. Dateien und Lautstärke im Backend unter Geräusche zuordnen; Level 5 hat „Apocalypse“ vorbelegt.
+
 ## 0.66.0 – 21.11.2026
 
 - Neu: Bundeswehr-Lager mit Flandernzaun rundum (Holzböcke mit Stacheldraht, Spieler kommen nicht durch, Zombies nur sehr langsam), Tor und drei S-Draht-Rollen. Zombies bleiben mit 40 % im Draht hängen, zappeln, beißen und reißen sich nach 60 s los; einige hängen schon bei Spielbeginn.
