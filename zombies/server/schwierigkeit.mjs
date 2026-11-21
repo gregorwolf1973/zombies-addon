@@ -4,12 +4,25 @@
 
 // Level-Tabelle: Index 0 = Level 1 ... Index 4 = Level 5
 export const LEVEL_TABELLE = [
-  { dichte: 1.0,  horde: 1.0,  abstand: 1.0,  schnell: 0.0,  beute: 1.0,  munition: 1.0,  nacht: 1.0 },
-  { dichte: 1.1875, horde: 1.25, abstand: 0.9,  schnell: 0.095, beute: 0.925, munition: 0.9, nacht: 1.1 },
-  { dichte: 1.375,  horde: 1.5,  abstand: 0.8,  schnell: 0.19, beute: 0.85,  munition: 0.8, nacht: 1.2 },
-  { dichte: 1.5625, horde: 1.75, abstand: 0.7,  schnell: 0.285, beute: 0.775, munition: 0.7, nacht: 1.3 },
-  { dichte: 1.75,  horde: 2.0,  abstand: 0.6,  schnell: 0.38, beute: 0.7,   munition: 0.6, nacht: 1.4 }
+  { schnell: 0.0,  beute: 1.0,  munition: 1.0,  nacht: 1.0 },
+  { schnell: 0.095, beute: 0.925, munition: 0.9, nacht: 1.1 },
+  { schnell: 0.19, beute: 0.85,  munition: 0.8, nacht: 1.2 },
+  { schnell: 0.285, beute: 0.775, munition: 0.7, nacht: 1.3 },
+  { schnell: 0.38, beute: 0.7,   munition: 0.6, nacht: 1.4 }
 ];
+
+// Zombies und Horden je Level (Vorgabe der Einstellung zombies.level, im Backend änderbar); Index 0 = Level 1
+//   grund/jeSpieler: Zombies draußen = grund + jeSpieler × Spielerzahl (echte Spieler + 0,5 × Bots)
+//   horde: Hordengröße je Spieler; dauer: Minuten, die eine Horde zusammenbleibt; pause: Minuten bis zur nächsten Horde
+//   gleichzeitig: so viele Horden höchstens zugleich (0 = keine Horden); haeuser: schlafende Zombies je Zombieplatz in Häusern (10 = 1)
+export const LEVEL_VORGABE = [
+  { grund: 8,  jeSpieler: 5,  horde: 12, dauer: 10, pause: 5, gleichzeitig: 1, haeuser: 10 },
+  { grund: 10, jeSpieler: 6,  horde: 15, dauer: 12, pause: 4, gleichzeitig: 1, haeuser: 11 },
+  { grund: 12, jeSpieler: 7,  horde: 20, dauer: 12, pause: 3, gleichzeitig: 2, haeuser: 12 },
+  { grund: 14, jeSpieler: 8,  horde: 25, dauer: 15, pause: 2, gleichzeitig: 2, haeuser: 14 },
+  { grund: 16, jeSpieler: 10, horde: 30, dauer: 15, pause: 1, gleichzeitig: 2, haeuser: 16 },
+];
+export const LEVEL_GRENZEN = { grund: [0, 200], jeSpieler: [0, 100], horde: [0, 200], dauer: [1, 60], pause: [0.5, 60], gleichzeitig: [0, 5], haeuser: [0, 50] };
 
 // Reglerfaktoren für die gewählte Schwierigkeit
 export const REGLER = { leicht: 0.75, normal: 1, schwer: 1.3 };
@@ -54,10 +67,9 @@ export function schwierigkeit({ level, tage, regler = 'normal' } = {}) {
   const bonus = Math.min(TAG_MAX, t * TAG_BONUS);
 
   // Einzelne Werte berechnen
-  const dichte = tab.dichte * (1 + bonus) * r;
-  const horde = tab.horde * (1 + bonus) * r;
-  let abstand = tab.abstand / ((1 + bonus) * r);
-  if (abstand < 0.25) abstand = 0.25;
+  // Tag-Bonus × Regler: gilt für Zombies draußen und Hordengröße (die Level-Grundwerte stehen in LEVEL_VORGABE / den Einstellungen)
+  const dichte = (1 + bonus) * r;
+  const horde = dichte;
   const schnell = Math.min(0.7, (tab.schnell + bonus * 0.25) * r);
   const beute = Math.max(0.35, tab.beute / ((1 + bonus / 2) * r));
   const munition = Math.max(0.35, tab.munition / ((1 + bonus / 2) * r));
@@ -67,7 +79,6 @@ export function schwierigkeit({ level, tage, regler = 'normal' } = {}) {
   return {
     dichte: runde3(dichte),
     horde: runde3(horde),
-    abstand: runde3(abstand),
     schnell: runde3(schnell),
     beute: runde3(beute),
     munition: runde3(munition),
