@@ -240,6 +240,9 @@ export function bereinige(e = {}, alt = {}) {
       leopardPause: Math.round(zahl(bw.leopardPause, 0.1, 5, 0.4) * 10) / 10, // … Sekunden zwischen zwei Schüssen
       leopardSchaden: Math.round(zahl(bw.leopardSchaden, 1, 500, 100)),       // … Schaden je Treffer
       leopardUeberrollen: typeof bw.leopardUeberrollen === 'boolean' ? bw.leopardUeberrollen : true,   // … überrollt Zombies beim Fahren
+      leopardKanone: typeof bw.leopardKanone === 'boolean' ? bw.leopardKanone : true,                    // … Hauptkanone auf Zombiehaufen (an/aus)
+      leopardKanonePause: Math.round(zahl(bw.leopardKanonePause, 3, 120, 8)),                           // … Sekunden zwischen zwei Kanonenschüssen
+      leopardKanoneMin: Math.round(zahl(bw.leopardKanoneMin, 3, 50, 10)),                               // … so viele Zombies müssen auf einem Fleck (6 m Durchmesser) stehen
     },
     moerser: (() => {                                                         // Panzermörser: Reichweite/Radius/Sicherheit in Metern, Pause in Sekunden
       const m = { ...a.moerser, ...(e.moerser ?? {}) }, V = MOERSER;
@@ -272,7 +275,7 @@ export function vorgaben() {
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
-    bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, mgMunition: 400, pumaMunition: 200 },
+    bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, mgMunition: 400, pumaMunition: 200 },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [], moerser: false },
     moerser: { ...MOERSER },

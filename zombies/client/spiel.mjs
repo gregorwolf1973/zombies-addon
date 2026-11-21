@@ -13,7 +13,7 @@ import { zeichneBoden, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, ze
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
-import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
+import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText, moerserBild, moerserFahrzeug, moerserSchuss } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
@@ -885,6 +885,7 @@ class Ort extends Phaser.Scene {
     });
     raum.onMessage('bwschuss', m => m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
+    raum.onMessage('leopardkanone', m => leopardKanone(this, m, raum.state));   // Leopard-Hauptkanone: Mündungsfeuer, Rückstoß, Knall
     raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
     raum.onMessage('moerser', m => moerserSchuss(this, m, raum.state));   // Panzermörser: Granate im hohen Bogen
     b11Registrieren(this, raum, { skala: () => BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg() });   // Szene „Stau auf der B11“
@@ -2081,7 +2082,7 @@ class Ort extends Phaser.Scene {
         o.vorher = d;
       }
       if (f.art === 'moerser') moerserFahrzeug(this, o, dt, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
-      if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene)) {
+      if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg())) {
         // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
         const pz = evakArtVon(s) === 'panzer', lx = pz ? -22 : -8, an = Math.floor(this.time.now / 260) % 2;
         o.licht.fillStyle(0xff9100, an ? 0.3 : 0.12).fillCircle(lx, 0, an ? 34 : 22);
