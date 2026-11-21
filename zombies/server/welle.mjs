@@ -486,7 +486,7 @@ export class Zombiewelle {
   // alle möglichen Opfer: Spieler/Bots draußen (nicht am Boden), Soldaten (ein Ziel für den Stützpunkt), sichtbare Menschen
   opfer(a) {
     const r = this.raum, s = r.state, out = [];
-    for (const [sid, p] of s.spieler) if (!p.ebene && !p.unten && !p.anBord && !(p.zombie > 0)) out.push({ key: 's:' + sid, art: 'spieler', sid, x: p.x, y: p.y });
+    for (const [sid, p] of s.spieler) if (!p.ebene && !p.unten && !p.anBord && !p.kamera && !(p.zombie > 0)) out.push({ key: 's:' + sid, art: 'spieler', sid, x: p.x, y: p.y });
     const sp = r.stuetzpunkt;
     if (sp?.schuetzen && s.stuetzpunkt === 'steht' && sp.einst().falltage > 0) {
       let best = null, bd = Infinity;
