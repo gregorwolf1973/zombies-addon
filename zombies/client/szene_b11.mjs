@@ -1,14 +1,21 @@
-// Darstellung der Szene „Stau auf der B11“ (Karte geretsried2, Verhalten: server/szene_b11.mjs): 8 Infanteristen, Puma mit drehendem Turm, Schüsse.
+// Darstellung der Szene „Stau auf der B11“ (Karte geretsried2, Verhalten: server/szene_b11.mjs): 8 Infanteristen, Puma und Leopard 2 (streifen
+// langsam, Turm dreht, hinterlassen Kettenspuren), plattgefahrene Autos auf dem Parkplatz, Schüsse.
 // Autos, Wracks, Feuer, Feuerwehr und der Mörserpanzer sind gewöhnliche Fahrzeuge/Feuer im Spielzustand und werden von spiel.mjs gezeichnet.
-// Nachrichten: 'b11' { s: [[nr, x, y, blick, tot]], p: [x, y, w, turm] | 0, aus } (jede Sekunde), 'b11schuss', 'b11tot'.
+// Nachrichten: 'b11' { s: [[nr, x, y, blick, tot]], p/l: [x, y, w, turm] | 0 (Puma/Leopard), aus } (jede Sekunde), 'b11f' { p, l } (5 mal je
+// Sekunde, solange ein Panzer rollt), 'b11schuss', 'b11tot', 'b11platt' { x, y, w } (Auto überfahren). Plattgefahrene Autos: state.platt (client/b11_platt.mjs).
 import * as ton from './ton.mjs';
 import { PUMA_BILD } from './stuetzpunkt.mjs';
 import { fetzen } from './effekte.mjs';
+import { LEOPARD } from './evak.mjs';
+import { kettenSpur, kettenAnimieren } from './ketten.mjs';
+import { plattLesen } from './b11_platt.mjs';
 
 // ctx: { skala: () => Soldatengröße, raum } aus spiel.mjs
 export function b11Registrieren(scene, raum, ctx) {
-  scene.b11 = { soldaten: new Map(), leichen: new Map(), puma: null, ctx };
+  scene.b11 = { soldaten: new Map(), leichen: new Map(), puma: null, leopard: null, ctx, raum, platt: { stand: '', gfx: null, autos: null } };
   raum.onMessage('b11', m => b11Sync(scene, m));
+  raum.onMessage('b11f', m => b11Fahrzeuge(scene, m));
+  raum.onMessage('b11platt', m => b11Staub(scene, m));
   raum.onMessage('b11schuss', m => b11Schuss(scene, m));
   raum.onMessage('b11tot', m => { const l = scene.b11.leichen.get(m.i); if (!l) b11Leiche(scene, m.i, m.x, m.y, m.w); ton.ereignis('menschGebissen', m.x, m.y); fetzen(scene, m.x, m.y, m.w ?? 0, 1.4); });
 }
@@ -35,7 +42,26 @@ function b11Puma(scene, p) {
     .setRotation(p[3]).setScale(m.skala).setDepth(5.1);
   const c = Math.cos(p[2]), s = Math.sin(p[2]), vx = PUMA_BILD.turmX * m.f, vy = PUMA_BILD.turmY * m.f;
   turm.setPosition(p[0] + c * vx - s * vy, p[1] + s * vx + c * vy);
-  return { wanne, turm, f: m.f, soll: p[3] };
+  return { wanne, turm, f: m.f, soll: p[3], ziel: { x: p[0], y: p[1], w: p[2] }, w: p[2], breite: 50 };
+}
+
+// Leopard 2 (Bilder wie der Evakuierungspanzer: Wanne, Turm mit Drehpunkt, Kommandant und Ladeschütze in den Luken)
+function b11Leopard(scene, l) {
+  const wanne = scene.add.image(l[0], l[1], 'leopard-wanne').setRotation(l[2]).setScale(LEOPARD.skala).setDepth(5);
+  const turm = scene.add.image(l[0], l[1], 'leopard-turm').setOrigin(LEOPARD.turmOx, LEOPARD.turmOy).setRotation(l[3]).setScale(LEOPARD.skala).setDepth(5.1);
+  const sk = scene.b11.ctx.skala() * 0.8, soldat = () => scene.add.image(0, 0, 'figuren2', scene.figurBild2('soldat_idle')).setScale(sk).setDepth(5.2);
+  return { wanne, turm, kdt: soldat(), lader: soldat(), soll: l[3], ziel: { x: l[0], y: l[1], w: l[2] }, w: l[2], breite: LEOPARD.breite };
+}
+
+function b11FzZiel(e, a) { if (e && a) { e.ziel = { x: a[0], y: a[1], w: a[2] }; e.soll = a[3]; } }
+function b11Fahrzeuge(scene, m) { const b = scene.b11; b11FzZiel(b.puma, m.p); b11FzZiel(b.leopard, m.l); }
+
+// Staubwolke und Knirschen, wenn ein Panzer ein geparktes Auto überfährt
+function b11Staub(scene, m) {
+  for (let i = 0; i < 4; i++) {
+    const r = scene.add.circle(m.x + (Math.random() - 0.5) * 24, m.y + (Math.random() - 0.5) * 14, 5 + Math.random() * 4, 0x8d8579, 0.5).setDepth(6.4);
+    scene.tweens.add({ targets: r, x: r.x + (Math.random() - 0.5) * 30, y: r.y - 6 - Math.random() * 10, alpha: 0, scale: 2.2, duration: 900, onComplete: () => r.destroy() });
+  }
 }
 
 function b11Sync(scene, m) {
@@ -48,14 +74,18 @@ function b11Sync(scene, m) {
     if (tot === 2 && b.leichen.has(i)) { b.leichen.get(i).destroy(); b.leichen.delete(i); }
   }
   if (m.p && !b.puma && scene.textures.exists('puma-wanne-bild')) b.puma = b11Puma(scene, m.p);
-  if (m.p && b.puma) b.puma.soll = m.p[3];
+  if (m.l && !b.leopard && scene.textures.exists('leopard-wanne') && scene.textures.exists('leopard-turm')) b.leopard = b11Leopard(scene, m.l);
+  b11Fahrzeuge(scene, m);
   b.aus = !!m.aus;
 }
 
-// pro Bild: Soldaten ziehen weich nach, schießen sichtbar; Puma-Turm dreht zum Server-Winkel
+// pro Bild: Soldaten ziehen weich nach, schießen sichtbar; Panzer rollen weich zum Server-Stand, Türme drehen zum Server-Winkel
 export function b11Animieren(scene) {
   const b = scene.b11;
-  if (!b || (!b.soldaten.size && !b.puma)) return;
+  if (!b) return;
+  kettenAnimieren(scene);
+  b11Platt(scene);
+  if (!b.soldaten.size && !b.puma && !b.leopard) return;
   const jetzt = scene.time.now, dt = scene.game.loop.delta / 1000, k = Math.min(1, dt * 8);
   const draussen = !scene.aktEbene;
   for (const e of b.soldaten.values()) {
@@ -68,11 +98,74 @@ export function b11Animieren(scene) {
     e.box.setRotation(schiesst ? e.w : e.blick);
   }
   for (const l of b.leichen.values()) l.setVisible(draussen);
-  const p = b.puma;
+  const p = b.puma, l = b.leopard;
   if (p) {
-    p.wanne.setVisible(draussen); p.turm.setVisible(draussen);
-    let d = p.soll - p.turm.rotation; d = Math.atan2(Math.sin(d), Math.cos(d));
-    p.turm.setRotation(p.turm.rotation + d * Math.min(1, dt * 8));
+    b11Rollen(scene, p, dt, draussen, 'b11puma');
+    const c = Math.cos(p.wanne.rotation), s = Math.sin(p.wanne.rotation), vx = PUMA_BILD.turmX * p.f, vy = PUMA_BILD.turmY * p.f;
+    p.turm.setPosition(p.wanne.x + c * vx - s * vy, p.wanne.y + s * vx + c * vy);
+    p.turm.setVisible(draussen);
+  }
+  if (l) {
+    b11Rollen(scene, l, dt, draussen, 'b11leopard');
+    const c = Math.cos(l.wanne.rotation), s = Math.sin(l.wanne.rotation), tx = l.wanne.x + c * LEOPARD.turmX, ty = l.wanne.y + s * LEOPARD.turmX;
+    const loc = l.turm.rotation, lc = Math.cos(loc), ls = Math.sin(loc), luke = (q, vx, vy) => q.setPosition(tx + lc * vx - ls * vy, ty + ls * vx + lc * vy).setRotation(loc).setVisible(draussen);
+    l.turm.setPosition(tx, ty).setVisible(draussen);
+    luke(l.kdt, LEOPARD.kommandantX, LEOPARD.kommandantY).setFrame(scene.figurBild2('soldat_idle', Math.floor(jetzt / 300) % 3));
+    luke(l.lader, LEOPARD.mgX, LEOPARD.mgY).setFrame(scene.figurBild2('soldat_idle', Math.floor(jetzt / 260 + 1) % 3));
+  }
+}
+
+// Wanne weich zum Server-Stand rollen/drehen, Turm drehen, Kettenspur legen
+function b11Rollen(scene, e, dt, draussen, id) {
+  const k = Math.min(1, dt * 6), z = e.ziel, w = e.wanne;
+  const vorher = { x: w.x, y: w.y };
+  if (Math.hypot(z.x - w.x, z.y - w.y) > 200) w.setPosition(z.x, z.y);   // Sprung (Neustart): nicht quer über die Karte gleiten
+  else w.setPosition(w.x + (z.x - w.x) * k, w.y + (z.y - w.y) * k);
+  w.setRotation(w.rotation + Math.atan2(Math.sin(z.w - w.rotation), Math.cos(z.w - w.rotation)) * k);
+  w.setVisible(draussen);
+  let d = e.soll - e.turm.rotation; d = Math.atan2(Math.sin(d), Math.cos(d));
+  e.turm.setRotation(e.turm.rotation + d * Math.min(1, dt * 8));
+  if (draussen && Math.hypot(w.x - vorher.x, w.y - vorher.y) > 0.01) kettenSpur(scene, id, w.x, w.y, w.rotation, e.breite);
+}
+
+// plattgefahrene Autos: dunkler Fleck über dem gemalten Auto, darauf die zerquetschte Karosserie, um den Schub in Fahrtrichtung verschoben
+const PLATT_FARBEN = [0x6b6f75, 0x5e2222, 0x24394f, 0x2c2c2c, 0x8d8d80, 0x234a2e];
+function b11Platt(scene) {
+  const b = scene.b11, st = b.raum?.state?.platt;
+  if (!st) return;
+  b.platt.t = (b.platt.t ?? 0) + 1;
+  if (b.platt.t % 6 && b.platt.gfx) { b.platt.gfx.setVisible(!scene.aktEbene); return; }
+  let stand = '';
+  for (const [id, v] of st) stand += id + ':' + v + ',';
+  stand += scene.welt?.behaelter ? '' : '-';
+  if (stand === b.platt.stand && b.platt.gfx) { b.platt.gfx.setVisible(!scene.aktEbene); return; }
+  b.platt.stand = stand;
+  b.platt.autos ??= new Map((scene.welt?.behaelter ?? []).filter(q => q.art === 'auto').map(q => [q.id, q]));
+  const g = (b.platt.gfx ??= scene.add.graphics().setDepth(1.06)).clear().setVisible(!scene.aktEbene);
+  for (const [id, v] of st) {
+    const a = b.platt.autos.get(id);
+    if (!a || b.raum.state.verbrannt?.has?.('auto:' + id)) continue;
+    const { dx, dy } = plattLesen(v), w0 = (Number.isFinite(a.winkel) ? a.winkel : a.senkrecht ? Math.PI / 2 : 0) + ((a.farbe + Math.round(a.x)) % 2 ? Math.PI : 0);
+    const n = parseInt(id.slice(1), 10) || 0, jit = i => Math.sin(n * 12.9898 + i * 78.233) * 0.5;
+    const rot = (x, y, cx, cy, w) => ({ x: cx + x * Math.cos(w) - y * Math.sin(w), y: cy + x * Math.sin(w) + y * Math.cos(w) });
+    // 1. Fleck: deckt das gemalte Auto (46 × 22) samt Schub ab
+    const fl = (hl, hb, cx, cy) => g.fillPoints([rot(-hl, -hb, cx, cy, w0), rot(hl, -hb, cx, cy, w0), rot(hl, hb, cx, cy, w0), rot(-hl, hb, cx, cy, w0)], true);
+    g.fillStyle(0x2b2824, 0.92); fl(26, 14, a.x, a.y); fl(26, 14, a.x + dx, a.y + dy);
+    // 2. zerquetschte Karosserie: flacher, unregelmäßig, dunkel
+    const cx = a.x + dx, cy = a.y + dy, farbe = PLATT_FARBEN[(a.farbe ?? 0) % PLATT_FARBEN.length];
+    const umriss = [[-19, -9], [-6, -11], [8, -10], [19, -8], [21, 0], [19, 8], [7, 11], [-7, 10], [-19, 9], [-21, 0]].map(([x, y], i) => rot(x + jit(i) * 3, y + jit(i + 20) * 3, cx, cy, w0));
+    g.fillStyle(farbe, 1).fillPoints(umriss, true);
+    g.fillStyle(0x000000, 0.45).fillPoints(umriss, true);   // abgedunkelt
+    const dach = [[-9, -6], [7, -6], [9, 5], [-8, 6]].map(([x, y], i) => rot(x + jit(i + 40) * 2, y + jit(i + 60) * 2, cx, cy, w0));
+    g.fillStyle(farbe, 0.8).fillPoints(dach, true);
+    g.lineStyle(1, 0x000000, 0.7);
+    for (let i = 0; i < 3; i++) { const p1 = rot(-12 + i * 9, -9, cx, cy, w0), p2 = rot(-9 + i * 9 + jit(i) * 4, 9, cx, cy, w0); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }   // Knicke
+    g.fillStyle(0xcfd8dc, 0.8);
+    for (let i = 0; i < 4; i++) { const q = rot(-14 + i * 8 + jit(i + 80) * 6, jit(i + 90) * 16, cx, cy, w0); g.fillRect(q.x - 1, q.y - 1, 2, 1.4); }   // Glassplitter
+    // 3. Kettenabdrücke quer über das Wrack (in Schubrichtung)
+    const sw = Math.atan2(dy || 0.001, dx || 0.001);
+    g.lineStyle(3, 0x14110e, 0.5);
+    for (const ver of [-7, 7]) { const p1 = rot(-26, ver, cx, cy, sw), p2 = rot(26, ver, cx, cy, sw); g.lineBetween(p1.x, p1.y, p2.x, p2.y); }
   }
 }
 

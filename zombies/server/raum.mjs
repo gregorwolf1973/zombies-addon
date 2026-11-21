@@ -164,6 +164,7 @@ export const Zustand = schema({
   fahrzeuge: t.map(Fahrzeug),   // Linienbus, Verkehr, Polizei, Feuerwehr, Wracks
   feuer: t.map(Feuer),
   verbrannt: t.map('boolean'),  // 'haus:nr', 'auto:bID', 'bus:ID', 'fz:ID'
+  platt: t.map('int32'),        // Szene „Stau auf der B11“: von Panzern plattgefahrene geparkte Autos, Behälter-Id → Schub (client/b11_platt.mjs)
   kegel: t.boolean(),           // Sichtkegel der Zombies anzeigen (Einstellung)
   tuerFrei: t.uint8(), tuerRaetsel: t.uint8(), tuerSchluessel: t.uint8(),   // Anteile der Schlossarten verschlossener Zimmertüren in % (Einstellung, der Client berechnet damit schlossArt)
   stuetzpunkt: t.string(),      // Bundeswehr-Stützpunkt: '' = keiner, 'steht', 'gefallen' oder 'aus' (server/stuetzpunkt.mjs)
