@@ -50,29 +50,65 @@ function wiesenWolken(ctx, x0, y0, x1, y1) {
 
 const begehbarWiese = t => t === T.WIESE || t === T.BAUM;
 
-// ---------- Bäume: Lage/Größe je Kachel (Kronen in eigener Ebene, Schatten und Stamm im Boden) ----------
-// Kronen: große 8–10 m, kleine 6,5–8 m Durchmesser (Maßstab 8 px = 1 m; früher bis 11,6 m); der Stamm bleibt klein, die Kollision ändert sich nicht.
+// ---------- Bäume: Kronen je Baumgruppe (Kronen in eigener Ebene, Schatten und Stamm im Boden) ----------
+// Die Baumkacheln (je 4 m) bleiben, wie sie sind (Kollision, Sicht, Tempo); nur die Darstellung fasst sie zusammen:
+//  - Baumkacheln mit 4er-Nachbarschaft bilden eine Gruppe (gezählt bis BAUM_GRUPPE_MAX Kacheln, reicht für „Wald“).
+//  - Schachbrett-Regel: auf jeder Kachel mit (kx + ky) gerade steht ein Baum, auf den anderen nur, wenn die Kachel allein steht
+//    (keine Baumkachel in 4er-Nachbarschaft). So kommt höchstens ein Baum auf 2 Kacheln (Abstand ≥ 5,7 m), Einzelbäume bleiben Einzelbäume,
+//    Wälder bleiben dicht; Versatz ±0,5 m und Größe per Hash (deterministisch, unabhängig vom Kartenstück).
+//  - Kronendurchmesser je nach Gruppengröße: Einzelbaum 4–5,5 m, Paar/Dreier 4,5–6,5 m, Gruppe 5–7 m, Wald 5,5–7,5 m (8 px = 1 m).
+// Luftbild-Boden: das Foto zeigt die Bäume – dann nur kleine Stamm-/Schattenpunkte je Baumkachel (zeichneBaumMarker), keine Kronen.
 const BAUM_RAND = 3;   // Kacheln: so weit ragen Kronen über ihre Kachel (und damit über Stückgrenzen) hinaus
-export function baumVon(kx, ky) {
+export const BAUM_GRUPPE_MAX = 24;
+// Größe der Baumgruppe (4er-Nachbarschaft) von Kachel kx,ky aus, höchstens BAUM_GRUPPE_MAX; je Welt gemerkt
+export function baumGruppe(welt, kx, ky) {
+  const memo = welt._baumGruppe ??= new Map(), k0 = ky * 100000 + kx;
+  const m = memo.get(k0); if (m) return m;
+  const besucht = new Set([k0]), q = [[kx, ky]];
+  for (let i = 0; i < q.length && besucht.size < BAUM_GRUPPE_MAX; i++) {
+    const [x, y] = q[i];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k = (y + dy) * 100000 + x + dx;
+      if (besucht.has(k) || welt.hole(x + dx, y + dy) !== T.BAUM) continue;
+      besucht.add(k); q.push([x + dx, y + dy]);
+      if (besucht.size >= BAUM_GRUPPE_MAX) break;
+    }
+  }
+  const n = besucht.size;
+  if (n < BAUM_GRUPPE_MAX) for (const k of besucht) memo.set(k, n); else memo.set(k0, n);
+  return n;
+}
+// Krone für Kachel kx,ky in einer Gruppe der Größe n (Meter: gr/8)
+export function baumVon(kx, ky, n = 1) {
   const h = hash(kx * 31, ky * 17);
   const art = h < 0.62 ? 'baum_gross' : h < 0.82 ? 'baum_klein' : h < 0.93 ? 'baum_herbst' : 'baum_herbst_klein';
-  const faktor = 1.3 + hash(kx * 7 + 3, ky * 11 + 5) * 0.3;
-  const gr = (art.endsWith('klein') ? 40 : 50) * faktor;   // Krone ca. 6,5–10 m (8 px = 1 m)
-  return { art, gr, x: kx * KACHEL + KACHEL / 2, y: ky * KACHEL + KACHEL / 2, dreh: hash(ky, kx) * Math.PI * 2 };
+  const r = hash(kx * 7 + 3, ky * 11 + 5);
+  const [von, spanne] = n <= 1 ? [4, 1.5] : n <= 3 ? [4.5, 2] : n < 12 ? [5, 2] : [5.5, 2];
+  const gr = (von + r * spanne) * 8;
+  const jx = (hash(kx * 13 + 1, ky * 5 + 7) - 0.5) * 8, jy = (hash(kx * 3 + 11, ky * 19 + 2) - 0.5) * 8;   // ±0,5 m
+  return { art, gr, x: kx * KACHEL + KACHEL / 2 + jx, y: ky * KACHEL + KACHEL / 2 + jy, dreh: hash(ky, kx) * Math.PI * 2 };
 }
-function baumKacheln(welt, rect) {
+// Alle Kronen im Ausschnitt (auch aus Nachbarstücken, die hineinragen)
+export function baumKronen(welt, rect) {
   const l = [];
   for (let ky = Math.max(0, rect.y0 - BAUM_RAND); ky < Math.min(HOEHE, rect.y1 + BAUM_RAND); ky++) for (let kx = Math.max(0, rect.x0 - BAUM_RAND); kx < Math.min(BREITE, rect.x1 + BAUM_RAND); kx++) {
-    if (welt.hole(kx, ky) === T.BAUM) l.push(baumVon(kx, ky));
+    if (welt.hole(kx, ky) !== T.BAUM) continue;
+    if (((kx + ky) & 1) === 0 || (welt.hole(kx - 1, ky) !== T.BAUM && welt.hole(kx + 1, ky) !== T.BAUM && welt.hole(kx, ky - 1) !== T.BAUM && welt.hole(kx, ky + 1) !== T.BAUM)) l.push(baumVon(kx, ky, baumGruppe(welt, kx, ky)));
   }
   return l;
 }
-export function hatBaeume(welt, rect) { return baumKacheln(welt, rect).length > 0; }
-// Kronen eines Kartenstücks (auch Bäume aus Nachbarstücken, die hineinragen); Bild wird später halbtransparent über den Figuren gezeigt
+// Baumkacheln im Ausschnitt (für Hinweise im Luftbild-Modus)
+function baumKachelListe(welt, rect) {
+  const l = [];
+  for (let ky = Math.max(0, rect.y0); ky < Math.min(HOEHE, rect.y1); ky++) for (let kx = Math.max(0, rect.x0); kx < Math.min(BREITE, rect.x1); kx++) if (welt.hole(kx, ky) === T.BAUM) l.push([kx, ky]);
+  return l;
+}
+export function hatBaeume(welt, rect) { return baumKronen(welt, rect).length > 0; }
+// Kronen eines Kartenstücks; Bild wird später halbtransparent über den Figuren gezeigt
 export function zeichneKronen(ctx, welt, bilder, rect) {
   ctx.save();
   ctx.translate(-rect.x0 * KACHEL, -rect.y0 * KACHEL);
-  for (const b of baumKacheln(welt, rect).sort((a, c) => a.y - c.y)) {
+  for (const b of baumKronen(welt, rect).sort((a, c) => a.y - c.y)) {
     const bild = bilder[b.art];
     if (!bild) continue;
     ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.dreh); ctx.drawImage(bild, -b.gr / 2, -b.gr / 2, b.gr, b.gr); ctx.restore();
@@ -81,10 +117,18 @@ export function zeichneKronen(ctx, welt, bilder, rect) {
 }
 // Schatten und kleiner Stamm in der Bodenebene
 function zeichneBaumSockel(ctx, welt, rect) {
-  for (const b of baumKacheln(welt, rect)) {
+  for (const b of baumKronen(welt, rect)) {
     ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(b.x + 5, b.y + 6, b.gr / 2, b.gr / 2.3, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = '#4e342e'; ctx.beginPath(); ctx.arc(b.x, b.y, 3.2, 0, TAU); ctx.fill();
     ctx.fillStyle = '#6d4c41'; ctx.beginPath(); ctx.arc(b.x - 0.8, b.y - 0.8, 1.8, 0, TAU); ctx.fill();
+  }
+}
+// Luftbild-Boden: das Foto zeigt die Bäume; je Baumkachel nur ein dezenter Stamm-/Schattenpunkt, damit man die Baumfläche (langsamer, Sicht verdeckt) erkennt
+function zeichneBaumMarker(ctx, welt, rect) {
+  for (const [kx, ky] of baumKachelListe(welt, rect)) {
+    const x = kx * KACHEL + 8 + hash(kx * 5 + 2, ky * 9 + 1) * 16, y = ky * KACHEL + 8 + hash(kx * 11 + 4, ky * 3 + 8) * 16;
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.beginPath(); ctx.arc(x + 1.2, y + 1.6, 5, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(78,52,46,.7)'; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, TAU); ctx.fill();
   }
 }
 
@@ -192,11 +236,12 @@ export function zeichneBoden(ctx, welt, rect = null) {
   if (vek && !foto) zeichneWasser(ctx, welt, { x0, y0, x1, y1 });
   if (vek && !foto) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details?.zaeune) zaunLinien(ctx, welt, { x0, y0, x1, y1 });
+  zeichneKollisionsSockel(ctx, welt, { x0, y0, x1, y1 }, foto);
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
   zeichneMuell(ctx, welt, { x0, y0, x1, y1 });
   zeichneSperren(ctx, welt, { x0, y0, x1, y1 });
   zeichneStuetzpunktBoden(ctx, welt, { x0, y0, x1, y1 });
-  if (!foto) zeichneBaumSockel(ctx, welt, { x0, y0, x1, y1 });
+  if (foto) zeichneBaumMarker(ctx, welt, { x0, y0, x1, y1 }); else zeichneBaumSockel(ctx, welt, { x0, y0, x1, y1 });
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
     if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
@@ -207,7 +252,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
 
 // Kulisse „Schatten“: Schatten von Häusern und Bäumen eines Kartenstücks in ein leeres Bild (null, wenn nichts zu zeichnen ist)
 export function zeichneSchattenStueck(ctx, B, H, welt, rect) {
-  return zeichneSchatten(ctx, B, H, rect, vektorGebaeude(welt), baumKacheln(welt, { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 12, y1: rect.y1 + 12 }));
+  return zeichneSchatten(ctx, B, H, rect, vektorGebaeude(welt), baumKronen(welt, { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 12, y1: rect.y1 + 12 }));
 }
 
 // ---------- obere Ebene: Bäume und Deko aus dem Prototyp ----------
@@ -472,6 +517,39 @@ function zaunTeil(ctx, art, px, py, nb, kx, ky) {
 }
 
 // Gartenzäune als glatte Linien (tools/osm_karte.py begradigt die Rastertreppen); Kollision bleibt beim Raster
+// Alles, was die Spielfigur blockiert, muss man auch sehen (Superuser-Anzeige „Hindernisse zeigen“ deckte Lücken auf):
+//  - Hausumriss: das Kollisionsraster (1 m) folgt dem OSM-Umriss; ein dunkler Mauersockel (±0,75 m um den Umriss, unter dem Dach) zeigt die blockierte Kante
+//  - Container: blockieren die ganze 4-m-Kachel, das Bild ist nur ca. 1,5–2 m groß → Stellfläche in Kachelgröße
+//  - Luftbild-Boden: Wasserkacheln (blockieren) und der Kartenrand (Zaun) fehlen im Foto bzw. liegen auf dem Raster → dezent einfärben
+function zeichneKollisionsSockel(ctx, welt, rect, foto) {
+  const K = KACHEL, { x0, y0, x1, y1 } = rect;
+  if (welt.vektor?.gebaeude) {
+    ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(58,50,45,.55)'; ctx.lineWidth = 12;
+    for (const g of welt.vektor.gebaeude) {
+      if (g.safe || !g.p || g.x + g.b < x0 - 1 || g.x > x1 + 1 || g.y + g.h < y0 - 1 || g.y > y1 + 1) continue;
+      ctx.beginPath(); for (let i = 0; i < g.p.length; i += 2) i ? ctx.lineTo(g.p[i] * K, g.p[i + 1] * K) : ctx.moveTo(g.p[i] * K, g.p[i + 1] * K);
+      ctx.closePath(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  for (const c of welt.behaelter ?? []) {   // Container blockieren die ganze Kachel (4 × 4 m), das Bild ist viel kleiner: Stellfläche in Kachelgröße
+    if (c.art !== 'container') continue;
+    const kx = Math.floor(c.x / K), ky = Math.floor(c.y / K);
+    if (kx < x0 - 1 || kx > x1 || ky < y0 - 1 || ky > y1 || welt.hole(kx, ky) !== T.DEKO) continue;
+    ctx.fillStyle = 'rgba(35,38,42,.42)'; ctx.fillRect(kx * K + 1, ky * K + 1, K - 2, K - 2);
+    ctx.strokeStyle = 'rgba(210,210,200,.45)'; ctx.lineWidth = 1.5; ctx.strokeRect(kx * K + 2, ky * K + 2, K - 4, K - 4);
+  }
+  if (!foto) return;
+  for (let ky = Math.max(0, y0); ky < Math.min(HOEHE, y1); ky++) for (let kx = Math.max(0, x0); kx < Math.min(BREITE, x1); kx++) {
+    const t = welt.hole(kx, ky);
+    if (t === T.WASSER) { ctx.fillStyle = 'rgba(42,112,152,.42)'; ctx.fillRect(kx * K, ky * K, K, K); }
+    else if (t === T.ZAUN && (kx === 0 || ky === 0 || kx === BREITE - 1 || ky === HOEHE - 1)) {
+      ctx.fillStyle = 'rgba(52,44,38,.72)'; ctx.fillRect(kx * K, ky * K, K, K);
+      ctx.fillStyle = 'rgba(161,136,127,.55)'; ctx.fillRect(kx * K, ky * K + K / 2 - 1.5, K, 3);
+    }
+  }
+}
+
 function zaunLinien(ctx, welt, rect) {
   const K = KACHEL, r = { x0: rect.x0 * K - 40, y0: rect.y0 * K - 40, x1: rect.x1 * K + 40, y1: rect.y1 * K + 40 };
   welt._zaunBox ??= welt.details.zaeune.map(z => {
@@ -493,6 +571,7 @@ function zaunLinien(ctx, welt, rect) {
       }
       f(z.p.at(-2) * K, z.p.at(-1) * K, n);
     };
+    if (z.a !== 'h' && z.a !== 'w') strich('rgba(70,62,50,.3)', 12);   // Grundstreifen in der blockierten Breite (Kollision ±6 px), sonst wäre ein Drahtzaun fast unsichtbar
     if (z.a === 'h') {
       strich('rgba(0,0,0,.22)', 19, 3, 4); strich('#2f6b2a', 19);
       ctx.fillStyle = '#3f8a37';

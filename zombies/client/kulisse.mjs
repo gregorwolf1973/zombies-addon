@@ -17,13 +17,6 @@ export const kulSchatten = () => !!(kul && kul.an.schatten);
 export const kulHatFoto = () => !!kul?.index.foto;
 export const kulHatDaecher = () => !!kul?.daecher;
 
-// Baumkronen über dem Luftbild: die gezeichneten Kronen sind dezenter (Deckkraft 0,3 statt 0,55): das Foto zeigt die echten Bäume, die Kronen
-// bleiben als Hindernis erkennbar. Zum Vergleich: ?baum=a → wie bisher (0,55).
-export function kulBaumAlpha() {
-  if (!kulBoden()) return 0.55;
-  return new URLSearchParams(location.search).get('baum') === 'a' ? 0.55 : 0.3;
-}
-
 export async function ladeKulisse(karte) {
   kul = null;
   const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
