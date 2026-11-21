@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.66.2 – 21.11.2026
+
+- Schneller: Levelwechsel und Neuladen. Der Kartenaufbau rechnet die Zaunlücken jetzt über ein Raster statt jede Zaunkachel mit allen Zaunstücken zu vergleichen – Geretsried 2 baut in 1,4 statt 4,6 s, Geretsried in 0,5 statt 1,4 s (auf Tablets und Handys entsprechend mehr). Die Welt bleibt genau gleich.
+- Schneller und sparsamer: Töne werden nach dem Start nacheinander statt alle gleichzeitig geladen, lange Effekt-Töne als Mono (halber Speicher). Vorher lagen rund 230 MB dekodierte Töne im Speicher, was iPhone und iPad stark bremste.
+- Behoben: Nach dem automatischen Neuladen blieb auf iPhone/iPad die Sprache stumm, weil Safari den Ton nur bei „Loslassen“/Klick freigibt – jetzt weckt jede Berührung auch die Sprache.
+- Behoben: Nach dem Neuladen flackerte kurz die Anmeldung auf; jetzt erscheint gleich die Ladeanzeige.
+
 ## 0.66.1 – 21.11.2026
 
 - Neu: Hordengeräusch – sind viele Zombies in Hörweite, blendet ein Horden-Teppich ein (aus Richtung der Zombies, lauter je mehr), Einzelschreie werden seltener; bei schnell wachsender Horde ein kurzer Akzent. Schwellen (ab, nur noch Horde, voll, aus) und Hörweite im Backend einstellbar.

@@ -29,17 +29,46 @@ const hintergrund = { stadt: null, streuTimer: 0, krankTimer: 0 };
 
 export function toeneZuordnen(z) { zuordnung = z && typeof z === 'object' ? z : {}; if (ctx) vorladen(); }
 
+// Musikdatei? (bleibt Stereo; Effekte werden räumlich gemischt und dürfen Mono sein)
+const istMusik = datei => Object.entries(zuordnung).some(([id, t]) => id.startsWith('musik') && t?.dateien?.includes(datei));
+// Dekodierte Töne liegen als Float32 im Speicher (1 min Stereo ≈ 23 MB) – lange Effekte auf Mono halbieren (iPhone/iPad!)
+const MONO_AB_S = 8;
+function monoMachen(buf) {
+  if (buf.numberOfChannels < 2 || buf.duration < MONO_AB_S) return buf;
+  try {
+    const m = ctx.createBuffer(1, buf.length, buf.sampleRate), z = m.getChannelData(0), k = buf.numberOfChannels;
+    for (let c = 0; c < k; c++) { const q = buf.getChannelData(c); for (let i = 0; i < q.length; i++) z[i] += q[i] / k; }
+    return m;
+  } catch { return buf; }
+}
 function laden(datei) {
   if (puffer.has(datei)) return puffer.get(datei);
   const p = fetch('toene/' + encodeURIComponent(datei))
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))
     .then(b => new Promise((ok, fehl) => ctx.decodeAudioData(b, ok, fehl)))
+    .then(buf => istMusik(datei) ? buf : monoMachen(buf))
     .then(buf => { puffer.set(datei, buf); hintergrundPruefen(); return buf; })
     .catch(() => { puffer.set(datei, null); return null; });
   puffer.set(datei, p);
   return p;
 }
-function vorladen() { for (const [id, t] of Object.entries(zuordnung)) if (!id.startsWith('musik')) for (const d of t.dateien ?? []) laden(d); hintergrundPruefen(); }   // Spielmusik (musik…) wird erst bei Bedarf geladen
+// Vorladen nacheinander und erst nach einer Pause (Welt wird in der Zeit aufgebaut): vorher liefen ~40 Downloads und Dekodierungen
+// gleichzeitig, das bremste den Start und sprengte auf iPhone/iPad den Speicher. Was vorher gebraucht wird, lädt probe() sofort selbst.
+// Spielmusik (musik…) wird erst bei Bedarf geladen.
+let vorladeLauf = 0;
+const VORLADE_PAUSE_MS = 6000;
+function vorladen() {
+  const lauf = ++vorladeLauf;
+  const liste = [...new Set(Object.entries(zuordnung).filter(([id]) => !id.startsWith('musik')).flatMap(([, t]) => t?.dateien ?? []))];
+  const weiter = () => {
+    if (lauf !== vorladeLauf) return;   // neue Zuordnung: neuer Durchlauf
+    const d = liste.shift();
+    if (d === undefined) { hintergrundPruefen(); return; }
+    Promise.resolve(laden(d)).finally(() => setTimeout(weiter, 50));
+  };
+  setTimeout(weiter, VORLADE_PAUSE_MS);
+  hintergrundPruefen();
+}
 const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer ? b : null; };
 
 // ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------

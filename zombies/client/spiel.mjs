@@ -241,8 +241,9 @@ try {
     sessionStorage.removeItem('zob_autostart');
     { const pw = sessionStorage.getItem('zob_testpwtmp'); sessionStorage.removeItem('zob_testpwtmp'); if (pw && $('testpw')) { $('testpw').value = pw; $('testzugang').open = true; } }
     if (nameFeld.value.trim()) setTimeout(() => { ton.tonStarten(); mitspielen(); }, 0);
+    else ladenAus();   // Ladeanzeige aus index.html wieder weg, wenn kein Name gemerkt ist
   }
-} catch {}
+} catch { ladenAus(); }
 
 // Gepanzerter Schulbus von oben (Front rechts, Länge 124 px): knallgelb-orange, Warnstreifen, Gitter vor den Fenstern, Gewehrläufe, rotes Dachschild
 function zeichneSchulbus(c, breit, hoch) {
