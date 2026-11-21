@@ -275,6 +275,7 @@ button:disabled { opacity: .6; }
 .eg-reihe { display: flex; flex-wrap: wrap; gap: 8px; }
 .eg-reihe button { flex: 1 1 90px; width: auto; margin: 0; min-height: 48px; font-size: 16px; padding: 8px; background: #ffffff1f; color: #fff; }
 .eg-reihe button.an { background: #ffd54f; color: #2b1d00; }
+.eg-reihe[hidden] { display: none; }
 .eg-hinweis { font-size: 12px; opacity: .75; margin-top: 6px; }
 
 /* Figurenwahl auf der Startseite */

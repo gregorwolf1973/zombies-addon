@@ -98,7 +98,7 @@ const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer 
 // ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------
 const MAX_STIMMEN = 10, MAX_ZOMBIE_STIMMEN = 5;
 const ZOMBIE_IDS = new Set(['entdeckt', 'kriecher', 'stoehnen', 'zombieTod', 'zombielandTag', 'zombielandNacht']);
-const MIN_ABSTAND = { entdeckt: 3000, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 500, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, wimmern: 4000, soldatRuf: 8000, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
+const MIN_ABSTAND = { entdeckt: 3000, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 500, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, wimmern: 4000, soldatRuf: 8000, hundBellen: 2500, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
 const stimmen = [];            // laufende Einzel-Geräusche aus Dateien: { ende (s), v, zombie, g, src }
 const zuletzt = new Map();     // Ereignis-ID → Zeitpunkt (ms) des letzten Abspielens
 
@@ -375,6 +375,26 @@ export function zombieWeg(x, y) {
 }
 
 // Stöhnen: tiefe Sägezahnstimme mit Formantfilter und Zittern
+// Hund bellt (Begleiter-Hund): Datei aus der Zuordnung 'hundBellen', sonst ein synthetisches „Wuff-wuff“. Gehört nicht zu den abschaltbaren Zombiegeräuschen.
+export function hundBellen(x, y) {
+  if (probe('hundBellen', x, y, 1)) return;
+  if (!abstandOk('hundBellen')) return;
+  const z = ort(x, y, 0.7); if (!z) return;
+  abstandMerken('hundBellen');
+  const t0 = ctx.currentTime, n = Math.random() < 0.5 ? 2 : 3;
+  for (let i = 0; i < n; i++) {
+    const t = t0 + i * 0.26, f0 = 380 + Math.random() * 120;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 0.55, t + 0.16);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.5;
+    f.frequency.setValueAtTime(1100, t); f.frequency.exponentialRampToValueAtTime(550, t + 0.16);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.45, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(f); f.connect(g); g.connect(z);
+    o.start(t); o.stop(t + 0.2);
+  }
+}
+
 export function stoehnen(x, y, laut = 0.5, kriecht = false, pruefen = true) {
   if (pruefen && !zombieTonAn) return;   // Zahnrad: Zombiegeräusche aus (entdeckt ruft mit pruefen=false)
   if (pruefen && !schreiErlaubt(x, y)) return;   // in der Horde: Einzelschreie seltener bzw. nur aus der Nähe
