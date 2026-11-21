@@ -4,12 +4,15 @@
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, BREITE, HOEHE } from '../client/welt.mjs';
 import { B11_KARTE, b11Sperrkanten } from './szene_b11_geo.mjs';
+import { frei } from '../client/welt.mjs';
+import { Unfaelle } from './unfall.mjs';
 
 export const Fahrzeug = schema({
   x: t.number(), y: t.number(), richtung: t.number(),
   art: t.string(),          // 'bus' | 'auto' | 'laster' | 'polizei' | 'feuerwehr' | 'wrack' | 'evakuierung' (stehender Bus am Tor, server/aufgaben.mjs)
   farbe: t.uint8(),
   haelt: t.boolean(),
+  rauch: t.boolean(),       // Unfallfahrzeug raucht (server/unfall.mjs; der Client zeichnet Rauch darüber)
   turm: t.number(),         // Leopard (Evakuierungspanzer): Turmrichtung in Weltkoordinaten (Server dreht ihn mit begrenztem Tempo)
 }, 'Fahrzeug');
 
@@ -18,6 +21,11 @@ const KOSTEN = { primary: 0.55, secondary: 0.6, tertiary: 0.75, unclassified: 1,
 export const LASTER_ANTEIL = 0.1;   // Anteil Laster im normalen Verkehr
 const HAUPT = new Set(['primary', 'secondary', 'tertiary']);
 export const LAENGE = { auto: 46, laster: 90, bus: 124, evakuierung: 124, polizei: 50, feuerwehr: 74 };   // Fahrzeuglänge in Pixeln (für den Abstand)
+export const BREITE_FZ = { auto: 18, laster: 22, bus: 24, evakuierung: 26, polizei: 18, feuerwehr: 24 };   // Fahrzeugbreite in Pixeln (Abstandsprüfung)
+const SCHIEBBAR = new Set(['auto', 'laster', 'polizei', 'feuerwehr', 'bus', 'wrack']);   // diese Fahrzeuge schiebt ein festgefahrenes Fahrzeug zur Seite (nicht Panzer/Evakuierung/Mörser)
+const STAU_WENDEN = 8, STAU_SCHIEBEN = 15, STAU_WEG = 40;   // Sekunden Stillstand bis Wenden / Schieben / (unbeobachtet) Verschwinden
+const SCHUB = 45;                                          // Tempo (px/s), mit dem ein Hindernis zur Seite geschoben wird
+const KREUZ_ZELLE = 64;
 const TEMPO = { bus: 85, auto: 115, laster: 90, polizei: 175, feuerwehr: 160 };
 const SPUR = { bus: 0.22, auto: 0.22, laster: 0.22, polizei: 0.12, feuerwehr: 0.12 };   // Abstand zur Mitte in Kacheln je Meter Fahrbahn
 
@@ -72,8 +80,28 @@ export function naechsterKnoten(graph, x, y, nurHaupt = false) {
   return best;
 }
 
+// Kreuzungen und Einmündungen (Knoten mit mindestens 3 Straßen) in einem Gitter, damit die Suche je Fahrzeug billig bleibt
+function kreuzungsGitter(graph) {
+  if (graph.kgitter) return graph.kgitter;
+  const g = new Map();
+  for (const n of graph.knoten) {
+    if (n.nach.length < 3) continue;
+    const k = Math.floor(n.x / KREUZ_ZELLE) + ',' + Math.floor(n.y / KREUZ_ZELLE);
+    (g.get(k) ?? g.set(k, []).get(k)).push(n);
+  }
+  // Kreuzungen bestehen in OSM oft aus mehreren dicht beieinander liegenden Knoten: sie teilen sich eine Belegung (gruppe)
+  const nah = n => {
+    const cx = Math.floor(n.x / KREUZ_ZELLE), cy = Math.floor(n.y / KREUZ_ZELLE), l = [];
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const m of g.get((cx + i) + ',' + (cy + j)) ?? []) if (m !== n && Math.hypot(m.x - n.x, m.y - n.y) < 48) l.push(m);
+    return l;
+  };
+  for (const l of g.values()) for (const n of l) n.gruppe = nah(n);
+  return (graph.kgitter = g);
+}
+const winkelUnterschied = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+
 // Dijkstra (kleiner Graph, einfache Liste genügt)
-export function route(graph, von, nach) {
+export function route(graph, von, nach, meiden = null) {
   if (!von || !nach) return null;
   const dist = new Map([[von, 0]]), vor = new Map(), offen = new Set([von]);
   while (offen.size) {
@@ -82,6 +110,7 @@ export function route(graph, von, nach) {
     offen.delete(u);
     if (u === nach) break;
     for (const e of u.nach) {
+      if (meiden?.has(e.ziel) && e.ziel !== nach) continue;
       const nd = ud + e.kosten;
       if (nd < (dist.get(e.ziel) ?? Infinity)) { dist.set(e.ziel, nd); vor.set(e.ziel, u); offen.add(e.ziel); }
     }
@@ -121,15 +150,16 @@ export class Verkehr {
     this.graph = strassenGraph(raum.welt);
     this.info = new Map();      // id → { weg, pos, halt, ... }
     this.naechsteId = 1;
+    this.unfaelle = new Unfaelle(this);
     this.blaulichtUhr = this.naechsteBlaulichtPause();
   }
 
   neu(art, startKnoten, extra = {}) {
     const f = new Fahrzeug();
     f.x = startKnoten.x; f.y = startKnoten.y; f.richtung = 0; f.art = art; f.farbe = Math.floor(this.raum.rnd() * 8); f.haelt = false;
-    const id = art + this.naechsteId++;
+    const nr = this.naechsteId, id = art + this.naechsteId++;
     this.raum.state.fahrzeuge.set(id, f);
-    this.info.set(id, { weg: null, pos: 0, halt: 0, ...extra });
+    this.info.set(id, { weg: null, pos: 0, halt: 0, nr, ...extra });
     return id;
   }
 
@@ -138,7 +168,7 @@ export class Verkehr {
     const von = naechsterKnoten(this.graph, f.x, f.y);
     const weg = route(this.graph, von, ziel);
     if (!weg || weg.length < 2) return false;
-    const versatz = (SPUR[f.art] ?? 0.2) * 4 * KACHEL / 4 * 1.6;
+    const versatz = (SPUR[f.art] ?? 0.2) * 4 * KACHEL / 4 * 1.85;   // Spurabstand zur Mitte: Gegenverkehr hat ~26 px Abstand (Autos 18, Laster 22 px breit)
     inf.weg = spurLinie(weg, versatz); inf.pos = 0; inf.zielKnoten = ziel;
     return true;
   }
@@ -156,7 +186,13 @@ export class Verkehr {
       this.busId = id;
     }
     for (let i = 0; i < autos && this.graph.haupt.length; i++) {
-      const id = this.neu(r() < LASTER_ANTEIL ? 'laster' : 'auto', this.graph.haupt[Math.floor(r() * this.graph.haupt.length)]);
+      // Startknoten mit Abstand zu den anderen Fahrzeugen (sonst stehen mehrere übereinander am selben Knoten)
+      let start = null;
+      for (let versuch = 0; versuch < 12; versuch++) {
+        start = this.graph.haupt[Math.floor(r() * this.graph.haupt.length)];
+        if (![...this.raum.state.fahrzeuge.values()].some(o => Math.hypot(o.x - start.x, o.y - start.y) < 80)) break;
+      }
+      const id = this.neu(r() < LASTER_ANTEIL ? 'laster' : 'auto', start);
       this.neuesZiel(id);
     }
   }
@@ -259,6 +295,7 @@ export class Verkehr {
       const inf = this.info.get(id);
       if (!inf || f.art === 'wrack') continue;
       if (inf.brennt) { f.haelt = true; continue; }
+      if (inf.unfall) { this.unfaelle.fahrt(id, f, inf, dt); continue; }   // von der Spur abgekommen (server/unfall.mjs)
       if (inf.halt > 0) {
         f.haelt = true; inf.halt -= dt;
         if (inf.halt <= 0) this.weiter(id, f, inf);
@@ -269,12 +306,10 @@ export class Verkehr {
       // Fußgänger und Spieler direkt vor dem Fahrzeug: bremsen (Polizei und Feuerwehr fahren langsam vorbei)
       const vorn = { x: f.x + Math.cos(f.richtung) * 40, y: f.y + Math.sin(f.richtung) * 40 };
       const imWeg = [...s.spieler.values(), ...s.menschen.values()].some(p => !p.ebene && p.sichtbar !== false && Math.hypot(p.x - vorn.x, p.y - vorn.y) < 30);
-      // Fahrzeug direkt voraus (gleiche Spur): dahinter warten statt hindurchzufahren;
-      // steht es länger als 5 s (Wrack, Pannenauto, verkeilt an der Kreuzung), wird vorbeigefahren
-      const vorder = this.vorausFahrzeug(id, f);
-      if (vorder) inf.gestaut = (inf.gestaut ?? 0) + dt; else inf.gestaut = 0;
-      const stau = vorder && inf.gestaut < 5;
-      let rest = (TEMPO[f.art] ?? 100) * dt * (imWeg ? (inf.durchfahrt ? 0.3 : 0) : 1) * (stau ? 0 : 1);
+      // Abstand halten, Vorfahrt an Kreuzungen, Festgefahren: siehe fahrtFaktor / festgefahren
+      const lauf = this.fahrtFaktor(id, f, inf, dt);
+      let rest = (TEMPO[f.art] ?? 100) * dt * (imWeg ? (inf.durchfahrt ? 0.3 : 0) : 1) * lauf.faktor;
+      const x0 = f.x, y0 = f.y;
       while (rest > 0) {
         const ziel = inf.weg[inf.pos + 1];
         if (!ziel) { inf.weg = null; this.angekommen(id, f, inf, zeitMin, e); break; }
@@ -283,18 +318,138 @@ export class Verkehr {
         if (d <= rest) { f.x = ziel.x; f.y = ziel.y; inf.pos++; rest -= d; }
         else { f.x += Math.cos(w) * rest; f.y += Math.sin(w) * rest; rest = 0; }
       }
+      const bewegt = Math.hypot(f.x - x0, f.y - y0);
+      if (lauf.faktor < 0.05 && !imWeg) { if (bewegt < 0.3) this.festgefahren(id, f, inf, lauf, dt); }
+      else if (bewegt > 1.5) { inf.steht = 0; inf.gewendet = false; inf.kreuzFrei = false; inf.schubSeite = undefined; }
     }
+    this.unfaelle.schritt(dt);
   }
 
-  vorausFahrzeug(id, f) {
-    const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), lf = LAENGE[f.art] ?? 46;
+  // Erstes Fahrzeug im Fahrkorridor voraus (auch querende; Entgegenkommende auf ihrer Spur nicht). Lücke = freier Raum zwischen den Stoßstangen.
+  hindernis(id, f, weite) {
+    const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), lf = LAENGE[f.art] ?? 46, bf = (BREITE_FZ[f.art] ?? 18) / 2;
+    let best = null;
     for (const [oid, o] of this.raum.state.fahrzeuge) {
       if (oid === id) continue;
       const rx = o.x - f.x, ry = o.y - f.y;
+      if (rx * rx + ry * ry > 40000) continue;
       const vor = rx * c + ry * sn, quer = -rx * sn + ry * c;
-      if (vor > 0 && vor < lf / 2 + (LAENGE[o.art === 'wrack' ? 'auto' : o.art] ?? 46) / 2 + 10 && Math.abs(quer) < 17) return o;
+      if (vor <= 0) continue;
+      const oa = o.art === 'wrack' ? 'auto' : o.art, lo = LAENGE[oa] ?? 46, bo = (BREITE_FZ[oa] ?? 18) / 2;
+      const dth = o.richtung - f.richtung, cd = Math.cos(dth), sd = Math.abs(Math.sin(dth));
+      const entlang = Math.abs(cd) * lo / 2 + sd * bo, seite = sd * lo / 2 + Math.abs(cd) * bo;
+      const gegen = cd < -0.5;
+      if (Math.abs(quer) >= bf + seite - (gegen ? 4 : 1)) continue;   // Gegenverkehr darf sich in Kurven um wenige Pixel streifen, blockiert aber bei echter Frontalstellung
+      const luecke = vor - lf / 2 - entlang, extra = gegen ? 30 : 0;   // Gegenverkehr nähert sich doppelt so schnell: früher bremsen
+      if (luecke > weite + extra) continue;
+      if (!best || luecke < best.luecke) best = { oid, o, luecke, extra };
     }
-    return null;
+    return best;
+  }
+
+  // Fahrzeuge, die den Kreuzungsknoten `kid` gerade belegen (Vorrang durch frühere Einfahrt)
+  kreuzHalter(kid, ausser) {
+    const aus = [];
+    for (const [hid, hi] of this.info) {
+      if (hid === ausser || !hi.kreuz?.has(kid)) continue;
+      const hf = this.raum.state.fahrzeuge.get(hid);
+      if (hf) aus.push({ id: hid, f: hf, inf: hi });
+    }
+    return aus;
+  }
+
+  kreuzungenNah(x, y) {
+    const g = kreuzungsGitter(this.graph), cx = Math.floor(x / KREUZ_ZELLE), cy = Math.floor(y / KREUZ_ZELLE), aus = [];
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = g.get((cx + i) + ',' + (cy + j)); if (l) aus.push(...l); }
+    return aus;
+  }
+
+  // Tempofaktor 0..1: bremst mit Abstand vor Fahrzeugen im Korridor und wartet vor besetzten Kreuzungen
+  fahrtFaktor(id, f, inf, dt) {
+    const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), lf = LAENGE[f.art] ?? 46;
+    let faktor = 1;
+    const h = this.hindernis(id, f, 36);
+    inf.hindernis = h ? h.oid : null;
+    if (h) faktor = Math.max(0, Math.min(1, (h.luecke - 4) / (32 + h.extra)));
+    let wartet = false, gegnerId = null;
+    const halte = lf / 2 + 26;   // Haltelinie: Fahrzeugfront bleibt außerhalb der Fahrspuren der Kreuzung
+    for (const k of this.kreuzungenNah(f.x, f.y)) {
+      const dx = k.x - f.x, dy = k.y - f.y, d = Math.hypot(dx, dy), vor = dx * c + dy * sn, quer = Math.abs(-dx * sn + dy * c);
+      if (inf.kreuz?.has(k.id)) { if (vor < 0 && d > halte) inf.kreuz.delete(k.id); continue; }   // passiert: Vorrang abgeben
+      if (vor <= 0 || d > halte + 14 || quer > 30) continue;
+      const gruppe = [k, ...(k.gruppe ?? [])];
+      const gegner = gruppe.flatMap(g => this.kreuzHalter(g.id, id)).find(g => winkelUnterschied(g.f.richtung, f.richtung) > 0.7);
+      if (gegner && !inf.kreuzFrei) {
+        // gegenseitiges Warten > 3 s: das Fahrzeug mit der kleineren Nummer fährt
+        if ((inf.kreuzWarte ?? 0) > 3 && (gegner.inf.steht ?? 0) > 3 && (inf.nr ?? 0) < (gegner.inf.nr ?? 0)) { for (const g of gruppe) (inf.kreuz ??= new Map()).set(g.id, true); continue; }
+        wartet = true; gegnerId = gegner.id;
+        if (d <= halte + 4) faktor = 0;
+        continue;
+      }
+      for (const g of gruppe) (inf.kreuz ??= new Map()).set(g.id, true);
+    }
+    inf.kreuzWarte = wartet ? (inf.kreuzWarte ?? 0) + dt : 0;
+    return { faktor, hindernis: h, kreuzWartet: wartet, gegnerId };
+  }
+
+  // Das Fahrzeug will fahren, kommt aber nicht weiter: nach 8 s wenden, nach 15 s das Hindernis sanft zur Seite schieben
+  festgefahren(id, f, inf, lauf, dt) {
+    inf.steht = (inf.steht ?? 0) + dt;
+    inf.blechUhr = (inf.blechUhr ?? 0) - dt;
+    if (inf.steht >= STAU_WENDEN && !inf.gewendet) { inf.gewendet = true; this.wenden(id, f, inf); return; }
+    if (inf.steht >= STAU_SCHIEBEN) {
+      if (lauf.hindernis && lauf.hindernis.luecke < 12) {
+        if (this.schieben(f, lauf.hindernis.o, dt, inf) && inf.blechUhr <= 0) {
+          inf.blechUhr = 1.2;
+          this.raum.broadcast('blech', { x: lauf.hindernis.o.x, y: lauf.hindernis.o.y });
+        }
+      } else if (lauf.kreuzWartet) inf.kreuzFrei = true;   // ohne Alternative: trotz Vorrangs anderer langsam hineinfahren (der Korridor schützt vor Überlappung)
+    }
+    // lange festgefahren und niemand schaut zu: Fahrzeug verschwindet, damit die Straße frei wird
+    if (inf.steht >= STAU_WEG && ['auto', 'laster', 'polizei', 'feuerwehr'].includes(f.art) && !inf.evakuierung) {
+      const s = this.raum.state;
+      if (![...s.spieler.values()].some(p => !p.ebene && Math.hypot(p.x - f.x, p.y - f.y) < 700)) { s.fahrzeuge.delete(id); this.info.delete(id); }
+    }
+  }
+
+  // Rückwärts auf einen anderen Weg: Route vom Knoten hinter dem Fahrzeug unter Meidung der Knoten vor ihm
+  wenden(id, f, inf) {
+    if (!inf.weg || inf.querfeld || inf.flugzeug || !this.graph.knoten.length) return false;
+    const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), g = this.graph;
+    const hinten = naechsterKnoten(g, f.x - c * 50, f.y - sn * 50);
+    if (!hinten) return false;
+    const meiden = new Set();
+    for (const abst of [30, 60, 90]) { const n = naechsterKnoten(g, f.x + c * abst, f.y + sn * abst); if (n && n !== hinten) meiden.add(n); }
+    const r = this.raum.rnd, wege = [];
+    if (inf.zielKnoten) wege.push(inf.zielKnoten);
+    for (let v = 0; v < 5; v++) wege.push((r() < 0.75 && g.haupt.length ? g.haupt : g.knoten)[Math.floor(r() * (g.haupt.length || g.knoten.length))]);
+    for (const ziel of wege) {
+      if (!ziel || ziel === hinten) continue;
+      const weg = route(g, hinten, ziel, meiden);
+      if (!weg || weg.length < 2) continue;
+      // Mitte der Straße unter dem Fahrzeug; die neue Spur liegt auf der anderen Seite (rechts der neuen Fahrtrichtung)
+      const versatz = (SPUR[f.art] ?? 0.2) * 4 * KACHEL / 4 * 1.85;   // Spurabstand zur Mitte: Gegenverkehr hat ~26 px Abstand (Autos 18, Laster 22 px breit)
+      const mitte = { x: f.x + Math.sin(f.richtung) * versatz, y: f.y - Math.cos(f.richtung) * versatz };
+      inf.weg = spurLinie([mitte, ...weg], versatz); inf.pos = 0; inf.zielKnoten = ziel; inf.kreuz = null; inf.kreuzFrei = false; inf.kreuzWarte = 0;
+      f.x = inf.weg[0].x; f.y = inf.weg[0].y;   // wechselt sofort auf die Gegenspur (sonst stünde er dem Rückstau frontal gegenüber)
+      const q = inf.weg[1]; if (q) f.richtung = Math.atan2(q.y - f.y, q.x - f.x);   // der Client dreht weich nach
+      return true;
+    }
+    return false;
+  }
+
+  // Hindernis-Fahrzeug `o` quer zur Fahrtrichtung von `f` zur Seite schieben (nicht in Wände/Häuser); false, wenn kein Platz ist
+  schieben(f, o, dt, inf) {
+    if (!SCHIEBBAR.has(o.art)) return false;
+    const welt = this.raum.welt, nx = -Math.sin(f.richtung), ny = Math.cos(f.richtung), c = Math.cos(f.richtung), sn = Math.sin(f.richtung), schritt = SCHUB * dt;
+    // Seite mit mehr Platz (einmal gewählt, damit das Hindernis nicht hin und her wandert)
+    inf.schubSeite ??= [24, 36, 48].map(d => (frei(welt, o.x + nx * d, o.y + ny * d, 9) ? 1 : 0) - (frei(welt, o.x - nx * d, o.y - ny * d, 9) ? 1 : 0)).reduce((a, b) => a + b, 0) >= 0 ? 1 : -1;
+    const seite = inf.schubSeite;
+    for (const sd of [seite, -seite]) {
+      if (frei(welt, o.x + nx * sd * (schritt + 2), o.y + ny * sd * (schritt + 2), 9)) { o.x += nx * sd * schritt; o.y += ny * sd * schritt; return true; }
+    }
+    if (frei(welt, o.x + c * (schritt + 2), o.y + sn * (schritt + 2), 9)) { o.x += c * schritt; o.y += sn * schritt; return true; }
+    return false;
   }
 
   angekommen(id, f, inf, zeitMin, e) {

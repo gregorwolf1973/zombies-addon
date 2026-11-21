@@ -687,6 +687,13 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="tnVerkehr" min="0" max="20" step="1"><span id="tnVerkehrWert">6</span></div>
   <label for="tnVerkehrPhase">… während der ersten</label>
   <div class="tn-zeile"><input type="range" id="tnVerkehrPhase" min="0" max="120" step="5"><span id="tnVerkehrPhaseWert">25 min</span></div>
+  <label for="tnUnfall">Autounfall: etwa alle … Spielminuten (0 = keine Unfälle)</label>
+  <span class="hilfe">Ein fahrendes Auto in der Nähe eines Spielers kommt von der Spur ab und kracht in ein Fahrzeug oder eine Hauswand. Danach raucht es, brennt nach 10–20 s und explodiert mit der Wahrscheinlichkeit unten.</span>
+  <div class="tn-zeile"><input type="range" id="tnUnfall" min="0" max="120" step="1"><span id="tnUnfallWert">10 min</span></div>
+  <label for="tnUnfallExpl">… davon explodieren nach dem Brennen</label>
+  <div class="tn-zeile"><input type="range" id="tnUnfallExpl" min="0" max="100" step="5"><span id="tnUnfallExplWert">50 %</span></div>
+  <label for="tnUnfallSchaden">Explosion: Schaden für Spieler im Umkreis von 4 m (Lebenspunkte, am Rand halb)</label>
+  <div class="tn-zeile"><input type="range" id="tnUnfallSchaden" min="0" max="100" step="5"><span id="tnUnfallSchadenWert">30</span></div>
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
   <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
@@ -1006,6 +1013,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     feld('tnFeuerPhase', e.feuerPhase === undefined ? 20 : e.feuerPhase, function (v) { return v + ' min'; });
     feld('tnVerkehr', e.verkehr === undefined ? 6 : e.verkehr, function (v) { return String(v); });
     feld('tnVerkehrPhase', e.verkehrPhase === undefined ? 25 : e.verkehrPhase, function (v) { return v + ' min'; });
+    feld('tnUnfall', e.unfall === undefined ? 10 : e.unfall, function (v) { return v ? v + ' min' : 'aus'; });
+    feld('tnUnfallExpl', e.unfallExplosion === undefined ? 50 : e.unfallExplosion, function (v) { return v + ' %'; });
+    feld('tnUnfallSchaden', e.unfallSchaden === undefined ? 30 : e.unfallSchaden, function (v) { return String(v); });
     var nb = e.nebel || {};
     if (document.activeElement !== $('tnNebelAn')) $('tnNebelAn').checked = nb.an !== false;
     feld('tnNebelMorgen', nb.morgen === undefined ? 35 : nb.morgen, function (v) { return v + ' %'; });
@@ -1100,6 +1110,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   regler('tnFeuerPhase', function (v) { return v + ' min'; }, function (v) { return { feuerPhase: v }; });
   regler('tnVerkehr', function (v) { return String(v); }, function (v) { return { verkehr: v }; });
   regler('tnVerkehrPhase', function (v) { return v + ' min'; }, function (v) { return { verkehrPhase: v }; });
+  regler('tnUnfall', function (v) { return Number(v) ? v + ' min' : 'aus'; }, function (v) { return { unfall: v }; });
+  regler('tnUnfallExpl', function (v) { return v + ' %'; }, function (v) { return { unfallExplosion: v }; });
+  regler('tnUnfallSchaden', function (v) { return String(v); }, function (v) { return { unfallSchaden: v }; });
   regler('rwPistole', function (v) { return v + ' m'; }, function (v) { return { reichweite: { pistole: v } }; });
   regler('rwGewehr', function (v) { return v + ' m'; }, function (v) { return { reichweite: { gewehr: v } }; });
   regler('rwSchrot', function (v) { return v + ' m'; }, function (v) { return { reichweite: { schrotflinte: v } }; });
@@ -3115,7 +3128,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     gruppe(ausbruch);
     var stadt = unter('🚗 Autos, Verkehr, Feuer');
     zeile(stadt.inhalt, 'tnAutos'); rein(stadt.inhalt, $('tnAutosHinweis'));
-    ['tnVerkehr', 'tnVerkehrPhase', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt.inhalt, id); });
+    ['tnVerkehr', 'tnVerkehrPhase', 'tnUnfall', 'tnUnfallExpl', 'tnUnfallSchaden', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt.inhalt, id); });
     gruppe(stadt);
     var wk = unter('🔫 Waffen: Schaden, Schussfolge, Magazin'); rein(wk.inhalt, $('wfHinweis'));
     Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk.inhalt, 'wfS_' + k); zeile(wk.inhalt, 'wfP_' + k); rein(wk.inhalt, $('wfInfo_' + k)); if (window.WFMAG[k]) { zeile(wk.inhalt, 'wfM_' + k); zeile(wk.inhalt, 'wfN_' + k); } });
@@ -3147,7 +3160,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
     tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnNebelMorgen: 'nebel.morgen', tnNebelAbend: 'nebel.abend', tnNebelSicht: 'nebel.sicht', tnNebelZombie: 'nebel.zombie', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
-    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrPhase: 'verkehrPhase', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
+    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin',
     tnMgSchritt: 'munitionsglueck.schritt', tnMgMax: 'munitionsglueck.max', tnMgLeben: 'munitionsglueck.lebenUnter', tnMgLebenF: 'munitionsglueck.lebenFaktor', tnMgNot: 'munitionsglueck.notUnter', tnMgNotF: 'munitionsglueck.notFaktor',
@@ -3421,6 +3434,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
       ['tnFeuer', 'echte Minuten · Abstand schwankt um ±40 %'],
       ['tnFeuerPhase', 'echte Minuten seit Weltbeginn'],
       ['tnVerkehrPhase', 'echte Minuten seit Weltbeginn'],
+      ['tnUnfall', 'Spielminuten im Mittel · Abstand schwankt stark, 0 = aus'],
       ['hordeZiel', 'echte Minuten · schwankt um ±40 %'],
       ['hordeTrupp', 'Zombies · schwankt um ±30 %'],
       ['agStunde', 'Uhrzeit der Spieluhr · ein Spieltag = ' + tm + ' echte min'],
