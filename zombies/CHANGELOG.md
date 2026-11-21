@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.68.6 – 21.11.2026
+
+- Live-Radio verbindet gleich bei Spielbeginn und bleibt verbunden; die ersten Sekunden (einstellbar, Vorgabe 30 s) bleibt es stumm – so ist ein Sender-Vorspann vorbei, bevor man das erste Autoradio hört. Hinweis auf werbefreie BR-Streams im Backend.
+
 ## 0.68.5 – 21.11.2026
 
 - Behoben: Parkbucht-Berechnung ohne Winkelfunktionen – Server (Node 22) und Browser bauen auf Kochel und Geretsried 2 wieder exakt dieselbe Welt.

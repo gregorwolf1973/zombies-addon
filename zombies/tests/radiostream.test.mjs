@@ -14,4 +14,7 @@ test('Live-Radio: Vorgabe aus, Antenne Bayern, nur https-Adressen, Lautstärke b
   assert.equal(bereinigeRadioStream({ url: 'https://stream.example.org/live.mp3' }).url, 'https://stream.example.org/live.mp3');
   assert.equal(bereinigeRadioStream({ laut: 250 }).laut, 100);
   assert.equal(bereinigeRadioStream({ name: '  ' }).name, RADIO_STREAM_VORGABE.name);
+  assert.equal(bereinigeRadioStream({}).vorlauf, 30);
+  assert.equal(bereinigeRadioStream({ vorlauf: 500 }).vorlauf, 120);
+  assert.equal(bereinigeRadioStream({ url: 'https://dispatcher.rndfnk.com/br/br3/live/mp3/mid' }).url, 'https://dispatcher.rndfnk.com/br/br3/live/mp3/mid');
 });

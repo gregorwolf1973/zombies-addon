@@ -39,6 +39,7 @@ export function musikSetzen(an) {
   musikAn = !!an;
   if (!ctx) return;
   radioPegel();   // Live-Radio zählt als Musik
+  if (musikAn) radioVorstart(); else if (radioEl) radioPausieren(true);
   if (!musikAn) {
     musikAnwenden(null);   // Spielmusik ausblenden; kommt bei „an“ mit der nächsten Lage (≈1 s) wieder
     if (musik) { const m = musik; musik = null; if (m.strom) m.strom.stop(1); else { m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); setTimeout(() => { try { m.src.stop(); } catch { /* schon aus */ } }, 1500); } }
@@ -158,9 +159,11 @@ export function toneEinstellungen(i) {
   const r = i?.radioStream ?? {}, rl = Number(r.laut);
   const url = typeof r.url === 'string' && r.url.startsWith('https://') ? r.url : '';
   if (radioEl && radioEin.url !== url) radioPausieren(true);   // Senderwechsel: beim nächsten Auto neu verbinden
-  radioEin = { an: r.an === true && !!url, url, laut: Number.isFinite(rl) ? Math.max(0, Math.min(100, rl)) : 60 };
-  radioPegel();
+  const rv = Number(r.vorlauf);
+  radioEin = { an: r.an === true && !!url, url, laut: Number.isFinite(rl) ? Math.max(0, Math.min(100, rl)) : 60, vorlauf: Number.isFinite(rv) ? Math.max(0, Math.min(120, rv)) : 30 };
   if (!radioEin.an && radioEl) radioPausieren(true);
+  else radioVorstart();
+  radioPegel();
   const L = Number(i?.musik?.laut), B = Number(i?.musik?.blende);
   musikEin = { laut: Number.isFinite(L) ? Math.max(0, Math.min(100, L)) : 35, blende: Number.isFinite(B) ? Math.max(1, Math.min(10, B)) : 3 };
 }
@@ -558,7 +561,8 @@ export function knistern(x, y, staerke = 1) {
 // ---------- Autoradio als Live-Radio (Einstellung radioStream, z. B. Antenne Bayern) ----------
 // Ein gemeinsames <audio> holt den Stream direkt beim Sender (CORS erlaubt); jedes Auto mit Radio bekommt einen eigenen
 // Lautstärke-/Richtungszweig (wie die Sirene). Ohne Autos mit Radio wird der Stream nach 5 s getrennt (spart Datenvolumen).
-let radioEin = { an: false, url: '', laut: 60 };
+let radioEin = { an: false, url: '', laut: 60, vorlauf: 30 };
+let radioStummBis = 0, radioStummTimer = null;   // Vorlauf: Stream läuft schon, ist aber noch stumm (Senderwerbung am Anfang)
 let radioEl = null, radioQuelle = null, radioBus = null, radioFrei = false, radioNutzer = 0, radioAusTimer = null;
 function radioAnlegen() {
   if (radioEl || !ctx?.createMediaElementSource) return !!radioEl;
@@ -571,10 +575,29 @@ function radioAnlegen() {
   } catch { radioEl = null; return false; }
 }
 // Lautstärke des Live-Radios: gemeinsamer Bus, wirkt sofort auch auf schon laufende Autoradios
-function radioPegel() { if (ctx && radioBus) radioBus.gain.setTargetAtTime(musikAn ? radioEin.laut / 100 : 0, ctx.currentTime, 0.2); }
-function radioFreischalten() {   // iOS: einmal in einer Nutzergeste kurz (stumm) abspielen
-  if (!radioEin.an || radioFrei || !radioAnlegen() || radioNutzer > 0) return;
-  try { radioEl.src = stille(); Promise.resolve(radioEl.play()).then(() => { radioFrei = true; if (radioNutzer <= 0) radioEl.pause(); }).catch(() => {}); } catch { /* nächste Geste */ }
+function radioPegel() {
+  if (!ctx || !radioBus) return;
+  const stumm = performance.now() < radioStummBis;
+  radioBus.gain.setTargetAtTime(musikAn && !stumm ? radioEin.laut / 100 : 0, ctx.currentTime, stumm ? 0.05 : 0.6);
+}
+// Stream gleich bei Spielbeginn verbinden und für den Vorlauf stumm lassen; danach bleibt er bis zum Verlassen verbunden
+// (sonst spielt der Sender bei jedem neuen Verbindungsaufbau wieder seinen Vorspann)
+function radioVorstart() {
+  if (!ctx || !radioEin.an || !musikAn || !radioAnlegen()) return;
+  if (!radioEl.paused && radioEl.src && radioEl.src.startsWith(radioEin.url)) return;
+  try {
+    radioEl.src = radioEin.url;
+    Promise.resolve(radioEl.play()).then(() => {
+      radioFrei = true;
+      radioStummBis = performance.now() + radioEin.vorlauf * 1000;
+      clearTimeout(radioStummTimer); radioStummTimer = setTimeout(radioPegel, radioEin.vorlauf * 1000 + 50);
+      radioPegel();
+    }).catch(() => {});
+  } catch { /* nächste Geste */ }
+}
+function radioFreischalten() {   // iOS: in einer Nutzergeste starten (gleich mit dem Stream, stumm im Vorlauf)
+  if (!radioEin.an || radioFrei) return;
+  radioVorstart();
 }
 function radioPausieren(sofort = false) {
   clearTimeout(radioAusTimer);
@@ -593,9 +616,7 @@ function liveMischen() {
 function radioHandle() {
   if (!radioEin.an || !musikAn || !radioAnlegen()) return null;
   clearTimeout(radioAusTimer);
-  if (radioEl.paused || !radioEl.src || !radioEl.src.startsWith(radioEin.url)) {
-    try { radioEl.src = radioEin.url; Promise.resolve(radioEl.play()).catch(() => {}); } catch { return null; }
-  }
+  if (radioEl.paused || !radioEl.src || !radioEl.src.startsWith(radioEin.url)) radioVorstart();
   const g = ctx.createGain(); g.gain.value = 0;
   const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
   if (pan) { g.connect(pan); pan.connect(radioBus); } else g.connect(radioBus);
@@ -603,7 +624,7 @@ function radioHandle() {
   radioNutzer++;
   let weg = false;
   const h = { g, pan, laut: 1, quellen: null, rate: null, live: true };   // Lautstärke regelt radioBus (radioPegel)
-  const ende = { stop() { if (weg) return; weg = true; liveZweige.delete(h); try { radioQuelle.disconnect(g); } catch { /* schon getrennt */ } radioNutzer--; if (radioNutzer <= 0) radioPausieren(); } };
+  const ende = { stop() { if (weg) return; weg = true; liveZweige.delete(h); try { radioQuelle.disconnect(g); } catch { /* schon getrennt */ } radioNutzer--; } };   // Stream bleibt verbunden (kein neuer Sender-Vorspann)
   h.quellen = [ende];
   liveZweige.add(h);
   return h;
