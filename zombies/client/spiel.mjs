@@ -18,6 +18,7 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
+import { ladeKulisse } from './kulisse.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
 import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
@@ -503,6 +504,7 @@ async function starteSpiel() {
     try { KARTE = await (await fetch(`karten/${raum.state.karte}.json`)).json(); }
     catch (e) { console.error('Karte nicht geladen', e); }
   }
+  if (raum.state.karte) { try { await ladeKulisse(raum.state.karte); } catch (e) { console.error('Kulisse nicht geladen', e); } }   // Prototyp, nur mit ?kulisse=…
   ladenZeigen(40, 'Generiere Welt … Karte geladen');
   $('start').style.display = 'none';
   $('hud').style.display = 'block';
