@@ -807,6 +807,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   baueEinkaufswagen(welt, karte, seed);             // nur Behälter ohne Kollision (eigener Seed-Zufall), ändert kein Raster
   // Bäume in echter Größe fürs Zeichnen (Krone je Eintrag, d in m): nur Bäume, deren Stammkachel am Ende wirklich Baum ist (nach tuerenFreihalten)
   if (baeumeEchtRoh) welt.baeumeEcht = baeumeEchtRoh.filter(b => welt.hole(Math.floor(b.x / KACHEL), Math.floor(b.y / KACHEL)) === T.BAUM);
+  if (baeumeEchtRoh) welt.baeumeFenster = karte0.baeumeLuftbildFenster;   // nur fürs Zeichnen: wo die Einzelbäume gelten (nicht im Fingerabdruck)
   return welt;
 }
 

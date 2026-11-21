@@ -11,6 +11,8 @@ import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.m
 import { zeichneEinkaufswagen } from './einkaufswagen.mjs';
 import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach, vektorGebaeude } from './vektor.mjs';
 import { kulBoden, fotoStatus, zeichneFoto, zeichneSchatten } from './kulisse.mjs';
+import { imGebiet } from './luftbild.mjs';
+import { zeichneNebengebaeude, zeichnePools } from './nebenobjekte.mjs';
 
 const TAU = Math.PI * 2;
 
@@ -88,20 +90,61 @@ export function baumVon(kx, ky, n = 1) {
   const jx = (hash(kx * 13 + 1, ky * 5 + 7) - 0.5) * 8, jy = (hash(kx * 3 + 11, ky * 19 + 2) - 0.5) * 8;   // ±0,5 m
   return { art, gr, x: kx * KACHEL + KACHEL / 2 + jx, y: ky * KACHEL + KACHEL / 2 + jy, dreh: hash(ky, kx) * Math.PI * 2 };
 }
+// Einzelbäume aus dem Luftbild (welt.baeumeEcht: { x, y, d (Kronendurchmesser m), art 'laub'|'nadel' }, nur innerhalb der ausgewerteten Fenster
+// welt.baeumeFenster): dort genau eine Krone je Eintrag in echter Größe d. Baumkacheln im Fenster, die keine dieser Kronen deckt (z. B. OSM-Bäume),
+// und alle Kacheln außerhalb der Fenster bleiben bei der Baumgruppen-Regel.
+const ECHT_ZELLE = 96;
+function echtIndex(welt) {
+  if (welt._echtIdx) return welt._echtIdx;
+  const m = new Map();
+  for (const b of welt.baeumeEcht) {
+    const k = Math.floor(b.x / ECHT_ZELLE) + ',' + Math.floor(b.y / ECHT_ZELLE);
+    (m.get(k) ?? m.set(k, []).get(k)).push(b);
+  }
+  return (welt._echtIdx = m);
+}
+export function echtGr(b) { return Math.max(16, Math.min(240, b.d * 8)); }
+// Deckt eine echte Krone die Mitte der Kachel kx,ky (Kachel liegt im ausgewerteten Fenster)?
+function echtDeckt(welt, kx, ky) {
+  const x = (kx + 0.5) * KACHEL, y = (ky + 0.5) * KACHEL;
+  if (!imGebiet(welt.baeumeFenster, x, y)) return false;
+  const m = echtIndex(welt), cx = Math.floor(x / ECHT_ZELLE), cy = Math.floor(y / ECHT_ZELLE);
+  for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) for (const b of m.get((cx + i) + ',' + (cy + j)) ?? []) {
+    const r = echtGr(b) / 2 + KACHEL / 2;
+    if ((b.x - x) ** 2 + (b.y - y) ** 2 <= r * r) return true;
+  }
+  return false;
+}
+function echtKrone(b) {
+  const kx = Math.floor(b.x / KACHEL), ky = Math.floor(b.y / KACHEL), h = hash(Math.round(b.x) * 7 + 3, Math.round(b.y) * 11 + 5);
+  const art = b.art === 'nadel' ? 'nadel' : h < 0.7 ? 'baum_gross' : h < 0.88 ? 'baum_klein' : 'baum_herbst';
+  return { art, gr: echtGr(b), x: b.x, y: b.y, dreh: hash(ky + 5, kx + 9) * Math.PI * 2, echt: true };
+}
 // Alle Kronen im Ausschnitt (auch aus Nachbarstücken, die hineinragen)
 export function baumKronen(welt, rect) {
   const l = [];
+  const echt = !!welt.baeumeEcht?.length;
   for (let ky = Math.max(0, rect.y0 - BAUM_RAND); ky < Math.min(HOEHE, rect.y1 + BAUM_RAND); ky++) for (let kx = Math.max(0, rect.x0 - BAUM_RAND); kx < Math.min(BREITE, rect.x1 + BAUM_RAND); kx++) {
     if (welt.hole(kx, ky) !== T.BAUM) continue;
+    if (echt && echtDeckt(welt, kx, ky)) continue;
     if (((kx + ky) & 1) === 0 || (welt.hole(kx - 1, ky) !== T.BAUM && welt.hole(kx + 1, ky) !== T.BAUM && welt.hole(kx, ky - 1) !== T.BAUM && welt.hole(kx, ky + 1) !== T.BAUM)) l.push(baumVon(kx, ky, baumGruppe(welt, kx, ky)));
+  }
+  if (echt) {
+    const x0 = (rect.x0 - BAUM_RAND) * KACHEL, y0 = (rect.y0 - BAUM_RAND) * KACHEL, x1 = (rect.x1 + BAUM_RAND) * KACHEL, y1 = (rect.y1 + BAUM_RAND) * KACHEL;
+    for (const b of welt.baeumeEcht) { const r = echtGr(b) / 2; if (b.x + r >= x0 && b.x - r <= x1 && b.y + r >= y0 && b.y - r <= y1) l.push(echtKrone(b)); }
   }
   return l;
 }
-// Baumkacheln im Ausschnitt (für Hinweise im Luftbild-Modus)
+// Baumkacheln im Ausschnitt (für Hinweise im Luftbild-Modus): ohne die von echten Kronen gedeckten (die bekommen einen Stammpunkt am echten Stamm)
 function baumKachelListe(welt, rect) {
-  const l = [];
-  for (let ky = Math.max(0, rect.y0); ky < Math.min(HOEHE, rect.y1); ky++) for (let kx = Math.max(0, rect.x0); kx < Math.min(BREITE, rect.x1); kx++) if (welt.hole(kx, ky) === T.BAUM) l.push([kx, ky]);
+  const l = [], echt = !!welt.baeumeEcht?.length;
+  for (let ky = Math.max(0, rect.y0); ky < Math.min(HOEHE, rect.y1); ky++) for (let kx = Math.max(0, rect.x0); kx < Math.min(BREITE, rect.x1); kx++) if (welt.hole(kx, ky) === T.BAUM && !(echt && echtDeckt(welt, kx, ky))) l.push([kx, ky]);
   return l;
+}
+// Stammpunkte der echten Bäume im Ausschnitt (Luftbild-Modus)
+function echtStaemme(welt, rect) {
+  if (!welt.baeumeEcht?.length) return [];
+  return welt.baeumeEcht.filter(b => b.x >= rect.x0 * KACHEL - 8 && b.x < rect.x1 * KACHEL + 8 && b.y >= rect.y0 * KACHEL - 8 && b.y < rect.y1 * KACHEL + 8);
 }
 export function hatBaeume(welt, rect) { return baumKronen(welt, rect).length > 0; }
 // Kronen eines Kartenstücks; Bild wird später halbtransparent über den Figuren gezeigt
@@ -109,10 +152,23 @@ export function zeichneKronen(ctx, welt, bilder, rect) {
   ctx.save();
   ctx.translate(-rect.x0 * KACHEL, -rect.y0 * KACHEL);
   for (const b of baumKronen(welt, rect).sort((a, c) => a.y - c.y)) {
+    if (b.art === 'nadel') { nadelKrone(ctx, b); continue; }
     const bild = bilder[b.art];
     if (!bild) continue;
     ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.dreh); ctx.drawImage(bild, -b.gr / 2, -b.gr / 2, b.gr, b.gr); ctx.restore();
   }
+  ctx.restore();
+}
+// Nadelbaum von oben (kein Bild vorhanden): dunkle Krone aus Zackenringen, Spitze in der Mitte
+function nadelKrone(ctx, b) {
+  const r = b.gr / 2, zacken = 11;
+  ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.dreh);
+  for (const [f, farbe] of [[1, '#1f4a2a'], [0.74, '#27603a'], [0.48, '#31764a'], [0.22, '#4a9460']]) {
+    ctx.fillStyle = farbe; ctx.beginPath();
+    for (let i = 0; i < zacken * 2; i++) { const w = i * Math.PI / zacken, rr = r * f * (i % 2 ? 0.72 : 1); ctx.lineTo(Math.cos(w) * rr, Math.sin(w) * rr); }
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(-r * 0.12, -r * 0.12, r * 0.12, 0, TAU); ctx.fill();
   ctx.restore();
 }
 // Schatten und kleiner Stamm in der Bodenebene
@@ -129,6 +185,10 @@ function zeichneBaumMarker(ctx, welt, rect) {
     const x = kx * KACHEL + 8 + hash(kx * 5 + 2, ky * 9 + 1) * 16, y = ky * KACHEL + 8 + hash(kx * 11 + 4, ky * 3 + 8) * 16;
     ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.beginPath(); ctx.arc(x + 1.2, y + 1.6, 5, 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgba(78,52,46,.7)'; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, TAU); ctx.fill();
+  }
+  for (const b of echtStaemme(welt, rect)) {   // echte Bäume: ein Stammpunkt je Baum an x, y
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.beginPath(); ctx.arc(b.x + 1.2, b.y + 1.6, 5, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(78,52,46,.7)'; ctx.beginPath(); ctx.arc(b.x, b.y, 2.2, 0, TAU); ctx.fill();
   }
 }
 
@@ -241,6 +301,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
   zeichneMuell(ctx, welt, { x0, y0, x1, y1 });
   zeichneSperren(ctx, welt, { x0, y0, x1, y1 });
   zeichneStuetzpunktBoden(ctx, welt, { x0, y0, x1, y1 });
+  zeichnePools(ctx, welt, { x0, y0, x1, y1 }, foto);   // Schwimmbecken (Hindernis): halbtransparent über dem Luftbild, sonst deckend
   if (foto) zeichneBaumMarker(ctx, welt, { x0, y0, x1, y1 }); else zeichneBaumSockel(ctx, welt, { x0, y0, x1, y1 });
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
@@ -252,7 +313,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
 
 // Kulisse „Schatten“: Schatten von Häusern und Bäumen eines Kartenstücks in ein leeres Bild (null, wenn nichts zu zeichnen ist)
 export function zeichneSchattenStueck(ctx, B, H, welt, rect) {
-  return zeichneSchatten(ctx, B, H, rect, vektorGebaeude(welt), baumKronen(welt, { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 12, y1: rect.y1 + 12 }));
+  return zeichneSchatten(ctx, B, H, rect, vektorGebaeude(welt), baumKronen(welt, { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 12, y1: rect.y1 + 12 }), welt.nebengebaeude ?? []);
 }
 
 // ---------- obere Ebene: Bäume und Deko aus dem Prototyp ----------
@@ -364,6 +425,7 @@ export function zeichneDaecher(ctx, welt, rect) {
   ctx.translate(-x0 * KACHEL, -y0 * KACHEL);
   if (welt.vektor) {
     zeichneVektorDaecher(ctx, welt, rect);
+    zeichneNebengebaeude(ctx, welt, rect);   // Garagen, Gartenhäuser (Hindernisse aus dem LoD2-Modell)
     if (welt.details) gartenObjekte(ctx, welt, rect, true);   // Gartenhäuser, Haltestellen
   } else if (welt.karte) {
     const nr = dachIndex(welt);

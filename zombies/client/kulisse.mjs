@@ -99,12 +99,25 @@ export function zeichneEchtesDach(ctx, g, farbe) {
   if (!liste) return false;
   g._kd ??= liste.flatMap(b => b.f.map(flaecheAufbereiten).filter(Boolean)).sort((p, q) => p.zmax - q.zmax);
   if (!g._kd.length) return false;
-  const pts = g.pts;
+  dachFlaechenZeichnen(ctx, g.pts, g._kd, farbe);
+  return true;
+}
+
+// Nebengebäude (welt.nebengebaeude): LoD2-Dachflächen n.dach ([{ p, n, a, e }]) in den Umriss n.p (Spielpixel, flach [x, y, …]); false, wenn keine Flächen da sind
+export function zeichneNebenDach(ctx, n, farbe) {
+  n._kd ??= (n.dach ?? []).map(flaecheAufbereiten).filter(Boolean).sort((p, q) => p.zmax - q.zmax);
+  if (!n._kd.length) return false;
+  const pts = []; for (let i = 0; i + 1 < n.p.length; i += 2) pts.push([n.p[i], n.p[i + 1]]);
+  dachFlaechenZeichnen(ctx, pts, n._kd, farbe);
+  return true;
+}
+
+function dachFlaechenZeichnen(ctx, pts, flaechen, farbe) {
   ctx.save(); ctx.lineJoin = 'round';
   ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath();
   ctx.fillStyle = `rgb(${farbe[0]},${farbe[1]},${farbe[2]})`; ctx.fill();
   ctx.save(); ctx.clip();
-  for (const f of g._kd) {
+  for (const f of flaechen) {
     const c = farbe.map(v => Math.max(0, Math.min(255, (v * f.hell) | 0)));
     ctx.beginPath(); f.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
     ctx.fillStyle = ctx.strokeStyle = `rgb(${c[0]},${c[1]},${c[2]})`; ctx.lineWidth = 0.7; ctx.fill(); ctx.stroke();
@@ -119,7 +132,6 @@ export function zeichneEchtesDach(ctx, g, farbe) {
   ctx.strokeStyle = 'rgba(40,20,10,.5)'; ctx.lineWidth = 1.6;   // Traufkante
   ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.stroke();
   ctx.restore();
-  return true;
 }
 
 // Haushöhe in Metern (Firsthöhe aus LoD2, sonst Schätzwert)
@@ -131,7 +143,7 @@ function haushoehe(g) {
 // ---------- Schatten ----------
 // Schatten von Häusern (g.pts in Pixeln) und Bäumen (t.x, t.y, t.gr) in ein leeres Bodenstück-Bild (ohne Weltraum-Verschiebung; rect in Spielkacheln).
 // Deckkraft setzt der Aufrufer am Bild (nachts/Nebel ändern sie); hier wird nur deckend schwarz gezeichnet und weich gerechnet. Gibt zurück, ob etwas gezeichnet wurde.
-export function zeichneSchatten(ctx, B, H, rect, haeuser, baeume) {
+export function zeichneSchatten(ctx, B, H, rect, haeuser, baeume, neben = []) {
   const ox = rect.x0 * K, oy = rect.y0 * K, RAND = 220;   // Schatten fallen nach Nordwesten: Quellen bis 220 px südöstlich des Stücks zählen
   const hier = (x0, y0, x1, y1) => x1 >= ox - RAND && x0 <= ox + B + 8 && y1 >= oy - RAND && y0 <= oy + H + RAND;
   const h = document.createElement('canvas'); h.width = B; h.height = H;
@@ -144,6 +156,18 @@ export function zeichneSchatten(ctx, B, H, rect, haeuser, baeume) {
     for (let i = 0; i < P.length; i++) {
       const a = P[i], e = P[(i + 1) % P.length];
       g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(e[0], e[1]); g.lineTo(e[0] + dx, e[1] + dy); g.lineTo(a[0] + dx, a[1] + dy); g.closePath(); g.fill();
+    }
+    n++;
+  }
+  for (const b of neben) {   // Nebengebäude (Garagen, Gartenhäuser): Umriss b.p flach in Pixeln, Höhe b.h in dm
+    if (!b.p || b.p.length < 6) continue;
+    if (!b._box) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (let i = 0; i < b.p.length; i += 2) { x0 = Math.min(x0, b.p[i]); x1 = Math.max(x1, b.p[i]); y0 = Math.min(y0, b.p[i + 1]); y1 = Math.max(y1, b.p[i + 1]); } b._box = { x0, y0, x1, y1 }; }
+    if (!hier(b._box.x0, b._box.y0, b._box.x1, b._box.y1)) continue;
+    const m = Math.max(2, (b.h || 0) / 10), dx = SCHATTEN_JE_M.dx * m, dy = SCHATTEN_JE_M.dy * m, P = b.p, N = P.length >> 1;
+    g.beginPath(); for (let i = 0; i < N; i++) i ? g.lineTo(P[2 * i] + dx, P[2 * i + 1] + dy) : g.moveTo(P[0] + dx, P[1] + dy); g.closePath(); g.fill();
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      g.beginPath(); g.moveTo(P[2 * i], P[2 * i + 1]); g.lineTo(P[2 * j], P[2 * j + 1]); g.lineTo(P[2 * j] + dx, P[2 * j + 1] + dy); g.lineTo(P[2 * i] + dx, P[2 * i + 1] + dy); g.closePath(); g.fill();
     }
     n++;
   }
