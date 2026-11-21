@@ -578,17 +578,17 @@ test('Figur: gewähltes Aussehen kommt an, wird gespeichert, Unsinn wird ersetzt
   const id = neueId();
   let c = await new Client(URL_).joinOrCreate('zombies', { name: 'Modell', spielerId: id, aussehen: 'w,2,5' });
   let raum = matchMaker.getLocalRoomById(c.roomId);
-  assert.equal(raum.state.spieler.get(c.sessionId).aussehen, 'w,2,5');
+  assert.equal(raum.state.spieler.get(c.sessionId).aussehen, 'f,2,5', 'alte Wahl Frau wird zu Heldin');
   raum.speichereSpieler(c.sessionId);
   await c.leave(); await warte(200);
   // ohne Angabe: gespeichertes Aussehen
   c = await new Client(URL_).joinOrCreate('zombies', { name: 'Modell', spielerId: id });
   raum = matchMaker.getLocalRoomById(c.roomId);
-  assert.equal(raum.state.spieler.get(c.sessionId).aussehen, 'w,2,5');
+  assert.equal(raum.state.spieler.get(c.sessionId).aussehen, 'f,2,5');
   await c.leave(); await warte(200);
   c = await new Client(URL_).joinOrCreate('zombies', { name: 'Böse', spielerId: neueId(), aussehen: '<script>' });
   raum = matchMaker.getLocalRoomById(c.roomId);
-  assert.match(raum.state.spieler.get(c.sessionId).aussehen, /^[mws],[0-5],[0-7]$/);
+  assert.match(raum.state.spieler.get(c.sessionId).aussehen, /^[hfs],[0-5],[0-7]$/);
   await c.leave();
 });
 
