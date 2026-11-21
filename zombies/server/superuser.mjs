@@ -75,8 +75,8 @@ export function auffuellen(raum, p, x) {
   heilen(p);
   p.munition = MUNITION_MAX; p.pfeile = PFEILE_MAX; p.granaten = GRANATEN_MAX; p.handgranaten = HANDGRANATEN_MAX;
   const einst = raum.einstellungen?.() ?? {};
-  x.mag ??= [null, null, null];
-  [0, 1, 2].forEach(i => {
+  x.mag ??= [null, null];
+  [0, 1].forEach(i => {
     const name = p[WP.PLATZ_FELD[i]], gm = WP.magGroesse(name, einst);
     if (name && gm && WAFFEN[name]) x.mag[i] = { waffe: name, n: gm };
   });

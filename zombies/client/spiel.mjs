@@ -773,7 +773,7 @@ class Ort extends Phaser.Scene {
 
     this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,R,F,X,C,SPACE,ESC');
     this.tasten.E.on('down', () => this.aktion());
-    this.tasten.Q.on('down', () => this.aktion2());
+    this.tasten.Q.on('down', () => this.granateWerfen());
     this.tasten.C.on('down', () => this.alleSuchen());
     this.tasten.R.on('down', () => raum.send('nachladen'));            // Nachladen von Hand
     this.tasten.F.on('down', () => raum.send('waffenplatz', { weiter: true }));   // nächster Waffenplatz
@@ -960,10 +960,7 @@ class Ort extends Phaser.Scene {
     $('tauschok').onclick = () => raum.send('tausch_ok');
     $('tauschab').onclick = () => raum.send('tausch_ende');
     this.hudZeit = 0;
-    // Zoom: Knöpfe, Mausrad, Tasten + und −
-    $('zoomrein').style.display = $('zoomraus').style.display = 'block';
-    $('zoomrein').onclick = () => this.zoomen(1.25);
-    $('zoomraus').onclick = () => this.zoomen(0.8);
+    // Zoom: Mausrad, Zwei-Finger-Zoom, Tasten + und − (keine Knöpfe)
     this.input.on('wheel', (_p, _o, _dx, dy) => this.zoomen(dy < 0 ? 1.12 : 1 / 1.12));
     this.input.keyboard.on('keydown', e => {
       if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
@@ -981,11 +978,11 @@ class Ort extends Phaser.Scene {
     this.hordeGfx = this.add.graphics().setDepth(900);
     this.hordeFahne = this.add.text(0, 0, '', { fontSize: '15px', fontStyle: 'bold', color: '#ffd1e0', stroke: '#000', strokeThickness: 4, align: 'center' }).setOrigin(0.5, 1).setDepth(901).setVisible(false);
     this.hordeListe = document.createElement('div');
-    // Prüfhilfe nur für Superuser: steht direkt unter dem Zählerfenster
+    // Prüfhilfe nur für Superuser: steht direkt unter der Eckkarte
     this.hordeListe.id = 'hordeliste';
     this.hordeListe.style.display = 'none';
-    const zaehler = $('zaehler');
-    if (zaehler) zaehler.after(this.hordeListe); else document.body.appendChild(this.hordeListe);
+    const kartenbox = $('kartenbox');
+    if (kartenbox) kartenbox.after(this.hordeListe); else document.body.appendChild(this.hordeListe);
     raum.onMessage('hordeInfo', m => this.hordeInfoEmpfangen(m));
     if (new URLSearchParams(location.search).has('debug')) raum.send('hordeDebug', { an: true });
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
@@ -1530,9 +1527,7 @@ class Ort extends Phaser.Scene {
       if (!z) continue;
       const leer = z.rest === 0;
       if (b.art === 'auto') {
-        if (s.verbrannt?.has('auto:' + b.id)) continue;
-        autoFlaeche(g.fillStyle(0x111111, 0.85), b, -25, -16, 9);   // offener Kofferraum am Heck
-        if (leer) autoFlaeche(g.fillStyle(0x9e9e9e, 0.45), b, -23, 23, 11);
+        continue;   // Autos sehen immer normal aus (keine Markierung für durchsuchte/leere Kofferräume)
       } else if (b.art !== 'bus') {
         // das Möbelstück, zu dem der Behälter gehört (Rahmen und Kreuz liegen genau auf dem gedrehten Möbelbild = ganzes Möbelrechteck)
         const kx = Math.floor(b.x / KACHEL), ky = Math.floor(b.y / KACHEL);
@@ -2637,10 +2632,10 @@ class Ort extends Phaser.Scene {
         if (Math.hypot(x - nx, y - ny) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
       }
       if (w.kuehlschrank && Math.hypot(x - w.kuehlschrank.x, y - w.kuehlschrank.y) < AKTION_ABSTAND + 20) {
-        return { art: 'kuehlschrank', text: '🧊 Kühlschrank (Notvorrat, unter 30 %)' };
+        return { art: 'kuehlschrank', text: 'Kühlschrank öffnen (Notvorrat, unter 30 %)' };
       }
       if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < AKTION_ABSTAND + 20) {
-        return { art: 'kiste', text: '📦 Vorräte', safe };
+        return { art: 'kiste', text: 'Vorräte öffnen', safe };
       }
     }
     // Funkzelt des Bundeswehr-Stützpunkts: Funkspruch wie am Funktisch
@@ -2649,12 +2644,12 @@ class Ort extends Phaser.Scene {
     // Vorratskisten des Bundeswehr-Lagers (Safe House, solange es steht): gemeinsame Kisten, Munition darf hinein
     if (!ich.ebene && raum.state.stuetzpunkt === 'steht') {
       const vk = this.welt.stuetzpunkt?.teile.find(q => q.art === 'vorratskiste' && Math.hypot(x - q.x, y - q.y) < AKTION_ABSTAND + 20);
-      if (vk) return { art: 'kiste', text: '📦 Vorratskiste (Lager)', safe: { id: vk.id, name: 'Bundeswehr-Lager' } };
+      if (vk) return { art: 'kiste', text: 'Vorratskiste öffnen (Lager)', safe: { id: vk.id, name: 'Bundeswehr-Lager' } };
     }
     {
       const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene });
-      if (nah.length === 1 && ich.rucksack.length < ich.plaetze) return { art: 'aufheben', text: `✋ ${DINGE[nah[0].ding]?.zeichen ?? ''} aufheben`, html: `✋ ${dingIcon(nah[0].ding, 22)} aufheben` };
-      if (nah.length) return { art: 'aufheben_wahl', text: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => DINGE[n.ding]?.zeichen ?? '').join('')}`, html: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => dingIcon(n.ding, 20)).join('')}`, nah };
+      if (nah.length === 1 && ich.rucksack.length < ich.plaetze) return { art: 'aufheben', text: `${DINGE[nah[0].ding]?.name ?? 'Gegenstand'} aufheben` };
+      if (nah.length) return { art: 'aufheben_wahl', text: `Aufheben … (${nah.length})`, nah };
     }
     // Mensch in der Nähe (versteckt oder verängstigt): ansprechen, dann folgt er dir bis in den Safe Room
     {
@@ -2683,8 +2678,8 @@ class Ort extends Phaser.Scene {
       const d = Math.hypot(l.x - x, l.y - y);
       if (d < bd && l.rest !== 0) { bd = d; best = { art: 'leiche' }; }
     }
-    if (best?.art === 'auto' && !ich.rucksack.includes('brechstange')) return { art: 'durchsuchen', text: '🔒 Kofferraum (⚒️ Brechstange nötig)' };
-    if (best) return { art: 'durchsuchen', text: `${best.art === 'auto' ? '⚒️' : '🔍'} ${BEHAELTER_NAME[best.art]} ${best.art === 'auto' ? 'aufbrechen' : 'durchsuchen'}` };
+    if (best?.art === 'auto' && !ich.rucksack.includes('brechstange')) return { art: 'durchsuchen', text: 'Kofferraum (Brechstange nötig)' };
+    if (best) return { art: 'durchsuchen', text: `${BEHAELTER_NAME[best.art]} ${best.art === 'auto' ? 'aufbrechen' : OEFFNEN.has(best.art) ? 'öffnen' : 'durchsuchen'}` };
     const zu = this.tuerKontext(ich, 'zu');
     if (zu) return zu;
     if (!ich.ebene) {
@@ -2717,16 +2712,21 @@ class Ort extends Phaser.Scene {
 
   // „Alles durchsuchen“ (Taste C / Knopf): nur wenn es mindestens zwei Behälter/Leichen in Reichweite gibt
   alleSuchen() {
+    if (!suAn) return;   // nur noch für Superuser
     if ((this.alleSperreBis ?? 0) > Date.now()) return;
     if (this.alleKand && (this.aktEbene ? this.alleKand.drinnen : this.alleKand.liste.length >= 2)) raum.send('durchsuche_alle');
   }
 
-  // zweiter Knopf: andere Türmöglichkeit, Handel (wenn der Hauptknopf etwas anderes tut) oder Granate werfen
+  // Handgranate werfen (Taste Q / Granatenfeld): wie bisher „wurf“ an den Server
+  granateWerfen() {
+    if (this.granateBereit) raum.send('wurf');
+  }
+
+  // zweiter Knopf: andere Türmöglichkeit oder Handel (wenn der Hauptknopf etwas anderes tut)
   aktion2() {
     const z = this.zweit;
     if (!z) return;
-    if (z.art === 'wurf') raum.send('wurf');
-    else if (z.art === 'handel') handelAuf(z.wer);
+    if (z.art === 'handel') handelAuf(z.wer);
     else raum.send('aktion2');
   }
 
@@ -2906,24 +2906,19 @@ class Ort extends Phaser.Scene {
       const wf = WAFFEN[ich.waffe], d = DINGE[ich.waffe];
       const pfeile = ich.pfeile && !wf?.pfeil ? ` · ${dingIcon('pfeil', 18, '➶')} ${ich.pfeile} Pfeile` : '';
       let waffe;
-      if (!wf) waffe = `${dingIcon('faust', 20, '✊')} Unbewaffnet – stoßen${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
+      if (!wf) waffe = `${dingIcon('faust', 16, '✊')} Unbewaffnet – stoßen${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
       else if (wf.fern) {
         // „🔫 Pistole 12/15 · 48“: Magazin/Max · Vorrat (Pfeile bzw. Granaten beim Armbrust/Granatwerfer)
         const vorrat = vorratVon(ich, wf), leer = !(ich.magazin > 0) && vorrat <= 0;
-        waffe = `${dingIcon(ich.waffe, 20)} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ' · 🔄 lädt nach' : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
-      } else waffe = `${dingIcon(ich.waffe, 20)} ${d.name}${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
+        waffe = `${dingIcon(ich.waffe, 16)} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ' · 🔄 lädt nach' : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
+      } else waffe = `${dingIcon(ich.waffe, 16)} ${d.name}${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
       htmlSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
         + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
-      this.waffenplaetzeZeigen(ich);
-      // Nachladen-Knopf (Handy; am PC Taste R): nur wenn das Magazin nicht voll ist und Vorrat da ist
-      const nk = $('nachladenknopf'); nk.onclick = () => raum.send('nachladen');
-      const kannLaden = !!wf?.fern && !ich.unten && !(ich.zombie > 0) && ((ich.nachladen > 0) || ((ich.magazin ?? 0) < (ich.magmax || wf.magazin) && vorratVon(ich, wf) > 0));
-      nk.style.display = kannLaden ? 'block' : 'none';
-      nk.classList.toggle('ladet', ich.nachladen > 0);
-      const nt = ich.nachladen > 0 ? `🔄 lädt … ${Math.round(ich.nachladen * 100)} %` : '🔄 Nachladen (R)';
-      if (nk.textContent !== nt) nk.textContent = nt;
-      textSetzen('besiegt', `🧟 ${ich.besiegt} von dir · ${Math.max(s.besiegt, ich.besiegt)} gesamt`);
-      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} verwandelt · 🙋 ${s.gerettet ?? 0} gerettet · 🧟 ${s.zombieZahl || zombieKarte().size} unterwegs`);   // der Client kennt nur die Zombies in seiner Nähe
+      this.waffenplaetzeZeigen(ich);   // Waffenfelder (Antippen wechselt, Doppeltippen lädt nach, Taste R lädt auch nach)
+      this.granatenfeldZeigen(ich);
+      textSetzen('besiegt', `besiegt ${ich.besiegt} / ${Math.max(s.besiegt, ich.besiegt)}`); $('besiegt').title = 'besiegt: von dir / gesamt';
+      textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} · 🙋 ${s.gerettet ?? 0}`);
+      textSetzen('zombiezahl', `🧟 ${s.zombieZahl || zombieKarte().size}`);   // der Client kennt nur die Zombies in seiner Nähe
       const safe = ich.sicher === 'lager' ? { id: 'lager', name: 'Bundeswehr-Lager', lager: true } : ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
       if (safe?.lager) textSetzen('sichername', `🛡 ${safe.name} · bewacht`);
@@ -2960,13 +2955,13 @@ class Ort extends Phaser.Scene {
     const frei2 = ich && !ich.unten && !ich.aktion && !(ich.zombie > 0) && s.phase === 'spiel' && this.lokal;
     let zweit = frei2 ? this.tuerKontext(ich, 'zweit') : null;
     if (frei2 && !zweit && this.handelKontext && this.kontext !== this.handelKontext && !handelOffen) zweit = this.handelKontext;
-    if (frei2 && !zweit && (ich.rucksack.includes('granate') || (ich.waffe === 'handgranate' && ich.magazin > 0) || ich.handgranaten > 0)) zweit = { art: 'wurf', text: '💣 Granate werfen (Q)' };
     this.zweit = zweit;
     const knopf = $('aktion'), knopf2 = $('aktion2');
     knopf.style.display = this.kontext ? 'block' : 'none';
-    if (this.kontext && knopf.__text !== (this.kontext.html ?? this.kontext.text)) {   // html: mit Gegenstands-Icons
-      knopf.__text = this.kontext.html ?? this.kontext.text;
-      if (this.kontext.html) knopf.innerHTML = this.kontext.html; else knopf.textContent = this.kontext.text;
+    if (this.kontext && knopf.__text !== this.kontext.text) {   // nur Text, keine Icons; Taste E klein dahinter (nur mit Tastatur sichtbar)
+      knopf.__text = this.kontext.text;
+      knopf.textContent = nurText(this.kontext.text);
+      const tk = document.createElement('small'); tk.className = 'tk'; tk.textContent = ' (E)'; knopf.append(tk);
     }
     knopf.style.opacity = this.kontext?.aus ? '0.5' : '';   // ausgegraut (Schlüssel nötig), Klick zeigt nur den Hinweis
     knopf2.style.display = zweit ? 'block' : 'none';
@@ -2976,12 +2971,12 @@ class Ort extends Phaser.Scene {
       // drinnen: Quiz + alle Türen, daher immer anbieten, solange im Stockwerk noch ein Behälter ungesucht ist
       if (kand) kand.drinnen = !!ich.ebene && (this.wv(this.aktEbene).behaelter ?? []).some(b => b.art !== 'bw_kiste' && !s.behaelter.get(b.id));
       const ak = $('alleknopf'), zeige = !!kand && (kand.drinnen || kand.liste.length >= 2);
-      ak.style.display = zeige ? 'block' : 'none';
+      ak.style.display = zeige && suAn ? 'block' : 'none';   // nur für Superuser
       const sperre = Math.ceil(((this.alleSperreBis ?? 0) - Date.now()) / 1000);
-      if (zeige) { const t = sperre > 0 && ich.ebene ? `⏳ Alles durchsuchen in ${sperre} s` : kand.drinnen ? '🔍 Alles durchsuchen (3 Rätsel) [C]' : `🔍 Alles durchsuchen (${kand.liste.length}, ${Math.round(kand.dauer * 10) / 10} s) [C]`; if (ak.textContent !== t) ak.textContent = t; }
+      if (zeige) { const t = sperre > 0 && ich.ebene ? `Alles durchsuchen in ${sperre} s` : kand.drinnen ? 'Alles durchsuchen (3 Rätsel)' : `Alles durchsuchen (${kand.liste.length}, ${Math.round(kand.dauer * 10) / 10} s)`; if (ak.textContent !== t) ak.textContent = t; }
       fundPruefen(this.lokal);
     }
-    if (zweit && knopf2.textContent !== zweit.text) knopf2.textContent = zweit.text;
+    if (zweit && knopf2.__text !== zweit.text) { knopf2.__text = zweit.text; knopf2.textContent = nurText(zweit.text); }
     if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
     if (!this.kontext || this.kontext.art !== 'aufheben_wahl') auswahlZu();
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
@@ -3015,13 +3010,14 @@ class Ort extends Phaser.Scene {
     if (h.innerHTML !== hinweis) h.innerHTML = hinweis;
   }
 
-  // Waffenplätze: senkrechte Knopfreihe unten links über dem Inventar (1 Haupt, 2 Neben, 3 Ersatz); Antippen wechselt, Taste F schaltet weiter.
-  // Jeder Knopf zeigt Symbol, Kurzname, Magazin/Max und klein den Vorrat; beim Nachladen läuft ein Balken im aktiven Knopf.
+  // Waffenfelder (zwei Plätze, im HUD oben links unter den Mitspielern): großes Waffensymbol, nur das Magazin „3/15“ (Nahwaffe: nichts).
+  // Antippen wechselt, Doppeltippen lädt nach, gedrückt halten bzw. Rechtsklick öffnet das Menü; Taste F wechselt, R lädt nach, X = Faust.
+  // Ohne Waffe in der Hand (leer oder Faust) kämpft die Figur mit der Faust.
   waffenplaetzeZeigen(ich) {
     const leiste = $('waffenplaetze');
-    const namen = ['Haupt', 'Neben', 'Ersatz'], waffen = [ich.wp0, ich.wp1, ich.wp2], akt = ich.wplatz ?? 0;
+    const namen = ['Platz 1', 'Platz 2'], waffen = [ich.wp0, ich.wp1], akt = ich.wplatz ?? 0;
     if (!ich.faust) waffen[akt] = ich.waffe;
-    const mg = [ich.mg0, ich.mg1, ich.mg2], mx = [ich.mx0, ich.mx1, ich.mx2];
+    const mg = [ich.mg0, ich.mg1], mx = [ich.mx0, ich.mx1];
     if (!ich.faust) mg[akt] = ich.magazin ?? 0;
     const zeilen = waffen.map((w, i) => {
       const d = w ? DINGE[w] : null, wf = w ? WAFFEN[w] : null;
@@ -3037,27 +3033,43 @@ class Ort extends Phaser.Scene {
         b.type = 'button';
         const leer = z.wf?.fern && z.m <= 0 && z.vorrat <= 0;
         b.className = (i === akt && !ich.faust ? 'aktiv ' : '') + (z.w ? '' : 'leer ') + (leer ? 'rot' : '');
-        const kurz = z.d ? z.d.name.replace(/^Jagd/, '').replace(/^Baseball/, '').trim().replace(/^./, c => c.toUpperCase()) : 'leer';
-        const zahl = z.wf?.fern ? `<span class="mag">${z.m}/${z.max}</span><span class="vor">${z.vorrat}</span>` : '';
-        b.innerHTML = `<span class="nr">${i + 1}</span><span class="zz">${z.d ? dingIcon(z.w, 28) : '–'}</span><span class="nm">${kurz}</span>${zahl}<i class="lad"></i>`;
-        b.title = `${namen[i]}: ${z.d ? z.d.name : 'leer'}${z.wf?.fern ? ` – Magazin ${z.m}/${z.max}, Vorrat ${z.vorrat}` : ''} (Taste F wechselt)`;
-        // Antippen = in die Hand; gedrückt halten (Handy) bzw. Rechtsklick (PC) = Menü (Rucksack, Fallen lassen, Tauschen)
+        const zahl = z.wf?.fern ? `<span class="mag">${z.m}/${z.max}</span>` : '';
+        b.innerHTML = `<span class="zz">${z.d ? dingIcon(z.w, 40) : ''}</span>${zahl}<i class="lad"></i>`;
+        b.title = `${namen[i]}: ${z.d ? z.d.name : 'leer'}${z.wf?.fern ? ` – Magazin ${z.m}/${z.max}, Vorrat ${z.vorrat}` : ''} (Taste F wechselt, R lädt nach)`;
+        b.setAttribute('aria-label', b.title);
+        // Antippen = in die Hand, zweimal schnell = nachladen; gedrückt halten (Handy) bzw. Rechtsklick (PC) = Menü (Rucksack, Fallen lassen, Tauschen)
         let lang = false, timer = 0;
         const menue = () => { lang = true; platzMenue(b, i); };
         b.addEventListener('pointerdown', () => { lang = false; clearTimeout(timer); timer = setTimeout(menue, 500); });
         for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => clearTimeout(timer));
         b.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); clearTimeout(timer); if (!lang) menue(); });
-        b.onclick = e => { e.stopPropagation(); if (lang) { lang = false; return; } raum.send('waffenplatz', { platz: i }); };
+        b.onclick = e => {
+          e.stopPropagation();
+          if (lang) { lang = false; return; }
+          const jetzt = performance.now(), k = this.waffenKlick;
+          this.waffenKlick = { i, t: jetzt };
+          if (k && k.i === i && jetzt - k.t < 400) { this.waffenKlick = null; raum.send('waffenplatz', { platz: i }); raum.send('nachladen'); return; }   // Doppeltipp: nachladen
+          raum.send('waffenplatz', { platz: i });
+        };
         leiste.appendChild(b);
       });
-      const f = document.createElement('button');
-      f.type = 'button'; f.className = 'faustknopf' + (ich.faust ? ' aktiv' : '');
-      f.innerHTML = `${dingIcon('faust', 22, '✊')} Faust`; f.title = 'Nichts in der Hand, ohne einen Platz zu leeren (Taste X)';
-      f.onclick = e => { e.stopPropagation(); raum.send('faust'); };
-      leiste.appendChild(f);
     }
     const lad = ich.faust ? null : leiste.children[akt]?.querySelector('.lad');   // Nachladefortschritt (ohne Neuaufbau)
     if (lad) lad.style.width = ich.nachladen > 0 ? `${Math.round(Math.min(1, ich.nachladen) * 100)}%` : '0';
+  }
+
+  // Granatenfeld neben den Waffenfeldern: fester Platz, Anzahl der Handgranaten; nur sichtbar, wenn man werfen kann (Platz bleibt reserviert)
+  granatenfeldZeigen(ich) {
+    const feld = $('granatenfeld');
+    const inHand = ich.waffe === 'handgranate' && !ich.faust;
+    let n = (ich.handgranaten ?? 0) + [...ich.rucksack].filter(d => d === 'granate').length;
+    [0, 1].forEach(i => { if (ich['wp' + i] === 'handgranate') n += i === (ich.wplatz ?? 0) && !ich.faust ? (ich.magazin ?? 0) : (ich['mg' + i] ?? 0); });
+    const bereit = !ich.unten && !(ich.zombie > 0) && this.lokal && (ich.rucksack.includes('granate') || (inHand && ich.magazin > 0) || ich.handgranaten > 0);
+    this.granateBereit = !!bereit;
+    const sicht = bereit ? 'visible' : 'hidden';
+    if (feld.style.visibility !== sicht) feld.style.visibility = sicht;
+    textSetzen('granatenzahl', bereit ? String(n) : '');
+    if (!feld.__an) { feld.__an = true; feld.onclick = e => { e.stopPropagation(); this.granateWerfen(); }; }
   }
 
   // Handgranaten in der Hand: dezenter 60°-Bogen vor der Figur bis zur maximalen Wurfweite (Tippen wirft genau dorthin)
@@ -3203,6 +3215,7 @@ function popupAuf(knopf, platz, ding) {
   const r = knopf.getBoundingClientRect();
   p.style.display = 'block';
   p.style.left = Math.max(8, Math.min(window.innerWidth - p.offsetWidth - 8, r.left + r.width / 2 - p.offsetWidth / 2)) + 'px';
+  p.style.top = 'auto';
   p.style.bottom = (window.innerHeight - r.top + 8) + 'px';
 }
 function popupZu() { $('popup').style.display = 'none'; }
@@ -3213,7 +3226,7 @@ function platzMenue(knopf, platz) {
   const name = ich['wp' + platz] || '', p = $('popup');
   p.innerHTML = '';
   const titel = document.createElement('div');
-  titel.className = 'titel'; titel.innerHTML = name ? `${['Haupt', 'Neben', 'Ersatz'][platz]}: ${dingHtml(name, 24)}` : `${['Haupt', 'Neben', 'Ersatz'][platz]}: leer`;
+  titel.className = 'titel'; titel.innerHTML = name ? `${['Platz 1', 'Platz 2'][platz]}: ${dingHtml(name, 24)}` : `${['Platz 1', 'Platz 2'][platz]}: leer`;
   p.append(titel);
   const knopfMit = (text, daten, zweit, html) => {
     const b = document.createElement('button');
@@ -3234,7 +3247,8 @@ function platzMenue(knopf, platz) {
   const r = knopf.getBoundingClientRect();
   p.style.display = 'block';
   p.style.left = Math.max(8, Math.min(window.innerWidth - p.offsetWidth - 8, r.left)) + 'px';
-  p.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+  p.style.bottom = 'auto';
+  p.style.top = Math.max(8, Math.min(window.innerHeight - p.offsetHeight - 8, r.bottom + 8)) + 'px';   // das Feld sitzt oben links: Menü darunter
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') popupZu(); });
 document.addEventListener('pointerdown', e => {
@@ -3397,6 +3411,11 @@ function balkenSetzen(id, wert) {
   const w = Math.max(0, Math.min(100, wert)).toFixed(0) + '%';
   if (el.style.width !== w) el.style.width = w;
 }
+// Aktionsknöpfe zeigen nur Text: Emojis/Symbole raus
+const nurText = t => String(t ?? '').replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '').replace(/\s+/g, ' ').trim();
+// Behälter, bei denen der Knopf „öffnen“ heißt (Schrank, Kiste, Kofferraum, Container …)
+const OEFFNEN = new Set(['schrank', 'kuehlschrank', 'spind', 'spind_belohnung', 'container', 'bw_kiste', 'kiste']);
+
 function textSetzen(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
 // wie textSetzen, aber mit HTML (Gegenstands-Icons); nur bei Änderung neu setzen
 function htmlSetzen(id, html) { const el = $(id); if (el.__html !== html) { el.__html = html; el.innerHTML = html; } }
