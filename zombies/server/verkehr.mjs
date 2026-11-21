@@ -3,6 +3,7 @@
 // ab und zu Polizei und Feuerwehr mit Blaulicht und Sirene (die Feuerwehr fährt zu einem Brand).
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, BREITE, HOEHE } from '../client/welt.mjs';
+import { B11_KARTE, b11Sperrkanten } from './szene_b11_geo.mjs';
 
 export const Fahrzeug = schema({
   x: t.number(), y: t.number(), richtung: t.number(),
@@ -23,7 +24,7 @@ const SPUR = { bus: 0.22, auto: 0.22, laster: 0.22, polizei: 0.12, feuerwehr: 0.
 // Kante (Kachelkoordinaten, in beiden Richtungen) durch eine Straßensperre gesperrt? (welt.sperren aus osmwelt.mjs)
 function gesperrt(welt, ax, ay, bx, by) {
   const nah = (a, b) => Math.abs(a - b) < 0.05;
-  return (welt.sperren ?? []).some(({ kante: k }) =>
+  return [...(welt.sperren ?? []), ...(welt.verkehrSperren ?? [])].some(({ kante: k }) =>
     (nah(k[0], ax) && nah(k[1], ay) && nah(k[2], bx) && nah(k[3], by)) || (nah(k[0], bx) && nah(k[1], by) && nah(k[2], ax) && nah(k[3], ay)));
 }
 export function strassenGraph(welt) {
@@ -115,6 +116,7 @@ function spurLinie(punkte, versatz) {
 export class Verkehr {
   constructor(raum) {
     this.raum = raum;
+    if (raum.state?.karte === B11_KARTE && !raum.welt._graph) raum.welt.verkehrSperren = b11Sperrkanten(raum.welt);   // Szene „Stau auf der B11“: dort fährt kein Verkehr
     this.graph = strassenGraph(raum.welt);
     this.info = new Map();      // id → { weg, pos, halt, ... }
     this.naechsteId = 1;
