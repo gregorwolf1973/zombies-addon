@@ -320,7 +320,13 @@ export class Stadtleben {
     if (w.start) sperr.push({ x: Math.floor(w.start.x / K), y: Math.floor(w.start.y / K) });
     const platz = [];
     for (let y = w.oy; y < w.oy + w.h; y++) for (let x = w.ox; x < w.ox + w.b; x++) {
-      if (w.hole(x, y) !== T.BODEN || ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => w.hole(x + a, y + c) === T.MOEBEL)) continue;   // hinter Schrank/Möbel
+      if (w.hole(x, y) !== T.BODEN) continue;
+      if (!w.kachel) { if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => w.hole(x + a, y + c) === T.MOEBEL)) continue; }   // hinter Schrank/Möbel
+      else {   // Feinraster: die Figur (Radius 3 px) steht nie unmittelbar am Möbel; „dahinter“ = ein Möbelstück höchstens 3 Zellen (0,75 m) entfernt
+        let nah = false;
+        for (let dy = -3; dy <= 3 && !nah; dy++) for (let dx = -3; dx <= 3; dx++) if (w.hole(x + dx, y + dy) === T.MOEBEL) { nah = true; break; }
+        if (!nah) continue;
+      }
       if (sperr.some(q => Math.abs(q.x - x) <= nahe && Math.abs(q.y - y) <= nahe) || !frei(w, (x + 0.5) * K, (y + 0.5) * K, 12)) continue;
       platz.push({ x: (x + 0.5) * K, y: (y + 0.5) * K });
     }

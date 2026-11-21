@@ -29,7 +29,7 @@ const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum 
 import { innenraumFuer } from './innen.mjs';
 import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from './innen_fein_bild.mjs';
 // ?innen1m in der Adresse: nur noch zum Testen vorgesehen; maßgeblich ist der Schalter des Servers (state.optionen, siehe erzeuge())
-import { hindernisFelder, hindernisPixel } from './hindernisse.mjs';
+import { hindernisFelder, hindernisFelderFein, hindernisPixel } from './hindernisse.mjs';
 import * as ton from './ton.mjs';
 import { HundAnzeige, eigenerHund } from './hund.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlPruefen, brauchtPlatz } from './aufheben.mjs';
@@ -1338,15 +1338,15 @@ class Ort extends Phaser.Scene {
     if (!an) { if (this.hindBild) { this.hindBild.destroy(); this.hindBild = null; this.textures.remove('hindernisse'); this.hindStand = null; } return; }
     const jetzt = performance.now();
     if (this.hindStand && jetzt - this.hindStand.t < 250) return;
-    const v = this.cameras.main.worldView, FP = KACHEL / 4, ebene = this.aktEbene;
+    const v = this.cameras.main.worldView, ebene = this.aktEbene, welt = this.wv(ebene), fein = !!welt.kachel, FP = fein ? welt.kachel : KACHEL / 4;
     const sx0 = Math.floor(v.x / FP), sy0 = Math.floor(v.y / FP), sx1 = Math.ceil((v.x + v.width) / FP), sy1 = Math.ceil((v.y + v.height) / FP);
     const h = this.hindStand;
     if (h && h.ebene === ebene && this.hindBild && sx0 >= h.x0 && sy0 >= h.y0 && sx1 <= h.x0 + h.nx && sy1 <= h.y0 + h.ny) return;
-    const rand = 24, welt = this.wv(ebene);
-    const x0 = Math.max(0, sx0 - rand), y0 = Math.max(0, sy0 - rand), nx = Math.min(BREITE * 4, sx1 + rand) - x0, ny = Math.min(HOEHE * 4, sy1 + rand) - y0;
+    const rand = fein ? 8 : 24;
+    const x0 = Math.max(0, sx0 - rand), y0 = Math.max(0, sy0 - rand), nx = Math.min(fein ? welt.breite : BREITE * 4, sx1 + rand) - x0, ny = Math.min(fein ? welt.hoehe : HOEHE * 4, sy1 + rand) - y0;
     if (nx <= 0 || ny <= 0) return;
     const grenze = ebene ? { x0: welt.ox, y0: welt.oy, x1: welt.ox + welt.b, y1: welt.oy + welt.h } : null;
-    const codes = hindernisFelder(welt, x0, y0, nx, ny, W.spielerRadius, grenze);
+    const codes = fein ? hindernisFelderFein(welt, x0, y0, nx, ny, W.spielerRadius) : hindernisFelder(welt, x0, y0, nx, ny, W.spielerRadius, grenze);
     this.hindBild?.destroy(); this.hindBild = null;
     if (this.textures.exists('hindernisse')) this.textures.remove('hindernisse');
     const tex = this.textures.createCanvas('hindernisse', nx, ny), c = tex.getContext(), bd = c.createImageData(nx, ny);
@@ -1798,12 +1798,14 @@ class Ort extends Phaser.Scene {
         if (m) {
           const x0 = m.x * KW + ra, y0 = m.y * KW + ra, bw = m.b * KW - 2 * ra, bh = m.h * KW - 2 * ra;
           if (leer) {
+            const lw = w.kachel ? 0.35 : 1.5, ei = w.kachel ? 0.8 : 3;
             g.fillStyle(0x6e6e6e, 0.28).fillRect(x0, y0, bw, bh);
-            g.lineStyle(1.5, 0xbdbdbd, 0.55).strokeRect(x0, y0, bw, bh);
-            g.lineStyle(1.5, 0xbdbdbd, 0.45).lineBetween(x0 + 3, y0 + 3, x0 + bw - 3, y0 + bh - 3).lineBetween(x0 + bw - 3, y0 + 3, x0 + 3, y0 + bh - 3);
+            g.lineStyle(lw, 0xbdbdbd, 0.55).strokeRect(x0, y0, bw, bh);
+            g.lineStyle(lw, 0xbdbdbd, 0.45).lineBetween(x0 + ei, y0 + ei, x0 + bw - ei, y0 + bh - ei).lineBetween(x0 + bw - ei, y0 + ei, x0 + ei, y0 + bh - ei);
           } else {
-            g.fillStyle(0x111111, 0.3).fillRect(b.x - 9, b.y - 9, 18, 18);                    // geöffnete Türen
-            g.lineStyle(1.5, 0xffd54f, 0.6).strokeRect(x0, y0, bw, bh);
+            if (!w.kachel) g.fillStyle(0x111111, 0.3).fillRect(b.x - 9, b.y - 9, 18, 18);   // geöffnete Türen
+            else g.fillStyle(0x111111, 0.22).fillRect(x0, y0, bw, bh);
+            g.lineStyle(w.kachel ? 0.35 : 1.5, 0xffd54f, 0.6).strokeRect(x0, y0, bw, bh);
           }
         } else {
           g.lineStyle(2, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokeRect(b.x - 12, b.y - 12, 24, 24);
@@ -1847,9 +1849,10 @@ class Ort extends Phaser.Scene {
       const b = (w.behaelter ?? []).find(x => x.id === q.behaelter);
       if (!b) continue;
       const puls = 0.5 + 0.5 * Math.sin(ph * Math.PI * 2);
-      g.fillStyle(0xffd600, 0.18 + 0.14 * puls); g.fillCircle(b.x, b.y, 17 + 3 * puls);
-      g.lineStyle(2, 0xffe57f, 0.9 * (1 - ph)); g.strokeCircle(b.x, b.y, 12 + 22 * ph);
-      g.lineStyle(2, 0xffd600, 0.85); g.strokeCircle(b.x, b.y, 15);
+      const k = w.kachel ? 0.3 : 1;   // maßstäblich: Glanz im Maßstab des Möbelstücks
+      g.fillStyle(0xffd600, 0.18 + 0.14 * puls); g.fillCircle(b.x, b.y, (17 + 3 * puls) * k);
+      g.lineStyle(2 * k, 0xffe57f, 0.9 * (1 - ph)); g.strokeCircle(b.x, b.y, (12 + 22 * ph) * k);
+      g.lineStyle(2 * k, 0xffd600, 0.85); g.strokeCircle(b.x, b.y, 15 * k);
     }
   }
 
@@ -1947,7 +1950,7 @@ class Ort extends Phaser.Scene {
     const dunkel = this.add.renderTexture(X, Y, B, H).setOrigin(0).setDepth(9);
     const nebel = this.add.graphics().setDepth(9.5);   // Räume hinter nie geöffneten Türen: ganz schwarz
     // Safe Room: Vorratskiste (Kistenbild) und Bretter an der Eingangstür
-    const safe = w.kiste ? this.add.image(w.kiste.x, w.kiste.y, 'kiste').setScale(0.62).setDepth(0.45) : null;
+    const safe = w.kiste && !w.kachel ? this.add.image(w.kiste.x, w.kiste.y, 'kiste').setScale(0.62).setDepth(0.45) : null;   // maßstäblich: Vorratskiste ist ein gezeichnetes Möbelstück
     const bretter = this.add.graphics().setDepth(0.46);
     const schild = w.safe ? this.add.text(X + B / 2, Y - 14, '🛡 ' + (w.safeName ?? 'Safe Room'), {
       fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
@@ -1982,16 +1985,29 @@ class Ort extends Phaser.Scene {
     if (!ebene || !ich) return;
     const a = this.innenAnsicht(ebene), w = a.w;
     // Bretter an der Haustür (am Ausgang) je nach Barrikade (34 % je Brett); Safe Rooms zeigen den Wert aus ihrem Safe
-    if (w.ausgang && w.nr !== undefined && !w.kachel) {
+    if (w.ausgang && w.nr !== undefined) {
       const wert = Math.ceil(((w.safe ? raum.state.safes.get(w.safe)?.barrikade : raum.state.tueren.get('haus:' + w.nr)?.barrikade) ?? 0) / 34);
       if (wert !== a.bretterWert) {
         a.bretterWert = wert;
-        const g = a.bretter.clear(), tx = w.ausgang.x * KACHEL, ty = w.ausgang.y * KACHEL;
-        const quer = w.hole(w.ausgang.x - 1, w.ausgang.y) === T.WAND;   // Tür in waagrechter Wand
-        for (let i = 0; i < wert; i++) {
-          const o = 4 + i * 9;
-          if (quer) { g.fillStyle(0xa1887f, 1).fillRect(tx - 4, ty + o, KACHEL + 8, 6); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx - 4, ty + o, KACHEL + 8, 6); }
-          else { g.fillStyle(0xa1887f, 1).fillRect(tx + o, ty - 4, 6, KACHEL + 8); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx + o, ty - 4, 6, KACHEL + 8); }
+        const g = a.bretter.clear();
+        if (w.kachel) {   // maßstäblich: Bretter quer vor der Haustür, von der Türöffnung ins Zimmer gestapelt (1,25 m breit, je Brett 0,25 m)
+          const r = w.ausgang.rect, K = w.kachel, [nx, ny] = w.ausgang.nach;
+          for (let i = 0; i < wert; i++) {
+            const off = (i + 0.5) * 1.7;
+            const [bx, by, bw, bh] = ny !== 0
+              ? [r.x * K - 0.6, (ny > 0 ? r.y * K : (r.y + r.h) * K) - ny * off - 0.55, r.b * K + 1.2, 1.1]
+              : [(nx > 0 ? r.x * K : (r.x + r.b) * K) - nx * off - 0.55, r.y * K - 0.6, 1.1, r.h * K + 1.2];
+            g.fillStyle(0xa1887f, 1).fillRect(bx, by, bw, bh); g.lineStyle(0.25, 0x4e342e, 1).strokeRect(bx, by, bw, bh);
+            g.fillStyle(0x424242, 1).fillRect(bx + 0.4, by + 0.4, 0.3, 0.3).fillRect(bx + bw - 0.7, by + bh - 0.7, 0.3, 0.3);
+          }
+        } else {
+          const tx = w.ausgang.x * KACHEL, ty = w.ausgang.y * KACHEL;
+          const quer = w.hole(w.ausgang.x - 1, w.ausgang.y) === T.WAND;   // Tür in waagrechter Wand
+          for (let i = 0; i < wert; i++) {
+            const o = 4 + i * 9;
+            if (quer) { g.fillStyle(0xa1887f, 1).fillRect(tx - 4, ty + o, KACHEL + 8, 6); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx - 4, ty + o, KACHEL + 8, 6); }
+            else { g.fillStyle(0xa1887f, 1).fillRect(tx + o, ty - 4, 6, KACHEL + 8); g.lineStyle(1, 0x4e342e, 1).strokeRect(tx + o, ty - 4, 6, KACHEL + 8); }
+          }
         }
       }
     }
@@ -2057,7 +2073,8 @@ class Ort extends Phaser.Scene {
     d.clear();
     d.fill(0x030405, lampe ? (w.stock === 'keller' ? 0.94 : 0.88) : 0.965);
     const lx = this.lokal.x - a.X, ly = this.lokal.y - a.Y;
-    this.lichtPinsel.setScale(lampe ? 0.42 : 0.36).setAlpha(lampe ? 1 : 0.8);
+    const lk = w.kachel ? 0.3 : 1;   // maßstäblich: Lichtkreis um die Figur im Maßstab des Raums (Radius ~2 m statt ~12 m)
+    this.lichtPinsel.setScale((lampe ? 0.42 : 0.36) * lk).setAlpha(lampe ? 1 : 0.8);
     d.erase(this.lichtPinsel, lx, ly);
     if (lampe) {
       this.lampeKegel(d, lx, ly, this.lampenRichtung(ich), true);
@@ -2070,7 +2087,7 @@ class Ort extends Phaser.Scene {
   // Drinnen nur Mitspieler auf derselben Ebene (Haus und Stockwerk), draußen nur Mitspieler draußen.
   // Ein Kegel für alle (eigene, Mitspieler, Bots, Nebel): gleicher Pinsel, gleiche Länge/Helligkeit; drinnen etwas kürzer
   lampeKegel(ziel, x, y, winkel, innen, alpha = 1) {
-    this.lampenPinsel.setRotation(winkel).setScale(innen ? 0.8 : 1.0).setAlpha(alpha);
+    this.lampenPinsel.setRotation(winkel).setScale((innen ? 0.8 : 1.0) * (innen && this.feinInnen() ? 0.13 : 1)).setAlpha(alpha);   // maßstäblich: Lichtkegel ~7 m lang
     ziel.erase(this.lampenPinsel, x, y);
   }
 

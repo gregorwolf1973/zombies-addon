@@ -227,6 +227,17 @@ function tuerRang(raum, sid, p, ziel) {
   return rang;
 }
 
+// nächster begehbarer Punkt um ein nicht begehbares Ziel (Möbelmitte), vom Bot aus gesehen der nächste (Ringe 5–13 px, 16 Richtungen)
+function zugangsPunkt(welt, p, ziel) {
+  let best = null, bd = Infinity;
+  for (let r = 5; r <= 13 && !best; r += 2) for (let i = 0; i < 16; i++) {
+    const q = { x: ziel.x + Math.cos(i * Math.PI / 8) * r, y: ziel.y + Math.sin(i * Math.PI / 8) * r };
+    if (!frei(welt, q.x, q.y, RAD)) continue;
+    const d = abstand(p, q);
+    if (d < bd) { bd = d; best = q; }
+  }
+  return best;
+}
 // zum Ziel gehen: Weg berechnen (gelegentlich neu), Wegpunkten folgen, Abstand zu anderen halten
 function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
   const b = x.bot, jetzt = raum.uhr;
@@ -254,7 +265,12 @@ function geheZu(raum, sid, p, x, ziel, tempo = 1, halt = 14) {
   } else if (!anTuer) b.wartetSeit = null;
   const neu = !b.weg || jetzt - b.wegZeit > 0.8 || !b.wegZiel || abstand(b.wegZiel, ziel) > 40 * R;
   if (neu) {
-    b.weg = findeWeg(welt, p.x, p.y, ziel.x, ziel.y, RAD, 40000, true) ?? [{ x: ziel.x, y: ziel.y }];
+    let weg = findeWeg(welt, p.x, p.y, ziel.x, ziel.y, RAD, 40000, true);
+    if (!weg && welt.kachel) {   // maßstäbliche Innenräume: Ziel ist oft die Mitte eines Möbelstücks (nicht begehbar) – an den nächsten freien Punkt davor gehen
+      const q = zugangsPunkt(welt, p, ziel);
+      if (q) weg = findeWeg(welt, p.x, p.y, q.x, q.y, RAD, 40000, true);
+    }
+    b.weg = weg ?? [{ x: ziel.x, y: ziel.y }];
     b.wegZeit = jetzt; b.wegZiel = { x: ziel.x, y: ziel.y };
   }
   while (b.weg.length > 1 && abstand(p, b.weg[0]) < 10 * R) b.weg.shift();
@@ -361,7 +377,7 @@ export function botSchritt(raum, sid, p, x, dt) {
   const ueberall = alleSpieler.filter(([s, o]) => echt(s) && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
   if (ueberall.length && !ueberall.some(o => o.ebene === p.ebene)) {
     const punkt = raum.uebergangsPunkt(p.ebene, ueberall[0].ebene);
-    if (punkt) { b.uebergangZiel = punkt; geheZu(raum, sid, p, x, punkt, 1, 2); return; }
+    if (punkt) { b.uebergangZiel = punkt; geheZu(raum, sid, p, x, punkt, 1, 2 * R); return; }
   }
   const menschen = spieler.filter(([s, o]) => echt(s) && !o.unten && !(o.zombie > 0)).map(([, o]) => o);
   const anfuehrer = naechster(menschen, p, Infinity);
@@ -404,7 +420,7 @@ export function botSchritt(raum, sid, p, x, dt) {
 
   // 4. Niemand da: nach draußen und in den nächsten Safe Room
   if (safeRoomVon(raum.welt, p)) return;   // schon im Safe Room: dort warten
-  if (p.ebene) { const raus = raum.uebergangsPunkt(p.ebene, ''); if (raus) { b.uebergangZiel = raus; geheZu(raum, sid, p, x, raus, 1, 2); } return; }
+  if (p.ebene) { const raus = raum.uebergangsPunkt(p.ebene, ''); if (raus) { b.uebergangZiel = raus; geheZu(raum, sid, p, x, raus, 1, 2 * R); } return; }
   const safe = naechster(raum.welt.safeRooms, p, Infinity, () => true, r => r.vorTuer);
-  if (safe) { const tuer = raum.uebergangsPunkt('', safe.ebene); b.uebergangZiel = tuer; geheZu(raum, sid, p, x, tuer, 1, 2); }
+  if (safe) { const tuer = raum.uebergangsPunkt('', safe.ebene); b.uebergangZiel = tuer; geheZu(raum, sid, p, x, tuer, 1, 2 * R); }
 }

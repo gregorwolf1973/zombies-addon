@@ -256,7 +256,7 @@ function reise(raum, sid, p, x, H, a, zielEbene, sperrKey = 'u:' + zielEbene) {
   const punkt = raum.uebergangsPunkt(p.ebene ?? '', zielEbene);
   if (!punkt) return false;
   x.bot.uebergangZiel = punkt;
-  const r = gehe(raum, sid, p, x, H, a, punkt, sperrKey, 1, 2);
+  const r = gehe(raum, sid, p, x, H, a, punkt, sperrKey, 1, 2 * (raum.wv(p.ebene).reich ?? 1));
   return r === 'unterwegs';
 }
 function standpunkt(welt, p, rechtecke) {

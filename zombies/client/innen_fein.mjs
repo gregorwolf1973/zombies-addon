@@ -209,6 +209,9 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
       kandidaten.sort((p, q) => p.abst - q.abst);
       const { a0, d0 } = kandidaten[0], zellen = [];
       for (let a = a0; a < a0 + TUER; a++) for (let d = d0; d < d0 + AUSSEN; d++) { const [x, y] = zelle(s, a, d); k[idx(x, y)] = T.AUSGANG; zellen.push([x, y]); }
+      // Vorplatz: zwei Zellenlagen vor der Haustür gehören auch zum Ausgang (sonst passt der Figurenkreis von 3 px nur auf einer 1 px schmalen Linie in die 2 Zellen
+      // tiefe Türöffnung, und der Schritt nach draußen bliebe kurz davor hängen)
+      for (let a = a0; a < a0 + TUER; a++) for (let d = d0 - 1; d >= d0 - 2; d--) { const [x, y] = zelle(s, a, d); if (x >= 0 && y >= 0 && x < GB && y < GH && k[idx(x, y)] === T.LEER) k[idx(x, y)] = T.AUSGANG; }
       const [mx, my] = zelle(s, a0 + Math.floor(TUER / 2), d0 + AUSSEN - 1);
       const xs = zellen.map(c => c[0]), ys = zellen.map(c => c[1]), rx = Math.min(...xs), ry = Math.min(...ys);
       ausgang = { x: mx, y: my, nach, zellen, seite: s, a0, d0, rect: { x: rx, y: ry, b: Math.max(...xs) - rx + 1, h: Math.max(...ys) - ry + 1 } };
@@ -372,7 +375,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
       }
     }
     for (const liste of stufen) {
-      if (opt.fern) liste.sort((p, q) => ((q.x + q.b / 2 - opt.fern.x) ** 2 + (q.y + q.h / 2 - opt.fern.y) ** 2) - ((p.x + p.b / 2 - opt.fern.x) ** 2 + (p.y + p.h / 2 - opt.fern.y) ** 2));   // am weitesten von der Haustür weg
+      if (opt.fern) liste.sort((p, q) => { const dq = { x: q.x + q.b / 2 - opt.fern.x, y: q.y + q.h / 2 - opt.fern.y }, dp = { x: p.x + p.b / 2 - opt.fern.x, y: p.y + p.h / 2 - opt.fern.y }; return (dq.x * dq.x + dq.y * dq.y) - (dp.x * dp.x + dp.y * dp.y); });   // am weitesten von der Haustür weg
       for (let v = 0; v < 6 && liste.length; v++) {
         const i = opt.fern ? 0 : Math.floor(rng() * liste.length), p = liste.splice(i, 1)[0];
         if (platzieren(art, p.x, p.y, p.b, p.h)) return true;
@@ -437,9 +440,10 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
   if (safe) {
     const aus = ausgang ? { x: (ausgang.x + 0.5), y: (ausgang.y + 0.5) } : { x: (ix0 + ix1) / 2, y: (iy0 + iy1) / 2 };
     const rIdx = raeume.map((_, i) => i);
+    const dist2 = r => { const dx = r.x + r.b / 2 - aus.x, dy = r.y + r.h / 2 - aus.y; return dx * dx + dy * dy; };
     let reihum = 0;
     const setzeSafe = (art, opt = {}) => {
-      const reihe = opt.fern ? [...rIdx].sort((a, c) => (((raeume[c].x + raeume[c].b / 2) - aus.x) ** 2 + ((raeume[c].y + raeume[c].h / 2) - aus.y) ** 2) - (((raeume[a].x + raeume[a].b / 2) - aus.x) ** 2 + ((raeume[a].y + raeume[a].h / 2) - aus.y) ** 2)) : rIdx.map((_, j) => rIdx[(reihum + j) % rIdx.length]);
+      const reihe = opt.fern ? [...rIdx].sort((a, c) => dist2(raeume[c]) - dist2(raeume[a])) : rIdx.map((_, j) => rIdx[(reihum + j) % rIdx.length]);
       for (const ri of reihe) if (setze(ri, art, opt)) { if (!opt.fern) reihum = (rIdx.indexOf(ri) + 1) % rIdx.length; return true; }
       return false;
     };
