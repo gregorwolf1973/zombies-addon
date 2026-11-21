@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Nebel, NEBEL_VORGABE, NEBEL_DAUER, bereinigeNebel, nebelWuerfeln, nebelDauer, nebelDichte, zombieSichtFaktor, kreuzt } from '../server/nebel.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
-import { nebelRadius, nebelDeckkraft, rauschen } from '../client/nebel.mjs';
+import { nebelRadius, nebelDeckkraft, rauschen, NEBEL_MAX, sichtVerlauf } from '../client/nebel.mjs';
 
 const folge = (...w) => { let i = 0; return () => w[i++ % w.length]; };
 
@@ -108,8 +108,8 @@ test('Einstellungen: Vorgabe, Grenzen, Zusammenführen', () => {
 
 test('Darstellung: Radius schrumpft mit der Dichte, Deckkraft steigt', () => {
   assert.ok(nebelRadius(1, 20) < nebelRadius(0.5, 20) && nebelRadius(0.5, 20) < nebelRadius(0.1, 20));
-  assert.ok(Math.abs(nebelRadius(1, 20) - 20 * 8 * 1.3) < 1e-9);
-  assert.equal(nebelDeckkraft(0), 0); assert.equal(nebelDeckkraft(1), 1);
+  assert.ok(Math.abs(nebelRadius(1, 20) - 20 * 8 * 1.5) < 1e-9);
+  assert.equal(nebelDeckkraft(0), 0); assert.equal(nebelDeckkraft(1), 1); assert.ok(NEBEL_MAX < 0.8 && NEBEL_MAX > 0.6); assert.equal(sichtVerlauf(0.2), 0); assert.equal(sichtVerlauf(1), 1);
 });
 
 test('Rauschen: deterministisch, nahtlos, nicht flach', () => {

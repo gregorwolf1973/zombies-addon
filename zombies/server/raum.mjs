@@ -526,7 +526,11 @@ export class SpielRaum extends Room {
     this.onMessage('sprachWeg', (client, m) => this.sprachWeg(client, m));
     this.onMessage('sprachKann', (client, m) => this.sprachKann(client, m));
     this.onMessage('_$bsprachDaten', (client, m) => this.sprachDaten(client, m));   // Binärnachrichten (sendBytes) kommen mit Vorsatz _$b
-    this.onMessage('su', (client, m) => { const text = SU.befehl(this, client, m); if (text) client.send('meldung', { text }); });
+    this.onMessage('su', (client, m) => {
+      const text = SU.befehl(this, client, m);
+      if (text) client.send('meldung', { text });
+      if (this.extra.get(client.sessionId)?.superuser) client.send('suStatus', SU.status(this, client));   // Zustand der Umschalter für das Testmenü
+    });
     this.onMessage('ping', (client, m) => client.send('pong', m));
 
     // weltFp wird direkt nach dem Aufbau der Welt festgehalten (oben)

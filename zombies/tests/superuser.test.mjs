@@ -178,3 +178,34 @@ test('richtiges Passwort: Superuser mit ⭐, normaler Spieler daneben kann nicht
   await su(boss, { befehl: 'rm -rf' }); await su(boss, null); await su(boss, 'x');
   assert.ok(raum().state.spieler.get(boss.sessionId));
 });
+
+test('Statusanzeige: Server schickt den Zustand der Umschalter (nur an Superuser) nach jedem Befehl und auf Anfrage', async () => {
+  begrenzungZuruecksetzen();
+  const boss = await beitreten('Gregor', TESTPW);
+  const normal = await beitreten('Hias');
+  let st = null, stNormal = null;
+  boss.onMessage('suStatus', m => { st = m; });
+  normal.onMessage('suStatus', m => { stNormal = m; });
+  await su(boss, { befehl: 'status' });
+  assert.ok(st, 'Status auf Anfrage');
+  assert.equal(st.unsterblich, false); assert.equal(st.zeitraffer, 1);
+  await su(boss, { befehl: 'unsterblich' });
+  assert.equal(st.unsterblich, true); assert.equal(ex(boss).suUnsterblich, true);
+  await su(boss, { befehl: 'unsterblich' });
+  assert.equal(st.unsterblich, false);
+  const nebelVorher = st.nebel;
+  await su(boss, { befehl: 'nebel' });
+  assert.equal(st.nebel, !nebelVorher);
+  await su(boss, { befehl: 'nebel' });
+  assert.equal(st.nebel, nebelVorher);
+  await su(boss, { befehl: 'zeitraffer', faktor: 5 });
+  assert.equal(st.zeitraffer, 5);
+  await su(boss, { befehl: 'zeitraffer', faktor: 1 });
+  assert.equal(st.zeitraffer, 1);
+  const h0 = st.hordeanzeige;
+  await su(boss, { befehl: 'hordeanzeige' });
+  assert.equal(st.hordeanzeige, !h0);
+  await su(normal, { befehl: 'status' }); await su(normal, { befehl: 'unsterblich' });
+  assert.equal(stNormal, null, 'normaler Spieler bekommt keinen Status');
+  await boss.leave(); await normal.leave();
+});

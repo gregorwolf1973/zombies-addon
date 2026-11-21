@@ -574,19 +574,20 @@ function suMenueEinrichten(szene) {
   if (!fenster) {
     fenster = document.createElement('div'); fenster.id = 'sumenue';
     const b = (befehl, text, extra = {}) => `<button type="button" data-su='${JSON.stringify({ befehl, ...extra })}'>${text}</button>`;
+    const bs = (befehl, text) => `<button type="button" class="umschalter" data-schalter="${befehl}" data-text="${text}" data-su='${JSON.stringify({ befehl })}'>${text}: …</button>`;   // Umschalter: zeigt AN/AUS vom Server
     fenster.innerHTML = `<div class="fenster"><div class="kopfzeile"><b>☰ Testmenü</b><button type="button" id="suzu" aria-label="Schließen">✕</button></div>
       <div class="titel">Springen</div>
       ${b('bw', '🎖 Zur Bundeswehr')}${b('evak', '📍 Zum Evakuierungspunkt')}${b('horde_hin', '🧟 Zur Zombiehorde (50 m davor)')}
       <div class="titel">Bots und Ausrüstung</div>
-      ${b('bots', '🤖 Alle Bots zu mir (heilen)')}${b('auffuellen', '🎒 Ausrüstung auffüllen')}${b('unsterblich', '⭐ Unsterblich ein/aus')}
+      ${b('bots', '🤖 Alle Bots zu mir (heilen)')}${b('auffuellen', '🎒 Ausrüstung auffüllen')}${bs('unsterblich', '⭐ Unsterblich')}
       <div class="titel">Horde jetzt starten</div>
       <div class="zeile">${b('horde', '50', { groesse: 50 })}${b('horde', '200', { groesse: 200 })}${b('horde', '500', { groesse: 500 })}</div>
-      ${b('hordeanzeige', '🎯 Horden-Ziele anzeigen ein/aus')}
+      ${bs('hordeanzeige', '🎯 Horden-Ziele anzeigen')}
       <div class="titel">Tageszeit</div>
       <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
-      ${b('nebel', '🌫 Nebel ein/aus')}
+      ${bs('nebel', '🌫 Nebel')}
       <div class="titel">Zeitraffer</div>
-      <div class="zeile">${[1, 5, 10, 60].map(n => b('zeitraffer', `⏩ ${n}×`, { faktor: n })).join('')}</div>
+      <div class="zeile">${[1, 5, 10, 60].map(n => b('zeitraffer', `⏩ ${n}×`, { faktor: n }).replace('<button ', `<button data-zr="${n}" `)).join('')}</div>
       <div class="titel">Evakuierung und Lager</div>
       ${b('evakrufen', '🚌 Evakuierung sofort rufen')}${b('alleaufgaben', '✅ Alle Aufgaben erledigt')}
       <div class="zeile">${b('lager', '💥 Lager fallen', { zustand: 'gefallen' })}${b('lager', '🎖 Lager aufbauen', { zustand: 'steht' })}</div>
@@ -601,13 +602,32 @@ function suMenueEinrichten(szene) {
       const bt = e.target.closest('button[data-su]');
       if (!bt) return;
       try { raum?.send('su', JSON.parse(bt.dataset.su)); } catch { /* egal */ }
-      zu();
+      if (!bt.dataset.schalter && !bt.dataset.zr) zu();   // Umschalter bleiben offen: der Zustand springt sichtbar um
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') zu(); });
   }
   knopf.style.display = 'block';
   const ue = szene?.uebersicht; if (ue) ue.hinSpringen = (x, y) => raum?.send('su', { befehl: 'hin', x: Math.round(x), y: Math.round(y) });   // Karte: Rechtsklick/langer Druck → Hierhin springen
-  knopf.onclick = () => fenster.classList.add('offen');
+  if (suStatusRaum !== raum) {
+    suStatusRaum = raum;
+    raum?.onMessage('suStatus', st => suStatusZeigen(st));
+  }
+  knopf.onclick = () => { fenster.classList.add('offen'); try { raum?.send('su', { befehl: 'status' }); } catch { /* egal */ } };   // beim Öffnen den echten Zustand holen
+}
+
+// Zustand der Umschalter im Testmenü anzeigen (AN grün, AUS grau); Werte kommen als 'suStatus' vom Server
+let suStatusRaum = null;
+function suStatusZeigen(st) {
+  const f = $('sumenue'); if (!f || !st) return;
+  for (const bt of f.querySelectorAll('button[data-schalter]')) {
+    const an = !!st[bt.dataset.schalter];
+    bt.textContent = `${bt.dataset.text}: ${an ? 'AN' : 'AUS'}`;
+    bt.classList.toggle('an', an); bt.setAttribute('aria-pressed', an ? 'true' : 'false');
+  }
+  for (const bt of f.querySelectorAll('button[data-zr]')) {
+    const an = Number(bt.dataset.zr) === Number(st.zeitraffer ?? 1);
+    bt.classList.toggle('an', an); bt.setAttribute('aria-pressed', an ? 'true' : 'false');
+  }
 }
 
 function meldung(text, lang = false) {
@@ -977,7 +997,7 @@ class Ort extends Phaser.Scene {
     });
     raum.onMessage('sirene', () => {});   // die Sirene läuft dauernd am Fahrzeug (fahrzeuge in abgleichen)
     raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
-    raum.onMessage('entdeckt', m => { this.ausruf(m.x, m.y); ton.entdeckt(m.x, m.y); });
+    raum.onMessage('entdeckt', m => { ton.entdeckt(m.x, m.y); });
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
     raum.onMessage('weltFalsch', m => {
@@ -1868,16 +1888,29 @@ class Ort extends Phaser.Scene {
     this.lichtPinsel.setScale(lampe ? 0.42 : 0.36).setAlpha(lampe ? 1 : 0.8);
     d.erase(this.lichtPinsel, lx, ly);
     if (lampe) {
-      this.lampenPinsel.setRotation(this.lampenRichtung(ich)).setScale(0.8).setAlpha(1);
-      d.erase(this.lampenPinsel, lx, ly);
+      this.lampeKegel(d, lx, ly, this.lampenRichtung(ich), true);
     }
-    this.fremdeLampen(d, a.X, a.Y, ebene, 0.65);
+    this.fremdeLampen(d, a.X, a.Y, ebene);
     this.setzeGrau(!lampe);
   }
 
   // Taschenlampen der Mitspieler: Kegel in Blickrichtung (weich nachgeführt), gleiche Pinsel-Technik wie der eigene; höchstens 8 (nächste zuerst).
   // Drinnen nur Mitspieler auf derselben Ebene (Haus und Stockwerk), draußen nur Mitspieler draußen.
-  fremdeLampen(ziel, ox, oy, ebene, skala) {
+  // Ein Kegel für alle (eigene, Mitspieler, Bots, Nebel): gleicher Pinsel, gleiche Länge/Helligkeit; drinnen etwas kürzer
+  lampeKegel(ziel, x, y, winkel, innen, alpha = 1) {
+    this.lampenPinsel.setRotation(winkel).setScale(innen ? 0.8 : 1.0).setAlpha(alpha);
+    ziel.erase(this.lampenPinsel, x, y);
+  }
+
+  // Alle leuchtenden Lampen draußen für den Nebel: eigene + Mitspieler/Bots (Winkel wie bei der Nachtdunkelheit)
+  lampenListeAussen(ich) {
+    const l = [];
+    if (ich?.lampe > 0 && this.lokal) l.push({ x: this.lokal.x, y: this.lokal.y, winkel: this.lampenRichtung(ich) });
+    this.fremdeLampen(null, 0, 0, '', l);
+    return l;
+  }
+
+  fremdeLampen(ziel, ox, oy, ebene, sammeln = null) {
     if (!this.lampenWinkelAndere) this.lampenWinkelAndere = new Map();
     const v = this.cameras.main.worldView, r = 360, liste = [];
     for (const [id, p] of raum.state.spieler) {
@@ -1887,20 +1920,22 @@ class Ort extends Phaser.Scene {
       liste.push([Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y), id, p]);
     }
     liste.sort((a, b) => a[0] - b[0]);
-    const dt = this.game.loop.delta / 1000, benutzt = new Set();
+    const dt = this.game.loop.delta / 1000, benutzt = new Set(), bild = this.game.loop.frame, neuerBild = this.lampenBild !== bild;
+    this.lampenBild = bild;
     for (const [, id, p] of liste.slice(0, 8)) {
       benutzt.add(id);
-      const w = this.lampenWinkelAndere.get(id) ?? p.richtung;
-      const neu = Phaser.Math.Angle.RotateTo(w, p.richtung, dt * 3.5);
-      this.lampenWinkelAndere.set(id, neu);
-      this.lampenPinsel.setRotation(neu).setScale(skala).setAlpha(1);
-      ziel.erase(this.lampenPinsel, p.x - ox, p.y - oy);
+      let neu = this.lampenWinkelAndere.get(id) ?? p.richtung;
+      if (neuerBild) { neu = Phaser.Math.Angle.RotateTo(neu, p.richtung, dt * 3.5); this.lampenWinkelAndere.set(id, neu); }   // je Bild nur einmal nachführen (mehrere Zeichner)
+      if (sammeln) sammeln.push({ x: p.x, y: p.y, winkel: neu });
+      else this.lampeKegel(ziel, p.x - ox, p.y - oy, neu, !!ebene);
     }
     for (const id of this.lampenWinkelAndere.keys()) if (!benutzt.has(id) && !raum.state.spieler.get(id)?.lampe) this.lampenWinkelAndere.delete(id);
   }
 
   // Kegel folgt der Laufrichtung weich (nicht jedem Ruck, z. B. beim automatischen Zielen)
   lampenRichtung(ich) {
+    if (this.lampenRichtungBild === this.game.loop.frame && this.lampenWinkel !== undefined) return this.lampenWinkel;   // je Bild nur einmal nachführen
+    this.lampenRichtungBild = this.game.loop.frame;
     const e = this.eingabe, ziel = Math.hypot(e.dx, e.dy) > 0.1 ? Math.atan2(e.dy, e.dx) : (this.lampenWinkel ?? ich.richtung);
     this.lampenWinkel = Phaser.Math.Angle.RotateTo(this.lampenWinkel ?? ziel, ziel, this.game.loop.delta / 1000 * 3.5);
     return this.lampenWinkel;
@@ -1910,7 +1945,7 @@ class Ort extends Phaser.Scene {
   nebelZeichnen(ich, dt) {
     const n = this.nebelEbene ??= new NebelEbene(this), st = raum.state;
     if (!ich || !this.lokal) { n.verstecken(); return; }
-    n.aktualisiere(this.cameras.main.worldView, this.lokal.x, this.lokal.y, st.nebel ?? 0, st.nebelSicht || 20, 1 - helligkeit(st.uhr ?? 480), ich.lampe > 0 ? this.lampenRichtung(ich) : null, dt, !!this.aktEbene, (d => d * d * (3 - 2 * d) * (st.nachtDunkel ?? 92) / 100)(1 - helligkeit(st.uhr ?? 480)));
+    n.aktualisiere(this.cameras.main.worldView, this.lokal.x, this.lokal.y, st.nebel ?? 0, st.nebelSicht || 20, 1 - helligkeit(st.uhr ?? 480), this.lampenListeAussen(ich), dt, !!this.aktEbene, (d => d * d * (3 - 2 * d) * (st.nachtDunkel ?? 92) / 100)(1 - helligkeit(st.uhr ?? 480)), (ziel, ox, oy, lp, alpha) => this.lampeKegel(ziel, lp.x - ox, lp.y - oy, lp.winkel, false, alpha));
   }
 
   // Draußen: Dämmerung färbt warm, nachts dunkelblau; Laternen, Fenster, Taschenlampe und ein kleiner Schein um jeden Spieler
@@ -1945,10 +1980,10 @@ class Ort extends Phaser.Scene {
       if ((p.ebene ?? '') !== '' || id === meineId) continue;
       if (sicht(p.x, p.y, 100)) { P.setScale(p.lampe > 0 ? 0.7 : 0.45).setAlpha(0.7); rt.erase(P, p.x - ox, p.y - oy); }
     }
-    this.fremdeLampen(rt, ox, oy, '', 0.85);
+    this.fremdeLampen(rt, ox, oy, '');
     const lx = this.lokal.x - ox, ly = this.lokal.y - oy;
     P.setScale(0.6).setAlpha(0.8); rt.erase(P, lx, ly);
-    if (ich.lampe > 0) { this.lampenPinsel.setRotation(this.lampenRichtung(ich)).setScale(1.0).setAlpha(1); rt.erase(this.lampenPinsel, lx, ly); }
+    if (ich.lampe > 0) this.lampeKegel(rt, lx, ly, this.lampenRichtung(ich), false);
   }
 
   // Von der eigenen Position aus alles erkunden, was ohne geschlossene Tür erreichbar ist; einmal gesehen bleibt sichtbar
@@ -2898,11 +2933,6 @@ class Ort extends Phaser.Scene {
       const w = Math.random() * Math.PI * 2, d = 14 + Math.random() * 18;
       this.tweens.add({ targets: c, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, duration: 450, onComplete: () => c.destroy() });
     }
-  }
-
-  ausruf(x, y) {
-    const t = this.add.text(x, y - 22, '!', { fontSize: '22px', fontStyle: 'bold', color: '#ff5252', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setDepth(8);
-    this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: 900, onComplete: () => t.destroy() });
   }
 
   // ---------- Schleife ----------

@@ -43,7 +43,7 @@ export function anmelden(hash, passwort, schluessel) {
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel', 'status'];
 
 function springen(raum, p, x, ziel) {
   p.x = ziel.x; p.y = ziel.y; p.ebene = ziel.ebene ?? ''; p.unten = false; p.anBord = false; p.sicher = ''; p.aktion = ''; p.fortschritt = 0;
@@ -107,12 +107,25 @@ function evakPunkt(raum) {
   return tor ? raum.freierPlatz({ x: (tor.x + 1) * KACHEL, y: (tor.y + 1) * KACHEL }, 0) : null;
 }
 
+// Zustand der Umschalter für die Knöpfe im Testmenü (kommt vom Server, nicht vom Client geraten)
+export function status(raum, client) {
+  const x = raum.extra.get(client.sessionId), s = raum.state;
+  const alle = !!raum.welle?.einst?.().hordeZieleZeigen;
+  return {
+    unsterblich: !!x?.suUnsterblich,
+    nebel: !!(raum.nebel?.erzwungen || s.nebel > 0.05),
+    hordeanzeige: !raum.hordeAus.has(client.sessionId) && (alle || raum.hordeDebug.has(client.sessionId)),
+    zeitraffer: raum.zeitraffer?.() ?? 1,
+  };
+}
+
 // führt einen Befehl aus; Rückgabe = Meldung an den Superuser. Wer nicht Superuser ist, bekommt nichts (null).
 export function befehl(raum, client, m) {
   const x = raum.extra.get(client.sessionId), p = raum.state.spieler.get(client.sessionId);
   if (!x?.superuser || !p || !m || typeof m !== 'object') return null;
   const b = String(m.befehl ?? '');
   if (!SU_BEFEHLE.includes(b)) return 'Unbekannter Befehl';
+  if (b === 'status') return null;   // nur Zustand abfragen (der Raum schickt ihn nach jedem Befehl)
   console.log(`[Superuser] ${p.name}: ${b}${m.groesse ? ' ' + Number(m.groesse) : ''}${m.stunde ? ' ' + Number(m.stunde) : ''}${m.zustand ? ' ' + String(m.zustand).slice(0, 12) : ''}`);
   const s = raum.state;
   switch (b) {

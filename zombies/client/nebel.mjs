@@ -10,11 +10,11 @@ const TIEFE = 7.95;             // über Figuren, Zombies und Dingen (≤ 7), un
 // Sichtradius in Pixeln: bei schwacher Dichte weit, bei voller Dichte die eingestellte Sichtweite
 export function nebelRadius(dichte, sichtMeter = 20) {
   const d = Math.max(0, Math.min(1, dichte));
-  return sichtMeter * PIXEL_JE_METER * (1 + (1 - d) * 3) * 1.3;
+  return sichtMeter * PIXEL_JE_METER * (1 + (1 - d) * 3) * 1.5;   // Radius, an dem der Rand erreicht ist; der Verlauf beginnt schon bei 30 % davon
 }
 
 // Deckkraft der Nebelebenen aus der Dichte (voll = 1: außerhalb der Sicht ist alles verschluckt)
-export const nebelDeckkraft = dichte => Math.max(0, Math.min(1, dichte * 1.02));
+export const nebelDeckkraft = dichte => Math.max(0, Math.min(1, dichte * 1.02));   // 0..1; die Ebene malt davon höchstens NEBEL_MAX
 
 // Nahtlos kachelbares Wertrauschen (mehrere Oktaven) als Werte 0..255; groesse = Kantenlänge (Potenz von 2)
 export function rauschen(groesse = 256, samen = 1, oktaven = 4) {
@@ -43,6 +43,17 @@ export function rauschen(groesse = 256, samen = 1, oktaven = 4) {
   return r;
 }
 
+// Alle Nebel-Deckkräfte sind auf diesen Höchstwert begrenzt (früher 1: außerhalb der Sicht ganz zu; jetzt ~28 % lichter)
+export const NEBEL_MAX = 0.72;
+// Im Lampenkegel bleibt nur dieser Rest des Nebels als leichter Schleier (Kegel „schneidet“ den Nebel auf)
+export const LAMPE_NEBEL_REST = 0.15;
+
+// Verlauf der Sichtgrenze von 0 (innen, klar) bis 1 (Rand): weiches Smoothstep ab 30 % des Radius statt eines „Fensters“
+export function sichtVerlauf(t) {
+  const k = Math.max(0, Math.min(1, (t - 0.3) / 0.7));
+  return k * k * (3 - 2 * k);
+}
+
 export class NebelEbene {
   constructor(szene) {
     this.s = szene;
@@ -50,7 +61,8 @@ export class NebelEbene {
     this.t = 0;
   }
 
-  // Texturen und Objekte einmalig anlegen
+  // Texturen und Objekte einmalig anlegen. Die Nebelteile werden nicht direkt gezeigt, sondern je Bild in eine RenderTexture gemalt;
+  // dort schneiden die Lampenkegel (eigene und fremde, gleicher Pinsel) den Nebel auf.
   bauen() {
     const s = this.s;
     const schwaden = (key, samen) => {
@@ -67,29 +79,27 @@ export class NebelEbene {
     if (!s.textures.exists('nebel_sicht')) {
       const tex = s.textures.createCanvas('nebel_sicht', 512, 512), c = tex.getContext();
       const g = c.createRadialGradient(256, 256, 0, 256, 256, 256);
-      [[0, 0], [0.3, 0], [0.45, 0.06], [0.6, 0.2], [0.75, 0.45], [0.9, 0.82], [1, 1]].forEach(([p, a]) => g.addColorStop(p, `rgba(201,209,214,${a})`));
+      for (let i = 0; i <= 20; i++) g.addColorStop(i / 20, `rgba(201,209,214,${sichtVerlauf(i / 20)})`);
       c.fillStyle = g; c.fillRect(0, 0, 512, 512); tex.refresh();
     }
-    this.ebenen = [
-      { bild: s.add.tileSprite(0, 0, 512, 512, 'nebel_a').setOrigin(0).setDepth(TIEFE + 0.01), skala: 3.2, par: 0.82, vx: 5, vy: 2, a: 0.9 },
-      { bild: s.add.tileSprite(0, 0, 512, 512, 'nebel_b').setOrigin(0).setDepth(TIEFE + 0.02), skala: 5.5, par: 0.7, vx: -3, vy: 4, a: 0.75 },
-    ];
-    for (const e of this.ebenen) e.bild.setTileScale(e.skala);
-    this.sicht = s.add.image(0, 0, 'nebel_sicht').setDepth(TIEFE);
-    this.rand = [0, 1, 2, 3].map(() => s.add.rectangle(0, 0, 1, 1, NEBEL_FARBE).setOrigin(0).setDepth(TIEFE));
-    // Schein der Taschenlampe im Nebel: liegt unter der Nachtdunkelheit, sichtbar nur im ausgeschnittenen Kegel
-    this.schein = s.textures.exists('lampe') ? s.add.image(0, 0, 'lampe').setOrigin(0, 0.5).setDepth(TIEFE + 0.03).setBlendMode('ADD').setTint(0xfff1cf) : null;
+    const kachel = (key, skala, par, vx, vy, a) => {
+      const bild = s.make.tileSprite({ x: 0, y: 0, width: 512, height: 512, key, add: false }).setOrigin(0);
+      bild.setTileScale(skala);
+      return { bild, skala, par, vx, vy, a };
+    };
+    this.ebenen = [kachel('nebel_a', 3.2, 0.82, 5, 2, 0.9), kachel('nebel_b', 5.5, 0.7, -3, 4, 0.75)];
+    this.sicht = s.make.image({ key: 'nebel_sicht', add: false });
+    this.rand = [0, 1, 2, 3].map(() => new Phaser.GameObjects.Rectangle(s, 0, 0, 1, 1, NEBEL_FARBE).setOrigin(0));
     this.bereit = true;
   }
 
   verstecken() {
-    if (!this.bereit) return;
-    for (const e of this.ebenen) e.bild.setVisible(false);
-    this.sicht.setVisible(false); this.rand.forEach(r => r.setVisible(false)); this.schein?.setVisible(false);
+    this.rt?.setVisible(false);
   }
 
-  // v = sichtbarer Weltausschnitt (cameras.main.worldView), (px, py) = eigene Figur, dunkel 0..1 (Nacht), lampe = Winkel (Bogenmaß) oder null, dt in Sekunden
-  aktualisiere(v, px, py, dichte, sichtMeter, dunkel, lampe, dt, innen, abdunkeln = 0) {
+  // v = sichtbarer Weltausschnitt (cameras.main.worldView), (px, py) = eigene Figur, dunkel 0..1 (Nacht), dt in Sekunden,
+  // lampen = [{ x, y, winkel }] aller leuchtenden Taschenlampen (eigene und fremde), lampenZeichner(ziel, ox, oy, lampe, alpha) malt den Kegel (gleiche Funktion wie bei der Nachtdunkelheit)
+  aktualisiere(v, px, py, dichte, sichtMeter, dunkel, lampen, dt, innen, abdunkeln = 0, lampenZeichner = null) {
     if (dichte < 0.02 || innen) { this.verstecken(); return; }
     if (!this.bereit) this.bauen();
     this.t += dt;
@@ -97,29 +107,35 @@ export class NebelEbene {
     const k = Math.max(0, Math.min(1, abdunkeln)), mix = (a, b) => Math.round(a + (b - a) * k);
     const farbe = (mix(0xc9, 0x2a) << 16) | (mix(0xd1, 0x31) << 8) | mix(0xd6, 0x3d);
     const tm = (d, h) => Math.round(255 + (255 * d / h - 255) * k), toenung = (tm(0x2a, 0xc9) << 16) | (tm(0x31, 0xd1) << 8) | tm(0x3d, 0xd6);   // Texturen sind tagfarben: Tönung = Verhältnis zur Nachtfarbe
-    const alpha = nebelDeckkraft(dichte), R = nebelRadius(dichte, sichtMeter);
-    // Schwaden: Größe auf 128 gerundet (kein Neuaufbau bei jedem Zoomschritt), folgen der Kamera mit leichter Parallaxe
+    const alpha = nebelDeckkraft(dichte) * NEBEL_MAX, R = nebelRadius(dichte, sichtMeter);
+    // Zielfläche: Weltausschnitt mit Rand, Größe auf 128 gerundet (kein Neuaufbau bei jedem Zoomschritt)
     const pad = 64, B = Math.ceil((v.width + 2 * pad) / 128) * 128, H = Math.ceil((v.height + 2 * pad) / 128) * 128;
+    const s = this.s;
+    // neu anlegen statt resize() – nach resize() wirkt erase() in Phaser 3.90 nicht mehr
+    if (!this.rt || this.rt.width !== B || this.rt.height !== H) { this.rt?.destroy(); this.rt = s.add.renderTexture(0, 0, B, H).setOrigin(0).setDepth(TIEFE); }
+    const rt = this.rt, ox = v.x - pad, oy = v.y - pad;
+    rt.setPosition(ox, oy).setVisible(true).clear();
+    // Schwaden folgen der Kamera mit leichter Parallaxe
     for (const e of this.ebenen) {
       const b = e.bild;
       if (b.width !== B || b.height !== H) b.setSize(B, H);
-      b.setTint(toenung).setPosition(v.x - pad, v.y - pad).setVisible(true).setAlpha(e.a * alpha * (0.35 + 0.65 * Math.min(1, dichte * 1.5)));
-      b.tilePositionX = ((v.x - pad) * e.par + this.t * e.vx) / e.skala;
-      b.tilePositionY = ((v.y - pad) * e.par + this.t * e.vy) / e.skala;
+      b.setTint(toenung).setPosition(0, 0).setAlpha(e.a * alpha * (0.35 + 0.65 * Math.min(1, dichte * 1.5)));
+      b.tilePositionX = (ox * e.par + this.t * e.vx) / e.skala;
+      b.tilePositionY = (oy * e.par + this.t * e.vy) / e.skala;
+      rt.draw(b, 0, 0);
     }
     // Sichtgrenze: Verlauf um die Figur, außerhalb vier Flächen in derselben Farbe
-    this.sicht.setTint(toenung).setPosition(px, py).setDisplaySize(2 * R, 2 * R).setAlpha(alpha).setVisible(true);
-    const x0 = v.x - pad, y0 = v.y - pad, x1 = v.right + pad, y1 = v.bottom + pad, l = px - R, r = px + R, o = py - R, u = py + R;
-    const flaechen = [[x0, y0, x1 - x0, o - y0], [x0, u, x1 - x0, y1 - u], [x0, o, l - x0, u - o], [r, o, x1 - r, u - o]];
+    this.sicht.setTint(toenung).setPosition(px - ox, py - oy).setDisplaySize(2 * R, 2 * R).setAlpha(alpha);
+    rt.draw(this.sicht);
+    const l = px - ox - R, r = px - ox + R, o = py - oy - R, u = py - oy + R;
+    const flaechen = [[0, 0, B, o], [0, u, B, H - u], [0, o, l, u - o], [r, o, B - r, u - o]];
     flaechen.forEach(([x, y, w, h], i) => {
+      if (w <= 0 || h <= 0) return;
       const f = this.rand[i];
-      if (w <= 0 || h <= 0) { f.setVisible(false); return; }
-      f.setPosition(x, y).setSize(w, h).setFillStyle(farbe, alpha).setVisible(true);
+      f.setPosition(x, y).setSize(w, h).setFillStyle(farbe, alpha);
+      rt.draw(f);
     });
-    // Lampenschein: im Dunkeln deutlich, am Tag kaum
-    if (this.schein) {
-      if (lampe === null || lampe === undefined) this.schein.setVisible(false);
-      else this.schein.setPosition(px, py).setRotation(lampe).setScale(1.25).setAlpha(Math.min(1, dichte) * (0.12 + 0.55 * dunkel)).setVisible(true);
-    }
+    // Lampenkegel schneiden den Nebel auf (nur ein leichter Schleier bleibt)
+    if (lampenZeichner) for (const lp of lampen ?? []) lampenZeichner(rt, ox, oy, lp, 1 - LAMPE_NEBEL_REST);
   }
 }
