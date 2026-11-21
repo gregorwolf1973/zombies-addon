@@ -12,6 +12,7 @@ import { Aufgabe, Aufgaben, Mission, levelSchluessel } from './aufgaben.mjs';
 import { schwierigkeit, LEVEL_VORGABE } from './schwierigkeit.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
+import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
 import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
@@ -90,13 +91,14 @@ export const Zombie = schema({
   jagt: t.boolean(),
   hp: t.uint8(),
   kriecht: t.boolean(),     // „nicht ganz tot“: robbt am Boden
+  haengt: t.boolean(),      // hängt im S-Draht fest (Kriecher-Bild, zappelt; server/haengend.mjs)
   ebene: t.string(),
   variante: t.uint8(),      // Zombietyp 0–24 (Reihenfolge ZOMBIE_TYPEN in einstellungen.mjs)
 }, 'Zombie');
 
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
 // alter (Sekunden) ist nur Server-Eigenschaft; übertragen wird blass (0 = voll, 10 = verschwunden) in den letzten 20 s
-export const Leiche = schema({ x: t.number(), y: t.number(), richtung: t.number(), rest: t.uint8(), blass: t.uint8(), variante: t.uint8(), ebene: t.string(), fest: t.boolean() }, 'Leiche');  // fest: Tote in Wohnungen, verschwinden nie
+export const Leiche = schema({ x: t.number(), y: t.number(), richtung: t.number(), rest: t.uint8(), blass: t.uint8(), variante: t.uint8(), ebene: t.string(), fest: t.boolean(), deko: t.boolean() }, 'Leiche');  // fest: Tote in Wohnungen, verschwinden nie
 export const BodenDing = schema({ x: t.number(), y: t.number(), ding: t.string(), blass: t.uint8(), ebene: t.string() }, 'BodenDing');
 // Türen: Zimmertüren ('ebene:x,y') und Haustüren ('haus:nr'). barrikade und hp 0–100, kaputt = zerbrochen (bleibt offen)
 export const Tuer = schema({ offen: t.boolean(), verschlossen: t.boolean(), barrikade: t.number(), hp: t.number(), kaputt: t.boolean() }, 'Tuer');
@@ -440,6 +442,7 @@ export class SpielRaum extends Room {
     this.tageszeitenUebernehmen();   // Nachtlänge hängt vom Level ab
     this.stuetzpunkt = new Stuetzpunkt(this);
     this.stuetzpunkt.start(stand, !!passt);
+    haengendStart(this);   // hängende Zombies im S-Draht (Lager, Flugfeld) und Tote am Flugfeld Königsdorf
     this.granaten = new Granaten(this);
     this.radios = new Radios(this);
     this.moerser = new Moerser(this);   // Panzermörser (Test-Schalter test.moerser)
@@ -1343,6 +1346,14 @@ export class SpielRaum extends Room {
     // tempo: fester Tempofaktor 0,9–1,1, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen)
     this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: (schnell > 0 && this.rnd() < schnell ? 1.3 : 0.9) + this.rnd() * 0.2 });
     return id;
+  }
+
+  // Zombie bleibt im S-Draht hängen: Kriecher-Aussehen, bewegt sich nicht (zombieGehen), beißt Nahe, ist erschießbar; nach dauer Sekunden
+  // reißt er sich los (haengtSchritt) und kriecht als normaler Kriecher weiter
+  haengenBleiben(z, info, dauer) {
+    z.haengt = true; z.kriecht = true; z.jagt = false;
+    z.hp = Math.max(1, Math.round(KRIECHER_HP * (SpielRaum.einstellungen?.zombieLeben ?? ZOMBIE_HP) / ZOMBIE_HP));
+    info.haengtT = dauer; info.ziel = null; info.punkt = null; info.schlaeft = false; info.steht = false; info.welle = null;
   }
 
   // Betreten, Verlassen, Treppen: wer auf die Kachel tritt, wechselt die Ebene
@@ -2927,6 +2938,7 @@ export class SpielRaum extends Room {
     const info = this.zombieInfo.get(id);
     const welt = this.wv(z.ebene);
     const ebene = z.ebene ?? '';
+    if (z.haengt) haengtSchritt(this, z, info, dt);   // Zeit im Draht läuft; nach Ablauf frei
     // Sehen: Kegel in Blickrichtung, schleichende Spieler erst später
     if (!info.ziel) {
       for (const [sid, p] of this.state.spieler) {
@@ -3032,7 +3044,8 @@ export class SpielRaum extends Room {
     if (info.welle) return this.welle.gehen(id, z, info, dt);
     // schlafende Zombies (in Häusern) bewegen sich nicht, bis sie jemanden sehen oder hören
     if (info.schlaeft) return;
-    // Wandern
+    // Wandern (wer im Draht hängt, bleibt stehen)
+    if (z.haengt) return;
     info.wechsel -= dt;
     if (info.wechsel <= 0) {
       info.wechsel = 2 + this.rnd() * 4;
@@ -3103,6 +3116,7 @@ export class SpielRaum extends Room {
   }
 
   zombieGehen(z, w, weg, dt, info = null) {
+    if (z.haengt) return false;   // im S-Draht festgehakt
     const eifrig = z.jagt || weg > W.zombieTempoWandern * dt * 1.5;   // jagt oder folgt einem Geräusch (nicht nur Umherirren)
     weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
     if (info && !z.kriecht) weg *= info.tempo ?? 1;     // eigener Tempofaktor des Zombies (0,9–1,1)
@@ -3125,6 +3139,7 @@ export class SpielRaum extends Room {
     if (!z.ebene && this.hausEindringen(z)) { this.zombieAbstand(z, welt, info); return true; }
     // Abstand zu anderen Zombies halten
     this.zombieAbstand(z, welt, info);
+    if (!z.ebene && !z.kriecht && info) drahtPruefen(this, z, info);   // läuft er in eine S-Draht-Rolle, bleibt er mit 40 % hängen
     return Math.hypot(z.x - x0, z.y - y0) > schritt * 0.3;
   }
 
