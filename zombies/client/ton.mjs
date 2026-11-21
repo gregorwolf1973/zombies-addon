@@ -218,7 +218,7 @@ export function tageszeit(nacht) {
 
 // erst nach einer Berührung/einem Klick erlaubt der Browser Ton
 export function tonStarten() {
-  if (ctx) { if (!document.hidden) ctx.resume?.(); return; }
+  if (ctx) { if (!document.hidden) ctx.resume?.(); audioFreischalten(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
@@ -230,6 +230,7 @@ export function tonStarten() {
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   hintergrundAufbauen();
   vorladen();
+  audioFreischalten();
   if (!hintergrund.streuTimer) hintergrund.streuTimer = setTimeout(streuen, 6000);
   if (!hintergrund.krankTimer) hintergrund.krankTimer = setTimeout(krankenwagen, 30000 + Math.random() * 60000);
 }
@@ -596,7 +597,68 @@ export function brandRauschen(staerke) {
 // ---------- Spielmusik: Hauptlied je Level, Lager, Horde, Safe, Finale (Auswahl: client/musiklogik.mjs) ----------
 let musikBus = null, musikSt, musikLauf = null;
 const musikLetzt = new Map();
-const hatMusik = k => (zuordnung[k]?.dateien ?? []).some(d => puffer.get(d) !== null);   // undefined = noch nicht geladen, null = fehlt
+const hatMusik = k => (zuordnung[k]?.dateien ?? []).some(d => puffer.get(d) !== null && !stromFehlt.has(d));   // undefined = noch nicht geladen, null = fehlt
+
+// ---------- Musik streamen statt dekodieren ----------
+// Ein dekodiertes Lied liegt als Float32 im Speicher (3 min Stereo ≈ 70 MB) – zu viel für iPhone/iPad. Deshalb spielt Musik über
+// <audio>-Elemente, die an den AudioContext angeschlossen sind (MediaElementSource): kaum Speicher, startet sofort.
+// iOS erlaubt play() nur Elementen, die einmal in einer Nutzergeste gespielt haben → feste Elemente, in der ersten Geste freigeschaltet.
+const stromFehlt = new Set();
+const stromSpieler = [];   // { a, g, belegt, frei }
+let stilleUrl = null;
+function stille() {   // 0,05 s Stille als WAV-Daten-URL zum Freischalten
+  if (stilleUrl) return stilleUrl;
+  const n = 2205, b = new DataView(new ArrayBuffer(44 + n * 2)), txt = (o, t) => { for (let i = 0; i < t.length; i++) b.setUint8(o + i, t.charCodeAt(i)); };
+  txt(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); txt(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+  b.setUint32(24, 44100, true); b.setUint32(28, 88200, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); txt(36, 'data'); b.setUint32(40, n * 2, true);
+  let bin = ''; const u = new Uint8Array(b.buffer); for (let i = 0; i < u.length; i++) bin += String.fromCharCode(u[i]);
+  return (stilleUrl = 'data:audio/wav;base64,' + btoa(bin));
+}
+function stromAnlegen() {
+  if (!ctx?.createMediaElementSource || stromSpieler.length >= 3) return null;
+  try {
+    const a = new Audio(); a.preload = 'auto'; a.setAttribute('playsinline', ''); a.crossOrigin = 'anonymous';
+    const g = ctx.createGain(); g.gain.value = 0; ctx.createMediaElementSource(a).connect(g);
+    const sp = { a, g, belegt: false, frei: false };
+    stromSpieler.push(sp);
+    return sp;
+  } catch { return null; }
+}
+// in jeder Nutzergeste aufrufen: legt die Elemente an und spielt einmal kurz Stille (iOS-Freischaltung)
+export function audioFreischalten() {
+  if (!ctx) return;
+  while (stromSpieler.length < 3 && stromAnlegen());
+  for (const sp of stromSpieler) {
+    if (sp.frei || sp.belegt) continue;
+    try { sp.a.src = stille(); Promise.resolve(sp.a.play()).then(() => { sp.frei = true; if (!sp.belegt) sp.a.pause(); }).catch(() => {}); } catch { /* nächste Geste */ }
+  }
+}
+// Datei auf einem freien Element abspielen; liefert { g, stop(sek) } oder null (dann alter Weg über dekodierte Puffer)
+function stromStarten(datei, { loop = false, ziel, laut = 1, blende = 1, ende } = {}) {
+  const sp = stromSpieler.find(x => !x.belegt && x.frei) ?? (stromSpieler.some(x => x.frei) ? null : stromSpieler.find(x => !x.belegt));
+  if (!sp) return null;
+  sp.belegt = true;
+  const a = sp.a, g = sp.g, jetzt = ctx.currentTime;
+  try { g.disconnect(); } catch { /* war nicht verbunden */ }
+  g.connect(ziel);
+  g.gain.cancelScheduledValues(jetzt); g.gain.setValueAtTime(0, jetzt); g.gain.linearRampToValueAtTime(laut, jetzt + blende);
+  let aus = false;
+  const frei = () => { if (aus) return; aus = true; a.onended = a.onerror = null; try { a.pause(); a.removeAttribute('src'); a.load(); } catch { /* egal */ } sp.belegt = false; };
+  a.onended = () => { frei(); ende?.(); };
+  a.onerror = () => { stromFehlt.add(datei); frei(); ende?.(); };
+  a.loop = loop; a.src = 'toene/' + encodeURIComponent(datei);
+  Promise.resolve(a.play()).then(() => { sp.frei = true; }).catch(() => { frei(); ende?.('gesperrt'); });
+  return {
+    g,
+    stop(sek = 0) {
+      if (aus) return;
+      const t = ctx.currentTime;
+      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + sek);
+      a.onended = null;
+      setTimeout(frei, sek * 1000 + 150);
+    },
+  };
+}
 // lage: { level, lager, safe, finale }; etwa jede Sekunde vom Spiel aufgerufen
 export function musikLage(lage) {
   if (!ctx) return;
@@ -611,7 +673,8 @@ function musikLautstaerke() {
 function musikAnwenden(kat) {
   const l = musikLauf;
   if ((l?.kat ?? null) === kat) return;
-  if (l?.g) {
+  if (l?.strom) l.strom.stop(musikEin.blende);
+  else if (l?.g) {
     const t = ctx.currentTime, b = musikEin.blende;
     l.g.gain.cancelScheduledValues(t); l.g.gain.setValueAtTime(l.g.gain.value, t); l.g.gain.linearRampToValueAtTime(0, t + b);
     try { l.src.stop(t + b + 0.1); } catch { /* schon aus */ }
@@ -620,9 +683,20 @@ function musikAnwenden(kat) {
   if (kat) musikStueck(kat);
 }
 function musikStueck(kat) {
-  const t = zuordnung[kat], liste = (t?.dateien ?? []).filter(d => puffer.get(d) !== null);
+  const t = zuordnung[kat], liste = (t?.dateien ?? []).filter(d => puffer.get(d) !== null && !stromFehlt.has(d));
   const datei = naechstesStueck(liste, musikLetzt.get(kat));
   if (!datei) return;
+  // bevorzugt streamen; nur ohne freigeschaltetes Element (alte Browser) über den dekodierten Puffer
+  if (!geladen(datei)) {
+    const l = { kat };
+    l.strom = stromStarten(datei, { ziel: musikBus, laut: (t.laut ?? 100) / 100, blende: musikEin.blende, ende: grund => {
+      if (musikLauf !== l) return;
+      musikLauf = null;
+      if (grund === 'gesperrt') { l.gesperrt = true; return; }   // iOS ohne Geste: bei der nächsten Lage (≈1 s) neuer Versuch
+      musikStueck(kat);
+    } });
+    if (l.strom) { musikLetzt.set(kat, datei); musikLauf = l; return; }
+  }
   const buf = geladen(datei);
   if (!buf) { const w = { kat }; musikLauf = w; Promise.resolve(laden(datei)).then(() => { if (musikLauf === w) { musikLauf = null; musikStueck(kat); } }); return; }
   musikLetzt.set(kat, datei);
@@ -640,8 +714,15 @@ let musik = null;
 export function musikStarten() {
   tonStarten();
   if (!ctx || musik) return;
-  const t = zuordnung.startmusik, liste = (t?.dateien ?? []);
+  const t = zuordnung.startmusik, liste = (t?.dateien ?? []).filter(d => !stromFehlt.has(d));
   if (!liste.length) return;
+  audioFreischalten();
+  if (!liste.some(geladen)) {
+    const m = { strom: null };
+    m.strom = stromStarten(liste[Math.floor(Math.random() * liste.length)], { loop: true, ziel: haupt, laut: (t.laut ?? 55) / 100, blende: 2,
+      ende: () => { if (musik === m) musik = null; } });   // gesperrt/Fehler: nächste Geste versucht es wieder
+    if (m.strom) { musik = m; return; }
+  }
   const buf = liste.map(geladen).filter(Boolean);
   if (!buf.length) { Promise.all(liste.map(laden)).then(() => { if (!musik && !musikAus) musikStarten(); }); return; }
   const g = ctx.createGain(); g.gain.value = 0; g.connect(haupt);
@@ -675,6 +756,7 @@ export function musikSofort(startseiteSichtbar = () => true) {
   const ab = () => { for (const a of ARTEN) document.removeEventListener(a, geste, true); hinweisZeigen(false); };
   const geste = () => {
     los();
+    try { audioFreischalten(); } catch { /* egal */ }
     // erst abmelden, wenn der Ton wirklich läuft; sonst bei der nächsten Geste noch einmal
     setTimeout(() => { if (musikAus || !startseiteSichtbar() || ctx?.state === 'running') ab(); }, 300);
   };
@@ -687,6 +769,7 @@ export function musikAusblenden(sek = 4) {
   musikAus = true;
   if (!musik || !ctx) return;
   const m = musik; musik = null;
+  if (m.strom) { m.strom.stop(sek); return; }
   m.g.gain.setTargetAtTime(0, ctx.currentTime, sek / 3);
   setTimeout(() => { try { m.src.stop(); } catch { /* schon aus */ } }, sek * 1500);
 }

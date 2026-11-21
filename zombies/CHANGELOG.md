@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.66.3 – 21.11.2026
+
+- Musik wird jetzt gestreamt statt komplett entpackt: Lieder starten sofort und belegen kaum Arbeitsspeicher, egal wie lang (vorher bis zu 115 MB je Lied). Auf iPhone/iPad werden die Abspieler bei der ersten Berührung freigeschaltet.
+- Neue Hintergrundmusik: Level 3 „Hiding from Zombies“, Level 4 „Overdrive“ (MAITTRE, CC BY 3.0), BW-Lager „Dominion“ (Hriday Talur, CC BY 3.0), Horde „Infestation“. Nachweis auf der Startseite.
+- Töne auf dem Server verkleinert: Geräusche Mono 96 kbit/s, lange Schleifen (Horde, Stadt, Wasser) auf nahtlose 30 s gekürzt – deutlich weniger Download und Speicher.
+
 ## 0.66.2 – 21.11.2026
 
 - Schneller: Levelwechsel und Neuladen. Der Kartenaufbau rechnet die Zaunlücken jetzt über ein Raster statt jede Zaunkachel mit allen Zaunstücken zu vergleichen – Geretsried 2 baut in 1,4 statt 4,6 s, Geretsried in 0,5 statt 1,4 s (auf Tablets und Handys entsprechend mehr). Die Welt bleibt genau gleich.
