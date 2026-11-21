@@ -8,6 +8,7 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, BREITE, HOEHE, frei } from '../client/welt.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
+import { LEVEL_VORGABE } from '../server/schwierigkeit.mjs';
 
 const PORT = 27300 + Math.floor(Math.random() * 200);
 const URL_ = `http://127.0.0.1:${PORT}`;
@@ -24,21 +25,36 @@ async function beitreten(name) {
   return { c, raum, p: raum.state.spieler.get(c.sessionId) };
 }
 const alteEinst = SpielRaum.einstellungen;
+const ebenen = zusatz => LEVEL_VORGABE.map(v => ({ ...v, ...zusatz }));   // Level-Tabelle für alle Level gleich überschreiben
 function einst(zusatz) { SpielRaum.einstellungen = { ...alteEinst, ...zusatz }; }
 const streuung = werte => { const m = werte.reduce((a, b) => a + b, 0) / werte.length; return Math.sqrt(werte.reduce((a, b) => a + (b - m) ** 2, 0) / werte.length); };
 
-test('Einstellungen: Blaulicht und Welle werden bereinigt', () => {
+test('Einstellungen: Blaulicht und Level-Tabelle werden bereinigt', () => {
   const v = vorgaben();
   assert.equal(v.blaulicht, 'selten');
-  assert.equal(v.zombies.welle, 20); assert.equal(v.zombies.welleMin, 20); assert.equal(v.zombies.welleMax, 50);
+  assert.equal(v.zombies.level.length, 5);
+  assert.deepEqual(v.zombies.level[0], { grund: 8, jeSpieler: 5, horde: 12, dauer: 10, pause: 5, gleichzeitig: 1, haeuser: 10 });
+  assert.deepEqual(v.zombies.level[4], { grund: 16, jeSpieler: 10, horde: 30, dauer: 15, pause: 1, gleichzeitig: 2, haeuser: 16 });
   assert.equal(bereinige({ blaulicht: 'quatsch' }).blaulicht, 'selten');
   assert.equal(bereinige({ blaulicht: 'aus' }).blaulicht, 'aus');
-  assert.equal(bereinige({ zombies: { welle: 2 } }).zombies.welle, 5);
-  assert.equal(bereinige({ zombies: { welle: 0 } }).zombies.welle, 0);
-  const z = bereinige({ zombies: { welleMin: 40, welleMax: 10 } }).zombies;
-  assert.ok(z.welleMax >= z.welleMin && z.welleMax <= 1000);
-  assert.equal(bereinige({ zombies: { welleMax: 5000 } }).zombies.welleMax, 1000);
-  assert.equal(bereinige({ zombies: { welleMin: 200, welleMax: 250 } }).zombies.welleMin, 200);
+  // Teilwerte ändern nur das Genannte, alles wird geklammert
+  const l = bereinige({ zombies: { level: [{ pause: 0.1, horde: 5000, grund: 'viel' }, { gleichzeitig: 0, dauer: 7.4 }] } }).zombies.level;
+  assert.equal(l[0].pause, 0.5); assert.equal(l[0].horde, 200); assert.equal(l[0].grund, 8); assert.equal(l[0].jeSpieler, 5);
+  assert.equal(l[1].gleichzeitig, 0); assert.equal(l[1].dauer, 7); assert.equal(l[1].haeuser, 11);
+  // frühere Werte der Tabelle bleiben bei späteren Teiländerungen erhalten
+  const alt = bereinige({ zombies: { level: [{ grund: 20 }] } });
+  assert.equal(bereinige({ zombies: { level: [{ horde: 7 }] } }, alt).zombies.level[0].grund, 20);
+});
+
+test('Einstellungen: alte Werte (dichte, haeuser, welle*, Min/Max-Paare) werden übernommen', () => {
+  const z = bereinige({ zombies: { dichte: 20, haeuser: 5, welle: 20, welleMin: 35, welleMax: 35, hordeZielMin: 2, hordeZielMax: 4, hordeTruppMin: 6, hordeTruppMax: 14 } }).zombies;
+  assert.equal(z.level[0].grund, 16); assert.equal(z.level[0].jeSpieler, 10); assert.equal(z.level[0].haeuser, 5); assert.equal(z.level[0].horde, 12);
+  assert.equal(z.level[4].haeuser, 8); assert.equal(z.level[0].gleichzeitig, 1);
+  assert.equal(z.hordeZiel, 3); assert.equal(z.hordeTrupp, 10);
+  for (const k of ['dichte', 'haeuser', 'welle', 'welleMin', 'welleMax', 'hordeZielMin', 'hordeZielMax', 'hordeTruppMin', 'hordeTruppMax']) assert.ok(!(k in z), k + ' sollte wegfallen');
+  assert.equal(bereinige({ zombies: { welle: 0 } }).zombies.level[2].gleichzeitig, 0, 'welle 0 = keine Horden');
+  // eine vorhandene Tabelle gewinnt gegen alte Felder
+  assert.equal(bereinige({ zombies: { dichte: 20, level: [{ grund: 9 }] } }).zombies.level[0].grund, 9);
 });
 
 test('Zombies bekommen verschiedene feste Tempofaktoren zwischen 0,9 und 1,1', async () => {
@@ -70,7 +86,7 @@ test('Zombies bekommen verschiedene feste Tempofaktoren zwischen 0,9 und 1,1', a
 test('Zombiewelle: Meldung, Gruppe außerhalb des Bildes, zieht zur Gegenseite, löst sich auf, zählt nicht zum Soll', async () => {
   const { c, raum, p } = await beitreten('Wellen');
   try {
-    einst({ welleMinuten: 20, welleMin: 20, welleMax: 50, zombieFaktor: 1 });
+    einst({ zombieFaktor: 1, zombiesLevel: ebenen({ horde: 30 }) });
     raum.zombieFaktor = 0;
     // Spieler mitten auf die Karte, draußen
     p.ebene = ''; p.x = BREITE * KACHEL / 2; p.y = HOEHE * KACHEL / 2;
@@ -79,7 +95,7 @@ test('Zombiewelle: Meldung, Gruppe außerhalb des Bildes, zieht zur Gegenseite, 
     raum.broadcast = (typ, m, ...r) => { if (typ === 'meldung') meldungen.push(m.text); return alt(typ, m, ...r); };
     const seite = raum.welle.ansagen('west');
     assert.equal(seite, 'west');
-    assert.ok(meldungen.some(m => /Zombiewelle kommt von .*Westen/.test(m)), 'Meldung fehlt');
+    assert.ok(meldungen.some(m => /Zombiehorde kommt von .*Westen/.test(m)), 'Meldung fehlt');
     // vor Ablauf der 10 s noch nichts
     raum.welle.schritt(5);
     assert.equal(raum.state.zombies.size, 0);
@@ -112,7 +128,7 @@ test('Zombiewelle: Meldung, Gruppe außerhalb des Bildes, zieht zur Gegenseite, 
     }
     // am Ziel angekommen: die Welle zieht weiter (neues Ziel) statt stehen zu bleiben
     assert.ok(raum.welle.aktiv && raum.welle.aktiv.ziele >= 2, 'Welle ist am Ziel stehen geblieben');
-    raum.welle.aufloesen();
+    raum.welle.beenden();
     const lebend = ids.filter(id => raum.state.zombies.has(id));
     const rest = lebend.map(id => raum.state.zombies.get(id));
     // Welle ist am Ziel angekommen und aufgelöst (verschwunden oder normale Zombies)
@@ -129,49 +145,187 @@ test('Zombiewelle: Meldung, Gruppe außerhalb des Bildes, zieht zur Gegenseite, 
 test('Zombiewelle: weit weg von allen Spielern verschwinden sie beim Auflösen; höchstens 50', async () => {
   const { c, raum, p } = await beitreten('Weg');
   try {
-    einst({ welleMinuten: 20, welleMin: 50, welleMax: 50 });
     p.ebene = ''; p.x = 4 * KACHEL; p.y = HOEHE * KACHEL / 2;
     // Welle von Osten, am anderen Ende der Karte; Spieler ist weit weg
-    raum.welle.erzeugen('ost');
+    raum.welle.erzeugen('ost', 50);
     const ids = [...raum.welle.aktiv.ids];
     assert.ok(ids.length <= 50 && ids.length > 0);
     const nahe = ids.filter(id => Math.hypot(raum.state.zombies.get(id).x - p.x, raum.state.zombies.get(id).y - p.y) < 700);
     for (const id of nahe) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); }
-    raum.welle.aufloesen();
+    raum.welle.beenden();
     assert.equal(raum.welle.aktiv, null);
     for (const id of ids) if (!nahe.includes(id)) assert.ok(!raum.state.zombies.has(id), 'ferner Wellen-Zombie ist nicht verschwunden');
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
-test('Zombiewelle: Zeitgeber löst nach der Einstellung aus; 0 = keine Welle', async () => {
+test('Zombiewelle: Zeitgeber nach Level-Tabelle (erste Horde verzögert); gleichzeitig 0 = keine Horde', async () => {
   const { c, raum, p } = await beitreten('Uhr');
   try {
     p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;   // Startplatz ist immer frei und draußen
-    einst({ welleMinuten: 0, welleMin: 20, welleMax: 20, zeitraffer: 1 });
+    einst({ zeitraffer: 1, zombiesLevel: ebenen({ gleichzeitig: 0 }) });
     raum.welle.uhr = null;
     for (let i = 0; i < 100; i++) raum.welle.schritt(60);
     assert.equal(raum.welle.ansage, null); assert.equal(raum.welle.aktiv, null);
-    einst({ welleMinuten: 5, welleMin: 20, welleMax: 20, zeitraffer: 1 });
-    raum.welle.uhr = null;
-    for (let i = 0; i < 4; i++) raum.welle.schritt(60);
+    einst({ zeitraffer: 1, zombiesLevel: ebenen({ gleichzeitig: 1, pause: 5, horde: 20 }) });
+    raum.welle.uhr = null; raum.welle.erste = true;
+    for (let i = 0; i < 7; i++) raum.welle.schritt(60);   // Pause 5 min + 3 min Startverzögerung = 480 s
     assert.equal(raum.welle.ansage, null, 'zu früh angesagt');
     raum.welle.schritt(59);
-    assert.equal(raum.welle.ansage, null, 'zu früh angesagt (vor 5 Minuten)');
+    assert.equal(raum.welle.ansage, null, 'zu früh angesagt (vor 8 Minuten)');
     raum.welle.schritt(2);
-    assert.ok(raum.welle.ansage, 'keine Ansage nach 5 Minuten');
+    assert.ok(raum.welle.ansage, 'keine Ansage nach 8 Minuten');
     raum.welle.schritt(11);
     // in engen Zufallswelten ist nicht immer Platz für alle – etwas weniger ist in Ordnung
-    assert.ok(raum.welle.aktiv && raum.welle.aktiv.ids.size >= 5 && raum.welle.aktiv.ids.size <= 20, 'Welle nicht erschienen: ' + raum.welle.aktiv?.ids.size);
-    raum.welle.aufloesen();
+    assert.ok(raum.welle.aktiv && raum.welle.aktiv.ids.size >= 5 && raum.welle.aktiv.ids.size <= 30, 'Horde nicht erschienen: ' + raum.welle.aktiv?.ids.size);
+    // gleichzeitig 1: solange sie zieht, kommt keine zweite
+    for (let i = 0; i < 5; i++) raum.welle.schritt(1);
+    assert.equal(raum.welle.uhr, null); assert.equal(raum.welle.horden.length, 1);
+    raum.welle.beenden();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Horde: Größe = je Spieler × Spielerzahl (Bots zählen halb) × Tag-Bonus × Regler, ±30 %', async () => {
+  const { c, raum } = await beitreten('Groesse');
+  try {
+    einst({ zombiesLevel: ebenen({ horde: 20 }), schwierigkeit: 'normal' });
+    assert.equal(raum.spielerZahl(), 1);
+    const gr = () => Array.from({ length: 200 }, () => raum.welle.hordeGroesse());
+    let g = gr();
+    assert.ok(Math.min(...g) >= 14 && Math.max(...g) <= 26 && Math.max(...g) - Math.min(...g) >= 6, `1 Spieler: ${Math.min(...g)}–${Math.max(...g)}`);
+    raum.extra.set('bot1', { bot: { nr: 0 } }); raum.state.spieler.set('bot1', new (raum.state.spieler.get(c.sessionId).constructor)());
+    assert.equal(raum.spielerZahl(), 1.5);
+    g = gr();
+    assert.ok(Math.min(...g) >= 21 && Math.max(...g) <= 39, `1,5 Spieler: ${Math.min(...g)}–${Math.max(...g)}`);
+    raum.state.spieler.delete('bot1'); raum.extra.delete('bot1');
+    einst({ zombiesLevel: ebenen({ horde: 20 }), schwierigkeit: 'schwer' });
+    g = gr();
+    assert.ok(Math.min(...g) >= 18 && Math.max(...g) <= 34 && Math.max(...g) > 28, `schwer: ${Math.min(...g)}–${Math.max(...g)}`);
+    einst({ zombiesLevel: ebenen({ horde: 5000 }) });
+    assert.ok(gr().every(x => x <= 1000), 'Deckel WELLE_MAX');
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Zombies draußen = (Grund + je Spieler × Spielerzahl) × Nacht × Regler', async () => {
+  const { c, raum } = await beitreten('Soll');
+  try {
+    raum.zombieFaktor = 1; raum.stadt = null; raum.state.level = 1; raum.state.tag = 1;
+    einst({ nachtFaktor: 1.5, schwierigkeit: 'normal', zombiesLevel: ebenen({ grund: 10, jeSpieler: 6 }) });
+    raum.state.uhr = 12 * 60;
+    assert.equal(raum.zombieSollJetzt(), 16);   // 10 + 6 × 1 Spieler
+    raum.state.uhr = 0;
+    assert.equal(raum.zombieSollJetzt(), 24);   // nachts × 1,5
+    raum.state.uhr = 12 * 60;
+    einst({ nachtFaktor: 1.5, schwierigkeit: 'schwer', zombiesLevel: ebenen({ grund: 10, jeSpieler: 6 }) });
+    assert.equal(raum.zombieSollJetzt(), Math.round(16 * 1.3));
+    SpielRaum.einstellungen = { ...alteEinst, nachtFaktor: 1.5, schwierigkeit: 'normal', zombiesLevel: LEVEL_VORGABE };
+    raum.state.level = 3;
+    assert.equal(raum.zombieSollJetzt(), 12 + 7);   // Vorgabe Level 3
+    raum.state.level = 5;
+    assert.equal(raum.zombieSollJetzt(), 16 + 10);
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Horde: Hordendauer um → ein Drittel streunt, der Rest zieht zum Rand ab und wird außer Sicht gelöscht; Pause; neue Horde von der anderen Seite', async () => {
+  const { c, raum, p } = await beitreten('Abzug');
+  try {
+    einst({ zeitraffer: 1, zombiesLevel: ebenen({ gleichzeitig: 1, pause: 4, dauer: 10, horde: 30 }) });
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.unten = true;
+    const w = raum.welle;
+    w.erzeugen('west', 60);
+    const a = w.aktiv, gesamt = a.ids.size;
+    assert.ok(gesamt >= 30);
+    assert.equal(w.letzteSeite, 'west');
+    assert.equal(a.dauer, 600);
+    a.lebt = a.dauer - 1; w.verfolgen(a, 0.5);
+    assert.ok(!a.abzug, 'zu früh aufgelöst');
+    w.verfolgen(a, 1);
+    assert.ok(a.abzug, 'nicht aufgelöst');
+    assert.equal(a.zielArt, 'abzug');
+    const streuner = [...raum.zombieInfo.values()].filter(i => !i.welle && !i.bleibt).length;
+    assert.ok(Math.abs(streuner - gesamt / 3) <= 2, `Streuner ${streuner} von ${gesamt}`);
+    assert.ok(a.ids.size >= gesamt / 2, 'Rest zieht ab');
+    assert.equal(w.aktive().length, 0, 'Abzug zählt nicht als aktive Horde');
+    // Abzug: nah am Spieler (im Bild) bleiben sie; fern von allen Spielern werden sie gelöscht
+    const ids = [...a.ids];
+    for (const id of ids) { const q = raum.state.zombies.get(id); q.x = p.x + 1500; q.y = p.y; }
+    w.verfolgen(a, 0.1);
+    assert.equal(a.ids.size, 0); assert.ok(!w.horden.includes(a), 'Horde nicht entfernt');
+    for (const id of ids) assert.ok(!raum.state.zombies.has(id), 'Abzugs-Zombie nicht gelöscht');
+    // Pause: Uhr startet neu, nach 4 min neue Ansage von der anderen Seite
+    w.erste = false;
+    w.schritt(1);
+    assert.ok(w.uhr !== null && w.uhr > 200 && w.uhr <= 240, 'Pause nicht gestartet: ' + w.uhr);
+    for (let i = 0; i < 235; i++) w.schritt(1);
+    assert.equal(w.ansage, null, 'zu früh');
+    w.schritt(10);   // Ansage + 10 s: die neue Horde steht
+    assert.equal(w.horden.length, 1, 'keine neue Horde');
+    assert.equal(w.horden[0].seite, 'ost', 'neue Horde nicht von der anderen Seite');
+    w.beenden();
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Horde: Abzug – wer nah am Spieler ist, bleibt; Rest erreicht den Rand', async () => {
+  const { c, raum, p } = await beitreten('Rand');
+  try {
+    einst({ zeitraffer: 1, zombiesLevel: ebenen({ gleichzeitig: 1, dauer: 10, horde: 30 }) });
+    p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.unten = true;
+    const w = raum.welle;
+    w.erzeugen('west', 30);
+    const a = w.aktiv; a.lebt = a.dauer + 1; w.verfolgen(a, 0.1);
+    assert.ok(a.abzug && a.ziel);
+    // Ziel liegt in Randnähe (3 Kacheln), nächster Rand zur Mitte
+    const rd = Math.min(a.ziel.x, a.ziel.y, BREITE * KACHEL - a.ziel.x, HOEHE * KACHEL - a.ziel.y);
+    assert.ok(rd <= 8 * KACHEL, 'Abzugsziel nicht am Rand: ' + rd);
+    // ein Zombie neben dem Spieler wird nicht gelöscht, auch wenn alle anderen weg sind
+    const [nah, ...rest] = [...a.ids];
+    const q = raum.state.zombies.get(nah); q.x = p.x + 100; q.y = p.y;
+    for (const id of rest) { const z = raum.state.zombies.get(id); z.x = p.x + 3000; z.y = p.y; }
+    w.verfolgen(a, 0.1);
+    assert.ok(raum.state.zombies.has(nah) && a.ids.has(nah), 'Zombie im Bild gelöscht');
+    assert.equal(a.ids.size, 1);
+    // nach ABZUG_MAX streunt der Rest
+    w.verfolgen(a, 301);
+    assert.ok(!w.horden.includes(a)); assert.ok(raum.zombieInfo.get(nah) && !raum.zombieInfo.get(nah).welle, 'Rest streunt nicht');
+  } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
+});
+
+test('Horde: mehrere gleichzeitig (Level 3: 2), jede mit eigener Zeit; Zeitraffer verkürzt Dauer und Pause; Hordenliste je Horde', async () => {
+  const { c, raum, p } = await beitreten('Zwei');
+  try {
+    einst({ zeitraffer: 10, hordeZieleZeigen: true, zombiesLevel: ebenen({ gleichzeitig: 2, pause: 3, dauer: 12, horde: 20 }) });
+    p.ebene = ''; p.x = BREITE * KACHEL / 2; p.y = HOEHE * KACHEL / 2; p.unten = true;
+    const w = raum.welle;
+    w.uhr = null; w.erste = false;
+    w.schritt(1);
+    assert.ok(w.uhr !== null && w.uhr < 180 && w.uhr > 140, 'Zeitraffer wirkt nicht auf die Pause: ' + w.uhr);
+    for (let i = 0; i < 20 && !w.ansage; i++) w.schritt(1);
+    assert.ok(w.ansage, 'keine Ansage');
+    w.schritt(11);
+    assert.equal(w.horden.length, 1);
+    assert.ok(w.uhr !== null, 'zweiter Platz frei: Uhr läuft weiter');
+    for (let i = 0; i < 40 && w.horden.length < 2; i++) w.schritt(1);
+    assert.equal(w.horden.length, 2, 'zweite Horde fehlt');
+    assert.equal(w.uhr, null, 'mehr als „gleichzeitig“ Horden');
+    // Hordenliste: je Horde Größe, Restzeit, Ziel
+    const info = []; raum.clients[0].send = (typ, m) => { if (typ === 'hordeInfo') info.push(m); };
+    raum.extra.get(raum.clients[0].sessionId).superuser = true;
+    w.infoSenden(0, true);
+    const m = info.at(-1);
+    assert.equal(m.horden.length, 2);
+    assert.ok(m.horden.every(h => h.n > 0 && typeof h.restDauer === 'number' && h.restDauer > 0 && h.name && h.mitte && h.ziel));
+    // Zeitraffer: Hordendauer läuft 10× so schnell ab
+    const a = w.horden[0]; a.lebt = 0; w.verfolgen(a, 6, 10);
+    assert.equal(Math.round(a.lebt), 60);
+    w.beenden(w.horden[1]); w.beenden(a);
+    assert.equal(w.horden.length, 0);
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
 test('Zombiewelle: Leistung mit 50 Wellen-Zombies', async () => {
   const { c, raum, p } = await beitreten('Last');
   try {
-    einst({ welleMinuten: 20, welleMin: 50, welleMax: 50 });
     p.ebene = ''; p.x = BREITE * KACHEL / 2; p.y = HOEHE * KACHEL / 2; p.unten = true;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 50);
     const n = raum.state.zombies.size;
     const t0 = performance.now();
     const N = 100;
@@ -179,7 +333,7 @@ test('Zombiewelle: Leistung mit 50 Wellen-Zombies', async () => {
     const ms = (performance.now() - t0) / N;
     console.log(`# Welle: ${n} Zombies, ${ms.toFixed(2)} ms je Takt`);
     assert.ok(ms < 25, `zu langsam: ${ms} ms`);
-    raum.welle.aufloesen();
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
@@ -210,16 +364,15 @@ test('Blaulicht: Abstände selten 8–15 min, normal 2,5–6,5 min; aus = keine 
 test('Zombiewelle: zieht am Ziel weiter (neues Ziel) statt sich aufzulösen, Ziele bleiben im Ort', async () => {
   const { c, raum, p } = await beitreten('Weiter');
   try {
-    einst({ welleMinuten: 20, welleMin: 30, welleMax: 30 });
     p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 30);
     const a = raum.welle.aktiv, ziel0 = { ...a.ziel };
     a.mitte = { x: ziel0.x, y: ziel0.y };
-    raum.welle.neuesZiel();
+    raum.welle.neuesZiel(a);
     assert.ok(raum.welle.aktiv, 'Welle löst sich auf statt weiterzuziehen');
     const z = raum.welle.aktiv.ziel;
     assert.ok(z.x >= 6 * KACHEL && z.x <= (BREITE - 6) * KACHEL && z.y >= 6 * KACHEL && z.y <= (HOEHE - 6) * KACHEL, 'Ziel zu nah am Rand');
-    raum.welle.aufloesen();
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
@@ -242,28 +395,29 @@ test('Zombies lassen am Boden liegende Spieler in Ruhe', async () => {
 
 test('Einstellungen: Hordenziel, Trupp und Reichweite werden bereinigt', () => {
   const v = vorgaben().zombies;
-  assert.equal(v.hordeZielMin, 2); assert.equal(v.hordeZielMax, 5);
-  assert.equal(v.hordeTruppMin, 5); assert.equal(v.hordeTruppMax, 15); assert.equal(v.hordeReichweite, 18);
-  const z = bereinige({ zombies: { hordeZielMin: 9, hordeZielMax: 3, hordeTruppMin: 40, hordeTruppMax: 10, hordeReichweite: 999 } }).zombies;
-  assert.ok(z.hordeZielMax >= z.hordeZielMin && z.hordeTruppMax >= z.hordeTruppMin && z.hordeReichweite <= 60);
+  assert.equal(v.hordeZiel, 3.5); assert.equal(v.hordeTrupp, 10); assert.equal(v.hordeReichweite, 18);
+  const z = bereinige({ zombies: { hordeZiel: 99, hordeTrupp: 5000, hordeReichweite: 999 } }).zombies;
+  assert.equal(z.hordeZiel, 30); assert.equal(z.hordeTrupp, 300); assert.equal(z.hordeReichweite, 60);
+  assert.equal(bereinige({ zombies: { hordeZiel: 0, hordeTrupp: 0 } }).zombies.hordeZiel, 0.5);
   assert.equal(bereinige({ zombies: { hordeReichweite: 1 } }).zombies.hordeReichweite, 5);
 });
 
-test('Horde: Zielwechsel nach Ablauf der Zeit (2–5 echte Minuten)', async () => {
+test('Horde: Zielwechsel nach Ablauf der Zeit (hordeZiel ±40 %)', async () => {
   const { c, raum, p } = await beitreten('Zielzeit');
   try {
-    einst({ welleMinuten: 20, welleMin: 30, welleMax: 30, hordeZielMin: 2, hordeZielMax: 3 });
+    einst({ hordeZiel: 2.5 });
     p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.unten = true;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 30);
     const a = raum.welle.aktiv;
     const dauern = Array.from({ length: 50 }, () => raum.welle.zielDauer());
-    assert.ok(dauern.every(d => d >= 120 && d <= 180), 'Zieldauer außerhalb 2–3 min');
-    assert.ok(a.zielUhr >= 120 && a.zielUhr <= 180);
+    assert.ok(dauern.every(d => d >= 90 && d <= 210), 'Zieldauer außerhalb ±40 % von 2,5 min');
+    assert.ok(new Set(dauern.map(d => Math.round(d))).size > 20, 'Zieldauer streut nicht');
+    assert.ok(a.zielUhr >= 90 && a.zielUhr <= 210);
     const ziele0 = a.ziele; a.zielUhr = 1; a.pruef.t = 0;
     for (let i = 0; i < 30; i++) raum.welle.schritt(0.05);
     assert.ok(raum.welle.aktiv.ziele > ziele0, 'Ziel wurde nach Ablauf der Zeit nicht gewechselt');
-    assert.ok(raum.welle.aktiv.zielUhr >= 100, 'Zeitgeber nicht neu gesetzt');
-    raum.welle.aufloesen();
+    assert.ok(raum.welle.aktiv.zielUhr >= 80, 'Zeitgeber nicht neu gesetzt');
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
@@ -280,9 +434,9 @@ function spielerNebenHorde(raum, p) {
 test('Horde: Trupp löst sich bei Spieler in Reichweite und greift an; Liegende bleiben unangetastet', async () => {
   const { c, raum, p } = await beitreten('Trupp');
   try {
-    einst({ welleMinuten: 20, welleMin: 40, welleMax: 40, hordeTruppMin: 6, hordeTruppMax: 6, hordeReichweite: 18 });
+    einst({ hordeTrupp: 6, hordeReichweite: 18 });
     p.ebene = ''; p.unten = true;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 40);
     const a = raum.welle.aktiv, gesamt = a.ids.size;
     assert.ok(spielerNebenHorde(raum, p), 'kein freier Platz');
     // am Boden: nichts passiert
@@ -305,16 +459,16 @@ test('Horde: Trupp löst sich bei Spieler in Reichweite und greift an; Liegende 
     assert.ok([...t.ids].every(id => !raum.zombieInfo.get(id).ziel), 'Zombie jagt Liegenden weiter');
     raum.welle.schritt(0.6);
     assert.equal(a.trupps.length, 0, 'Trupp bleibt trotz Liegendem');
-    raum.welle.aufloesen();
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
 test('Horde: Trupp kehrt zurück oder streunt, wenn das Ziel 20–30 s außer Sicht ist', async () => {
   const { c, raum, p } = await beitreten('Truppende');
   try {
-    einst({ welleMinuten: 20, welleMin: 40, welleMax: 40, hordeTruppMin: 8, hordeTruppMax: 8 });
+    einst({ hordeTrupp: 8 });
     p.ebene = ''; p.unten = false;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 40);
     const a = raum.welle.aktiv, gesamt = a.ids.size;
     assert.ok(spielerNebenHorde(raum, p));
     // nur den Trupp gegen den Testspieler zählen (in der Zufallswelt können Menschen/Bots weitere Trupps auslösen)
@@ -331,7 +485,7 @@ test('Horde: Trupp kehrt zurück oder streunt, wenn das Ziel 20–30 s außer Si
     assert.ok(a.ids.size >= gesamt - ids.length);
     // außer Sicht: Spieler draußen, aber weit weg
     p.ebene = ''; p.unten = false;
-    raum.welle.aufloesen();
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
@@ -340,7 +494,7 @@ test('Horde: kein Gleichschritt – Tempi, Richtungen und Wege streuen', async (
   try {
     einst({ welleMinuten: 20, welleMin: 80, welleMax: 80 });
     p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y; p.unten = true;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 40);
     const ids = [...raum.welle.aktiv.ids];
     const tempi = ids.map(id => raum.zombieInfo.get(id).wTempo);
     assert.ok(tempi.every(x => x >= 0.8 && x <= 1.2), 'Tempo außerhalb ±20 %');
@@ -358,7 +512,7 @@ test('Horde: kein Gleichschritt – Tempi, Richtungen und Wege streuen', async (
     assert.ok(streuung(weg) / (weg.reduce((x, y) => x + y, 0) / weg.length) > 0.05, 'zurückgelegte Wege zu gleich');
     const rs = winkel.map(w => { const sx = w.reduce((x, y) => x + Math.cos(y), 0) / w.length, sy = w.reduce((x, y) => x + Math.sin(y), 0) / w.length; return 1 - Math.hypot(sx, sy); });
     assert.ok(rs.some(r => r > 0.01), 'Blickrichtungen laufen im Gleichschritt');
-    raum.welle.aufloesen();
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
@@ -367,7 +521,7 @@ test('Horde: zieht zügig und zusammenhängend – Mitte legt in 60 s Spielzeit 
   try {
     einst({ welleMinuten: 20, welleMin: 40, welleMax: 40, hordeZielMin: 5, hordeZielMax: 5 });
     p.ebene = ''; p.x = 4 * KACHEL; p.y = 4 * KACHEL; p.unten = true;   // Liegender weit weg in der Ecke: sonst weichen Zombies vor ihm aus
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 40);
     const a = raum.welle.aktiv, ids = [...a.ids];
     const start = { ...a.mitte };
     let weg = 0, letzte = { ...a.mitte }, steht = 0, messungen = 0;
@@ -387,7 +541,7 @@ test('Horde: zieht zügig und zusammenhängend – Mitte legt in 60 s Spielzeit 
     assert.ok(raum.welle.aktiv && raum.welle.aktiv.ids.size >= ids.length * 0.4, 'Horde zerfallen');
     assert.ok(weg >= 2000, `Hordenmitte zu langsam: ${Math.round(weg)} px in 60 s`);
     assert.ok(steht / messungen < 0.25, 'zu viele Zombies stehen oder hängen fest: ' + (steht / messungen));   // gewollte kurze Pausen (kein Gleichschritt) erlauben etwas mehr Stillstand
-    raum.welle.aufloesen();
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
@@ -396,9 +550,9 @@ test('Horde: zieht zügig und zusammenhängend – Mitte legt in 60 s Spielzeit 
 test('Horde: Dauerlärm (20 Schüsse in 60 s) lenkt höchstens einmal um', async () => {
   const { c, raum, p } = await beitreten('Dauerlaerm');
   try {
-    einst({ welleMinuten: 20, welleMin: 30, welleMax: 30, hordeZielMin: 0.5, hordeZielMax: 0.5 });
+    einst({ hordeZiel: 0.5 });
     p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 30);
     const w = raum.welle, a = w.aktiv;
     a.seitZiel = 999; a.zielUhr = 9999;
     const lx = a.mitte.x + 650, ly = a.mitte.y;   // mehr als LAERM_NAH entfernt
@@ -408,25 +562,25 @@ test('Horde: Dauerlärm (20 Schüsse in 60 s) lenkt höchstens einmal um', async
     assert.equal(wechsel, 0, 'MG-Dauerfeuer lenkt um');
     for (let i = 0; i < 20; i++) { raum.laerm(lx, ly, 600, true, ''); a.laermPause -= 3; a.seitZiel = 999; a.alter += 3; }   // laut (Explosion): 60 s
     assert.ok(wechsel <= 1, 'mehr als eine Umlenkung in 60 s: ' + wechsel);
-    w.aufloesen();
+    w.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
 test('Horde: festgefahren wechselt nicht vor 30 s (erst Umweg), hordeInfo mit Ziel/Grund, Liste höchstens 5', async () => {
   const { c, raum, p } = await beitreten('Klemm');
   try {
-    einst({ welleMinuten: 20, welleMin: 30, welleMax: 30, hordeZielMin: 5, hordeZielMax: 5 });
+    einst({ hordeZiel: 5 });
     p.ebene = ''; p.x = raum.welt.start.x; p.y = raum.welt.start.y;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 30);
     const w = raum.welle, a = w.aktiv;
     let wechsel = 0; const alt = w.neuesZiel.bind(w); const gruende = [];
-    w.neuesZiel = g => { wechsel++; gruende.push(g); return alt(g); };
+    w.neuesZiel = (h, g) => { wechsel++; gruende.push(g); return alt(h, g); };
     a.ziel = { x: a.mitte.x + 5000, y: a.mitte.y }; a.zielUhr = 9999;   // weit weg, nicht angekommen
-    w.verfolgen(0.01); a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y };
-    for (let t = 0; t < 29; t++) w.verfolgen(1);   // Zombies bewegen sich nicht: kein Fortschritt
+    w.verfolgen(a, 0.01); a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y };
+    for (let t = 0; t < 29; t++) w.verfolgen(a, 1);   // Zombies bewegen sich nicht: kein Fortschritt
     assert.equal(wechsel, 0, 'Wechsel vor 30 s');
     assert.ok(a.klemmStufe >= 1, 'kein Umweg versucht ' + JSON.stringify([a.pruef.t, a.ids.size, wechsel, a.klemmStufe]));
-    for (let t = 0; t < 3; t++) w.verfolgen(1);
+    for (let t = 0; t < 3; t++) w.verfolgen(a, 1);
     assert.equal(gruende[0], 'festgefahren');
     // hordeInfo: Ziel, Name, Grund
     const info = []; raum.clients[0].send = (typ, m) => { if (typ === 'hordeInfo') info.push(m); };
@@ -438,7 +592,7 @@ test('Horde: festgefahren wechselt nicht vor 30 s (erst Umweg), hordeInfo mit Zi
     const m = info.at(-1);
     assert.ok(m?.aktiv && m.ziel && m.mitte && typeof m.name === 'string' && m.name && typeof m.rest === 'number', 'hordeInfo unvollständig');
     assert.ok(m.wechsel.length >= 1 && m.wechsel.every(x => x.grund && x.name && x.art));
-    for (let i = 0; i < 10; i++) { a.zielName = 'X' + i; w.wechselMerken('laden', 'zeit'); }
+    for (let i = 0; i < 10; i++) { a.zielName = 'X' + i; w.wechselMerken(a, 'laden', 'zeit'); }
     assert.equal(a.wechsel.length, 5);
     w.infoSenden(0, true);
     assert.ok(info.at(-1).wechsel.length <= 5);
@@ -446,7 +600,7 @@ test('Horde: festgefahren wechselt nicht vor 30 s (erst Umweg), hordeInfo mit Zi
     SpielRaum.einstellungen = { ...SpielRaum.einstellungen, hordeZieleZeigen: false };
     const n = info.length; w.infoSenden(0, true);
     assert.equal(info.length, n, 'sendet trotz ausgeschaltetem Schalter');
-    w.aufloesen();
+    w.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
@@ -473,31 +627,31 @@ test('Soll früh im Ausbruch: mindestens 60 % des vollen Solls', async () => {
 test('Horde: Truppgröße wächst mit der Hordengröße (mindestens 15 %)', async () => {
   const { c, raum, p } = await beitreten('Truppgroesse');
   try {
-    einst({ welleMinuten: 20, welleMin: 200, welleMax: 200, hordeTruppMin: 5, hordeTruppMax: 5, hordeReichweite: 40 });
+    einst({ hordeTrupp: 5, hordeReichweite: 40 });
     p.ebene = ''; p.unten = false;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 200);
     const a = raum.welle.aktiv, gesamt = a.ids.size;
-    assert.ok(gesamt >= 100, `Horde nur ${gesamt}`);
+    assert.ok(gesamt >= 60, `Horde nur ${gesamt}`);
     assert.ok(spielerNebenHorde(raum, p));
     // Trupps lösen sich zufällig: bis zu 20 Schritte warten, statt sich auf den ersten zu verlassen
     let t = null;
     for (let i = 0; i < 20 && !t; i++) { raum.welle.schritt(0.6); t = a.trupps.find(q => q.sid === c.sessionId); }
     assert.ok(t, 'kein Trupp');
     assert.ok(t.ids.size >= Math.floor(gesamt * 0.12), `Trupp ${t.ids.size} von ${gesamt}`);
-    raum.welle.aufloesen();
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
 
 test('Horde: Trupp bleibt bei sichtbarem Spieler länger als 30 s dran', async () => {
   const { c, raum, p } = await beitreten('Truppdauer');
   try {
-    einst({ welleMinuten: 20, welleMin: 40, welleMax: 40, hordeTruppMin: 8, hordeTruppMax: 8 });
+    einst({ hordeTrupp: 8 });
     p.ebene = ''; p.unten = false;
-    raum.welle.erzeugen('west');
+    raum.welle.erzeugen('west', 40);
     const a = raum.welle.aktiv;
     assert.ok(spielerNebenHorde(raum, p));
-    raum.welle.schritt(0.6);
     const meine = () => a.trupps.filter(t => t.sid === c.sessionId);
+    for (let i = 0; i < 20 && !meine().length; i++) raum.welle.schritt(0.6);   // Trupp löst sich je nach Zufallsstart etwas später
     assert.equal(meine().length, 1);
     for (let i = 0; i < 70; i++) { raum.welle.schritt(0.6); a.cool.clear(); }   // 42 s, Spieler dauernd in Sicht
     assert.equal(meine().length, 1, 'Trupp hat trotz Sicht aufgegeben');
@@ -505,8 +659,8 @@ test('Horde: Trupp bleibt bei sichtbarem Spieler länger als 30 s dran', async (
     const t = meine()[0];
     for (const id of t.ids) { const q = raum.state.zombies.get(id); q.x = p.x + 3000; q.y = p.y; }
     raum.welle.laermOrt = null;
-    raum.welle.truppen(0.6);
+    raum.welle.truppen(a, 0.6);
     assert.ok(t.aus > 0 && t.ausMax >= 30 && t.ausMax <= 45, `ausMax ${t.ausMax}`);
-    raum.welle.aufloesen();
+    raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });

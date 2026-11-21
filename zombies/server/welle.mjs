@@ -1,23 +1,28 @@
-// Zombiewellen: alle X Spielminuten kommen 20–50 Zombies als dichte Gruppe von links oder rechts durchs Bild
-// und ziehen quer über die Spieler hinweg zur anderen Seite. Man kann sie erledigen oder sich im Haus verstecken.
+// Zombiehorden: je Level (Einstellung zombies.level) kommen bis zu „gleichzeitig“ Horden als dichte Gruppe von links oder rechts
+// durchs Bild und ziehen von Ziel zu Ziel. Eine Horde lebt „Hordendauer“ Minuten; danach bleibt ein Drittel als normale Streuner,
+// der Rest zieht zum nächsten Kartenrand ab und verschwindet dort außer Sicht. Nach der „Pause“ kommt die nächste Horde von der
+// anderen Seite. Man kann sie erledigen oder sich im Haus verstecken.
 // Zehn Sekunden vorher gibt es eine Funkmeldung. Die Gruppe läuft mit einem gemeinsamen Ziel (kein Einzel-Wegsuchen):
 // Richtung aus einem einmal berechneten Wegefeld zum Gruppenziel (Breitensuche, ein Durchlauf je Welle statt Wegsuche
 // je Zombie) + Zusammenhalt zur Gruppenmitte; Abstand halten erledigt zombieGehen. Klemmt ein Zombie, weicht er kurz aus. Wellen-Zombies sehen Spieler wie alle anderen und jagen sie dann.
 // Sie zählen nicht zum normalen Zombie-Soll (info.bleibt) und werden vom Auffüllen nicht ersetzt.
 // Natürliches Verhalten: die Horde hat ein Ziel (Safe-Room-Vorplatz, Laden, Stützpunkt, Lärmort, Menschen, Spielernähe, Kreuzung),
-// wechselt es alle hordeZielMin–hordeZielMax echte Minuten oder bei Ankunft; jeder Zombie hat eigenes Tempo, schlängelt, macht Pausen
+// wechselt es etwa alle hordeZiel echte Minuten (±40 %) oder bei Ankunft; jeder Zombie hat eigenes Tempo, schlängelt, macht Pausen
 // und taumelt, leichte Schwarmregeln (Abstand, schwache Kohäsion, lockere Ausrichtung) ergeben einen langgezogenen Haufen.
 // Kommt die Horde in Reichweite von Spielern/Bots/Soldaten/Menschen, löst sich ein Angriffstrupp und jagt sein Ziel mit der
 // normalen Jagdlogik (info.ziel / info.mensch / info.punkt); danach kehrt er zurück oder streunt.
 import { KACHEL, BREITE, HOEHE, WERTE as W, T, BLOCKIERT, frei, drinnen, ladenArt } from '../client/welt.mjs';
 
-export const WELLE_MAX = 1000;       // so viele zusätzliche Zombies höchstens
+export const WELLE_MAX = 1000;       // so viele Zombies je Horde höchstens
 const ANSAGE = 10;                    // Sekunden zwischen Meldung und Auftauchen
 const SICHT = 1000;                   // halbe Bildbreite eines breiten PC-Bildschirms: so weit sieht man höchstens
 const ABSTAND = SICHT + 300;          // für die Seitenwahl am Kartenrand (Horde startet hinter dem Bildrand)
 const ZIEL_ABSTAND = 900;             // Gruppenziel: so weit auf der Gegenseite des Spielers
 const TEMPO = 0.85;                   // Anteil von W.zombieTempoJagen (ca. 89 px/s): die Horde marschiert zügig, etwa wie ein Zombie auf Geräuschspur
-const MAX_DAUER = 600;                // spätestens dann löst sich die Welle auf (Sekunden); bis dahin zieht sie von Ziel zu Ziel
+const ERSTE_EXTRA = 180;              // die erste Horde nach Spielstart kommt Pause + so viele Sekunden nach dem Start
+const ABZUG_MAX = 300;                // Sekunden, die der Abzug zum Kartenrand höchstens dauert (danach streunen die Reste)
+const STREUNER = 1 / 3;               // Anteil der Horde, der bei der Auflösung als normale Streuner bleibt
+const ABZUG_SICHT = 1000;             // Abzug: erst löschen, wenn kein Spieler draußen näher ist (px) – oder am Rand
 const RAND = 7;                       // Wegziele mindestens so viele Kacheln vom Kartenrand (Ortsausfahrt meiden)
 const ABSPALT = 0.06;                 // Anteil der Gruppe, der sich bei jedem neuen Ziel abspaltet und als normaler Zombie streunt
 const KLEMM_PRUEFUNG = 15;            // alle so viele Sekunden: kommt die Gruppenmitte kaum voran? Erst Umweg, beim zweiten Mal (30 s) neues Ziel
@@ -38,27 +43,40 @@ const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 export class Zombiewelle {
   constructor(raum) {
     this.raum = raum;
-    this.uhr = null;       // Sekunden (Spielzeit) bis zur nächsten Welle
+    this.uhr = null;       // Sekunden (Spielzeit) bis zur nächsten Horde; null = kein Platz frei oder noch nicht gestartet
+    this.erste = true;     // die erste Horde nach Spielstart kommt verzögert
+    this.zeit = 0;         // laufende Sekunden (echte Zeit), gemeinsame Uhr für Lärmmerker
     this.ansage = null;    // { t, seite } zwischen Meldung und Auftauchen
-    this.aktiv = null;     // { ids, ziel, mitte, alter, seite }
+    this.horden = [];      // alle Horden: { ids, ziel, mitte, alter, lebt, dauer, seite, abzug, ... }
+    this.letzteSeite = null;   // Startseite der letzten Horde (die nächste kommt von der anderen)
   }
+
+  // Zugriff auf die erste Horde (Superuser-Werkzeuge, Tests); null setzt alle Horden zurück
+  get aktiv() { return this.horden[0] ?? null; }
+  set aktiv(h) { this.horden = h ? [h] : []; }
+  // Horden, die noch ziehen (nicht im Abzug): nur sie zählen für „gleichzeitig“
+  aktive() { return this.horden.filter(h => !h.abzug); }
 
   einst() { return this.raum.einstellungen?.() ?? {}; }
 
-  // Ein Takt: Zeitgeber, Ansage, Auftauchen, Gruppenmitte, Auflösen
+  // Ein Takt: Zeitgeber, Ansage, Auftauchen, Gruppenmitten, Auflösen
   schritt(dt) {
-    const e = this.einst(), zr = this.raum.zeitraffer?.() ?? 1, min = e.welleMinuten ?? 0;
-    if (min > 0) {
-      const abstand = min * 60 * (this.raum.schwierigkeit?.().abstand ?? 1);   // Level/Spieltag/Regler: Wellen kommen häufiger
-      if (this.uhr === null) this.uhr = abstand;
+    const zr = this.raum.zeitraffer?.() ?? 1;
+    this.zeit += dt;
+    const lv = this.raum.levelEinst?.() ?? { gleichzeitig: 0, pause: 5, horde: 0 };
+    const frei = lv.gleichzeitig - this.aktive().length - (this.ansage ? 1 : 0);
+    if (lv.gleichzeitig > 0 && lv.horde > 0 && frei > 0) {
+      const pause = lv.pause * 60;
+      if (this.uhr === null) { this.uhr = pause + (this.erste ? ERSTE_EXTRA : 0); this.erste = false; }
       this.uhr -= dt * zr;
       if (this.uhr <= 0) {
-        this.uhr = abstand;
-        if (!this.ansage && !this.aktiv) this.ansagen();
+        this.uhr = frei > 1 ? pause : null;   // weiterer freier Platz: die nächste Horde nach einer weiteren Pause
+        this.ansagen();
       }
     } else this.uhr = null;
     if (this.ansage && (this.ansage.t -= dt) <= 0) { const seite = this.ansage.seite; this.ansage = null; this.erzeugen(seite); }
-    if (this.aktiv) this.verfolgen(dt);
+    for (const h of [...this.horden]) this.verfolgen(h, dt, zr);
+    if (this.horden.length) this.infoSenden(dt);
     else if (this.infoOffen) this.infoSenden(0, true);
   }
 
@@ -66,13 +84,13 @@ export class Zombiewelle {
   ansagen(seite = null) {
     const ref = this.bezug();
     if (!seite) {
-      seite = this.raum.rnd() < 0.5 ? 'west' : 'ost';
+      seite = this.letzteSeite ? (this.letzteSeite === 'west' ? 'ost' : 'west') : this.raum.rnd() < 0.5 ? 'west' : 'ost';   // nie die Seite der letzten Horde
       // zu nah am Kartenrand: auf die andere Seite ausweichen, damit sie wirklich außerhalb des Bildes auftauchen
       if (ref.draussen && ref.x - ABSTAND < 2 * KACHEL) seite = 'ost';
       else if (ref.draussen && ref.x + ABSTAND > (BREITE - 2) * KACHEL) seite = 'west';
     }
     this.ansage = { t: ANSAGE, seite };
-    this.raum.broadcast('meldung', { text: `🧟 Eine Zombiewelle kommt von ${seite === 'west' ? '◀ Westen' : 'Osten ▶'}!`, lang: true });
+    this.raum.broadcast('meldung', { text: `🧟 Eine Zombiehorde kommt von ${seite === 'west' ? '◀ Westen' : 'Osten ▶'}!`, lang: true });
     return seite;
   }
 
@@ -92,11 +110,15 @@ export class Zombiewelle {
   }
 
   // Die Gruppe erscheint dicht beieinander außerhalb des Bildes auf begehbaren Feldern und bekommt ihr Ziel
-  erzeugen(seite = 'west') {
-    const r = this.raum, e = this.einst(), welt = r.welt;
-    const gr = r.schwierigkeit?.().horde ?? 1;   // Hordengröße × Schwierigkeit
-    const lo = Math.max(1, Math.min(WELLE_MAX, Math.round((e.welleMin ?? 20) * gr))), hi = Math.max(lo, Math.min(WELLE_MAX, Math.round((e.welleMax ?? 50) * gr)));
-    const n = lo + Math.floor(r.rnd() * (hi - lo + 1));
+  // Hordengröße: je Spieler (Level-Tabelle) × Spielerzahl × Tag-Bonus × Regler, zufällig ±30 %
+  hordeGroesse() {
+    const r = this.raum, lv = r.levelEinst(), faktor = r.schwierigkeit?.().horde ?? 1;
+    return Math.max(1, Math.min(WELLE_MAX, Math.round(lv.horde * r.spielerZahl() * faktor * (0.7 + 0.6 * r.rnd()))));
+  }
+
+  erzeugen(seite = 'west', anzahl = null) {
+    const r = this.raum, welt = r.welt;
+    const n = Math.max(1, Math.min(WELLE_MAX, Math.round(anzahl ?? this.hordeGroesse())));
     const richtung = seite === 'west' ? 1 : -1;     // Zugrichtung in x
     const ref = this.bezug();
     const kl = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -141,22 +163,25 @@ export class Zombiewelle {
     }
     if (!beste.length) return null;
     const ids = new Set();
+    this.letzteSeite = seite;
     const w0 = Math.atan2(ziel.y - cy0, ziel.x - cx);
+    const a = { ids, ziel, mitte: { x: cx, y: cy0 }, alter: 0, lebt: 0, dauer: r.levelEinst().dauer * 60, abzug: false, seite, feld: this.baueFeld(ziel), pruef: { t: 0, x: cx, y: cy0 }, ziele: 1, ...this.neuerZustand() };
     for (const p of beste) {
       const id = r.setzeZombie(p.x, p.y, '');
       const info = r.zombieInfo.get(id);
+      info.h = a;
       info.welle = true; info.bleibt = true; info.versatz = (r.rnd() - 0.5) * 0.4; info.ausweich = 0;
       info.wTempo = 0.8 + r.rnd() * 0.4; info.phase = r.rnd() * Math.PI * 2; info.phaseV = 1 + r.rnd() * 1.2; info.steuerT = r.rnd() * 0.4;
       r.state.zombies.get(id).richtung = w0;
       ids.add(id);
     }
-    this.aktiv = { ids, ziel, mitte: { x: cx, y: cy0 }, alter: 0, seite, feld: this.baueFeld(ziel), pruef: { t: 0, x: cx, y: cy0 }, ziele: 1, ...this.neuerZustand() };
-    this.aktiv.zielName = this.zielName('start', ziel);
-    this.wechselMerken('start', 'start');
+    this.horden.push(a);
+    a.zielName = this.zielName('start', ziel);
+    this.wechselMerken(a, 'start', 'start');
     return [...ids];
   }
 
-  // Wegefeld zum Gruppenziel: Schritte jeder begehbaren Kachel bis zur Zielkachel (einmal je Welle)
+  // Wegefeld zum Gruppenziel: Schritte jeder begehbaren Kachel bis zur Zielkachel (einmal je Ziel)
   baueFeld(ziel) {
     const welt = this.raum.welt, feld = new Int16Array(BREITE * HOEHE).fill(-1);
     const frei_ = (x, y) => x >= 0 && y >= 0 && x < BREITE && y < HOEHE && !GESPERRT.has(welt.hole(x, y));
@@ -212,16 +237,16 @@ export class Zombiewelle {
     return { zielUhr: this.zielDauer(), trupps: [], cool: new Map(), truppT: 0, laermPause: 0, seitZiel: 0, radius: 100, zielArt: 'start', klemmStufe: 0, umwegBis: 0, feldHaupt: null, wechsel: [], infoT: 0 };
   }
 
-  // Sekunden (echte Zeit) bis zum nächsten Zielwechsel: zufällig zwischen hordeZielMin und hordeZielMax Minuten
+  // Sekunden (echte Zeit) bis zum nächsten Zielwechsel: hordeZiel Minuten, zufällig ±40 %
   zielDauer() {
-    const e = this.einst(), lo = Math.max(0.2, e.hordeZielMin ?? 2), hi = Math.max(lo, e.hordeZielMax ?? 5);
-    return (lo + this.raum.rnd() * (hi - lo)) * 60;
+    const m = Math.max(0.2, this.einst().hordeZiel ?? 3.5);
+    return m * (0.6 + 0.8 * this.raum.rnd()) * 60;
   }
 
   // Gruppenmitte nachführen; Zielwechsel nach Zeit/Ankunft/Klemmen, Trupps lösen und verwalten; Zeitablauf: auflösen
-  verfolgen(dt) {
-    const a = this.aktiv, z = this.raum.state.zombies;
-    a.alter += dt; a.seitZiel += dt; a.laermPause -= dt;
+  verfolgen(a, dt, zr = 1) {
+    const z = this.raum.state.zombies;
+    a.alter += dt; a.lebt += dt * zr; a.seitZiel += dt; a.laermPause -= dt;
     let sx = 0, sy = 0, n = 0, amZiel = 0;
     const streu = Math.max(192, Math.sqrt(Math.max(a.ids.size, 1)) * 14);   // Streuradius der Eigenpunkte (siehe lenken)
     for (const id of a.ids) {
@@ -230,11 +255,12 @@ export class Zombiewelle {
       sx += q.x; sy += q.y; n++;
       if (Math.hypot(q.x - a.ziel.x, q.y - a.ziel.y) < streu + 70) amZiel++;
     }
+    if (a.abzug) return this.abzugSchritt(a, dt, n, sx, sy);
     a.truppT += dt;
-    if (a.truppT >= TRUPP_TAKT) { const d = a.truppT; a.truppT = 0; this.truppen(d); }
-    if (!n) { if (!a.trupps.length) this.aktiv = null; return; }
+    if (a.truppT >= TRUPP_TAKT) { const d = a.truppT; a.truppT = 0; this.truppen(a, d); }
+    if (!n) { if (!a.trupps.length) this.entfernen(a); return; }
     a.mitte = { x: sx / n, y: sy / n };
-    if (a.alter > MAX_DAUER) return this.aufloesen();
+    if (a.lebt > a.dauer) return this.aufloesen(a);
     // Ausdehnung der Horde (80 % der Zombies) für die Reichweitenprüfung: Näherung aus dem Abstand eines Teils
     let rs = 0, k = 0; const schritt = Math.max(1, Math.floor(n / 40));
     let i = 0;
@@ -247,20 +273,18 @@ export class Zombiewelle {
       klemmt = Math.hypot(a.mitte.x - a.pruef.x, a.mitte.y - a.pruef.y) < KLEMM_WEG;
       a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y };
       if (!klemmt) a.klemmStufe = 0;
-      else if (a.klemmStufe === 0) { a.klemmStufe = 1; klemmt = false; this.umweg(); }   // erstes Mal (15 s): ausweichen
+      else if (a.klemmStufe === 0) { a.klemmStufe = 1; klemmt = false; this.umweg(a); }   // erstes Mal (15 s): ausweichen
       // zweites Mal in Folge (30 s ohne Fortschritt): klemmt bleibt true → neues Ziel
     }
     if (a.umwegBis && a.alter >= a.umwegBis) { a.umwegBis = 0; if (a.feldHaupt) { a.feld = a.feldHaupt; a.feldHaupt = null; } }
     a.zielUhr -= dt;
     // Ziel wechseln: Zeit abgelaufen, am Ziel (Mitte nah oder die Hälfte angekommen) oder festgefahren
     const angekommen = Math.hypot(a.mitte.x - a.ziel.x, a.mitte.y - a.ziel.y) < 160 + Math.sqrt(n) * 6 || amZiel >= n / 2 || (a.seitZiel > 60 && amZiel >= n * 0.2);
-    if (klemmt || angekommen || a.zielUhr <= 0) this.neuesZiel(klemmt ? 'festgefahren' : angekommen ? 'angekommen' : 'zeit');
-    this.infoSenden(dt);
+    if (klemmt || angekommen || a.zielUhr <= 0) this.neuesZiel(a, klemmt ? 'festgefahren' : angekommen ? 'angekommen' : 'zeit');
   }
 
   // Umweg: kurz einen Punkt seitlich der Gruppenmitte ansteuern (Wegefeld dorthin), danach wieder zum eigentlichen Ziel
-  umweg() {
-    const a = this.aktiv;
+  umweg(a) {
     for (let v = 0; v < 6; v++) {
       const p = this.punktNahe(a.mitte.x, a.mitte.y, 250, 500);
       if (!p) continue;
@@ -296,30 +320,33 @@ export class Zombiewelle {
     return art;
   }
 
-  wechselMerken(art, grund) {
-    const a = this.aktiv, name = a.zielName;
+  wechselMerken(a, art, grund) {
+    const name = a.zielName;
     a.wechsel.push({ zeit: Math.round(this.raum.state?.uhr ?? 0), art, name, grund });
     if (a.wechsel.length > WECHSEL_MAX) a.wechsel.splice(0, a.wechsel.length - WECHSEL_MAX);
-    const GRUND = { zeit: 'Zeit', angekommen: 'angekommen', festgefahren: 'festgefahren', laerm: 'Lärm', start: 'Start' };
+    const GRUND = { zeit: 'Zeit', angekommen: 'angekommen', festgefahren: 'festgefahren', laerm: 'Lärm', start: 'Start', dauer: 'Hordendauer um' };
     console.log(`Horde (${a.ids.size}): neues Ziel ${name} – Grund: ${GRUND[grund] ?? grund}`);
   }
 
-  // Zustand der Horde an Clients, die ihn sehen wollen (Einstellung hordeZieleZeigen oder Client mit ?debug); sonst nichts senden
+  // Zustand der Horden an Clients, die ihn sehen wollen (Einstellung hordeZieleZeigen oder Client mit ?debug); sonst nichts senden.
+  // Oben die Felder der ersten Horde (Übersichtskarte, Fahne), dazu „horden“ mit allen: Größe, Restzeit, nächstes Ziel
   infoSenden(dt = INFO_TAKT, erzwingen = false) {
-    const a = this.aktiv, r = this.raum;
-    if (a) { a.infoT -= dt; if (a.infoT > 0 && !erzwingen) return; a.infoT = INFO_TAKT; }
+    const r = this.raum, hs = this.horden;
+    if (hs.length) { this.infoT = (this.infoT ?? 0) - dt; if (this.infoT > 0 && !erzwingen) return; this.infoT = INFO_TAKT; }
     // nur Superuser: Einstellung hordeZieleZeigen = für Superuser von Anfang an an; im ☰-Menü je Person schaltbar
     const alle = !!this.einst().hordeZieleZeigen;
     const debug = r.hordeDebug, aus = r.hordeAus;
     const sieht = c => !!r.extra?.get(c.sessionId)?.superuser && !aus?.has(c.sessionId) && (alle || !!debug?.has(c.sessionId));
     const empf = (r.clients ?? []).filter(sieht);
     if (!empf.length) { this.infoOffen = false; return; }
-    const m = a ? {
-      aktiv: true, n: a.ids.size, mitte: { x: Math.round(a.mitte.x), y: Math.round(a.mitte.y) }, ziel: { x: Math.round(a.ziel.x), y: Math.round(a.ziel.y) },
-      art: a.zielArt, name: a.zielName, rest: Math.max(0, Math.round(a.zielUhr)), wechsel: a.wechsel.slice(-WECHSEL_MAX),
-    } : { aktiv: false };
-    if (!a && !this.infoOffen) return;
-    this.infoOffen = !!a;
+    const eine = a => ({
+      n: a.ids.size + a.trupps.reduce((x, t) => x + t.ids.size, 0), mitte: { x: Math.round(a.mitte.x), y: Math.round(a.mitte.y) }, ziel: { x: Math.round(a.ziel.x), y: Math.round(a.ziel.y) },
+      art: a.zielArt, name: a.zielName, rest: a.abzug ? 0 : Math.max(0, Math.round(a.zielUhr)), restDauer: Math.max(0, Math.round(a.dauer - a.lebt)), abzug: !!a.abzug,
+      wechsel: a.wechsel.slice(-WECHSEL_MAX),
+    });
+    const m = hs.length ? { aktiv: true, ...eine(hs.find(h => !h.abzug) ?? hs[0]), horden: hs.map(eine) } : { aktiv: false };
+    if (!hs.length && !this.infoOffen) return;
+    this.infoOffen = hs.length > 0;
     for (const c of empf) { try { c.send('hordeInfo', m); } catch { /* Client weg */ } }
   }
 
@@ -371,7 +398,7 @@ export class Zombiewelle {
         const f = { n: [0, -1], s: [0, 1], o: [1, 0], w: [-1, 0] }[sp.richtung] ?? [0, 1];
         return { x: (sp.x + sp.b / 2 + f[0] * (sp.b / 2 + 5)) * KACHEL, y: (sp.y + sp.h / 2 + f[1] * (sp.h / 2 + 5)) * KACHEL };
       }
-      case 'laerm': return this.laermOrt && a.alter - this.laermOrt.t < 180 ? { x: this.laermOrt.x, y: this.laermOrt.y } : null;
+      case 'laerm': return this.laermOrt && this.zeit - this.laermOrt.t < 180 ? { x: this.laermOrt.x, y: this.laermOrt.y } : null;
       case 'menschen': {
         const l = [...s.menschen.values()].filter(m => m.sichtbar && !m.infiziert && !m.ebene);
         const m = wahl(l); return m ? this.punktNahe(m.x, m.y, 60, 160) : null;
@@ -386,8 +413,8 @@ export class Zombiewelle {
   }
 
   // Zielart gewichtet wählen und ein erreichbares Ziel dazu finden (mindestens RAND Kacheln vom Kartenrand, nicht direkt nebenan)
-  waehleZiel() {
-    const a = this.aktiv, r = this.raum;
+  waehleZiel(a) {
+    const r = this.raum;
     const kl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const gew = { safe: 2, laden: 3, stuetzpunkt: 1.5, laerm: 3, menschen: 2, spieler: 2.5, kreuzung: 2, haus: 1 };
     const arten = Object.keys(gew);
@@ -412,12 +439,12 @@ export class Zombiewelle {
   }
 
   // Neues Wegziel; dabei spalten sich einzelne Zombies ab und streunen als normale Zombies weiter
-  neuesZiel(grund = 'zeit') {
-    const a = this.aktiv, r = this.raum;
-    if (!a) return;
-    const w = this.waehleZiel();
+  neuesZiel(a, grund = 'zeit') {
+    const r = this.raum;
+    if (!a || a.abzug) return;
+    const w = this.waehleZiel(a);
     if (!w) return;   // Ziel unerreichbar: das alte behalten, beim nächsten Takt neuer Versuch
-    this.setzeZiel(w.ziel, w.feld, w.art, grund);
+    this.setzeZiel(a, w.ziel, w.feld, w.art, grund);
     for (const id of [...a.ids]) {
       if (a.ids.size <= 3 || r.rnd() >= ABSPALT) continue;
       const info = r.zombieInfo.get(id);
@@ -426,31 +453,32 @@ export class Zombiewelle {
     }
   }
 
-  setzeZiel(ziel, feld, art, grund = 'zeit') {
-    const a = this.aktiv;
+  setzeZiel(a, ziel, feld, art, grund = 'zeit') {
     a.ziel = ziel; a.feld = feld; a.ziele++; a.zielArt = art; a.seitZiel = 0; a.zielUhr = this.zielDauer();
     a.pruef = { t: 0, x: a.mitte.x, y: a.mitte.y }; a.klemmStufe = 0; a.umwegBis = 0; a.feldHaupt = null;
     a.zielName = this.zielName(art, ziel);
-    this.wechselMerken(art, grund);
+    this.wechselMerken(a, art, grund);
     this.infoSenden(0, true);
   }
 
-  // Lärm (aus SpielRaum.laerm): lenkt die Horde höchstens alle 2–3 Minuten um, nur bei lautem Lärm (weite >= LAERM_LAUT)
-  // oder wenn die Hordenmitte ohnehin nah dran ist (LAERM_NAH); das Ziel bleibt wie jedes andere hordeZielMin–Max Minuten.
+  // Lärm (aus SpielRaum.laerm): lenkt jede Horde höchstens alle 2–3 Minuten um, nur bei lautem Lärm (weite >= LAERM_LAUT)
+  // oder wenn die Hordenmitte ohnehin nah dran ist (LAERM_NAH); das Ziel bleibt mindestens 60 % der Zielzeit (hordeZiel) bestehen.
   laermHoeren(x, y, weite) {
-    this.laermOrt = { x, y, t: this.aktiv?.alter ?? 0 };
-    const a = this.aktiv;
-    if (!a || a.laermPause > 0 || weite < 200) return;
-    if (a.seitZiel < Math.max(0.2, this.einst().hordeZielMin ?? 2) * 60) return;   // Ziel bleibt mindestens hordeZielMin Minuten
-    const dist = Math.hypot(a.mitte.x - x, a.mitte.y - y);
-    if (!(weite >= LAERM_LAUT ? dist <= Math.max(700, a.radius + weite) : dist < LAERM_NAH)) return;
+    this.laermOrt = { x, y, t: this.zeit };
+    if (weite < 200) return;
     const kl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    const ziel = { x: kl(x, RAND * KACHEL, (BREITE - RAND) * KACHEL), y: kl(y, RAND * KACHEL, (HOEHE - RAND) * KACHEL) };
-    if (Math.hypot(ziel.x - a.mitte.x, ziel.y - a.mitte.y) < 200) return;
-    const feld = this.baueFeld(ziel);
-    if (!feld) return;
-    a.laermPause = LAERM_PAUSE_MIN + this.raum.rnd() * (LAERM_PAUSE_MAX - LAERM_PAUSE_MIN);
-    this.setzeZiel(ziel, feld, 'laerm', 'laerm');
+    for (const a of this.horden) {
+      if (a.abzug || a.laermPause > 0) continue;
+      if (a.seitZiel < Math.max(0.2, (this.einst().hordeZiel ?? 3.5) * 0.6) * 60) continue;
+      const dist = Math.hypot(a.mitte.x - x, a.mitte.y - y);
+      if (!(weite >= LAERM_LAUT ? dist <= Math.max(700, a.radius + weite) : dist < LAERM_NAH)) continue;
+      const ziel = { x: kl(x, RAND * KACHEL, (BREITE - RAND) * KACHEL), y: kl(y, RAND * KACHEL, (HOEHE - RAND) * KACHEL) };
+      if (Math.hypot(ziel.x - a.mitte.x, ziel.y - a.mitte.y) < 200) continue;
+      const feld = this.baueFeld(ziel);
+      if (!feld) continue;
+      a.laermPause = LAERM_PAUSE_MIN + this.raum.rnd() * (LAERM_PAUSE_MAX - LAERM_PAUSE_MIN);
+      this.setzeZiel(a, ziel, feld, 'laerm', 'laerm');
+    }
   }
 
   // ---- Angriffstrupps ----
@@ -482,8 +510,8 @@ export class Zombiewelle {
   }
 
   // alle TRUPP_TAKT Sekunden: neue Trupps lösen, bestehende betreuen
-  truppen(dt) {
-    const a = this.aktiv, r = this.raum, e = this.einst();
+  truppen(a, dt) {
+    const r = this.raum, e = this.einst();
     const z = r.state.zombies;
     // bestehende Trupps
     for (const t of [...a.trupps]) {
@@ -491,14 +519,14 @@ export class Zombiewelle {
       const lebende = [...t.ids].filter(id => z.has(id) && r.zombieInfo.get(id)?.trupp === t);
       t.ids = new Set(lebende);
       const lage = lebende.length ? this.opferLage(t) : null;
-      if (!lage || t.alter > 300) { this.truppEnde(t); continue; }
+      if (!lage || t.alter > 300) { this.truppEnde(a, t); continue; }
       t.x = lage.x; t.y = lage.y;
       let sieht = false;
       for (const id of lebende) { const q = z.get(id); if (Math.hypot(q.x - lage.x, q.y - lage.y) < W.sichtWeite * 1.6) { sieht = true; break; } }
       // solange das Opfer in Hörweite ist (Zombies im Umkreis), bleibt der Trupp dran
-      if (!sieht && this.laermOrt && a.alter - this.laermOrt.t < 8 && Math.hypot(this.laermOrt.x - lage.x, this.laermOrt.y - lage.y) < 400) sieht = true;
+      if (!sieht && this.laermOrt && this.zeit - this.laermOrt.t < 8 && Math.hypot(this.laermOrt.x - lage.x, this.laermOrt.y - lage.y) < 400) sieht = true;
       t.aus = sieht ? 0 : t.aus + dt;
-      if (t.aus > t.ausMax) { this.truppEnde(t); continue; }
+      if (t.aus > t.ausMax) { this.truppEnde(a, t); continue; }
       for (const id of lebende) {   // wer sein Ziel verloren hat, geht zur letzten bekannten Stelle, solange der Trupp es noch sucht
         const info = r.zombieInfo.get(id), q = z.get(id);
         if (!info.ziel && !info.mensch && !info.punkt && Math.hypot(q.x - lage.x, q.y - lage.y) < W.sichtWeite * 3) info.punkt = { x: lage.x, y: lage.y };
@@ -519,20 +547,20 @@ export class Zombiewelle {
       for (const id of a.ids) { const q = z.get(id); if (q) { const d = Math.hypot(q.x - o.x, q.y - o.y); if (d < reichweite) kand.push([d, id]); } }
       if (!kand.length) continue;
       kand.sort((p, q) => p[0] - q[0]);
-      const lo = Math.max(1, e.hordeTruppMin ?? 5), hi = Math.max(lo, e.hordeTruppMax ?? 15);
+      const t0 = Math.max(1, e.hordeTrupp ?? 10), lo = Math.max(1, t0 * 0.7), hi = Math.max(lo, t0 * 1.3);   // Angriffstrupp-Größe ±30 %
       let n = lo + r.rnd() * (hi - lo);
       n *= Math.max(0.5, Math.min(2, Math.sqrt(a.ids.size / 40)));   // größere Horde → größerer Trupp
       n = Math.max(n, a.ids.size * (0.15 + r.rnd() * 0.1));          // mindestens 15–25 % der Horde, damit der Angriff nicht versandet
       if (o.art === 'soldat') n *= 2;
       n = Math.min(n, Math.max(hi * 4, 60));                          // Obergrenze: Einstellung × 4 (mindestens 60)
       n = Math.max(1, Math.min(Math.round(n), a.ids.size - 3, 300));
-      this.truppLoesen(o, kand.slice(0, n).map(q => q[1]));
+      this.truppLoesen(a, o, kand.slice(0, n).map(q => q[1]));
       neu++;
     }
   }
 
-  truppLoesen(o, ids) {
-    const a = this.aktiv, r = this.raum;
+  truppLoesen(a, o, ids) {
+    const r = this.raum;
     const t = { key: o.key, art: o.art, sid: o.sid, mid: o.mid, x: o.x, y: o.y, ids: new Set(), alter: 0, aus: 0, ausMax: 30 + r.rnd() * 15 };
     for (const id of ids) {
       const info = r.zombieInfo.get(id), q = r.state.zombies.get(id);
@@ -548,8 +576,8 @@ export class Zombiewelle {
   }
 
   // Trupp aufgelöst: die meisten kehren zur Horde zurück, der Rest streunt als normaler Zombie
-  truppEnde(t) {
-    const a = this.aktiv, r = this.raum;
+  truppEnde(a, t) {
+    const r = this.raum;
     if (!a) return;
     a.trupps = a.trupps.filter(q => q !== t);
     a.cool.set(t.key, a.alter + TRUPP_SPERRE);
@@ -563,10 +591,76 @@ export class Zombiewelle {
     }
   }
 
-  // Zombies weit weg von allen Spielern draußen verschwinden (außerhalb des Bildes), die übrigen werden normale Zombies
-  aufloesen() {
-    const a = this.aktiv, r = this.raum;
+  // Horde aus der Liste nehmen; war es die letzte ziehende, beginnt die Pause bis zur nächsten (uhr = null: Takt setzt sie neu)
+  entfernen(a) {
+    this.horden = this.horden.filter(h => h !== a);
+  }
+
+  // Hordendauer um: Trupps und etwa ein Drittel werden normale Streuner, der Rest zieht zum nächsten Kartenrand ab
+  aufloesen(a = this.aktiv) {
+    if (!a || a.abzug) return;
+    const r = this.raum;
+    // Trupps: wer jagt, jagt weiter (normaler Zombie)
+    for (const t of a.trupps) for (const id of t.ids) {
+      const info = r.zombieInfo.get(id);
+      if (info && info.trupp === t) { info.trupp = null; info.welle = false; info.bleibt = false; }
+    }
+    a.trupps = [];
+    const liste = [...a.ids];
+    for (let i = liste.length - 1; i > 0; i--) { const k = Math.floor(r.rnd() * (i + 1)); [liste[i], liste[k]] = [liste[k], liste[i]]; }
+    const streuner = Math.round(liste.length * STREUNER);
+    for (const id of liste.slice(0, streuner)) {
+      const info = r.zombieInfo.get(id);
+      if (info) { info.welle = false; info.bleibt = false; info.h = null; }
+      a.ids.delete(id);
+    }
+    // nächster Kartenrand (ein Punkt etwas innerhalb des Randes, damit das Wegefeld ihn kennt); andere Seiten als Ausweichen
+    const m = a.mitte, rd = 3 * KACHEL;
+    const kandidaten = [
+      { d: m.x, x: rd, y: m.y }, { d: BREITE * KACHEL - m.x, x: BREITE * KACHEL - rd, y: m.y },
+      { d: m.y, x: m.x, y: rd }, { d: HOEHE * KACHEL - m.y, x: m.x, y: HOEHE * KACHEL - rd },
+    ].sort((p, q) => p.d - q.d);
+    let rand = null, feld = null;
+    for (const k of kandidaten) {
+      const ziel = { x: Math.max(rd, Math.min(BREITE * KACHEL - rd, k.x)), y: Math.max(rd, Math.min(HOEHE * KACHEL - rd, k.y)) };
+      feld = this.baueFeld(ziel);
+      if (feld) { rand = ziel; break; }
+    }
+    if (!rand || !a.ids.size) {   // kein Weg zum Rand: alle bleiben als Streuner
+      for (const id of a.ids) { const info = r.zombieInfo.get(id); if (info) { info.welle = false; info.bleibt = false; info.h = null; } }
+      this.entfernen(a);
+      return;
+    }
+    a.abzug = true; a.abzugT = 0; a.ziel = rand; a.feld = feld; a.zielArt = 'abzug'; a.zielName = 'Abzug zum Kartenrand';
+    a.ziele++; a.seitZiel = 0; a.zielUhr = Infinity; a.umwegBis = 0; a.feldHaupt = null; a.klemmStufe = 0;
+    a.pruef = { t: 0, x: m.x, y: m.y };
+    this.wechselMerken(a, 'abzug', 'dauer');
+    this.infoSenden(0, true);
+  }
+
+  // Abzug: wer am Rand steht oder außer Sicht aller Spieler draußen ist, wird gelöscht; nach ABZUG_MAX streunen die Reste
+  abzugSchritt(a, dt, n, sx, sy) {
+    const r = this.raum, z = r.state.zombies;
+    a.abzugT += dt;
+    if (n) a.mitte = { x: sx / n, y: sy / n };
+    const spieler = [...r.state.spieler.values()].filter(p => !p.ebene);
+    const rd = 2.2 * KACHEL;
+    for (const id of [...a.ids]) {
+      const q = z.get(id), info = r.zombieInfo.get(id);
+      if (!q || !info) { a.ids.delete(id); continue; }
+      if (a.abzugT > ABZUG_MAX) { info.welle = false; info.bleibt = false; info.h = null; a.ids.delete(id); continue; }
+      if (q.jagt) { info.welle = false; info.bleibt = false; info.h = null; a.ids.delete(id); continue; }   // hat einen Spieler entdeckt: jagt als Streuner
+      const amRand = q.x < rd || q.y < rd || q.x > BREITE * KACHEL - rd || q.y > HOEHE * KACHEL - rd;
+      const nah = d => spieler.some(p => Math.hypot(p.x - q.x, p.y - q.y) < d);
+      if (!nah(ABZUG_SICHT) || (amRand && !nah(400))) { z.delete(id); r.zombieInfo.delete(id); a.ids.delete(id); }
+    }
+    if (!a.ids.size) this.entfernen(a);
+  }
+
+  // Sofort beenden (Prüfwerkzeug, Tests): ferne Zombies verschwinden, die übrigen werden normale Zombies
+  beenden(a = this.aktiv) {
     if (!a) return;
+    const r = this.raum;
     const spieler = [...r.state.spieler.values()].filter(p => !p.ebene);
     const alle = new Set(a.ids);
     for (const t of a.trupps) for (const id of t.ids) alle.add(id);
@@ -576,9 +670,9 @@ export class Zombiewelle {
       info.trupp = null;
       const nah = spieler.some(p => Math.hypot(p.x - q.x, p.y - q.y) < 700);
       if (!nah && !q.jagt) { r.state.zombies.delete(id); r.zombieInfo.delete(id); }
-      else { info.welle = false; info.bleibt = false; }
+      else { info.welle = false; info.bleibt = false; info.h = null; }
     }
-    this.aktiv = null;
+    this.entfernen(a);
   }
 
   // Schwarm-Lenkung eines Wellen-Zombies: Richtung (Winkel) aus Wegefeld + Abstand + schwacher Zusammenhalt + lockerer Ausrichtung
@@ -680,7 +774,7 @@ export class Zombiewelle {
 
   // Bewegung eines Wellen-Zombies (aus zombieSchritt, wenn er nichts jagt und keinem Geräusch folgt)
   gehen(id, z, info, dt) {
-    const a = this.aktiv, r = this.raum;
+    const r = this.raum, a = info.h && this.horden.includes(info.h) ? info.h : null;   // jeder Zombie kennt seine Horde
     if (!a || z.ebene) { info.welle = false; info.bleibt = false; info.trupp = null; return; }   // Haus betreten oder Welle vorbei: normaler Zombie
     info.wTempo ??= 0.8 + r.rnd() * 0.4; info.phase ??= r.rnd() * Math.PI * 2; info.phaseV ??= 1 + r.rnd() * 1.2; info.steuerT ??= 0;
     info.phase += info.phaseV * dt;

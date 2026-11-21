@@ -70,8 +70,9 @@ test('Schwierigkeit: steigt je Level und je Spieltag (gedeckelt), Regler multipl
   assert.deepEqual([s(1, 0).dichte, s(1, 0).horde, s(1, 0).schnell, s(1, 0).beute, s(1, 0).nacht], [1, 1, 0, 1, 1]);
   for (let l = 1; l < 5; l++) {
     const a = s(l, 0), b = s(l + 1, 0);
-    assert.ok(b.dichte > a.dichte && b.horde > a.horde && b.schnell > a.schnell && b.nacht > a.nacht, 'Level ' + (l + 1) + ' nicht schwerer');
-    assert.ok(b.beute < a.beute && b.munition < a.munition && b.abstand < a.abstand, 'Beute/Abstand Level ' + (l + 1));
+    assert.ok(b.schnell > a.schnell && b.nacht > a.nacht, 'Level ' + (l + 1) + ' nicht schwerer');
+    assert.equal(b.dichte, a.dichte, 'Zombiemengen je Level stehen in der Level-Tabelle (zombies.level), nicht hier');
+    assert.ok(b.beute < a.beute && b.munition < a.munition, 'Beute/Munition Level ' + (l + 1));
   }
   assert.deepEqual(s(9, 0), s(5, 0), 'über Level 5 wie Level 5');
   assert.deepEqual(s(0, 0), s(1, 0));

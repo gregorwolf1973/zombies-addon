@@ -1134,8 +1134,12 @@ class Ort extends Phaser.Scene {
     this.hordeInfo = m?.aktiv ? { ...m, ab: performance.now() } : null;
     if (this.uebersicht) this.uebersicht.horde = this.hordeInfo ? { mitte: { x: m.mitte.x / KACHEL, y: m.mitte.y / KACHEL }, ziel: { x: m.ziel.x / KACHEL, y: m.ziel.y / KACHEL }, name: `🎯 ${m.name}` } : null;
     if (!this.hordeInfo) { this.hordeGfx.clear(); this.hordeFahne.setVisible(false); this.hordeListe.style.display = 'none'; return; }
-    const GRUND = { zeit: 'Zeit', angekommen: 'angekommen', festgefahren: 'festgefahren', laerm: 'Lärm', start: 'Start' };
-    this.hordeListe.textContent = `Horde (${m.n}) – letzte Ziele\n` + [...m.wechsel].reverse().map(w => `${uhrText(w.zeit)} ${w.name} (${GRUND[w.grund] ?? w.grund})`).join('\n');
+    const GRUND = { zeit: 'Zeit', angekommen: 'angekommen', festgefahren: 'festgefahren', laerm: 'Lärm', start: 'Start', dauer: 'Hordendauer um' };
+    // Hordenliste: je Horde Größe, Restzeit und nächstes Ziel (Zielwechsel in …)
+    const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+    const horden = m.horden?.length ? m.horden : [m];
+    this.hordeListe.textContent = horden.map((h, i) => `Horde ${i + 1}: ${h.n} Zombies · ${h.abzug ? 'Abzug zum Rand' : `noch ${mmss(h.restDauer ?? 0)}`}\n  → ${h.name}${h.abzug ? '' : ` (in ${mmss(h.rest)})`}`).join('\n')
+      + `\nletzte Ziele\n` + [...m.wechsel].reverse().map(w => `${uhrText(w.zeit)} ${w.name} (${GRUND[w.grund] ?? w.grund})`).join('\n');
     this.hordeListe.style.display = 'block';
   }
 
@@ -1145,10 +1149,12 @@ class Ort extends Phaser.Scene {
     g.clear();
     if (!h || this.aktEbene) { this.hordeFahne.setVisible(false); return; }
     const rest = Math.max(0, h.rest - (performance.now() - h.ab) / 1000), min = Math.floor(rest / 60), sek = String(Math.floor(rest % 60)).padStart(2, '0');
-    const dx = h.ziel.x - h.mitte.x, dy = h.ziel.y - h.mitte.y, d = Math.hypot(dx, dy) || 1;
-    g.lineStyle(3, 0xff4081, 0.85);
-    for (let t = 0; t < d; t += 28) g.lineBetween(h.mitte.x + dx / d * t, h.mitte.y + dy / d * t, h.mitte.x + dx / d * Math.min(d, t + 14), h.mitte.y + dy / d * Math.min(d, t + 14));
-    g.fillStyle(0xff1744, 0.9).fillCircle(h.mitte.x, h.mitte.y, 8);
+    for (const q of (h.horden?.length ? h.horden : [h])) {   // jede Horde: gestrichelte Linie zum Ziel und Mittelpunkt; Fahne nur für die erste
+      const dx = q.ziel.x - q.mitte.x, dy = q.ziel.y - q.mitte.y, d = Math.hypot(dx, dy) || 1;
+      g.lineStyle(3, 0xff4081, 0.85);
+      for (let t = 0; t < d; t += 28) g.lineBetween(q.mitte.x + dx / d * t, q.mitte.y + dy / d * t, q.mitte.x + dx / d * Math.min(d, t + 14), q.mitte.y + dy / d * Math.min(d, t + 14));
+      g.fillStyle(0xff1744, 0.9).fillCircle(q.mitte.x, q.mitte.y, 8);
+    }
     g.lineStyle(3, 0xffffff, 1).lineBetween(h.ziel.x, h.ziel.y, h.ziel.x, h.ziel.y - 34);
     g.fillStyle(0xff1744, 1).fillTriangle(h.ziel.x, h.ziel.y - 34, h.ziel.x + 22, h.ziel.y - 27, h.ziel.x, h.ziel.y - 20);
     this.hordeFahne.setText(`🎯 ${h.name}\nZielwechsel in ${min}:${sek}`).setPosition(h.ziel.x, h.ziel.y - 38).setVisible(true);
