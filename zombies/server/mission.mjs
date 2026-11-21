@@ -24,6 +24,12 @@ export const MISSIONEN = {
     { ding: 'm_schluessel', typen: ['townhall', 'police', 'bank', 'school', 'social_facility', 'place_of_worship', 'gross'] },
     { ding: 'm_diesel', typen: ['fuel', 'car_repair', 'car', 'caravan', 'car_wash'] },
   ],
+  // Level 1, zweite Karte (Geretsried Nord/Ost, größer, viele benannte Läden): gleiche Gegenstände wie Geretsried, die Orte wählt der Plan nach Gebäudeart
+  geretsried2: [
+    ...FUNK,
+    { ding: 'm_schluessel', typen: ['townhall', 'police', 'bank', 'school', 'social_facility', 'place_of_worship', 'gross'] },
+    { ding: 'm_diesel', typen: ['fuel', 'car_repair', 'car', 'caravan', 'car_wash'] },
+  ],
   isarauen: [
     ...FUNK,
     { ding: 'm_treibstoff', typen: ['fuel', 'car_wash', 'car_repair', 'motorcycle', 'car'] },

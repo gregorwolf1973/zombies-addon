@@ -9,7 +9,7 @@ import { querfeldPlan, befahrbarNahe } from '../server/querfeld.mjs';
 const karte = n => JSON.parse(fs.readFileSync(new URL(`../client/karten/${n}.json`, import.meta.url)));
 const tor = w => ({ x: (w.tor.x + 1) * KACHEL, y: (w.tor.y + 1) * KACHEL });
 
-for (const name of ['isarauen', 'geretsried']) {
+for (const name of ['isarauen', 'geretsried', 'geretsried2']) {
   test(`Querfeld ${name}: Panzer erreicht den Abholpunkt für mehrere Seeds, Weg nur über befahrbaren Boden`, () => {
     const k = karte(name);
     setzeKartengroesse(k.breite, k.hoehe);

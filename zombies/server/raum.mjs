@@ -8,7 +8,7 @@ import { Mensch, Stadtleben, VERSTECK_WEITE } from './menschen.mjs';
 import { Fahrzeug, Verkehr } from './verkehr.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
 import { Zombiewelle } from './welle.mjs';
-import { Aufgabe, Aufgaben, Mission } from './aufgaben.mjs';
+import { Aufgabe, Aufgaben, Mission, levelSchluessel } from './aufgaben.mjs';
 import { schwierigkeit, LEVEL_VORGABE } from './schwierigkeit.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
@@ -2983,7 +2983,7 @@ export class SpielRaum extends Room {
           const schutz = ziel.kleidung > 0;
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1) * this.fkWert(ziel, 'schadenFaktor'));
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);
-          if (!(ziel.infektion > 0) && this.rnd() < (SpielRaum.einstellungen.bissSpielerLevel?.[this.state.karte] ?? SpielRaum.einstellungen.bissSpieler ?? BISS_CHANCE) * dt * (schutz ? 0.5 : 1)) {
+          if (!(ziel.infektion > 0) && this.rnd() < (SpielRaum.einstellungen.bissSpielerLevel?.[levelSchluessel(this.state.karte)] ?? SpielRaum.einstellungen.bissSpieler ?? BISS_CHANCE) * dt * (schutz ? 0.5 : 1)) {
             ziel.infektion = INFEKTION_DAUER;
             this.broadcast('meldung', { text: `🦠 ${ziel.name} wurde gebissen! Eine Rettungsspritze hilft.`, lang: true });
           }

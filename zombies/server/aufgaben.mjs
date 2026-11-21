@@ -26,7 +26,12 @@ export const Aufgabe = schema({
 
 // Reihenfolge der Karten von Level zu Level (jede andere Karte beginnt wieder bei der ersten)
 export const LEVEL_KARTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
-export const KARTEN_NAMEN = { geretsried: 'Geretsried', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };
+// Level 1 hat zwei Karten; die Wahl fällt per Zufall (50/50), außer das Backend legt eine fest
+export const LEVEL1_KARTEN = ['geretsried', 'geretsried2'];
+export const level1Karte = (zufall = Math.random) => LEVEL1_KARTEN[zufall() < 0.5 ? 0 : 1];
+// Spielstand-Schlüssel je Level (Tabellen je Karte): beide Level-1-Karten teilen sich die Werte von 'geretsried'
+export const levelSchluessel = karte => karte === 'geretsried2' ? 'geretsried' : karte;
+export const KARTEN_NAMEN = { geretsried: 'Geretsried (Level 1)', geretsried2: 'Geretsried 2 (Level 1)', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };
 
 export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
 const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
@@ -923,14 +928,16 @@ export class Aufgaben {
   }
 
   naechsteKarte() {
-    const i = LEVEL_KARTEN.indexOf(this.raum.state.karte || 'dorf');
+    const i = LEVEL_KARTEN.indexOf(levelSchluessel(this.raum.state.karte || 'dorf'));
     return LEVEL_KARTEN[(i + 1) % LEVEL_KARTEN.length];
   }
 
   // neue Karte einstellen und die Welt mit neuem Level neu starten; Rucksack und Werte der Spieler bleiben
   // ziel (optional): { karte, level, frisch } – Testbefehl und Finale; frisch = ganz neue Runde (Level 1, Fähigkeiten und Startwahl von vorn)
   levelWechsel(ziel = null) {
-    const r = this.raum, s = r.state, karte = ziel?.karte ?? this.naechsteKarte();
+    const r = this.raum, s = r.state;
+    let karte = ziel?.karte ?? this.naechsteKarte();
+    if (karte === 'geretsried' && !ziel?.fest) karte = r.constructor.level1Wahl || level1Karte();   // Level 1: feste Wahl aus dem Backend, sonst Zufall
     r.constructor.kartenWechsel?.(karte);
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.folgenId = null;

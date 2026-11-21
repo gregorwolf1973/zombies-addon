@@ -16,7 +16,7 @@ function scheinCanvas() {
   return schein;
 }
 
-for (const name of ['geretsried', 'isarauen']) {
+for (const name of ['geretsried', 'geretsried2', 'isarauen']) {
   const karte = JSON.parse(fs.readFileSync(new URL(`../client/karten/${name}.json`, import.meta.url)));
   const baue = seed => { setzeKartengroesse(karte.breite, karte.hoehe); return baueWeltAusKarte(karte, seed); };
   const w = baue(7);

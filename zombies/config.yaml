@@ -21,7 +21,7 @@ ports:
 ports_description:
   2567/tcp: "Spielzugang für Mitspieler (HTTP + WebSockets), z. B. hinter Reverse Proxy oder Cloudflare-Tunnel"
 options:
-  karte: geretsried
+  karte: level1
   zombies: 10
   funde:
     wasser: 10
@@ -47,7 +47,7 @@ options:
   bots: 0
   stun_server: "stun:stun.l.google.com:19302"
 schema:
-  karte: list(geretsried|isarauen|dorf)
+  karte: list(level1|geretsried|geretsried2|isarauen|koenigsdorf|kochel|andermatt|dorf)
   zombies: int(0,50)
   zombie_faktor: float(0.1,5)?
   funde:
