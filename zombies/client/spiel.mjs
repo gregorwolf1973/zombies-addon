@@ -4,6 +4,7 @@ import {
   KACHEL, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
+import { dingId, dingN, hat, zaehle, flach, kannAufnehmen, entferne as entferneStueck } from './stapel.mjs';
 import { laternen } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
@@ -22,7 +23,7 @@ let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
 import * as ton from './ton.mjs';
-import { naheBodenDinge, auswahlAuf, auswahlZu } from './aufheben.mjs';
+import { naheBodenDinge, auswahlAuf, auswahlZu, brauchtPlatz } from './aufheben.mjs';
 import { fundZeigen, fundZu, fundPruefen } from './fundliste.mjs';
 import { alleKandidaten } from './durchsuche_alle.mjs';
 import * as sprache from './sprache.mjs';
@@ -2600,10 +2601,10 @@ class Ort extends Phaser.Scene {
       const sa = st?.verschlossen && !haus ? this.schlossArtVon(wahl.key) : 'frei';
       if (sa === 'frei') return { art: 'tuer_auf', text: `🚪 ${name} öffnen` };
       if (sa === 'raetsel') return { art: 'schlossraetsel', text: '❓ Rätsel lösen' };
-      if (ich.rucksack.includes('schluessel')) return { art: 'aufschliessen', text: '🔑 Aufschließen' };
+      if (hat(ich.rucksack, 'schluessel')) return { art: 'aufschliessen', text: '🔑 Aufschließen' };
       return { art: 'schluessel_noetig', text: '🔑 Schlüssel nötig', aus: true };
     };
-    const brett = () => ich.rucksack.includes('bretter') && bar < 100 ? { art: 'barrikade', text: `🔨 ${name} verbarrikadieren` } : null;
+    const brett = () => hat(ich.rucksack, 'bretter') && bar < 100 ? { art: 'barrikade', text: `🔨 ${name} verbarrikadieren` } : null;
     if (modus === 'auf') return offen ? null : oeffnen();
     if (modus === 'zu') return offen ? (brett() ?? schliessen()) : null;
     const b = brett();
@@ -2628,7 +2629,7 @@ class Ort extends Phaser.Scene {
       if (Math.hypot(x - tx, y - ty) < 56) {
         const imWeg = [...raum.state.leichen.values()].some(l => (l.ebene ?? '') === safe.ebene && Math.hypot(l.x - tx, l.y - ty) < 44);
         if (imWeg) return { art: 'wegziehen', text: '🧟 Toten Zombie aus der Tür ziehen' };
-        if (ich.rucksack.includes('bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Eingangstür verbarrikadieren' };
+        if (hat(ich.rucksack, 'bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Eingangstür verbarrikadieren' };
       }
       const funkTisch = raum.state.aufgaben?.size && !raum.state.funk ? w.moebel?.find(q => q.art === 'funktisch') : null;
       if (funkTisch) {
@@ -2652,7 +2653,7 @@ class Ort extends Phaser.Scene {
     }
     {
       const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene });
-      if (nah.length === 1 && ich.rucksack.length < ich.plaetze) return { art: 'aufheben', text: `✋ ${DINGE[nah[0].ding]?.zeichen ?? ''} aufheben`, html: `✋ ${dingIcon(nah[0].ding, 22)} aufheben` };
+      if (nah.length === 1 && (!brauchtPlatz(nah[0].ding, ich) || kannAufnehmen(ich.rucksack, ich.plaetze, nah[0].ding))) return { art: 'aufheben', text: `✋ ${DINGE[nah[0].ding]?.zeichen ?? ''} aufheben`, html: `✋ ${dingIcon(nah[0].ding, 22)} aufheben` };
       if (nah.length) return { art: 'aufheben_wahl', text: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => DINGE[n.ding]?.zeichen ?? '').join('')}`, html: `✋ Aufheben … (${nah.length}) ${nah.slice(0, 4).map(n => dingIcon(n.ding, 20)).join('')}`, nah };
     }
     // Mensch in der Nähe (versteckt oder verängstigt): ansprechen, dann folgt er dir bis in den Safe Room
@@ -2682,7 +2683,7 @@ class Ort extends Phaser.Scene {
       const d = Math.hypot(l.x - x, l.y - y);
       if (d < bd && l.rest !== 0) { bd = d; best = { art: 'leiche' }; }
     }
-    if (best?.art === 'auto' && !ich.rucksack.includes('brechstange')) return { art: 'durchsuchen', text: '🔒 Kofferraum (⚒️ Brechstange nötig)' };
+    if (best?.art === 'auto' && !hat(ich.rucksack, 'brechstange')) return { art: 'durchsuchen', text: '🔒 Kofferraum (⚒️ Brechstange nötig)' };
     if (best) return { art: 'durchsuchen', text: `${best.art === 'auto' ? '⚒️' : '🔍'} ${BEHAELTER_NAME[best.art]} ${best.art === 'auto' ? 'aufbrechen' : 'durchsuchen'}` };
     const zu = this.tuerKontext(ich, 'zu');
     if (zu) return zu;
@@ -2959,7 +2960,7 @@ class Ort extends Phaser.Scene {
     const frei2 = ich && !ich.unten && !ich.aktion && !(ich.zombie > 0) && s.phase === 'spiel' && this.lokal;
     let zweit = frei2 ? this.tuerKontext(ich, 'zweit') : null;
     if (frei2 && !zweit && this.handelKontext && this.kontext !== this.handelKontext && !handelOffen) zweit = this.handelKontext;
-    if (frei2 && !zweit && (ich.rucksack.includes('granate') || (ich.waffe === 'handgranate' && ich.magazin > 0) || ich.handgranaten > 0)) zweit = { art: 'wurf', text: '💣 Granate werfen (Q)' };
+    if (frei2 && !zweit && (hat(ich.rucksack, 'granate') || (ich.waffe === 'handgranate' && ich.magazin > 0) || ich.handgranaten > 0)) zweit = { art: 'wurf', text: '💣 Granate werfen (Q)' };
     this.zweit = zweit;
     const knopf = $('aktion'), knopf2 = $('aktion2');
     knopf.style.display = this.kontext ? 'block' : 'none';
@@ -2970,7 +2971,7 @@ class Ort extends Phaser.Scene {
     knopf.style.opacity = this.kontext?.aus ? '0.5' : '';   // ausgegraut (Schlüssel nötig), Klick zeigt nur den Hinweis
     knopf2.style.display = zweit ? 'block' : 'none';
     {   // „Alles durchsuchen“
-      const kand = frei2 ? alleKandidaten(this.wv(this.aktEbene), s.behaelter, s.leichen, { x: this.lokal.x, y: this.lokal.y, ebene: ich.ebene ?? '' }, ich.rucksack.includes('brechstange')) : null;
+      const kand = frei2 ? alleKandidaten(this.wv(this.aktEbene), s.behaelter, s.leichen, { x: this.lokal.x, y: this.lokal.y, ebene: ich.ebene ?? '' }, hat(ich.rucksack, 'brechstange')) : null;
       this.alleKand = kand;
       // drinnen: Quiz + alle Türen, daher immer anbieten, solange im Stockwerk noch ein Behälter ungesucht ist
       if (kand) kand.drinnen = !!ich.ebene && (this.wv(this.aktEbene).behaelter ?? []).some(b => b.art !== 'bw_kiste' && !s.behaelter.get(b.id));
@@ -2997,13 +2998,13 @@ class Ort extends Phaser.Scene {
         if (p === ich || !p.unten) continue;
         const d = Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y);
         if (d < 110) {
-          const mit = ich.rucksack.includes('verband') ? ' (mit Verbandskasten schneller)' : '';
+          const mit = hat(ich.rucksack, 'verband') ? ' (mit Verbandskasten schneller)' : '';
           hinweis = `${escapeHtml(p.name)} liegt am Boden – bleib bei ihm stehen${mit}.${balken(p.hilfe)}`;
           break;
         }
       }
       if (!hinweis && ich.infektion > 0) {
-        const spritze = ich.rucksack.includes('spritze') ? ' – du hast eine 💉 im Rucksack!' : ' – du brauchst eine 💉 Rettungsspritze!';
+        const spritze = hat(ich.rucksack, 'spritze') ? ' – du hast eine 💉 im Rucksack!' : ' – du brauchst eine 💉 Rettungsspritze!';
         hinweis = `🦠 Infiziert: noch ${zeitText(ich.infektion)}${ich.sicher ? ' (ruht im Safe Room)' : ''}${spritze}`;
       }
       if (!hinweis && ich.ruht) hinweis = '💤 Du ruhst dich aus';
@@ -3092,11 +3093,11 @@ class Ort extends Phaser.Scene {
     const leiste = $('rucksack');
     leiste.innerHTML = '';
     for (let i = 0; i < (ich.plaetze || RUCKSACK_PLAETZE); i++) {
-      const d = ich.rucksack[i];
+      const e = ich.rucksack[i], d = e ? dingId(e) : '', n = e ? dingN(e) : 0;
       const b = document.createElement('button');
       b.className = 'platz' + (d ? '' : ' leer');
-      b.innerHTML = d ? dingIcon(d, 32) : '';
-      b.title = d ? `${DINGE[d]?.name} (Taste ${i + 1})` : 'leer';
+      b.innerHTML = d ? dingIcon(d, 32) + (n > 1 ? `<span class="stapelzahl">×${n}</span>` : '') : '';
+      b.title = d ? `${DINGE[d]?.name}${n > 1 ? ` ×${n}` : ''} (Taste ${i + 1})` : 'leer';
       b.dataset.i = i;
       if (d) { b.onclick = e => { e.stopPropagation(); if (zieheJuengst) return; popupAuf(b, i, d); }; rucksackZiehen(b, i); }
       leiste.appendChild(b);
@@ -3154,7 +3155,7 @@ function popupAuf(knopf, platz, ding) {
   const titel = document.createElement('div');
   titel.className = 'titel'; titel.innerHTML = dingHtml(ding, 24);
   const nutzen = document.createElement('button');
-  nutzen.textContent = DINGE[ding]?.waffe ? 'In die Hand' : ding === 'granate' ? 'Werfen' : ding === 'radio' ? 'Einschalten' : ding === 'bretter' ? 'Wofür?' : 'Benutzen';
+  nutzen.textContent = DINGE[ding]?.waffe ? 'In die Hand' : ding === 'munitionskiste' ? 'Öffnen (+30 Schuss)' : ding === 'granate' ? 'Werfen' : ding === 'radio' ? 'Einschalten' : ding === 'bretter' ? 'Wofür?' : 'Benutzen';
   nutzen.onclick = () => { raum.send('benutze', { platz }); popupZu(); };
   const weg = document.createElement('button');
   weg.textContent = 'Wegwerfen'; weg.className = 'zweit';
@@ -3178,10 +3179,10 @@ function popupAuf(knopf, platz, ding) {
       const warte = setInterval(() => {
         if ($('popup').style.display === 'none') return clearInterval(warte);
         const ich = raum.state.spieler.get(meineId);
-        if (ich?.rucksack[nach] === ding || ++n > 25) {
+        if ((ich?.rucksack[nach] && dingId(ich.rucksack[nach]) === ding) || ++n > 25) {
           clearInterval(warte);
           const nk = document.querySelector(`#rucksack .platz[data-i="${nach}"]`);
-          if (ich?.rucksack[nach] === ding && nk) popupAuf(nk, nach, ding); else popupZu();
+          if (ich?.rucksack[nach] && dingId(ich.rucksack[nach]) === ding && nk) popupAuf(nk, nach, ding); else popupZu();
         }
       }, 40);
     };
@@ -3221,13 +3222,14 @@ function platzMenue(knopf, platz) {
     b.onclick = () => { raum.send('platz_aktion', { platz, ...daten }); popupZu(); };
     p.append(b);
   };
-  if (name && ich.rucksack.length < (ich.plaetze || RUCKSACK_PLAETZE)) knopfMit('In den Rucksack', { aktion: 'rucksack' });
+  if (name && kannAufnehmen(ich.rucksack, ich.plaetze || RUCKSACK_PLAETZE, name === 'handgranate' ? 'granate' : name)) knopfMit('In den Rucksack', { aktion: 'rucksack' });
   if (name) knopfMit('Fallen lassen', { aktion: 'fallen' }, true);
   const gesehen = new Set();
-  [...ich.rucksack].forEach((d, rs) => {
+  [...ich.rucksack].forEach((e, rs) => {
+    const d = dingId(e);
     if (!(DINGE[d]?.waffe || d === 'granate') || gesehen.has(d)) return;
     gesehen.add(d);
-    const n = d === 'granate' ? ` (${ich.rucksack.filter(q => q === 'granate').length})` : '';
+    const n = d === 'granate' ? ` (${zaehle(ich.rucksack, 'granate')})` : '';
     knopfMit('', { aktion: 'tausch', rs }, true, `${name ? 'Tauschen mit' : 'Hierhin:'} ${dingHtml(d, 22)}${n}`);
   });
   const r = knopf.getBoundingClientRect();
@@ -3253,9 +3255,9 @@ function kisteZeigen(ich, safe) {
   const fuellen = (el, liste, max, richtung, titel) => {
     el.innerHTML = `<div class="kopf">${titel} (${liste.length}/${max}) – antippen zum ${richtung === 'raus' ? 'Nehmen' : 'Ablegen'}</div>`;
     const raster = document.createElement('div'); raster.className = 'raster';
-    [...liste].forEach((d, i) => {
-      const b = document.createElement('button');
-      b.className = 'ding'; b.innerHTML = dingHtml(d, 22);
+    [...liste].forEach((e, i) => {
+      const b = document.createElement('button'), n = dingN(e);
+      b.className = 'ding'; b.innerHTML = dingHtml(dingId(e), 22) + (n > 1 ? ` <b>×${n}</b>` : '');
       b.onclick = () => raum.send('kiste', { richtung, platz: i });
       raster.appendChild(b);
     });
@@ -3278,8 +3280,8 @@ function handelZeigen(ich, sp) {
   if (schluessel === handelSchluessel) return;
   handelSchluessel = schluessel;
   $('handeltitel').textContent = `${h.zeichen} Mit dem ${h.name} tauschen`;
-  const anz = d => ich.rucksack.filter(q => q === d).length;
-  const habe = [...new Set(ich.rucksack)].map(d => `${dingIcon(d, 20)} ${anz(d)}`).join('  ') || 'nichts';
+  const anz = d => zaehle(ich.rucksack, d);
+  const habe = [...new Set(flach(ich.rucksack))].map(d => `${dingIcon(d, 20)} ${anz(d)}`).join('  ') || 'nichts';
   $('handelhabe').innerHTML = `Du hast: ${habe}${ich.munition ? `  ${dingIcon('munition', 20)} ${ich.munition} Schuss` : ''}`;
   const box = $('handelangebote');
   box.innerHTML = '';
@@ -3288,7 +3290,7 @@ function handelZeigen(ich, sp) {
     const gibt = a.gibt === 'munition' ? `${dingIcon('munition', 22)} ${a.menge} Schuss Munition` : `${dingIcon(a.gibt, 22)} ${a.menge > 1 ? a.menge + '× ' : ''}${DINGE[a.gibt].name}`;
     const kostet = `${a.kostet.anzahl} beliebige aus ${a.kostet.aus.map(d => dingIcon(d, 20)).join(' ')}`;
     const zahl = bezahlung(ich.rucksack, a.kostet);
-    const platzOk = a.gibt === 'munition' ? ich.munition < MUNITION_MAX : ich.rucksack.length - (zahl?.length ?? 0) + a.menge <= ich.plaetze;
+    const platzOk = a.gibt === 'munition' ? ich.munition < MUNITION_MAX : (() => { const probe = [...ich.rucksack]; for (const d of zahl ?? []) entferneStueck(probe, d); return kannAufnehmen(probe, ich.plaetze, a.gibt, a.menge); })();
     const text = document.createElement('div'); text.className = 'text';
     text.innerHTML = `<b>${gibt}</b><span>kostet ${kostet}</span>${zahl ? `<span class="zahlt">zahlt: ${zahl.map(d => dingIcon(d, 20)).join(' ')}</span>` : '<span class="fehlt">dafür fehlt dir etwas</span>'}`;
     const knopf = document.createElement('button'); knopf.textContent = 'Tauschen';
@@ -3331,8 +3333,8 @@ function tauschRucksack() {
   const schluessel = [...(ich?.rucksack ?? [])].join(',');
   if (el.dataset.k === schluessel) return;
   el.dataset.k = schluessel; el.innerHTML = '';
-  [...(ich?.rucksack ?? [])].forEach((d, i) => {
-    const b = document.createElement('button'); b.className = 'ding'; b.innerHTML = dingHtml(d, 22);
+  [...(ich?.rucksack ?? [])].forEach((e, i) => {
+    const b = document.createElement('button'), n = dingN(e); b.className = 'ding'; b.innerHTML = dingHtml(dingId(e), 22) + (n > 1 ? ` <b>×${n}</b>` : '');
     b.onclick = () => raum.send('tausch_anbieten', { platz: i });
     el.appendChild(b);
   });

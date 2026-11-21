@@ -4,6 +4,7 @@
 // einen Funkkanal (Bandpass) über beliebige Entfernung.
 // Kommt die direkte Verbindung zu einem Mitspieler nicht zustande (z. B. Mobilfunk-NAT ohne TURN), läuft die Sprache
 // dieses Paars über den Server ('sprachWeg', Binärnachricht 'sprachDaten', Opus oder μ-law, siehe sprache_kodierung.mjs).
+import { flach } from './stapel.mjs';
 import { lautstaerke, SPRACHE_VORGABE } from './sprache_regeln.mjs';
 import {
   FORMAT_OPUS, FORMAT_MULAW, OPUS_RATE, OPUS_RAHMEN, MULAW_RATE, MULAW_RAHMEN, paketBauen, paketLesen, neuerAls,
@@ -250,7 +251,7 @@ export function starte({ raum, meineId, welt, meldung }) {
   }
 
   // ---------- Lautstärke nach Lage ----------
-  const spielerDaten = p => p && { x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: [...(p.rucksack ?? [])] };
+  const spielerDaten = p => p && { x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: flach(p.rucksack ?? []) };
   function lautstaerkeSetzen() {
     if (!ac || (!peers.size && !relais.size)) return;
     const ich = spielerDaten(raum.state.spieler.get(meineId)), w = welt();

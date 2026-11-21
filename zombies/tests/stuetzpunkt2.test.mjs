@@ -1,4 +1,5 @@
 // Bundeswehr-Stützpunkt, Teil 2: MG-Nester und Puma, Überrennen, Handgranate, MP/MG, Handel, Ärzte, Feldbetten, Funkzelt
+import { flach } from '../client/stapel.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -542,7 +543,7 @@ test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, M
     return nachrichten.handel[n];
   };
   const rucksack = (...d) => p.rucksack.splice(0, p.rucksack.length, ...d);
-  const hat = () => [...p.rucksack].sort();
+  const hat = () => flach(p.rucksack).sort();   // einzelne Stücke (Stapel aufgelöst)
   // Arzt: 1 Verband für 2 beliebige Dinge
   p.x = arzt.x + 18; p.y = arzt.y;
   rucksack('essen', 'essen', 'wasser', 'bretter');
