@@ -1,0 +1,13 @@
+{
+ "quelle": "\u00a9 Bayerische Vermessungsverwaltung, Digitales Orthophoto und 3D-Geb\u00e4udemodell LoD2 (CC BY 4.0)",
+ "daecher": true,
+ "kachel": 32,
+ "px": 512,
+ "nx": 11,
+ "ny": 14,
+ "breite": 340,
+ "hoehe": 421,
+ "meterProPixel": 0.25,
+ "format": "webp",
+ "foto": true
+}

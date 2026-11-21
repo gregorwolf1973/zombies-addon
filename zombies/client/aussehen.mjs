@@ -9,7 +9,8 @@ import { zeichneMoebelBild } from './moebel_bilder.mjs';
 import { fzPx } from './masse.mjs';
 import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
 import { zeichneEinkaufswagen } from './einkaufswagen.mjs';
-import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach } from './vektor.mjs';
+import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach, vektorGebaeude } from './vektor.mjs';
+import { kulBoden, fotoStatus, zeichneFoto, zeichneSchatten } from './kulisse.mjs';
 
 const TAU = Math.PI * 2;
 
@@ -95,11 +96,13 @@ export function zeichneBoden(ctx, welt, rect = null) {
   ctx.translate(-x0 * KACHEL, -y0 * KACHEL);
   // Wiese als Grundfläche mit Farbwolken: ein Pixel je 8×8-Feld rechnen und weich vergrößert zeichnen
   // (früher ein fillRect je Feld – das waren 16.000 Aufrufe je Kartenstück)
-  wiesenWolken(ctx, x0, y0, x1, y1);
+  // Kulisse „Luftbild-Boden“: Foto statt Wiese, Flächen, Straßen, Wasser (fehlt die Bildkachel, bleibt der gezeichnete Boden)
+  const foto = kulBoden() && fotoStatus({ x0, y0, x1, y1 }) === 'bereit';
+  if (foto) zeichneFoto(ctx, { x0, y0, x1, y1 }); else wiesenWolken(ctx, x0, y0, x1, y1);
   const gras = new Path2D(), blumen = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
   const vek = !!welt.vektor;
-  if (vek) zeichneFlaechen(ctx, welt, { x0, y0, x1, y1 });
-  for (let ky = y0; ky < y1; ky++) for (let kx = x0; kx < x1; kx++) {
+  if (vek && !foto) zeichneFlaechen(ctx, welt, { x0, y0, x1, y1 });
+  for (let ky = y0; ky < y1 && !foto; ky++) for (let kx = x0; kx < x1; kx++) {
     const t = welt.hole(kx, ky), px = kx * KACHEL, py = ky * KACHEL;
     const nb = (dx, dy) => welt.hole(kx + dx, ky + dy);
     if (vek && (t === T.STRASSE || t === T.PLATZ || t === T.WASSER)) continue;   // Wasser kommt als glatte Fläche (wasser.mjs)   // kommen als glatte Linien/Flächen
@@ -186,20 +189,25 @@ export function zeichneBoden(ctx, welt, rect = null) {
   }
   ctx.strokeStyle = 'rgba(30,70,25,.55)'; ctx.lineWidth = 1; ctx.stroke(gras);
   ['#fff59d', '#f8bbd0', '#ffffff', '#ce93d8'].forEach((f, i) => { ctx.fillStyle = f; ctx.fill(blumen[i]); });
-  if (vek) zeichneWasser(ctx, welt, { x0, y0, x1, y1 });
-  if (vek) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
+  if (vek && !foto) zeichneWasser(ctx, welt, { x0, y0, x1, y1 });
+  if (vek && !foto) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details?.zaeune) zaunLinien(ctx, welt, { x0, y0, x1, y1 });
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
   zeichneMuell(ctx, welt, { x0, y0, x1, y1 });
   zeichneSperren(ctx, welt, { x0, y0, x1, y1 });
   zeichneStuetzpunktBoden(ctx, welt, { x0, y0, x1, y1 });
-  zeichneBaumSockel(ctx, welt, { x0, y0, x1, y1 });
+  if (!foto) zeichneBaumSockel(ctx, welt, { x0, y0, x1, y1 });
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
     if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
     autoVonOben(ctx, b);
   }
   ctx.restore();
+}
+
+// Kulisse „Schatten“: Schatten von Häusern und Bäumen eines Kartenstücks in ein leeres Bild (null, wenn nichts zu zeichnen ist)
+export function zeichneSchattenStueck(ctx, B, H, welt, rect) {
+  return zeichneSchatten(ctx, B, H, rect, vektorGebaeude(welt), baumKacheln(welt, { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 12, y1: rect.y1 + 12 }));
 }
 
 // ---------- obere Ebene: Bäume und Deko aus dem Prototyp ----------
@@ -380,7 +388,7 @@ function hashText(b) {
 function autoVariante(b) {
   if (!autoListe || b.gezeichnet) return null;
   const h = hashText(b), farbe = (b.farbe ?? 0) % AUTO_FARBEN.length;
-  const maxLang = b.vorwaerts || b.platz === 'bucht' || b.platz === 'parkplatz' ? 46 : 58;
+  const maxLang = b.vorwaerts || b.platz === 'bucht' || b.platz === 'parkplatz' || b.platz === 'foto' ? 46 : 58;
   let art = h % 11 === 0 ? 'sport' : 'pkw';
   if (!b.vorwaerts) {
     const w = Math.floor(h / 11) % 20;

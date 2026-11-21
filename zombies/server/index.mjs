@@ -284,6 +284,8 @@ export async function starte({
     musik: datei.werte.musik,             // Musik: laut (%), blende (s)
     radioStream: datei.werte.radioStream, // Autoradio als Live-Radio (Stream direkt vom Sender)
   }));
+  // Luftbild-Kacheln der Kulisse (client/karten/kulisse): ändern sich selten, eine Stunde zwischenspeichern (spart Mobildaten beim Herumlaufen)
+  app.use('/karten/kulisse', (req, res, next) => { res.set('Cache-Control', 'public, max-age=3600'); next(); }, express.static(path.join(hier, '..', 'client', 'karten', 'kulisse')));
   app.use(nocache, express.static(path.join(hier, '..', 'client'), { extensions: ['html'] }));
 
   const httpServer = http.createServer(app);
