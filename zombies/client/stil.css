@@ -432,7 +432,9 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 #rucksack .platz.ziel { outline: 2px solid #ffca28; }
 
 /* Finale Andermatt: Atomschlag-Countdown und Abspann (client/finale.mjs) */
-#finale { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; padding: 4px 14px; border-radius: 10px; background: #000b; color: #ffe082; font: 800 22px/1.2 system-ui, sans-serif; font-variant-numeric: tabular-nums; border: 2px solid #ffb300; pointer-events: none; }
+/* Countdown als eigene Zeile in der Eckkarte (#kartenunten, über der Zombiezahl) statt fest oben mittig */
+#finale { padding: 0 6px; margin-bottom: 2px; border-radius: 6px; background: #000b; color: #ffe082; font: 800 13px/1.35 system-ui, sans-serif; font-variant-numeric: tabular-nums; border: 1px solid #ffb300; pointer-events: none; }
+#kartenbox.gross #finale { font-size: 17px; }
 #finale.dringend { color: #fff; background: #c62828e6; border-color: #ff5252; animation: finale-blink .8s steps(2, jump-none) infinite; }
 @keyframes finale-blink { 0% { opacity: 1; } 50% { opacity: .35; } 100% { opacity: 1; } }
 #abspann { display: none; position: fixed; inset: 0; z-index: 60; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; background: #fff; color: #1b2a1b; pointer-events: none; animation: abspann-ein 3s ease-out; }
@@ -459,3 +461,18 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
   #einstellungen .fenster, #sumenue .fenster { max-height: 90dvh; }
   #aufheben-wahl.fundliste { max-height: 55dvh; }
 }
+
+/* Zahnrad: Regler Stimmen, Feuerknopf (Schießen „per Knopf“) */
+#eg-stimmen { width: 100%; min-height: 36px; margin: 0; accent-color: #ffd54f; touch-action: pan-y; }
+#eg-stimmen-wert { font-weight: 600; opacity: .8; margin-left: 6px; }
+#feuerknopf {
+  display: none; position: fixed; left: max(8px, env(safe-area-inset-left)); bottom: max(4px, env(safe-area-inset-bottom)); z-index: 6;
+  width: var(--fk, 56px); height: var(--fk, 56px); min-width: 0; margin: 0; padding: 0; border-radius: 50%; font-size: 26px; line-height: 1;
+  background: #c62828cc; color: #fff; border: 3px solid #ffffffaa; box-shadow: 0 3px 10px #0009;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+#feuerknopf.gedrueckt { background: #ff1744; border-color: #fff; transform: scale(.94); }
+body.feuerknopf-an #feuerknopf { display: block; }
+/* Inventar rückt nach rechts, damit der Feuerknopf nichts überdeckt */
+body.feuerknopf-an #rucksack { padding-left: calc(var(--fk, 56px) + 16px + env(safe-area-inset-left)); }
+@media (max-width: 420px) { #feuerknopf { --fk: 48px; font-size: 22px; } }

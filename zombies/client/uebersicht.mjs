@@ -4,6 +4,14 @@ import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
 
 const S = 4;   // Pixel je Kachel im Grundbild
 
+// Eigene Position pulsiert nach Spielbeitritt/Levelstart und nach dem Öffnen der großen Karte: wachsender, verblassender Ring.
+export const PULS_DAUER_MS = 5000, PULS_PERIODE_MS = 1100;
+// Phase 0..1 des Rings (0 = klein/deckend, 1 = groß/verblasst) oder -1, wenn das Pulsieren vorbei ist
+export function pulsPhase(jetzt, bis, periode = PULS_PERIODE_MS) {
+  if (!(bis > jetzt)) return -1;
+  return 1 - ((((bis - jetzt) % periode) + periode) % periode) / periode;
+}
+
 function grundbild(welt) {
   const c = document.createElement('canvas');
   c.width = BREITE * S; c.height = HOEHE * S;
@@ -69,6 +77,7 @@ export class Uebersicht {
     this.zoom = 1;          // 1 = ganze Karte passt hinein
     this.mitte = null;      // null = folgt mir; sonst {x, y} in Kacheln (verschoben)
     this.gross = false;
+    this.pulsBis = performance.now() + PULS_DAUER_MS;   // Spielbeitritt/Levelstart (Level wechseln per Neuladen)
     box.style.display = 'block';
     box.style.setProperty('--seiten', String(BREITE / HOEHE));   // für die Größe der aufgeklappten Karte (stil.css)
     this.bedienung();
@@ -76,6 +85,7 @@ export class Uebersicht {
 
   umschalten(gross = !this.gross) {
     this.gross = gross;
+    if (gross) this.pulsBis = performance.now() + PULS_DAUER_MS;   // nach jedem Öffnen der großen Karte
     this.box.classList.toggle('gross', gross);
     if (!gross) { this.mitte = null; }
     this.zeichneNeu = true;
@@ -161,6 +171,8 @@ export class Uebersicht {
     this.hinAus = setTimeout(() => this.hinWeg(), 5000);
   }
   hinWeg() { this.hinKnopfEl?.remove(); this.hinKnopfEl = null; clearTimeout(this.hinAus); if (this.hinZu) document.removeEventListener('pointerdown', this.hinZu, true); this.hinZu = null; }
+
+  pulsAktiv() { return pulsPhase(performance.now(), this.pulsBis) >= 0; }
 
   aktuelleMitte() { return this.mitte ?? this.ich ?? { x: BREITE / 2, y: HOEHE / 2 }; }
 
@@ -287,6 +299,14 @@ export class Uebersicht {
       } else {
         c.fillStyle = p.farbe; c.fill();
         c.lineWidth = (p.ich ? 2.5 : 1.2) * dpr; c.strokeStyle = p.ich ? '#fff' : '#000'; c.stroke();
+      }
+      if (p.ich) {   // pulsierender Ring um die eigene Position (5 s)
+        const ph = pulsPhase(performance.now(), this.pulsBis);
+        if (ph >= 0) {
+          const w = ph;   // Ring wächst von der Punktgröße nach außen, während er verblasst
+          c.beginPath(); c.arc(x, y, rad + w * (this.gross ? 22 : 16) * dpr, 0, Math.PI * 2);
+          c.lineWidth = 2.5 * dpr; c.strokeStyle = `rgba(255,255,255,${(1 - w) * 0.95})`; c.stroke();
+        }
       }
       if (this.gross || this.zoom >= 3) {
         c.font = `bold ${Math.round(12 * dpr)}px sans-serif`; c.textAlign = 'left'; c.textBaseline = 'middle';

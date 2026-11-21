@@ -300,6 +300,7 @@ export class SpielRaum extends Room {
     if (l > 1) { dx /= l; dy /= l; }
     const x = this.extra.get(client.sessionId);
     if (!x) return null;
+    x.feuerAus = m.f === false;   // Feuerknopf-Modus: Client meldet f:false, solange der Knopf nicht gehalten wird (fehlt f: wie bisher automatisch)
     const n = Number(m.n), d = Number(m.d);
     if (Number.isInteger(n) && n >= 0 && Number.isFinite(d)) {
       x.warte ??= [];
@@ -2633,7 +2634,7 @@ export class SpielRaum extends Room {
       }
       // Fernwaffe lädt nach oder Magazin leer: kein Schuss (der Server lädt von selbst nach)
       const ladet = wf0.fern && (p.nachladen > 0 || p.magazin <= 0);
-      let ziel = ladet || wf0.wurf ? null : this.naechsterZombie(p.x, p.y, wf.reichweite, p);
+      let ziel = ladet || wf0.wurf || x.feuerAus ? null : this.naechsterZombie(p.x, p.y, wf.reichweite, p);
       if (ziel && wf.granate && Math.hypot(ziel[1].x - p.x, ziel[1].y - p.y) < GRANATE.radius + 12) ziel = null;   // zu nah: Splitter träfen den Schützen
       if (ziel) {
         const [zid, z] = ziel;

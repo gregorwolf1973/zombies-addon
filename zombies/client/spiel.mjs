@@ -29,6 +29,7 @@ import { fundZeigen, fundZu, fundPruefen } from './fundliste.mjs';
 import { alleKandidaten } from './durchsuche_alle.mjs';
 import * as sprache from './sprache.mjs';
 import { merkzettelAnschliessen, merkzettelErwarten } from './merkzettel.mjs';
+import { GERAET_SCHLUESSEL, stimmenFaktorLesen, anAusLesen, schiessModusLesen, feuerErlaubt as feuerErlaubtRegel } from './einstellungen_regeln.mjs';
 import { fkStart } from './faehigkeiten.mjs';
 import { startwahlStart } from './startwahl.mjs';
 import { Uebersicht } from './uebersicht.mjs';
@@ -327,8 +328,8 @@ async function mitspielen() {
     let r = null;
     let token = null;
     try { token = sessionStorage.getItem('zob_token'); } catch {}
-    if (token && !TUT.an) { try { r = await client.reconnect(token); } catch { r = null; } }
     const testpw = ($('testpw')?.value ?? '').slice(0, 200);   // Testzugang: nur beim Beitritt gesendet, nirgends gespeichert
+    if (token && !TUT.an && !testpw) { try { r = await client.reconnect(token); } catch { r = null; } }   // mit Testzugang kein reconnect (dort läuft kein onAuth)
     const beitritt = { name, code, ...(testpw ? { testzugang: testpw } : {}), spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst };
     if (!r) r = TUT.an ? await client.create('schiessstand', beitritt) : await client.joinOrCreate('zombies', beitritt);   // Schießstand: eigener Raum, nichts für die Hauptwelt
     raum = r;
@@ -420,7 +421,9 @@ function einstellungenEinrichten() {
     for (const b of document.querySelectorAll('#eg-ton button')) b.classList.toggle('an', Number(b.dataset.v) === ton.lautstaerke());
     let a = '0.6'; try { a = localStorage.getItem('zob_kartealpha') ?? '0.6'; } catch { /* egal */ }
     for (const b of document.querySelectorAll('#eg-karte button')) b.classList.toggle('an', b.dataset.v === a);
+    geraetMarkieren();
   };
+  geraetEinstellungenEinrichten(markieren);
   $('einstellknopf').onclick = auf;
   $('einstellzu').onclick = zu;
   fenster.addEventListener('click', e => { if (e.target === fenster) zu(); });
@@ -436,10 +439,58 @@ function einstellungenEinrichten() {
   };
 }
 
+// ---------- Geräte-Einstellungen: Schießen per Knopf, Stimmen, Zombiegeräusche, Musik (client/einstellungen_regeln.mjs) ----------
+let schiessModus = 'auto', feuerHalten = false;
+// false nur im Modus „per Knopf“, solange der Knopf (oder die Leertaste) nicht gehalten wird; der Server schießt dann nicht
+const feuerErlaubt = () => feuerErlaubtRegel(schiessModus, feuerHalten);
+function feuerUiAnwenden() {
+  document.body.classList.toggle('feuerknopf-an', schiessModus === 'knopf' && gestartet);
+  if (schiessModus !== 'knopf') feuerSetzen(false);
+}
+function feuerSetzen(an) {
+  feuerHalten = !!an;
+  $('feuerknopf')?.classList.toggle('gedrueckt', feuerHalten);
+}
+function geraetEinstellungenEinrichten(markieren) {
+  const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
+  const merke = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
+  const K = GERAET_SCHLUESSEL;
+  schiessModus = schiessModusLesen(lies(K.schiessen));
+  const stimmenAnzeige = () => { const pr = Math.round(stimmenFaktorLesen(lies(K.stimmen)) * 100); $('eg-stimmen').value = String(pr); $('eg-stimmen-wert').textContent = pr + ' %'; };
+  const gruppe = (id, wert, setzen, schluessel) => {
+    for (const b of document.querySelectorAll(`#${id} button`)) b.onclick = () => { setzen(b.dataset.v); merke(schluessel, b.dataset.v); markieren(); };
+    return () => { const w = wert(); for (const b of document.querySelectorAll(`#${id} button`)) b.classList.toggle('an', b.dataset.v === w); };
+  };
+  const marks = [
+    gruppe('eg-schiessen', () => schiessModus, v => { schiessModus = schiessModusLesen(v); feuerUiAnwenden(); }, K.schiessen),
+    gruppe('eg-zombieton', () => (anAusLesen(lies(K.zombieTon)) ? 'an' : 'aus'), v => ton.zombieTonSetzen(anAusLesen(v)), K.zombieTon),
+    gruppe('eg-musik', () => (anAusLesen(lies(K.musik)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.musikSetzen(anAusLesen(v)); }, K.musik),
+  ];
+  $('eg-stimmen').oninput = e => { merke(K.stimmen, e.target.value); sprache.stimmenFaktorSetzen(e.target.value); stimmenAnzeige(); };
+  // beim Öffnen des Menüs die Markierungen nachziehen (markieren() ruft der Aufrufer auf)
+  geraetMarkieren = () => { marks.forEach(m => m()); stimmenAnzeige(); };
+  geraetMarkieren();
+  ton.zombieTonSetzen(anAusLesen(lies(K.zombieTon)));
+  sprache.stimmenFaktorSetzen(lies(K.stimmen) ?? 100);
+  // Feuerknopf: Halten = Feuer frei (Touch, Maus), Leertaste am PC
+  const fk = $('feuerknopf');
+  fk.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { fk.setPointerCapture(e.pointerId); } catch { /* egal */ } feuerSetzen(true); });
+  for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) fk.addEventListener(t, () => feuerSetzen(false));
+  fk.addEventListener('contextmenu', e => e.preventDefault());
+  const tippt = () => document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  document.addEventListener('keydown', e => { if (e.code === 'Space' && schiessModus === 'knopf' && !tippt()) { e.preventDefault(); feuerSetzen(true); } });
+  document.addEventListener('keyup', e => { if (e.code === 'Space') feuerSetzen(false); });
+  window.addEventListener('blur', () => feuerSetzen(false));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) feuerSetzen(false); });
+  feuerUiAnwenden();
+}
+let geraetMarkieren = () => {};
+
 let gestartet = false;
 async function starteSpiel() {
   if (gestartet) return;
   gestartet = true;
+  feuerUiAnwenden();
   ladenZeigen(25, 'Generiere Welt … lade Karte');
   if (raum.state.karte) {
     try { KARTE = await (await fetch(`karten/${raum.state.karte}.json`)).json(); }
@@ -1597,7 +1648,7 @@ class Ort extends Phaser.Scene {
     if (lok && w) {
       for (const b of w.behaelter ?? []) {
         if (n >= 6) break;
-        if (b.art === 'bw_kiste' || b.art === 'bus') continue;
+        if (b.art === 'bw_kiste' || b.art === 'bus' || b.art === 'auto') continue;   // Autos/Kofferräume ohne Symbol
         if (Math.hypot(b.x - lok.x, b.y - lok.y) > 2 * KACHEL) continue;
         if (b.art === 'auto' && s.verbrannt?.has('auto:' + b.id)) continue;
         const leer = b.art === 'bw_kiste' ? this.leereKisten?.has(b.id) : s.behaelter.get(b.id)?.rest === 0;
@@ -2513,22 +2564,23 @@ class Ort extends Phaser.Scene {
     if (dx || dy) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; }
     else if (this.joystick.id !== null) { dx = this.joystick.vx; dy = this.joystick.vy; s = false; }
     if (window.__startwahlOffen) { dx = 0; dy = 0; s = false; }   // Startwahl-Dialog offen: Figur steht still
+    const f = feuerErlaubt();   // false nur im Modus „per Knopf“ ohne gedrückten Feuerknopf
     this.eingabe = { dx, dy, s };
     // Gemeldet wird immer das abgelaufene Stück: „d Sekunden lang mit (dx, dy, s) gelaufen“, mit laufender Nummer n.
     // Der Server arbeitet die Stücke in Echtzeit ab und bestätigt die Nummer (p.seq) – so geht nach einem Netz-Hänger
     // keine Bewegung verloren und die eigene Figur wird nicht zurückgezogen (siehe eigeneFigur / vorhersage).
     const g = this.gesendet, jetzt = performance.now();   // echte Uhr: bei niedriger Bildrate nicht an Frames gebunden
-    if (!g.t) { this.gesendet = { dx, dy, s, t: jetzt }; return; }
-    const anders = Math.abs(g.dx - dx) > 0.05 || Math.abs(g.dy - dy) > 0.05 || g.s !== s;
+    if (!g.t) { this.gesendet = { dx, dy, s, f, t: jetzt }; return; }
+    const anders = Math.abs(g.dx - dx) > 0.05 || Math.abs(g.dy - dy) > 0.05 || g.s !== s || g.f !== f;
     const steht = Math.hypot(g.dx, g.dy) <= 0.05;
     if ((anders && jetzt - g.t > 15) || jetzt - g.t >= (steht ? 250 : 50)) {
       if (this.eingabeNr === undefined) this.eingabeNr = raum.state?.spieler?.get(meineId)?.seq ?? 0;
       const n = this.eingabeNr = (this.eingabeNr + 1) & 0xffff;
-      const stueck = { dx: +g.dx.toFixed(3), dy: +g.dy.toFixed(3), s: g.s, n, d: +Math.min(0.25, (jetzt - g.t) / 1000).toFixed(3) };
+      const stueck = { dx: +g.dx.toFixed(3), dy: +g.dy.toFixed(3), s: g.s, f: f, n, d: +Math.min(0.25, (jetzt - g.t) / 1000).toFixed(3) };
       raum.send('eingabe', stueck);
       this.offen.push(stueck);
       if (this.offen.length > 120) this.offen.shift();
-      this.gesendet = { dx, dy, s, t: jetzt };
+      this.gesendet = { dx, dy, s, f, t: jetzt };
     }
   }
 
@@ -2853,7 +2905,7 @@ class Ort extends Phaser.Scene {
     if (this.hudZeit <= 0) { this.hudZeit = 0.15; this.hud(ich); }
     this.geraeusche(ich, dt);
     this.karteZeit = (this.karteZeit ?? 0) - dt;
-    if (this.karteZeit <= 0 || this.uebersicht?.zeichneNeu) { this.karteZeit = this.uebersicht?.gross ? 0.15 : (this.uebersicht?.bus || this.uebersicht?.abhol || [...raum.state.spieler.values()].some(q => q.unten)) ? 0.12 : 0.4; this.uebersichtZeichnen(); }
+    if (this.karteZeit <= 0 || this.uebersicht?.zeichneNeu) { this.karteZeit = this.uebersicht?.gross ? 0.15 : (this.uebersicht?.bus || this.uebersicht?.abhol || this.uebersicht?.pulsAktiv() || [...raum.state.spieler.values()].some(q => q.unten)) ? 0.12 : 0.4; this.uebersichtZeichnen(); }
     if (!this.ladenFertig) { this.ladenFertig = true; ladenZeigen(100, 'Generiere Welt … fertig'); setTimeout(ladenAus, 150); }
   }
 

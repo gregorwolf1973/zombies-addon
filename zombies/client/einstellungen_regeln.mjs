@@ -25,3 +25,25 @@ export function einstellungenBereinigen(roh) {
   }
   return JSON.stringify(aus).length <= EINSTELLUNG_MAX_BYTES ? aus : {};
 }
+
+// ---------- Geräte-Einstellungen (nur im localStorage dieses Geräts, nicht beim Server) ----------
+export const GERAET_SCHLUESSEL = {
+  stimmen: 'zob_stimmen',          // Stimmen der Mitspieler, Prozent 0–200 (Standard 100)
+  zombieTon: 'zob_zombieton',      // Zombiegeräusche an/aus (Standard an)
+  musik: 'zob_musik',              // Musik an/aus (Standard an)
+  schiessen: 'zob_schiessen',      // 'auto' (Standard) oder 'knopf'
+};
+
+// Text → Faktor 0–2 (ungültig/leer = 1); gerundet auf ganze Prozent
+export function stimmenFaktorLesen(roh) {
+  if (roh == null || String(roh).trim() === '') return 1;
+  const n = Number(roh);
+  if (!Number.isFinite(n)) return 1;
+  return Math.round(Math.max(0, Math.min(200, n))) / 100;
+}
+// Text → true/false; nur ein ausdrückliches 'aus' schaltet ab
+export function anAusLesen(roh) { return roh !== 'aus'; }
+// Text → 'auto' | 'knopf'
+export function schiessModusLesen(roh) { return roh === 'knopf' ? 'knopf' : 'auto'; }
+// Darf der Server auf Ziele schießen? Automatisch: immer; per Knopf: nur solange der Knopf gehalten wird
+export function feuerErlaubt(modus, gehalten) { return modus !== 'knopf' || !!gehalten; }

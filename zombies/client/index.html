@@ -94,7 +94,7 @@
 <div id="kartenbox" title="Übersicht (M)">
   <canvas id="karte"></canvas>
   <div id="kartenoben"><span id="zeit">00:00</span></div>
-  <div id="kartenunten"><span id="zombiezahl"></span><span id="besiegt"></span><span id="verwandelt"></span></div>
+  <div id="kartenunten"><span id="finale" style="display:none" title="Zeit bis zum Atomschlag" aria-live="off"></span><span id="zombiezahl"></span><span id="besiegt"></span><span id="verwandelt"></span></div>
   <div class="kartenknoepfe"><button class="mich" aria-label="Auf mich zentrieren">⌖</button></div>
 </div>
   <div id="sicher">
@@ -110,6 +110,7 @@
     <button id="chatsenden" type="submit" aria-label="Senden">➤</button>
   </form>
 </div>
+<button id="feuerknopf" type="button" aria-label="Feuer (halten)" title="Feuer: gedrückt halten (Leertaste)">🔫</button>
 <div id="unten">
   <div id="aktionen">
     <button id="aktion2" type="button"></button>
@@ -128,6 +129,20 @@
     <div class="eg-titel">🗺 Eckkarte</div>
     <div class="eg-reihe" id="eg-karte">
       <button type="button" data-v="0.35">Sehr blass</button><button type="button" data-v="0.6">Blass</button><button type="button" data-v="1">Deckend</button>
+    </div>
+    <div class="eg-titel">🔫 Schießen</div>
+    <div class="eg-reihe" id="eg-schiessen">
+      <button type="button" data-v="auto">Automatisch</button><button type="button" data-v="knopf">Per Knopf</button>
+    </div>
+    <div class="eg-titel">🎙 Stimmen der Mitspieler <span id="eg-stimmen-wert">100 %</span></div>
+    <input type="range" id="eg-stimmen" min="0" max="200" step="10" value="100" aria-label="Stimmen der Mitspieler in Prozent">
+    <div class="eg-titel">🧟 Zombiegeräusche</div>
+    <div class="eg-reihe" id="eg-zombieton">
+      <button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button>
+    </div>
+    <div class="eg-titel">🎵 Musik</div>
+    <div class="eg-reihe" id="eg-musik">
+      <button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button>
     </div>
   </div>
 </div>
@@ -164,7 +179,6 @@
     <p id="raetselergebnis"></p>
   </div>
 </div>
-<div id="finale" style="display:none" title="Zeit bis zum Atomschlag" aria-live="off"></div>
 <div id="abspann" role="status"></div>
 <div id="meldungen"></div>
 <div id="hinweis"></div>

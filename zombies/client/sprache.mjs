@@ -5,6 +5,7 @@
 // Kommt die direkte Verbindung zu einem Mitspieler nicht zustande (z. B. Mobilfunk-NAT ohne TURN), läuft die Sprache
 // dieses Paars über den Server ('sprachWeg', Binärnachricht 'sprachDaten', Opus oder μ-law, siehe sprache_kodierung.mjs).
 import { flach } from './stapel.mjs';
+import { stimmenFaktorLesen } from './einstellungen_regeln.mjs';
 import { lautstaerke, SPRACHE_VORGABE } from './sprache_regeln.mjs';
 import {
   FORMAT_OPUS, FORMAT_MULAW, OPUS_RATE, OPUS_RAHMEN, MULAW_RATE, MULAW_RAHMEN, paketBauen, paketLesen, neuerAls,
@@ -29,6 +30,10 @@ const PUFFER_S = 0.12;         // Jitter-Puffer beim Abspielen der Serverpakete 
 
 const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const merke = (k, v) => { try { localStorage.setItem(k, v); } catch { /* egal */ } };
+
+// Zahnrad-Menü „Stimmen der Mitspieler“: Faktor 0–2 auf nah/funk (nicht auf Spielgeräusche); wirkt beim nächsten Lautstärke-Takt
+let stimmenFaktor = stimmenFaktorLesen(lies('zob_stimmen'));
+export function stimmenFaktorSetzen(prozent) { stimmenFaktor = stimmenFaktorLesen(String(prozent)); }
 
 export function starte({ raum, meineId, welt, meldung }) {
   const knopf = document.getElementById('sprachknopf');
@@ -261,8 +266,8 @@ export function starte({ raum, meineId, welt, meldung }) {
       if (!p.knoten) continue;
       const er = spielerDaten(raum.state.spieler.get(sid));
       const l = ich && er && w ? lautstaerke(ich, er, w, einst) : { nah: 0, funk: 0, pan: 0 };
-      p.knoten.nah.gain.setTargetAtTime(l.nah, t, 0.08);
-      p.knoten.funk.gain.setTargetAtTime(l.funk, t, 0.08);
+      p.knoten.nah.gain.setTargetAtTime(l.nah * stimmenFaktor, t, 0.08);
+      p.knoten.funk.gain.setTargetAtTime(l.funk * stimmenFaktor, t, 0.08);
       p.knoten.panner?.pan.setTargetAtTime(l.pan, t, 0.08);
     }
   }

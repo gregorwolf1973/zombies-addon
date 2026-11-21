@@ -4,8 +4,11 @@
 import { stimmeZuweisen } from './tonlogik.mjs';
 import { hordeEinstellung, zaehleHoerbare, hordeSchritt, einzelschreiOk, akzentSchritt, PIXEL_JE_METER } from './hordenlogik.mjs';
 import { musikSchritt, naechstesStueck } from './musiklogik.mjs';
+import { anAusLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
 let ctx = null, haupt = null, rauschPuffer = null, stufe = 1;
 const BASIS = 0.36;                          // Grundpegel (früher 0.8 – war zu laut); die Stufe regelt darunter
+const EFFEKT_FAKTOR = 0.75;                  // Spielgeräusche 25 % leiser als zuvor (Stimmen kommen besser durch); Musik behält ihren Pegel
+let zombieTonAn = true, musikAn = true;      // Zahnrad-Menü (je Gerät): Zombie-Einzelgeräusche, Musik
 const STUFEN = [1, 0.5, 0.25, 0];            // 100 %, 50 %, 25 %, stumm
 let hx = 0, hy = 0;                         // Hörer (eigene Figur) in Pixeln
 let wind = null, brumm = null;
@@ -15,11 +18,31 @@ try {
   const v = Number(localStorage.getItem('zombies_lautstaerke'));
   if (localStorage.getItem('zombies_lautstaerke') !== null && STUFEN.includes(v)) stufe = v;
   else if (localStorage.getItem('zombies_ton') === 'aus') stufe = 0;
+  zombieTonAn = anAusLesen(localStorage.getItem(GERAET_SCHLUESSEL.zombieTon));
+  musikAn = anAusLesen(localStorage.getItem(GERAET_SCHLUESSEL.musik));
 } catch { /* ohne Speicher: 100 % */ }
 
 export function tonAn() { return stufe > 0; }
 export function lautstaerke() { return stufe; }
 const pegel = () => BASIS * stufe;
+const pegelEffekt = () => pegel() * EFFEKT_FAKTOR;
+let musikAusgang = null;   // Musik (Spiel- und Startmusik) läuft an haupt vorbei, damit der Effekt-Faktor sie nicht leiser macht
+function pegelAnwenden(zeitkonstante = 0.05) {
+  if (!ctx) return;
+  if (haupt) haupt.gain.setTargetAtTime(pegelEffekt(), ctx.currentTime, zeitkonstante);
+  if (musikAusgang) musikAusgang.gain.setTargetAtTime(pegel(), ctx.currentTime, zeitkonstante);
+}
+// Zombie-Einzelgeräusche stumm schalten (Horde, „entdeckt“ bleiben)
+export function zombieTonSetzen(an) { zombieTonAn = !!an; }
+const zombieStumm = id => !zombieTonAn && ZOMBIE_IDS.has(id) && id !== 'entdeckt';
+export function musikSetzen(an) {
+  musikAn = !!an;
+  if (!ctx) return;
+  if (!musikAn) {
+    musikAnwenden(null);   // Spielmusik ausblenden; kommt bei „an“ mit der nächsten Lage (≈1 s) wieder
+    if (musik) { const m = musik; musik = null; if (m.strom) m.strom.stop(1); else { m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); setTimeout(() => { try { m.src.stop(); } catch { /* schon aus */ } }, 1500); } }
+  }
+}
 
 // ---------- Tondateien (auf der Einstellungsseite Ereignissen zugeordnet) ----------
 let zuordnung = {};                 // Ereignis → { dateien, laut }
@@ -99,6 +122,7 @@ const SCHUSS_MAX_SEK = 0.45;   // bei hoher Kadenz Schusstöne kürzen (Auskling
 function probe(id, x, y, extra = 1) {
   const t = zuordnung[id];
   if (!ctx || !t?.dateien?.length) return false;
+  if (zombieStumm(id)) return true;   // Zahnrad: Zombiegeräusche aus – auch kein Ersatzton
   const bereit = t.dateien.map(geladen).filter(Boolean);
   if (!bereit.length) { t.dateien.forEach(laden); return false; }
   if (!abstandOk(id)) return true;   // zu kurz nach dem letzten: verworfen, auch kein Ersatzton
@@ -222,8 +246,9 @@ export function tonStarten() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
-  haupt = ctx.createGain(); haupt.gain.value = pegel(); haupt.connect(ctx.destination);
-  musikBus = ctx.createGain(); musikBus.gain.value = musikEin.laut / 100; musikBus.connect(haupt);
+  haupt = ctx.createGain(); haupt.gain.value = pegelEffekt(); haupt.connect(ctx.destination);
+  musikAusgang = ctx.createGain(); musikAusgang.gain.value = pegel(); musikAusgang.connect(ctx.destination);
+  musikBus = ctx.createGain(); musikBus.gain.value = musikEin.laut / 100; musikBus.connect(musikAusgang);
   // 2 s weißes Rauschen als Grundstoff für Schuss, Wind, Schlurfen
   rauschPuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = rauschPuffer.getChannelData(0);
@@ -239,7 +264,7 @@ export function tonStarten() {
 export function tonUmschalten() {
   stufe = STUFEN[(STUFEN.indexOf(stufe) + 1) % STUFEN.length];
   try { localStorage.setItem('zombies_lautstaerke', String(stufe)); localStorage.setItem('zombies_ton', stufe ? 'an' : 'aus'); } catch { /* egal */ }
-  if (haupt) haupt.gain.setTargetAtTime(pegel(), ctx.currentTime, 0.05);
+  pegelAnwenden();
   return stufe;
 }
 
@@ -248,7 +273,7 @@ export function lautstaerkeSetzen(v) {
   if (!STUFEN.includes(v)) return stufe;
   stufe = v;
   try { localStorage.setItem('zombies_lautstaerke', String(stufe)); localStorage.setItem('zombies_ton', stufe ? 'an' : 'aus'); } catch { /* egal */ }
-  if (haupt) haupt.gain.setTargetAtTime(pegel(), ctx.currentTime, 0.05);
+  pegelAnwenden();
   return stufe;
 }
 
@@ -336,6 +361,7 @@ export function stoss(x, y, messer) {
 }
 
 export function zombieWeg(x, y) {
+  if (!zombieTonAn) return;
   if (probe('zombieTod', x, y)) return;
   if (!abstandOk('zombieTod')) return; abstandMerken('zombieTod');
   const z = ort(x, y, 0.8); if (!z) return;
@@ -345,6 +371,7 @@ export function zombieWeg(x, y) {
 
 // Stöhnen: tiefe Sägezahnstimme mit Formantfilter und Zittern
 export function stoehnen(x, y, laut = 0.5, kriecht = false, pruefen = true) {
+  if (pruefen && !zombieTonAn) return;   // Zahnrad: Zombiegeräusche aus (entdeckt ruft mit pruefen=false)
   if (pruefen && !schreiErlaubt(x, y)) return;   // in der Horde: Einzelschreie seltener bzw. nur aus der Nähe
   if (probe(kriecht ? 'kriecher' : 'stoehnen', x, y, laut * 1.6)) return;
   if (!abstandOk('stoehnen')) return;
@@ -663,7 +690,7 @@ function stromStarten(datei, { loop = false, ziel, laut = 1, blende = 1, ende } 
 export function musikLage(lage) {
   if (!ctx) return;
   musikSt = musikSchritt(musikSt, { ...lage, horde: hordeSt.aktiv }, hatMusik, performance.now());
-  musikAnwenden(musikSt.aktuell);
+  musikAnwenden(musikAn ? musikSt.aktuell : null);
   musikLautstaerke();
 }
 function musikLautstaerke() {
@@ -713,19 +740,19 @@ function musikStueck(kat) {
 let musik = null;
 export function musikStarten() {
   tonStarten();
-  if (!ctx || musik) return;
+  if (!ctx || musik || !musikAn) return;
   const t = zuordnung.startmusik, liste = (t?.dateien ?? []).filter(d => !stromFehlt.has(d));
   if (!liste.length) return;
   audioFreischalten();
   if (!liste.some(geladen)) {
     const m = { strom: null };
-    m.strom = stromStarten(liste[Math.floor(Math.random() * liste.length)], { loop: true, ziel: haupt, laut: (t.laut ?? 55) / 100, blende: 2,
+    m.strom = stromStarten(liste[Math.floor(Math.random() * liste.length)], { loop: true, ziel: musikAusgang, laut: (t.laut ?? 55) / 100, blende: 2,
       ende: () => { if (musik === m) musik = null; } });   // gesperrt/Fehler: nächste Geste versucht es wieder
     if (m.strom) { musik = m; return; }
   }
   const buf = liste.map(geladen).filter(Boolean);
   if (!buf.length) { Promise.all(liste.map(laden)).then(() => { if (!musik && !musikAus) musikStarten(); }); return; }
-  const g = ctx.createGain(); g.gain.value = 0; g.connect(haupt);
+  const g = ctx.createGain(); g.gain.value = 0; g.connect(musikAusgang);
   const src = ctx.createBufferSource(); src.buffer = buf[Math.floor(Math.random() * buf.length)]; src.loop = true; src.connect(g); src.start();
   g.gain.setTargetAtTime((t.laut ?? 55) / 100, ctx.currentTime, 0.8);
   musik = { g, src };
