@@ -893,7 +893,7 @@ export function innenraumFuer(seed, welt, ebene) {
   const m = EBENE_MUSTER.exec(ebene ?? '');
   if (!m) return null;
   const nr = Number(m[1]), haus = welt.haeuser[nr];
-  if (INNEN_FEIN && haus) return innenraumFein(seed, welt, ebene, EBENE_MUSTER);   // maßstäbliche Innenräume (Läden, Wohnhäuser und Safe Rooms)
+  if (INNEN_FEIN && haus) { const f = innenraumFein(seed, welt, ebene, EBENE_MUSTER); if (f) return f; }   // maßstäbliche Innenräume (Läden, Wohnhäuser, Safe Rooms); sehr große oder verwinkelte Gebäude bleiben im groben Raster
   const kat = haus?.safe ? '' : ladenArt(haus);
   const w = baueInnenraum(seed, nr, m[2], seiteVon(haus), !!kat);
   if (kat) w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; });

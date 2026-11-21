@@ -65,13 +65,14 @@ function grundriss(haus) {
   }
   // Lage der Außentür im Raster (für die Wahl der Haustür-Stelle)
   const [tu, tv] = rot((haus.tuer.x + 0.5) * MPK, (haus.tuer.y + 0.5) * MPK);
-  return { GB, GH, mask, tuer: { x: Math.round((tu - u0) * ZM) + RAND, y: Math.round((tv - v0) * ZM) + RAND }, breiteM: (u1 - u0), hoeheM: (v1 - v0), abb: { c, s, u0, v0 } };
+  return { zuGross: (u1 - u0) * ZM > 400 || (v1 - v0) * ZM > 400, GB, GH, mask, tuer: { x: Math.round((tu - u0) * ZM) + RAND, y: Math.round((tv - v0) * ZM) + RAND }, breiteM: (u1 - u0), hoeheM: (v1 - v0), abb: { c, s, u0, v0 } };
 }
 
 // ---------- Generator ----------
 export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unten', safe = false) {
   const rng = zufall(seed ^ Math.imul(nr + 1, 7919) ^ (stock === 'eg' ? 0 : stock === 'keller' ? 0x51ed : 0xa77e) ^ 0x1f1e);
   const g = grundriss(haus), GB = g.GB, GH = g.GH;
+  if (g.zuGross) return null;   // über 100 m: passt nicht in das Raster (400 × 400 Zellen), das Haus bleibt im groben Raster
   const k = new Uint8Array(GB * GH).fill(T.LEER);
   const idx = (x, y) => y * GB + x;
   const hole = (x, y) => (x < 0 || y < 0 || x >= GB || y >= GH) ? T.LEER : k[y * GB + x];
@@ -147,6 +148,10 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
   };
   // Türen zwischen Nachbarzimmern (5 Zellen breit, in der 1-Zellen-Wand)
   const tueren = [], adj = raeume.map(() => []);
+  // Türen, Haustür und Treppen als Rechtecke (Zellen): „liegt etwas davon höchstens abst Zellen neben dem Rechteck x,y,b,h?“ (statt Zelle für Zelle zu suchen)
+  const sperrR = [];
+  const sperrRect = zellen => { let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1; for (const [x, y] of zellen) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } sperrR.push({ x0, y0, x1, y1 }); };
+  const naheSperr = (x, y, b, h, abst) => { for (const r of sperrR) if (r.x1 >= x - abst && r.x0 <= x + b + abst - 1 && r.y1 >= y - abst && r.y0 <= y + h + abst - 1) return true; return false; };
   const tuerSuche = (i, j) => {
     const a = raeume[i], b = raeume[j];
     let wand = null;
@@ -173,6 +178,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     for (let t = t0; t < t0 + TUER; t++) { const x = s.wand.vert ? s.wand.w : t, y = s.wand.vert ? t : s.wand.w; k[idx(x, y)] = T.INNENTUER; zellen.push([x, y]); }
     const m = zellen[Math.floor(TUER / 2)];
     tueren.push({ x: m[0], y: m[1], zellen, senkrecht: s.wand.vert, verschlossen: false });
+    sperrRect(zellen);
   };
   const besucht = new Set([0]), kanten = [], fifo = [0];
   for (let a = 0; a < fifo.length; a++) for (const { j, s } of adj[fifo[a]]) if (!besucht.has(j)) { besucht.add(j); kanten.push([fifo[a], j, s]); fifo.push(j); }
@@ -214,6 +220,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
       for (let a = a0; a < a0 + TUER; a++) for (let d = d0 - 1; d >= d0 - 2; d--) { const [x, y] = zelle(s, a, d); if (x >= 0 && y >= 0 && x < GB && y < GH && k[idx(x, y)] === T.LEER) k[idx(x, y)] = T.AUSGANG; }
       const [mx, my] = zelle(s, a0 + Math.floor(TUER / 2), d0 + AUSSEN - 1);
       const xs = zellen.map(c => c[0]), ys = zellen.map(c => c[1]), rx = Math.min(...xs), ry = Math.min(...ys);
+      sperrRect(zellen);
       ausgang = { x: mx, y: my, nach, zellen, seite: s, a0, d0, rect: { x: rx, y: ry, b: Math.max(...xs) - rx + 1, h: Math.max(...ys) - ry + 1 } };
       const [fx, fy] = zelle(s, a0 + Math.floor(TUER / 2), d0 + AUSSEN + 1);
       flurIndex = Math.max(0, raumAn(fx, fy));
@@ -235,40 +242,56 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
   else raeume.forEach((_, i) => { typ[i] = 'dachboden'; });
 
   // Türen zählen als offen (Zimmertüren lassen sich öffnen)
+  // (Summentabelle der gesperrten Zellen: „passt die Figur (4 × 4 Zellen) hierhin?“ in O(1); gleiches Ergebnis wie freiFigur, aber viel schneller)
   const erreichbar = (sx, sy) => {
-    const s = new Uint8Array(GB * GH), q = [idx(sx, sy)]; s[q[0]] = 1;
-    for (let a = 0; a < q.length; a++) {
-      const i = q[a], x = i % GB, y = (i - x) / GB;
-      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-        if (nx < 0 || ny < 0 || nx >= GB || ny >= GH) continue;
-        const j = idx(nx, ny); if (s[j] || !freiFigur(nx, ny)) continue;
-        s[j] = 1; q.push(j);
-      }
+    const W1 = GB + 1, S = new Int32Array(W1 * (GH + 1));
+    for (let y = 0; y < GH; y++) {
+      let zeile = 0;
+      for (let x = 0; x < GB; x++) { const t = k[y * GB + x]; if (t === T.WAND || t === T.MOEBEL || t === T.LEER) zeile++; S[(y + 1) * W1 + x + 1] = S[y * W1 + x + 1] + zeile; }
+    }
+    const passt = (cx, cy) => {
+      const x0 = cx - 1, y0 = cy - 1, x1 = cx + 2, y1 = cy + 2;
+      if (x0 < 0 || y0 < 0 || x1 >= GB || y1 >= GH) return false;
+      return S[(y1 + 1) * W1 + x1 + 1] - S[y0 * W1 + x1 + 1] - S[(y1 + 1) * W1 + x0] + S[y0 * W1 + x0] === 0;
+    };
+    const s = new Uint8Array(GB * GH), q = new Int32Array(GB * GH), s0 = idx(sx, sy);
+    let kopf = 0, ende = 0; s[s0] = 1; q[ende++] = s0;
+    while (kopf < ende) {
+      const i = q[kopf++], x = i % GB, y = (i - x) / GB;
+      if (x + 1 < GB && !s[i + 1] && passt(x + 1, y)) { s[i + 1] = 1; q[ende++] = i + 1; }
+      if (x > 0 && !s[i - 1] && passt(x - 1, y)) { s[i - 1] = 1; q[ende++] = i - 1; }
+      if (y + 1 < GH && !s[i + GB] && passt(x, y + 1)) { s[i + GB] = 1; q[ende++] = i + GB; }
+      if (y > 0 && !s[i - GB] && passt(x, y - 1)) { s[i - GB] = 1; q[ende++] = i - GB; }
     }
     return s;
   };
 
   // Treppen: 4 × 12 Zellen (1 × 3 m) längs einer Wand
   const treppen = [];
-  const treppeSetzen = (art, ziel, raumIdx) => {
+  const treppeSetzen = (art, ziel, raumIdx, streng = true) => {   // streng = false: Notlösung (Treppe auch frei im Raum, kürzer), damit Keller und Dachboden immer einen Rückweg haben
     const kand = [];
+    // Summentabelle der Nicht-Boden-Zellen: „ist das Rechteck reiner Boden?“ in O(1)
+    const W1 = GB + 1, S = new Int32Array(W1 * (GH + 1));
+    for (let y = 0; y < GH; y++) { let zeile = 0; for (let x = 0; x < GB; x++) { if (k[y * GB + x] !== T.BODEN) zeile++; S[(y + 1) * W1 + x + 1] = S[y * W1 + x + 1] + zeile; } }
+    const nurBoden = (x, y, b, h) => S[(y + h) * W1 + x + b] - S[y * W1 + x + b] - S[(y + h) * W1 + x] + S[y * W1 + x] === 0;
     for (const ri of raumIdx) {
       const r = raeume[ri];
-      for (const [b, h] of [[TUER - 1, 12], [12, TUER - 1]]) {
+      for (const [b, h] of streng ? [[TUER - 1, 12], [12, TUER - 1]] : [[TUER - 1, 8], [8, TUER - 1]]) {
+        const lang = b > h;   // eine lange Seite an der Wand
         for (let y = r.y; y <= r.y + r.h - h; y++) for (let x = r.x; x <= r.x + r.b - b; x++) {
-          let gut = true;
-          for (let dy = 0; dy < h && gut; dy++) for (let dx = 0; dx < b; dx++) if (k[idx(x + dx, y + dy)] !== T.BODEN) { gut = false; break; }
-          if (!gut) continue;
-          // eine lange Seite an der Wand
-          const lang = b > h;
-          const wandSeite = lang
-            ? [...Array(b).keys()].every(dx => k[idx(x + dx, y - 1)] === T.WAND) || [...Array(b).keys()].every(dx => k[idx(x + dx, y + h)] === T.WAND)
-            : [...Array(h).keys()].every(dy => k[idx(x - 1, y + dy)] === T.WAND) || [...Array(h).keys()].every(dy => k[idx(x + b, y + dy)] === T.WAND);
-          if (!wandSeite) continue;
-          // nicht an Türen (Abstand ≥ 4 Zellen)
-          let nah = false;
-          for (let dy = -4; dy < h + 4 && !nah; dy++) for (let dx = -4; dx < b + 4; dx++) { const t = hole(x + dx, y + dy); if (t === T.INNENTUER || t === T.AUSGANG || t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH) { nah = true; break; } }
-          if (!nah) kand.push({ x, y, b, h });
+          if (!nurBoden(x, y, b, h)) continue;
+          if (naheSperr(x, y, b, h, streng ? 4 : 1)) continue;   // nicht an Türen (Abstand ≥ 4 Zellen)
+          let wand = !streng;
+          if (!streng) { /* ohne Wandbindung */ } else if (lang) {
+            let o = true, u = true;
+            for (let i = 0; i < b && (o || u); i++) { if (k[idx(x + i, y - 1)] !== T.WAND) o = false; if (k[idx(x + i, y + h)] !== T.WAND) u = false; }
+            wand = o || u;
+          } else {
+            let l = true, rr = true;
+            for (let i = 0; i < h && (l || rr); i++) { if (k[idx(x - 1, y + i)] !== T.WAND) l = false; if (k[idx(x + b, y + i)] !== T.WAND) rr = false; }
+            wand = l || rr;
+          }
+          if (wand) kand.push({ x, y, b, h });
         }
       }
     }
@@ -276,6 +299,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     const p = kand[Math.floor(rng() * kand.length)], zellen = [];
     for (let dy = 0; dy < p.h; dy++) for (let dx = 0; dx < p.b; dx++) { k[idx(p.x + dx, p.y + dy)] = art === 'runter' ? T.TREPPE_RUNTER : T.TREPPE_HOCH; zellen.push([p.x + dx, p.y + dy]); }
     treppen.push({ x: p.x, y: p.y, art, ziel, zellen, rect: p });
+    sperrRect(zellen);
     return true;
   };
   let hatKeller = false, hatDach = false;
@@ -286,8 +310,8 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     hatKeller = rng() < 0.5; hatDach = rng() < 0.4;
     if (hatKeller && !treppeSetzen('runter', 'keller', nahFlur) && !treppeSetzen('runter', 'keller', alleRaeume)) hatKeller = false;
     if (hatDach && !treppeSetzen('hoch', 'dach', nahFlur) && !treppeSetzen('hoch', 'dach', alleRaeume)) hatDach = false;
-  } else if (stock === 'keller') treppeSetzen('hoch', 'eg', alleRaeume);
-  else treppeSetzen('runter', 'eg', alleRaeume);
+  } else if (stock === 'keller') { if (!treppeSetzen('hoch', 'eg', alleRaeume)) treppeSetzen('hoch', 'eg', alleRaeume, false); }
+  else if (!treppeSetzen('runter', 'eg', alleRaeume)) treppeSetzen('runter', 'eg', alleRaeume, false);
 
   // Start
   let start = null;
@@ -306,16 +330,24 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
   start ??= zentrum(ix0 + 1, iy0 + 1);
   const startZ = [Math.floor(start.x / INNEN_Z), Math.floor(start.y / INNEN_Z)];
 
+  // Plausibilität (vor der Einrichtung, deshalb billig): Start, Haustür, alle Zimmertüren und Treppen müssen für die Figur vom Start aus erreichbar sein;
+  // Keller und Dachboden brauchen eine Treppe zurück. Sonst (sehr verwinkelte Umrisse) bleibt das Haus im groben Raster (Rückgabe null, siehe innenraumFein).
+  {
+    const fl = erreichbar(startZ[0], startZ[1]);
+    const erreicht = zellen => zellen.some(([zx, zy]) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => fl[idx(zx + a, zy + c)]));
+    let ok = freiFigur(startZ[0], startZ[1]);
+    if (ok && stock === 'eg' && !ausgang) ok = false;
+    if (ok && ausgang && !erreicht(ausgang.zellen)) ok = false;
+    if (ok) for (const t of tueren) if (!erreicht(t.zellen)) { ok = false; break; }
+    if (ok) for (const t of treppen) if (!erreicht(t.zellen)) { ok = false; break; }
+    if (ok && stock !== 'eg' && !treppen.length) ok = false;
+    if (!ok) return null;
+  }
+
   // ---------- Möbel ----------
   const moebel = [], behaelter = [], zaehler = { n: 0 };
   const freiVon = (x, y, b, h) => { for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < b; dx++) if (k[idx(x + dx, y + dy)] !== T.BODEN) return false; return true; };
-  const nahTuer = (x, y, b, h, abst) => {
-    for (let dy = -abst; dy < h + abst; dy++) for (let dx = -abst; dx < b + abst; dx++) {
-      const t = hole(x + dx, y + dy);
-      if (t === T.INNENTUER || t === T.AUSGANG || t === T.TREPPE_RUNTER || t === T.TREPPE_HOCH || t === T.TUER_OFFEN) return true;
-    }
-    return false;
-  };
+  const nahTuer = (x, y, b, h, abst) => naheSperr(x, y, b, h, abst);
   const nachbar = (x, y, b, h, was) => {   // an den vier Seiten: Anzahl Zellen der Art `was`
     const r = { oben: 0, unten: 0, links: 0, rechts: 0 };
     for (let i = 0; i < b; i++) { if (hole(x + i, y - 1) === was) r.oben++; if (hole(x + i, y + h) === was) r.unten++; }
@@ -457,6 +489,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     // ohne Kiste ist der Safe Room unbrauchbar: notfalls ein beliebiger freier Platz an der Wand
     if (mk) kiste = { x: (mk.x + mk.b / 2) * INNEN_Z, y: (mk.y + mk.h / 2) * INNEN_Z };
     if (mc) kuehlschrank = { x: (mc.x + mc.b / 2) * INNEN_Z, y: (mc.y + mc.h / 2) * INNEN_Z };
+    if (!kiste) return null;   // ohne Vorratskiste ist der Safe Room unbrauchbar: im groben Raster bauen
   }
 
   // Behälter nur halten, wenn sie nicht zu viele Läden-Regale sind (höchstens 10 Ladenbehälter, gleichmäßig gewählt)
@@ -503,14 +536,41 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
   };
 }
 
-// Einstieg wie innenraumFuer(): Läden mit Verkaufsraum, Haus ohne Umriss aus dem Hausrechteck
+// Entscheidung je Haus (fein oder grob), damit alle Stockwerke eines Hauses im selben Raster liegen: Erdgeschoss, und wenn es Treppen nach unten/oben hat,
+// auch Keller und Dachboden müssen sich bauen lassen (Größe, Erreichbarkeit). Gleiche Entscheidung auf Server und Client (alles deterministisch).
+const ENTSCHEIDUNG = new WeakMap();
+function bauen(seed, nr, stock, haus) {
+  const safe = !!haus.safe, kat = safe ? '' : ladenArt(haus);
+  return baueInnenFein(seed, nr, safe ? 'eg' : stock, haus, !!kat, seiteVon(haus), safe);
+}
+function feinMoeglich(seed, welt, nr, haus) {
+  let m = ENTSCHEIDUNG.get(welt);
+  if (!m) ENTSCHEIDUNG.set(welt, m = new Map());
+  const key = seed + ':' + nr;
+  if (m.has(key)) return m.get(key);
+  let ok = false;
+  const eg = bauen(seed, nr, 'eg', haus);
+  if (eg) {
+    ok = true;
+    if (!haus.safe) for (const [st, hat] of [['keller', eg.hatKeller], ['dach', eg.hatDach]]) if (hat && !bauen(seed, nr, st, haus)) { ok = false; break; }
+  }
+  const e = { ok, eg: ok ? eg : null };   // das gebaute Erdgeschoss wird beim ersten Abruf wiederverwendet (kein zweites Bauen)
+  m.set(key, e);
+  return e;
+}
+
+// Einstieg wie innenraumFuer(): Läden mit Verkaufsraum, Haus ohne Umriss aus dem Hausrechteck; null = dieses Haus bleibt im groben Raster
 export function innenraumFein(seed, welt, ebene, muster) {
   const m = muster.exec(ebene ?? '');
   if (!m) return null;
   const nr = Number(m[1]), haus = welt.haeuser[nr];
   if (!haus) return null;
+  const e = feinMoeglich(seed, welt, nr, haus);
+  if (!e.ok) return null;
   const safe = !!haus.safe, kat = safe ? '' : ladenArt(haus);
-  const w = baueInnenFein(seed, nr, safe ? 'eg' : m[2], haus, !!kat, seiteVon(haus), safe);
+  let w;
+  if (m[2] === 'eg' && e.eg) { w = e.eg; e.eg = null; } else w = bauen(seed, nr, m[2], haus);
+  if (!w) return null;
   if (kat) { w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; }); w.moebel.forEach(q => { if (q.art === 'regal_lang') q.kat = kat; }); w.laden = kat; }
   w.ebene = ebene; w.nr = nr; w.stock = m[2];
   w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));

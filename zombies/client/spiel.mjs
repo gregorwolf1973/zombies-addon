@@ -2,7 +2,7 @@
 import { fzPx } from './masse.mjs';
 import { groesse } from './groessen.mjs';
 import {
-  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, INNEN_FEIN, INNEN_TEMPO, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
+  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, INNEN_FEIN, INNEN_TEMPO, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
@@ -2296,14 +2296,14 @@ class Ort extends Phaser.Scene {
       } else if (neu) {
         // flüssig animierte Zombies (Riley Gombart): Laufen, Angriff, Stehen
         let nah = false;
-        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < W.spielerRadius + W.zombieRadius + 16) { nah = true; break; }
+        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < (W.spielerRadius + W.zombieRadius + 16) * (this.feinInnen() ? INNEN_REICH : 1)) { nah = true; break; }
         const art = nah ? 'angriff' : bildNr < 0 ? 'stehen' : 'laufen';
         const i = art === 'laufen' ? Math.floor((f.lauf ?? 0) / 6) : Math.floor(this.time.now / (art === 'angriff' ? 70 : 140));
         f.bild.setFrame(this.figurBild2(`${typ}_${art}`, i)).setRotation(0).setScale(BOGEN2_GROESSE * zf * groesse('figuren2', typ + '_laufen'));
       } else {
         // Angriff: beim Zubeißen das Bild mit offenem Mund (wo vorhanden)
         let nah = false;
-        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < W.spielerRadius + W.zombieRadius + 16) { nah = true; break; }
+        if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < (W.spielerRadius + W.zombieRadius + 16) * (this.feinInnen() ? INNEN_REICH : 1)) { nah = true; break; }
         const angriff = nah && this.figurListe['zombie_' + typ + '_angriff'];
         f.bild.setFrame(angriff ? angriff[0] : this.figurBild('zombie_' + typ, bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 11)));
         // schlurfen: leicht wanken
@@ -3220,7 +3220,7 @@ class Ort extends Phaser.Scene {
     const l = this.letzterOrt ?? this.lokal;
     this.schrittWeg = (this.schrittWeg ?? 0) + Math.hypot(this.lokal.x - l.x, this.lokal.y - l.y);
     this.letzterOrt = { x: this.lokal.x, y: this.lokal.y };
-    if (this.schrittWeg > 46) { this.schrittWeg = 0; ton.schritt(!!this.aktEbene); }
+    if (this.schrittWeg > (this.feinInnen() ? 46 * INNEN_FIGUR : 46)) { this.schrittWeg = 0; ton.schritt(!!this.aktEbene); }
     if (this.altHp != null && ich.hp < this.altHp - 2) ton.biss();
     // Wassermangel: alle ~25 s ein trockenes Husten mit Tropfen, solange Durst unter der Schwelle (nicht im Hintergrund)
     if (ich.durst < 20 && ich.hp > 0 && !document.hidden) {

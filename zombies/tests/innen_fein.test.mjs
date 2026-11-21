@@ -85,3 +85,66 @@ test('Grundriss entspricht dem OSM-Umriss (Innenmaß ≈ Umrissfläche abzüglic
     assert.equal(kachelVon(w), 2);
   }
 });
+
+test('Safe Rooms im Feinraster: Vorratskiste, Kühlschrank, Funktisch, Feldbetten, alles offen, keine Treppen; Kiste und Kühlschrank erreichbar', () => {
+  const safes = welt.haeuser.filter(h => h.betretbar && h.safe);
+  assert.ok(safes.length >= 3);
+  for (const h of safes) {
+    const w = innenraumFuer(3, welt, `h${h.nr}eg`), info = `${h.safe} (h${h.nr})`;
+    assert.equal(w.kachel, 2, info);
+    assert.equal(w.safe, h.safeId); assert.equal(w.safeName, h.safe);
+    assert.ok(w.kiste && w.kuehlschrank, info + ': Kiste/Kühlschrank');
+    for (const art of ['funktisch', 'vorratskiste', 'safe_kuehlschrank', 'erstehilfe', 'generator']) assert.ok(w.moebel.some(m => m.art === art), `${info}: ${art} fehlt`);
+    assert.ok(w.moebel.filter(m => m.art === 'feldbett').length >= 2, info + ': Feldbetten');
+    assert.equal(w.treppen.length, 0); assert.equal(w.hatKeller, false); assert.equal(w.hatDach, false);
+    assert.ok(w.tueren.every(t => !t.verschlossen && t.offen === true));
+    assert.equal(w.zombiePlaetze.length, 0);
+    const s = erreichbar(w), B = w.breite;
+    for (const ziel of [w.kiste, w.kuehlschrank]) assert.ok(nahe(s, B, Math.floor(ziel.x / 2), Math.floor(ziel.y / 2), 6), info + ': nicht erreichbar');
+    assert.ok(w.ausgang.zellen.some(([x, y]) => nahe(s, B, x, y, 3)));
+    for (const b of w.behaelter) assert.ok(['vorratsregal', 'erstehilfe'].includes(b.art), info + ': Behälterart ' + b.art);
+  }
+});
+
+test('Missionsort auf der Karte: Behälter liegt exakt im Gebäudeumriss (Umkehrung der Ausrichtung)', async () => {
+  const { behaelterAufKarte } = await import('../server/mission.mjs');
+  let geprueft = 0;
+  for (const h of wohn.concat(laeden).slice(0, 40)) {
+    const w = innenraumFuer(5, welt, `h${h.nr}eg`);
+    if (!w.behaelter.length || !h.umriss) continue;
+    for (const b of w.behaelter.slice(0, 4)) {
+      const [px, py] = behaelterAufKarte(5, welt, h.nr, b), x = px / 32, y = py / 32, p = h.umriss;
+      let drin = false;
+      for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) if ((p[i + 1] > y) !== (p[j + 1] > y) && x < (p[j] - p[i]) * (y - p[i + 1]) / (p[j + 1] - p[i + 1]) + p[i]) drin = !drin;
+      assert.ok(drin, `Haus ${h.nr}: Behälter ${b.id} bei ${x.toFixed(1)},${y.toFixed(1)} liegt außerhalb des Umrisses`);
+      geprueft++;
+    }
+  }
+  assert.ok(geprueft > 30);
+});
+
+test('Plausibilitätsprüfung: fast alle Häuser maßstäblich, der Rest (zu groß/verwinkelt) im groben Raster; Stockwerke eines Hauses gleich', () => {
+  let fein = 0, gesamt = 0;
+  for (const h of welt.haeuser.filter(h => h.betretbar)) {
+    const eg = innenraumFuer(2, welt, `h${h.nr}eg`);
+    gesamt++;
+    if (eg.kachel) fein++;
+    for (const st of ['keller', 'dach']) {
+      if (st === 'keller' ? !eg.hatKeller : !eg.hatDach) continue;
+      const w = innenraumFuer(2, welt, `h${h.nr}${st}`);
+      assert.equal(!!w.kachel, !!eg.kachel, `Haus ${h.nr}: ${st} im anderen Raster als das Erdgeschoss`);
+      assert.ok(w.treppen.length >= 1, `Haus ${h.nr}: ${st} ohne Treppe zurück`);
+    }
+  }
+  assert.ok(fein / gesamt > 0.95, `nur ${fein}/${gesamt} maßstäblich`);
+});
+
+test('Außerhalb des Schalters bleibt alles beim Alten: ohne Schalter kein kachel-Feld, Fingerabdruck wie ohne Innenräume', () => {
+  setzeInnenFein(false);
+  try {
+    const h = welt.haeuser.find(h => h.betretbar && !h.safe);
+    const w = innenraumFuer(3, welt, `h${h.nr}eg`);
+    assert.equal(w.kachel, undefined); assert.equal(w.tempo, undefined); assert.equal(w.reich, undefined);
+    assert.equal(weltFingerabdruck(welt), fpAus);
+  } finally { setzeInnenFein(true); }
+});
