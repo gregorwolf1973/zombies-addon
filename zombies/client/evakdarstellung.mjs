@@ -32,11 +32,11 @@ export function evakFahrzeugBild(scene, s) {
 
 // Zusatzteile und Bewegung des Evakuierungsfahrzeugs (Container o: box, bild, licht; Rotation des Containers = Fahrzeugrichtung).
 // Liefert true, wenn die Darstellung hier vollständig ist (Panzer/Flugzeug), false beim Bus (Rundumleuchte macht spiel.mjs).
-export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene) {
+export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene, skalaSoldat = 0.3) {
   const art = evakArtVon(s), jetzt = scene.time.now;
   const panzer = art === 'panzer' && scene.textures.exists('leopard-wanne'), flug = art === 'flugzeug' && scene.textures.exists('a400m-rumpf');
   // nicht mehr gebrauchte Teile (Art gewechselt) entfernen
-  if (!panzer && o.turm) { o.turm.destroy(); o.turm = null; }
+  if (!panzer && o.turm) { o.turm.destroy(); o.turm = null; for (const q of [o.kdt, o.lader]) q?.destroy(); o.kdt = o.lader = null; }
   if (!flug && o.tank) { o.tank.destroy(); o.tank = null; }
   if (!flug && o.props) { for (const p of o.props) p.destroy(); o.props = null; }
   if (!panzer && !flug) { o.bild.setScale(1); if (o.kette) { ton.sireneStoppen(o.kette); o.kette = null; } return false; }
@@ -45,12 +45,20 @@ export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene) {
     o.bild.setScale(LEOPARD.skala);
     if (!o.turm) {
       o.turm = scene.add.image(LEOPARD.turmX, LEOPARD.turmY, 'leopard-turm').setOrigin(LEOPARD.turmOx, LEOPARD.turmOy).setScale(LEOPARD.skala);
-      o.box.addAt(o.turm, 1); o.turmW = o.r;
+      o.box.addAt(o.turm, 1); o.turmW = Number.isFinite(f.turm) ? f.turm : o.r;
+      // Kommandant und Ladeschütze schauen aus den Luken (drehen mit dem Turm), kleiner als normale Figuren
+      const soldat = () => scene.add.image(0, 0, 'figuren2', scene.figurBild2('soldat_idle')).setScale(skalaSoldat * 0.8);
+      o.kdt = soldat(); o.lader = soldat(); o.box.addAt(o.kdt, 2); o.box.addAt(o.lader, 3);
     }
-    // Turm dreht zum Ziel (zuletzt geschossen), danach zurück nach vorn
-    const ziel = jetzt < (o.turmBis ?? 0) ? o.turmZiel : o.r;
-    o.turmW += winkelDiff(o.turmW, ziel) * Math.min(1, dt * 6);
-    o.turm.setRotation(o.turmW - o.r);
+    // Turmwinkel kommt vom Server (dreht dort gleichmäßig, ca. 40 °/s); hier wird nur geglättet
+    o.turmW += winkelDiff(o.turmW, Number.isFinite(f.turm) ? f.turm : o.r) * Math.min(1, dt * 12);
+    const loc = o.turmW - o.r, lc = Math.cos(loc), ls = Math.sin(loc);
+    o.rueck = Math.max(0, (o.rueck ?? 0) - dt * 2.2);                        // Rückstoß der Hauptkanone: Turm rutscht zurück und kehrt wieder
+    const rueck = o.rueck * 7;
+    o.turm.setRotation(loc).setPosition(LEOPARD.turmX - lc * rueck, LEOPARD.turmY - ls * rueck);
+    const luke = (q, vx, vy) => q.setPosition(LEOPARD.turmX + lc * vx - ls * vy - lc * rueck, LEOPARD.turmY + ls * vx + lc * vy - ls * rueck).setRotation(loc);
+    luke(o.kdt, LEOPARD.kommandantX, LEOPARD.kommandantY).setFrame(scene.figurBild2('soldat_idle', Math.floor(jetzt / 300) % 3));
+    luke(o.lader, LEOPARD.mgX, LEOPARD.mgY).setFrame(jetzt < (o.mgBis ?? 0) ? scene.figurBild2('soldat_schuss', Math.floor(jetzt / 70)) : scene.figurBild2('soldat_idle', Math.floor(jetzt / 260 + 1) % 3));
     // orangene Rundumleuchte hinten auf dem Wannendeck (Erkennungszeichen des Evakuierungsfahrzeugs)
     const an = Math.floor(jetzt / 260) % 2;
     o.licht.fillStyle(0xff9100, an ? 0.28 : 0.1).fillCircle(-46, 0, an ? 17 : 11);
@@ -100,11 +108,11 @@ export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene) {
   return true;
 }
 
-// Schuss des Lader-MGs: Turm zum Ziel drehen, Leuchtspur und Mündungsblitz am MG, Ton wie bei den MG-Nestern
+// Schuss des Lader-MGs (Turm dreht der Server): Ladeschütze schießt, Leuchtspur und Mündungsblitz am MG, Ton wie bei den MG-Nestern
 export function leopardSchuss(scene, m, s) {
   const id = s ? [...(s.fahrzeuge?.entries() ?? [])].find(([, v]) => v.art === 'evakuierung')?.[0] : null;
   const o = id ? scene.busObj.get(id) : null;
-  if (o) { o.turmZiel = m.tw; o.turmBis = scene.time.now + 2200; }
+  if (o) o.mgBis = scene.time.now + 260;   // Ladeschütze zeigt soldat_schuss
   const w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), mx = m.x1 + Math.cos(w) * 4, my = m.y1 + Math.sin(w) * 4;
   const g = scene.add.graphics().setDepth(7), l1 = Math.min(1, 70 / Math.max(1, Math.hypot(m.x2 - mx, m.y2 - my)));
   g.lineStyle(2, 0xffee58, 1).lineBetween(mx, my, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
@@ -115,6 +123,25 @@ export function leopardSchuss(scene, m, s) {
   if (m.t) fetzen(scene, m.x2, m.y2, w, 0.8);
   const jetzt = performance.now();
   if (jetzt - (scene.letzterBwKnall ?? 0) > 70) { scene.letzterBwKnall = jetzt; ton.schuss(m.x1, m.y1, 1.4, 'gewehr'); }
+}
+
+// Schuss der Hauptkanone: großes Mündungsfeuer am Rohrende, Rauch, Rückstoß, Knall; der Einschlag kommt als 'explosion'
+export function leopardKanone(scene, m, s) {
+  const id = s ? [...(s.fahrzeuge?.entries() ?? [])].find(([, v]) => v.art === 'evakuierung')?.[0] : null;
+  const o = id ? scene.busObj.get(id) : null;
+  if (o) o.rueck = 1;
+  const w = m.w, c = Math.cos(w), sn = Math.sin(w);
+  const blitz = scene.add.image(m.x1, m.y1, 'figuren2', scene.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(w).setScale(1.9).setDepth(7);
+  scene.tweens.add({ targets: blitz, alpha: 0, scale: 2.8, duration: 220, onComplete: () => blitz.destroy() });
+  for (let i = 0; i < 12; i++) {
+    const r = scene.add.circle(m.x1 + c * Math.random() * 14, m.y1 + sn * Math.random() * 14, 6 + Math.random() * 6, 0xbdbdbd, 0.6).setDepth(6.5);
+    scene.tweens.add({ targets: r, x: r.x + c * (14 + Math.random() * 40) + (Math.random() - 0.5) * 22, y: r.y + sn * (14 + Math.random() * 40) + (Math.random() - 0.5) * 22, alpha: 0, scale: 2.6, duration: 1000, onComplete: () => r.destroy() });
+  }
+  const g = scene.add.graphics().setDepth(7);   // Leuchtspur der Granate
+  g.lineStyle(3, 0xffcc80, 1).lineBetween(m.x1, m.y1, m.x2, m.y2);
+  scene.tweens.add({ targets: g, alpha: 0, duration: 140, onComplete: () => g.destroy() });
+  if (scene.lokal && Math.hypot(scene.lokal.x - m.x1, scene.lokal.y - m.y1) < 700) scene.cameras.main.shake(180, 0.006);
+  ton.kanone(m.x1, m.y1);
 }
 
 // Zombie unter den Ketten: dunkler Fleck und Fetzen

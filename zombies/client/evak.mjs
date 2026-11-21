@@ -9,6 +9,8 @@ export const LEOPARD = {
   laenge: 113, breite: 56, skala: 0.5527,                  // Wannenbild: Spielpixel je Bildpunkt
   turmX: 14.9, turmY: 0, turmOx: 0.392, turmOy: 0.490,     // Drehpunkt im Turmbild (Anteile)
   mgX: -7.6, mgY: -13.7,
+  kommandantX: -1, kommandantY: 11,                        // Lukenplätze im Turm-Rahmen: Kommandant rechts hinten, Ladeschütze (mit MG) links
+  muendung: 89,                                            // Rohrende: so weit vor dem Turmdrehpunkt (Turmbild 265 px, Drehpunkt bei 39 %)
 };
 
 // A400M: 45 m lang, 42 m Spannweite (Bild: tools/a400m_bilder.py, 800 Spielpixel je Modelleinheit, Rumpfbild 544×506 px)

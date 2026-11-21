@@ -867,6 +867,12 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <label for="tnLeoSchaden">Leopard-MG: Schaden je Treffer</label>
   <div class="tn-zeile"><input type="range" id="tnLeoSchaden" min="1" max="500" step="1"><span id="tnLeoSchadenWert">100</span></div>
   <label class="tn-schalter"><input type="checkbox" id="tnLeoUeberroll"> Leopard überrollt Zombies beim Fahren (Spieler nie – er hält vor ihnen an)</label>
+  <label class="tn-schalter"><input type="checkbox" id="tnLeoKanone"> Leopard-Hauptkanone: schießt auf Zombiehaufen (Spieler und Menschen nie in Gefahr)</label>
+  <label for="tnLeoKanonePause">Leopard-Kanone: Pause zwischen zwei Schüssen</label>
+  <div class="tn-zeile"><input type="range" id="tnLeoKanonePause" min="3" max="120" step="1"><span id="tnLeoKanonePauseWert">8 s</span></div>
+  <label for="tnLeoKanoneMin">Leopard-Kanone: Zombies auf einem Fleck (6 m Durchmesser)</label>
+  <div class="tn-zeile"><input type="range" id="tnLeoKanoneMin" min="3" max="50" step="1"><span id="tnLeoKanoneMinWert">10</span></div>
+  <p class="tn-leise">Der Turm dreht gleichmäßig (ca. 40 °/s) und feuert erst, wenn das Rohr auf dem Ziel steht. Kanone: Reichweite 15–60 m, Explosion 5 m Radius.</p>
   <p class="tn-leise" id="bwInfoLeo"></p>
   <label class="tn-schalter"><input type="checkbox" id="tnMoTest"> Test: Panzermörser (M113 mit Soldat) neben den Start stellen (Vorgabe: aus)</label>
   <label for="tnMoMin">Mörser: Mindestreichweite</label>
@@ -1007,6 +1013,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     feld('tnLeoPause', bwe.leopardPause === undefined ? 0.4 : bwe.leopardPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnLeoSchaden', bwe.leopardSchaden === undefined ? 100 : bwe.leopardSchaden, function (v) { return String(v); });
     if (document.activeElement !== $('tnLeoUeberroll')) $('tnLeoUeberroll').checked = bwe.leopardUeberrollen !== false;
+    if (document.activeElement !== $('tnLeoKanone')) $('tnLeoKanone').checked = bwe.leopardKanone !== false;
+    feld('tnLeoKanonePause', bwe.leopardKanonePause === undefined ? 8 : bwe.leopardKanonePause, function (v) { return v + ' s'; });
+    feld('tnLeoKanoneMin', bwe.leopardKanoneMin === undefined ? 10 : bwe.leopardKanoneMin, function (v) { return String(v); });
     feld('tnMgMunition', bwe.mgMunition === undefined ? 400 : bwe.mgMunition, function (v) { return v ? String(v) : 'unbegrenzt'; });
     feld('tnPumaMunition', bwe.pumaMunition === undefined ? 200 : bwe.pumaMunition, function (v) { return v ? String(v) : 'unbegrenzt'; });
     feld('tnBwTage', bwe.falltage === undefined ? 3 : bwe.falltage, function (v) { return v ? v + (v === 1 ? ' Tag' : ' Tage') : 'nie'; });
@@ -1103,6 +1112,11 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   regler('tnLeoReich', function (v) { return v + ' m'; }, function (v) { return { bundeswehr: { leopardReichweite: v } }; });
   regler('tnLeoPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { leopardPause: v } }; });
   regler('tnLeoSchaden', function (v) { return String(v); }, function (v) { return { bundeswehr: { leopardSchaden: v } }; });
+  regler('tnLeoKanonePause', function (v) { return v + ' s'; }, function (v) { return { bundeswehr: { leopardKanonePause: v } }; });
+  regler('tnLeoKanoneMin', function (v) { return String(v); }, function (v) { return { bundeswehr: { leopardKanoneMin: v } }; });
+  $('tnLeoKanone').addEventListener('change', function () {
+    anfrage('verwaltung/api', { bundeswehr: { leopardKanone: $('tnLeoKanone').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
   $('tnLeoUeberroll').addEventListener('change', function () {
     anfrage('verwaltung/api', { bundeswehr: { leopardUeberrollen: $('tnLeoUeberroll').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
@@ -3006,10 +3020,10 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     var bw = unter('🎖 Bundeswehr, Panzer, Mörser');
     schalter(bw.inhalt, 'tnBwAktiv');
     zeile(bw.inhalt, 'tnBwTage'); zeile(bw.inhalt, 'tnPumaPause'); zeile(bw.inhalt, 'tnMgMunition'); zeile(bw.inhalt, 'tnPumaMunition'); rein(bw.inhalt, $('bwInfoPuma'));
-    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden'].forEach(function (id) { zeile(bw.inhalt, id); });
+    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden', 'tnLeoKanonePause', 'tnLeoKanoneMin'].forEach(function (id) { zeile(bw.inhalt, id); });
     schalter(bw.inhalt, 'tnMoTest');
     ['tnMoMin', 'tnMoMax', 'tnMoPause', 'tnMoSchaden', 'tnMoRadius', 'tnMoMind', 'tnMoSicher', 'tnMoTempo'].forEach(function (id) { zeile(bw.inhalt, id); });
-    rein(bw.inhalt, $('bwInfoMo')); schalter(bw.inhalt, 'tnLeoUeberroll'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
+    rein(bw.inhalt, $('bwInfoMo')); schalter(bw.inhalt, 'tnLeoUeberroll'); schalter(bw.inhalt, 'tnLeoKanone'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
     gruppe(bw);
   }
   gruppe(ausKarte(karteVon('titelFunde'), '🎒 Fundhäufigkeit'));
@@ -3027,7 +3041,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrPhase: 'verkehrPhase', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
-    tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden',
+    tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin',
     tnMoMin: 'moerser.reichweiteMin', tnMoMax: 'moerser.reichweiteMax', tnMoPause: 'moerser.pause', tnMoSchaden: 'moerser.schaden', tnMoRadius: 'moerser.radius', tnMoMind: 'moerser.mindestZombies', tnMoSicher: 'moerser.sicherheit', tnMoTempo: 'moerser.tempo',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
     agStunde: 'aufgaben.stunde', agWarteEcht: 'aufgaben.wartenEchtMin', agWarte: 'aufgaben.wartezeit', agFinale: 'aufgaben.finaleMinuten', agAnzahl: 'aufgaben.anzahl', fkFaktor: 'faehigkeiten.xpFaktor',

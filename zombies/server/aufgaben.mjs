@@ -6,6 +6,7 @@ import { flach, hat, indexVon, zaehle as zaehleStapel } from '../client/stapel.m
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei } from '../client/welt.mjs';
 import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
+import { Leopard, leopardEinst } from './leopard.mjs';
 import { querfeldPlan } from './querfeld.mjs';
 import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplatz.mjs';
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
@@ -129,7 +130,7 @@ export class Aufgaben {
 
   einst() { return { an: false, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, ...(this.raum.einstellungen?.()?.aufgaben ?? {}) }; }
   an() { return !!this.einst().an; }
-  bw() { return { leopardReichweite: 29, leopardPause: EVAK_PAUSE, leopardSchaden: 100, leopardUeberrollen: true, ...(this.raum.einstellungen?.()?.bundeswehr ?? {}) }; }
+  bw() { return { leopardReichweite: 29, leopardPause: EVAK_PAUSE, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, ...(this.raum.einstellungen?.()?.bundeswehr ?? {}) }; }
 
   // Evakuierungsart dieser Karte; die Einstellung aufgaben.evakArt erzwingt eine Art zum Ausprobieren.
   // Flugzeug braucht einen Landestreifen und einen Hubschrauberplatz in der Welt, sonst Bus.
@@ -479,40 +480,35 @@ export class Aufgaben {
     if (!f) return;
     const art = this.fz().art;
     if (art === 'flugzeug') return;
-    const bw = this.bw(), panzer = art === 'panzer';
-    if (panzer && bw.leopardUeberrollen) this.ueberrollen(f, dt);
+    const bw = this.bw();
+    if (art === 'panzer') {   // Leopard: Turm, Lader-MG und Hauptkanone (server/leopard.mjs)
+      if (bw.leopardUeberrollen) this.ueberrollen(f, dt);
+      (this.leopard ??= new Leopard(r)).schritt(f, dt, leopardEinst(bw, this.evakTrefferChance));
+      return;
+    }
     this.feuerKuehl = (this.feuerKuehl ?? 0) - dt;
     if (this.feuerKuehl > 0) return;
-    // Leopard: Turmdrehpunkt vor der Wannenmitte; Reichweite aus den Einstellungen (Meter)
-    const px = panzer ? f.x + Math.cos(f.richtung) * LEOPARD.turmX : f.x, py = panzer ? f.y + Math.sin(f.richtung) * LEOPARD.turmX : f.y;
-    let ziel = null, bd = panzer ? bw.leopardReichweite * 8 : EVAK_REICHWEITE;
+    let ziel = null, bd = EVAK_REICHWEITE;
     for (const [id, z] of s.zombies) {
       if (z.ebene || !(z.hp > 0)) continue;
-      const d = Math.hypot(z.x - px, z.y - py);
+      const d = Math.hypot(z.x - f.x, z.y - f.y);
       if (d < bd) { bd = d; ziel = [id, z]; }
     }
     if (!ziel) return;
-    this.feuerKuehl = panzer ? bw.leopardPause : EVAK_PAUSE;
+    this.feuerKuehl = EVAK_PAUSE;
     const [id, z] = ziel;
-    // Bus: Fenster verteilt über die Länge, auf der Seite zum Ziel; Leopard: Lader-MG im (zum Ziel gedrehten) Turm
-    let x = f.x, y = f.y, turmW;
-    if (panzer) {
-      turmW = Math.atan2(z.y - py, z.x - px);
-      const c = Math.cos(turmW), sn = Math.sin(turmW);
-      x = px + c * LEOPARD.mgX - sn * LEOPARD.mgY; y = py + sn * LEOPARD.mgX + c * LEOPARD.mgY;
-    } else {
-      const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), laengs = (r.rnd() - 0.5) * 100;
-      const links = (z.y - f.y) * c - (z.x - f.x) * sn > 0 ? 1 : -1;   // Seite des Ziels
-      x = f.x + c * laengs - sn * 9 * links; y = f.y + sn * laengs + c * 9 * links;
-    }
+    // Bus: Fenster verteilt über die Länge, auf der Seite zum Ziel
+    const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), laengs = (r.rnd() - 0.5) * 100;
+    const links = (z.y - f.y) * c - (z.x - f.x) * sn > 0 ? 1 : -1;   // Seite des Ziels
+    const x = f.x + c * laengs - sn * 9 * links, y = f.y + sn * laengs + c * 9 * links;
     const treffer = r.rnd() < (this.evakTrefferChance ?? EVAK_TREFFER);
     const w = Math.atan2(z.y - y, z.x - x) + (treffer ? 0 : (r.rnd() < 0.5 ? -1 : 1) * (0.06 + r.rnd() * 0.08));
     const d = Math.hypot(z.x - x, z.y - y);
-    r.broadcast('bwschuss', { art: 'mg', n: -1, x1: x, y1: y, x2: x + Math.cos(w) * d, y2: y + Math.sin(w) * d, w, t: treffer ? 1 : 0, ...(panzer ? { evak: 'panzer', tw: turmW } : {}) });
+    r.broadcast('bwschuss', { art: 'mg', n: -1, x1: x, y1: y, x2: x + Math.cos(w) * d, y2: y + Math.sin(w) * d, w, t: treffer ? 1 : 0 });
     if (treffer) {
-      const vorher = s.besiegt, von = this.schuetze ??= { name: panzer ? 'Evakuierungspanzer' : 'Evakuierungsbus', x, y, besiegt: 0 };
+      const vorher = s.besiegt, von = this.schuetze ??= { name: 'Evakuierungsbus', x, y, besiegt: 0 };
       von.x = x; von.y = y;
-      r.schaden(id, z, panzer ? bw.leopardSchaden : (r.einstellungen?.()?.waffen?.gewehr?.schaden ?? WAFFEN.gewehr.schaden), von);
+      r.schaden(id, z, r.einstellungen?.()?.waffen?.gewehr?.schaden ?? WAFFEN.gewehr.schaden, von);
       s.besiegt = vorher;   // zählt nicht für die Aufgaben der Spieler (wie die Bundeswehr)
     }
   }

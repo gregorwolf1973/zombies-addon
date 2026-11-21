@@ -4,6 +4,7 @@
 // (Flugzeit nach Entfernung, Nachricht 'moerser'), Einschlag mit Flächenschaden (nach außen schwächer, Sicht egal – Steilfeuer von oben).
 // Es wird nie geschossen, wenn ein Spieler (auch Bot) oder Mensch im Sicherheitsradius um den Einschlagpunkt steht; Spieler nehmen nie Schaden.
 import { Fahrzeug } from './verkehr.mjs';
+import { PX, gefaehrdet, haufenZiel } from './zielwahl.mjs';
 
 export const MOERSER = {
   reichweiteMin: 15, reichweiteMax: 80,   // Meter (8 px = 1 m) vom Fahrzeug zum Einschlag
@@ -13,7 +14,6 @@ export const MOERSER = {
   sicherheit: 6,                          // Meter um den Einschlag, in denen kein Spieler/Mensch stehen darf
   tempo: 30,                              // Granatengeschwindigkeit in m/s (Flugzeit = Entfernung / Tempo, 1,5–5 s)
 };
-const PX = 8;
 
 export class Moerser {
   constructor(raum) {
@@ -25,16 +25,17 @@ export class Moerser {
   }
 
   einst() { return { ...MOERSER, ...(this.raum.einstellungen?.()?.moerser ?? {}) }; }
-  an() { return !!this.raum.einstellungen?.()?.test?.moerser; }
+  // Schalter test.moerser; der Schießstand erzwingt ihn per this.erzwungen (true/false) und gibt den Standplatz in this.platz { x, y } vor
+  an() { return this.erzwungen ?? !!this.raum.einstellungen?.()?.test?.moerser; }
 
   // Fahrzeug anlegen/entfernen je nach Schalter; steht neben dem Start (freier Platz)
   abgleichen() {
     if (this.fest) return;   // fest eingebaut (Szene „Stau auf der B11“, server/szene_b11.mjs): Fahrzeug setzt die Szene, Test-Schalter egal
     const r = this.raum, s = r.state;
     if (this.an() && !this.id && r.welt?.start) {
-      const p = r.freierPlatz(r.welt.start, 2);
+      const p = this.platz ?? (q => ({ x: q.x + 60, y: q.y }))(r.freierPlatz(r.welt.start, 2));
       const f = new Fahrzeug();
-      f.x = p.x + 60; f.y = p.y; f.richtung = this.richtung; f.art = 'moerser'; f.farbe = 0; f.haelt = true;
+      f.x = p.x; f.y = p.y; f.richtung = this.richtung; f.art = 'moerser'; f.farbe = 0; f.haelt = true;
       this.id = 'moerser1'; s.fahrzeuge.set(this.id, f);
     } else if (!this.an() && this.id) {
       s.fahrzeuge.delete(this.id); this.id = null; this.flug = [];
@@ -43,32 +44,12 @@ export class Moerser {
 
   fahrzeug() { return this.id ? this.raum.state.fahrzeuge.get(this.id) : null; }
 
-  // Wer im Sicherheitsradius um (x, y) steht: Spieler (auch Bots, draußen) und Menschen
-  gefaehrdet(x, y, R) {
-    const s = this.raum.state;
-    for (const p of s.spieler.values()) if (!p.ebene && p.sichtbar !== false && Math.hypot(p.x - x, p.y - y) < R) return true;
-    for (const m of s.menschen?.values?.() ?? []) if (!m.ebene && Math.hypot(m.x - x, m.y - y) < R) return true;
-    return false;
-  }
+  // Wer im Sicherheitsradius um (x, y) steht: Spieler (auch Bots, draußen) und Menschen (gemeinsame Hilfe: server/zielwahl.mjs)
+  gefaehrdet(x, y, R) { return gefaehrdet(this.raum.state, x, y, R); }
 
   // bester Einschlagpunkt (Zombie mit den meisten Nachbarn im Radius) oder null
   waehleZiel(f, e) {
-    const s = this.raum.state, rmin = e.reichweiteMin * PX, rmax = e.reichweiteMax * PX, R = e.radius * PX;
-    const liste = [];
-    for (const z of s.zombies.values()) if (!z.ebene && z.hp > 0) liste.push(z);
-    let best = null;
-    for (const z of liste) {
-      const d = Math.hypot(z.x - f.x, z.y - f.y);
-      if (d < rmin || d > rmax) continue;
-      let n = 0, sx = 0, sy = 0;
-      for (const q of liste) if (Math.hypot(q.x - z.x, q.y - z.y) <= R) { n++; sx += q.x; sy += q.y; }
-      if (n < e.mindestZombies) continue;
-      // Schwerpunkt der Gruppe als Einschlagpunkt
-      const x = sx / n, y = sy / n, dd = Math.hypot(x - f.x, y - f.y);
-      if (dd < rmin || dd > rmax || this.gefaehrdet(x, y, e.sicherheit * PX)) continue;
-      if (!best || n > best.n || (n === best.n && dd < best.d)) best = { x, y, n, d: dd };
-    }
-    return best;
+    return haufenZiel(this.raum.state, f, { rmin: e.reichweiteMin * PX, rmax: e.reichweiteMax * PX, R: e.radius * PX, min: e.mindestZombies, sicher: e.sicherheit * PX });
   }
 
   schritt(dt) {
