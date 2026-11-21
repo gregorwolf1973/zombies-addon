@@ -15,7 +15,7 @@ const GEGENSTAENDE = [
 
 const CSS = `
 #swfenster { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: #000b; }
-#swfenster .sw-box { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow: auto; background: #1b1f23; color: #fff;
+#swfenster .sw-box { width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow: auto; background: #1b1f23; color: #fff;
   border-radius: 12px; padding: 12px 14px; box-sizing: border-box; font-size: 14px; }
 #swfenster h2 { margin: 0 0 4px; font-size: 18px; }
 #swfenster h3 { margin: 12px 0 4px; font-size: 14px; color: #ffca28; }
