@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.68.1 – 21.11.2026
+
+- Behoben: Lautstärke des Live-Radios (und Musik-/Hordeneinstellungen) wirkt sofort im laufenden Spiel, auch bei schon spielenden Autoradios – vorher erst nach Neuladen.
+
 ## 0.68.0 – 21.11.2026
 
 - Neu: Kulisse nach amtlichen Luftbildern (Bayerische Vermessungsverwaltung CC BY 4.0, swisstopo) – Bäume, Äcker und Dachfarben wie in echt; Eckkarte und große Karte mit Luftbild und Straßen wie im Navi (im Zahnrad umschaltbar).

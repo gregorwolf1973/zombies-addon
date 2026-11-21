@@ -38,7 +38,7 @@ const zombieStumm = id => !zombieTonAn && ZOMBIE_IDS.has(id) && id !== 'entdeckt
 export function musikSetzen(an) {
   musikAn = !!an;
   if (!ctx) return;
-  if (radioBus) radioBus.gain.setTargetAtTime(musikAn ? 1 : 0, ctx.currentTime, 0.3);   // Live-Radio zählt als Musik
+  radioPegel();   // Live-Radio zählt als Musik
   if (!musikAn) {
     musikAnwenden(null);   // Spielmusik ausblenden; kommt bei „an“ mit der nächsten Lage (≈1 s) wieder
     if (musik) { const m = musik; musik = null; if (m.strom) m.strom.stop(1); else { m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); setTimeout(() => { try { m.src.stop(); } catch { /* schon aus */ } }, 1500); } }
@@ -159,6 +159,8 @@ export function toneEinstellungen(i) {
   const url = typeof r.url === 'string' && r.url.startsWith('https://') ? r.url : '';
   if (radioEl && radioEin.url !== url) radioPausieren(true);   // Senderwechsel: beim nächsten Auto neu verbinden
   radioEin = { an: r.an === true && !!url, url, laut: Number.isFinite(rl) ? Math.max(0, Math.min(100, rl)) : 60 };
+  radioPegel();
+  if (!radioEin.an && radioEl) radioPausieren(true);
   const L = Number(i?.musik?.laut), B = Number(i?.musik?.blende);
   musikEin = { laut: Number.isFinite(L) ? Math.max(0, Math.min(100, L)) : 35, blende: Number.isFinite(B) ? Math.max(1, Math.min(10, B)) : 3 };
 }
@@ -563,11 +565,13 @@ function radioAnlegen() {
   try {
     radioEl = new Audio(); radioEl.crossOrigin = 'anonymous'; radioEl.preload = 'none'; radioEl.setAttribute('playsinline', '');
     radioQuelle = ctx.createMediaElementSource(radioEl);
-    radioBus = ctx.createGain(); radioBus.gain.value = musikAn ? 1 : 0; radioBus.connect(haupt);
+    radioBus = ctx.createGain(); radioBus.gain.value = musikAn ? radioEin.laut / 100 : 0; radioBus.connect(haupt);
     radioEl.onerror = () => { radioPausieren(true); };
     return true;
   } catch { radioEl = null; return false; }
 }
+// Lautstärke des Live-Radios: gemeinsamer Bus, wirkt sofort auch auf schon laufende Autoradios
+function radioPegel() { if (ctx && radioBus) radioBus.gain.setTargetAtTime(musikAn ? radioEin.laut / 100 : 0, ctx.currentTime, 0.2); }
 function radioFreischalten() {   // iOS: einmal in einer Nutzergeste kurz (stumm) abspielen
   if (!radioEin.an || radioFrei || !radioAnlegen() || radioNutzer > 0) return;
   try { radioEl.src = stille(); Promise.resolve(radioEl.play()).then(() => { radioFrei = true; if (radioNutzer <= 0) radioEl.pause(); }).catch(() => {}); } catch { /* nächste Geste */ }
@@ -590,7 +594,7 @@ function radioHandle() {
   radioNutzer++;
   let weg = false;
   const ende = { stop() { if (weg) return; weg = true; try { radioQuelle.disconnect(g); } catch { /* schon getrennt */ } radioNutzer--; if (radioNutzer <= 0) radioPausieren(); } };
-  return { g, pan, laut: radioEin.laut / 100, quellen: [ende], rate: null, live: true };
+  return { g, pan, laut: 1, quellen: [ende], rate: null, live: true };   // Lautstärke regelt radioBus (radioPegel)
 }
 
 // allgemeine Schleife an einem bewegten Ding (z. B. Autoradio); ohne zugeordnete Datei: null

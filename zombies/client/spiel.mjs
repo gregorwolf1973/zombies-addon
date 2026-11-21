@@ -1013,6 +1013,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('sirene', () => {});   // die Sirene läuft dauernd am Fahrzeug (fahrzeuge in abgleichen)
     raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
     raum.onMessage('entdeckt', m => { ton.entdeckt(m.x, m.y); });
+    raum.onMessage('tonEinst', m => ton.toneEinstellungen(m));   // Backend hat Musik/Radio/Horde geändert
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
     raum.onMessage('weltFalsch', m => {
