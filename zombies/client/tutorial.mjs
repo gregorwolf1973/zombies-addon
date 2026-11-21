@@ -99,7 +99,9 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
         <button class="ss-b" type="button" id="ss-wurf" title="Handgranate werfen (Taste Q)"><span class="z">💣</span>Werfen</button></div>
       <div class="ss-titel">Zombies</div>
       <div class="ss-reihe">${[5, 20, 50].map(n => `<button class="ss-b" type="button" data-z="${n}">🧟 ${n} starten</button>`).join('')}</div>
-      <div class="ss-reihe" style="margin-top:4px"><button class="ss-b" type="button" id="ss-panzer">🛡 Panzer: aus</button><button class="ss-b" type="button" id="ss-reset">↺ Zurücksetzen</button></div>
+      <div class="ss-titel">Fahrzeug am Lager</div>
+      <div class="ss-reihe" id="ss-fahrzeuge">${[['', '🚫 Keins'], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard'], ['moerser', '💥 Mörser']].map(([a, t]) => `<button class="ss-b" type="button" data-f="${a}">${t}</button>`).join('')}</div>
+      <div class="ss-reihe" style="margin-top:4px"><button class="ss-b" type="button" id="ss-reset">↺ Zurücksetzen</button></div>
       <div id="ss-info"></div>
       <div class="ss-titel">Auswertung je Waffe</div>
       <table><thead><tr><th>Waffe</th><th title="Schüsse, Schläge bzw. Würfe">Schuss</th><th title="Schüsse mit mindestens einem Treffer">Treffer</th><th>%</th><th title="getötete Zombies">Tote</th><th title="Schüsse je toter Zombie">Sch./Z.</th><th title="verbrauchte Munition">Muni</th></tr></thead><tbody id="ss-tab"></tbody></table>
@@ -114,7 +116,7 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
   box.querySelectorAll('[data-z]').forEach(b => { b.onclick = () => raum.send('ss_zombies', { n: Number(b.dataset.z) }); });
   $('ss-wurf').onclick = () => raum.send('wurf');
   let daten = null;
-  $('ss-panzer').onclick = () => raum.send('ss_panzer', { an: !daten?.panzer });
+  box.querySelectorAll('[data-f]').forEach(b => { b.onclick = () => raum.send('ss_fahrzeug', { art: b.dataset.f }); });
   $('ss-reset').onclick = () => raum.send('ss_reset');
   $('ss-ende').onclick = async () => {
     ctx.abmelden?.();
@@ -128,8 +130,7 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
     const aktiv = ich?.waffe || 'faust';
     box.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('aktiv', b.dataset.w === aktiv));
     if (!daten) return;
-    $('ss-panzer').textContent = '🛡 Panzer: ' + (daten.panzer ? 'an' : 'aus');
-    $('ss-panzer').classList.toggle('an', !!daten.panzer);
+    box.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('an', b.dataset.f === (daten.fahrzeug ?? (daten.panzer ? 'puma' : ''))));
     $('ss-info').textContent = `🧟 ${daten.zombies}${daten.warten ? ` (+${daten.warten} kommen noch)` : ''} Zombies auf dem Platz`;
     const zeilen = ZEILEN.filter(n => daten.stat[n]?.schuesse > 0 || n === aktiv);
     $('ss-tab').innerHTML = zeilen.map(n => {
@@ -162,7 +163,7 @@ export function erklaerung(daten, aktiv) {
     if (s.kills) teile.push(`<p>${zeichen(n)} ${esc(KURZ[n])}: im Schnitt ${komma(s.schuesse / s.kills)} ${wort(n)} je Zombie${WAFFEN[n]?.fern || n === 'handgranate' ? ` (${s.munition} Munition verbraucht)` : ''}.</p>`);
     else teile.push(`<p>${zeichen(n)} ${esc(KURZ[n])}: ${s.schuesse} ${s.schuesse === 1 ? wort(n) : MEHRZAHL[wort(n)]}, noch kein Zombie erledigt.</p>`);
   }
-  if (daten.panzerKills) teile.push(`<p>🛡 Der Panzer hat ${daten.panzerKills} Zombie${daten.panzerKills === 1 ? '' : 's'} erledigt (zählt nicht in der Waffen-Auswertung).</p>`);
+  if (daten.panzerKills) teile.push(`<p>🛡 Das Fahrzeug hat ${daten.panzerKills} Zombie${daten.panzerKills === 1 ? '' : 's'} erledigt (zählt nicht in der Waffen-Auswertung).</p>`);
   teile.push('<p class="klein">Treffer = Schüsse, die mindestens einen Zombie trafen. Granaten treffen im Umkreis, Schrot im Kegel, Schüsse auf mehrere Ziele zählen einmal. Kriecher brauchen einen zweiten Treffer. Zurücksetzen löscht die Auswertung.</p>');
   return teile.join('');
 }

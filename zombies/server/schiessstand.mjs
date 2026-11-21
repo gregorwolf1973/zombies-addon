@@ -2,17 +2,24 @@
 // Es wird nichts in die Datenbank geschrieben (kein Rucksack, keine Werte, keine Welt) und SpielRaum.aktiv bleibt die Hauptwelt.
 // Der Raum erbt Bewegung, Zombies, Schüsse und Nachladen von SpielRaum und nutzt dieselben Einstellungen (Waffen: Schaden, Pause,
 // Reichweite, Magazin, Zombie-Leben …), damit die Auswertung die echten Werte zeigt. Spieler: unsterblich, kein Hunger/Durst,
-// unbegrenzter Vorrat (Magazin und Nachladen wie im Spiel). Der Puma des Bundeswehr-Standorts schießt nur, wenn „Panzer“ an ist.
+// unbegrenzter Vorrat (Magazin und Nachladen wie im Spiel). Ein Fahrzeug am Lager (Auswahl vor dem Start) feuert auf die Zombies: Puma des
+// Bundeswehr-Standorts, Leopard (Turm, MG, Hauptkanone) oder Mörserpanzer M113; Vorgabe: keins.
 import { zaehle, fuegeHinzu } from '../client/stapel.mjs';
 import { SpielRaum, Zustand, Spieler, sauberName } from './raum.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
+import { Fahrzeug } from './verkehr.mjs';
+import { Moerser } from './moerser.mjs';
+import { Leopard, leopardEinst } from './leopard.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { WAFFEN, GRANATE, WERTE as W, RUCKSACK_PLAETZE, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, aktiveWaffe, frei, zufall, KACHEL } from '../client/welt.mjs';
 import { baueSchiessstandWelt, SS_START, SS_ZOMBIE_Y } from '../client/schiessstand_welt.mjs';
 
 export const SS_WAFFEN = ['pistole', 'mp', 'gewehr', 'schrotflinte', 'mg', 'scharfschuetze', 'armbrust', 'granatwerfer', 'messer', 'schlaeger', 'faust'];
+export const SS_FAHRZEUGE = ['', 'puma', 'leopard', 'moerser'];   // Auswahl: keins, Puma, Leopard 2A7, Mörserpanzer M113
+export const SS_FZ_LEOPARD = { x: SS_START.x - 140, y: SS_START.y - 10, richtung: Math.PI / 2 };   // Standplätze vor dem Lager (freie Wiese)
+export const SS_FZ_MOERSER = { x: SS_START.x + 140, y: SS_START.y - 10 };
 export const SS_GRANATE = 'handgranate';   // Statistikname der Handgranate (Wurfgegenstand, keine Waffe in der Hand)
 const AUSSEHEN = /^[mwshf],[0-5],[0-7]$/;
 const ZOMBIE_MAX = 120;      // so viele Zombies gleichzeitig (Warteschlange eingerechnet)
@@ -39,7 +46,8 @@ export class SchiessstandRaum extends SpielRaum {
     this.naechsteZombieId = 1; this.feldZeit = 0; this.nachspawn = 0; this.erwischtSeit = 0; this.kriecherChance = 0.15;
     this.stadt = null; this.verkehr = null; this.brand = null; this.welle = null; this.aufgaben = null; this.radios = null;
     this.granaten = new Granaten(this);
-    this.panzer = false; this.warteschlange = 0; this.spawnT = 0; this.statT = 0; this.statSchmutzig = true;
+    this.fahrzeug = ''; this.leopard = new Leopard(this, 'Leopard'); this.moerser = new Moerser(this); this.moerser.erzwungen = false; this.moerser.platz = SS_FZ_MOERSER;
+    this.warteschlange = 0; this.spawnT = 0; this.statT = 0; this.statSchmutzig = true;
     this.stuetzpunkt = new SchiessstandBasis(this);
     this.stuetzpunkt.start(null, false);
     this.statistikLeeren();
@@ -70,7 +78,8 @@ export class SchiessstandRaum extends SpielRaum {
     });
     this.onMessage('ss_waffe', (client, m) => this.waffeWaehlen(client.sessionId, String(m?.name ?? '')));
     this.onMessage('ss_zombies', (client, m) => this.zombiesStarten(Number(m?.n)));
-    this.onMessage('ss_panzer', (client, m) => { this.panzer = !!m?.an; this.statSchmutzig = true; });
+    this.onMessage('ss_panzer', (client, m) => this.fahrzeugWaehlen(m?.an ? 'puma' : ''));   // alter Schalter: an = Puma
+    this.onMessage('ss_fahrzeug', (client, m) => this.fahrzeugWaehlen(String(m?.art ?? '')));
     this.onMessage('ss_reset', () => this.zuruecksetzen());
     this.onMessage('ss_stat', client => this.statSenden(client));
     this.onMessage('ping', (client, m) => client.send('pong', m));
@@ -122,6 +131,33 @@ export class SchiessstandRaum extends SpielRaum {
     this.statSchmutzig = true;
   }
 
+  // ---------- Fahrzeug am Lager ----------
+  // Auswahl: '' (keins), 'puma', 'leopard' (Evakuierungspanzer-Fahrzeug, Turm/MG/Kanone), 'moerser' (M113); es steht vor dem Lager
+  fahrzeugWaehlen(art) {
+    if (!SS_FAHRZEUGE.includes(art) || art === this.fahrzeug) return;
+    this.fahrzeug = art;
+    const s = this.state;
+    if (this.leopardId && art !== 'leopard') { s.fahrzeuge.delete(this.leopardId); this.leopardId = null; s.evakArt = ''; }
+    if (art === 'leopard' && !this.leopardId) {
+      const f = new Fahrzeug();
+      f.x = SS_FZ_LEOPARD.x; f.y = SS_FZ_LEOPARD.y; f.richtung = SS_FZ_LEOPARD.richtung; f.turm = f.richtung; f.art = 'evakuierung'; f.farbe = 0; f.haelt = true;
+      this.leopardId = 'leopard1'; s.fahrzeuge.set(this.leopardId, f); s.evakArt = 'panzer';
+      this.leopard = new Leopard(this, 'Leopard');
+    }
+    this.moerser.erzwungen = art === 'moerser';
+    this.moerser.abgleichen();
+    this.statSchmutzig = true;
+  }
+
+  fahrzeugSchritt(dt) {
+    const s = this.state, bw = this.einst().bundeswehr ?? {};
+    if (this.fahrzeug === 'leopard') {
+      const f = s.fahrzeuge.get(this.leopardId);
+      if (f) this.leopard.schritt(f, dt, leopardEinst({ leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, ...bw }, 0.8));
+    }
+    if (this.fahrzeug === 'moerser') this.moerser.schritt(dt);
+  }
+
   // ---------- Zombies ----------
   zombiesStarten(n) {
     if (!Number.isFinite(n) || n < 1) return;
@@ -148,7 +184,7 @@ export class SchiessstandRaum extends SpielRaum {
 
   zuruecksetzen() {
     this.state.zombies.clear(); this.zombieInfo.clear(); this.state.leichen.clear(); this.leichenInhalt.clear(); this.state.boden.clear();
-    this.warteschlange = 0; this.granaten.liste.length = 0;
+    this.warteschlange = 0; this.granaten.liste.length = 0; this.moerser.flug = []; this.leopard.kuehlK = 3; this.moerser.kuehl = 2;
     this.state.besiegt = 0;
     for (const [sid, p] of this.state.spieler) {
       const x = this.extra.get(sid);
@@ -166,7 +202,7 @@ export class SchiessstandRaum extends SpielRaum {
   statistikLeeren() {
     this.stat = {};
     for (const n of [...SS_WAFFEN, SS_GRANATE]) this.stat[n] = { schuesse: 0, treffer: 0, kills: 0, munition: 0 };
-    this.panzerKills = 0;
+    this.panzerKills = 0;   // Abschüsse des gewählten Fahrzeugs
     this.schussKontext = null; this.quelle = null;
   }
 
@@ -187,7 +223,7 @@ export class SchiessstandRaum extends SpielRaum {
         if (tot && this.stat[k.waffe]) this.stat[k.waffe].kills++;
         this.statSchmutzig = true;
       }
-    } else if (tot && this.stuetzpunkt.schuetze === von) { this.panzerKills++; this.statSchmutzig = true; }
+    } else if (tot && von && [this.stuetzpunkt.schuetze, this.leopard?.schuetze, this.moerser?.schuetze].includes(von)) { this.panzerKills++; this.statSchmutzig = true; }
   }
 
   // jeder Schuss/Schlag des Spielers: Waffe merken, danach prüfen, ob geschossen wurde und ob er getroffen hat
@@ -226,7 +262,7 @@ export class SchiessstandRaum extends SpielRaum {
     const e = this.einst();
     const daten = {
       stat: this.stat, werte: this.werte(), zombieLeben: e.zombieLeben ?? 100,
-      zombies: this.state.zombies.size, warten: this.warteschlange, panzer: this.panzer, panzerKills: this.panzerKills,
+      zombies: this.state.zombies.size, warten: this.warteschlange, panzer: this.fahrzeug === 'puma', fahrzeug: this.fahrzeug, panzerKills: this.panzerKills,
     };
     for (const c of clients) c.send('ss_stat', daten);
     this.statSchmutzig = false;
@@ -265,6 +301,7 @@ export class SchiessstandRaum extends SpielRaum {
     this.zRaster = null;
     for (const p of s.spieler.values()) { p.hp = 100; p.unten = false; p.infektion = 0; }   // Bisse in diesem Takt zählen nicht
     this.stuetzpunkt.schritt(dt);
+    this.fahrzeugSchritt(dt);
     this.granaten.schritt(dt);
     this.leichenAltern(dt);
     this.statT -= dt;
@@ -272,12 +309,12 @@ export class SchiessstandRaum extends SpielRaum {
   }
 }
 
-// Bundeswehr-Standort im Schießstand: nur der Puma (und nur auf Wunsch), keine MG-Nester, Soldaten, Ärzte, kein Fall des Lagers
+// Bundeswehr-Standort im Schießstand: nur der Puma (und nur, wenn er als Fahrzeug gewählt ist), keine MG-Nester, Soldaten, Ärzte, kein Fall des Lagers
 class SchiessstandBasis extends Stuetzpunkt {
   einst() { return { aktiv: true, falltage: 0, mgMunition: 0, pumaMunition: 0, pumaPause: this.raum.einst?.().bundeswehr?.pumaPause }; }
   schritt(dt) {
     const s = this.raum.state;
     if (!this.sp || s.stuetzpunkt !== 'steht' || !this.puma) return;
-    if (this.raum.panzer) this.pumaSchritt(this.puma, dt);
+    if (this.raum.fahrzeug === 'puma') this.pumaSchritt(this.puma, dt);
   }
 }
