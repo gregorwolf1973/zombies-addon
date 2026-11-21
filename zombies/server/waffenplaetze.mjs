@@ -1,11 +1,12 @@
-// Magazine, Nachladen und Waffenplätze (links = Haupt, rechts = Neben, dazu ein Ersatzplatz).
+// Magazine, Nachladen und Waffenplätze (zwei Plätze: 1 = Haupt, 2 = Neben; Nahkampf = Faust oder eine Nahwaffe in Platz 2).
 // p.waffe ist immer die Waffe in der Hand = der Inhalt des aktiven Platzes p.wplatz; alter Code, der p.waffe setzt, bleibt
 // deshalb gültig – abgleich() übernimmt die Hand jeden Tick in den aktiven Platz und verwaltet das Magazin dazu.
 // p.munition / p.pfeile / p.granaten sind der Vorrat AUSSERHALB des Magazins (p.magazin = Schuss im Magazin der Hand).
 import { WAFFEN, DINGE, GRANATE, vorratFeld, vorratVon, magazinGroesse, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX } from '../client/welt.mjs';
 
-export const PLATZ_FELD = ['wp0', 'wp1', 'wp2'];
-export const PLATZ_NAME = ['Haupt', 'Neben', 'Ersatz'];
+export const PLATZ_FELD = ['wp0', 'wp1'];   // wp2/mg2/mx2 im Schema sind aus der Zeit mit drei Plätzen übrig und bleiben leer
+export const PLATZ_NAME = ['Platz 1', 'Platz 2'];
+export const PLATZ_ANZAHL = PLATZ_FELD.length;
 const VORRAT_MAX = { munition: MUNITION_MAX, pfeile: PFEILE_MAX, granaten: GRANATEN_MAX, handgranaten: HANDGRANATEN_MAX };
 
 // Magazingröße / Nachladedauer: Verwaltung (einst.waffen) vor Vorgabe aus WAFFEN
@@ -27,25 +28,39 @@ function erstatte(p, name, n) {
 
 // Spielstand aus der Datenbank übernehmen (Plätze, Magazine); danach gleicht abgleich() alles an
 export function lade(p, x, g) {
-  x.mag = [null, null, null];
+  x.mag = [null, null];
   const ok = n => DINGE[n]?.waffe ? n : '';
-  p.wplatz = Number.isInteger(g?.wplatz) && g.wplatz >= 0 && g.wplatz <= 2 ? g.wplatz : 0;
-  PLATZ_FELD.forEach((f, i) => { p[f] = i === p.wplatz ? p.waffe : ok(g?.[f]); });
-  (Array.isArray(g?.mag) ? g.mag : []).slice(0, 3).forEach((n, i) => {
-    const name = p[PLATZ_FELD[i]];
-    if (name && WAFFEN[name]?.fern && Number.isFinite(Number(n)) && Number(n) > 0) x.mag[i] = { waffe: name, n: Math.min(255, Math.floor(Number(n))) };
+  let wpl = Number.isInteger(g?.wplatz) && g.wplatz >= 0 && g.wplatz <= 2 ? g.wplatz : 0;
+  // alter Stand mit drei Plätzen: [Platz 1, Platz 2, ehemaliger Platz 3]; der aktive Platz trägt die Waffe aus p.waffe
+  const slots = [0, 1, 2].map(i => i === wpl ? p.waffe : ok(g?.['wp' + i]));
+  const mags = [0, 1, 2].map(i => {
+    const n = Array.isArray(g?.mag) ? Number(g.mag[i]) : 0;
+    return slots[i] && WAFFEN[slots[i]]?.fern && Number.isFinite(n) && n > 0 ? { waffe: slots[i], n: Math.min(255, Math.floor(n)) } : null;
   });
+  x.ueberlauf = [];   // Waffen ohne Platz: der Raum legt sie nach dem Laden in den Rucksack (sonst verfallen sie)
+  if (slots[2]) {
+    const frei = [0, 1].find(i => !slots[i]);
+    if (frei !== undefined) { slots[frei] = slots[2]; mags[frei] = mags[2]; if (wpl === 2) wpl = frei; }
+    else {
+      const name = slots[2], n = mags[2]?.n ?? 0;
+      if (istHg(name)) { const anzahl = n + (p.handgranaten ?? 0); p.handgranaten = 0; for (let k = 0; k < Math.min(anzahl, HANDGRANATEN_MAX); k++) x.ueberlauf.push('granate'); }
+      else { if (n > 0) erstatte(p, name, n); x.ueberlauf.push(name); }
+      if (wpl === 2) wpl = 0;
+    }
+  }
+  p.wplatz = wpl; p.waffe = slots[wpl]; p.wp2 = ''; p.mg2 = 0; p.mx2 = 0;
+  PLATZ_FELD.forEach((f, i) => { p[f] = slots[i]; x.mag[i] = mags[i]; });
   p.magazin = x.mag[p.wplatz]?.n ?? 0;
   p.nachladen = 0;
 }
-export const speicherDaten = (p, x) => ({ wplatz: p.wplatz, wp0: p.wp0, wp1: p.wp1, wp2: p.wp2, mag: [0, 1, 2].map(i => i === p.wplatz && !p.faust ? p.magazin : x.mag?.[i]?.n ?? 0) });
+export const speicherDaten = (p, x) => ({ wplatz: p.wplatz, wp0: p.wp0, wp1: p.wp1, mag: [0, 1].map(i => i === p.wplatz && !p.faust ? p.magazin : x.mag?.[i]?.n ?? 0) });
 
 // Hand ↔ Platz ↔ Magazin angleichen (jeden Tick, billig)
 export function abgleich(p, x, einst) {
   abgleich1(p, x, einst);
   const wm = Math.min(255, Math.round(einst?.reichweite?.handgranate ?? GRANATE.wurfWeite / 8));
   if (p.wurfweite !== wm) p.wurfweite = wm;
-  [0, 1, 2].forEach(i => {   // Magazinstand je Platz für den Client (HUD-Knöpfe)
+  [0, 1].forEach(i => {   // Magazinstand je Platz für den Client (HUD-Knöpfe)
     const name = p[PLATZ_FELD[i]], gm = magGroesse(name, einst);
     const n = !gm ? 0 : i === p.wplatz && !p.faust ? p.magazin : (x.mag[i]?.waffe === name ? x.mag[i].n : 0);
     if (p['mg' + i] !== n) p['mg' + i] = n;
@@ -53,7 +68,7 @@ export function abgleich(p, x, einst) {
   });
 }
 function abgleich1(p, x, einst) {
-  x.mag ??= [null, null, null];
+  x.mag ??= [null, null];
   const a = p.wplatz;
   if (p.faust) {   // Faust: Hand leer, der Platz behält Waffe und Magazin; wird von außen eine Waffe in die Hand gesetzt, endet die Faust
     if (!p.waffe) { p.magazin = 0; p.magmax = 0; p.nachladen = 0; return; }
@@ -82,7 +97,7 @@ function brauchbar(p, x, i) {
 }
 
 export function wechsle(raum, client, p, x, platz, einst, still = false) {
-  if (!Number.isInteger(platz) || platz < 0 || platz > 2 || (platz === p.wplatz && !p.faust)) return false;
+  if (!Number.isInteger(platz) || platz < 0 || platz >= PLATZ_ANZAHL || (platz === p.wplatz && !p.faust)) return false;
   abgleich(p, x, einst);
   const name = p[PLATZ_FELD[platz]];
   p.faust = false; p.wplatz = platz; p.waffe = name; p.nachladen = 0; x.nRest = 0;
@@ -94,7 +109,7 @@ export function wechsle(raum, client, p, x, platz, einst, still = false) {
 
 // nächster belegter Platz (Taste F)
 export function naechster(p) {
-  for (let k = p.faust ? 0 : 1; k <= 2; k++) { const i = (p.wplatz + k) % 3; if (p[PLATZ_FELD[i]]) return i; }
+  for (let k = p.faust ? 0 : 1; k < PLATZ_ANZAHL; k++) { const i = (p.wplatz + k) % PLATZ_ANZAHL; if (p[PLATZ_FELD[i]]) return i; }
   return -1;
 }
 
@@ -105,7 +120,7 @@ export function inDieHand(raum, client, p, x, ding, einst) {
   abgleich(p, x, einst);
   if (p.faust) wechsle(raum, null, p, x, p.wplatz, einst, true);   // Aufnehmen beendet die Faust (zurück zum Waffenplatz)
   if (!p.waffe) { p.waffe = ding; return ''; }
-  const frei = [1, 2, 0].map(k => (p.wplatz + k) % 3).find(i => !p[PLATZ_FELD[i]]);
+  const frei = [1, 0].map(k => (p.wplatz + k) % PLATZ_ANZAHL).find(i => !p[PLATZ_FELD[i]]);
   if (frei === undefined) { const alt = p.waffe; p.waffe = ding; return alt; }
   p[PLATZ_FELD[frei]] = ding;
   wechsle(raum, null, p, x, frei, einst, true);
@@ -139,12 +154,9 @@ export function schritt(raum, client, p, x, dt, einst) {
     return;
   }
   if (p.magazin <= 0 && vorratVon(p, w) > 0) { startNachladen(raum, p, x, einst); return; }
-  // Magazin und Vorrat leer: erst auf eine andere Fernwaffe mit Schuss, sonst auf eine Nahkampfwaffe (Platz 3 bevorzugt),
-  // sonst Faust
+  // Magazin und Vorrat leer: auf den anderen Platz (Fernwaffe mit Schuss oder Nahwaffe), sonst Faust
   if (p.magazin <= 0) {
-    const nahe = i => i !== p.wplatz && p[PLATZ_FELD[i]] && !WAFFEN[p[PLATZ_FELD[i]]]?.fern;
-    const ziel = [1, 2].map(k => (p.wplatz + k) % 3).find(i => brauchbar(p, x, i) && !nahe(i))
-      ?? (nahe(2) ? 2 : [0, 1, 2].find(nahe));
+    const ziel = [1 - p.wplatz].find(i => brauchbar(p, x, i));
     const alt = p.waffe;
     if (ziel !== undefined) {
       wechsle(raum, client, p, x, ziel, einst, true);
@@ -157,13 +169,13 @@ export function schritt(raum, client, p, x, dt, einst) {
 }
 
 // Waffen aller Plätze (für den Sterbehaufen)
-export const alleWaffen = p => [p.wp0, p.wp1, p.wp2].filter((n, i) => n && (i !== p.wplatz || p.faust));
-export function leeren(p, x) { p.wp0 = p.wp1 = p.wp2 = ''; p.wplatz = 0; p.faust = false; p.handgranaten = 0; p.magazin = 0; p.nachladen = 0; if (x) { x.mag = [null, null, null]; x.nRest = 0; } }
+export const alleWaffen = p => [p.wp0, p.wp1].filter((n, i) => n && (i !== p.wplatz || p.faust));
+export function leeren(p, x) { p.wp0 = p.wp1 = p.wp2 = ''; p.wplatz = 0; p.faust = false; p.handgranaten = 0; p.magazin = 0; p.nachladen = 0; if (x) { x.mag = [null, null]; x.nRest = 0; } }
 
 // ---------- Waffenplätze verwalten (Menü am Knopf, Rucksack, Faust) ----------
 const istHg = name => name === 'handgranate';
 // Platz mit Handgranaten (oder -1)
-export const handgranatenPlatz = p => [0, 1, 2].find(i => p[PLATZ_FELD[i]] === 'handgranate') ?? -1;
+export const handgranatenPlatz = p => [0, 1].find(i => p[PLATZ_FELD[i]] === 'handgranate') ?? -1;
 
 // Waffe aus Platz i nehmen (Platz danach leer). Schuss im Magazin gehen zurück in den Vorrat; Handgranaten werden zu einzelnen
 // 'granate'-Gegenständen (Anzahl = Magazin + Vorrat). Rückgabe { name, anzahl } oder null.
@@ -197,7 +209,7 @@ const frage = (raum, p) => !p || p.unten || p.zombie > 0 || raum.state.phase !==
 export function platzAktion(raum, client, p, x, m, einst) {
   if (frage(raum, p)) return false;
   const i = Number(m?.platz);
-  if (!Number.isInteger(i) || i < 0 || i > 2) return false;
+  if (!Number.isInteger(i) || i < 0 || i >= PLATZ_ANZAHL) return false;
   abgleich(p, x, einst);
   if (m.aktion === 'tausch') return ausRucksack(raum, client, p, x, Number(m.rs), i, einst);   // auch in einen leeren Platz
   const name = p[PLATZ_FELD[i]];
@@ -221,7 +233,7 @@ export function platzAktion(raum, client, p, x, m, einst) {
 
 // Rucksack-Eintrag rs (Waffe oder Handgranate) in Platz i; eine dort liegende Waffe geht in den Rucksack (Tausch)
 export function ausRucksack(raum, client, p, x, rs, i, einst) {
-  if (frage(raum, p) || !Number.isInteger(rs) || rs < 0 || rs >= p.rucksack.length || !Number.isInteger(i) || i < 0 || i > 2) return false;
+  if (frage(raum, p) || !Number.isInteger(rs) || rs < 0 || rs >= p.rucksack.length || !Number.isInteger(i) || i < 0 || i >= PLATZ_ANZAHL) return false;
   const d = p.rucksack[rs];
   if (d !== 'granate' && !(DINGE[d]?.waffe && !DINGE[d].intern)) return false;
   abgleich(p, x, einst);

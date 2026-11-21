@@ -108,12 +108,12 @@ test('Auto-Wechsel: aktive Waffe leer (Magazin und Vorrat) → nächster Platz m
   } finally { await c.leave(); }
 });
 
-test('Auto-Wechsel: alles leer → Nahkampfwaffe (Platz 3 bevorzugt), sonst Faust', async () => {
+test('Auto-Wechsel: alles leer → Nahkampfwaffe in Platz 2, sonst Faust', async () => {
   const { c, p } = await spieler('Nahkampf');
   try {
-    p.waffe = 'pistole'; p.munition = 0; p.pfeile = 0; p.granaten = 0; p.wp1 = 'messer'; p.wp2 = 'sense';
-    assert.ok(await bis(() => p.waffe === 'sense'), 'Sense auf Platz 3 nicht gewählt: ' + p.waffe);
-    assert.equal(p.wplatz, 2);
+    p.waffe = 'pistole'; p.munition = 0; p.pfeile = 0; p.granaten = 0; p.wp1 = 'sense';
+    assert.ok(await bis(() => p.waffe === 'sense'), 'Sense auf Platz 2 nicht gewählt: ' + p.waffe);
+    assert.equal(p.wplatz, 1);
   } finally { await c.leave(); }
   const b = await spieler('Faustwechsler');
   try {
@@ -123,10 +123,10 @@ test('Auto-Wechsel: alles leer → Nahkampfwaffe (Platz 3 bevorzugt), sonst Faus
   } finally { await b.c.leave(); }
   const d = await spieler('Fernvorrang');
   try {
-    d.p.waffe = 'pistole'; d.p.munition = 30; d.p.pfeile = 0; d.p.granaten = 0; d.p.wp1 = 'messer'; d.p.wp2 = 'gewehr';
+    d.p.waffe = 'pistole'; d.p.munition = 30; d.p.pfeile = 0; d.p.granaten = 0; d.p.wp1 = 'gewehr';
     assert.ok(await bis(() => d.p.waffe === 'pistole' && d.p.magazin === 15));
     d.p.magazin = 0; d.p.munition = 0;
-    d.x.mag[2] = { waffe: 'gewehr', n: 5 };
+    d.x.mag[1] = { waffe: 'gewehr', n: 5 };
     assert.ok(await bis(() => d.p.waffe === 'gewehr'), 'andere Fernwaffe mit Schuss hat Vorrang: ' + d.p.waffe);
   } finally { await d.c.leave(); }
 });

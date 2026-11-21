@@ -55,8 +55,8 @@ export const Spieler = schema({
   magazin: t.uint8(),       // Schuss im Magazin der Waffe in der Hand (munition/pfeile/granaten = Vorrat außerhalb des Magazins)
   magmax: t.uint8(),        // Magazingröße der Waffe in der Hand (Einstellung der Verwaltung)
   nachladen: t.number(),    // Fortschritt des Nachladens 0..1 (0 = lädt nicht nach)
-  wplatz: t.uint8(),        // aktiver Waffenplatz: 0 = Haupt (links), 1 = Neben (rechts), 2 = Ersatz
-  wp0: t.string(), wp1: t.string(), wp2: t.string(),   // Waffen der drei Plätze (der aktive spiegelt p.waffe)
+  wplatz: t.uint8(),        // aktiver Waffenplatz: 0 = Platz 1, 1 = Platz 2 (nur noch zwei Plätze)
+  wp0: t.string(), wp1: t.string(), wp2: t.string(),   // Waffen der Plätze (wp2 ungenutzt, bleibt leer; der aktive spiegelt p.waffe)
   mg0: t.uint8(), mg1: t.uint8(), mg2: t.uint8(),      // Schuss im Magazin je Waffenplatz (für die Knöpfe im HUD)
   mx0: t.uint8(), mx1: t.uint8(), mx2: t.uint8(),      // Magazingröße je Waffenplatz (0 = Nahwaffe)
   ebene: t.string(),        // '' = draußen, sonst z. B. 'h5eg', 'h5keller', 'h5dach'
@@ -599,6 +599,8 @@ export class SpielRaum extends Room {
       extra.startOffen = this.state.level === 1 && !!gespeichert.startOffen;   // Startwahl noch nicht getroffen
       p.plaetze += FK.wirkung.rucksack(extra.fk);
       for (const d of (gespeichert.rucksack ?? []).slice(0, p.plaetze)) if (DINGE[d]) p.rucksack.push(d);
+      for (const d of extra.ueberlauf ?? []) if (p.rucksack.length < p.plaetze) p.rucksack.push(d);   // ehemaliger dritter Waffenplatz
+      delete extra.ueberlauf;
       extra.letzterSafe = gespeichert.letzterSafe ?? '';
       // gespeichert wird nur im Safe Room: dort (im Innenraum) geht es weiter; sonst im letzten Safe Room
       // ohne gespeicherten Ort (neues Level): alle im selben Start-Safe-House
@@ -1131,7 +1133,7 @@ export class SpielRaum extends Room {
       rest.shift();
       if (!p.waffe && !p.faust) p.waffe = d;
       else {
-        const frei = [0, 1, 2].find(i => i !== p.wplatz && !p[WP.PLATZ_FELD[i]]);
+        const frei = [0, 1].find(i => i !== p.wplatz && !p[WP.PLATZ_FELD[i]]);
         if (frei !== undefined) p[WP.PLATZ_FELD[frei]] = d; else rest.unshift(d);
       }
     } else if (d === 'pfeil' || d === 'munition') { /* Vorrat, über einpacken */ }
@@ -1785,7 +1787,11 @@ export class SpielRaum extends Room {
       if (k.art === 'aufbrechen') client?.send('meldung', { text: '⚒️ Tür aufgebrochen – das war laut!' });
     }
     else if (k.art === 'funk') this.aufgaben?.funkAbsetzen(p, k.safe);
-    else if (k.art === 'tuer_zu') this.setzeTuer(k.key, false);
+    else if (k.art === 'tuer_zu') {
+      this.setzeTuer(k.key, false);
+      // von Hand geschlossen: die Auto-Öffnung greift für diese Tür erst wieder, wenn man sich > 80 px entfernt hat
+      if (k.tuer && !x.bot) x.tuerSperre = { key: k.key, x: (k.tuer.x + 0.5) * KACHEL, y: (k.tuer.y + 0.5) * KACHEL, ebene: p.ebene ?? '' };
+    }
     else if (k.art === 'ansprechen') this.stadt?.ansprechen(sid, p, k.id);
     else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; this.broadcast('klettern', { x: p.x, y: p.y, id: sid }); }
     else if (k.art === 'aufheben') {
@@ -2470,11 +2476,14 @@ export class SpielRaum extends Room {
   tuerAuto(p, x, dt, e) {
     const vorher = x.tuerPos; x.tuerPos = { x: p.x, y: p.y };
     const reset = () => { x.tuerT = 0; x.tuerKey = null; };
+    const sp = x.tuerSperre;   // nach manuellem Schließen: Sperre bis > 80 px Abstand zur Tür
+    if (sp && (Math.hypot(p.x - sp.x, p.y - sp.y) > 80 || (p.ebene ?? '') !== sp.ebene)) x.tuerSperre = null;
     if (x.bot || p.unten || p.aktion || p.zombie > 0 || this.state.phase !== 'spiel' || x.ankunft || !p.ebene) return reset();
     const wahl = this.tuerWahl(p);
     if (!wahl?.tuer) return reset();
     const k = this.tuerKontext(p, 'auf');
     if (k?.art !== 'tuer_auf' || this.tuerBarrikade(k.key) > 0) return reset();
+    if (x.tuerSperre?.key === k.key) return reset();
     const l = Math.hypot(e.dx, e.dy);
     if (l > 0.05) {   // drückt die Eingabe auf die Tür zu (±45°) und kommt nicht voran?
       const wx = (wahl.tuer.x + 0.5) * KACHEL - p.x, wy = (wahl.tuer.y + 0.5) * KACHEL - p.y, wl = Math.hypot(wx, wy) || 1;

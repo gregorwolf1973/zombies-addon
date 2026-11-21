@@ -59,12 +59,8 @@
 
 <div id="gruen"></div>
 <div id="hud">
-  <div id="aufgaben" style="display:none">
-    <button id="aufgabenknopf" type="button" aria-expanded="true" aria-controls="aufgabenkoerper">📋 <span id="aufgabenkopf"></span></button>
-    <div id="aufgabenkoerper">
-      <ul id="aufgabenliste"></ul>
-      <div id="busanzeige"></div>
-    </div>
+  <div class="zeile klein">
+    <span id="waffe"></span>
   </div>
   <div class="zeile">
     <div class="anzeigen">
@@ -73,27 +69,33 @@
       <div class="anzeige" title="Hunger"><span>🍖</span><div id="hunger" class="bar orange"><div></div></div></div>
     </div>
   </div>
-  <div class="zeile klein">
-    <span id="waffe"></span>
-  </div>
-  <div id="waffenplaetze" aria-label="Waffenplätze"></div>
   <button id="listeknopf" type="button" aria-expanded="false" aria-controls="liste" title="Spielerliste ein-/ausklappen"><span id="punkte"></span></button>
   <ul id="liste"></ul>
+  <div id="waffenzeile">
+    <div id="waffenplaetze" aria-label="Waffenplätze"></div>
+    <button id="granatenfeld" type="button" title="Handgranate werfen (Q)" aria-label="Handgranate werfen"><span class="gz">💣</span><span id="granatenzahl"></span></button>
+  </div>
+  <div id="aufgaben" style="display:none">
+    <button id="aufgabenknopf" type="button" aria-expanded="true" aria-controls="aufgabenkoerper">📋 <span id="aufgabenkopf"></span></button>
+    <div id="aufgabenkoerper">
+      <ul id="aufgabenliste"></ul>
+      <div id="busanzeige"></div>
+    </div>
+  </div>
 </div>
 <div id="rechts">
 <div id="leiste">
 <button id="chatknopf" title="Chat" aria-label="Chat">💬<span id="chatzaehler"></span></button>
 <button id="sprachknopf" title="Mikrofon" aria-label="Mikrofon an/aus">🎤</button>
-<button id="zoomraus" class="zoomknopf" title="Herauszoomen (−)" aria-label="Herauszoomen">−</button>
-<button id="zoomrein" class="zoomknopf" title="Hineinzoomen (+)" aria-label="Hineinzoomen">+</button>
 <button id="einstellknopf" title="Spieler-Einstellungen" aria-label="Spieler-Einstellungen">⚙️</button>
 <button id="suknopf" title="Testmenü" aria-label="Testmenü">☰</button>
 </div>
 <div id="kartenbox" title="Übersicht (M)">
   <canvas id="karte"></canvas>
-  <div class="kartenknoepfe"><button class="plus" aria-label="Hineinzoomen">+</button><button class="minus" aria-label="Herauszoomen">−</button><button class="mich" aria-label="Auf mich zentrieren">⌖</button></div>
+  <div id="kartenoben"><span id="zeit">00:00</span></div>
+  <div id="kartenunten"><span id="zombiezahl"></span><span id="besiegt"></span><span id="verwandelt"></span></div>
+  <div class="kartenknoepfe"><button class="mich" aria-label="Auf mich zentrieren">⌖</button></div>
 </div>
-<div id="zaehler"><span id="zeit">00:00</span><span id="besiegt"></span><span id="verwandelt"></span></div>
   <div id="sicher">
     <span id="sichername"></span>
     <button id="ausruhen">💤 Ausruhen &amp; abmelden</button>
@@ -108,10 +110,11 @@
   </form>
 </div>
 <div id="unten">
-  <button id="nachladenknopf" type="button" title="Nachladen (R)">🔄 Nachladen</button>
-  <button id="alleknopf" type="button" title="Alles durchsuchen (C)"></button>
-  <button id="aktion2" type="button"></button>
-  <button id="aktion" type="button"></button>
+  <div id="aktionen">
+    <button id="aktion2" type="button"></button>
+    <button id="aktion" type="button"></button>
+    <button id="alleknopf" type="button" title="Alles durchsuchen (C)"></button>
+  </div>
   <div id="rucksack"></div>
 </div>
 <div id="einstellungen" role="dialog" aria-label="Spieler-Einstellungen">
