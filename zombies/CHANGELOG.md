@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.68.8 – 21.11.2026
+
+- Radio-Eilmeldung jetzt mit zwei ElevenLabs-Sprechern (abwechselnd) für Geretsried und die Isarauen; die Piper-Stimme ist entfernt. Level ohne passende Aufnahme bleiben ohne Durchsage.
+
 ## 0.68.7 – 21.11.2026
 
 - Neu: Eilmeldung im Live-Radio – ein Nachrichtensprecher (Piper-Stimme „Thorsten“) meldet Zombies am Ort des Levels; kommt aus dem Autoradio, der Sender wird dabei leiser. Abstand im Backend (Vorgabe alle 4 Minuten, 0 = aus), Dateien je Level unter Geräusche.

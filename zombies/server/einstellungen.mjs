@@ -32,11 +32,8 @@ export const TON_STANDARD = {
   hordeAkzent: { dateien: ['freesound_community-zombie-horde-87204.mp3'], laut: 80 },
   musikLevel5: { dateien: ['franzian-deo-apocalypse-469581.mp3'], laut: 100 },
   hundBellen: { dateien: ['dragon-studio-free-dog-bark-419014.mp3', 'dragon-studio-dog-bark-382732.mp3'], laut: 80 },
-  durchsageLevel1: { dateien: ['durchsage_level1.mp3'], laut: 100 },
-  durchsageLevel2: { dateien: ['durchsage_level2.mp3'], laut: 100 },
-  durchsageLevel3: { dateien: ['durchsage_level3.mp3'], laut: 100 },
-  durchsageLevel4: { dateien: ['durchsage_level4.mp3'], laut: 100 },
-  durchsageLevel5: { dateien: ['durchsage_level5.mp3'], laut: 100 },
+  durchsageLevel1: { dateien: ['eilmeldung_geretsried_mann.mp3', 'eilmeldung_geretsried_frau.mp3'], laut: 100 },   // Aufnahmen mit ElevenLabs-Stimmen
+  durchsageLevel2: { dateien: ['eilmeldung_geretsried_mann.mp3', 'eilmeldung_geretsried_frau.mp3'], laut: 100 },   // Isarauen: „nähere Umgebung“ von Geretsried
 };
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 

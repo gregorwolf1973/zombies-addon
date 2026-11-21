@@ -564,7 +564,7 @@ export function knistern(x, y, staerke = 1) {
 // Lautstärke-/Richtungszweig (wie die Sirene). Ohne Autos mit Radio wird der Stream nach 5 s getrennt (spart Datenvolumen).
 let radioEin = { an: false, url: '', laut: 60, vorlauf: 30 };
 let radioStummBis = 0, radioStummTimer = null;
-let radioDuck = null, aktLevel = 1, durchsageNaechste = 0, durchsageLaeuft = false;   // Vorlauf: Stream läuft schon, ist aber noch stumm (Senderwerbung am Anfang)
+let radioDuck = null, aktLevel = 1, durchsageNaechste = 0, durchsageLaeuft = false, durchsageNr = -1;   // Vorlauf: Stream läuft schon, ist aber noch stumm (Senderwerbung am Anfang)
 let radioEl = null, radioQuelle = null, radioBus = null, radioFrei = false, radioNutzer = 0, radioAusTimer = null;
 function radioAnlegen() {
   if (radioEl || !ctx?.createMediaElementSource) return !!radioEl;
@@ -624,10 +624,12 @@ function durchsagePruefen(h) {
   if (!radioEin.durchsage || durchsageLaeuft || jetzt < radioStummBis) return;
   if (!durchsageNaechste) { durchsageNaechste = jetzt + 20000; return; }
   if (jetzt < durchsageNaechste) return;
-  const t = zuordnung['durchsageLevel' + aktLevel] ?? zuordnung.durchsageLevel1, datei = t?.dateien?.[0];
-  if (!datei) return;
+  const t = zuordnung['durchsageLevel' + aktLevel], liste = t?.dateien ?? [];   // kein Rückfall auf andere Level (Ortsname!)
+  if (!liste.length) return;
+  durchsageNr = (durchsageNr + 1) % liste.length;   // mehrere Aufnahmen: abwechselnd
+  const datei = liste[durchsageNr];
   const buf = geladen(datei);
-  if (!buf) { laden(datei); return; }
+  if (!buf) { laden(datei); durchsageNr--; return; }
   durchsageLaeuft = true;
   const src = ctx.createBufferSource(), g = ctx.createGain(), z = ctx.currentTime;
   src.buffer = buf; g.gain.value = (t.laut ?? 100) / 100 * 2.2;   // Sprecher deutlich über dem (geduckten) Sender
