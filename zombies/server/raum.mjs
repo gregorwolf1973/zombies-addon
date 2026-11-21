@@ -45,6 +45,7 @@ export const Spieler = schema({
   x: t.number(), y: t.number(),
   richtung: t.number(),
   hp: t.number(),
+  kamera: t.boolean(),      // Superuser im Kameraflug: Figur steht, unverwundbar, für Zombies unsichtbar (server/superuser.mjs)
   anBord: t.boolean(),      // sitzt im Evakuierungsfahrzeug (Bus, Panzer, A400M, Hubschrauber): Position folgt ihm, Zombies lassen ihn in Ruhe
   durst: t.uint8(),         // 100 = satt, 0 = verdurstet (Server rechnet genau, übertragen wird die ganze Zahl)
   hunger: t.uint8(),
@@ -182,7 +183,7 @@ const BRETT_STAERKE = 35;
 const TICK = 50; // ms → 20 Simulationsschritte pro Sekunde
 const PATCH = 100; // ms → 10 Zustands-Updates pro Sekunde an die Clients (der Client glättet dazwischen)
 const SICHT_RAND = 260, SICHT_LOESEN = 220;   // Pixel um den Bildausschnitt: dort werden Zombies schon geschickt; erst so viel weiter wieder entfernt
-const SICHT_VORGABE = { w: 1100, h: 700 }, SICHT_MAX = 2600;   // halbe Ausschnittgröße in Pixeln, bis der Client seine meldet
+const SICHT_VORGABE = { w: 1100, h: 700 }, SICHT_MAX = 2600, SICHT_MAX_FLUG = 6000;   // halbe Ausschnittgröße in Pixeln, bis der Client seine meldet
 const EINGABE_GUTHABEN_MAX = 1.5;   // Sekunden Bewegung, die der Server nach einem Netz-Hänger nachholt
 const ZWEI_PI = Math.PI * 2;
 const ZOMBIE_HP = 100;   // Vorgabe; wirksam ist die Einstellung zombieLeben
@@ -280,11 +281,15 @@ export class SpielRaum extends Room {
       if (!p) continue;
       const w = c.sicht?.w ?? SICHT_VORGABE.w, h = c.sicht?.h ?? SICHT_VORGABE.h, eb = p.ebene ?? '';
       const ax = w + SICHT_RAND, ay = h + SICHT_RAND, lx = ax + SICHT_LOESEN, ly = ay + SICHT_LOESEN;
+      const kam = p.kamera ? this.extra.get(c.sessionId)?.kameraPos ?? null : null;
       const pruefe = (karte, ids, ebeneVon) => {
         if (!karte) return;
         for (const id of ids) if (!karte.has(id)) ids.delete(id);
         for (const [id, o] of karte) {
-          const dx = Math.abs(o.x - p.x), dy = Math.abs(o.y - p.y), gleich = ebeneVon(o) === eb;
+          const gleich = ebeneVon(o) === eb;
+          let dx = Math.abs(o.x - p.x), dy = Math.abs(o.y - p.y);
+          const k = kam;   // Kameraflug: auch rund um die Kamera senden (näherer der beiden Mittelpunkte zählt)
+          if (k) { const kx = Math.abs(o.x - k.x), ky = Math.abs(o.y - k.y); if (Math.max(kx - ax, ky - ay) < Math.max(dx - ax, dy - ay)) { dx = kx; dy = ky; } }
           if (ids.has(id)) {
             if (!gleich || dx > lx || dy > ly) { c.view.remove(o); ids.delete(id); }
           } else if (gleich && dx <= ax && dy <= ay) { c.view.add(o); ids.add(id); }
@@ -464,7 +469,11 @@ export class SpielRaum extends Room {
     // halbe Größe des Bildausschnitts in Weltpixeln (je nach Bildschirm und Zoom): bestimmt, welche Zombies der Client bekommt
     this.onMessage('sicht', (client, m) => {
       const w = Number(m?.w), h = Number(m?.h);
-      if (Number.isFinite(w) && Number.isFinite(h)) client.sicht = { w: Math.max(200, Math.min(SICHT_MAX, w)), h: Math.max(150, Math.min(SICHT_MAX, h)) };
+      if (Number.isFinite(w) && Number.isFinite(h)) {
+        const flug = this.state.spieler.get(client.sessionId)?.kamera && this.extra.get(client.sessionId)?.superuser;   // Kameraflug: weiter hinaus sehen
+        const mx = flug ? SICHT_MAX_FLUG : SICHT_MAX;
+        client.sicht = { w: Math.max(200, Math.min(mx, w)), h: Math.max(150, Math.min(mx, h)) };
+      }
     });
     // jede dieser Nachrichten zeigt, dass jemand am Gerät ist (Rückkehr aus der AFK-Steuerung)
     {
@@ -1074,7 +1083,8 @@ export class SpielRaum extends Room {
     // zu viele Zombies draußen: die am weitesten entfernten, nicht jagenden verschwinden
     const draussen = [...this.state.zombies.entries()].filter(([id, z]) => !z.ebene && !z.jagt && !this.zombieInfo.get(id)?.welle && !this.zombieInfo.get(id)?.bleibt);   // wie beim Nachfüllen: Stadt- und Horden-Zombies zählen nicht
     const spieler = [...this.state.spieler.values()].filter(p => !p.ebene);
-    const abstand = z => Math.min(...spieler.map(p => Math.hypot(p.x - z.x, p.y - z.y)), Infinity);
+    const kpunkte = this.kameraPunkte();
+    const abstand = z => Math.min(...spieler.map(p => Math.hypot(p.x - z.x, p.y - z.y)), ...kpunkte.map(k => Math.hypot(k.x - z.x, k.y - z.y)), Infinity);
     draussen.sort((a, b) => abstand(b[1]) - abstand(a[1]));
     for (const [id] of draussen.slice(0, Math.max(0, draussen.length - soll))) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
   }
@@ -1082,7 +1092,7 @@ export class SpielRaum extends Room {
   zeitraffer() { return SpielRaum.einstellungen.zeitraffer || 1; }
   einstellungen() { return SpielRaum.einstellungen; }
 
-  unsterblich(p, x = null) { return x?.suUnsterblich || SpielRaum.einstellungen.unsterblich?.has?.(String(p.name).toLowerCase()); }
+  unsterblich(p, x = null) { return p.kamera || x?.suUnsterblich || SpielRaum.einstellungen.unsterblich?.has?.(String(p.name).toLowerCase()); }
 
   // Testzugang: Anmeldung ins Protokoll (nie das Passwort), Rückmeldung nur an den Spieler selbst
   suAnmeldung(client, p, auth) {
@@ -1799,7 +1809,7 @@ export class SpielRaum extends Room {
 
   starteAktion(client, zweit = false) {
     const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
-    if (!p || !x || p.aktion) return;
+    if (!p || !x || p.aktion || p.kamera) return;   // Kameraflug: keine Aktionen
     if (p.anBord) return void this.aufgaben?.aussteigen(client.sessionId);   // an Bord: die Aktionstaste steigt aus
     // zweite Taste: die andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
     const k = zweit ? (p.unten || p.zombie > 0 || this.state.phase !== 'spiel' ? null : this.tuerKontext(p, 'zweit')) : this.kontext(p);
@@ -2522,7 +2532,7 @@ export class SpielRaum extends Room {
       }
       this.spielerSchritt(id, p, xs, dt);
       this.beduerfnisse(p, x, dt * zr);
-      if (this.unsterblich(p, x)) { p.hp = 100; p.unten = false; p.infektion = 0; p.durst = Math.max(p.durst, 30); p.hunger = Math.max(p.hunger, 30); }
+      if (p.kamera || this.unsterblich(p, x)) { p.hp = 100; p.unten = false; p.infektion = 0; p.durst = Math.max(p.durst, 30); p.hunger = Math.max(p.hunger, 30); }
       this.aktionSchritt(id, p, x, dt);
     }
     this.messen('spieler', t0); t0 = performance.now();
@@ -2609,7 +2619,7 @@ export class SpielRaum extends Room {
     const safe = safeRoomVon(this.welt, p);
     p.sicher = safe ? safe.id : this.imLagerSafe(p) ? 'lager' : '';
     if (safe) { x.letzterSafe = safe.id; if (!x.bot) this.teamSafe = safe.id; }   // Team-Safe: zuletzt von einem echten Spieler betreten
-    if (p.unten || p.anBord) { this.eingabeVerwerfen(p, x); return; }   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
+    if (p.unten || p.anBord || p.kamera) { this.eingabeVerwerfen(p, x); return; }   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
     const schritte = this.eingabeSchritte(p, x, dt);
     const e = x.eingabe;
     if (p.zombie > 0) {
@@ -2876,7 +2886,7 @@ export class SpielRaum extends Room {
     const feld = new Int16Array(BREITE * HOEHE).fill(-1);
     const q = [];
     for (const p of this.state.spieler.values()) {
-      if (p.unten || p.anBord || p.zombie > 0 || p.ebene !== ebene) continue;
+      if (p.unten || p.anBord || p.kamera || p.zombie > 0 || p.ebene !== ebene) continue;
       const i = Math.floor(p.y / KACHEL) * BREITE + Math.floor(p.x / KACHEL);
       if (feld[i] === -1) { feld[i] = 0; q.push(i); }
     }
@@ -2914,9 +2924,10 @@ export class SpielRaum extends Room {
   berechneNah() {
     const m = new Map();
     const add = (e, x, y) => { let l = m.get(e); if (!l) m.set(e, l = []); l.push(x, y); };
-    for (const p of this.state.spieler.values()) {
+    for (const [sid, p] of this.state.spieler) {
       const e = p.ebene ?? '';
       add(e, p.x, p.y);
+      if (p.kamera) { const k = this.extra.get(sid)?.kameraPos; if (k) add(e, k.x, k.y); }   // Kameraflug: Zombies am Flugort laufen sauber mit
       if (e) {
         const mm = EBENE_MUSTER.exec(e), h = mm ? this.welt.haeuser[Number(mm[1])] : null;
         if (h) add('', (h.tuer.x + 0.5) * KACHEL, (h.tuer.y + 0.5) * KACHEL);
@@ -2929,6 +2940,13 @@ export class SpielRaum extends Room {
       if (sp.puma) add('', sp.puma.x, sp.puma.y);
     }
     this.nahPunkte = m;
+  }
+
+  // Kameraposition jedes Superusers im Kameraflug (Weltpixel) – dort soll gesehen werden, was sonst nur rund um Spieler existiert
+  kameraPunkte() {
+    const l = [];
+    for (const [sid, p] of this.state.spieler) if (p.kamera) { const k = this.extra.get(sid)?.kameraPos; if (k) l.push(k); }
+    return l;
   }
 
   istFern(x, y, ebene = '') {
@@ -2977,7 +2995,7 @@ export class SpielRaum extends Room {
     // Sehen: Kegel in Blickrichtung, schleichende Spieler erst später
     if (!info.ziel) {
       for (const [sid, p] of this.state.spieler) {
-        if (p.unten || p.anBord || p.zombie > 0 || p.ebene !== ebene) continue;
+        if (p.unten || p.anBord || p.kamera || p.zombie > 0 || p.ebene !== ebene) continue;
         const d = Math.hypot(p.x - z.x, p.y - z.y);
         let weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
         const gute = d < 200 ? sichtGuete(welt, z.x, z.y, p.x, p.y) : 0;   // Bäume mindern die Sicht, verdecken sie aber nie ganz
@@ -2997,7 +3015,7 @@ export class SpielRaum extends Room {
       }
     }
     let ziel = info.ziel ? this.state.spieler.get(info.ziel) : null;
-    if (ziel && (ziel.unten || ziel.anBord || ziel.zombie > 0 || ziel.ebene !== ebene)) {
+    if (ziel && (ziel.unten || ziel.anBord || ziel.kamera || ziel.zombie > 0 || ziel.ebene !== ebene)) {
       // der Gejagte ist in ein Haus gelaufen: zur Haustür (letzte bekannte Stelle)
       const m = !ebene && !ziel.unten && !(ziel.zombie > 0) ? EBENE_MUSTER.exec(ziel.ebene ?? '') : null;
       const h = m ? this.welt.haeuser[Number(m[1])] : null;
@@ -3208,9 +3226,10 @@ export class SpielRaum extends Room {
     this.nachspawn -= dt;
     // weit von allen Spielern entfernte, nicht jagende Zombies draußen verschwinden (große Karten)
     const draussenSpieler = [...this.state.spieler.values()].filter(p => !p.ebene);
+    const kameras = this.kameraPunkte();   // Kameraflug: Zombies am Flugort bleiben bestehen
     if (draussenSpieler.length) for (const [id, z] of this.state.zombies) {
       if (z.ebene || z.jagt || this.zombieInfo.get(id)?.bleibt) continue;   // Stadt-Zombies (Ausbruch, Verwandelte) bleiben
-      if (draussenSpieler.every(p => Math.hypot(p.x - z.x, p.y - z.y) > 1500)) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
+      if (draussenSpieler.every(p => Math.hypot(p.x - z.x, p.y - z.y) > 1500) && kameras.every(k => Math.hypot(k.x - z.x, k.y - z.y) > 1500)) { this.state.zombies.delete(id); this.zombieInfo.delete(id); }
     }
     const soll = this.zombieSollJetzt();
     // gezählt werden nur Zombies aus dem Umland – die Stadt-Zombies kommen obendrauf

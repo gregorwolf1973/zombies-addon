@@ -43,7 +43,10 @@ export function anmelden(hash, passwort, schluessel) {
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel', 'kamera', 'kamerapos'];
+
+// Kameraposition: Zahl innerhalb der Karte, sonst Rückfallwert
+const kameraZahl = (v, rueck, max) => Number.isFinite(Number(v)) ? Math.max(0, Math.min(max, Number(v))) : rueck;
 
 function springen(raum, p, x, ziel) {
   p.x = ziel.x; p.y = ziel.y; p.ebene = ziel.ebene ?? ''; p.unten = false; p.anBord = false; p.sicher = ''; p.aktion = ''; p.fortschritt = 0;
@@ -113,7 +116,7 @@ export function befehl(raum, client, m) {
   if (!x?.superuser || !p || !m || typeof m !== 'object') return null;
   const b = String(m.befehl ?? '');
   if (!SU_BEFEHLE.includes(b)) return 'Unbekannter Befehl';
-  console.log(`[Superuser] ${p.name}: ${b}${m.groesse ? ' ' + Number(m.groesse) : ''}${m.stunde ? ' ' + Number(m.stunde) : ''}${m.zustand ? ' ' + String(m.zustand).slice(0, 12) : ''}`);
+  if (b !== 'kamerapos') console.log(`[Superuser] ${p.name}: ${b}${m.groesse ? ' ' + Number(m.groesse) : ''}${m.stunde ? ' ' + Number(m.stunde) : ''}${m.zustand ? ' ' + String(m.zustand).slice(0, 12) : ''}`);
   const s = raum.state;
   switch (b) {
     case 'bw': {
@@ -168,6 +171,18 @@ export function befehl(raum, client, m) {
       if (an) { raum.hordeAus.add(sid); raum.hordeDebug.delete(sid); try { client.send('hordeInfo', { aktiv: false }); } catch { /* egal */ } }
       else { raum.hordeAus.delete(sid); raum.hordeDebug.add(sid); raum.welle?.infoSenden?.(0, true); }
       return an ? 'Horden-Anzeige: aus' : '🧟 Horden-Anzeige: an';
+    }
+    case 'kamera': {   // Kameraflug: Figur steht, unverwundbar und für Zombies unsichtbar; die Kamera meldet ihre Position (Sichtmittelpunkt)
+      const an = !!m.an;
+      p.kamera = an;
+      x.eingabe = { dx: 0, dy: 0, s: false }; raum.eingabeVerwerfen(p, x); raum.ruehrt?.(client.sessionId);
+      if (an) { x.aktionZiel = null; x.kameraPos = { x: kameraZahl(m.x, p.x, BREITE * KACHEL), y: kameraZahl(m.y, p.y, HOEHE * KACHEL) }; }
+      else x.kameraPos = null;
+      return an ? '🎥 Kameraflug: an (Figur unsichtbar und unverwundbar)' : 'Kameraflug beendet';
+    }
+    case 'kamerapos': {   // gedrosselt vom Client, ohne Meldung
+      if (p.kamera) { x.kameraPos = { x: kameraZahl(m.x, x.kameraPos?.x ?? p.x, BREITE * KACHEL), y: kameraZahl(m.y, x.kameraPos?.y ?? p.y, HOEHE * KACHEL) }; raum.ruehrt?.(client.sessionId); }
+      return null;
     }
     case 'unsterblich': {
       x.suUnsterblich = !x.suUnsterblich;

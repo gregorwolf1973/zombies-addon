@@ -34,6 +34,7 @@ import { GERAET_SCHLUESSEL, stimmenFaktorLesen, anAusLesen, schiessModusLesen, f
 import { fkStart } from './faehigkeiten.mjs';
 import { startwahlStart } from './startwahl.mjs';
 import { Uebersicht } from './uebersicht.mjs';
+import { Kameraflug, radEinrichten, ZOOM_MIN, ZOOM_MAX, FLUG_ZOOM_MIN } from './kameraflug.mjs';
 import { b11Registrieren, b11Animieren } from './szene_b11.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
@@ -576,6 +577,7 @@ function suMenueEinrichten(szene) {
     const b = (befehl, text, extra = {}) => `<button type="button" data-su='${JSON.stringify({ befehl, ...extra })}'>${text}</button>`;
     fenster.innerHTML = `<div class="fenster"><div class="kopfzeile"><b>☰ Testmenü</b><button type="button" id="suzu" aria-label="Schließen">✕</button></div>
       <div class="titel">Springen</div>
+      <button type="button" data-flug="1">🎥 Kameraflug</button>
       ${b('bw', '🎖 Zur Bundeswehr')}${b('evak', '📍 Zum Evakuierungspunkt')}${b('horde_hin', '🧟 Zur Zombiehorde (50 m davor)')}
       <div class="titel">Bots und Ausrüstung</div>
       ${b('bots', '🤖 Alle Bots zu mir (heilen)')}${b('auffuellen', '🎒 Ausrüstung auffüllen')}${b('unsterblich', '⭐ Unsterblich ein/aus')}
@@ -598,6 +600,7 @@ function suMenueEinrichten(szene) {
     fenster.querySelector('#suzu').onclick = zu;
     fenster.addEventListener('click', e => {
       if (e.target === fenster) return zu();
+      if (e.target.closest('button[data-flug]')) { zu(); szene?.flug?.starten(); return; }
       const bt = e.target.closest('button[data-su]');
       if (!bt) return;
       try { raum?.send('su', JSON.parse(bt.dataset.su)); } catch { /* egal */ }
@@ -886,7 +889,7 @@ class Ort extends Phaser.Scene {
     this.input.on('pointermove', p => {
       if (this.finger.has(p.id)) this.finger.set(p.id, { x: p.x, y: p.y });
       if (this.kneifen && this.finger.size >= 2) {
-        this.zoomWahl = Phaser.Math.Clamp(this.kneifen.zoom * fingerAbstand() / this.kneifen.abstand, 0.4, 1.8);
+        this.zoomWahl = Phaser.Math.Clamp(this.kneifen.zoom * fingerAbstand() / this.kneifen.abstand, ...this.zoomGrenzen());
         this.cameras.main.setZoom(this.zielZoom());
         return;
       }
@@ -908,7 +911,7 @@ class Ort extends Phaser.Scene {
         }
       }
       if (this.kneifen && this.finger.size < 2) {
-        if (this.finger.size === 0) { this.kneifen = null; try { localStorage.setItem('zob_zoom', this.zoomWahl.toFixed(2)); } catch {} }
+        if (this.finger.size === 0) { this.kneifen = null; if (!this.flug?.aktiv) { try { localStorage.setItem('zob_zoom', this.zoomWahl.toFixed(2)); } catch {} } }
         return;
       }
       if (p.id === this.joystick.id) this.joystick = { id: null, bx: 0, by: 0, vx: 0, vy: 0 };
@@ -1043,7 +1046,10 @@ class Ort extends Phaser.Scene {
     $('tauschab').onclick = () => raum.send('tausch_ende');
     this.hudZeit = 0;
     // Zoom: Mausrad, Zwei-Finger-Zoom, Tasten + und − (keine Knöpfe)
-    this.input.on('wheel', (_p, _o, _dx, dy) => this.zoomen(dy < 0 ? 1.12 : 1 / 1.12));
+    // (Mausrad: Fensterhörer in kameraflug.mjs – Phasers eigener Hörer sah nur Ereignisse über dem Canvas)
+    if (window.__radAb) window.__radAb();
+    window.__radAb = radEinrichten(this);
+    this.flug = new Kameraflug(this, raum);   // Superuser-Kameraflug (Server prüft)
     this.input.keyboard.on('keydown', e => {
       if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
       if (e.key === '+' || e.key === '=') this.zoomen(1.25);
@@ -1081,10 +1087,28 @@ class Ort extends Phaser.Scene {
   // Kamerazoom: Bildschirmgröße × eigene Wahl (Knöpfe, Mausrad, +/−) × drinnen näher
   zielZoom(ebene = this.aktEbene) { return this.grundZoom * this.zoomWahl * (ebene ? INNEN_ZOOM : 1); }
 
+  // Zoom-Grenzen: im Kameraflug darf man weiter hinaus
+  zoomGrenzen() { return [this.flug?.aktiv ? FLUG_ZOOM_MIN : ZOOM_MIN, ZOOM_MAX]; }
+
+  // Mausrad (kameraflug.mjs): jede Raststufe wirkt, auch mitten in einer laufenden Bewegung – Phasers zoomTo() hätte
+  // neue Zielwerte verworfen, solange ein früherer Zoom noch lief; darum setzt update() den Zoom selbst weich nach
+  radZoom(faktor) { this.zoomen(faktor); }
+
   zoomen(faktor) {
-    this.zoomWahl = Phaser.Math.Clamp((this.zoomWahl ?? 1) * faktor, 0.4, 1.8);
-    try { localStorage.setItem('zob_zoom', this.zoomWahl.toFixed(2)); } catch {}
-    this.cameras.main.zoomTo(this.zielZoom(), 160, 'Sine.easeOut');
+    const [lo, hi] = this.zoomGrenzen();
+    this.zoomWahl = Phaser.Math.Clamp((this.zoomWahl ?? 1) * faktor, lo, hi);
+    if (!this.flug?.aktiv) { try { localStorage.setItem('zob_zoom', this.zoomWahl.toFixed(2)); } catch {} }
+    this.cameras.main.zoomEffect?.reset?.();   // ein laufender Szenenwechsel-Zoom darf den Radzoom nicht blockieren
+    this.zoomGlatt = true;
+  }
+
+  // jede Bildfolge: Kamerazoom weich auf den Zielwert ziehen (unabhängig von der Bildrate)
+  zoomNachziehen(dt) {
+    const cam = this.cameras.main;
+    if (cam.zoomEffect?.isRunning) return;   // Szenenwechsel-Zoom (innen/außen) läuft
+    const ziel = this.zielZoom(), d = ziel - cam.zoom;
+    if (Math.abs(d) < 0.0005) { if (d) cam.setZoom(ziel); return; }
+    cam.setZoom(cam.zoom + d * (1 - Math.exp(-dt * 16)));
   }
 
   zeichneKarte() {
@@ -1910,7 +1934,8 @@ class Ort extends Phaser.Scene {
   nebelZeichnen(ich, dt) {
     const n = this.nebelEbene ??= new NebelEbene(this), st = raum.state;
     if (!ich || !this.lokal) { n.verstecken(); return; }
-    n.aktualisiere(this.cameras.main.worldView, this.lokal.x, this.lokal.y, st.nebel ?? 0, st.nebelSicht || 20, 1 - helligkeit(st.uhr ?? 480), ich.lampe > 0 ? this.lampenRichtung(ich) : null, dt, !!this.aktEbene, (d => d * d * (3 - 2 * d) * (st.nachtDunkel ?? 92) / 100)(1 - helligkeit(st.uhr ?? 480)));
+    const fz = this.flug?.zentrum();
+    n.aktualisiere(this.cameras.main.worldView, fz ? fz.x : this.lokal.x, fz ? fz.y : this.lokal.y, st.nebel ?? 0, st.nebelSicht || 20, 1 - helligkeit(st.uhr ?? 480), ich.lampe > 0 ? this.lampenRichtung(ich) : null, dt, !!this.aktEbene, (d => d * d * (3 - 2 * d) * (st.nachtDunkel ?? 92) / 100)(1 - helligkeit(st.uhr ?? 480)));
   }
 
   // Draußen: Dämmerung färbt warm, nachts dunkelblau; Laternen, Fenster, Taschenlampe und ein kleiner Schein um jeden Spieler
@@ -1946,9 +1971,10 @@ class Ort extends Phaser.Scene {
       if (sicht(p.x, p.y, 100)) { P.setScale(p.lampe > 0 ? 0.7 : 0.45).setAlpha(0.7); rt.erase(P, p.x - ox, p.y - oy); }
     }
     this.fremdeLampen(rt, ox, oy, '', 0.85);
-    const lx = this.lokal.x - ox, ly = this.lokal.y - oy;
+    const fz = this.flug?.zentrum();
+    const lx = (fz ? fz.x : this.lokal.x) - ox, ly = (fz ? fz.y : this.lokal.y) - oy;   // Kameraflug: Schein um die Kamera
     P.setScale(0.6).setAlpha(0.8); rt.erase(P, lx, ly);
-    if (ich.lampe > 0) { this.lampenPinsel.setRotation(this.lampenRichtung(ich)).setScale(1.0).setAlpha(1); rt.erase(this.lampenPinsel, lx, ly); }
+    if (ich.lampe > 0 && !fz) { this.lampenPinsel.setRotation(this.lampenRichtung(ich)).setScale(1.0).setAlpha(1); rt.erase(this.lampenPinsel, lx, ly); }
   }
 
   // Von der eigenen Position aus alles erkunden, was ohne geschlossene Tür erreichbar ist; einmal gesehen bleibt sichtbar
@@ -2541,7 +2567,7 @@ class Ort extends Phaser.Scene {
     if (!this.lokal) this.lokal = { x: p.x, y: p.y };
     // Kamera hängt an der eigenen Figur – auch wenn man (z. B. im Safe Room) drinnen startet und die Position
     // schon beim Ebenenwechsel gesetzt wurde, oder die Figur neu angelegt wurde
-    if (this.folgtFigur !== f.box) { this.folgtFigur = f.box; this.cameras.main.startFollow(f.box, true, 0.15, 0.15); this.cameras.main.centerOn(this.lokal.x, this.lokal.y); }
+    if (this.folgtFigur !== f.box && !this.flug?.aktiv) { this.folgtFigur = f.box; this.cameras.main.startFollow(f.box, true, 0.15, 0.15); this.cameras.main.centerOn(this.lokal.x, this.lokal.y); }
     if (this.sprung) {
       const sp = this.sprung;
       sp.t = Math.min(1, sp.t + dt / 0.32);
@@ -2600,7 +2626,8 @@ class Ort extends Phaser.Scene {
     let s = k.SHIFT.isDown;
     if (dx || dy) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; }
     else if (this.joystick.id !== null) { dx = this.joystick.vx; dy = this.joystick.vy; s = false; }
-    if (window.__startwahlOffen) { dx = 0; dy = 0; s = false; }   // Startwahl-Dialog offen: Figur steht still
+    if (window.__startwahlOffen || this.flug?.aktiv) { dx = 0; dy = 0; s = false; }   // Kameraflug: die Figur steht, die Tasten steuern die Kamera
+    if (false) { dx = 0; }   // Startwahl-Dialog offen: Figur steht still
     const f = feuerErlaubt();   // false nur im Modus „per Knopf“ ohne gedrückten Feuerknopf
     this.eingabe = { dx, dy, s };
     // Gemeldet wird immer das abgelaufene Stück: „d Sekunden lang mit (dx, dy, s) gelaufen“, mit laufender Nummer n.
@@ -2915,6 +2942,8 @@ class Ort extends Phaser.Scene {
       this.tagAb = raum.state.tagAb; this.nachtAb = raum.state.nachtAb; setzeTageszeiten(this.tagAb, this.nachtAb);
     }
     this.leseEingabe();
+    this.flug?.update(dt);
+    this.zoomNachziehen(dt);
     this.zeichneStick();
     this.abgleichen(dt);
     this.ladeRingeZeichnen();
@@ -2950,7 +2979,8 @@ class Ort extends Phaser.Scene {
   // Schritte, Treffer am eigenen Leib, Stöhnen naher Zombies
   geraeusche(ich, dt) {
     if (!ich || !this.lokal) return;
-    ton.hoerer(this.lokal.x, this.lokal.y);
+    const fz = this.flug?.zentrum();
+    ton.hoerer(fz ? fz.x : this.lokal.x, fz ? fz.y : this.lokal.y);   // Kameraflug: gehört wird an der Kamera
     const l = this.letzterOrt ?? this.lokal;
     this.schrittWeg = (this.schrittWeg ?? 0) + Math.hypot(this.lokal.x - l.x, this.lokal.y - l.y);
     this.letzterOrt = { x: this.lokal.x, y: this.lokal.y };

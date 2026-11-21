@@ -147,7 +147,11 @@ export class Uebersicht {
       const war = zug;
       clearTimeout(this.hinTimer);
       zeiger.delete(e.pointerId);
-      if (zeiger.size === 0 && war && !war.bewegt && !war.lang && e.button !== 2) this.umschalten();
+      if (zeiger.size === 0 && war && !war.bewegt && !war.lang && e.button !== 2) {
+        const a = this.letzteAnsicht;
+        if (this.flugHin && a) { const p = lokal(e); this.flugHin((a.x0 + p.x / a.m) * KACHEL, (a.y0 + p.y / a.m) * KACHEL); }   // Kameraflug: Klick springt dorthin
+        else this.umschalten();
+      }
       if (zeiger.size === 0) zug = null;
     };
     el.addEventListener('pointerup', ende);

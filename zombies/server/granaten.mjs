@@ -15,7 +15,7 @@ export class Granaten {
   // Mit Zielpunkt m = { x, y }: genau dorthin, geklemmt auf Wurfweite und den 60°-Bogen vor der Figur; Zünder = Aufschlag.
   werfen(client, m = null) {
     const r = this.raum, p = r.state.spieler.get(client.sessionId), x = r.extra.get(client.sessionId);
-    if (!p || !x || p.unten || p.zombie > 0 || p.aktion || r.state.phase !== 'spiel') return false;
+    if (!p || !x || p.unten || p.kamera || p.zombie > 0 || p.aktion || r.state.phase !== 'spiel') return false;
     if ((x.wurfPause ?? 0) > this.zeit) return false;
     const einst = r.constructor.einstellungen ?? {};
     const hand = p.waffe === 'handgranate' && !p.faust;
