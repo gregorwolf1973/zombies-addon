@@ -614,6 +614,43 @@ function schatten(ctx, g) {
   ctx.restore();
 }
 
+// gut sichtbare Haustür im Ursprung (x entlang der Wand, y nach außen): heller Rahmen, kräftig rotbraunes Türblatt mit Füllungen, goldene Klinke, Stufe und Fußabtreter davor
+export function haustuerZeichnen(ctx) {
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-15, 3, 32, 13);                      // Schlagschatten
+  ctx.fillStyle = '#e0dcd0'; ctx.fillRect(-16, 4, 32, 11);                              // Stufe (heller Stein)
+  ctx.fillStyle = '#9e9a8c'; ctx.fillRect(-16, 13, 32, 2);                              // Stufenkante
+  ctx.fillStyle = '#2e5d34'; ctx.fillRect(-9, 7, 18, 5);                                // Fußabtreter
+  ctx.fillStyle = '#7fb069'; for (let x = -7; x <= 5; x += 4) ctx.fillRect(x, 8, 2, 3);
+  ctx.fillStyle = '#fff6dc'; ctx.fillRect(-14, -7, 28, 12);                             // heller Türrahmen
+  ctx.strokeStyle = '#1b0f0a'; ctx.lineWidth = 1; ctx.strokeRect(-13.5, -6.5, 27, 11);
+  ctx.fillStyle = '#a63a1a'; ctx.fillRect(-11, -5, 22, 8);                              // Türblatt (Holzrot)
+  ctx.fillStyle = '#6e2410'; ctx.fillRect(-11, -5, 22, 1.5); ctx.fillRect(-0.5, -3.5, 1, 6.5);   // Oberkante, Mittelfuge
+  ctx.fillStyle = '#c4572e'; ctx.fillRect(-9, -2.5, 7, 4.5); ctx.fillRect(2, -2.5, 7, 4.5);        // Füllungen
+  ctx.fillStyle = '#ffd54f'; ctx.fillRect(5.5, -0.5, 3, 3);                             // Klinke
+  ctx.strokeStyle = '#5a4300'; ctx.lineWidth = 0.8; ctx.strokeRect(5.5, -0.5, 3, 3);
+}
+
+// Eingangsmarkierung eines Safe Rooms, ÜBER dem Safe-Dach (das Dach großer/unregelmäßiger Gebäude deckt Tür und Vorplatz sonst zu):
+// Tür auf der Wand (wie haustuerZeichnen), grüner Leuchtfleck auf dem Vorplatz und ein Schild „SAFE“ mit Pfeil zur Tür. Ursprung = Türmitte, w = Drehwinkel der Tür (+y nach außen).
+export function zeichneSafeEingang(ctx, w) {
+  const nx = -Math.sin(w), ny = Math.cos(w);   // Richtung nach draußen
+  const g = ctx.createRadialGradient(nx * 22, ny * 22, 2, nx * 22, ny * 22, 34);
+  g.addColorStop(0, 'rgba(105,240,120,.55)'); g.addColorStop(1, 'rgba(105,240,120,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(nx * 22, ny * 22, 34, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.rotate(w); haustuerZeichnen(ctx); ctx.restore();
+  // Schild vor dem Vorplatz der Tür, Pfeil zeigt zur Tür
+  const sx = nx * 52, sy = ny * 52;
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(sx - 15, sy - 5, 32, 17);
+  ctx.fillStyle = '#1b5e20'; ctx.fillRect(sx - 16, sy - 9, 32, 17);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.strokeRect(sx - 15, sy - 8, 30, 15);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('SAFE', sx, sy);
+  const tx = nx * 19, ty = ny * 19;   // Pfeilspitze an der Stufenkante
+  ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(nx * 35, ny * 35); ctx.lineTo(tx + nx * 6, ty + ny * 6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + nx * 8 - ny * 5, ty + ny * 8 + nx * 5); ctx.lineTo(tx + nx * 8 + ny * 5, ty + ny * 8 - nx * 5); ctx.closePath(); ctx.fill();
+}
+
 export function zeichneVektorDaecher(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect);
   const hier = v.gebaeude.filter(g => !g.safe && schneidet({ ...g.box, x1: g.box.x1 + 10, y1: g.box.y1 + 12 }, r));
@@ -631,19 +668,7 @@ export function zeichneVektorDaecher(ctx, welt, rect) {
     const t = tuerAufWand(v, h);
     if (t.x < r.x0 - K || t.x > r.x1 + K || t.y < r.y0 - K || t.y > r.y1 + K) continue;
     ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.w);   // x entlang der Wand, y nach außen
-    // gut sichtbare Haustür: heller Rahmen, kräftig rotbraunes Türblatt mit Füllungen, goldene Klinke, Stufe und Fußabtreter davor
-    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-15, 3, 32, 13);                      // Schlagschatten
-    ctx.fillStyle = '#e0dcd0'; ctx.fillRect(-16, 4, 32, 11);                              // Stufe (heller Stein)
-    ctx.fillStyle = '#9e9a8c'; ctx.fillRect(-16, 13, 32, 2);                              // Stufenkante
-    ctx.fillStyle = '#2e5d34'; ctx.fillRect(-9, 7, 18, 5);                                // Fußabtreter
-    ctx.fillStyle = '#7fb069'; for (let x = -7; x <= 5; x += 4) ctx.fillRect(x, 8, 2, 3);
-    ctx.fillStyle = '#fff6dc'; ctx.fillRect(-14, -7, 28, 12);                             // heller Türrahmen
-    ctx.strokeStyle = '#1b0f0a'; ctx.lineWidth = 1; ctx.strokeRect(-13.5, -6.5, 27, 11);
-    ctx.fillStyle = '#a63a1a'; ctx.fillRect(-11, -5, 22, 8);                              // Türblatt (Holzrot)
-    ctx.fillStyle = '#6e2410'; ctx.fillRect(-11, -5, 22, 1.5); ctx.fillRect(-0.5, -3.5, 1, 6.5);   // Oberkante, Mittelfuge
-    ctx.fillStyle = '#c4572e'; ctx.fillRect(-9, -2.5, 7, 4.5); ctx.fillRect(2, -2.5, 7, 4.5);        // Füllungen
-    ctx.fillStyle = '#ffd54f'; ctx.fillRect(5.5, -0.5, 3, 3);                             // Klinke
-    ctx.strokeStyle = '#5a4300'; ctx.lineWidth = 0.8; ctx.strokeRect(5.5, -0.5, 3, 3);
+    haustuerZeichnen(ctx);
     ctx.restore();
   }
 }

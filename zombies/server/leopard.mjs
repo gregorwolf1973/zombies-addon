@@ -3,7 +3,7 @@
 // erst, wenn die Rohrrichtung höchstens ZIEL_TOLERANZ vom Ziel abweicht; der Client glättet nur.
 // Hauptkanone: ab `kanoneMin` Zombies auf einem Fleck (Kreis 3 m Radius) in 15–60 m Entfernung, Pause mindestens `kanonePause` s,
 // Explosion mit 5 m Radius und hohem Flächenschaden (nach außen schwächer, Spieler nie verletzt). Nie schießen, wenn ein Spieler oder
-// Mensch im Sicherheitsradius um den Einschlag steht (gemeinsame Zielwahl mit dem Panzermörser: server/zielwahl.mjs).
+// Mensch im Sicherheitsradius um den Einschlag steht (Zielwahl: server/zielwahl.mjs).
 import { LEOPARD } from '../client/evak.mjs';
 import { PX, gefaehrdet, haufenZiel } from './zielwahl.mjs';
 

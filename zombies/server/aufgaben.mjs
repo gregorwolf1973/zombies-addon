@@ -109,6 +109,8 @@ export class Aufgaben {
     this.medizin = false;      // Spritze aus der Apotheke gefunden
     this.busId = null;
     this.busRest = 0;          // ECHTE Sekunden bis zur Abfahrt (ab dem Halt)
+    this.alleBordSek = 10;     // sind alle echten Spieler an Bord und die Aufgaben geschafft, läuft die Wartezeit auf höchstens so viele Sekunden herunter
+    this.alleBordGemeldet = false; this.alleDa = false;
     this.busHeute = false;     // der Bus war in diesem Zeitfenster schon da
     this.ankGemeldet = false;
     this.echteDa = 0;
@@ -470,8 +472,27 @@ export class Aufgaben {
     this.busAbSetzen();
     const alleDa = this.mitfahrer();
     this.abfahrtWarnung();
-    // sofortige Abfahrt nur, wenn die Fahrt auch gelingt – sonst wartet er bis zum Ablauf der Zeit
-    if ((alleDa && this.fahrtGelingt()) || this.busRest <= 0) this.abfahrt();
+    // alle an Bord und die Fahrt gelingt: Wartezeit auf höchstens 10 s kürzen, dann fährt er sofort – sonst wartet er bis zum Ablauf der Zeit
+    this.bordRaffen(alleDa);
+    if (this.busRest <= 0) this.abfahrt();
+  }
+
+  // Alle lebenden echten Spieler an Bord und die Aufgaben geschafft (fahrtGelingt): Restwartezeit höchstens alleBordSek, einmalige Meldung
+  bordRaffen(alleDa) {
+    this.alleDa = alleDa;
+    if (!alleDa || !this.fahrtGelingt()) { this.alleBordGemeldet = false; return; }
+    const bunker = this.heli?.art === 'bunker', fin = this.raum.finale;
+    if (bunker) {   // Bunker: der Atomschlag-Countdown springt auf 10 s (server/finale.mjs), danach Sieg
+      if (!fin?.aktiv() || fin.rest <= this.alleBordSek) return;
+      fin.setzen(this.alleBordSek);
+    } else {
+      if (this.busRest <= this.alleBordSek) return;
+      this.busRest = this.alleBordSek; this.busAbSetzen();
+    }
+    if (this.alleBordGemeldet) return;
+    this.alleBordGemeldet = true;
+    const n = Math.max(1, Math.round(this.alleBordSek));
+    this.raum.broadcast('meldung', { text: bunker ? `☢️ Alle im Bunker – Tor schließt in ${n} s` : `${this.fz().zeichen} Alle an Bord – Abfahrt in ${n} s`, lang: true });
   }
 
   // Bus (Gewehre aus den Fenstern) und Panzer (Turm-MG) schießen vom Erscheinen bis zur Abfahrt auf Zombies in der Nähe;
@@ -524,6 +545,7 @@ export class Aufgaben {
   }
 
   restSetzen() {
+    this.alleBordGemeldet = false;
     this.busRest = Math.max(1, Math.min(60, Number(this.einst().wartenEchtMin) || 10)) * 60;
     this.busAbSetzen();
   }
@@ -648,7 +670,8 @@ export class Aufgaben {
       if (!bot && p.verbunden !== false && an) echtDa++;
     }
     s.busBord = bord; s.busGesamt = gesamt; this.echteDa = echtDa;
-    return lebende > 0 && lebendeDa === lebende;
+    this.alleDa = lebende > 0 && lebendeDa === lebende;
+    return this.alleDa;
   }
 
   // was für eine erfolgreiche Abfahrt noch fehlt (Pflichtaufgaben, Mindestzahl erledigter Aufgaben)
@@ -857,11 +880,12 @@ export class Aufgaben {
     if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); }   // Aufgaben/Missionen laufen auch beim wartenden Hubschrauber weiter
     const alleDa = this.mitfahrer();
     if (!this.heli) return;   // mitfahrer() hat abgebrochen
-    if (h.phase === 'bunker') return;   // Bunkertor: nur hineingehen, kein Abflug – das Ende kommt mit dem Countdown (bunkerEnde)
+    if (h.phase === 'bunker') { this.bordRaffen(this.alleDa); return; }   // Bunkertor: nur hineingehen, kein Abflug – das Ende kommt mit dem Countdown (bunkerEnde)
     this.busRest -= dt; this.busAbSetzen();
     // Abflug nur, wenn die Fahrt gelingt (Pflicht-/Missionsaufgaben erledigt); sonst wartet er weiter
-    if (!this.fahrtGelingt()) { if (this.busRest <= 0) this.restSetzen(); return; }
-    if (!alleDa && this.busRest > 0) return;
+    if (!this.fahrtGelingt()) { this.alleBordGemeldet = false; if (this.busRest <= 0) this.restSetzen(); return; }
+    this.bordRaffen(alleDa);
+    if (this.busRest > 0) return;
     const nichtDa = s.busGesamt > s.busBord;
     if (this.echteDa >= 1) {
       this.heli = null; s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.folgenId = null;   // wer an Bord ist, bleibt bis zum Levelwechsel dort

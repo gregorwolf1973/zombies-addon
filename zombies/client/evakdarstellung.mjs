@@ -1,6 +1,6 @@
 // Darstellung der Evakuierungsarten (Phaser): Leopard 2A7 mit drehendem Turm und Lader-MG (Level 2), A400M mit drehenden Propellern
 // und der Hubschrauber (Evakuierung per Flugzeug). Logik und Zahlen kommen vom Server (server/aufgaben.mjs, client/evak.mjs).
-import { LEOPARD, A400M, HELI, TANKLASTER, M113, evakArtFuer } from './evak.mjs';
+import { LEOPARD, A400M, HELI, TANKLASTER, evakArtFuer } from './evak.mjs';
 import { fetzen } from './effekte.mjs';
 import * as ton from './ton.mjs';
 import { kettenSpur } from './ketten.mjs';
@@ -17,7 +17,6 @@ export function evakLaden(scene) {
   scene.load.image('nh90-rumpf', 'grafik/nh90_rumpf.webp');        // Hubschrauber NH90: Rumpf und Hauptrotor getrennt (Rotor dreht)
   scene.load.image('nh90-rotor', 'grafik/nh90_rotor.webp');
   scene.load.image('tanklaster', 'grafik/tanklaster.webp');        // Kulisse neben dem gelandeten A400M
-  scene.load.image('m113-moerser', 'grafik/m113_moerser.webp');    // Panzermörser (M113, Dachluke offen)
 }
 
 // Art der Evakuierung dieser Welt (Server: state.evakArt; ältere Stände: nach Karte)
@@ -224,53 +223,6 @@ export function evakHudText(s, an, uhrText) {
   if (ph === 'abflug') return '🚁 Der Hubschrauber hebt ab …';
   if (s.funk && s.busAnkunft >= 0) return `✈️ Der A400M landet um ${uhrText(s.busAnkunft)} auf dem markierten Landeplatz`;
   return '📻 Funkspruch fehlt – ohne ihn kommt keine Maschine';
-}
-
-// ---------- Panzermörser (M113, Steilfeuer; Test-Schalter, server/moerser.mjs) ----------
-export function moerserBild(scene) { return scene.textures.exists('m113-moerser') ? 'm113-moerser' : null; }
-
-// Zusatzteile im Fahrzeug-Container: Soldat am Mörser und das 120-mm-Rohr, das zum Ziel zeigt; skalaSoldat = Größe der Soldatenfigur
-export function moerserFahrzeug(scene, o, dt, skalaSoldat) {
-  o.bild.setScale(M113.skala);
-  if (!o.rohr) {
-    o.rohr = scene.add.graphics();
-    o.soldat = scene.add.image(M113.soldatX, 0, 'figuren2', scene.figurBild2('soldat_idle')).setScale(skalaSoldat);
-    o.box.add([o.rohr, o.soldat]);
-    o.rohrW = o.r;
-  }
-  const jetzt = scene.time.now, ziel = jetzt < (o.rohrBis ?? 0) ? o.rohrZiel : o.r - 0.9;   // ohne Ziel steht das Rohr schräg nach hinten-oben
-  o.rohrW += winkelDiff(o.rohrW, ziel) * Math.min(1, dt * 5);
-  const loc = o.rohrW - o.r, c = Math.cos(loc), sn = Math.sin(loc), r0 = M113.lagerX;
-  o.rohr.clear();
-  o.rohr.lineStyle(3, 0x2b2f26, 1).lineBetween(r0, 0, r0 + c * M113.rohr, sn * M113.rohr);        // Rohr
-  o.rohr.lineStyle(1.5, 0x5b6350, 1).lineBetween(r0, 0, r0 + c * M113.rohr, sn * M113.rohr);
-  o.rohr.fillStyle(0x15170f, 1).fillCircle(r0 + c * M113.rohr, sn * M113.rohr, 2);                  // Mündung
-  o.soldat.setRotation(loc + Math.PI);                                                              // Soldat blickt über das Rohr
-  o.soldat.setFrame(scene.figurBild2('soldat_idle', Math.floor(jetzt / 260) % 3));
-}
-
-// Schuss: Rohr zum Ziel, Rauch am Rohr, Granate im hohen Bogen (wird größer und wieder kleiner, Schatten am Boden); der Einschlag kommt als 'explosion'
-export function moerserSchuss(scene, m, s) {
-  const id = [...(s?.fahrzeuge?.entries?.() ?? [])].find(([, v]) => v.art === 'moerser')?.[0];
-  const o = id ? scene.busObj.get(id) : null;
-  if (o) { o.rohrZiel = m.w; o.rohrBis = scene.time.now + 2500; }
-  const mx = m.x1 + Math.cos(m.w) * 11, my = m.y1 + Math.sin(m.w) * 11;
-  for (let i = 0; i < 6; i++) {
-    const r = scene.add.circle(mx + (Math.random() - 0.5) * 8, my + (Math.random() - 0.5) * 8, 4 + Math.random() * 4, 0xbdbdbd, 0.6).setDepth(6.5);
-    scene.tweens.add({ targets: r, x: r.x + (Math.random() - 0.5) * 30, y: r.y - 16 - Math.random() * 20, alpha: 0, scale: 2.4, duration: 900, onComplete: () => r.destroy() });
-  }
-  ton.kanone(m.x1, m.y1);
-  const schatten = scene.add.circle(m.x1, m.y1, 1.5, 0x000000, 0.35).setDepth(3.9);
-  const granate = scene.add.circle(m.x1, m.y1, 1.8, 0x37402b).setStrokeStyle(0.6, 0x12140d).setDepth(9);   // klein: halbe Größe, wächst im Bogen höchstens auf das 1,6-fache
-  const t0 = scene.time.now, flug = m.flug * 1000, hoch = Math.min(180, 40 + Math.hypot(m.x2 - m.x1, m.y2 - m.y1) * 0.35);
-  const tick = () => {
-    const k = Math.min(1, (scene.time.now - t0) / flug), x = m.x1 + (m.x2 - m.x1) * k, y = m.y1 + (m.y2 - m.y1) * k, h = Math.sin(k * Math.PI);
-    schatten.setPosition(x, y).setScale(1 - 0.4 * h).setAlpha(0.35 - 0.15 * h);
-    granate.setPosition(x, y - h * hoch).setScale(1 + h * 0.6);
-    if (k >= 1) { scene.events.off('update', tick); schatten.destroy(); granate.destroy(); }
-  };
-  scene.events.on('update', tick);
-  scene.time.delayedCall(flug + 200, () => { scene.events.off('update', tick); schatten.destroy(); granate.destroy(); });
 }
 
 // ---------- Königsdorf: A400M-Absturz (Anflug mit Rauchspur, Einschlag, Wrack als bleibende Kulisse) ----------

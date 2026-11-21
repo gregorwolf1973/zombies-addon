@@ -189,7 +189,7 @@ test('A400M: landet, einsteigen, Triebwerk fällt aus, alle raus, zu Fuß zum Hu
   const a = await beitreten('Flieger');
   const { raum } = a;
   try {
-    const s = raum.state, ag = raum.aufgaben;
+    const s = raum.state, ag = raum.aufgaben; ag.alleBordSek = 0.3;
     assert.equal(s.evakArt, 'flugzeug');
     const plan = flugplanBerechnen(raum.welt, s.seed);
     assert.ok(plan, 'kein Flugplan in der Isarauen-Welt');
@@ -318,7 +318,7 @@ test('Leopard: einsteigen, warten, Aufgaben werden erfüllt, Abfahrt → bleibt 
   const a = await beitreten('Mitfahrer');
   const { raum, p } = a;
   try {
-    const s = raum.state, ag = raum.aufgaben, v = raum.verkehr;
+    const s = raum.state, ag = raum.aufgaben, v = raum.verkehr; ag.alleBordSek = 0.3;
     nurFunk(raum);
     ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
     ag.fahrtGelingt = () => false;   // noch nicht erfüllt

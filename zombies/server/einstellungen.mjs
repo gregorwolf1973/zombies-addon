@@ -3,7 +3,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DINGE, WAFFEN } from '../client/welt.mjs';
-import { MOERSER } from './moerser.mjs';
 import { HUND } from './hund.mjs';
 import { MUNITIONSGLUECK } from './munitionsglueck.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
@@ -78,7 +77,7 @@ export const EREIGNISSE = [
   { id: 'wasser', name: 'Wasser', beschreibung: 'Rauschen in der Nähe von Bach und Fluss', art: 'schleife', gruppe: 'umgebung', kategorien: ['umgebung'] },
   { id: 'durstMann', name: 'Durst (Männerstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler'] },
   { id: 'durstFrau', name: 'Durst (Frauenstimme)', beschreibung: 'Bei großem Durst alle 22–30 s; Stimme je Gerät fest', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler'] },
-  { id: 'panzerFaehrt', name: 'Panzer fährt', beschreibung: 'Kettenrasseln des Puma, solange er fährt', art: 'schleife', gruppe: 'bundeswehr', kategorien: ['bundeswehr', 'fahrzeuge'] },
+  { id: 'panzerFaehrt', name: 'Panzer fährt', beschreibung: 'Kettenrasseln aller Panzer (Puma, Leopard), solange sie fahren', art: 'schleife', gruppe: 'bundeswehr', kategorien: ['bundeswehr', 'fahrzeuge'] },
   { id: 'chatKlingel', name: 'Chat-Nachricht', beschreibung: 'Klingelton, wenn eine neue Chat-Nachricht eintrifft (dazu kurze Vibration)', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler'] },
   { id: 'radio', name: 'Radio (Gegenstand)', beschreibung: 'Ein eingeschaltetes Radio spielt ca. 75 s und lockt Zombies an; ohne Zuordnung nimmt das Spiel das Autoradio, sonst erzeugte Musik', art: 'schleife', gruppe: 'musik', kategorien: ['musik', 'bundeswehr'] },
   { id: 'nachladen', name: 'Nachladen', beschreibung: 'Wenn eine Waffe nachgeladen wird (ohne Datei ein kurzer Klick)', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
@@ -306,19 +305,6 @@ export function bereinige(e = {}, alt = {}) {
       leopardKanoneMin: Math.round(zahl(bw.leopardKanoneMin, 3, 50, 10)),                               // … so viele Zombies müssen auf einem Fleck (6 m Durchmesser) stehen
     },
     hund: { ablenkung: Math.round(zahl(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)) },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
-    moerser: (() => {                                                         // Panzermörser: Reichweite/Radius/Sicherheit in Metern, Pause in Sekunden
-      const m = { ...a.moerser, ...(e.moerser ?? {}) }, V = MOERSER;
-      const rmin = Math.round(zahl(m.reichweiteMin, 5, 100, V.reichweiteMin)), rmax = Math.max(rmin + 5, Math.round(zahl(m.reichweiteMax, 10, 150, V.reichweiteMax)));
-      return {
-        reichweiteMin: rmin, reichweiteMax: rmax,
-        pause: Math.round(zahl(m.pause, 1, 60, V.pause) * 10) / 10,
-        schaden: Math.round(zahl(m.schaden, 10, 1000, V.schaden)),
-        radius: Math.round(zahl(m.radius, 2, 15, V.radius) * 2) / 2,
-        mindestZombies: Math.round(zahl(m.mindestZombies, 1, 30, V.mindestZombies)),
-        sicherheit: Math.round(zahl(m.sicherheit, 0, 30, V.sicherheit)),
-        tempo: Math.round(zahl(m.tempo, 10, 80, V.tempo)),
-      };
-    })(),
     funde,
     munitionsglueck: {                                                        // Munitionsglück (server/munitionsglueck.mjs), alles in %
       schritt: Math.round(zahl(mgl.schritt, 0, 100, MG.schritt)),
@@ -351,7 +337,6 @@ export function vorgaben() {
     nebel: { ...NEBEL_VORGABE },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
-    moerser: { ...MOERSER },
     hund: { ...HUND },
     munitionsglueck: { ...MUNITIONSGLUECK },
     toene: {},

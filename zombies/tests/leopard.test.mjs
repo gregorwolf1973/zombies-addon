@@ -1,5 +1,5 @@
 // Leopard 2A7: Turm dreht begrenzt (Server), MG feuert erst auf Ziel, Hauptkanone nur ab 10 Zombies auf einem Fleck und nie bei Spieler im Radius;
-// Schießstand: Fahrzeugwahl (keins / Puma / Leopard / Mörser)
+// Schießstand: Fahrzeugwahl (keins / Puma / Leopard)
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { matchMaker } from '@colyseus/core';
@@ -140,7 +140,7 @@ const stelleZombies = (raum, n, x, y) => {
   for (let i = 0; i < n; i++) { const id = raum.setzeZombie(x + (i % 3) * 6, y + Math.floor(i / 3) * 6, '', true); raum.zombieInfo.get(id).steht = true; raum.zombieInfo.get(id).uebung = false; raum.state.zombies.get(id).hp = 100; }
 };
 
-test('Schießstand: Fahrzeugwahl – ohne Wahl schießt keins; Leopard und Mörserpanzer stehen am Lager und feuern', async () => {
+test('Schießstand: Fahrzeugwahl – ohne Wahl schießt keins; der Leopard steht am Lager und feuert', async () => {
   const { c, raum } = await beitreten();
   try {
     assert.equal(raum.fahrzeug, '');
@@ -150,7 +150,7 @@ test('Schießstand: Fahrzeugwahl – ohne Wahl schießt keins; Leopard und Mörs
     assert.equal(raum.fahrzeug, '');
     // Leopard
     const kanonen = [], mg = [];
-    c.onMessage('leopardkanone', m => kanonen.push(m)); c.onMessage('bwschuss', m => mg.push(m)); c.onMessage('moerser', () => {});
+    c.onMessage('leopardkanone', m => kanonen.push(m)); c.onMessage('bwschuss', m => mg.push(m));
     c.send('ss_fahrzeug', { art: 'leopard' });
     assert.ok(await bis(() => raum.fahrzeug === 'leopard' && raum.state.fahrzeuge.get('leopard1')), 'Leopard fehlt');
     const f = raum.state.fahrzeuge.get('leopard1');
@@ -161,30 +161,14 @@ test('Schießstand: Fahrzeugwahl – ohne Wahl schießt keins; Leopard und Mörs
     for (const p of raum.state.spieler.values()) { p.x = SS_START.x + 400; p.y = SS_START.y - 5; }   // Spieler außerhalb des Sicherheitsradius
     assert.ok(await bis(() => kanonen.length > 0 || mg.length > 0, 6000), 'Leopard schießt nicht');
     assert.ok(await bis(() => kanonen.length > 0, 8000), 'Kanone schießt nicht auf den Haufen');
-    // Wechsel auf Mörser: Leopard weg, M113 da
-    c.send('ss_fahrzeug', { art: 'moerser' });
-    assert.ok(await bis(() => raum.fahrzeug === 'moerser' && raum.moerser.fahrzeug()), 'Mörser fehlt');
-    assert.ok(!raum.state.fahrzeuge.has('leopard1') && raum.state.evakArt === '');
-    assert.equal(raum.moerser.fahrzeug().art, 'moerser');
-    assert.ok(Math.hypot(raum.moerser.fahrzeug().x - SS_START.x, raum.moerser.fahrzeug().y - SS_START.y) < 250, 'Mörser steht nicht am Lager');
-    // Puma: Mörser weg
+    // Puma: Leopard weg
     c.send('ss_fahrzeug', { art: 'puma' });
-    assert.ok(await bis(() => raum.fahrzeug === 'puma' && !raum.moerser.fahrzeug()), 'Mörser bleibt');
+    assert.ok(await bis(() => raum.fahrzeug === 'puma' && !raum.state.fahrzeuge.has('leopard1') && raum.state.evakArt === ''), 'Leopard bleibt');
+    // Mörserpanzer ist entfernt: Wahl wird ignoriert
+    c.send('ss_fahrzeug', { art: 'm' + 'oerser' }); await warte(100);
+    assert.equal(raum.fahrzeug, 'puma');
     // alter Schalter ss_panzer: aus = keins
     c.send('ss_panzer', { an: false });
     assert.ok(await bis(() => raum.fahrzeug === ''), 'ss_panzer aus');
-  } finally { await c.leave(); }
-});
-
-test('Schießstand: Mörserpanzer beschießt Zombiegruppen (Spieler weit weg)', async () => {
-  const { c, raum } = await beitreten();
-  try {
-    const schuesse = []; c.onMessage('moerser', m => schuesse.push(m)); c.onMessage('explosion', () => {});
-    c.send('ss_fahrzeug', { art: 'moerser' });
-    assert.ok(await bis(() => raum.moerser.fahrzeug()), 'Mörser fehlt');
-    const f = raum.moerser.fahrzeug(); raum.moerser.kuehl = 0;
-    for (const p of raum.state.spieler.values()) { p.x = SS_START.x + 400; p.y = SS_START.y - 5; }
-    stelleZombies(raum, 6, f.x - 20, f.y + 40 * 8);
-    assert.ok(await bis(() => schuesse.length > 0, 6000), 'Mörser schießt nicht');
   } finally { await c.leave(); }
 });

@@ -1,6 +1,6 @@
 // Darstellung der Szene „Stau auf der B11“ (Karte geretsried2, Verhalten: server/szene_b11.mjs): 8 Infanteristen, Puma und Leopard 2 (streifen
 // langsam, Turm dreht, hinterlassen Kettenspuren), plattgefahrene Autos auf dem Parkplatz, Schüsse.
-// Autos, Wracks, Feuer, Feuerwehr und der Mörserpanzer sind gewöhnliche Fahrzeuge/Feuer im Spielzustand und werden von spiel.mjs gezeichnet.
+// Autos, Wracks, Feuer, Feuerwehr sind gewöhnliche Fahrzeuge/Feuer im Spielzustand und werden von spiel.mjs gezeichnet.
 // Nachrichten: 'b11' { s: [[nr, x, y, blick, tot]], p/l: [x, y, w, turm] | 0 (Puma/Leopard), aus } (jede Sekunde), 'b11f' { p, l } (5 mal je
 // Sekunde, solange ein Panzer rollt), 'b11schuss', 'b11tot', 'b11platt' { x, y, w } (Auto überfahren). Plattgefahrene Autos: state.platt (client/b11_platt.mjs).
 import * as ton from './ton.mjs';
@@ -126,7 +126,13 @@ function b11Rollen(scene, e, dt, draussen, id) {
   w.setVisible(draussen);
   let d = e.soll - e.turm.rotation; d = Math.atan2(Math.sin(d), Math.cos(d));
   e.turm.setRotation(e.turm.rotation + d * Math.min(1, dt * 8));
-  if (draussen && Math.hypot(w.x - vorher.x, w.y - vorher.y) > 0.01) kettenSpur(scene, id, w.x, w.y, w.rotation, e.breite);
+  const bewegt = Math.hypot(w.x - vorher.x, w.y - vorher.y) > 0.01;
+  if (draussen && bewegt) kettenSpur(scene, id, w.x, w.y, w.rotation, e.breite);
+  // Fahrgeräusch wie beim Puma der Bundeswehr (Ereignis „Panzer fährt“), solange er rollt, draußen und in Hörweite
+  e.faehrtT = bewegt ? 0.6 : Math.max(0, (e.faehrtT ?? 0) - dt);
+  const lokal = scene.lokal, hoerbar = !!lokal && draussen && Math.hypot(w.x - lokal.x, w.y - lokal.y) < 700;
+  if (hoerbar && e.faehrtT > 0 && !e.kette) e.kette = ton.schleifeStarten('panzerFaehrt');
+  if (e.kette) ton.sireneLage(e.kette, w.x, w.y, 0, 700, !(hoerbar && e.faehrtT > 0));
 }
 
 // plattgefahrene Autos: dunkler Fleck über dem gemalten Auto, darauf die zerquetschte Karosserie, um den Schub in Fahrtrichtung verschoben

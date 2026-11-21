@@ -37,6 +37,7 @@ const mitArt = (art, fn, extra = {}) => async () => {
     const meldungen = []; c.onMessage('meldung', m => meldungen.push(m.text));
     c.onMessage('bunkerEnde', () => {});
     const ag = raum.aufgaben, s = raum.state;
+    ag.alleBordSek = 0.3;   // sonst 10 s Restwartezeit, wenn alle an Bord sind
     await fn({ c, raum, p: s.spieler.get(c.sessionId), s, ag, meldungen });
   } finally { await c.leave(); await bis(() => !SpielRaum.aktiv, 3000); SpielRaum.einstellungen = alt; }
 };
@@ -131,6 +132,22 @@ test('Bunker: Einsteigen = hineingehen (anBord), kein Abflug; Countdown-Ende: dr
   assert.equal(r.sieg, false);
   assert.equal(s.evakPhase, 'niederlage');
   assert.ok(r.draussen.includes(c.sessionId));
+}));
+
+test('Bunker: alle im Bunker und Aufgaben erledigt → Countdown springt auf 10 s, Meldung, dann Sieg', mitArt('bunker', async ({ c, raum, p, s, ag, meldungen }) => {
+  ag.alleBordSek = 10;
+  assert.ok(raum.finale.aktiv(), 'kein Countdown');
+  assert.ok(s.finaleRest > 60, 'Countdown zu kurz: ' + s.finaleRest);
+  ag.fahrtGelingt = () => false;
+  p.ebene = ''; p.x = s.evakX; p.y = s.evakY;
+  await warte(800);
+  assert.ok(s.finaleRest > 60 && !p.anBord, 'Tor offen trotz fehlender Aufgaben');
+  ag.fahrtGelingt = () => true;
+  assert.ok(await bis(() => p.anBord), 'geht nicht hinein');
+  assert.ok(await bis(() => s.finaleRest <= 10), 'Countdown springt nicht auf 10 s: ' + s.finaleRest);
+  assert.ok(meldungen.some(m => m.includes('Alle im Bunker – Tor schließt in 10 s')), meldungen.join(' | '));
+  raum.finale.rest = 0.05;
+  assert.ok(await bis(() => s.evakPhase === 'sieg', 3000), 'kein Sieg: ' + s.evakPhase);
 }));
 
 // ---------- Levelwechsel auf die neuen Karten: Evakuierungsart je Karte, nie Panzer/Bus ----------

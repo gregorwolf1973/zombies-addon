@@ -63,10 +63,6 @@ Hubschrauber NH90 (grafik/nh90_rumpf.webp, nh90_rotor.webp): Draufsichten (Rumpf
 Tanklaster (grafik/tanklaster.webp): Draufsicht, gerendert aus dem 3D-Modell „Fuel Truck“ von simonthedigger,
 https://sketchfab.com/3d-models/fuel-truck-443da3cd0f4547c980e52168bfbe7b76 – CC-BY 4.0. Im Repo nur die gerenderte Draufsicht.
 
-Panzermörser (grafik/m113_moerser.webp): Draufsicht, gerendert aus dem 3D-Modell „M113“ von arc4de,
-https://sketchfab.com/3d-models/7fe132c071584049b51d3569726021a0 – CC-BY 4.0; die offene Dachluke mit dem Mörserlager im Heck wurde selbst eingezeichnet
-(tools/fahrzeug_bilder.py), das 120-mm-Rohr zeichnet das Spiel. Im Repo nur die gerenderte Draufsicht.
-
 Bewohner-Typen (grafik/buerger160.webp, buerger160.json): mit Google Gemini für dieses Spiel erzeugt (ein Bildbogen mit
 acht Typen, vom Spieler selbst in Auftrag gegeben und für das Spiel freigegeben); freigestellt, skaliert und angeordnet mit
 tools/gemini_buerger_schneiden.py.

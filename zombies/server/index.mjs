@@ -130,7 +130,6 @@ export async function starte({
       zeitraffer: w.test.zeitraffer,
       munitionsglueck: w.munitionsglueck,           // { schritt, max, lebenUnter, lebenFaktor, notUnter, notFaktor } in %
       hund: w.hund,                                 // { ablenkung } in %
-      moerser: w.moerser,                           // { reichweiteMin, reichweiteMax, pause, schaden, radius, mindestZombies, sicherheit, tempo }
       unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),
     };
     SpielRaum.aktiv?.einstellungenGeaendert?.();

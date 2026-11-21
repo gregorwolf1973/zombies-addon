@@ -1,4 +1,4 @@
-// Gemeinsame Zielwahl für Steilfeuer und Kanonen (Panzermörser, Leopard-Hauptkanone): Zombiehaufen finden, Sicherheitsradius prüfen.
+// Gemeinsame Zielwahl für Kanonen (Leopard-Hauptkanone): Zombiehaufen finden, Sicherheitsradius prüfen.
 // Maße in Spielpixeln (8 px = 1 m). Es wird nie auf einen Punkt geschossen, in dessen Sicherheitsradius ein Spieler oder Mensch steht.
 export const PX = 8;
 
