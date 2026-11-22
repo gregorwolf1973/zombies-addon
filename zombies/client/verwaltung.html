@@ -920,6 +920,16 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <label class="tn-schalter"><input type="checkbox" id="tnInnen"> Maßstäbliche Innenräume (echter Grundriss, Wände 25 cm, Möbel in echten Maßen; wirkt sofort – wer drinnen ist, kommt an die Haustür)</label>
   <label for="tnZLeben">Lebenspunkte eines Zombies (100 = normal; ein Kriecher – ein Zombie, der nach dem Tod am Boden weiterkriecht – hat 35 % davon)</label>
   <div class="tn-zeile"><input type="range" id="tnZLeben" min="20" max="500" step="5"><span id="tnZLebenWert">100</span></div>
+  <label for="tnTHeldGehen">Held geht (km/h)</label>
+  <span class="hilfe">Maßstab 8 px = 1 m. Vorgabe 20 km/h. Wirkt auf Spieler, Bots, Hund und Bewohner (sie laufen relativ dazu).</span>
+  <div class="tn-zeile"><input type="range" id="tnTHeldGehen" min="2" max="60" step="0.5"><span id="tnTHeldGehenWert">20 km/h</span></div>
+  <label for="tnTHeldSchleichen">Held schleicht (km/h)</label>
+  <div class="tn-zeile"><input type="range" id="tnTHeldSchleichen" min="1" max="40" step="0.5"><span id="tnTHeldSchleichenWert">9 km/h</span></div>
+  <label for="tnTZombieJagen">Zombie jagt (km/h)</label>
+  <span class="hilfe">Auch Hordenmarsch und Hund-Verfolgung orientieren sich daran; verwandelte Spieler sind 15 % schneller. Der Prozent-Faktor „Tempo“ der Zombies wirkt zusätzlich.</span>
+  <div class="tn-zeile"><input type="range" id="tnTZombieJagen" min="1" max="60" step="0.5"><span id="tnTZombieJagenWert">15 km/h</span></div>
+  <label for="tnTZombieWandern">Zombie wandert (km/h)</label>
+  <div class="tn-zeile"><input type="range" id="tnTZombieWandern" min="1" max="30" step="0.5"><span id="tnTZombieWandernWert">4 km/h</span></div>
   <label for="tnBaumTempo">Tempo unter Bäumen (%)</label>
   <span class="hilfe">Menschen, Zombies, Spieler und Bots laufen auf Baumkacheln nur mit diesem Anteil ihres Tempos (Vorgabe 25 % = 75 % langsamer; 100 = kein Unterschied). Fahrzeuge und der Hund sind nicht betroffen.</span>
   <div class="tn-zeile"><input type="range" id="tnBaumTempo" min="5" max="100" step="5"><span id="tnBaumTempoWert">25 %</span></div>
@@ -1216,6 +1226,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnMGroesse', e.menschenGroesse === undefined ? 100 : e.menschenGroesse, function (v) { return v + ' %'; });
     feld('tnZGroesse', e.zombieGroesse === undefined ? 100 : e.zombieGroesse, function (v) { return v + ' %'; });
     feld('tnGGroesse', e.groesseGesamt === undefined ? 70 : e.groesseGesamt, function (v) { return v + ' %'; });
+    feld('tnTHeldGehen', e.tempoHeldGehen === undefined ? 20 : e.tempoHeldGehen, function (v) { return v + ' km/h'; });
+    feld('tnTHeldSchleichen', e.tempoHeldSchleichen === undefined ? 9 : e.tempoHeldSchleichen, function (v) { return v + ' km/h'; });
+    feld('tnTZombieJagen', e.tempoZombieJagen === undefined ? 15 : e.tempoZombieJagen, function (v) { return v + ' km/h'; });
+    feld('tnTZombieWandern', e.tempoZombieWandern === undefined ? 4 : e.tempoZombieWandern, function (v) { return v + ' km/h'; });
     feld('tnBaumTempo', e.baumTempo === undefined ? 25 : e.baumTempo, function (v) { return v + ' %'; });
     feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
     if (window.groessenVorschau) window.groessenVorschau();
@@ -1387,6 +1401,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnInnenTempo', function (v) { return v + ' %'; }, function (v) { return { innenTempo: v }; });
   regler('tnAnst', function (v) { return v + ' min'; }, function (v) { return { verwandlung: v }; });
   regler('tnMGroesse', function (v) { return v + ' %'; }, function (v) { return { menschenGroesse: v }; });
+  regler('tnTHeldGehen', function (v) { return v + ' km/h'; }, function (v) { return { tempoHeldGehen: v }; });
+  regler('tnTHeldSchleichen', function (v) { return v + ' km/h'; }, function (v) { return { tempoHeldSchleichen: v }; });
+  regler('tnTZombieJagen', function (v) { return v + ' km/h'; }, function (v) { return { tempoZombieJagen: v }; });
+  regler('tnTZombieWandern', function (v) { return v + ' km/h'; }, function (v) { return { tempoZombieWandern: v }; });
   regler('tnBaumTempo', function (v) { return v + ' %'; }, function (v) { return { baumTempo: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
   regler('tnGGroesse', function (v) { return v + ' %'; }, function (v) { return { groesseGesamt: v }; });
@@ -3633,7 +3651,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var zk = ausKarte(karteVon('titelZombies'), '🧟 Zombies');
   if (zk) {
     zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel');
-    zeile(zk.inhalt, 'tnBaumTempo'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
+    ['tnTZombieJagen', 'tnTZombieWandern', 'tnTHeldGehen', 'tnTHeldSchleichen'].forEach(function (id) { zeile(zk.inhalt, id); }); zeile(zk.inhalt, 'tnBaumTempo'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
     var zs = unter('👁 Zombie-Sicht'); rein(zs.inhalt, $('zsHinweis')); ['zsGehen', 'zsSchleichen', 'zsKegel', 'zsVerfolgen', 'zsAufgeben', 'zsNacht'].forEach(function (id) { zeile(zs.inhalt, id); }); zk.inhalt.appendChild(zs);
     var typen = unter('Zombietypen (mindestens einer bleibt an)');
     (window.ZTYPEN || []).forEach(function (k) { schalter(typen.inhalt, 'zt_' + k); });
@@ -3691,7 +3709,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite',
     tnMgSchritt: 'munitionsglueck.schritt', tnMgMax: 'munitionsglueck.max', tnMgLeben: 'munitionsglueck.lebenUnter', tnMgLebenF: 'munitionsglueck.lebenFaktor', tnMgNot: 'munitionsglueck.notUnter', tnMgNotF: 'munitionsglueck.notFaktor',
-    tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo',
+    tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
     agStunde: 'aufgaben.stunde', agWarteEcht: 'aufgaben.wartenEchtMin', agWarte: 'aufgaben.wartezeit', agFinale: 'aufgaben.finaleMinuten', agAnzahl: 'aufgaben.anzahl', fkFaktor: 'faehigkeiten.xpFaktor',

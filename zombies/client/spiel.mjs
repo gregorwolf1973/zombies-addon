@@ -3,7 +3,7 @@ import { fzPx } from './masse.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
 import {
-  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
+  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, baumFaktor, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
@@ -859,6 +859,7 @@ function chatAnschliessen(raum) {
     for (const n of liste) chatAnhaengen({ ...n, ich: vonMir(n) });
     $('chatliste').scrollTop = $('chatliste').scrollHeight;
   };
+  raum.onMessage('tempoWerte', v => tempoWerteSetzen(W, v));   // Held-/Zombietempo (km/h) aus der Verwaltung, gleich wie auf dem Server (Vorhersage)
   raum.onMessage('baumTempo', v => { if (Number.isFinite(v)) baumTempoWert = v; });   // Einstellung „Tempo unter Bäumen“ (%), für die Vorhersage
   raum.onMessage('chatVerlauf', m => {
     const liste = m.nachrichten ?? [];
@@ -3469,6 +3470,19 @@ class Ort extends Phaser.Scene {
       g.setPosition(m.x1 + c * 14, m.y1 + sn * 14);
       this.tweens.add({ targets: g, x: m.x2, y: m.y2, duration: Math.min(260, 60 + Math.hypot(m.x2 - m.x1, m.y2 - m.y1) * 0.7), onComplete: () => g.destroy() });
       return;
+    }
+    // Leuchtspur: jeder 3. Schuss je Schütze (nicht Schrot/Bogen), gleiche Optik wie die MG-Spur der Bundeswehr; nur auf der eigenen Ebene
+    if (m.art !== 'schrotflinte' && m.art !== 'bogen' && (m.ebene ?? '') === (this.aktEbene ?? '')) {
+      this.spurZaehler ??= new Map();
+      const n = (this.spurZaehler.get(m.von ?? '') ?? 0) + 1;
+      this.spurZaehler.set(m.von ?? '', n % 3);
+      if (n % 3 === 0) {
+        const lg = this.add.graphics().setDepth(7);
+        const sx = m.x1 + c * 16, sy = m.y1 + sn * 16, dx = m.x2 - sx, dy = m.y2 - sy, l1 = Math.min(1, 70 / Math.max(1, Math.hypot(dx, dy)));
+        lg.lineStyle(1, 0xffee58, 1).lineBetween(sx, sy, sx + dx * l1, sy + dy * l1);
+        lg.lineStyle(0.6, 0xffffff, 0.9).lineBetween(sx, sy, sx + dx * l1, sy + dy * l1);
+        this.tweens.add({ targets: lg, x: dx * (1 - l1), y: dy * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => lg.destroy() });
+      }
     }
     const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr' || m.art === 'mg' || m.art === 'scharfschuetze';
     this.muendungsLicht(m.x1 + c * 16, m.y1 + sn * 16, m.ebene, m.art);

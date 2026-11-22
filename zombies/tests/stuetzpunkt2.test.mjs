@@ -11,7 +11,8 @@ import { bereinige } from '../server/einstellungen.mjs';
 import { WAFFEN_RANG, GRENZE } from '../server/bots.mjs';
 import { KACHEL, BREITE, HOEHE, T, DINGE, WAFFEN, BEUTE, LEICHE_SELTEN, LEICHE_OFT, GRANATE, HANDEL, MUNITION_MAX, TEMPO_MG, bezahlung, setzeKartengroesse, frei, linieFrei, sichtfrei } from '../client/welt.mjs';
 import { rahmen, handelsleute, zeltWandImWeg, planKoord, imLager, fahrFlaeche, PUMA_PARK } from '../client/stuetzpunkt.mjs';
-import { freierPort } from './hilfe.mjs';
+import { freierPort, altesTempo } from './hilfe.mjs';
+altesTempo(SpielRaum);
 
 const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;

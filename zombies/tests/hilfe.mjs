@@ -28,3 +28,9 @@ export async function bisBedingung(bedingung, ms = 5000, takt = 20) {
   while (Date.now() < ende) { if (await bedingung()) return true; await new Promise(r => setTimeout(r, takt)); }
   return !!(await bedingung());
 }
+
+// Diese Tests gehen von den früheren, schnellen Tempi aus (Held 67,5 km/h, Zombie 47 km/h): feste Wartezeiten/Wege.
+// Die Vorgaben (20/9/15/4 km/h) prüft tests/tempo_kmh.test.mjs.
+export function altesTempo(SpielRaum) {
+  SpielRaum.prototype.tempoWerte = () => ({ gehen: 67.5, schleichen: 31.5, jagen: 47.25, wandern: 13.5 });
+}
