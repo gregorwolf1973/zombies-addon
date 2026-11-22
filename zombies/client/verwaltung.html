@@ -976,7 +976,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     if (aktiv !== 'tnAutos') { $('tnAutos').value = e.autos === undefined ? 10 : e.autos; $('tnAutosWert').textContent = komma($('tnAutos').value); }
     if (aktiv !== 'tnMenschen') { $('tnMenschen').value = e.menschen === undefined ? 50 : e.menschen; $('tnMenschenWert').textContent = $('tnMenschen').value; }
     if (aktiv !== 'tnAnst') { $('tnAnst').value = e.verwandlung || 30; $('tnAnstWert').textContent = $('tnAnst').value + ' min'; }
-    var feld = function (id, wert, text) { if (aktiv !== id) { $(id).value = wert; $(id + 'Wert').textContent = text(Number($(id).value)); } };
+    var feld = function (id, wert, text) { if (!$(id)) { console.warn('Feld fehlt: ' + id); return; } if (aktiv !== id) { $(id).value = wert; $(id + 'Wert').textContent = text(Number($(id).value)); } };
     feld('tnMGroesse', e.menschenGroesse === undefined ? 100 : e.menschenGroesse, function (v) { return v + ' %'; });
     feld('tnZGroesse', e.zombieGroesse === undefined ? 100 : e.zombieGroesse, function (v) { return v + ' %'; });
     feld('tnGGroesse', e.groesseGesamt === undefined ? 70 : e.groesseGesamt, function (v) { return v + ' %'; });
@@ -3261,6 +3261,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   var zk = ausKarte(karteVon('titelZombies'), '🧟 Zombies');
   if (zk) {
     zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel');
+    zeile(zk.inhalt, 'tnBaumTempo'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
     var typen = unter('Zombietypen (mindestens einer bleibt an)');
     (window.ZTYPEN || []).forEach(function (k) { schalter(typen.inhalt, 'zt_' + k); });
     var ztt = $('ztTitel'); if (ztt) ztt.remove();
