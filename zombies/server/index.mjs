@@ -265,8 +265,8 @@ export async function starte({
     if (neu.karte !== vorher) { level1Merken(neu.karte); level1Gewuerfelt = null; }   // Backend-Wahl geändert: Zufall neu würfeln bzw. feste Karte
     anwenden(neu);
     // Ton-Einstellungen sofort an laufende Spiele (sonst erst nach Neuladen der Seite)
-    if (['radioStream', 'musik', 'toeneHorde'].some(k => k in (req.body ?? {}))) {
-      try { SpielRaum.aktiv?.broadcast('tonEinst', { radioStream: neu.radioStream, musik: neu.musik, toeneHorde: neu.toeneHorde }); } catch { /* kein Raum */ }
+    if (['radioStream', 'musik', 'toeneHorde', 'toene'].some(k => k in (req.body ?? {}))) {
+      try { SpielRaum.aktiv?.broadcast('tonEinst', { radioStream: neu.radioStream, musik: neu.musik, toeneHorde: neu.toeneHorde, toene: neu.toene }); } catch { /* kein Raum */ }
     }
     res.json(lage());
   });
