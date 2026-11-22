@@ -248,7 +248,7 @@ export function bereinige(e = {}, alt = {}) {
     biss: Math.round(zahl(e.biss ?? a.biss, 0, 100, 100)),                   // Stadtbewohner: Chance in % je Bissversuch (einmal pro Sekunde bei Berührung)
     feuer: zahl(e.feuer ?? a.feuer, 0, 30, 1),                                 // Minuten zwischen zwei Bränden (0 = keine)
     feuerPhase: Math.round(zahl(e.feuerPhase ?? a.feuerPhase, 0, 240, 20)),  // so lange (Spielminuten ab Weltbeginn) brennt es immer wieder
-    verkehr: Math.round(zahl(e.verkehr ?? a.verkehr, 0, 30, 6)),             // fahrende Autos am Anfang
+    verkehr: Math.round(zahl(e.verkehr ?? a.verkehr, 0, 30, 30)),            // Obergrenze fahrender Autos am Anfang (die Anzahl richtet sich nach der Straßenlänge, server/verkehr.mjs verkehrAnzahl)
     verkehrPhase: Math.round(zahl(e.verkehrPhase ?? a.verkehrPhase, 0, 240, 25)),
     unfall: Math.round(zahl(e.unfall ?? a.unfall, 0, 600, 10)),                // Verkehrsunfall durchschnittlich alle … Spielminuten (0 = keine Unfälle, siehe server/unfall.mjs)
     unfallExplosion: Math.round(zahl(e.unfallExplosion ?? a.unfallExplosion, 0, 100, 50)),   // % der Unfallautos, die nach dem Brennen explodieren
@@ -347,7 +347,7 @@ export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
 
 export function grundwerte() {
   return {
-    superuserHash: '', zugangscode: '', karte: 'level1', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, innenMassstab: false, innenTempo: 35, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', karte: 'level1', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, innenMassstab: false, innenTempo: 35, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },

@@ -76,6 +76,7 @@ test('Verkehr: etwa 10 % Laster, mit Länge und Tempo', async () => {
   try {
     const raum = matchMaker.getLocalRoomById(c.roomId), s = raum.state;
     for (const id of [...s.fahrzeuge.keys()]) { s.fahrzeuge.delete(id); raum.verkehr.info.delete(id); }
+    raum.verkehr.graph.netzMeter = 400 * 2000;   // genug Straße für 400 Autos (die Anzahl richtet sich nach der Netzlänge)
     raum.verkehr.start([], 400);
     const liste = [...s.fahrzeuge.values()];
     const laster = liste.filter(f => f.art === 'laster').length;

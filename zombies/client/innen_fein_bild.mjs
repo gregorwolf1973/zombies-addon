@@ -325,26 +325,72 @@ function waende(ctx, w) {
     if (bo(x + 1, y)) ctx.fillRect(x * Z + Z - 0.4, y * Z, 0.4, Z + 0.02);
     if (bo(x - 1, y)) ctx.fillRect(x * Z, y * Z, 0.4, Z + 0.02);
   }
-  // Fenster in geraden Außenwänden: 1,5 m breit alle 3 m
-  const fenster = (x, y, quer) => {
-    const px = x * Z, py = y * Z;
-    ctx.fillStyle = '#b3dff2'; ctx.fillRect(px, py, Z + 0.02, Z + 0.02);
-    ctx.fillStyle = 'rgba(255,255,255,.55)'; if (quer) ctx.fillRect(px, py + 0.2, Z + 0.02, 0.35); else ctx.fillRect(px + 0.2, py, 0.35, Z + 0.02);
-  };
-  for (let y = 2; y < H - 2; y++) for (let x = 2; x < B - 2; x++) {
-    if (!wand(x, y)) continue;
-    // waagrechte Außenwand: darüber oder darunter (bis zu 2 Zellen) draußen, und 4 Zellen links/rechts dasselbe
-    const oben = leer(x, y - 1) || leer(x, y - 2), unten = leer(x, y + 1) || leer(x, y + 2);
-    if ((oben || unten) && !(leer(x - 1, y) || leer(x + 1, y))) {
-      const gerade = [-4, -3, -2, -1, 1, 2, 3, 4].every(d => wand(x + d, y) && (oben ? (leer(x + d, y - 1) || leer(x + d, y - 2)) : (leer(x + d, y + 1) || leer(x + d, y + 2))));
-      if (gerade && ((x + (hs(y >> 1, 11) > 0.5 ? 6 : 0)) % 12) < 6) fenster(x, y, true);
-    }
-    const links = leer(x - 1, y) || leer(x - 2, y), rechts = leer(x + 1, y) || leer(x + 2, y);
-    if ((links || rechts) && !(leer(x, y - 1) || leer(x, y + 1))) {
-      const gerade = [-4, -3, -2, -1, 1, 2, 3, 4].every(d => wand(x, y + d) && (links ? (leer(x - 1, y + d) || leer(x - 2, y + d)) : (leer(x + 1, y + d) || leer(x + 2, y + d))));
-      if (gerade && ((y + (hs(x >> 1, 12) > 0.5 ? 6 : 0)) % 12) < 6) fenster(x, y, false);
+  // Fenster in geraden Außenwänden (Positionen: fensterPositionen)
+  for (const f of fensterPositionen(w)) {
+    const quer = f.richtung === 'n' || f.richtung === 's';
+    for (let i = 0; i < f.n; i++) {
+      const px = (f.x + (quer ? i : 0)) * Z, py = (f.y + (quer ? 0 : i)) * Z;
+      ctx.fillStyle = '#b3dff2'; ctx.fillRect(px, py, Z + 0.02, Z + 0.02);
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; if (quer) ctx.fillRect(px, py + 0.2, Z + 0.02, 0.35); else ctx.fillRect(px + 0.2, py, 0.35, Z + 0.02);
     }
   }
+}
+
+// Fensterpositionen einer Ebene (Raster aus 0,25-m-Zellen): etwa alle 6 m ein Fenster von 1,25 m (5 Zellen) in geraden
+// Außenwänden, mindestens 1 m von Ecken und Türen entfernt, Wandstücke unter 2,5 m ohne Fenster.
+// Liefert [{ x, y, richtung, n }]: erste Zelle, Blickrichtung nach draußen ('n' 's' 'w' 'o'), Länge in Zellen
+// (waagrecht n/s: Zellen x..x+n-1, senkrecht w/o: y..y+n-1). Rein ganzzahlig, damit Licht durch Fenster später dieselben Orte nutzt.
+export const FENSTER_ZELLEN = 5, FENSTER_ABSTAND = 24, FENSTER_RAND = 4, FENSTER_MIN_WAND = 10;
+export function fensterPositionen(w) {
+  const B = w.breite, H = w.hoehe;
+  const wand = (a, c) => w.hole(a, c) === T.WAND;
+  const leer = (a, c) => w.hole(a, c) === T.LEER;
+  const aus = [];
+  // Lauf (Zellen l0..l1-1 entlang der Wand) -> Fenster gleichmäßig verteilt
+  const lauf = (l0, l1, fest, quer, richtung) => {
+    const L = l1 - l0;
+    if (L < FENSTER_MIN_WAND) return;
+    const nutz = L - 2 * FENSTER_RAND;
+    if (nutz < FENSTER_ZELLEN) return;
+    const n = Math.floor((nutz - FENSTER_ZELLEN) / FENSTER_ABSTAND) + 1;
+    const start = l0 + FENSTER_RAND + Math.floor((nutz - FENSTER_ZELLEN - (n - 1) * FENSTER_ABSTAND) / 2);
+    for (let i = 0; i < n; i++) {
+      const p = start + i * FENSTER_ABSTAND;
+      aus.push(quer ? { x: p, y: fest, richtung, n: FENSTER_ZELLEN } : { x: fest, y: p, richtung, n: FENSTER_ZELLEN });
+    }
+  };
+  // Seite einer Zelle: 1 = draußen oben/links, 2 = unten/rechts, 0 = kein gerader Außenwandabschnitt
+  const seiteQ = (x, y) => {
+    if (!wand(x, y) || leer(x - 1, y) || leer(x + 1, y)) return 0;
+    const o = leer(x, y - 1) || leer(x, y - 2), u = leer(x, y + 1) || leer(x, y + 2);
+    return o ? 1 : u ? 2 : 0;
+  };
+  const seiteS = (x, y) => {
+    if (!wand(x, y) || leer(x, y - 1) || leer(x, y + 1)) return 0;
+    const l = leer(x - 1, y) || leer(x - 2, y), r = leer(x + 1, y) || leer(x + 2, y);
+    return l ? 1 : r ? 2 : 0;
+  };
+  for (let y = 2; y < H - 2; y++) {
+    let x = 2;
+    while (x < B - 2) {
+      const s = seiteQ(x, y);
+      if (!s) { x++; continue; }
+      let e = x; while (e < B - 2 && seiteQ(e, y) === s) e++;
+      lauf(x, e, y, true, s === 1 ? 'n' : 's');
+      x = e;
+    }
+  }
+  for (let x = 2; x < B - 2; x++) {
+    let y = 2;
+    while (y < H - 2) {
+      const s = seiteS(x, y);
+      if (!s) { y++; continue; }
+      let e = y; while (e < H - 2 && seiteS(x, e) === s) e++;
+      lauf(y, e, x, false, s === 1 ? 'w' : 'o');
+      y = e;
+    }
+  }
+  return aus;
 }
 
 // Innenraum zeichnen; die Zeichenfläche beginnt bei (0, 0) = Zelle (0, 0) des Rasters

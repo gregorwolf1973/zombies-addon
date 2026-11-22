@@ -9,7 +9,7 @@ import { zeichneMoebelBild } from './moebel_bilder.mjs';
 import { fzPx } from './masse.mjs';
 import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
 import { zeichneEinkaufswagen } from './einkaufswagen.mjs';
-import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach, vektorGebaeude } from './vektor.mjs';
+import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach, vektorGebaeude, fahrbahnBreite } from './vektor.mjs';
 import { kulBodenArt, fotoStatus, zeichneFoto, zeichneSchatten } from './kulisse.mjs';
 import { imGebiet } from './luftbild.mjs';
 import { SCHATTEN_JE_M } from './kulisse_regeln.mjs';
@@ -662,6 +662,33 @@ function zaunLinien(ctx, welt, rect) {
   ctx.restore();
 }
 
+// Lage einer Haltestelle (nur Zeichnung): Richtung der nächsten Straße, Rückwand zur Außenseite, Unterstand mit Abstand zur Fahrbahn
+function haltestellenLage(welt, o) {
+  if (o._lage) return o._lage;
+  const K = KACHEL, px = o.x * K, py = o.y * K;
+  let best = null, bd = Infinity;
+  for (const st of welt.vektor?.strassen ?? []) {
+    if (st.t === 'service' || st.t === 'pedestrian' || st.t === 'footway' || st.t === 'path' || st.t === 'track') continue;
+    for (let i = 0; i + 3 < st.p.length; i += 2) {
+      const ax = st.p[i] * K, ay = st.p[i + 1] * K, bx = st.p[i + 2] * K, by = st.p[i + 3] * K, dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+      if (l2 < 1) continue;
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)), cx = ax + dx * t, cy = ay + dy * t, d = Math.hypot(px - cx, py - cy);
+      if (d < bd) { bd = d; best = { dx, dy, cx, cy, st }; }
+    }
+  }
+  let winkel = 0, vx = 0, vy = 0;
+  if (best && bd < 80) {
+    const len = Math.hypot(best.dx, best.dy), ux = best.dx / len, uy = best.dy / len;
+    let nx = px - best.cx, ny = py - best.cy;   // von der Straße weg
+    if (bd < 0.5) { nx = -uy; ny = ux; } else { nx /= bd; ny /= bd; }
+    winkel = Math.atan2(uy, ux);
+    if (-uy * nx + ux * ny < 0) winkel += Math.PI;   // lokale +y-Achse zeigt von der Straße weg
+    const noetig = fahrbahnBreite(best.st) / 2 + 10;   // Fahrbahnhälfte + Randstreifen + halbe Tiefe
+    if (bd < noetig) { vx = nx * (noetig - bd); vy = ny * (noetig - bd); }
+  }
+  return (o._lage = { winkel, vx, vy });
+}
+
 // Gartenausstattung, Bänke, Haltestellen. oben = false: flache Dinge (Boden), true: Dächer (Gartenhaus, Haltestelle)
 function gartenObjekte(ctx, welt, rect, oben) {
   const K = KACHEL;
@@ -702,11 +729,17 @@ function gartenObjekte(ctx, welt, rect, oben) {
       ctx.fillStyle = '#a1887f'; ctx.fillRect(x - 2, y - 2, (b + 4) / 2, h + 4);
       ctx.strokeStyle = '#5d4037'; ctx.lineWidth = 1; for (let i = 4; i < h; i += 5) { ctx.beginPath(); ctx.moveTo(x - 2, y + i); ctx.lineTo(x + b + 2, y + i); ctx.stroke(); }
     } else if (oben && o.a === 'haltestelle') {
-      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x - 14, y - 4, 32, 14);
-      ctx.fillStyle = 'rgba(180,220,240,.75)'; ctx.fillRect(x - 16, y - 7, 32, 12);
-      ctx.strokeStyle = '#455a64'; ctx.lineWidth = 2; ctx.strokeRect(x - 16, y - 7, 32, 12);
-      ctx.fillStyle = '#fdd835'; ctx.beginPath(); ctx.arc(x + 20, y - 8, 6, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#2e7d32'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('H', x + 20, y - 8);
+      // parallel zur nächsten Straße: Rückwand auf der straßenabgewandten Seite, Unterstand auf dem Gehweg neben der Fahrbahn
+      const l = haltestellenLage(welt, o);
+      ctx.translate(x + l.vx, y + l.vy); ctx.rotate(l.winkel);
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-14, -4, 32, 14);
+      ctx.fillStyle = 'rgba(180,220,240,.75)'; ctx.fillRect(-16, -7, 32, 12);
+      ctx.strokeStyle = '#455a64'; ctx.lineWidth = 2; ctx.strokeRect(-16, -7, 32, 12);
+      ctx.fillStyle = '#37474f'; ctx.fillRect(-16, 3, 32, 3);   // Rückwand (y positiv = von der Straße weg)
+      ctx.rotate(-l.winkel);   // Schild bleibt lesbar
+      const sx = Math.cos(l.winkel) * 20 + Math.sin(l.winkel) * 0, sy = Math.sin(l.winkel) * 20;
+      ctx.fillStyle = '#fdd835'; ctx.beginPath(); ctx.arc(sx, sy, 6, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#2e7d32'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('H', sx, sy);
     }
     ctx.restore();
   }

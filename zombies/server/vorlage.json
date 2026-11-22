@@ -16,7 +16,7 @@
  },
  "feuer": 1.5,
  "feuerPhase": 60,
- "verkehr": 20,
+ "verkehr": 30,
  "verkehrPhase": 30,
  "blaulicht": "normal",
  "innenMassstab": true,

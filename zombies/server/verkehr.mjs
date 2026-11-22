@@ -70,8 +70,19 @@ export function strassenGraph(welt) {
     if (teil.length > bestes.length) bestes = teil;
   }
   const netz = new Set(bestes);
-  welt._graph = { knoten: bestes, netz, haupt: bestes.filter(n => n.haupt) };
+  let netzM = 0, gesamtM = 0;
+  for (const n of liste) for (const e of n.nach) gesamtM += e.laenge;
+  for (const n of bestes) for (const e of n.nach) netzM += e.laenge;
+  // Länge in Metern (8 px = 1 m); jede Kante steht an beiden Endknoten, daher halbieren
+  welt._graph = { knoten: bestes, netz, haupt: bestes.filter(n => n.haupt), netzMeter: netzM / 16, gesamtMeter: gesamtM / 16 };
   return welt._graph;
+}
+
+// Anzahl normaler Autos am Anfang: nach befahrbarer Netzlänge (ein Auto je METER_JE_AUTO m), mindestens 3, höchstens die Einstellung `verkehr`
+export const METER_JE_AUTO = 2000, MIN_AUTOS = 3, HAUPT_START_ANTEIL = 0.5, VERKEHR_REST = 1 / 3;
+export function verkehrAnzahl(netzMeter, obergrenze) {
+  const max = Math.max(0, Math.floor(obergrenze ?? 0));
+  return Math.min(max, Math.max(MIN_AUTOS, Math.round(netzMeter / METER_JE_AUTO)));
 }
 
 export function naechsterKnoten(graph, x, y, nurHaupt = false) {
@@ -185,11 +196,14 @@ export class Verkehr {
       const id = this.neu('bus', reihe[0].knoten, { linie: reihe, stopp: 0, halt: 6, mitfahrer: new Map() });
       this.busId = id;
     }
-    for (let i = 0; i < autos && this.graph.haupt.length; i++) {
+    const anzahl = verkehrAnzahl(this.graph.netzMeter, autos);
+    this.sollAutos = anzahl;
+    for (let i = 0; i < anzahl; i++) {
       // Startknoten mit Abstand zu den anderen Fahrzeugen (sonst stehen mehrere übereinander am selben Knoten)
       let start = null;
       for (let versuch = 0; versuch < 12; versuch++) {
-        start = this.graph.haupt[Math.floor(r() * this.graph.haupt.length)];
+        const liste = r() < HAUPT_START_ANTEIL && this.graph.haupt.length ? this.graph.haupt : this.graph.knoten;
+        start = liste[Math.floor(r() * liste.length)];
         if (![...this.raum.state.fahrzeuge.values()].some(o => Math.hypot(o.x - start.x, o.y - start.y) < 80)) break;
       }
       const id = this.neu(r() < LASTER_ANTEIL ? 'laster' : 'auto', start);
@@ -198,7 +212,7 @@ export class Verkehr {
   }
 
   neuesZiel(id) {
-    const r = this.raum.rnd, liste = r() < 0.75 && this.graph.haupt.length ? this.graph.haupt : this.graph.knoten;
+    const r = this.raum.rnd, liste = r() < HAUPT_START_ANTEIL && this.graph.haupt.length ? this.graph.haupt : this.graph.knoten;
     for (let v = 0; v < 6; v++) if (this.fahreNach(id, liste[Math.floor(r() * liste.length)])) return true;
     return false;
   }
@@ -463,8 +477,12 @@ export class Verkehr {
       if (inf.brand && !inf.amBrand) { inf.amBrand = true; inf.halt = 25; return; }   // (die Sirene ist dabei nach wenigen Sekunden aus, siehe Client)   // Feuerwehr löscht eine Weile
       s.fahrzeuge.delete(id); this.info.delete(id); return;
     }
-    // normaler Verkehr: nach der Anfangsphase verschwinden die Autos am Ziel
-    if (zeitMin > (e.verkehrPhase ?? 25)) { s.fahrzeuge.delete(id); this.info.delete(id); return; }
+    // normaler Verkehr: nach der Anfangsphase verschwinden die Autos am Ziel, bis nur noch ein Drittel fährt
+    if (zeitMin > (e.verkehrPhase ?? 25)) {
+      let normal = 0;
+      for (const [fid, fz] of s.fahrzeuge) if ((fz.art === 'auto' || fz.art === 'laster') && fid !== id && this.info.get(fid) && !this.info.get(fid).durchfahrt) normal++;
+      if (normal + 1 > Math.ceil((this.sollAutos ?? 0) * VERKEHR_REST)) { s.fahrzeuge.delete(id); this.info.delete(id); return; }
+    }
     this.neuesZiel(id);
   }
 

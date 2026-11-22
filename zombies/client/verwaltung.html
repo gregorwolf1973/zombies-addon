@@ -683,8 +683,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="tnFeuer" min="0" max="10" step="0.5"><span id="tnFeuerWert">1 min</span></div>
   <label for="tnFeuerPhase">… während der ersten</label>
   <div class="tn-zeile"><input type="range" id="tnFeuerPhase" min="0" max="120" step="5"><span id="tnFeuerPhaseWert">20 min</span></div>
-  <label for="tnVerkehr">Fahrende Autos am Anfang</label>
-  <div class="tn-zeile"><input type="range" id="tnVerkehr" min="0" max="20" step="1"><span id="tnVerkehrWert">6</span></div>
+  <label for="tnVerkehr">Fahrende Autos am Anfang (Obergrenze; Anzahl nach Straßenlänge)</label>
+  <div class="tn-zeile"><input type="range" id="tnVerkehr" min="0" max="30" step="1"><span id="tnVerkehrWert">30</span></div>
   <label for="tnVerkehrPhase">… während der ersten</label>
   <div class="tn-zeile"><input type="range" id="tnVerkehrPhase" min="0" max="120" step="5"><span id="tnVerkehrPhaseWert">25 min</span></div>
   <label for="tnUnfall">Autounfall: etwa alle … Spielminuten (0 = keine Unfälle)</label>
@@ -1004,7 +1004,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     feld('tnBiss', e.biss === undefined ? 100 : e.biss, function (v) { return v ? v + ' %' : 'nie'; });
     feld('tnFeuer', e.feuer === undefined ? 1 : e.feuer, function (v) { return v ? String(v).replace('.', ',') + ' min' : 'aus'; });
     feld('tnFeuerPhase', e.feuerPhase === undefined ? 20 : e.feuerPhase, function (v) { return v + ' min'; });
-    feld('tnVerkehr', e.verkehr === undefined ? 6 : e.verkehr, function (v) { return String(v); });
+    feld('tnVerkehr', e.verkehr === undefined ? 30 : e.verkehr, function (v) { return String(v); });
     feld('tnVerkehrPhase', e.verkehrPhase === undefined ? 25 : e.verkehrPhase, function (v) { return v + ' min'; });
     feld('tnUnfall', e.unfall === undefined ? 10 : e.unfall, function (v) { return v ? v + ' min' : 'aus'; });
     feld('tnUnfallExpl', e.unfallExplosion === undefined ? 50 : e.unfallExplosion, function (v) { return v + ' %'; });

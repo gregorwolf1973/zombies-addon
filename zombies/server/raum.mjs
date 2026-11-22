@@ -456,7 +456,7 @@ export class SpielRaum extends Room {
     this.stadt = new Stadtleben(this);
     this.stadt.start(this.welt.karte ? (SpielRaum.einstellungen.menschen ?? 50) : 0);
     this.verkehr = new Verkehr(this);
-    if (this.welt.karte) this.verkehr.start(this.stadt.haltestellen, SpielRaum.einstellungen.verkehr ?? 6);
+    if (this.welt.karte) this.verkehr.start(this.stadt.haltestellen, SpielRaum.einstellungen.verkehr ?? 30);
     this.brand = new Brandstifter(this);
     this.welle = new Zombiewelle(this);
     this.aufgaben = new Aufgaben(this);
