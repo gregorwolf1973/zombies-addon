@@ -45,6 +45,7 @@ const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum 
 import { innenraumFuer } from './innen.mjs';
 import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from './innen_fein_bild.mjs';
 import { lichtRichtungWelt, lichtSeite, fensterFlecken } from './fensterlicht.mjs';
+import { Blitzliste, WEICH_RADIUS, MUENDUNG_MAX } from './muendungslicht.mjs';
 // ?innen1m in der Adresse: nur noch zum Testen vorgesehen; maßgeblich ist der Schalter des Servers (state.optionen, siehe erzeuge())
 import { hindernisFelder, hindernisFelderFein, hindernisPixel } from './hindernisse.mjs';
 import * as ton from './ton.mjs';
@@ -2177,6 +2178,7 @@ class Ort extends Phaser.Scene {
       this.lampeKegel(d, lx, ly, this.lampenRichtung(ich), true);
     }
     this.fremdeLampen(d, a.X, a.Y, ebene);
+    this.muendungsAufhellen(d, a.X, a.Y, ebene);
     this.setzeGrau(!lampe);
   }
 
@@ -2207,6 +2209,36 @@ class Ort extends Phaser.Scene {
 
   // Taschenlampen der Mitspieler: Kegel in Blickrichtung (weich nachgeführt), gleiche Pinsel-Technik wie der eigene; höchstens 8 (nächste zuerst).
   // Drinnen nur Mitspieler auf derselben Ebene (Haus und Stockwerk), draußen nur Mitspieler draußen.
+  // Mündungsfeuer erhellt die Umgebung (client/muendungslicht.mjs): Blitz anlegen; gezeichnet wird in aussenLicht/innenAnsicht (radiert die Abdunklung)
+  // und als schwacher additiver Warmschein im Weltbild (feste Bildpool, kein neues Objekt pro Frame)
+  muendungsLicht(x, y, ebene, art) {
+    this.blitzListe ??= new Blitzliste();
+    this.blitzListe.neu(x, y, ebene ?? this.aktEbene ?? '', art, performance.now());
+  }
+
+  muendungsSchein() {
+    const liste = this.blitzListe;
+    if (!liste) return;
+    const pool = this.blitzSchein ??= Array.from({ length: MUENDUNG_MAX }, () => this.add.image(0, 0, 'lichtweich').setBlendMode('ADD').setTint(0xffb050).setDepth(7.5).setVisible(false));
+    const jetzt = performance.now();
+    let i = 0;
+    liste.jeder(jetzt, this.aktEbene ?? '', (b, s) => {
+      pool[i++].setPosition(b.x, b.y).setScale(b.r / WEICH_RADIUS).setAlpha(0.15 * s).setVisible(true);
+    });
+    for (; i < pool.length; i++) if (pool[i].visible) pool[i].setVisible(false);
+  }
+
+  // Blitze radieren die Abdunklung (rt/d: Maske; ox, oy: Ursprung der Maske in Weltkoordinaten)
+  muendungsAufhellen(ziel, ox, oy, ebene) {
+    const liste = this.blitzListe;
+    if (!liste) return;
+    const P = this.weichPinsel;
+    liste.jeder(performance.now(), ebene, (b, s) => {
+      P.setScale(b.r / WEICH_RADIUS).setAlpha(s);
+      ziel.erase(P, b.x - ox, b.y - oy);
+    });
+  }
+
   // Ein Kegel für alle (eigene, Mitspieler, Bots, Nebel): gleicher Pinsel, gleiche Länge/Helligkeit; drinnen etwas kürzer
   lampeKegel(ziel, x, y, winkel, innen, alpha = 1) {
     this.lampenPinsel.setRotation(winkel).setScale((innen ? 0.8 : AUSSEN_ZOOM_KORREKTUR) * (innen && this.feinInnen() ? 0.13 : 1)).setAlpha(alpha);   // maßstäblich: Lichtkegel ~7 m lang
@@ -2277,6 +2309,7 @@ class Ort extends Phaser.Scene {
     // nur dunkler/heller: neutrale, leicht bläuliche Nacht ohne Farbwechsel; Stärke = Einstellung „Nachtdunkelheit“
     const sanft = dunkel * dunkel * (3 - 2 * dunkel);
     rt.fill(0x060a14, Math.min(1, sanft * (raum.state.nachtDunkel ?? 92) / 100));
+    this.muendungsAufhellen(rt, ox, oy, '');
     if (dunkel < 0.3) return;
     const sicht = (x, y, r) => x > v.x - r && x < v.right + r && y > v.y - r && y < v.bottom + r;
     const P = this.weichPinsel;
@@ -2772,6 +2805,7 @@ class Ort extends Phaser.Scene {
     g.lineStyle(kanone ? 3 : 2, kanone ? 0xffcc80 : 0xffee58, 1).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
     g.lineStyle(1, 0xffffff, 0.9).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
     this.tweens.add({ targets: g, x: (m.x2 - mx) * (1 - l1), y: (m.y2 - my) * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => g.destroy() });
+    this.muendungsLicht(mx, my, '', kanone ? (o?.turm ? 'puma' : 'kanone') : (evak ? 'leopard' : 'mg'));
     // Mündungsblitz (additiv) und Pulverrauch
     const blitz = this.add.image(mx, my, 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(wb)
       .setScale(kanone || evak ? 0.6 : 0.32).setDepth(7);
@@ -3288,6 +3322,7 @@ class Ort extends Phaser.Scene {
       return;
     }
     const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr' || m.art === 'mg' || m.art === 'scharfschuetze';
+    this.muendungsLicht(m.x1 + c * 16, m.y1 + sn * 16, m.ebene, m.art);
     const vorn = 16, fk = gewehr ? 0.55 : schrot ? 0.65 : 0.4, lang = (gewehr ? 38 : schrot ? 22 : 26) * fk, br = 3.5 * fk;
     const g = this.add.graphics().setDepth(7);
     // Feuerzunge: breit und gelb an der Mündung, schmal und rot nach vorn auslaufend
@@ -3349,6 +3384,7 @@ class Ort extends Phaser.Scene {
     this.sichtMelden();
     this.innenAktualisieren(ich);
     if (ich) this.aussenLicht(ich);
+    this.muendungsSchein();
     this.nebelZeichnen(ich, dt);
     if (kulSchatten()) this.schattenAlphaSetzen();
     this.chunksAktualisieren();
