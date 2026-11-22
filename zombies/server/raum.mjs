@@ -2862,21 +2862,21 @@ export class SpielRaum extends Room {
             const alle = imWinkel(wf.kegel).filter(t => t[0] !== zid);
             for (let i = -2; i <= 2; i++) {   // Schrotgarbe
               const ww = w + i * wf.kegel / 2.5;
-              this.broadcast('schuss', { x1: p.x, y1: p.y, x2: p.x + Math.cos(ww) * wf.reichweite, y2: p.y + Math.sin(ww) * wf.reichweite, art: name, ebene: p.ebene ?? '' });
+              this.broadcast('schuss', { x1: p.x, y1: p.y, x2: p.x + Math.cos(ww) * wf.reichweite, y2: p.y + Math.sin(ww) * wf.reichweite, art: name, ebene: p.ebene ?? '', von: id });
             }
             treffer([ziel], wf.schaden); treffer(alle, wf.nebenSchaden);
           } else {
             const baum = gueteVon(ziel) >= 1 ? null : ersterBaum(welt, p.x, p.y, z.x, z.y), fehl = !!baum && !(this.rnd() < gueteVon(ziel));   // Fehlschuss: Spur endet am ersten Baum
-            this.broadcast('schuss', fehl ? { x1: p.x, y1: p.y, x2: baum.x, y2: baum.y, art: name, ebene: p.ebene ?? '' } : { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name, z: zid, ebene: p.ebene ?? '' });
+            this.broadcast('schuss', fehl ? { x1: p.x, y1: p.y, x2: baum.x, y2: baum.y, art: name, ebene: p.ebene ?? '', von: id } : { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name, z: zid, ebene: p.ebene ?? '', von: id });
             if (!fehl) this.schaden(zid, z, wf.schaden * faktor(ziel), p, id);
             if (wf.pfeil) this.legeHin('pfeil', fehl ? baum.x : z.x, fehl ? baum.y : z.y, p.ebene);   // der Pfeil bleibt am Einschlagort liegen und lässt sich aufheben
           }
         } else if (wf.bogen) {
-          this.broadcast('stoss', { x: p.x, y: p.y, w, sense: true });
+          this.broadcast('stoss', { x: p.x, y: p.y, w, sense: true, ebene: p.ebene ?? '', von: id });
           treffer(imWinkel(wf.bogen), wf.schaden);
         } else {
           if (wf.stoss) bewege(welt, z, Math.cos(w) * STOSS_WEG, Math.sin(w) * STOSS_WEG, W.zombieRadius);
-          this.broadcast('stoss', { x: p.x, y: p.y, w, messer: name === 'messer', schlag: name === 'schlaeger' });
+          this.broadcast('stoss', { x: p.x, y: p.y, w, messer: name === 'messer', schlag: name === 'schlaeger', ebene: p.ebene ?? '', von: id });
           treffer([ziel], wf.schaden);
         }
         pause = wf.pause;
@@ -3013,14 +3013,14 @@ export class SpielRaum extends Room {
     const info = this.zombieInfo.get(id);
     if (info && !info.ziel) {
       // getroffen: jetzt hat er dich bemerkt
-      if (vonSid && z.hp > 0) { info.ziel = vonSid; info.verloren = 0; info.punkt = null; info.schlaeft = false; z.jagt = true; this.broadcast('entdeckt', { x: z.x, y: z.y }); }
+      if (vonSid && z.hp > 0) { info.ziel = vonSid; info.verloren = 0; info.punkt = null; info.schlaeft = false; z.jagt = true; this.broadcast('entdeckt', { x: z.x, y: z.y, ebene: z.ebene ?? '' }); }
       else info.punkt = { x: von.x, y: von.y };
     }
     if (z.hp === 0 && !z.kriecht && this.rnd() < (this.kriecherChance ?? KRIECHER_CHANCE)) {
       // nicht ganz tot: bricht zusammen und kriecht weiter
       z.kriecht = true; z.hp = Math.max(1, Math.round(KRIECHER_HP * (SpielRaum.einstellungen?.zombieLeben ?? ZOMBIE_HP) / ZOMBIE_HP)); z.jagt = false;
       if (info) { info.ziel = null; info.punkt = null; }
-      this.broadcast('weg', { x: z.x, y: z.y, halb: true });
+      this.broadcast('weg', { x: z.x, y: z.y, halb: true, ebene: z.ebene ?? '', von: vonSid ?? '' });
       return;
     }
     if (z.hp === 0) {
@@ -3030,7 +3030,7 @@ export class SpielRaum extends Room {
       von.besiegt++;
       if (vonSid) this.xpGeben(vonSid, 'zombie');
       this.neueLeiche(z);
-      this.broadcast('weg', { x: z.x, y: z.y });
+      this.broadcast('weg', { x: z.x, y: z.y, ebene: z.ebene ?? '', von: vonSid ?? '' });
     }
   }
 
@@ -3200,7 +3200,7 @@ export class SpielRaum extends Room {
         const bemerkt = z.kriecht ? d < (leise ? KRIECHER_SPUERT * 0.5 : KRIECHER_SPUERT) * R : info.schlaeft ? d < (leise ? 70 : 140) * R : (ganzNah || (d < weite && imKegel));
         if (bemerkt && gute > 0) {
           info.ziel = sid; info.verloren = 0; info.punkt = null; info.schlaeft = false;
-          this.broadcast('entdeckt', { x: z.x, y: z.y });
+          this.broadcast('entdeckt', { x: z.x, y: z.y, ebene: z.ebene ?? '' });
           break;
         }
       }

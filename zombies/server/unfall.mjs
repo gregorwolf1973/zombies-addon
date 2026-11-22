@@ -133,7 +133,7 @@ export class Unfaelle {
         if (frei(this.raum.welt, o.x + c * 10, o.y + sn * 10, 8)) { o.x += c * 10; o.y += sn * 10; }
       }
     }
-    this.raum.broadcast('krach', { x: f.x, y: f.y });
+    this.raum.broadcast('krach', { x: f.x, y: f.y, ebene: '' });
     this.raum.laerm(f.x, f.y, 650, true, '');
     this.melden(f.x, f.y, '💥 Unfall!');
     this.liste.set(id, { phase: 'rauch', t: 0, rauchBis: 10 + this.raum.rnd() * 10 });

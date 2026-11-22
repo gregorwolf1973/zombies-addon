@@ -589,7 +589,7 @@ export class Stadtleben {
         this.info.get(mid).inf = sekunden;
         if (this.info.get(mid).gruppe) { this.gruppeVerlassen(mid, this.info.get(mid)); this.info.get(mid).modus = ''; }
         if (this.info.get(mid).folgt) this.freilassen(mid, m, this.info.get(mid));   // Gebissene lassen sich nicht mehr retten
-        this.raum.broadcast('menschGebissen', { x: m.x, y: m.y });
+        this.raum.broadcast('menschGebissen', { x: m.x, y: m.y, ebene: m.ebene ?? '' });
       }
     }
   }

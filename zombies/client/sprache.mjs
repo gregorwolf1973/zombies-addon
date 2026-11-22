@@ -83,6 +83,7 @@ export function starte({ raum, meineId, welt, meldung }) {
     mikroAnfrage = true;
     try {
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('kein sicherer Kontext');
+      try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch { /* egal */ }
       strom = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       spur = strom.getAudioTracks()[0] ?? null;
       if (!spur) throw new Error('keine Tonspur');
@@ -100,6 +101,7 @@ export function starte({ raum, meineId, welt, meldung }) {
   }
   function mikroLoslassen() {
     pegelStoppen(); aufnahmeStoppen();
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* egal */ }
     try { strom?.getTracks().forEach(t => t.stop()); } catch { /* egal */ }
     strom = null; spur = null; mikroFertig = false; mikroFehler = false;
     sendeSpricht(false);
