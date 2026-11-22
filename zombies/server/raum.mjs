@@ -20,6 +20,7 @@ import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
 import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
+import { nachSeq } from '../client/netzpuffer.mjs';
 import { waehleZiel, schussGuete, ersterBaum } from './baumschuss.mjs';
 import { aussehenMigriert } from '../client/figurbild.mjs';
 import { Granaten } from './granaten.mjs';
@@ -554,6 +555,13 @@ export class SpielRaum extends Room {
       if (a.length > 5) m.verz = a[5];
       const r = this.eingabeEmpfangen(client, m);
       if (r?.bewegt) this.ruehrt(client.sessionId);
+    });
+    // Blickrichtung im Stand (Drehzone des Laufsticks: Figur und Taschenlampe drehen, ohne zu laufen): [Richtung in 256 Stufen, letzte gesendete Eingabe-Nummer].
+    // Gilt erst, wenn der Server alle Bewegungsstücke bis zu dieser Nummer abgearbeitet hat (sonst überschriebe die alte Laufrichtung sie).
+    this.onMessage('blick', (client, a) => {
+      const x = this.extra.get(client.sessionId), q = Number(a?.[0]), n = Number(a?.[1]);
+      if (!x || !Number.isInteger(q) || q < 0 || q > 255 || !Number.isInteger(n)) return;
+      x.blick = { w: q / 256 * ZWEI_PI, n: n & 0xffff };
     });
     // halbe Größe des Bildausschnitts in Weltpixeln (je nach Bildschirm und Zoom): bestimmt, welche Zombies der Client bekommt
     this.onMessage('sicht', (client, m) => {
@@ -2891,6 +2899,7 @@ export class SpielRaum extends Room {
       if (!x.bot) this.klettern(id, p, x, se, laenge, ((p.x - x0) * se.dx + (p.y - y0) * se.dy) / laenge < f * 0.35, sd);
     }
     if (!bewegt) x.kletter = 0;
+    if (x.blick && !nachSeq(x.blick.n, p.seq ?? 0)) { p.richtung = x.blick.w; x.blick = null; }   // Drehzone: erst nach den älteren Laufstücken (gesendet wird er nur im Stand)
     const ebeneVorher = p.ebene;
     this.uebergang(id, p, x, dt);
     if (p.ebene !== ebeneVorher) this.eingabeVerwerfen(p, x);   // neue Ebene: alte Eingaben gehören zum alten Ort
@@ -2993,7 +3002,7 @@ export class SpielRaum extends Room {
         pause = wf.pause;
         x.pauseFern = !!wf.fern && Math.hypot(z.x - p.x, z.y - p.y) >= nahR;   // Schuss auf fernes Ziel: nahe Zombies müssen nicht die volle Pause warten
         x.feuerSchuldT = 0;
-        if (!bewegt) p.richtung = w;   // nur im Stehen zum Ziel drehen; im Lauf bleibt die Laufrichtung (sonst läuft die Figur seitwärts/rückwärts)
+        if (!bewegt && (x.bot || x.afkBot)) p.richtung = w;   // nur Bots drehen im Stehen zum Ziel; Menschen behalten ihre Blickrichtung (Taschenlampe), der Körper dreht beim Schuss nur kurz (Client zielW)
       } else pause = 0;
     }
     x.pause = Math.max(0, pause);

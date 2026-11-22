@@ -73,6 +73,7 @@ const INNEN_ZOOM = 1.6;
 const AUSSEN_ZOOM_KORREKTUR = 1 / 1.4;
 import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
 import { NetzPuffer, nachSeq, ausStufe, verzFuerServer, naheAnzeigeVerz } from './netzpuffer.mjs';
+import { STICK_TOT, STICK_WEG, stickWert } from './stick.mjs';
 import { Sammler, geraetTyp } from './diagnose.mjs';
 import { dingIcon, dingHtml, setzeDingListe, dingRahmen, hatDingBild } from './dingbild.mjs';
 
@@ -1065,10 +1066,11 @@ class Ort extends Phaser.Scene {
         return;
       }
       if (p.id !== this.joystick.id) return;
-      let vx = (p.x - this.joystick.bx) / 60, vy = (p.y - this.joystick.by) / 60;
-      const l = Math.hypot(vx, vy);
-      if (l > 1) { vx /= l; vy /= l; }
-      this.joystick.vx = vx; this.joystick.vy = vy;
+      const j = this.joystick, v = stickWert(p.x - j.bx, p.y - j.by);
+      if (v.dreht) { this.blickZiel = v.winkel; this.blickDreht = true; }
+      else if (v.laeuft) this.blickDreht = false;
+      if (v.laeuft && !j.laeuft) { try { navigator.vibrate?.(12); } catch {} }   // Grenze der Drehzone überschritten (Android; iOS kann das im Browser nicht)
+      j.vx = v.vx; j.vy = v.vy; j.kx = v.kx; j.ky = v.ky; j.laeuft = v.laeuft;
     });
     const loslassen = p => {
       this.finger.delete(p.id);
@@ -1085,7 +1087,7 @@ class Ort extends Phaser.Scene {
         if (this.finger.size === 0) { this.kneifen = null; if (!this.flug?.aktiv) { try { localStorage.setItem('zob_zoom', this.zoomWahl.toFixed(2)); } catch {} } }
         return;
       }
-      if (p.id === this.joystick.id) this.joystick = { id: null, bx: 0, by: 0, vx: 0, vy: 0 };
+      if (p.id === this.joystick.id) { this.joystick = { id: null, bx: 0, by: 0, vx: 0, vy: 0 }; this.blickDreht = false; }
     };
     this.input.on('pointerup', loslassen);
     this.input.on('pointerupoutside', loslassen);
@@ -2354,13 +2356,22 @@ class Ort extends Phaser.Scene {
     for (const id of this.lampenWinkelAndere.keys()) if (!benutzt.has(id) && !raum.state.spieler.get(id)?.lampe) this.lampenWinkelAndere.delete(id);
   }
 
-  // Kegel folgt der Laufrichtung weich (nicht jedem Ruck, z. B. beim automatischen Zielen)
+  // Blickrichtung des eigenen Helden (Lampe, Körper im Stand): Laufrichtung aus der Eingabe, sonst die gewählte Richtung
+  eigeneBlickRichtung(ich) {
+    const e = this.eingabe;
+    if (e && Math.hypot(e.dx, e.dy) > 0.05) return (this.blickZiel = Math.atan2(e.dy, e.dx));
+    if (ich.afk || this.blickZiel === undefined) return (this.blickZiel = ich.richtung ?? 0);
+    return this.blickZiel;
+  }
+
+  // Kegel folgt der Laufrichtung weich (nicht jedem Ruck); in der Drehzone des Sticks schnell
   lampenRichtung(ich) {
     if (this.lampenRichtungBild === this.game.loop.frame && this.lampenWinkel !== undefined) return this.lampenWinkel;   // je Bild nur einmal nachführen
     this.lampenRichtungBild = this.game.loop.frame;
-    // ohne eigene Eingabe (Stillstand oder AFK-Bot steuert den Helden) zählt die Blickrichtung vom Server
-    const e = this.eingabe, ziel = Math.hypot(e.dx, e.dy) > 0.1 ? Math.atan2(e.dy, e.dx) : (ich.richtung ?? this.lampenWinkel ?? 0);
-    this.lampenWinkel = Phaser.Math.Angle.RotateTo(this.lampenWinkel ?? ziel, ziel, this.game.loop.delta / 1000 * 3.5);
+    // Laufen: Laufrichtung; Stand: zuletzt gewählte Blickrichtung (Drehzone des Sticks oder letzte Laufrichtung) – das Auto-Zielen
+    // dreht die Lampe nicht mit. Steuert der AFK-Bot den Helden, zählt die Blickrichtung vom Server.
+    const ziel = this.eigeneBlickRichtung(ich);
+    this.lampenWinkel = Phaser.Math.Angle.RotateTo(this.lampenWinkel ?? ziel, ziel, this.game.loop.delta / 1000 * (this.blickDreht ? 14 : 3.5));
     return this.lampenWinkel;
   }
 
@@ -3039,7 +3050,7 @@ class Ort extends Phaser.Scene {
     const tempo = weg / Math.max(dt, 0.001) / tfa;
     // Laufrichtung: Füße und (außer kurz beim Schuss/Schlag) Körper zeigen immer in Laufrichtung; der eigene Held nimmt sie sofort aus der Eingabe
     let lr = p.richtung;
-    if (f === this.figuren.get(meineId) && this.eingabe && Math.hypot(this.eingabe.dx, this.eingabe.dy) > 0.05) lr = Math.atan2(this.eingabe.dy, this.eingabe.dx);
+    if (f === this.figuren.get(meineId) && this.eingabe) lr = this.eigeneBlickRichtung(p);   // Laufen: Eingabe; Stand: Drehzone/letzte Richtung
     const kr = !p.unten && f.zielBis > this.time.now && typeof f.zielW === 'number' ? f.zielW : lr;
     if (p.unten) textur = 'liegend-' + f.n;
     else if (zombie) { textur = 'figuren'; bild = this.figurBild('zombie_hemd', geht ? Math.floor(f.lauf / 11) : 0); }
@@ -3190,6 +3201,11 @@ class Ort extends Phaser.Scene {
       if (this.offen.length > 120) this.offen.shift();
       this.gesendet = { dx, dy, s, f, t: jetzt };
     }
+    // Drehzone: Blickrichtung im Stand melden (Mitspieler sehen Figur und Lampenkegel), höchstens alle 100 ms
+    if (!dx && !dy && this.blickZiel !== undefined && this.eingabeNr !== undefined && jetzt - (this.blickT ?? 0) >= 100) {
+      const q = ((Math.round(this.blickZiel / (Math.PI * 2) * 256) % 256) + 256) % 256;
+      if (q !== this.blickQ) { this.blickQ = q; this.blickT = jetzt; raum.send('blick', [q, this.eingabeNr]); }
+    } else if (dx || dy) this.blickQ = undefined;
   }
 
   // ein Stück Bewegung wie auf dem Server (raum.mjs spielerSchritt) auf pos anwenden
@@ -3238,8 +3254,9 @@ class Ort extends Phaser.Scene {
     const X = v => (v - cx) * k + cx, Y = v => (v - cy) * k + cy;
     this.stick.fillStyle(0xffffff, 0.08).fillCircle(X(j.bx), Y(j.by), 80 * k);
     this.stick.lineStyle(1.5 * k, 0xffffff, 0.22).strokeCircle(X(j.bx), Y(j.by), 80 * k);
-    this.stick.lineStyle(1 * k, 0xffffff, 0.15).strokeCircle(X(j.bx), Y(j.by), 48 * k);
-    this.stick.fillStyle(0xffffff, 0.35).fillCircle(X(j.bx + j.vx * 60), Y(j.by + j.vy * 60), 28 * k);
+    this.stick.lineStyle(1 * k, 0xffffff, 0.15).strokeCircle(X(j.bx), Y(j.by), (STICK_TOT + STICK_WEG * 0.55) * k);   // Grenze Schleichen/Gehen
+    this.stick.lineStyle(1.5 * k, 0xffe9a8, j.laeuft ? 0.2 : 0.5).strokeCircle(X(j.bx), Y(j.by), STICK_TOT * k);      // Drehzone: nur Figur und Lampe drehen
+    this.stick.fillStyle(0xffffff, 0.35).fillCircle(X(j.bx + (j.kx ?? 0)), Y(j.by + (j.ky ?? 0)), 28 * k);
   }
 
   // ---------- Aktionen ----------
