@@ -20,7 +20,7 @@ import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 import { weltBeschaffen, weltVorrechnen } from './weltladen.mjs';
-import { ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulSchatten, fotoStatus, fotoWunsch } from './kulisse.mjs';
+import { ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulFoto, kulHatGezeichnet, kulSchatten, fotoStatus, fotoWunsch } from './kulisse.mjs';
 import { KUL_SCHLUESSEL, schattenFaktor } from './kulisse_regeln.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
@@ -483,7 +483,10 @@ function feuerSetzen(an) {
 function kulisseSchalterZeigen() {
   const da = kulisseVorhanden();
   $('eg-kulisse').hidden = !da;
-  if (da) { $('eg-kul-boden-z').hidden = !kulHatFoto(); $('eg-kul-daecher-z').hidden = !kulHatDaecher(); }
+  if (da) {
+    $('eg-kul-boden-z').hidden = !kulHatFoto(); $('eg-kul-daecher-z').hidden = !kulHatDaecher(); $('eg-kul-gezeichnet-z').hidden = !kulHatGezeichnet();
+    for (const [id, an] of [['boden', kulHatFoto()], ['daecher', kulHatDaecher()], ['gezeichnet', kulHatGezeichnet()]]) $('eg-kul-' + id).hidden = !an;
+  }
 }
 function geraetEinstellungenEinrichten(markieren) {
   const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -499,7 +502,7 @@ function geraetEinstellungenEinrichten(markieren) {
   const marks = [
     gruppe('eg-schiessen', () => schiessModus, v => { schiessModus = schiessModusLesen(v); feuerUiAnwenden(); }, K.schiessen),
     gruppe('eg-kartenbild', () => kartenbildLesen(lies(K.kartenbild)), v => document.dispatchEvent(new CustomEvent('zob-kartenbild', { detail: kartenbildLesen(v) })), K.kartenbild),
-    ...['boden', 'daecher', 'schatten'].map(w => gruppe('eg-kul-' + w, () => (kulisse()?.an[w] ? 'an' : 'aus'),
+    ...['boden', 'gezeichnet', 'daecher', 'schatten'].map(w => gruppe('eg-kul-' + w, () => (kulisse()?.an[w] ? 'an' : 'aus'),
       v => { const k = kulisse(); if (!k) return; k.an[w] = anAusLesen(v); document.dispatchEvent(new CustomEvent('zob-kulisse')); }, KUL_SCHLUESSEL[w])),
     gruppe('eg-zombieton', () => (anAusLesen(lies(K.zombieTon)) ? 'an' : 'aus'), v => ton.zombieTonSetzen(anAusLesen(v)), K.zombieTon),
     gruppe('eg-musik', () => (anAusLesen(lies(K.musik)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.musikSetzen(anAusLesen(v)); }, K.musik),
@@ -1539,7 +1542,7 @@ class Ort extends Phaser.Scene {
     const rect = { x0: cx * STUECK, y0: cy * STUECK, x1: Math.min(BREITE, (cx + 1) * STUECK), y1: Math.min(HOEHE, (cy + 1) * STUECK) };
     const B = (rect.x1 - rect.x0) * KACHEL, H = (rect.y1 - rect.y0) * KACHEL, key = cx + ',' + cy;
     const tb = this.textures.createCanvas('boden-' + key, B, H);
-    const foto = kulBoden() && fotoStatus(rect) === 'bereit';   // gleiche Bedingung wie in zeichneBoden: Luftbild statt gezeichnetem Boden
+    const foto = kulFoto() && fotoStatus(rect) === 'bereit';   // gleiche Bedingung wie in zeichneBoden: Luftbild (zeigt Bäume selbst); beim gezeichneten Boden zeichnet das Spiel die Bäume
     zeichneBoden(tb.getContext(), this.welt, rect); tb.refresh(); this.kanteFesthalten(tb);
     const boden = this.add.image(rect.x0 * KACHEL, rect.y0 * KACHEL, 'boden-' + key).setOrigin(0).setDepth(0).setVisible(!this.aktEbene);
     const st = { cx, cy, key, rect, B, H, foto, boden, oben: null, baum: undefined, schatten: null };
