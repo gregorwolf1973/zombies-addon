@@ -26,6 +26,10 @@ export function leseOptionen(datei = process.env.ZOMBIES_OPTIONS || '/data/optio
   try { return JSON.parse(fs.readFileSync(datei, 'utf8')); } catch { return {}; }
 }
 
+// WebSocket-Kompression (permessage-deflate): wird nur genutzt, wenn der Client sie anbietet (Browser tun das); entfernt ein Proxy (Cloudflare-Tunnel,
+// HA-Ingress) die Erweiterung, läuft es unkomprimiert weiter. Kleine Pakete (Eingaben, Meldungen) bleiben unkomprimiert, Stufe 3 spart CPU.
+export const WS_KOMPRESSION = { threshold: 256, zlibDeflateOptions: { level: 3 }, concurrencyLimit: 8 };
+
 // ICE-Server für die Sprachübertragung aus den Add-on-Optionen („aus“ = kein STUN)
 export function iceServer(o = {}) {
   const ice = [];
@@ -338,7 +342,7 @@ export async function starte({
 
   const httpServer = http.createServer(app);
   const spielServer = new Server({
-    transport: new WebSocketTransport({ server: httpServer, maxPayload: 32 * 1024 }),   // Standard 4 KB: zu knapp für WebRTC-Signalisierung (SDP)
+    transport: new WebSocketTransport({ server: httpServer, maxPayload: 32 * 1024, perMessageDeflate: WS_KOMPRESSION }),   // Standard 4 KB: zu knapp für WebRTC-Signalisierung (SDP)
     greet: false,
     logger: leise ? { info() {}, warn() {}, error: console.error, debug() {}, trace() {} } : undefined,
   });

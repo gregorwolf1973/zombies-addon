@@ -2,16 +2,18 @@
 // lenken Zombies ab und bellen, wenn ein Zombie vor der Haustür steht. Der Hund ist unverwundbar, braucht nichts
 // und wird mit dem Spieler gespeichert (extra.hund -> speichereSpieler). Maße in Pixeln (8 px = 1 m).
 import { schema, t } from '@colyseus/schema';
+import { entkoppeln } from './netzfeld.mjs';
 import { BREITE, HOEHE, KACHEL, tempoVon, T, WERTE as W, bewege, frei, findeWeg, sichtfrei } from '../client/welt.mjs';
 
 export const Hund = schema({
-  x: t.number(), y: t.number(),
+  x: t.int16(), y: t.int16(),  // ganze Pixel (server/netzfeld.mjs)
   richtung: t.number(),        // Blickrichtung (Bogenmaß)
   ebene: t.string(),           // '' = draußen, sonst Innenraum (wie bei Spielern)
   besitzer: t.string(),        // Sitzungs-ID des Spielers, '' = Streuner
   laeuft: t.boolean(),         // bewegt sich gerade (Laufanimation)
   winselt: t.boolean(),        // ein Zombie hat ihn erreicht: kurz winseln
 }, 'Hund');
+entkoppeln(Hund, ['x', 'y']);
 
 export const HUND = { ablenkung: 40 };   // Vorgabe der Einstellung: Wahrscheinlichkeit in %, dass ein Zombie in der Nähe den Hund jagt
 

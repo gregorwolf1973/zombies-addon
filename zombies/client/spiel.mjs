@@ -832,6 +832,7 @@ const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   //
 // Zombies in der Nähe: Sieht man keinen (z. B. drinnen), schickt der Server die Liste gar nicht – dann leer
 const LEERE_KARTE = new Map();
 const zombieKarte = () => raum?.state?.zombies ?? LEERE_KARTE;
+const fzRichtung = f => (typeof f.rq === 'number' ? ausStufe(f.rq) : f.richtung ?? 0);   // Fahrzeuge: ebenfalls 256 Stufen
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
 let baumTempoWert = 25;
 // Maßstäbliche Innenräume: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
@@ -2410,8 +2411,8 @@ class Ort extends Phaser.Scene {
     }
     if (pf.patch(s.takt, raum.__ankunftTakt === s.takt && raum.__ankunft ? raum.__ankunft : performance.now())) {
       for (const [id, p] of s.spieler) if (id !== meineId) pf.merke('s' + id, p.x, p.y, s.takt);
-      for (const [id, z] of zombieKarte()) pf.merke('z' + id, z.x, z.y, s.takt);
-      for (const [id, m] of s.menschen ?? []) pf.merke('m' + id, m.x, m.y, s.takt);
+      for (const [id, z] of zombieKarte()) pf.merke('z' + id, z.x, z.y, s.takt, true);
+      for (const [id, m] of s.menschen ?? []) pf.merke('m' + id, m.x, m.y, s.takt, true);
     }
     const rt = typeof s.takt === 'number' ? pf.zeit(performance.now()) : null;   // Anzeigezeit (Server-Uhr minus Verzögerung)
     // Spieler
@@ -2563,12 +2564,12 @@ class Ort extends Phaser.Scene {
         const bild = this.add.image(0, 0, key);
         const licht = this.add.graphics();
         const sch = f.art === 'evakuierung' && evakArtVon(raum.state) === 'flugzeug' ? null : this.add.image(0, 0, this.fahrzeugSchattenTextur(key)).setDepth(4.55).setAlpha(FZ_SCHATTEN.alpha);
-        o = { box: this.add.container(f.x, f.y, [bild, licht]).setDepth(4.6), bild, licht, sch, x: f.x, y: f.y, r: f.richtung };
+        o = { box: this.add.container(f.x, f.y, [bild, licht]).setDepth(4.6), bild, licht, sch, x: f.x, y: f.y, r: fzRichtung(f) };
         this.busObj.set(id, o);
       }
       if (o.bild.texture.key !== key) { o.bild.setTexture(key); o.sch?.setTexture(this.fahrzeugSchattenTextur(key)); }
       o.x += (f.x - o.x) * glatt; o.y += (f.y - o.y) * glatt;
-      o.r = Phaser.Math.Angle.RotateTo(o.r, f.richtung, dt * 6);
+      o.r = Phaser.Math.Angle.RotateTo(o.r, fzRichtung(f), dt * 6);
       o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
       o.sch?.setPosition(o.x + FZ_SCHATTEN.dx, o.y + FZ_SCHATTEN.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible);
       o.licht.clear();
@@ -2805,7 +2806,7 @@ class Ort extends Phaser.Scene {
     if (kanone && o?.turm) {
       wb = o.turm.rotation; mx = o.turm.x + Math.cos(wb) * o.pumaMuendung; my = o.turm.y + Math.sin(wb) * o.pumaMuendung;
     } else if (evak) {
-      const f = fzPx('puma')[0] / PUMA_BILD.laenge, r = this.busObj.get([...raum.state.fahrzeuge.entries()].find(([, v]) => v === evak)?.[0])?.r ?? evak.richtung;
+      const f = fzPx('puma')[0] / PUMA_BILD.laenge, r = this.busObj.get([...raum.state.fahrzeuge.entries()].find(([, v]) => v === evak)?.[0])?.r ?? fzRichtung(evak);
       const ox = (PUMA_BILD.turmX + PUMA_BILD.muendung) * f, oy = PUMA_BILD.turmY * f;
       mx = evak.x + Math.cos(r) * ox - Math.sin(r) * oy; my = evak.y + Math.sin(r) * ox + Math.cos(r) * oy; wb = r;
     }
@@ -3073,10 +3074,13 @@ class Ort extends Phaser.Scene {
     if ((anders && jetzt - g.t > 15) || jetzt - g.t >= (steht ? 250 : 50)) {
       if (this.eingabeNr === undefined) this.eingabeNr = raum.state?.spieler?.get(meineId)?.seq ?? 0;
       const n = this.eingabeNr = (this.eingabeNr + 1) & 0xffff;
-      const stueck = { dx: +g.dx.toFixed(3), dy: +g.dy.toFixed(3), s: g.s, f: f, n, d: +Math.min(0.25, (jetzt - g.t) / 1000).toFixed(3) };
+      // kompakt senden (Meldung 'e': Feld-Array statt Objekt, Richtung in Hundertsteln, Dauer in ms); die Vorhersage rechnet mit denselben gerundeten Werten wie der Server
+      const q = v => Math.round(v * 100), dms = Math.max(0, Math.min(250, Math.round(jetzt - g.t)));
+      const stueck = { dx: q(g.dx) / 100, dy: q(g.dy) / 100, s: g.s, f: f, n, d: dms / 1000 };
+      const feld = [n, q(g.dx), q(g.dy), (g.s ? 1 : 0) | (f ? 2 : 0), dms];
       // Anzeigeverzögerung der fremden Figuren (ms) für die Biss-Prüfung des Servers (Lag-Kompensation), alle ~1,5 s
-      if (jetzt - (this.verzGemeldet ?? 0) > 1500) { this.verzGemeldet = jetzt; stueck.verz = verzFuerServer(this.puffer.verz); }
-      raum.send('eingabe', stueck);
+      if (jetzt - (this.verzGemeldet ?? 0) > 1500) { this.verzGemeldet = jetzt; stueck.verz = verzFuerServer(this.puffer.verz); feld.push(stueck.verz); }
+      raum.send('e', feld);
       this.offen.push(stueck);
       if (this.offen.length > 120) this.offen.shift();
       this.gesendet = { dx, dy, s, f, t: jetzt };

@@ -6,6 +6,7 @@
 const SPUR_MAX = 12;          // so viele Stände je Figur
 const WEITER_MAX = 250;       // ms: so lange über den letzten Stand hinaus weiterrechnen (Geschwindigkeit klingt linear auf 0 ab)
 const SPRUNG = 200;           // px: größere Sprünge zwischen zwei Ständen (Ebenenwechsel, Teleport) nicht gleiten
+export const RUHE_NACH = 160;   // ms
 export const VERZ_MIN = 110, VERZ_MAX = 450;
 
 export class NetzPuffer {
@@ -34,10 +35,14 @@ export class NetzPuffer {
     return true;
   }
 
-  merke(id, x, y, takt) {
+  // traege = true (Zombies): Der Server schickt Positionen nur bei ≥ 1 px Änderung, ferne Zombies nur jeden 2. Patch. Ein unveränderter Stand
+  // gilt daher erst als „steht“, wenn er RUHE_NACH ms lang gleich blieb; vorher gleitet die Figur einfach weiter zum nächsten Stand
+  // (sonst bliebe sie einen Patch lang stehen und holte danach doppelt auf).
+  merke(id, x, y, takt, traege = false) {
     let s = this.spuren.get(id);
     if (!s) this.spuren.set(id, s = []);
     const l = s[s.length - 1];
+    if (traege && l && l.x === x && l.y === y && takt > l.t && takt - l.t < RUHE_NACH) return;
     if (l && l.t >= takt) { if (l.t === takt) { l.x = x; l.y = y; } return; }
     s.push({ t: takt, x, y });
     if (s.length > SPUR_MAX) s.shift();
