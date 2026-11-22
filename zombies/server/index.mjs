@@ -14,6 +14,7 @@ import { SpielRaum } from './raum.mjs';
 import { LEVEL1_KARTEN, level1Karte } from './aufgaben.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
+import { clientAuslieferung, auslieferungsVersion } from './statisch.mjs';
 import { EinstellungsDatei, oeffentlich, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, TON_STANDARD, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
@@ -69,11 +70,6 @@ export async function starte({
   SpielRaum.speicher = new Speicher(datenbank);
   const app = express();
   app.disable('x-powered-by');
-  const nocache = (req, res, next) => { res.set('Cache-Control', 'no-cache'); next(); };
-  app.get('/vendor/phaser.min.js', nocache, (req, res) =>
-    res.sendFile(require.resolve('phaser/dist/phaser.min.js')));
-  app.get('/vendor/colyseus.js', nocache, (req, res) =>
-    res.sendFile(path.join(path.dirname(require.resolve('@colyseus/sdk/package.json')), 'dist/colyseus.js')));
   const datei = new EinstellungsDatei(einstellungsDatei, optionen);
   // Levelwechsel (Evakuierungsbus): die nächste Karte einstellen, die Welt startet der Raum selbst neu
   // (die in der Verwaltung erzwungene Evakuierungsart gilt nur für die aktuelle Karte und wird beim Kartenwechsel zurückgesetzt – sonst käme z. B. der Leopard auch in Königsdorf)
@@ -286,7 +282,16 @@ export async function starte({
   }));
   // Luftbild-Kacheln der Kulisse (client/karten/kulisse): ändern sich selten, eine Stunde zwischenspeichern (spart Mobildaten beim Herumlaufen)
   app.use('/karten/kulisse', (req, res, next) => { res.set('Cache-Control', 'public, max-age=3600'); next(); }, express.static(path.join(hier, '..', 'client', 'karten', 'kulisse')));
-  app.use(nocache, express.static(path.join(hier, '..', 'client'), { extensions: ['html'] }));
+  // Client: unter v/<version>/ unveränderlich zwischengespeichert + komprimiert, index.html und alte Pfade no-cache (server/statisch.mjs)
+  const clientOrdner = path.join(hier, '..', 'client');
+  const vendorDateien = {
+    'phaser.min.js': require.resolve('phaser/dist/phaser.min.js'),
+    'colyseus.js': path.join(path.dirname(require.resolve('@colyseus/sdk/package.json')), 'dist/colyseus.js'),
+  };
+  clientAuslieferung(app, {
+    wurzel: clientOrdner, vendor: vendorDateien,
+    version: auslieferungsVersion(clientOrdner, paketVersion, Object.values(vendorDateien)),
+  });
 
   const httpServer = http.createServer(app);
   const spielServer = new Server({

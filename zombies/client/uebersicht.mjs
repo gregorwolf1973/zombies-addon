@@ -1,5 +1,6 @@
 // Übersichtskarte: klein in der Ecke, angetippt groß. Häuser und Straßen nach den echten Umrissen (OSM),
 // Zoom mit +/−, Mausrad oder zwei Fingern, in der großen Ansicht verschiebbar.
+import { ASSETS } from './basis.mjs';
 import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
 import { kartenbildLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
 
@@ -113,7 +114,7 @@ export class Uebersicht {
     if (kartenName && welt.vektor && typeof Image !== 'undefined') {
       const img = new Image();
       img.onload = () => { this.basisLuft = grundbildLuftbild(welt, img); this.basisWaehlen(); };
-      img.src = `karten/${kartenName}_luftbild.webp`;
+      img.src = `${ASSETS}karten/${kartenName}_luftbild.webp`;
     }
     this.kartenbildHoerer = e => { this.modus = kartenbildLesen(e.detail); this.basisWaehlen(); };
     if (typeof document !== 'undefined') document.addEventListener('zob-kartenbild', this.kartenbildHoerer);

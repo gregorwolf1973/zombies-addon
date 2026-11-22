@@ -4,6 +4,7 @@
 //   Schatten        weiche Schlagschatten von Häusern und Bäumen (Sonne fest Vormittag Südost), nachts und im Nebel ausgeblendet
 // Daten je Karte: karten/kulisse/<karte>/index.json (+ <kx>_<ky>.webp, daecher.json). Ohne Daten bleibt alles wie bisher.
 import { KACHEL as K } from './welt.mjs';
+import { ASSETS } from './basis.mjs';
 import { KUL_SCHLUESSEL, schalterLesen, indexLesen, kachelName, kachelnFuerRect, puffer, daecherLesen, flaecheAufbereiten,
   SCHATTEN_JE_M, STANDARD_HAUSHOEHE, baumHoehe } from './kulisse_regeln.mjs';
 
@@ -20,7 +21,7 @@ export const kulHatDaecher = () => !!kul?.daecher;
 export async function ladeKulisse(karte) {
   kul = null;
   const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
-  const basis = `karten/kulisse/${karte}/`;
+  const basis = `${ASSETS}karten/kulisse/${karte}/`;
   let index = null;
   try { const r = await fetch(basis + 'index.json'); if (r.ok) index = indexLesen(await r.json()); } catch { /* keine Kulisse */ }
   if (!index) return null;

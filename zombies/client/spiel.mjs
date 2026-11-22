@@ -1,5 +1,6 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
 import { fzPx } from './masse.mjs';
+import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
@@ -195,14 +196,14 @@ ton.musikSofort(() => $('start').style.display !== 'none');
 let meinAussehen = aussehenLesen(null), aussehenAngefasst = false;   // angefasst: in der Anmeldung selbst gewählt
 try { meinAussehen = aussehenLesen(aussehenMigriert(localStorage.getItem('zob_aussehen'))); if (/^[mw],/.test(localStorage.getItem('zob_aussehen') ?? '')) localStorage.setItem('zob_aussehen', aussehenText(meinAussehen)); } catch {}
 const figurVorlage = { bild: new Image(), liste: null, bild2: new Image(), liste2: null, bild3: new Image(), liste3: null };
-figurVorlage.bild3.src = 'grafik/helden160.webp';
-fetch('grafik/helden160.json').then(r => r.json()).then(j => { figurVorlage.liste3 = j; vorschauZeichnen(); }).catch(() => {});
+figurVorlage.bild3.src = ASSETS + 'grafik/helden160.webp';
+fetch(ASSETS + 'grafik/helden160.json').then(r => r.json()).then(j => { figurVorlage.liste3 = j; vorschauZeichnen(); }).catch(() => {});
 figurVorlage.bild3.onload = () => vorschauZeichnen();
-figurVorlage.bild.src = 'grafik/figuren.png';
-fetch('grafik/figuren.json').then(r => r.json()).then(j => { figurVorlage.liste = j; vorschauZeichnen(); }).catch(() => {});
+figurVorlage.bild.src = ASSETS + 'grafik/figuren.png';
+fetch(ASSETS + 'grafik/figuren.json').then(r => r.json()).then(j => { figurVorlage.liste = j; vorschauZeichnen(); }).catch(() => {});
 figurVorlage.bild.onload = () => vorschauZeichnen();
-figurVorlage.bild2.src = 'grafik/figuren2.webp';
-fetch('grafik/figuren2.json').then(r => r.json()).then(j => { figurVorlage.liste2 = j; vorschauZeichnen(); }).catch(() => {});
+figurVorlage.bild2.src = ASSETS + 'grafik/figuren2.webp';
+fetch(ASSETS + 'grafik/figuren2.json').then(r => r.json()).then(j => { figurVorlage.liste2 = j; vorschauZeichnen(); }).catch(() => {});
 figurVorlage.bild2.onload = () => vorschauZeichnen();
 function vorschauZeichnen() {
   const l = figurVorlage.liste;
@@ -529,7 +530,7 @@ async function starteSpiel() {
   feuerUiAnwenden();
   ladenZeigen(25, 'Generiere Welt … lade Karte');
   if (raum.state.karte) {
-    try { KARTE = await (await fetch(`karten/${raum.state.karte}.json`)).json(); }
+    try { KARTE = await (await fetch(`${ASSETS}karten/${raum.state.karte}.json`)).json(); }
     catch (e) { console.error('Karte nicht geladen', e); }
   }
   if (raum.state.karte) { try { await ladeKulisse(raum.state.karte); } catch (e) { console.error('Kulisse nicht geladen', e); } }   // Luftbild/Dächer/Schatten, falls die Karte Kulisse-Daten hat
@@ -839,6 +840,7 @@ class Ort extends Phaser.Scene {
   constructor() { super('ort'); }
 
   preload() {
+    if (ASSETS) this.load.setBaseURL(ASSETS);   // Grafiken aus dem versionierten Ordner (lange zwischengespeichert)
     this.load.on('progress', v => ladenZeigen(40 + 30 * v, 'Generiere Welt … lade Grafiken'));
     for (const g of GRAFIK) this.load.image(g, 'grafik/' + g + '.png');
     // Figuren aus den KI-Bögen (tools/figuren_schneiden.py): 160er-Felder, Drehpunkt in der Feldmitte
