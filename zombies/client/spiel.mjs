@@ -19,6 +19,7 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
+import { weltBeschaffen, weltVorrechnen } from './weltladen.mjs';
 import { ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulSchatten, fotoStatus, fotoWunsch } from './kulisse.mjs';
 import { KUL_SCHLUESSEL, schattenFaktor } from './kulisse_regeln.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
@@ -523,6 +524,7 @@ function geraetEinstellungenEinrichten(markieren) {
 }
 let geraetMarkieren = () => {};
 
+let VORWELT = null;   // { seed, autos, p: Promise<{ welt, quelle }|null> } – Welt aus Worker/IndexedDB
 let gestartet = false;
 async function starteSpiel() {
   if (gestartet) return;
@@ -535,6 +537,11 @@ async function starteSpiel() {
   }
   if (raum.state.karte) { try { await ladeKulisse(raum.state.karte); } catch (e) { console.error('Kulisse nicht geladen', e); } }   // Luftbild/Dächer/Schatten, falls die Karte Kulisse-Daten hat
   ladenZeigen(40, 'Generiere Welt … Karte geladen');
+  // Welt schon jetzt im Web Worker bauen bzw. aus IndexedDB holen (läuft parallel zum Laden der Bilder und Töne); create() wartet darauf
+  if (KARTE && !TUT.an) {
+    const seed = raum.state.seed, autos = (raum.state.autos ?? 10) / 10;
+    VORWELT = { seed, autos, t0: performance.now(), p: weltBeschaffen(KARTE, seed, autos).catch(e => { console.error('Welt-Vorbau', e); return null; }) };
+  }
   $('start').style.display = 'none';
   $('hud').style.display = 'block';
   $('unten').style.display = 'flex';
@@ -877,7 +884,12 @@ class Ort extends Phaser.Scene {
     ladenZeigen(72, 'Generiere Welt … baue Häuser und Straßen');
     this.bereit = false;
     // erst einen Frame zeichnen lassen, damit die Anzeige sichtbar ist – das Bauen der Welt blockiert 1–2 s
-    einFrame().then(() => {
+    einFrame().then(async () => {
+      this.vorwelt = null;
+      if (VORWELT) {
+        const w = await VORWELT.p;
+        if (w && VORWELT.seed === raum.state.seed && VORWELT.autos === (raum.state.autos ?? 10) / 10) { this.vorwelt = w.welt; window.__weltQuelle = w.quelle; window.__weltMs = Math.round(performance.now() - VORWELT.t0); }
+      }
       this.erzeuge(); this.bereit = true;
       if (TUT.an) tutorialStart(this, raum, meineId, { abmelden: () => { abgemeldet = true; } });   // Marken am Boden, Bedienfeld, Auswertung
       // Welt mit dem Server abgleichen (weicht sie ab, stehen Kisten und Wände woanders)
@@ -896,7 +908,7 @@ class Ort extends Phaser.Scene {
       });
     }
     if (TUT.an) { setzeKartengroesse(SS_B, SS_H); this.welt = baueSchiessstandWelt(); }   // Schießstand: kleine erzeugte Übungswelt
-    else if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); }
+    else if (KARTE) { setzeKartengroesse(KARTE.breite, KARTE.hoehe); this.welt = this.vorwelt ?? baueWeltAusKarte(KARTE, s.seed, { autos: (s.autos ?? 10) / 10 }); this.vorwelt = null; }
     else { setzeKartengroesse(64, 48); this.welt = baueWelt(s.seed); }
     this.weltFp = weltFingerabdruck(this.welt);   // sofort nach dem Aufbau – später kommen Haufen, Leichen usw. aus dem Spielstand dazu
     try { setzeAutoBilder(this.textures.get('autos').getSourceImage(), this.cache.json.get('autosliste')); } catch { setzeAutoBilder(null, null); }   // vor den ersten Kartenstücken
@@ -1097,6 +1109,14 @@ class Ort extends Phaser.Scene {
       meldung(m.grund === 'fertig' ? '🤝 Getauscht!' : 'Tausch abgebrochen');
     });
     raum.onMessage('aufloesung', m => zeigeAufloesung(m));
+    // Server kündigt das nächste Level an (Karte + Seed): schon jetzt im Worker rechnen und in IndexedDB legen, dann lädt der Levelwechsel sie von dort
+    raum.onMessage('weltvorschau', async m => {
+      try {
+        if (TUT.an || !m?.karte || !/^[a-z0-9_-]+$/.test(m.karte) || !Number.isInteger(m.seed)) return;
+        const k = await (await fetch(`karten/${m.karte}.json`)).json();
+        await weltVorrechnen(k, m.seed, (m.autos ?? 10) / 10);
+      } catch { /* egal: der Levelwechsel baut dann normal */ }
+    });
     raum.onMessage('neustart', m => {
       abgemeldet = true;
       if (m?.level) ladenZeigen(30, 'Generiere nächstes Level …', `🎉 Level ${m.level - 1} abgeschlossen!`); else ladenZeigen(30, 'Generiere Welt neu …');

@@ -12,6 +12,7 @@ import { querfeldPlan } from './querfeld.mjs';
 import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplatz.mjs';
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
+import { weltVorbereiten } from './weltcache.mjs';
 
 // Missionsgegenstand für die Clients (Karte): exakte Position (x, y), Radius des animierten Auffindkreises, abgegeben, Ortsbeschreibung
 export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
@@ -938,7 +939,24 @@ export class Aufgaben {
     this.raum.broadcast('meldung', { text: `🎉 Geschafft! Weiter nach Level ${s.level + 1} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
     if (nichtDa) this.raum.broadcast('meldung', { text: `${zeichen} Wer nicht an Bord war, kommt trotzdem mit – ihr seid eine Gruppe` });
     this.wechselLaeuft = true;
+    this.levelVorplanen();
     this.raum.clock.setTimeout(() => this.levelWechsel(), this.wechselVerzoegerung);
+  }
+
+  // Nächstes Level (Karte + Seed) schon jetzt festlegen: der Server baut die Welt im Worker-Thread vor (weltcache.mjs), die Clients
+  // bekommen 'weltvorschau' und rechnen sie im Hintergrund in ihren Zwischenspeicher. Der Levelwechsel nach der Pause nutzt genau diesen Plan.
+  levelVorplanen() {
+    try {
+      const r = this.raum, s = r.state;
+      let karte = this.naechsteKarte();
+      if (karte === 'geretsried') karte = r.constructor.level1Wahl || level1Karte();
+      const seed = Math.floor(Math.random() * 2 ** 31);
+      const autos = Math.max(0, Math.min(50, Math.round((r.constructor.einstellungen?.autoFaktor ?? 1) * 10)));   // wie SpielRaum.onCreate für neue Level
+      this.plan = { von: s.karte, karte, seed, autos };
+      const k = r.constructor.karteVon?.(karte);
+      if (k?.kacheln) weltVorbereiten(k, seed, autos / 10);
+      r.broadcast('weltvorschau', { karte, seed, autos });
+    } catch (e) { this.plan = null; console.error('Level vorplanen:', e.message); }
   }
 
   naechsteKarte() {
@@ -950,14 +968,16 @@ export class Aufgaben {
   // ziel (optional): { karte, level, frisch } – Testbefehl und Finale; frisch = ganz neue Runde (Level 1, Fähigkeiten und Startwahl von vorn)
   levelWechsel(ziel = null) {
     const r = this.raum, s = r.state;
-    let karte = ziel?.karte ?? this.naechsteKarte();
-    if (karte === 'geretsried' && !ziel?.fest) karte = r.constructor.level1Wahl || level1Karte();   // Level 1: feste Wahl aus dem Backend, sonst Zufall
+    const plan = !ziel && this.plan?.von === s.karte ? this.plan : null;   // in erfolg() vorgeplant (Karte + Seed, Welt ist schon im Bau)
+    this.plan = null;
+    let karte = ziel?.karte ?? plan?.karte ?? this.naechsteKarte();
+    if (!plan && karte === 'geretsried' && !ziel?.fest) karte = r.constructor.level1Wahl || level1Karte();   // Level 1: feste Wahl aus dem Backend, sonst Zufall
     r.constructor.kartenWechsel?.(karte);
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.folgenId = null;
     if (ziel?.frisch) return r.weltNeuStarten(false);
     r.weltNeuStarten(false, {
-      version: WELT_VERSION, karte, seed: Math.floor(Math.random() * 2 ** 31), zeit: 0, uhr: 8 * 60,
+      version: WELT_VERSION, karte, seed: plan?.seed ?? Math.floor(Math.random() * 2 ** 31), zeit: 0, uhr: 8 * 60,
       besiegt: s.besiegt, level: ziel?.level ?? s.level + 1, chat: [...r.chatVerlauf],
     });
   }

@@ -82,6 +82,7 @@ export async function starte({
     if (zufall && LEVEL1_KARTEN.includes(karte)) { level1Gewuerfelt = karte; anwenden(datei.aendern({ karte: 'level1', aufgaben: { evakArt: '' } })); }   // Zufallswahl bleibt gespeichert
     else anwenden(datei.aendern({ karte, aufgaben: { evakArt: '' } }));
   };
+  SpielRaum.karteVon = ladeKarte;   // für das Vorbauen der nächsten Welt (weltcache.mjs)
   SpielRaum.testSetzen = test => { anwenden(datei.aendern({ test })); return datei.werte.test; };   // Testmenü (Superuser): wie die Verwaltung speichern und für alle Räume übernehmen
   let geladeneKarte = null;
   const anwenden = w => {
