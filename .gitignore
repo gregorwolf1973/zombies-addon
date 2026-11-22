@@ -14,4 +14,5 @@ zombies/tools/glb_draufsicht/modelle/
 tools/quellen/
 tools/luftbild/cache/
 tools/.pylib/
+tools/einspielen.env.lokal
 tools/__pycache__/

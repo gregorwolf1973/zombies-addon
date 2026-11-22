@@ -70,6 +70,7 @@ const INNEN_ZOOM = 1.6;
 const AUSSEN_ZOOM_KORREKTUR = 1 / 1.4;
 import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
 import { NetzPuffer, nachSeq, ausStufe, verzFuerServer, naheAnzeigeVerz } from './netzpuffer.mjs';
+import { Sammler, geraetTyp } from './diagnose.mjs';
 import { dingIcon, dingHtml, setzeDingListe, dingRahmen, hatDingBild } from './dingbild.mjs';
 
 const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
@@ -112,6 +113,57 @@ const BASIS = location.href.replace(/[?#].*$/, '').replace(/\/[^/]*$/, '');
 
 let raum = null;
 let meineId = null;
+// ---------- Diagnose (client/diagnose.mjs → POST diag → Server-Log): Fehler sofort, Kennzahlen alle 60 s ----------
+const diag = new Sammler({ geraet: geraetTyp(navigator.userAgent), senden: b => diagSenden(b) });
+let diagSitzung = null, diagTimer = null, diagPingTimer = null, diagAnzeigeTimer = null;
+function diagSenden(b) {
+  if (!diagSitzung) return;
+  try {
+    const t = JSON.stringify({ s: diagSitzung, ...b });
+    if (t.length < 7800) fetch('diag', { method: 'POST', body: t, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+  } catch { /* Diagnose darf nie stören */ }
+}
+window.addEventListener('error', e => { if (e.message) diag.fehler({ meldung: e.message, quelle: e.filename, zeile: e.lineno, stack: e.error?.stack }); });
+window.addEventListener('unhandledrejection', e => { const g = e.reason; diag.fehler({ meldung: 'Promise: ' + String(g?.message ?? g), quelle: '', zeile: 0, stack: g?.stack }); });
+ton.diagnoseHaken((art, d) => {
+  if (art === 'stumm') diag.tonZaehler(1, 0);
+  else if (art === 'verdraengt') diag.tonZaehler(0, Number(d) || 1);
+  else diag.tonProblem(art, d);
+});
+function diagKontext() {
+  const sz = chatSzene, ich = sz?.lokal;
+  return { zoom: sz?.zoomWahl ? Math.round(sz.zoomWahl * 100) / 100 : null, bild: `${window.innerWidth}x${window.innerHeight}`, karte: raum?.state?.karte || '', drinnen: !!sz?.aktEbene, ton: ton.kontextZustand(), zombies: sz?.zombies?.size ?? null };
+}
+function diagStarten(r) {
+  diagSitzung = r.sessionId;
+  clearInterval(diagTimer); clearInterval(diagPingTimer);
+  const nachrichten = () => { try { r.connection.transport.ws.addEventListener('message', e => diag.empfangen(e.data?.byteLength ?? e.data?.length ?? 0)); } catch { /* ohne Zählung */ } };
+  nachrichten();
+  r.onReconnect(nachrichten);
+  r.onMessage('pong', t => diag.pingSetzen(performance.now() - t));
+  const ping = () => { if (!document.hidden) try { r.send('ping', performance.now()); } catch { /* egal */ } };
+  diagPingTimer = setInterval(ping, 10000); ping();
+  diagTimer = setInterval(() => { if (!document.hidden) diag.kpi(diagKontext()); else diag.neuFenster(); }, 60000);
+}
+// Diagnose-Anzeige (Zahnrad „📊 Diagnose anzeigen“): kleine Ecke, einmal pro Sekunde aktualisiert, nur wenn an
+function diagAnzeige(an) {
+  clearInterval(diagAnzeigeTimer); diagAnzeigeTimer = null;
+  let el = document.getElementById('diagAnzeige');
+  if (!an) { el?.remove(); return; }
+  if (!el) {
+    el = document.createElement('div'); el.id = 'diagAnzeige';
+    el.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:60;background:rgba(0,0,0,.6);color:#9f9;font:11px/1.35 monospace;padding:3px 6px;border-radius:4px;pointer-events:none;white-space:pre';
+    document.body.appendChild(el);
+  }
+  let f0 = diag.gesamtFrames, b0 = diag.gesamtBytes, t0 = performance.now();
+  diagAnzeigeTimer = setInterval(() => {
+    const t = performance.now(), sek = Math.max(0.2, (t - t0) / 1000), k = diagKontext();
+    const fps = (diag.gesamtFrames - f0) / sek, kbs = (diag.gesamtBytes - b0) / 1024 / sek;
+    f0 = diag.gesamtFrames; b0 = diag.gesamtBytes; t0 = t;
+    el.textContent = `FPS ${fps.toFixed(0)}  Ping ${diag.ping == null ? '–' : Math.round(diag.ping) + ' ms'}\n${kbs.toFixed(1)} kB/s  Zombies ${k.zombies ?? '–'}\nTon ${k.ton}`;
+  }, 1000);
+}
+
 let wikiAdresse = '', externeAdresse = '';
 
 // fester, geheimer Spieler-Schlüssel dieses Browsers – daran hängt der Spielstand
@@ -145,7 +197,7 @@ async function veraltet() {
 function autostartMerken() { try { sessionStorage.setItem('zob_autostart', '1'); const pw = $('testpw')?.value; if (pw) sessionStorage.setItem('zob_testpwtmp', pw); } catch {} }
 function frischLaden(wiederBeitreten) { if (wiederBeitreten) autostartMerken(); location.reload(); }
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && await veraltet()) frischLaden(!!window.szene); });
-fetch('info').then(r => r.json()).then(i => { seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); }).catch(() => {});
+fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 tutorialKnopf(() => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });   // „🎯 Schießstand / Tutorial“ unter „Mitspielen“
 
@@ -369,6 +421,7 @@ async function mitspielen() {
     ladenZeigen(15, 'Generiere Welt … verbunden');
     ton.musikAusblenden(4);   // Startmusik sanft ausblenden
     meineId = r.sessionId;
+    diagStarten(r);
     try { if (!TUT.an) sessionStorage.setItem('zob_token', r.reconnectionToken); } catch {}
     raum.onDrop(() => { $('verbindung').style.display = 'block'; });
     raum.onReconnect(() => {
@@ -514,12 +567,14 @@ function geraetEinstellungenEinrichten(markieren) {
       v => { const k = kulisse(); if (!k) return; k.an[w] = anAusLesen(v); document.dispatchEvent(new CustomEvent('zob-kulisse')); }, KUL_SCHLUESSEL[w])),
     gruppe('eg-zombieton', () => (anAusLesen(lies(K.zombieTon)) ? 'an' : 'aus'), v => ton.zombieTonSetzen(anAusLesen(v)), K.zombieTon),
     gruppe('eg-musik', () => (anAusLesen(lies(K.musik)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.musikSetzen(anAusLesen(v)); }, K.musik),
+    gruppe('eg-diagnose', () => (lies(K.diagnose) === 'an' ? 'an' : 'aus'), v => diagAnzeige(v === 'an'), K.diagnose),
     gruppe('eg-autoradio', () => (anAusLesen(lies(K.autoradio)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.autoradioSetzen(anAusLesen(v)); }, K.autoradio),
   ];
   $('eg-stimmen').oninput = e => { merke(K.stimmen, e.target.value); sprache.stimmenFaktorSetzen(e.target.value); stimmenAnzeige(); };
   // beim Öffnen des Menüs die Markierungen nachziehen (markieren() ruft der Aufrufer auf)
   geraetMarkieren = () => { marks.forEach(m => m()); stimmenAnzeige(); };
   geraetMarkieren();
+  diagAnzeige(lies(K.diagnose) === 'an');
   ton.zombieTonSetzen(anAusLesen(lies(K.zombieTon)));
   ton.autoradioSetzen(anAusLesen(lies(K.autoradio)));
   sprache.stimmenFaktorSetzen(lies(K.stimmen) ?? 100);
@@ -3399,6 +3454,7 @@ class Ort extends Phaser.Scene {
 
   // ---------- Schleife ----------
   update(_t, ms) {
+    diag.bild();   // einziger Zähler pro Frame
     if (!this.bereit) return;
     const dt = Math.min(0.1, ms / 1000);
     if (this.hordeInfo) this.hordeZeichnen();
