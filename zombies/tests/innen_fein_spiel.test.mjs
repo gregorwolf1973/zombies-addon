@@ -12,7 +12,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { KACHEL, T, INNEN_FEIN, WERTE as W, frei, sichtfrei, kachelVon, reichVon, tempoVon, AKTION_ABSTAND, safeRoomVon } from '../client/welt.mjs';
+import { KACHEL, T, INNEN_FEIN, WERTE as W, frei, sichtfrei, kachelVon, reichVon, tempoVon, AKTION_ABSTAND, safeRoomVon, poolFaktor } from '../client/welt.mjs';
 import { BOTPLAN } from '../server/botplan.mjs';
 import { hat } from '../client/stapel.mjs';
 BOTPLAN.an = false;
@@ -63,7 +63,7 @@ test('Tempo drinnen im Maßstab des Raums, draußen unverändert (Laufen und Sch
     let ok = false;
     for (let i = 0; i < 400 && !ok; i++) {
       const x = (6 + (i % 20) * 2) * KACHEL, y = (6 + Math.floor(i / 20) * 2) * KACHEL;
-      if (frei(w0, x, y, 9) && frei(w0, x + 200, y, 9) && [40, 80, 120, 160, 200].every(a => frei(w0, x + a, y, 9))) { p.x = x; p.y = y; p.ebene = ''; ok = true; }
+      if (frei(w0, x, y, 9) && frei(w0, x + 200, y, 9) && [0, 40, 80, 120, 160, 200].every(a => frei(w0, x + a, y, 9) && poolFaktor(w0, x + a, y) === 1)) { p.x = x; p.y = y; p.ebene = ''; ok = true; }
     }
     assert.ok(ok);
     const aussen = await lauf(1, 0);

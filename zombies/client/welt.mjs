@@ -376,7 +376,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 27;   // 27: Einzelbäume, Hecken, Pools, Schuppen und Beläge aus dem Luftbild (baeumeLuftbild …), echte Foto-Autos (autosLuftbild von Gemini), 26: Maibaum entfällt, Panzer in echten Maßen (Puma/Leopard im Lager und auf dem Flugfeld), 25: Autos aus dem Luftbild (karte.autosLuftbild ersetzt die zufälligen Parkplatz-/Bucht-Autos), 24: Parkplatzautos stehen in den gezeichneten Buchten (Winkel = Buchtrichtung, parkplatzBuchten in vektor.mjs), 23: Kulisse nach Luftbild (Bäume, Äcker, Dachfarben nach amtlichen Luftbildern), 22: Einkaufswagen vor Läden (durchsuchbar), geglättete Zaunlinien (zaunglatt.mjs), 21: ländliche Details (Alleen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen), B-11-Kreuzung ausgedünnt, feste Safehouses per Kachel, 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 28;   // 28: Pools sind keine Hindernisse mehr (Tempo 10 % im Wasser, welt.poolZonen), 27: Einzelbäume, Hecken, Pools, Schuppen und Beläge aus dem Luftbild (baeumeLuftbild …), echte Foto-Autos (autosLuftbild von Gemini), 26: Maibaum entfällt, Panzer in echten Maßen (Puma/Leopard im Lager und auf dem Flugfeld), 25: Autos aus dem Luftbild (karte.autosLuftbild ersetzt die zufälligen Parkplatz-/Bucht-Autos), 24: Parkplatzautos stehen in den gezeichneten Buchten (Winkel = Buchtrichtung, parkplatzBuchten in vektor.mjs), 23: Kulisse nach Luftbild (Bäume, Äcker, Dachfarben nach amtlichen Luftbildern), 22: Einkaufswagen vor Läden (durchsuchbar), geglättete Zaunlinien (zaunglatt.mjs), 21: ländliche Details (Alleen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen), B-11-Kreuzung ausgedünnt, feste Safehouses per Kachel, 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -647,8 +647,28 @@ export function tierGelaende(welt, x, y, rad) {
 
 // Tempo unter Bäumen: Faktor (prozent / 100), wenn die Kachel unter (x, y) ein Baum ist, sonst 1 (nicht in Innenräumen, nicht für Fahrzeuge/Hund)
 export function baumFaktor(welt, x, y, prozent = 25) {
-  if (welt.ebene || prozent >= 100) return 1;
-  return welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL)) === T.BAUM ? Math.max(0.05, prozent / 100) : 1;
+  if (welt.ebene) return 1;
+  const pool = poolFaktor(welt, x, y);
+  if (prozent >= 100) return pool;
+  return (welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL)) === T.BAUM ? Math.max(0.05, prozent / 100) : 1) * pool;
+}
+
+// Tempo im Pool-Wasser: fest 10 % (Pools sind keine Hindernisse). welt.poolZonen = [{ x0, y0, x1, y1, p? }] in Spielpixeln
+// (Rechteck der OSM-Pools, p = Polygon der Luftbild-Pools); gilt für alle Figuren über baumFaktor (Server und Client-Vorhersage gleich)
+export const POOL_TEMPO = 0.1;
+export function poolFaktor(welt, x, y) {
+  const z = welt.poolZonen;
+  if (!z || welt.ebene) return 1;
+  for (let i = 0; i < z.length; i++) {
+    const q = z[i];
+    if (x < q.x0 || x > q.x1 || y < q.y0 || y > q.y1) continue;
+    if (!q.p) return POOL_TEMPO;
+    const p = q.p;
+    let drin = false;
+    for (let a = 0, b = p.length - 2; a < p.length; b = a, a += 2) if ((p[a + 1] > y) !== (p[b + 1] > y) && x < (p[b] - p[a]) * (y - p[a + 1]) / (p[b + 1] - p[a + 1]) + p[a]) drin = !drin;
+    if (drin) return POOL_TEMPO;
+  }
+  return 1;
 }
 
 // Bewegen mit Gleiten an Wänden: erst x, dann y getrennt

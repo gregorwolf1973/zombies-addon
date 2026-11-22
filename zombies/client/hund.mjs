@@ -61,6 +61,7 @@ export class HundAnzeige {
       o.bild.setFrame(hundBild(o.richtung, laeuft, o.lauf)).setScale(skala).setPosition(o.x + zittern, o.y);
       const sichtbar = (h.ebene ?? '') === (ebene ?? '') && (!sicht || (o.x >= sicht.x0 && o.x <= sicht.x1 && o.y >= sicht.y0 && o.y <= sicht.y1));
       o.bild.setVisible(sichtbar);
+      if (sz.schattenTon) o.bild.setTint(sz.schattenTon(o, o.x, o.y, 0xd09a62));   // im Schatten dunkler
     }
     for (const [id, o] of this.objekte) if (!hunde?.has(id)) { o.bild.destroy(); this.objekte.delete(id); }
   }
