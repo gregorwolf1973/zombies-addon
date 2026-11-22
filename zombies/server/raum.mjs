@@ -3146,8 +3146,12 @@ export class SpielRaum extends Room {
       const info = this.zombieInfo.get(id);
       if (!info || info.ziel) continue;
       if (!durchWaende && !sichtfrei(welt, z.x, z.y, x, y)) continue;
-      info.punkt = { x: x + (this.rnd() * 2 - 1) * 40, y: y + (this.rnd() * 2 - 1) * 40 }; info.schlaeft = false;   // eigener, gestreuter Punkt
-      if (!(info.reakT > 0)) info.reakT = this.rnd();   // Hörverzug 0–1 s
+      info.schlaeft = false;
+      // gleiche Lärmquelle (< ~8 m vom bisherigen Lärmpunkt): gestreuten Punkt behalten, nicht neu würfeln, kein neuer Verzug
+      if (info.punkt && info.laermQ && Math.hypot(info.laermQ.x - x, info.laermQ.y - y) < 64) continue;
+      const war = !!info.punkt || info.sucheT > 0 ? false : true;   // nur wer vorher untätig war, bekommt den Hörverzug
+      info.punkt = { x: x + (this.rnd() * 2 - 1) * 40, y: y + (this.rnd() * 2 - 1) * 40 }; info.laermQ = { x, y };   // eigener, gestreuter Punkt
+      if (war && !(info.reakT > 0)) info.reakT = this.rnd();   // Hörverzug 0–1 s
     }
   }
 
@@ -3282,7 +3286,7 @@ export class SpielRaum extends Room {
 
   // Individuelles Verhalten je Zombie (Jagd, Lärm, Menschenjagd): Reaktionsverzug, Schlängeln, seltenes Taumeln.
   // Rückgabe: { dw: Winkelzusatz, halt: true = in diesem Tick nicht gehen }
-  zombieIndiv(info, dt) {
+  zombieIndiv(info, dt, nah = false) {
     if (info.sF === undefined) {
       info.sPh = this.rnd() * Math.PI * 2; info.sF = 1.2 + this.rnd() * 1.6; info.sAmp = 0.15 + this.rnd() * 0.1;
       info.tmNaechst = 4 + this.rnd() * 6; info.tmT = 0; info.tmW = 0;
@@ -3290,6 +3294,7 @@ export class SpielRaum extends Room {
     info.sPh += info.sF * dt;
     let halt = false;
     if (info.reakT > 0) { info.reakT -= dt; halt = true; }
+    if (nah) { info.tmT = 0; if (info.tmNaechst < 1) info.tmNaechst = 1; }   // kein Taumeln in Bissnähe
     if (info.tmT > 0) { info.tmT -= dt; if (info.tmW === 0) halt = true; }
     else if ((info.tmNaechst -= dt) <= 0) {
       info.tmNaechst = 4 + this.rnd() * 6; info.tmT = 0.3;
@@ -3321,8 +3326,9 @@ export class SpielRaum extends Room {
         // Kriecher spüren ringsum, schlafende (lauernde) Zombies in Häusern auch – aber nur bei freier Sicht
         const bemerkt = z.kriecht ? d < (leise ? KRIECHER_SPUERT * 0.5 : KRIECHER_SPUERT) * R : info.schlaeft ? d < (leise ? 70 : 140) * R : (ganzNah || (d < weite && imKegel));
         if (bemerkt && gute > 0) {
+          const warAktiv = !!info.punkt;
           info.ziel = sid; info.verloren = 0; info.punkt = null; info.schlaeft = false;
-          info.reakT = 0.1 + this.rnd() * 0.7;   // Reaktionsverzug: nicht alle starten im selben Tick
+          if (!warAktiv && !(info.reakT > 0)) info.reakT = 0.1 + this.rnd() * 0.7;   // Reaktionsverzug: nicht alle starten im selben Tick
           this.broadcast('entdeckt', { x: z.x, y: z.y, ebene: z.ebene ?? '' });
           break;
         }
@@ -3363,7 +3369,7 @@ export class SpielRaum extends Room {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
         z.richtung = w;
         const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
-        const iv = this.zombieIndiv(info, dt);
+        const iv = this.zombieIndiv(info, dt, d < 24 * R);
         if (!iv.halt && d > (W.spielerRadius + W.zombieRadius + 3) * R) this.zombieGehen(z, w + iv.dw, W.zombieTempoJagen * lahm * dt, dt, info);   // geht bis knapp in Bissreichweite
         // Biss nur bei Berührung (+ ca. 0,5 m): nach aktueller Stelle UND nach der Stelle, die der Spieler gerade angezeigt bekommt (Lag-Kompensation)
         const bissR = (W.spielerRadius + W.zombieRadius + 4) * R;
