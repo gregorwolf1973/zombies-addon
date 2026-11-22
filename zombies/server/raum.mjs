@@ -1464,8 +1464,8 @@ export class SpielRaum extends Room {
     const id = 'z' + (this.naechsteZombieId++);
     const schnell = this.schwierigkeit().schnell;   // Anteil schneller Zombies („Läufer“) steigt mit Level und Spieltagen
     this.state.zombies.set(id, z);
-    // tempo: fester Tempofaktor 0,9–1,1, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen)
-    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: (schnell > 0 && this.rnd() < schnell ? 1.3 : 0.9) + this.rnd() * 0.2 });
+    // tempo: fester Tempofaktor 0,75–1,25, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen)
+    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: schnell > 0 && this.rnd() < schnell ? 1.3 + this.rnd() * 0.3 : 0.75 + this.rnd() * 0.5 });
     return id;
   }
 
@@ -3084,7 +3084,8 @@ export class SpielRaum extends Room {
       const info = this.zombieInfo.get(id);
       if (!info || info.ziel) continue;
       if (!durchWaende && !sichtfrei(welt, z.x, z.y, x, y)) continue;
-      info.punkt = { x, y }; info.schlaeft = false;
+      info.punkt = { x: x + (this.rnd() * 2 - 1) * 40, y: y + (this.rnd() * 2 - 1) * 40 }; info.schlaeft = false;   // eigener, gestreuter Punkt
+      if (!(info.reakT > 0)) info.reakT = this.rnd();   // Hörverzug 0–1 s
     }
   }
 
@@ -3217,6 +3218,24 @@ export class SpielRaum extends Room {
     return { x: z.x, y: z.y };
   }
 
+  // Individuelles Verhalten je Zombie (Jagd, Lärm, Menschenjagd): Reaktionsverzug, Schlängeln, seltenes Taumeln.
+  // Rückgabe: { dw: Winkelzusatz, halt: true = in diesem Tick nicht gehen }
+  zombieIndiv(info, dt) {
+    if (info.sF === undefined) {
+      info.sPh = this.rnd() * Math.PI * 2; info.sF = 1.2 + this.rnd() * 1.6; info.sAmp = 0.15 + this.rnd() * 0.1;
+      info.tmNaechst = 4 + this.rnd() * 6; info.tmT = 0; info.tmW = 0;
+    }
+    info.sPh += info.sF * dt;
+    let halt = false;
+    if (info.reakT > 0) { info.reakT -= dt; halt = true; }
+    if (info.tmT > 0) { info.tmT -= dt; if (info.tmW === 0) halt = true; }
+    else if ((info.tmNaechst -= dt) <= 0) {
+      info.tmNaechst = 4 + this.rnd() * 6; info.tmT = 0.3;
+      info.tmW = this.rnd() < 0.5 ? 0 : (this.rnd() < 0.5 ? -1 : 1) * (0.8 + this.rnd() * 0.5);   // 0 = kurzer Stopp, sonst Seitenschritt
+    }
+    return { dw: Math.sin(info.sPh) * info.sAmp + (info.tmT > 0 ? info.tmW : 0), halt };
+  }
+
   zombieSchritt(id, z, dt) {
     const info = this.zombieInfo.get(id);
     const welt = this.wv(z.ebene);
@@ -3241,6 +3260,7 @@ export class SpielRaum extends Room {
         const bemerkt = z.kriecht ? d < (leise ? KRIECHER_SPUERT * 0.5 : KRIECHER_SPUERT) * R : info.schlaeft ? d < (leise ? 70 : 140) * R : (ganzNah || (d < weite && imKegel));
         if (bemerkt && gute > 0) {
           info.ziel = sid; info.verloren = 0; info.punkt = null; info.schlaeft = false;
+          info.reakT = 0.1 + this.rnd() * 0.7;   // Reaktionsverzug: nicht alle starten im selben Tick
           this.broadcast('entdeckt', { x: z.x, y: z.y, ebene: z.ebene ?? '' });
           break;
         }
@@ -3281,7 +3301,8 @@ export class SpielRaum extends Room {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
         z.richtung = w;
         const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
-        if (d > (W.spielerRadius + W.zombieRadius + 3) * R) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt, info);   // geht bis knapp in Bissreichweite
+        const iv = this.zombieIndiv(info, dt);
+        if (!iv.halt && d > (W.spielerRadius + W.zombieRadius + 3) * R) this.zombieGehen(z, w + iv.dw, W.zombieTempoJagen * lahm * dt, dt, info);   // geht bis knapp in Bissreichweite
         // Biss nur bei Berührung (+ ca. 0,5 m): nach aktueller Stelle UND nach der Stelle, die der Spieler gerade angezeigt bekommt (Lag-Kompensation)
         const bissR = (W.spielerRadius + W.zombieRadius + 4) * R;
         let beisst = d < bissR;
@@ -3312,7 +3333,8 @@ export class SpielRaum extends Room {
         info.mensch = null;
       } else {
         z.richtung = Math.atan2(m.y - z.y, m.x - z.x); z.jagt = true;
-        this.zombieGehen(z, z.richtung, W.zombieTempoJagen * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt, info);
+        const iv = this.zombieIndiv(info, dt);
+        if (!iv.halt) this.zombieGehen(z, z.richtung + iv.dw, W.zombieTempoJagen * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt, info);
         return;
       }
     }
@@ -3321,17 +3343,18 @@ export class SpielRaum extends Room {
       const d = Math.hypot(info.punkt.x - z.x, info.punkt.y - z.y);
       if (d < 16 * R) {
         info.punkt = null; info.wechsel = 0;
-        if (info.suche) { info.suche = false; info.sucheT = 4; }   // letzter bekannter Ort erreicht: kurz umsehen, bevor er weiterzieht
+        if (info.suche) { info.suche = false; info.sucheT = 2 + this.rnd() * 4; }   // letzter bekannter Ort erreicht: kurz umsehen, bevor er weiterzieht
       } else {
         const sieht = sichtfrei(welt, z.x, z.y, info.punkt.x, info.punkt.y);
         z.richtung = sieht ? Math.atan2(info.punkt.y - z.y, info.punkt.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
-        if (!this.zombieGehen(z, z.richtung, W.zombieTempoJagen * 0.7 * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt, info)) info.punkt = null;
+        const iv = this.zombieIndiv(info, dt);
+        if (!iv.halt && !this.zombieGehen(z, z.richtung + iv.dw, W.zombieTempoJagen * 0.7 * (z.kriecht ? KRIECHER_TEMPO : 1) * dt, dt, info)) info.punkt = null;
       }
       return;
     }
 
     // Suche am letzten bekannten Ort: stehen bleiben und sich langsam umsehen (Sehen oben greift weiter)
-    if (info.sucheT > 0) { info.sucheT -= dt; z.richtung += dt * 1.6; return; }
+    if (info.sucheT > 0) { info.sucheT -= dt; z.richtung += dt * (info.drehF ??= (this.rnd() < 0.5 ? -1 : 1) * (0.8 + this.rnd() * 1.4)); return; }
     // Zombiewelle: gemeinsam zum Gruppenziel
     if (info.welle) return this.welle.gehen(id, z, info, dt);
     // schlafende Zombies (in Häusern) bewegen sich nicht, bis sie jemanden sehen oder hören
@@ -3417,7 +3440,7 @@ export class SpielRaum extends Room {
     const eifrig = z.jagt || weg > W.zombieTempoWandern * dt * 1.5;   // jagt oder folgt einem Geräusch (nicht nur Umherirren)
     weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
     weg *= tempoVon(this.wv(z.ebene));                  // drinnen im Feinraster: Tempo im Maßstab des Raums
-    if (info && !z.kriecht) weg *= info.tempo ?? 1;     // eigener Tempofaktor des Zombies (0,9–1,1)
+    if (info && !z.kriecht) weg *= info.tempo ?? 1;     // eigener Tempofaktor des Zombies (0,75–1,25)
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
     // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)

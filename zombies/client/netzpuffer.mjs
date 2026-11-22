@@ -4,7 +4,7 @@
 // ankommende Pakete (WLAN, Mobilfunk, Paketverlust) kaum noch auf. Reißt der Strom ab, rechnet er kurz weiter und bleibt dann stehen.
 
 const SPUR_MAX = 12;          // so viele Stände je Figur
-const WEITER_MAX = 120;       // ms: so lange über den letzten Stand hinaus weiterrechnen
+const WEITER_MAX = 250;       // ms: so lange über den letzten Stand hinaus weiterrechnen (Geschwindigkeit klingt linear auf 0 ab)
 const SPRUNG = 200;           // px: größere Sprünge zwischen zwei Ständen (Ebenenwechsel, Teleport) nicht gleiten
 export const VERZ_MIN = 110, VERZ_MAX = 450;
 
@@ -55,7 +55,7 @@ export class NetzPuffer {
     const n = s.length, last = s[n - 1];
     if (rt >= last.t) {
       if (n >= 2) {
-        const a = s[n - 2], dtv = last.t - a.t, ex = Math.min(rt - last.t, WEITER_MAX);
+        const a = s[n - 2], dtv = last.t - a.t, e0 = Math.min(rt - last.t, WEITER_MAX), ex = e0 - e0 * e0 / (2 * WEITER_MAX);
         if (dtv > 0 && dtv < 400 && Math.hypot(last.x - a.x, last.y - a.y) < SPRUNG * 0.4) {
           ziel.x = last.x + (last.x - a.x) / dtv * ex; ziel.y = last.y + (last.y - a.y) / dtv * ex;
           return true;
