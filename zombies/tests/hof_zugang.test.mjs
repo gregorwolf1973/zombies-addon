@@ -6,7 +6,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { KACHEL, setzeKartengroesse, frei } from '../client/welt.mjs';
+import { KACHEL, setzeKartengroesse, frei, WERTE as W } from '../client/welt.mjs';
 import { freierPort } from './hilfe.mjs';
 
 const PORT = await freierPort();
@@ -41,11 +41,12 @@ test('Zombies finden in den Innenhof des BGZ', async () => {
     const ids = starts.map(s => raum.setzeZombie(s.x, s.y, ''));
     for (const id of ids) { const i = raum.zombieInfo.get(id); i.schlaeft = false; i.steht = false; i.wechsel = 1e6; i.ziel = [...raum.state.spieler.keys()][0]; i.verloren = 0; }
     assert.ok(starts.length >= 10, 'zu wenige Startpunkte: ' + starts.length);
-    for (let t = 0; t < 25 * 20; t++) {
+    const sek = Math.ceil(25 * 105 / W.zombieTempoJagen);   // 25 s beim alten Jagdtempo (105 px/s), mit 15 km/h entsprechend länger
+    for (let t = 0; t < sek * 20; t++) {
       for (const id of ids) { const i = raum.zombieInfo.get(id); if (i && !i.ziel) i.ziel = c.sessionId; }
       raum.schritt(0.05);
     }
-    const nah = ids.filter(id => { const z = raum.state.zombies.get(id); return z && Math.hypot(z.x - HOF.x, z.y - HOF.y) < 60; });
+    const nah = ids.filter(id => { const z = raum.state.zombies.get(id); return z && Math.hypot(z.x - HOF.x, z.y - HOF.y) < 130; });   // im Hof-Kanal (schmal: viele Zombies stauen sich hintereinander vor dem Spieler)
     assert.ok(nah.length >= Math.ceil(ids.length * 0.9), `nur ${nah.length} von ${ids.length} Zombies im Hof`);
   } finally { await c.leave(); }
 });

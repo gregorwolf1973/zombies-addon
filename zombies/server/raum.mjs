@@ -3411,7 +3411,7 @@ export class SpielRaum extends Room {
         const iv = this.zombieIndiv(info, dt, d < 24 * R);
         if (!iv.halt && d > (W.spielerRadius + W.zombieRadius + 3) * R) {   // geht bis knapp in Bissreichweite
           const ging = this.zombieGehen(z, w + iv.dw, W.zombieTempoJagen * lahm * dt, dt, info);
-          if (direkt && !ging) { if ((info.klemmT = (info.klemmT ?? 0) + dt) > 0.5) { info.klemmT = 0; info.umwegT = 2; } } else if (direkt) info.klemmT = 0;
+          if (direkt && !ging) { if ((info.klemmT = (info.klemmT ?? 0) + dt) > 0.5) { info.klemmT = 0; info.umwegT = Math.max(2, 210 / W.zombieTempoJagen); } } else if (direkt) info.klemmT = 0;   // Umweg ~210 px (früher 2 s bei 105 px/s)
         }
         // Biss nur bei Berührung (+ ca. 0,5 m): nach aktueller Stelle UND nach der Stelle, die der Spieler gerade angezeigt bekommt (Lag-Kompensation)
         const bissR = (W.spielerRadius + W.zombieRadius + 4) * R;

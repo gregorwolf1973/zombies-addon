@@ -6,7 +6,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { KACHEL, BREITE, HOEHE, frei } from '../client/welt.mjs';
+import { KACHEL, BREITE, HOEHE, frei, WERTE as W } from '../client/welt.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
 import { LEVEL_VORGABE } from '../server/schwierigkeit.mjs';
 import { freierPort } from './hilfe.mjs';
@@ -540,7 +540,9 @@ test('Horde: zieht zügig und zusammenhängend – Mitte legt in 60 s Spielzeit 
     }
     raum.zRaster = null;
     assert.ok(raum.welle.aktiv && raum.welle.aktiv.ids.size >= ids.length * 0.4, 'Horde zerfallen');
-    assert.ok(weg >= 2000, `Hordenmitte zu langsam: ${Math.round(weg)} px in 60 s`);
+    // seit 0.84.0 Tempo in km/h (Zombie jagt 15 km/h): Mindestweg = 60 % des Marschtempos (TEMPO 0,85), höchstens wie früher 2000 px
+    const soll = Math.min(2000, 0.6 * W.zombieTempoJagen * 0.85 * 60);
+    assert.ok(weg >= soll, `Hordenmitte zu langsam: ${Math.round(weg)} px in 60 s (Soll ${Math.round(soll)})`);
     assert.ok(steht / messungen < 0.25, 'zu viele Zombies stehen oder hängen fest: ' + (steht / messungen));   // gewollte kurze Pausen (kein Gleichschritt) erlauben etwas mehr Stillstand
     raum.welle.beenden();
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }

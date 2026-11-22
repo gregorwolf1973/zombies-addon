@@ -12,7 +12,8 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { BOT_NAMEN } from '../server/bots.mjs';
 import { BUS_ABSTAND } from '../client/welt.mjs';
-import { freierPort } from './hilfe.mjs';
+import { freierPort, altesTempo } from './hilfe.mjs';
+altesTempo(SpielRaum);   // Zeitgrenzen der Bot-Tests stammen aus der Zeit vor dem km/h-Tempo (0.84.0)
 
 const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
