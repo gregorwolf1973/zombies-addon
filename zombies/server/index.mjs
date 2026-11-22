@@ -249,6 +249,10 @@ export async function starte({
       fs.mkdirSync(hochladeOrdner.pfad, { recursive: true });
       fs.writeFileSync(path.join(hochladeOrdner.pfad, name), req.body);
     } catch (e) { return res.status(400).json({ fehler: 'Speichern fehlgeschlagen: ' + e.message }); }
+    // optional: Anzeigename im Kopf x-anzeigename (URL-kodiert)
+    let anzeige = '';
+    try { anzeige = decodeURIComponent(req.get('x-anzeigename') ?? ''); } catch { /* ohne Namen */ }
+    if (anzeige.trim()) anwenden(datei.aendern({ toeneNamen: { [name]: anzeige } }));
     res.json(lage());
   });
   app.delete('/verwaltung/ton/:datei', nurIngress, (req, res) => {
@@ -257,7 +261,7 @@ export async function starte({
     try { fs.unlinkSync(path.join(hochladeOrdner.pfad, path.basename(name))); } catch { return res.status(404).json({ fehler: 'Nur hochgeladene Dateien lassen sich löschen' }); }
     // aus allen Zuordnungen entfernen
     const toene = Object.fromEntries(Object.entries(datei.werte.toene).map(([id, t]) => [id, { ...t, dateien: t.dateien.filter(d => d !== name) }]));
-    anwenden(datei.aendern({ toene }));
+    anwenden(datei.aendern({ toene, toeneNamen: { [name]: '' } }));   // auch ihr Anzeigename fällt weg
     res.json(lage());
   });
   app.post('/verwaltung/neustart', nurIngress, express.json({ limit: '2kb' }), (req, res) => {

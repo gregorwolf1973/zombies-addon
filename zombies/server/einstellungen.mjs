@@ -45,6 +45,21 @@ export const TON_STANDARD = {
 };
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 
+// Anzeigenamen der Tondateien: { dateiname: name } – getrimmt, höchstens 60 Zeichen, leere fallen weg (leer setzen = Namen entfernen)
+export const TON_NAME_MAX = 60;
+export function bereinigeToeneNamen(neu, alt = {}) {
+  const aus = {};
+  for (const [k, v] of Object.entries(alt && typeof alt === 'object' ? alt : {})) if (TON_DATEI.test(k) && typeof v === 'string' && v.trim()) aus[k] = v.trim().slice(0, TON_NAME_MAX);
+  if (neu && typeof neu === 'object' && !Array.isArray(neu)) {
+    for (const [k, v] of Object.entries(neu)) {
+      if (!TON_DATEI.test(k)) continue;
+      const n = typeof v === 'string' ? v.trim().slice(0, TON_NAME_MAX).trim() : '';
+      if (n) aus[k] = n; else delete aus[k];
+    }
+  }
+  return aus;
+}
+
 // Hintergrundmusik im Spiel: je Situation eine Dateiliste (nach Ende das nächste Stück, abwechselnd); Auswahl siehe client/musiklogik.mjs
 export const MUSIK_EREIGNISSE = [
   ...[1, 2, 3, 4, 5].map(n => ({ id: 'musikLevel' + n, name: `Level ${n} – Hauptlied`, beschreibung: n === 1 ? 'Hauptlied in Level 1 (beide Geretsried-Karten)' : `Hauptlied in Level ${n}`, art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 })),
@@ -331,6 +346,7 @@ export function bereinige(e = {}, alt = {}) {
       notFaktor: Math.round(zahl(mgl.notFaktor, 100, 300, MG.notFaktor)),
     },
     toene,
+    toeneNamen: bereinigeToeneNamen(e.toeneNamen, a.toeneNamen),
     toeneHorde: bereinigeHordeTon({ ...a.toeneHorde, ...(e.toeneHorde ?? {}) }),
     musik: bereinigeMusik({ ...a.musik, ...(e.musik ?? {}) }),
     radioStream: bereinigeRadioStream({ ...a.radioStream, ...(e.radioStream ?? {}) }),
@@ -360,6 +376,7 @@ export function grundwerte() {
     hund: { ...HUND },
     munitionsglueck: { ...MUNITIONSGLUECK },
     toene: {},
+    toeneNamen: {},
     toeneHorde: { ...HORDE_TON_VORGABE },
     musik: { ...MUSIK_VORGABE },
     radioStream: { ...RADIO_STREAM_VORGABE },

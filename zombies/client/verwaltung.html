@@ -1634,6 +1634,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tk-upload">
     <input type="file" id="tkFileInput" accept=".mp3,.ogg,.wav,.m4a,audio/*" multiple hidden>
     <button type="button" id="tkUploadBtn" class="tk-btn">Tondatei hochladen …</button>
+    <div id="tkUploadNamen" class="tk-upnamen" hidden></div>
   </div>
 </section>
 
@@ -1717,6 +1718,15 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     margin: 0;
     accent-color: var(--akzent);
   }
+  #toeneKarte .tk-name { font-weight: 600; }
+  #toeneKarte .tk-dateiklein { display: block; font-size: 0.75rem; color: var(--text-soft); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #toeneKarte .tk-datei-name { display: flex; flex-direction: column; min-width: 0; }
+  #toeneKarte .tk-edit, #toeneKarte .tk-namefeld button { min-height: 32px; padding: 0 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--chip); color: var(--text); }
+  #toeneKarte .tk-namefeld { display: flex; flex: 1 1 100%; gap: 0.4rem; align-items: center; }
+  #toeneKarte .tk-namefeld input[type=text], #toeneKarte .tk-upnamen input[type=text] { flex: 1; min-width: 0; min-height: 32px; }
+  #toeneKarte .tk-upnamen { margin-top: 0.6rem; }
+  #toeneKarte .tk-upzeile { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.3rem; }
+  #toeneKarte .tk-upzeile small { color: var(--text-soft); flex: 0 0 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #toeneKarte .tk-datei-text {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1866,6 +1876,36 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     zeigeStatus(text || 'Unbekannter Fehler', 'fehler');
   }
 
+  // Anzeigename einer Tondatei (Einstellung toeneNamen); ohne Namen der Dateiname
+  function anzeigeName(datei) {
+    var n = daten && daten.einstellungen && daten.einstellungen.toeneNamen;
+    var v = n && n[datei];
+    return typeof v === 'string' && v.trim() ? v : datei;
+  }
+  function nachName(liste) {
+    return liste.slice().sort(function (a, b) {
+      return anzeigeName(a.datei).localeCompare(anzeigeName(b.datei), 'de', { sensitivity: 'base', numeric: true });
+    });
+  }
+  // Vorschlag für den Namen aus dem Dateinamen: ohne Endung und Ziffernketten, Bindestriche/Unterstriche zu Leerzeichen
+  function nameVorschlag(dateiname) {
+    var n = String(dateiname).replace(/\.[A-Za-z0-9]+$/, '').replace(/[0-9]+/g, ' ').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return n.slice(0, 60);
+  }
+  function speichereName(datei, name, fertig) {
+    var body = { toeneNamen: {} };
+    body.toeneNamen[datei] = name;
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.json || res.json.fehler) throw new Error((res.json && res.json.fehler) || ('Fehler ' + res.status));
+        daten = res.json;
+        neuAufbauen();
+        zeigeStatus('✓ Gespeichert', 'ok');
+      })
+      .catch(function (err) { zeigeFehler('Speichern fehlgeschlagen: ' + err.message); if (fertig) fertig(); });
+  }
+
   function kuerzen(name, max) {
     if (name.length <= max) return name;
     return name.slice(0, max - 1) + '…';
@@ -2012,7 +2052,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     dd.addEventListener('toggle', function () { offen['dd-' + ev.id] = dd.open; });
     var sum = document.createElement('summary');
     var n = einst.dateien.length;
-    sum.textContent = n === 0 ? 'Keine Datei gewählt (Spiel erzeugt eigenen Ton)' : n === 1 ? kuerzen(einst.dateien[0], 40) : n + ' Dateien gewählt (zufällig)';
+    sum.textContent = n === 0 ? 'Keine Datei gewählt (Spiel erzeugt eigenen Ton)' : n === 1 ? kuerzen(anzeigeName(einst.dateien[0]), 40) : n + ' Dateien gewählt (zufällig)';
     dd.appendChild(sum);
     var inhalt = document.createElement('div');
     inhalt.className = 'tk-dd-inhalt';
@@ -2027,8 +2067,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     }
     var alle = !!alleZeigen[ev.id];
     var sichtbar = [];
-    for (var i = 0; i < daten.toene.length; i++) {
-      var e = daten.toene[i];
+    var sortiert = nachName(daten.toene);
+    for (var i = 0; i < sortiert.length; i++) {
+      var e = sortiert[i];
       // schon gewählte Dateien bleiben immer sichtbar
       if (alle || passt(e, ev) || einst.dateien.indexOf(e.datei) !== -1) sichtbar.push(e);
     }
@@ -2072,7 +2113,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
       }.bind(null, datei));
       var txt = document.createElement('span');
       txt.className = 'tk-datei-text';
-      txt.textContent = kuerzen(datei, 40);
+      txt.className += ' tk-name';
+      txt.textContent = kuerzen(anzeigeName(datei), 40);
       txt.title = datei + ((sichtbar[j].kategorien || []).length ? ' – ' + sichtbar[j].kategorien.join(', ') : '');
       label.appendChild(cb);
       label.appendChild(txt);
@@ -2162,15 +2204,23 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
       elDateien.appendChild(leer);
       return;
     }
-    for (var i = 0; i < daten.toene.length; i++) {
+    var sortiertAlle = nachName(daten.toene);
+    for (var i = 0; i < sortiertAlle.length; i++) {
       (function (eintrag) {
         var zeile = document.createElement('div');
         zeile.className = 'tk-datei-zeile-all';
 
         var nameEl = document.createElement('span');
         nameEl.className = 'tk-datei-name';
-        nameEl.textContent = eintrag.datei;
         nameEl.title = eintrag.datei;
+        var fett = document.createElement('span');
+        fett.className = 'tk-name';
+        fett.textContent = anzeigeName(eintrag.datei);
+        var klein = document.createElement('span');
+        klein.className = 'tk-dateiklein';
+        klein.textContent = eintrag.datei;
+        nameEl.appendChild(fett);
+        nameEl.appendChild(klein);
         zeile.appendChild(nameEl);
 
         var meta = document.createElement('span');
@@ -2187,20 +2237,56 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
 
         zeile.appendChild(machePlayKnopf(eintrag.datei, function () { return 100; }));
 
+        var edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'tk-edit';
+        edit.textContent = '✏️';
+        edit.title = 'Namen ändern';
+        edit.setAttribute('aria-label', 'Namen ändern: ' + anzeigeName(eintrag.datei));
+        edit.addEventListener('click', function () {
+          if (zeile.querySelector('.tk-namefeld')) return;
+          var feld = document.createElement('div');
+          feld.className = 'tk-namefeld';
+          var inp = document.createElement('input');
+          inp.type = 'text';
+          inp.maxLength = 60;
+          inp.value = anzeigeName(eintrag.datei) === eintrag.datei ? '' : anzeigeName(eintrag.datei);
+          inp.placeholder = 'Name (leer = Dateiname)';
+          var ok = document.createElement('button');
+          ok.type = 'button';
+          ok.textContent = 'Speichern';
+          var abbr = document.createElement('button');
+          abbr.type = 'button';
+          abbr.textContent = 'Abbrechen';
+          var fertig = false;
+          function speichern() { if (fertig) return; fertig = true; ok.disabled = true; speichereName(eintrag.datei, inp.value, function () { fertig = false; ok.disabled = false; }); }
+          function abbrechen() { fertig = true; feld.remove(); }
+          inp.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { ev.preventDefault(); speichern(); }
+            else if (ev.key === 'Escape') { ev.preventDefault(); abbrechen(); }
+          });
+          ok.addEventListener('click', speichern);
+          abbr.addEventListener('click', abbrechen);
+          feld.appendChild(inp); feld.appendChild(ok); feld.appendChild(abbr);
+          zeile.appendChild(feld);
+          inp.focus();
+        });
+        zeile.appendChild(edit);
+
         if (eintrag.quelle === 'hochgeladen') {
           var loesch = document.createElement('button');
           loesch.type = 'button';
           loesch.className = 'tk-loeschen';
           loesch.textContent = 'Löschen';
           loesch.addEventListener('click', function () {
-            if (!confirm('Datei „' + eintrag.datei + '“ wirklich löschen?')) return;
+            if (!confirm('Datei „' + anzeigeName(eintrag.datei) + '“ (' + eintrag.datei + ') wirklich löschen?')) return;
             loescheDatei(eintrag.datei, loesch);
           });
           zeile.appendChild(loesch);
         }
 
         elDateien.appendChild(zeile);
-      })(daten.toene[i]);
+      })(sortiertAlle[i]);
     }
   }
 
@@ -2278,8 +2364,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     return null;
   }
 
-  function ladeHoch(files) {
+  function ladeHoch(files, namen) {
     if (!files || files.length === 0) return;
+    namen = namen || [];
     var gesamt = files.length;
     var fehler = [];
     var kette = Promise.resolve();
@@ -2297,7 +2384,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
           zeigeStatus('Lade ' + (index + 1) + ' von ' + gesamt + ' …');
           return fetch(UPLOAD, {
             method: 'POST',
-            headers: { 'x-dateiname': encodeURIComponent(file.name) },
+            headers: namen[index] && namen[index].trim()
+              ? { 'x-dateiname': encodeURIComponent(file.name), 'x-anzeigename': encodeURIComponent(namen[index].trim()) }
+              : { 'x-dateiname': encodeURIComponent(file.name) },
             body: file
           }).then(function (r) {
             return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; });
@@ -2341,8 +2430,46 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     if (!files || files.length === 0) return;
     var arr = [];
     for (var i = 0; i < files.length; i++) arr.push(files[i]);
-    ladeHoch(arr);
+    fragNamen(arr);
   });
+
+  // vor dem Hochladen je Datei einen Namen eingeben lassen (vorbelegt aus dem Dateinamen)
+  var elUpNamen = document.getElementById('tkUploadNamen');
+  function fragNamen(arr) {
+    elUpNamen.textContent = '';
+    elUpNamen.hidden = false;
+    var felder = [];
+    arr.forEach(function (f) {
+      var z = document.createElement('div');
+      z.className = 'tk-upzeile';
+      var kl = document.createElement('small');
+      kl.textContent = f.name;
+      kl.title = f.name;
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.maxLength = 60;
+      inp.value = nameVorschlag(f.name);
+      inp.placeholder = 'Name';
+      inp.setAttribute('aria-label', 'Name für ' + f.name);
+      felder.push(inp);
+      z.appendChild(kl); z.appendChild(inp);
+      elUpNamen.appendChild(z);
+    });
+    var los = document.createElement('button');
+    los.type = 'button'; los.className = 'tk-btn'; los.textContent = 'Hochladen';
+    var abbr = document.createElement('button');
+    abbr.type = 'button'; abbr.className = 'tk-btn'; abbr.textContent = 'Abbrechen';
+    function zu() { elUpNamen.hidden = true; elUpNamen.textContent = ''; }
+    los.addEventListener('click', function () {
+      var namen = felder.map(function (x) { return x.value; });
+      zu();
+      ladeHoch(arr, namen);
+    });
+    abbr.addEventListener('click', zu);
+    felder.forEach(function (x) { x.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); los.click(); } else if (ev.key === 'Escape') zu(); }); });
+    elUpNamen.appendChild(los); elUpNamen.appendChild(abbr);
+    if (felder[0]) felder[0].focus();
+  }
 
   ladeDaten();
 })();

@@ -152,3 +152,32 @@ test('Hordengeräusch- und Musik-Einstellungen: Vorgaben und Klammern', async ()
   assert.equal(v.toene.musikLevel1.laut, 100);
   assert.deepEqual(v.toene.horde.dateien, []);
 });
+
+test('Tonnamen: bereinigen (trimmen, 60 Zeichen, leer entfernt, nur zulässige Dateinamen, Teiländerung)', async () => {
+  const { bereinige, vorgaben } = await import('../server/einstellungen.mjs');
+  assert.deepEqual(vorgaben().toeneNamen, {});
+  assert.deepEqual(bereinige({}).toeneNamen, {});
+  const a = bereinige({ toeneNamen: { 'a.mp3': '  Hundebellen  ', 'b.ogg': '   ', '../x.mp3': 'böse', 'c.txt': 'nein', 'd.wav': 'x'.repeat(100), 'e.mp3': 42 } });
+  assert.deepEqual(Object.keys(a.toeneNamen).sort(), ['a.mp3', 'd.wav']);
+  assert.equal(a.toeneNamen['a.mp3'], 'Hundebellen');
+  assert.equal(a.toeneNamen['d.wav'].length, 60);
+  const b = bereinige({ toeneNamen: { 'f.mp3': 'Frau' } }, a);   // Teiländerung behält die übrigen
+  assert.equal(b.toeneNamen['a.mp3'], 'Hundebellen'); assert.equal(b.toeneNamen['f.mp3'], 'Frau');
+  assert.ok(!('a.mp3' in bereinige({ toeneNamen: { 'a.mp3': '' } }, b).toeneNamen), 'leer = Name entfernen');
+  assert.deepEqual(bereinige({ toeneNamen: 'quatsch' }, b).toeneNamen, b.toeneNamen);
+});
+
+test('Tonnamen: API setzen, beim Hochladen mitgeben, beim Löschen entfernen', async () => {
+  process.env.ZOMBIES_VERWALTUNG_LOKAL = '1';
+  const url = `http://127.0.0.1:${PORT}/verwaltung`;
+  const hoch = await fetch(`${url}/ton`, { method: 'POST', headers: { 'x-dateiname': 'hund-bellt-01.mp3', 'x-anzeigename': encodeURIComponent('  Hund bellt ') }, body: Buffer.from('xx') });
+  assert.equal(hoch.status, 200);
+  assert.equal((await hoch.json()).einstellungen.toeneNamen['hund-bellt-01.mp3'], 'Hund bellt');
+  const r = await fetch(`${url}/api`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ toeneNamen: { 'hund-bellt-01.mp3': 'Laut bellender Hund', 'nix.txt': 'x' } }) });
+  const d = await r.json();
+  assert.deepEqual(d.einstellungen.toeneNamen, { 'hund-bellt-01.mp3': 'Laut bellender Hund' });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(ordner, 'einstellungen.json'), 'utf8')).toeneNamen['hund-bellt-01.mp3'], 'Laut bellender Hund');
+  const del = await fetch(`${url}/ton/hund-bellt-01.mp3`, { method: 'DELETE' });
+  assert.equal(del.status, 200);
+  assert.deepEqual((await del.json()).einstellungen.toeneNamen, {});
+});
