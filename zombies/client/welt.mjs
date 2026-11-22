@@ -24,6 +24,18 @@ export function setzeInnenTempo(faktor) { INNEN_TEMPO = Math.max(0.1, Math.min(1
 export const INNEN_REICH = 0.35;        // Aktionsreichweiten (Durchsuchen, Türen, Aufheben …): 40 px (5 m) draußen → 14 px (1,75 m) drinnen
 export const tempoVon = w => (w?.kachel ? INNEN_TEMPO : 1);
 export const reichVon = (w, wert) => (w?.reich ? Math.round(wert * w.reich) : wert);
+// Abstand eines Punkts zu einem Behälter: im Feinraster bis zum Möbelrand (rect), sonst zur Mitte
+export const abstandBehaelter = (b, x, y) => b.rect
+  ? Math.hypot(Math.max(b.rect.x0 - x, 0, x - b.rect.x1), Math.max(b.rect.y0 - y, 0, y - b.rect.y1))
+  : Math.hypot(b.x - x, b.y - y);
+// Abstand zu einer Tür (Feinraster: bis zum Rand des mehrzelligen Türrechtecks, sonst zur Mitte der Türkachel)
+export function abstandTuer(w, t, x, y) {
+  const K = kachelVon(w);
+  if (!t.zellen) return Math.hypot((t.x + 0.5) * K - x, (t.y + 0.5) * K - y);
+  let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+  for (const [a, b] of t.zellen) { if (a < x0) x0 = a; if (a > x1) x1 = a; if (b < y0) y0 = b; if (b > y1) y1 = b; }
+  return abstandBehaelter({ rect: { x0: x0 * K, y0: y0 * K, x1: (x1 + 1) * K, y1: (y1 + 1) * K } }, x, y);
+}
 export const kachelVon = w => w?.kachel ?? KACHEL;      // Pixel je Kachel dieser Welt/Ebene
 export const breiteVon = w => w?.breite ?? BREITE;      // Kacheln je Zeile
 export const hoeheVon = w => w?.hoehe ?? HOEHE;

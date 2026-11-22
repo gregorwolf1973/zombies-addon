@@ -371,7 +371,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     moebel.push({ art, x, y, b, h });
     if (BEHAELTER.has(art)) {
       const bArt = art === 'regal_lang' ? 'laden' : art === 'kiste' ? 'spind' : art === 'klo' || art === 'waschbecken' ? 'bad' : (art === 'alter_schrank' || art === 'garderobe' || art === 'kommode' ? 'schrank' : art);
-      behaelter.push({ id: 'm' + (zaehler.n++), art: bArt, x: (x + b / 2) * INNEN_Z, y: (y + h / 2) * INNEN_Z });
+      behaelter.push({ id: 'm' + (zaehler.n++), art: bArt, x: (x + b / 2) * INNEN_Z, y: (y + h / 2) * INNEN_Z, rect: { x0: x * INNEN_Z, y0: y * INNEN_Z, x1: (x + b) * INNEN_Z, y1: (y + h) * INNEN_Z } });   // rect: Möbelumriss in px – Reichweite zählt bis zum Rand, nicht zur Mitte (lange Regale)
     }
     return true;
   };

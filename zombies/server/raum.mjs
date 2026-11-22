@@ -36,7 +36,7 @@ import { Nebel, NEBEL_VORGABE, zombieSichtFaktor } from './nebel.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
-  KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, tempoVon, reichVon, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
+  KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, tempoVon, reichVon, abstandBehaelter, abstandTuer, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, INNEN_FEIN, setzeInnenFein, setzeInnenTempo, setzeTageszeiten,
   WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
@@ -1348,7 +1348,7 @@ export class SpielRaum extends Room {
     if (!p.ebene && this.state.torGeloest < TOR_RAETSEL && this.amTor(p)) return { art: 'raetsel' };
     let best = null, bd = AKT;
     for (const b of welt.behaelter) {
-      const d = Math.hypot(b.x - p.x, b.y - p.y);
+      const d = abstandBehaelter(b, p.x, p.y);
       if (d >= bd) continue;
       const zustand = this.state.behaelter.get(b.id);
       if (zustand && zustand.rest === 0) continue;
@@ -1653,7 +1653,7 @@ export class SpielRaum extends Room {
       const w = this.wv(p.ebene);
       const KW = kachelVon(w), rt = w.kachel ? 14 : 42;   // Reichweite zur Tür: 1,75 m im Feinraster statt 5 m
       for (const t of w.tueren) {
-        const d = Math.hypot((t.x + 0.5) * KW - p.x, (t.y + 0.5) * KW - p.y);
+        const d = abstandTuer(w, t, p.x, p.y);
         if (d < rt && d < bd) { bd = d; best = { key: `${p.ebene}:${t.x},${t.y}`, tuer: t, ebene: p.ebene }; }
       }
       if (w.ausgang && w.nr !== undefined) {
@@ -1685,8 +1685,10 @@ export class SpielRaum extends Room {
     const basis = { key: wahl.key, tuer: wahl.tuer, ebene: wahl.ebene };
     const schliessen = () => {
       if (kaputt) return null;
+      const wf = wahl.tuer?.zellen ? this.wv(wahl.ebene) : null;   // Feinraster: mehrzellige Tür – belegt, wenn eine Figur das Türrechteck berührt (nicht nur die Mitte)
+      const rect = wf ? (() => { const K = kachelVon(wf), xs = wahl.tuer.zellen.map(c => c[0]), ys = wahl.tuer.zellen.map(c => c[1]); return { x0: Math.min(...xs) * K, y0: Math.min(...ys) * K, x1: (Math.max(...xs) + 1) * K, y1: (Math.max(...ys) + 1) * K }; })() : null;
       const belegt = this.tuerStellen(wahl).some(o => [...this.state.spieler.values(), ...this.state.zombies.values()]
-        .some(q => (q.ebene ?? '') === o.ebene && Math.hypot(q.x - o.x, q.y - o.y) < reichVon(this.wv(o.ebene), 20)));
+        .some(q => (q.ebene ?? '') === o.ebene && (rect ? abstandBehaelter({ rect }, q.x, q.y) < (wf.radMax ?? 3) + 0.5 : Math.hypot(q.x - o.x, q.y - o.y) < reichVon(this.wv(o.ebene), 20))));
       return belegt ? null : { ...basis, art: 'tuer_zu', dauer: 0.25 };
     };
     const oeffnen = () => {
@@ -1702,7 +1704,7 @@ export class SpielRaum extends Room {
     if (modus === 'auf') return offen ? null : oeffnen();
     if (modus === 'zu') return offen ? (brett() ?? schliessen()) : null;
     const b = brett();
-    return b ? (offen ? umschalten() : b) : null;
+    return b ? (offen ? umschalten() : b) : (offen ? schliessen() : null);   // ohne Bretter: Schließen als zweite Möglichkeit (z. B. wenn ein Behälter in der Nähe die erste Taste belegt)
   }
 
   setzeTuer(key, offen) {

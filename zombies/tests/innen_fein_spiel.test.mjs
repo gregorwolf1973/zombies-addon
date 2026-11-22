@@ -177,6 +177,56 @@ test('Zimmertüren: öffnen, schließen, mehrzellig; Zombie hämmert gegen die g
   } finally { await c.leave(); }
 });
 
+test('Langes Regal: Durchsuchen auch am Ende (Reichweite zählt bis zum Möbelrand, nicht zur Mitte)', async () => {
+  const { c, raum, p } = await beitreten('Regalsucher');
+  try {
+    const { w } = hausMit(raum, w => w.behaelter.length >= 1);
+    const reich = reichVon(w, AKTION_ABSTAND);
+    const a = w.behaelter[0], r = a.rect;
+    assert.ok(r && r.x1 > r.x0, 'Behälter ohne Möbelrechteck');
+    // künstliches langes Regal (Ladenreihe): Mitte weiter als die Reichweite vom Standpunkt, Rand aber nah
+    const st = { x: (r.x0 + r.x1) / 2, y: r.y1 + 4 };
+    const lang = { id: w.ebene + ':lang', art: 'laden', x: st.x + reich + 10, y: st.y, rect: { x0: st.x + 2, y0: st.y - 2, x1: st.x + 2 * reich + 20, y1: st.y + 2 } };
+    const alt = w.behaelter; w.behaelter = [lang];
+    p.ebene = w.ebene; Object.assign(p, st);
+    assert.ok(Math.hypot(lang.x - p.x, lang.y - p.y) > reich, 'Aufbau: Mitte müsste außer Reichweite liegen');
+    const k = raum.kontext(p);
+    assert.equal(k?.art, 'durchsuchen', 'am Regalrand nicht durchsuchbar: ' + k?.art);
+    // und ein echter Behälter: Standpunkt am Rand statt in der Mitte funktioniert weiterhin (Bestandstest oben)
+    w.behaelter = alt;
+  } finally { await c.leave(); }
+});
+
+test('Zimmertür schließen: Standpunkt neben der offenen Tür, auch mit Schrank in der Nähe; belegt nur, wenn jemand im Türrechteck steht', async () => {
+  const { c, raum, p } = await beitreten('Türschließer');
+  try {
+    raum.state.tuerFrei = 100; raum.state.tuerRaetsel = 0; raum.state.tuerSchluessel = 0;
+    const { w } = hausMit(raum, w => w.tueren.length >= 2);
+    const t = w.tueren[0], key = `${w.ebene}:${t.x},${t.y}`;
+    raum.state.tueren.get(key) ?? raum.baueEbene?.(w.ebene);
+    raum.setzeTuer(key, true);
+    const seite = t.senkrecht ? [3, 0] : [0, 3];
+    const a = zellMitte(w, [t.x - seite[0], t.y - seite[1]]);
+    p.ebene = w.ebene; Object.assign(p, a);
+    const zu = raum.tuerKontext(p, 'zu');
+    assert.equal(zu?.art, 'tuer_zu', 'offene Tür lässt sich nicht schließen (Kontext): ' + zu?.art);
+    // ein Behälter direkt daneben belegt die erste Taste – die zweite Taste schließt trotzdem
+    const alt = w.behaelter; w.behaelter = [{ id: w.ebene + ':test', art: 'schrank', x: a.x + 3, y: a.y, rect: { x0: a.x + 1, y0: a.y - 4, x1: a.x + 5, y1: a.y + 4 } }];
+    assert.equal(raum.kontext(p)?.art, 'durchsuchen');
+    assert.equal(raum.tuerKontext(p, 'zweit')?.art, 'tuer_zu', 'zweite Taste schließt nicht');
+    w.behaelter = alt;
+    // wer im Türrechteck steht (nicht nur in der Mitte), verhindert das Schließen
+    const rand = zellMitte(w, t.zellen[0]);
+    const zid = raum.setzeZombie(rand.x, rand.y, w.ebene, false);
+    assert.equal(raum.tuerKontext(p, 'zu'), null, 'Zombie in der Tür: Schließen müsste gesperrt sein');
+    raum.state.zombies.delete(zid); raum.zombieInfo.delete(zid);
+    w.behaelter = [];
+    c.send('aktion');
+    assert.ok(await bis(() => !raum.state.tueren.get(key).offen), 'Tür geht nicht zu');
+    assert.ok(t.zellen.every(([x, y]) => w.hole(x, y) === T.INNENTUER), 'geschlossene Tür: nicht alle Zellen zu');
+  } finally { await c.leave(); }
+});
+
 test('Schlafender Zombie hinter geschlossener Tür bleibt liegen, wacht bei offener Tür auf; Biss nur aus Nahdistanz', async () => {
   const { c, raum, p } = await beitreten('Weckdienst');
   try {
