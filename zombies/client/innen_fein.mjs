@@ -361,7 +361,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < b; dx++) k[idx(x + dx, y + dy)] = T.MOEBEL;
     // Zugänglichkeit: Start, alle Türen, Treppen und alle bisherigen Behälter müssen mit echtem Figurenradius erreichbar bleiben
     const s = schnell ? null : erreichbar(startZ[0], startZ[1]);
-    let ok = schnell || s[idx(startZ[0], startZ[1])] === 1;
+    let ok = freiFigur(startZ[0], startZ[1]) && (schnell || s[idx(startZ[0], startZ[1])] === 1);   // Start bleibt für die Figur frei (erreichbar() setzt die Startzelle immer auf 1)
     if (!schnell) for (const t of tueren) { if (!ok) break; const [cx, cy] = t.zellen[Math.floor(TUER / 2)]; ok = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => s[idx(cx + a, cy + c)]) || t.zellen.some(([zx, zy]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => s[idx(zx + a, zy + c)])); }
     if (ok && !schnell) for (const tr of treppen) if (!tr.zellen.some(([zx, zy]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => s[idx(zx + a, zy + c)]))) { ok = false; break; }
     if (ok && !schnell) for (const mm of moebel.concat([{ art, x, y, b, h }])) {
@@ -539,6 +539,17 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     if (ns.size !== 1) continue;
     const r = raeume[[...ns][0]];
     for (const bh of behaelter) { const cx = Math.floor(bh.x / INNEN_Z), cy = Math.floor(bh.y / INNEN_Z); if (!bh.tuer && cx >= r.x && cx < r.x + r.b && cy >= r.y && cy < r.y + r.h) bh.tuer = [t.x, t.y]; }
+  }
+
+  // Sicherheitsnetz: Hallen-Regale u. ä. (ohne Erreichbarkeitsprüfung) dürfen den Start nicht zustellen -> nächste freie, mit der Haustür verbundene Zelle
+  if (!freiFigur(startZ[0], startZ[1])) {
+    const cands = [];
+    for (let y = iy0; y <= iy1; y++) for (let x = ix0; x <= ix1; x++) if (k[idx(x, y)] === T.BODEN && freiFigur(x, y)) cands.push([x, y, (x - startZ[0]) * (x - startZ[0]) + (y - startZ[1]) * (y - startZ[1])]);
+    cands.sort((p, q) => p[2] - q[2] || p[1] - q[1] || p[0] - q[0]);
+    for (const [x, y] of cands.slice(0, 40)) {
+      const fl = erreichbar(x, y);
+      if (!ausgang || ausgang.zellen.some(([zx, zy]) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => fl[idx(zx + a, zy + c)]))) { start = zentrum(x, y); startZ[0] = x; startZ[1] = y; break; }
+    }
   }
 
   // Zombieplätze: freie Zellen in Zimmern (nicht Flur), mit echtem Figurenradius passend
