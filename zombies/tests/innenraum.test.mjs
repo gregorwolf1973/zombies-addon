@@ -306,7 +306,7 @@ test('Neue Waffen: Schrot trifft mehrere und braucht Munition, Sense mäht im Bo
     for (let y = 5; y < 40 && !ort; y++) for (let x = 5; x < 55 && !ort; x++) {
       const px = x * KACHEL + 16, py = y * KACHEL + 16;
       if ([0, 60, 120, 200, 300].every(dx => [-40, 0, 40].every(dy => frei(welt, px + dx, py + dy, 16)))
-        && [[300, 0], [90, -12], [100, 14], [40, -25], [40, 25]].every(([dx, dy]) => sichtfrei(welt, px, py, px + dx, py + dy))) ort = { x: px, y: py };
+        && [[300, 0], [90, -12], [100, 14], [20, -12], [20, 12]].every(([dx, dy]) => sichtfrei(welt, px, py, px + dx, py + dy))) ort = { x: px, y: py };
     }
     assert.ok(ort, 'kein freier Platz');
     const aufstellen = punkte => {
@@ -327,7 +327,7 @@ test('Neue Waffen: Schrot trifft mehrere und braucht Munition, Sense mäht im Bo
     assert.ok(p.munition < 3, 'keine Munition verbraucht');
     // Sense: zwei Zombies links und rechts vorne
     p.waffe = 'sense'; p.munition = 0; p.x = ort.x; p.y = ort.y;
-    zs = aufstellen([[40, -25], [40, 25]]);
+    zs = aufstellen([[20, -12], [20, 12]]);
     assert.ok(await bis(() => zs.every(z => z.hp < 100), 3000), 'Sense trifft nicht beide');
     // Gewehr: weit entfernter Zombie
     p.waffe = 'gewehr'; p.munition = 2; p.x = ort.x; p.y = ort.y;

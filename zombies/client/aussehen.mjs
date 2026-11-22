@@ -296,11 +296,11 @@ export function zeichneBoden(ctx, welt, rect = null) {
       // Grasbüschel (gesammelt, am Ende ein einziger Strich)
       for (let k = 0; k < 3; k++) {
         const x = px + hash(kx * 13 + k, ky * 7) * KACHEL, y = py + hash(kx * 7, ky * 13 + k) * KACHEL;
-        gras.moveTo(x - 3, y); gras.lineTo(x - 1.5, y - 5); gras.moveTo(x, y); gras.lineTo(x + 0.5, y - 6.5); gras.moveTo(x + 3, y); gras.lineTo(x + 4, y - 4);
+        gras.moveTo(x - 1.8, y); gras.lineTo(x - 0.9, y - 3); gras.moveTo(x, y); gras.lineTo(x + 0.3, y - 3.9); gras.moveTo(x + 1.8, y); gras.lineTo(x + 2.4, y - 2.4);
       }
       if (hash(kx * 3, ky * 5) < 0.06) {   // Wiesenblumen
         const b = blumen[Math.floor(hash(kx, ky * 9) * 4)], bx = px + hash(kx, ky) * 28 + 2, by = py + hash(ky, kx) * 28 + 2;
-        b.moveTo(bx + 1.8, by); b.arc(bx, by, 1.8, 0, TAU);
+        b.moveTo(bx + 1.1, by); b.arc(bx, by, 1.1, 0, TAU);
       }
     }
     if (t === T.STRASSE) {
