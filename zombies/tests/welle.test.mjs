@@ -57,12 +57,12 @@ test('Einstellungen: alte Werte (dichte, haeuser, welle*, Min/Max-Paare) werden 
   assert.equal(bereinige({ zombies: { dichte: 20, level: [{ grund: 9 }] } }).zombies.level[0].grund, 9);
 });
 
-test('Zombies bekommen verschiedene feste Tempofaktoren zwischen 0,9 und 1,1', async () => {
+test('Zombies bekommen verschiedene feste Tempofaktoren zwischen 0,75 und 1,25', async () => {
   const { c, raum } = await beitreten('Tempo');
   try {
     const ids = Array.from({ length: 40 }, (_, i) => raum.setzeZombie(100 + i * 5, 100, ''));
     const t = ids.map(id => raum.zombieInfo.get(id).tempo);
-    assert.ok(t.every(x => x >= 0.9 && x <= 1.1), 'außerhalb 0,9–1,1');
+    assert.ok(t.every(x => x >= 0.75 && x <= 1.25), 'außerhalb 0,75–1,25');
     assert.ok(new Set(t.map(x => x.toFixed(3))).size > 20, 'zu wenig verschieden');
     // wirkt beim Gehen: schneller Zombie kommt weiter als langsamer
     const a = raum.setzeZombie(300, 300, ''), b = raum.setzeZombie(300, 600, '');

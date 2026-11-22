@@ -95,7 +95,9 @@ function figurenVorzeichnen(szene) {
 function laufBild(f, dx, dy, dt, schrittLaenge, tf = 1, ff = 1) {
   const weg = Math.hypot(dx, dy);
   f.lauf = (f.lauf ?? 0) + weg / ff;
-  const geht = weg / Math.max(dt, 0.001) > 12 * tf;
+  let geht = weg / Math.max(dt, 0.001) > 12 * tf;
+  // Stand-Bild erst nach 250 ms ohne Bewegung (kurzer Netz-Hänger lässt nicht alle gleichzeitig erstarren)
+  if (geht) f.ruheT = 0; else { f.ruheT = (f.ruheT ?? 1) + dt; if (f.ruheT < 0.25) geht = true; }
   return geht ? Math.floor((f.lauf / schrittLaenge) % 1 * LAUFBILDER) : -1;
 }
 
@@ -2429,6 +2431,7 @@ class Ort extends Phaser.Scene {
       let f = this.zombies.get(id);
       if (!f) { f = this.neuerZombie(z); this.zombies.set(id, f); }
       const vx = f.x, vy = f.y;
+      if (f.zh === undefined) { let h = 2166136261; for (let k = 0; k < id.length; k++) h = Math.imul(h ^ id.charCodeAt(k), 16777619); h = (h >>> 0) / 4294967296; f.zh = h; f.zs = 0.75 + h * 0.5; f.zv = ((h * 7919) % 1) * 1000; }   // je Zombie: Schrittfrequenz ±25 %, Versatz
       // nah am eigenen Helden (< ~3 m): weniger Verzögerung, damit Biss und Anzeige zusammenpassen (fließend über den Abstand)
       let rtZ = rt;
       if (rt !== null && eigen) rtZ = rt + naheAnzeigeVerz(pf.verz, Math.hypot(f.x - eigen.x, f.y - eigen.y));
@@ -2442,7 +2445,7 @@ class Ort extends Phaser.Scene {
       const zeigen = this.sichtbar(z);
       if (zeigen) sichtbarZ++;
       f.box.setVisible(zeigen);
-      const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, z.kriecht ? 18 : 30, this.feinInnen() ? INNEN_TEMPO : 1, this.feinInnen() ? INNEN_FIGUR : 1);
+      const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, (z.kriecht ? 18 : 30) / f.zs, this.feinInnen() ? INNEN_TEMPO : 1, this.feinInnen() ? INNEN_FIGUR : 1);
       const typ = ZOMBIE_TYPEN[(z.variante ?? 0) % ZOMBIE_TYPEN.length];
       const neu = !z.kriecht && (typ === 'z6' || typ === 'z7');
       const gem = !z.kriecht && GEMINI_TYPEN.has(typ);
@@ -2454,13 +2457,13 @@ class Ort extends Phaser.Scene {
       } else if (gem) {
         // Einzelbild (Gemini): beim Gehen leicht wanken, Maßstab wie die übrigen Zombies
         const l3 = this.figurListe3[typ];
-        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren3', typ));
+        f.bild.setFrame(l3 ? l3[0] : 0).setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9 * f.zs + f.zv) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren3', typ));
       } else if (neu) {
         // flüssig animierte Zombies (Riley Gombart): Laufen, Angriff, Stehen
         let nah = false;
         if (z.jagt) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < (W.spielerRadius + W.zombieRadius + 16) * (this.feinInnen() ? INNEN_REICH : 1)) { nah = true; break; }
         const art = nah ? 'angriff' : bildNr < 0 ? 'stehen' : 'laufen';
-        const i = art === 'laufen' ? Math.floor((f.lauf ?? 0) / 6) : Math.floor(this.time.now / (art === 'angriff' ? 70 : 140));
+        const i = art === 'laufen' ? Math.floor((f.lauf ?? 0) / 6 * f.zs) : Math.floor((this.time.now + f.zv) / ((art === 'angriff' ? 70 : 140) / f.zs));
         f.bild.setFrame(this.figurBild2(`${typ}_${art}`, i)).setRotation(0).setScale(BOGEN2_GROESSE * zf * groesse('figuren2', typ + '_laufen'));
       } else {
         // Angriff: beim Zubeißen das Bild mit offenem Mund (wo vorhanden)
@@ -2469,7 +2472,7 @@ class Ort extends Phaser.Scene {
         const angriff = nah && this.figurListe['zombie_' + typ + '_angriff'];
         f.bild.setFrame(angriff ? angriff[0] : this.figurBild('zombie_' + typ, bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 11)));
         // schlurfen: leicht wanken
-        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'zombie_' + typ) * (angriff ? 1.06 : 1));
+        f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9 * f.zs + f.zv) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'zombie_' + typ) * (angriff ? 1.06 : 1));
       }
       f.bild.setTint(this.schattenTon(f, f.x, f.y, z.jagt ? 0xffd2c8 : 0xffffff));
       if ((s.optionen & 1) && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {

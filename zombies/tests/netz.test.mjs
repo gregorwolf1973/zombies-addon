@@ -146,8 +146,8 @@ test('NetzPuffer: gleichmäßig zwischen Ständen, kurz weiterrechnen, Sprünge 
   const rt = pf.zeit(50500);
   assert.ok(rt < 1500 && rt > 1500 - 500, 'Anzeigezeit ' + rt);
   assert.ok(pf.pos('a', 1250, z)); assert.equal(Math.round(z.x), 25);
-  // über den letzten Stand hinaus: höchstens 120 ms weiter
-  pf.pos('a', 1500 + 1000, z); assert.ok(z.x > 50 && z.x <= 50 + 12.01, 'weitergerechnet ' + z.x);
+  // über den letzten Stand hinaus: weich auslaufend, höchstens ca. 125 ms Wegstrecke
+  pf.pos('a', 1500 + 1000, z); assert.ok(z.x > 50 && z.x <= 50 + 12.6, 'weitergerechnet ' + z.x);
   // Sprung (Ebenenwechsel): nicht gleiten
   pf.merke('b', 0, 0, 1000); pf.merke('b', 900, 0, 1100);
   pf.pos('b', 1050, z); assert.equal(z.x, 900);
