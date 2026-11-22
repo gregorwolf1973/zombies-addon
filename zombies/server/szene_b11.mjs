@@ -286,18 +286,18 @@ export class SzeneB11 {
 
   sendeFahrzeuge() {
     const rund = a => Math.round(a * 10) / 10, w = a => Math.round(a * 100) / 100, k = f => (f ? [rund(f.x), rund(f.y), w(f.richtung), w(f.turm)] : 0);
-    this.raum.broadcast('b11f', { p: k(this.puma), l: k(this.leopard) });
+    this.raum.sendeNah('b11f', { p: k(this.puma), l: k(this.leopard) }, [this.puma, this.leopard]);   // nur Spieler in der Nähe, nur bei Änderung
   }
 
   senden() {
     const rund = a => Math.round(a * 10) / 10;
     this.sendT = 1;
     const p = this.puma;
-    this.raum.broadcast('b11', {
+    this.raum.sendeNah('b11', {
       s: this.soldaten.map(q => [q.i, rund(q.x), rund(q.y), Math.round(q.blick * 100) / 100, q.tot]),
       p: p ? [rund(p.x), rund(p.y), Math.round(p.richtung * 100) / 100, Math.round(p.turm * 100) / 100] : 0,
       l: this.leopard ? [rund(this.leopard.x), rund(this.leopard.y), Math.round(this.leopard.richtung * 100) / 100, Math.round(this.leopard.turm * 100) / 100] : 0,
       aus: this.aufgegeben ? 1 : 0,
-    });
+    }, [p, this.leopard, ...this.soldaten]);
   }
 }

@@ -7,6 +7,7 @@ import { botBefehl } from './botplan.mjs';
 import { Mensch, Stadtleben, VERSTECK_WEITE } from './menschen.mjs';
 import { Hund, Hunde } from './hund.mjs';
 import { Fahrzeug, Verkehr } from './verkehr.mjs';
+import { entkoppeln, netzKopie } from './netzfeld.mjs';
 import { Feuer, Brandstifter } from './feuer.mjs';
 import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben, Mission, levelSchluessel } from './aufgaben.mjs';
@@ -87,6 +88,7 @@ export const Spieler = schema({
   spricht: t.boolean(),     // spricht gerade ins Mikrofon (Sprachübertragung, zeigt 🔊 über der Figur)
   seq: t.uint16(),          // Nummer der letzten ganz verarbeiteten Eingabe (Client gleicht seine Vorhersage damit ab)
 }, 'Spieler');
+entkoppeln(Spieler, ['durst', 'hunger']);   // rechnet genau, geht nur bei Änderung der ganzen Zahl in den Patch (netzAbgleich)
 
 // Positionen als int16 (Karte < 32768 px): der Server rechnet weiter mit Kommazahlen, übertragen werden ganze Pixel.
 // Die Blickrichtung z.richtung (Bogenmaß) ist nur noch eine Server-Eigenschaft; übertragen wird rq = Richtung in 256 Stufen.
@@ -100,6 +102,7 @@ export const Zombie = schema({
   ebene: t.string(),
   variante: t.uint8(),      // Zombietyp 0–24 (Reihenfolge ZOMBIE_TYPEN in einstellungen.mjs)
 }, 'Zombie');
+entkoppeln(Zombie, ['x', 'y']);   // übertragen wird erst in netzAbgleich (ganze Pixel, ab 1 px Änderung, Ferne nur jeden 2. Patch)
 
 export const Behaelter = schema({ rest: t.uint8() }, 'Behaelter');
 // alter (Sekunden) ist nur Server-Eigenschaft; übertragen wird blass (0 = voll, 10 = verschwunden) in den letzten 20 s
@@ -165,7 +168,7 @@ export const Zustand = schema({
   safes: t.map(Safe),
   hunde: t.map(Hund),               // Streuner und Begleiter-Hunde (server/hund.mjs)
   menschen: t.map(Mensch).view(),   // Bewohner der Stadt (Abschnitt 4); wie Zombies nur im Bildausschnitt (+ Rand)
-  fahrzeuge: t.map(Fahrzeug),   // Linienbus, Verkehr, Polizei, Feuerwehr, Wracks
+  fahrzeuge: t.map(Fahrzeug).view(),   // Linienbus, Verkehr, Polizei, Feuerwehr, Wracks; wie Zombies nur im Bildausschnitt (+ Rand), das Evakuierungsfahrzeug immer
   feuer: t.map(Feuer),
   verbrannt: t.map('boolean'),  // 'haus:nr', 'auto:bID', 'bus:ID', 'fz:ID'
   platt: t.map('int32'),        // Szene „Stau auf der B11“: von Panzern plattgefahrene geparkte Autos, Behälter-Id → Schub (client/b11_platt.mjs)
@@ -175,6 +178,7 @@ export const Zustand = schema({
   bwTurm: t.number(),           // Drehwinkel des Puma-Turms (Bogenmaß), der Turm dreht sich zum Ziel
   bwX: t.number(), bwY: t.number(), bwW: t.number(),   // Puma: Position (Turmmitte) und Fahrtrichtung der Wanne, er patrouilliert an der Front
 }, 'Zustand');
+entkoppeln(Zustand, ['uhr', 'zeit']);   // ändern sich jeden Schritt; zeit liest der Client nie, uhr nur auf ganze Spielminuten genau (helligkeit() ist glatt)
 
 const ZETTEL_CHANCE = 0.06;  // Zettel bei einer Leiche draußen: Hinweis auf einen Missionsgegenstand
 const TUER_HP = 100;          // Haltbarkeit einer Tür (nach der Barrikade)
@@ -189,6 +193,12 @@ const SICHT_RAND = 260, SICHT_LOESEN = 220;   // Pixel um den Bildausschnitt: do
 const SICHT_VORGABE = { w: 1100, h: 700 }, SICHT_MAX = 2600, SICHT_MAX_FLUG = 6000;   // halbe Ausschnittgröße in Pixeln, bis der Client seine meldet
 const EINGABE_GUTHABEN_MAX = 1.5;   // Sekunden Bewegung, die der Server nach einem Netz-Hänger nachholt
 const ZWEI_PI = Math.PI * 2;
+const ZOMBIE_RQ_STUFEN = 8, ZOMBIE_FERN = 300;
+const NAH_WIEDERHOLEN = 10000;   // ms
+const NAH_MELDUNG = 1500;   // Bundeswehr-Soldaten/-Fahrzeuge (b11, b11f, bwSoldaten): nur an Spieler in dieser Nähe (px)
+const zahlVonId = id => parseInt(String(id).replace(/\D/g, ''), 10) || 0;
+// Fahrzeugrichtung in 256 Stufen (f.richtung bleibt Server-Eigenschaft); jede Änderung um eine Stufe geht raus (lange Fahrzeuge)
+function fahrzeugRq(f) { const q = ((Math.round((f.richtung ?? 0) / ZWEI_PI * 256) % 256) + 256) % 256; if (f.rq !== q) f.rq = q; }
 const ZOMBIE_HP = 100;   // Vorgabe; wirksam ist die Einstellung zombieLeben
 const STOSS_WEG = 11;   // Schläger und Faust stoßen den Zombie etwa 1,4 m zurück (echter Maßstab 8 px/m; früher 34 px = 4 m; Waffenwerte: WAFFEN in client/welt.mjs)
 const ANKUNFT_ZOMBIEFREI = 144;   // Pixel (4,5 Kacheln): so weit um den Ankunftspunkt entstehen beim ersten Betreten keine Zombies
@@ -275,12 +285,51 @@ export class SpielRaum extends Room {
     this.startZeit ??= performance.now();
     s.takt = Math.round(performance.now() - this.startZeit) >>> 0;
     if (s.zombieZahl !== s.zombies.size) s.zombieZahl = s.zombies.size;
-    // erst ab 2 Stufen (~3°) Änderung neu senden: Schwarm-Zombies zittern sonst ständig in der Richtung (der Client dreht ohnehin weich)
-    const rq = o => { const r = o.richtung; if (typeof r !== 'number') return; const q = ((Math.round(r / ZWEI_PI * 256) % 256) + 256) % 256;
-      const d = Math.abs(q - (o.rq ?? -9)); if (Math.min(d, 256 - d) >= 2 || o.rq === undefined) o.rq = q; };
-    for (const z of s.zombies.values()) rq(z);
-    if (s.menschen) for (const m of s.menschen.values()) rq(m);
+    // Richtung erst ab ZOMBIE_RQ_STUFEN Stufen Änderung neu senden (8 Stufen ≈ 11°; Schwarm-Zombies zittern sonst ständig, der Client dreht ohnehin weich)
+    const rq = (o, stufen) => { const r = o.richtung; if (typeof r !== 'number') return; const q = ((Math.round(r / ZWEI_PI * 256) % 256) + 256) % 256;
+      const d = Math.abs(q - (o.rq ?? -99)); if (Math.min(d, 256 - d) >= stufen || o.rq === undefined) o.rq = q; };
+    // Netzposition: ferne Zombies (> ZOMBIE_FERN px vom nächsten Spieler/Kameraflug) nur jeden 2. Patch (versetzt nach Id), nah jeden Patch
+    this.netzNr = ((this.netzNr ?? 0) + 1) | 0;
+    const nahe = [];
+    for (const [id, p] of s.spieler) { nahe.push(p); const k = p.kamera ? this.extra.get(id)?.kameraPos : null; if (k) nahe.push(k); }
+    const f2 = ZOMBIE_FERN * ZOMBIE_FERN;
+    for (const [id, z] of s.zombies) {
+      rq(z, ZOMBIE_RQ_STUFEN);
+      if (!this.zombieNah(z, nahe, f2) && ((this.netzNr + zahlVonId(id)) & 1)) continue;
+      netzKopie(z, ['x', 'y']);
+    }
+    if (s.menschen) for (const m of s.menschen.values()) { rq(m, 2); netzKopie(m, ['x', 'y']); }
+    for (const p of s.spieler.values()) netzKopie(p, ['durst', 'hunger'], 0.5);
+    netzKopie(s, ['uhr'], 0.5); netzKopie(s, ['zeit'], 5);
+    for (const f of s.fahrzeuge.values()) { fahrzeugRq(f); netzKopie(f, ['x', 'y']); }
+    for (const h of s.hunde.values()) netzKopie(h, ['x', 'y']);
     this.sichtAktualisieren();
+  }
+
+  // Meldung nur an Clients, deren Spieler (oder Kameraflug) höchstens `weite` px von einem der Punkte entfernt ist, und nur, wenn sie sich
+  // gegenüber dem zuletzt an diesen Client Gesendeten geändert hat (Schlüssel = Meldungsart; wer neu in die Nähe kommt, bekommt sie sofort).
+  sendeNah(typ, msg, punkte, weite = NAH_MELDUNG) {
+    const json = JSON.stringify(msg), stand = (this.nahStand ??= new Map()).get(typ) ?? (this.nahStand.set(typ, new Map()), this.nahStand.get(typ));
+    let n = 0;
+    for (const c of this.clients) {
+      const p = this.state.spieler.get(c.sessionId);
+      if (!p) continue;
+      const k = p.kamera ? this.extra.get(c.sessionId)?.kameraPos : null;
+      const nah = punkte.some(q => q && (Math.hypot(q.x - p.x, q.y - p.y) < weite || (k && Math.hypot(q.x - k.x, q.y - k.y) < weite)));
+      if (!nah) { stand.delete(c.sessionId); continue; }
+      const alt = stand.get(c.sessionId), jetzt = performance.now();
+      if (alt && alt.json === json && jetzt - alt.t < NAH_WIEDERHOLEN) continue;   // unverändert: nur selten erneut (Wiederverbindung, verpasste Meldung)
+      stand.set(c.sessionId, { json, t: jetzt }); c.send(typ, msg); n++;
+    }
+    for (const id of stand.keys()) if (!this.state.spieler.has(id)) stand.delete(id);
+    return n;
+  }
+
+  // innerhalb von ZOMBIE_FERN px (Quadrat f2) um einen der Punkte? (ohne Spieler: alle gelten als nah)
+  zombieNah(z, punkte, f2) {
+    if (!punkte.length) return true;
+    for (const p of punkte) { const dx = z.x - p.x, dy = z.y - p.y; if (dx * dx + dy * dy < f2) return true; }
+    return false;
   }
 
   // Zombies nur an Clients, in deren Bildausschnitt (+ Rand) sie stehen – auf derselben Ebene; mit Abstand zum Entfernen,
@@ -288,16 +337,17 @@ export class SpielRaum extends Room {
   sichtAktualisieren() {
     const s = this.state;
     for (const c of this.clients) {
-      if (!c.view) { c.view = new StateView(); c.sichtZ = new Set(); c.sichtM = new Set(); }
+      if (!c.view) { c.view = new StateView(); c.sichtZ = new Set(); c.sichtM = new Set(); c.sichtF = new Set(); }
       const p = s.spieler.get(c.sessionId);
       if (!p) continue;
       const w = c.sicht?.w ?? SICHT_VORGABE.w, h = c.sicht?.h ?? SICHT_VORGABE.h, eb = p.ebene ?? '';
       const ax = w + SICHT_RAND, ay = h + SICHT_RAND, lx = ax + SICHT_LOESEN, ly = ay + SICHT_LOESEN;
       const kam = p.kamera ? this.extra.get(c.sessionId)?.kameraPos ?? null : null;
-      const pruefe = (karte, ids, ebeneVon) => {
+      const pruefe = (karte, ids, ebeneVon, immer = null) => {
         if (!karte) return;
         for (const id of ids) if (!karte.has(id)) ids.delete(id);
         for (const [id, o] of karte) {
+          if (immer?.(o)) { if (!ids.has(id)) { c.view.add(o); ids.add(id); } continue; }   // z. B. Evakuierungsfahrzeug: der Client sucht es (Hinweis, Karte, Einstieg)
           const gleich = ebeneVon(o) === eb;
           let dx = Math.abs(o.x - p.x), dy = Math.abs(o.y - p.y);
           const k = kam;   // Kameraflug: auch rund um die Kamera senden (näherer der beiden Mittelpunkte zählt)
@@ -308,6 +358,7 @@ export class SpielRaum extends Room {
         }
       };
       pruefe(s.zombies, c.sichtZ ??= new Set(), z => z.ebene ?? '');
+      pruefe(s.fahrzeuge, c.sichtF ??= new Set(), () => eb, f => f.art === 'evakuierung');   // draußen unterwegs, aber Sirenen/Rauch hört man auch aus dem Haus
       pruefe(s.menschen, c.sichtM ??= new Set(), m => m.sichtbar === false ? '\u0000' : (m.ebene ?? ''));   // Bewohner im Haus/Bus: nirgends sichtbar
     }
   }
@@ -488,6 +539,14 @@ export class SpielRaum extends Room {
     this.onMessage('eingabe', (client, m) => {
       const r = this.eingabeEmpfangen(client, m);
       if (r?.bewegt) this.ruehrt(client.sessionId);   // der Client sendet auch im Stand alle 250 ms: nur Bewegung zählt
+    });
+    // kompakte Form der Eingabe (Client ≥ diese Version): [n, dx·100, dy·100, Bits (1 = Shift, 2 = Feuer), d in ms, verz?] statt Objekt mit langen Schlüsseln
+    this.onMessage('e', (client, a) => {
+      if (!Array.isArray(a) || a.length < 5) return;
+      const m = { dx: Number(a[1]) / 100, dy: Number(a[2]) / 100, s: !!(a[3] & 1), f: !!(a[3] & 2), n: a[0], d: Number(a[4]) / 1000 };
+      if (a.length > 5) m.verz = a[5];
+      const r = this.eingabeEmpfangen(client, m);
+      if (r?.bewegt) this.ruehrt(client.sessionId);
     });
     // halbe Größe des Bildausschnitts in Weltpixeln (je nach Bildschirm und Zoom): bestimmt, welche Zombies der Client bekommt
     this.onMessage('sicht', (client, m) => {
