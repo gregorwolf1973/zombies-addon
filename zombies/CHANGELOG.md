@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.78.0 – 22.11.2026
+
+- Behoben (Backend): Nach dem Umbau zeigte die Seite ab „Tempo unter Bäumen“ falsche Werte (Waffen, Nebel, Biss, Zombietypen, Verkehr, Bundeswehr …) und speicherte beim Antippen von +/− den falschen Wert; Baumtempo und maßstäbliche Innenräume sind wieder einstellbar.
+- Behoben: Haustüren sitzen nie mehr an Wänden zum Nachbarhaus oder in schmalen Spalten (Geretsried 2: 26 Häuser); Zäune und Hecken liegen nicht mehr auf Fahrbahn oder Gehweg.
+- Neu: Mündungsfeuer erhellt im Dunkeln kurz die Umgebung (Pistole 5 m bis Leopard 20 m); Mündungsblitz kleiner und nach Waffe gestaffelt; Puma-Schuss und Explosionen wackeln deutlich weniger.
+- Geändert: Straßen und Wege mit leicht unregelmäßigen, weichen Rändern, abgerundeten Kreuzungen, verblassten Markierungen und Feldwegen mit Laufspuren.
+- Geändert: Man kann mehrere Taschen tragen (je ein Platz); Ziehen-Anzeige und Namen bleiben beim Ranzoomen klein; Taschenlampe zeigt auch unter Bot-Steuerung in Laufrichtung.
+- Geändert: Lautstärken aller Geräusche nach Messung neu abgestimmt (Schüsse am lautesten, Musik darunter), Grundpegel verdoppelt.
+
 ## 0.77.0 – 22.11.2026
 
 - Behoben: Zombies beißen nur noch, wenn sie dich auf dem Bildschirm auch berühren (Server rechnet die Anzeigeverzögerung zurück, kürzere Bissweite, nahe Zombies ohne Verzögerung gezeichnet).
