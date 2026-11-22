@@ -4,7 +4,8 @@
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, BREITE, HOEHE } from '../client/welt.mjs';
 import { B11_KARTE, b11Sperrkanten } from './szene_b11_geo.mjs';
-import { frei } from '../client/welt.mjs';
+import { frei, bewege } from '../client/welt.mjs';
+import { imFussabdruck } from '../client/evak.mjs';
 import { Unfaelle } from './unfall.mjs';
 import { entkoppeln } from './netzfeld.mjs';
 
@@ -30,6 +31,14 @@ const SCHIEBBAR = new Set(['auto', 'laster', 'polizei', 'feuerwehr', 'bus', 'wra
 const STAU_WENDEN = 8, STAU_SCHIEBEN = 15, STAU_WEG = 40;   // Sekunden Stillstand bis Wenden / Schieben / (unbeobachtet) Verschwinden
 const SCHUB = 45;                                          // Tempo (px/s), mit dem ein Hindernis zur Seite geschoben wird
 const KREUZ_ZELLE = 64;
+// Fahrzeuge fahren Zombies um (Fußabdruck des Fahrzeugs, nur fahrende Fahrzeuge; Zombies per Raster des Raums, Fahrzeuge bremsen nicht dafür)
+export const TREFFER_TOT_TEMPO = 55;      // px/s (≈ 25 km/h): ab hier ist der Zombie sofort tot
+const TREFFER_SCHLEUDER = 11;             // px, die ein langsam getroffener Zombie quer zur Fahrt weggeschleudert wird
+const TREFFER_SCHADEN_JE_TEMPO = 0.6 / 44.4;   // Anteil des Zombie-Lebens je px/s (60 % bei 20 km/h = 44,4 px/s)
+const TREFFER_BREMSE = 0.85, TREFFER_ERHOLUNG = 0.075, TREFFER_MIN = 0.3;   // jeder Treffer −15 % Tempo, erholt sich in ~2 s
+const TREFFER_STECKEN = 6, TREFFER_FENSTER = 8;   // so viele Treffer in so vielen Sekunden: Fahrzeug bleibt stecken (Unfall)
+const TREFFER_PAUSE = 0.8;                // s, in denen derselbe Zombie nicht nochmal getroffen wird
+
 const TEMPO = { bus: 85, auto: 115, laster: 90, polizei: 175, feuerwehr: 160 };
 const SPUR = { bus: 0.22, auto: 0.22, laster: 0.22, polizei: 0.12, feuerwehr: 0.12 };   // Abstand zur Mitte in Kacheln je Meter Fahrbahn
 
@@ -326,7 +335,7 @@ export class Verkehr {
       const imWeg = [...s.spieler.values(), ...s.menschen.values()].some(p => !p.ebene && p.sichtbar !== false && Math.hypot(p.x - vorn.x, p.y - vorn.y) < 30);
       // Abstand halten, Vorfahrt an Kreuzungen, Festgefahren: siehe fahrtFaktor / festgefahren
       const lauf = this.fahrtFaktor(id, f, inf, dt);
-      let rest = (TEMPO[f.art] ?? 100) * dt * (imWeg ? (inf.durchfahrt ? 0.3 : 0) : 1) * lauf.faktor * (inf.evakuierung && inf.abfahrt ? 0.6 : 1);   // abfahrender Evakuierungsbus rollt langsam: man kann noch aufspringen
+      let rest = (TEMPO[f.art] ?? 100) * dt * (imWeg ? (inf.durchfahrt ? 0.3 : 0) : 1) * lauf.faktor * (inf.treffer?.mal ?? 1) * (inf.evakuierung && inf.abfahrt ? 0.6 : 1);   // abfahrender Evakuierungsbus rollt langsam: man kann noch aufspringen
       const x0 = f.x, y0 = f.y;
       while (rest > 0) {
         const ziel = inf.weg[inf.pos + 1];
@@ -337,10 +346,47 @@ export class Verkehr {
         else { f.x += Math.cos(w) * rest; f.y += Math.sin(w) * rest; rest = 0; }
       }
       const bewegt = Math.hypot(f.x - x0, f.y - y0);
+      if (!inf.querfeld && !inf.flugzeug) this.zombiesUeberfahren(id, f, inf, bewegt / dt, dt);
       if (lauf.faktor < 0.05 && !imWeg) { if (bewegt < 0.3) this.festgefahren(id, f, inf, lauf, dt); }
       else if (bewegt > 1.5) { inf.steht = 0; inf.gewendet = false; inf.kreuzFrei = false; inf.schubSeite = undefined; }
     }
     this.unfaelle.schritt(dt);
+  }
+
+  // Zombies im Fußabdruck des fahrenden Fahrzeugs: schnell = tot (zählt für niemanden), langsam = quer weggeschleudert + Schaden ∝ Tempo.
+  // Jeder Treffer bremst; viele Treffer kurz hintereinander lassen das Fahrzeug steckenbleiben (server/unfall.mjs).
+  zombiesUeberfahren(id, f, inf, tempo, dt) {
+    const tr = inf.treffer ??= { mal: 1, uhr: 0, zeiten: [], pause: new Map() };
+    tr.uhr += dt;
+    if (tr.mal < 1) tr.mal = Math.min(1, tr.mal + TREFFER_ERHOLUNG * dt);
+    if (tempo < 6 || !this.raum.state.zombies.size) return;
+    const raum = this.raum, s = raum.state, a = f.art, hl = (LAENGE[a] ?? 46) / 2, hb = (BREITE_FZ[a] ?? 18) / 2;
+    if (!raum.zRaster) raum.baueZombieRaster();
+    const maxHp = (raum.einstellungen?.() ?? {}).zombieLeben ?? 100;
+    let n = 0;
+    for (const z of raum.zombiesNahe(f.x, f.y, '', 1)) {
+      if (z.ebene || !(z.hp > 0) || Math.abs(z.x - f.x) > hl + 10 || Math.abs(z.y - f.y) > hl + 10) continue;
+      if (!imFussabdruck(f, z.x, z.y, hl, hb, 4)) continue;
+      if ((tr.pause.get(z) ?? 0) > tr.uhr) continue;
+      const zid = [...s.zombies].find(([, q]) => q === z)?.[0];
+      if (!zid) continue;
+      tr.pause.set(z, tr.uhr + TREFFER_PAUSE);
+      const tot = tempo >= TREFFER_TOT_TEMPO, vorher = s.besiegt, von = { name: 'Fahrzeug', x: f.x, y: f.y, besiegt: 0 };
+      if (tot) { z.kriecht = true; raum.schaden(zid, z, z.hp + 1, von); }
+      else {
+        const quer = -(z.x - f.x) * Math.sin(f.richtung) + (z.y - f.y) * Math.cos(f.richtung), sd = quer >= 0 ? 1 : -1;
+        bewege(raum.welt, z, -Math.sin(f.richtung) * sd * TREFFER_SCHLEUDER, Math.cos(f.richtung) * sd * TREFFER_SCHLEUDER, 6);
+        raum.schaden(zid, z, Math.min(maxHp * 0.95, maxHp * TREFFER_SCHADEN_JE_TEMPO * tempo), von);
+      }
+      s.besiegt = vorher;   // kein Kill für die Aufgaben
+      raum.broadcast('aufprall', { x: z.x, y: z.y, id, tot, w: f.richtung, ebene: '' });
+      tr.mal = Math.max(TREFFER_MIN, tr.mal * TREFFER_BREMSE);
+      tr.zeiten.push(tr.uhr); n++;
+    }
+    if (tr.pause.size > 40) for (const [z, t] of tr.pause) if (t < tr.uhr) tr.pause.delete(z);
+    if (!n) return;
+    tr.zeiten = tr.zeiten.filter(t => t > tr.uhr - TREFFER_FENSTER);
+    if (tr.zeiten.length >= TREFFER_STECKEN && !inf.evakuierung && f.art !== 'wrack') this.unfaelle.aufprall(id, f, inf, null);   // bleibt stecken: Rauch → Feuer → ggf. Explosion
   }
 
   // Erstes Fahrzeug im Fahrkorridor voraus (auch querende; Entgegenkommende auf ihrer Spur nicht). Lücke = freier Raum zwischen den Stoßstangen.

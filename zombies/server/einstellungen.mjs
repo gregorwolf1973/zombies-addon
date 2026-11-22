@@ -89,6 +89,7 @@ export const EREIGNISSE = [
   { id: 'truheLeer', name: 'Behälter leer', beschreibung: 'Wenn du einen Behälter oder ein Möbelstück durchsuchst und nichts findest', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler', 'umgebung'] },
   { id: 'krach', name: 'Autounfall (Krach)', beschreibung: 'Wenn ein Auto in ein anderes Fahrzeug oder eine Hauswand kracht', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge', 'umgebung'] },
   { id: 'blech', name: 'Blech schabt', beschreibung: 'Wenn ein festgefahrenes Fahrzeug ein anderes zur Seite schiebt', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
+  { id: 'aufprall', name: 'Aufprall (Zombie überfahren)', beschreibung: 'Wenn ein fahrendes Fahrzeug einen Zombie umfährt (dumpfer Schlag)', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge', 'zombies'], lautVorgabe: 70 },
   { id: 'feuer', name: 'Feuer bricht aus', beschreibung: 'Wenn ein Haus, Auto oder Bus zu brennen beginnt', art: 'einmal', gruppe: 'umgebung', kategorien: ['umgebung'] },
   { id: 'schussPistole', name: 'Schuss: Pistole', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
   { id: 'schussGewehr', name: 'Schuss: Jagdgewehr', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },

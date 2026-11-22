@@ -1138,6 +1138,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('feuer', m => { if (hoertEbene(m)) if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('krach', m => { if (hoertEbene(m) && !ton.ereignis('krach', m.x, m.y)) { ton.schuss(m.x, m.y, 1.8); ton.stoss(m.x, m.y, false); } this.krachEffekt(m.x, m.y); });
     raum.onMessage('blech', m => { if (!ton.ereignis('blech', m.x, m.y)) ton.stoss(m.x, m.y, false); });
+    raum.onMessage('aufprall', m => { if (hoertEbene(m) && !ton.ereignis('aufprall', m.x, m.y)) ton.stoss(m.x, m.y, false); this.aufprallEffekt(m); });
     raum.onMessage('menschGebissen', m => { if (hoertEbene(m)) ton.ereignis('menschGebissen', m.x, m.y); });
     raum.onMessage('hundBellen', m => { if ((m.ebene ?? '') === this.aktEbene) ton.hundBellen(m.x, m.y); });
     raum.onMessage('soldatRuf', m => {
@@ -2941,6 +2942,18 @@ class Ort extends Phaser.Scene {
   }
 
   // Autounfall: Funken, Splitter und eine Staubwolke, leichtes Kamerawackeln (Rauch danach: Fahrzeug.rauch in abgleichen)
+  // Fahrzeug erwischt einen Zombie: Blutspritzer in Fahrtrichtung, kleiner Ruck am Fahrzeug
+  aufprallEffekt(m) {
+    if (this.aktEbene) return;
+    for (let i = 0; i < 9; i++) {
+      const w = (m.w ?? 0) + (Math.random() - 0.5) * 1.6, d = 8 + Math.random() * (m.tot ? 22 : 12);
+      const c = this.add.circle(m.x, m.y, 0.9 + Math.random() * 1.4, i % 3 ? 0x8b0000 : 0xb71c1c, 0.9).setDepth(7);
+      this.tweens.add({ targets: c, x: m.x + Math.cos(w) * d, y: m.y + Math.sin(w) * d, alpha: 0, duration: 350 + Math.random() * 250, ease: 'Cubic.easeOut', onComplete: () => c.destroy() });
+    }
+    const o = this.busObj.get(m.id);
+    if (o?.bild) this.tweens.add({ targets: o.bild, x: { from: -2.5, to: 0 }, duration: 140 });
+  }
+
   krachEffekt(x, y) {
     if (this.aktEbene) return;
     for (let i = 0; i < 10; i++) {
