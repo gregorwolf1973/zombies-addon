@@ -431,7 +431,7 @@ test('Handgranate: Wurf auf den nächsten Zombie, Explosion nach 2 s, Schaden im
   assert.equal(p.hp, 100 - GRANATE.schadenSpieler, 'halber Schaden für Spieler');
   assert.equal(p.besiegt, 2, 'Abschüsse gutgeschrieben');
   // Lärm: Zombie in 600 px lockt, einer in 700+ px nicht
-  assert.ok(lockInfo.punkt && Math.hypot(lockInfo.punkt.x - g.x2, lockInfo.punkt.y - g.y2) < 1, 'Lärm lockt nicht');
+  assert.ok(lockInfo.punkt && Math.hypot(lockInfo.punkt.x - g.x2, lockInfo.punkt.y - g.y2) <= 40 * Math.SQRT2 + 1, 'Lärm lockt nicht');   // Lärmpunkt ist je Zombie um ±40 px gestreut
   assert.ok(!fernInfo.punkt, 'Lärm zu weit gehört');
   // ohne Ziel: Wurf in Blickrichtung (80 px)
   for (const id of [...raum.state.zombies.keys()]) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); }

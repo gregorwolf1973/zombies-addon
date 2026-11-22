@@ -74,7 +74,7 @@ test('Radio: einschalten legt es ab, macht regelmäßig weiten Lärm, lockt Zomb
   raum.radios.schritt(0.1);
   assert.ok(laerm.some(l => Math.abs(l.x - r.x) < 1 && l.weite >= 600), 'kein weiter Lärm');
   const info = raum.zombieInfo.get(z);
-  assert.ok(info.punkt && Math.hypot(info.punkt.x - r.x, info.punkt.y - r.y) < 2, 'Zombie läuft nicht zum Radio');
+  assert.ok(info.punkt && Math.hypot(info.punkt.x - r.x, info.punkt.y - r.y) <= 40 * Math.SQRT2 + 1, 'Zombie läuft nicht zum Radio');   // Lärmpunkt je Zombie um ±40 px gestreut
   const n0 = laerm.length;
   for (let i = 0; i < 40; i++) raum.radios.schritt(0.5);   // 20 s: mehrere Lärm-Ereignisse
   assert.ok(laerm.length - n0 >= 4, 'Lärm nicht regelmäßig');
