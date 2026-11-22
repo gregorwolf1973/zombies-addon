@@ -1,5 +1,7 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
+import { berechneTuerPose } from './tuerpose.mjs';
+import { zaeuneVorTuerenKappen } from './zaunkappen.mjs';
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite, parkplatzBuchten } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
@@ -810,6 +812,12 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     })),
   };
   for (const h of haeuser) h.umriss = karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss;
+  for (const h of haeuser) if (h.tuer) h.tuerPos = berechneTuerPose(h, KACHEL);   // Tür exakt auf der Polygonwand (Nische/Vordach bevorzugt), siehe tuerpose.mjs
+  // Zäune/Hecken vor Haustüren wegschneiden (3 m um die Tür, Korridor zur Straße, parallele Zäune an der Hauswand); Fein-Raster und Zeichnung bauen darauf auf
+  if (karte.zaeune?.length) {
+    const kap = zaeuneVorTuerenKappen(karte.zaeune, haeuser, karte.gebaeude.map(g => g.umriss), karte.strassen, KACHEL);
+    karte.zaeune = kap.zaeune;
+  }
   // Gärten, Zaunarten und Gartenausstattung (tools/osm_karte.py) – nur fürs Aussehen; das Raster enthält sie schon
   const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [], zaeune: karte.zaeune ?? null } : null;
   const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details, muell, sperren };

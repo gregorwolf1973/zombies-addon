@@ -169,7 +169,7 @@ test('S-Draht: Zombie bleibt mit 40 % hängen (einmal je Berührung), beißt, is
     assert.equal(z.x, x0); assert.equal(z.y, y0);
     assert.ok(z.haengt, 'nach 10 s noch hängen');
     // beißt einen Spieler in Reichweite
-    p.x = x0 - roll.ausen[0] * 20; p.y = y0 - roll.ausen[1] * 20;
+    p.x = x0 - roll.ausen[0] * 17; p.y = y0 - roll.ausen[1] * 17;
     const hp = p.hp; p.hp = 100;
     info.ziel = [...raum.state.spieler.keys()][0];
     raum.extra.get(info.ziel).schonT = 0;

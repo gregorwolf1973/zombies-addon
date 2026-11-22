@@ -196,6 +196,12 @@ const SCHONZEIT_EBENE = 1;   // Sekunden nach einem Ebenenwechsel, in denen Zomb
 const BISS_PRO_SEK = 14;
 const KRIECHER_CHANCE = 0.25, KRIECHER_HP = 35, KRIECHER_TEMPO = 0.28, KRIECHER_SPUERT = 110;
 const UNTEN_ABSTAND = 110;   // so nah an einem am Boden liegenden Spieler halten sich Zombies nicht auf
+const VERZ_MAX_MS = 450;     // größte vom Client gemeldete Anzeigeverzögerung (ms), siehe client/netzpuffer.mjs
+const VERLAUF_MS = 600;      // so lange merkt sich der Server die Positionen jagender Zombies (Lag-Kompensation beim Biss)
+const TUER_EIN_ZEIT = 0.3;   // s gezielt gegen die Haustür laufen, bevor es ins Haus geht
+const TUER_EIN_COS = 0.7;    // Eingaberichtung gegen die Türnormale (Skalarprodukt)
+const TUER_HALB = 6;         // px (0,75 m) seitlich der Türmitte
+const TUER_NAH = 60;         // px: Suchradius um die Türpose
 const BISS_CHANCE = 0.12;   // pro Sekunde Kontakt: Wahrscheinlichkeit für einen infizierenden Biss
 const SPRITZE_ABSTAND = 50;
 const LAMPE_DAUER = 3600;   // eine Taschenlampe leuchtet etwa eine Stunde
@@ -314,6 +320,7 @@ export class SpielRaum extends Room {
     if (l > 1) { dx /= l; dy /= l; }
     const x = this.extra.get(client.sessionId);
     if (!x) return null;
+    if (m.verz !== undefined) { const v = Number(m.verz); if (Number.isFinite(v)) x.verz = Math.max(0, Math.min(VERZ_MAX_MS, Math.round(v))); }   // Anzeigeverzögerung des Clients (ms) für die Biss-Prüfung
     x.feuerAus = m.f === false;   // Feuerknopf-Modus: Client meldet f:false, solange der Knopf nicht gehalten wird (fehlt f: wie bisher automatisch)
     const n = Number(m.n), d = Number(m.d);
     if (Number.isInteger(n) && n >= 0 && Number.isFinite(d)) {
@@ -1466,6 +1473,35 @@ export class SpielRaum extends Room {
     info.haengtT = dauer; info.ziel = null; info.punkt = null; info.schlaeft = false; info.steht = false; info.welle = null;
   }
 
+  // Haus, dessen Haustür (Wandlinie) in Reichweite des Spielers liegt (nur draußen)
+  tuerHausNah(p) {
+    const liste = this.tuerListe ??= this.welt.haeuser.filter(h => h.tuer).map(h => {
+      const q = h.tuerPos ?? { x: (h.tuer.x + 0.5 + h.raus.dx * 0.5) * KACHEL, y: (h.tuer.y + 0.5 + h.raus.dy * 0.5) * KACHEL, nx: h.raus.dx, ny: h.raus.dy };
+      return { h, q };
+    });
+    let best = null, bd = TUER_NAH * TUER_NAH;
+    for (const e of liste) {
+      const dx = p.x - e.q.x, dy = p.y - e.q.y, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = e.h; }
+    }
+    return best;
+  }
+
+  // Wechsel ins Haus: Wandlinie der Tür berühren (± 0,75 m seitlich) UND gezielt hineinlaufen (Eingaberichtung gegen die Türnormale, Skalarprodukt > 0,7)
+  // zusammen mindestens TUER_EIN_ZEIT s; Streifen und Schrägvorbeilaufen löst nichts aus.
+  tuerEintritt(p, x, h, dt) {
+    const q = h.tuerPos ?? { x: (h.tuer.x + 0.5 + h.raus.dx * 0.5) * KACHEL, y: (h.tuer.y + 0.5 + h.raus.dy * 0.5) * KACHEL, nx: h.raus.dx, ny: h.raus.dy };
+    const rx = p.x - q.x, ry = p.y - q.y;
+    const aussen = rx * q.nx + ry * q.ny, seit = rx * -q.ny + ry * q.nx;   // Abstand vor der Wand, seitlich der Türmitte
+    const e = x.eingabe, l = e ? Math.hypot(e.dx, e.dy) : 0;
+    const hinein = l > 0.05 && -(e.dx * q.nx + e.dy * q.ny) / l > TUER_EIN_COS;
+    if (aussen <= W.spielerRadius + 1 && Math.abs(seit) <= TUER_HALB && hinein) x.tuerEinT = (x.tuerEinT ?? 0) + dt;
+    else x.tuerEinT = 0;
+    if (x.tuerEinT < TUER_EIN_ZEIT) return false;
+    x.tuerEinT = 0;
+    return true;
+  }
+
   // Betreten, Verlassen, Treppen: wer auf die Kachel tritt, wechselt die Ebene
   uebergang(id, p, x, dt) {
     if (!x) return;
@@ -1492,9 +1528,13 @@ export class SpielRaum extends Room {
     const kx = Math.floor(p.x / KW), ky = Math.floor(p.y / KW);
     const t = welt.hole(kx, ky);
     let ziel = null, pos = null, tuerDraussen = null;
-    if (!p.ebene && t === T.TUER) {
-      const h = this.welt.haeuser.find(h => h.tuer.x === kx && h.tuer.y === ky);
-      if (!h || !h.betretbar) return;
+    // Haustür: Bots wie bisher beim Betreten der Türkachel; Menschen erst an der Wandlinie der Tür und nur mit gezieltem Hineinlaufen (tuerEintritt)
+    const tuerHaus = !p.ebene ? (x.bot ? (t === T.TUER ? this.welt.haeuser.find(h => h.tuer.x === kx && h.tuer.y === ky) : null) : this.tuerHausNah(p)) : null;
+    if (!x.bot) { if (!tuerHaus || !tuerHaus.betretbar) x.tuerEinT = 0; }
+    if (tuerHaus) {
+      const h = tuerHaus;
+      if (!h.betretbar) return;
+      if (!x.bot && !this.tuerEintritt(p, x, h, dt)) return;
       // brennende Häuser kann man nicht betreten
       if ([...this.brand?.info.values() ?? []].some(i => i.ziel === 'haus:' + h.nr)) {
         if (!x.bot) this.clients.find(c => c.sessionId === id)?.send('meldung', { text: '🔥 Das Haus brennt – da kommst du nicht rein' });
@@ -2625,6 +2665,7 @@ export class SpielRaum extends Room {
     this.welle?.schritt(dt);
     // Entlastung: weit von allen Spielern (und vom Stützpunkt) entfernte Zombies nur jeden FERN_TAKT-ten Takt mit gesammeltem dt
     this.takteGezaehlt = (this.takteGezaehlt ?? 0) + 1;
+    this.uhr = (this.uhr ?? 0) + dt;
     this.berechneNah();
     this.baueZombieRaster();
     this.hunde?.schritt(dt);
@@ -3081,10 +3122,32 @@ export class SpielRaum extends Room {
     return null;
   }
 
+  // Positionsverlauf jagender Zombies (letzte VERLAUF_MS): der Client zeigt Zombies verzögert, der Biss prüft deshalb auch die Stelle von damals
+  verlaufMerken(z, info) {
+    if (!info.ziel) { if (info.spur) info.spur = null; return; }
+    const t = this.uhr ?? 0, sp = info.spur ??= [];
+    sp.push({ t, x: z.x, y: z.y });
+    while (sp.length > 2 && sp[0].t < t - VERLAUF_MS / 1000) sp.shift();
+  }
+
+  // Ort des Zombies vor verz ms (aus dem Verlauf, linear gemischt); ohne Verlauf die aktuelle Stelle
+  zombieOrtVor(z, info, verz) {
+    const sp = info.spur;
+    if (!(verz > 0) || !sp || sp.length < 2) return { x: z.x, y: z.y };
+    const t = (this.uhr ?? 0) - verz / 1000;
+    if (t <= sp[0].t) return { x: sp[0].x, y: sp[0].y };
+    for (let i = sp.length - 1; i > 0; i--) {
+      const a = sp[i - 1], b = sp[i];
+      if (t >= a.t) { const k = b.t > a.t ? Math.min(1, (t - a.t) / (b.t - a.t)) : 1; return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k }; }
+    }
+    return { x: z.x, y: z.y };
+  }
+
   zombieSchritt(id, z, dt) {
     const info = this.zombieInfo.get(id);
     const welt = this.wv(z.ebene);
     const ebene = z.ebene ?? '', R = welt.reich ?? 1;   // R: Maßstab der Nahbereichs-Abstände (drinnen im Feinraster kleiner)
+    this.verlaufMerken(z, info);
     if (z.haengt) haengtSchritt(this, z, info, dt);   // Zeit im Draht läuft; nach Ablauf frei
     if (info.hundBis && this.hunde?.zombieJagt(z, info, dt)) return;   // lässt sich vom Hund ablenken (server/hund.mjs)
     // Sehen: Kegel in Blickrichtung, schleichende Spieler erst später
@@ -3144,8 +3207,15 @@ export class SpielRaum extends Room {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
         z.richtung = w;
         const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
-        if (d > (W.spielerRadius + W.zombieRadius + 4) * R) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt, info);
-        if (d < (W.spielerRadius + W.zombieRadius + 12) * R && !(this.extra.get(info.ziel)?.schonT > 0)) {
+        if (d > (W.spielerRadius + W.zombieRadius + 3) * R) this.zombieGehen(z, w, W.zombieTempoJagen * lahm * dt, dt, info);   // geht bis knapp in Bissreichweite
+        // Biss nur bei Berührung (+ ca. 0,5 m): nach aktueller Stelle UND nach der Stelle, die der Spieler gerade angezeigt bekommt (Lag-Kompensation)
+        const bissR = (W.spielerRadius + W.zombieRadius + 4) * R;
+        let beisst = d < bissR;
+        if (beisst) {
+          const verz = this.extra.get(info.ziel)?.verz ?? 0;
+          if (verz > 0) { const o = this.zombieOrtVor(z, info, verz); beisst = Math.hypot(ziel.x - o.x, ziel.y - o.y) < bissR; }
+        }
+        if (beisst && !(this.extra.get(info.ziel)?.schonT > 0)) {
           const schutz = ziel.kleidung > 0;
           ziel.hp = Math.max(0, ziel.hp - BISS_PRO_SEK * dt * (schutz ? 0.6 : 1) * (z.kriecht ? 0.6 : 1) * this.fkWert(ziel, 'schadenFaktor'));
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);

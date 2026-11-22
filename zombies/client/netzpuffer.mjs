@@ -84,3 +84,14 @@ export const nachSeq = (n, ack) => { const d = (n - ack) & 0xffff; return d > 0 
 
 // Richtung aus 256 Stufen (Server: rq) in Bogenmaß
 export const ausStufe = q => q * (Math.PI * 2 / 256);
+
+// Verzögerung für die Meldung an den Server (ms, gerundet, 0–450)
+export const verzFuerServer = verz => Math.max(0, Math.min(VERZ_MAX, Math.round(verz || 0)));
+
+// Nahe am eigenen Helden (unter 16 px = 2 m volle Hilfe, ab 24 px = 3 m keine) wird auf NAH_VERZ ms Verzögerung verkürzt.
+// Rückgabe: ms, um die die Anzeigezeit nach vorn rückt (fließend, ohne Sprung)
+export const NAH_VERZ = 80;
+export function naheAnzeigeVerz(verz, abstand) {
+  const k = Math.max(0, Math.min(1, (24 - abstand) / 8));
+  return k * Math.max(0, verz - NAH_VERZ);
+}

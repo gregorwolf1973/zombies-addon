@@ -65,7 +65,7 @@ const INNEN_ZOOM = 1.6;
 // Seit 0.69.4 ist der Grundzoom ×1,4 näher: Ring und Kegel draußen auf die frühere Bildschirmgröße zurückrechnen
 const AUSSEN_ZOOM_KORREKTUR = 1 / 1.4;
 import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
-import { NetzPuffer, nachSeq, ausStufe } from './netzpuffer.mjs';
+import { NetzPuffer, nachSeq, ausStufe, verzFuerServer, naheAnzeigeVerz } from './netzpuffer.mjs';
 import { dingIcon, dingHtml, setzeDingListe, dingRahmen, hatDingBild } from './dingbild.mjs';
 
 const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
@@ -2360,11 +2360,15 @@ class Ort extends Phaser.Scene {
     const zf = zg();   // Menschengröße × Gesamtgröße × Zombiegröße
     const RAND = 150, rx0 = cam.x - RAND, rx1 = cam.right + RAND, ry0 = cam.y - RAND, ry1 = cam.bottom + RAND;   // Ausschnitt + Rand: nur dort wird gezeichnet
     let gesamtZ = 0, sichtbarZ = 0;
+    const eigen = this.lokal && Number.isFinite(this.lokal.x) ? this.lokal : null;   // vorhergesagte Position des eigenen Helden
     for (const [id, z] of zombieKarte()) {
       let f = this.zombies.get(id);
       if (!f) { f = this.neuerZombie(z); this.zombies.set(id, f); }
       const vx = f.x, vy = f.y;
-      if (pf.pos('z' + id, rt, pp)) { f.x = pp.x; f.y = pp.y; }
+      // nah am eigenen Helden (< ~3 m): weniger Verzögerung, damit Biss und Anzeige zusammenpassen (fließend über den Abstand)
+      let rtZ = rt;
+      if (rt !== null && eigen) rtZ = rt + naheAnzeigeVerz(pf.verz, Math.hypot(f.x - eigen.x, f.y - eigen.y));
+      if (pf.pos('z' + id, rtZ, pp)) { f.x = pp.x; f.y = pp.y; }
       else { f.x += (z.x - f.x) * glatt; f.y += (z.y - f.y) * glatt; }
       f.r = Phaser.Math.Angle.RotateTo(f.r, zRichtung(z), dt * 6);
       gesamtZ++;
@@ -2985,6 +2989,8 @@ class Ort extends Phaser.Scene {
       if (this.eingabeNr === undefined) this.eingabeNr = raum.state?.spieler?.get(meineId)?.seq ?? 0;
       const n = this.eingabeNr = (this.eingabeNr + 1) & 0xffff;
       const stueck = { dx: +g.dx.toFixed(3), dy: +g.dy.toFixed(3), s: g.s, f: f, n, d: +Math.min(0.25, (jetzt - g.t) / 1000).toFixed(3) };
+      // Anzeigeverzögerung der fremden Figuren (ms) für die Biss-Prüfung des Servers (Lag-Kompensation), alle ~1,5 s
+      if (jetzt - (this.verzGemeldet ?? 0) > 1500) { this.verzGemeldet = jetzt; stueck.verz = verzFuerServer(this.puffer.verz); }
       raum.send('eingabe', stueck);
       this.offen.push(stueck);
       if (this.offen.length > 120) this.offen.shift();
