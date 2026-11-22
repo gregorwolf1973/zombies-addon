@@ -152,13 +152,22 @@ function musterHolen(ctx) {
       koerner(c, g, '#c9c3b6', 40, ['rgba(0,0,0,.06)', 'rgba(255,255,255,.12)']);
       c.fillStyle = 'rgba(90,80,70,.28)'; c.fillRect(0, 0, g, 1); c.fillRect(0, 0, 1, g); c.fillRect(0, g / 2, g, 1); c.fillRect(g / 2, 0, 1, g / 2);
     }),
+    // Fleckigkeit für Gehwege (durchscheinend, über der Betongrau-Fläche)
+    gehfleck: mach(64, (c, g) => {
+      for (let i = 0; i < 18; i++) {
+        const x = hash(i * 7 + 2) * g, y = hash(i * 11 + 5) * g, r = 3 + hash(i * 3 + 8) * 7;
+        const f = i % 3 === 0 ? 'rgba(255,255,255,.07)' : i % 3 === 1 ? 'rgba(0,0,0,.07)' : 'rgba(90,80,60,.06)';
+        for (const [dx, dy] of [[0, 0], [-g, 0], [g, 0], [0, -g], [0, g]]) { c.fillStyle = f; c.beginPath(); c.ellipse(x + dx, y + dy, r, r * (0.6 + hash(i + 40) * 0.5), hash(i + 60) * 3, 0, Math.PI * 2); c.fill(); }
+      }
+      koerner(c, g, 'rgba(0,0,0,0)', 90, ['rgba(0,0,0,.08)', 'rgba(255,255,255,.1)']);
+    }),
     kies: mach(48, (c, g) => koerner(c, g, '#bba882', 300, ['rgba(0,0,0,.14)', 'rgba(255,255,255,.18)', 'rgba(120,90,50,.2)'])),
     pflaster: mach(24, (c, g) => {
       koerner(c, g, '#bfb39a', 30, ['rgba(0,0,0,.06)']);
       c.strokeStyle = 'rgba(80,70,50,.3)'; c.lineWidth = 1;
       for (let y = 0; y < g; y += 8) for (let x = (y / 8) % 2 * 6; x < g + 12; x += 12) c.strokeRect(x + 0.5, y + 0.5, 12, 8);
     }),
-    waldboden: mach(64, (c, g) => koerner(c, g, '#3d6b2f', 200, ['rgba(80,60,30,.25)', 'rgba(0,0,0,.15)', 'rgba(120,160,70,.2)'])),
+    waldboden: mach(64, (c, g) => koerner(c, g, '#46603a', 200, ['rgba(80,60,30,.25)', 'rgba(0,0,0,.15)', 'rgba(130,150,80,.18)'])),
     beton: mach(48, (c, g) => { koerner(c, g, '#b4b1a8', 80, ['rgba(0,0,0,.07)', 'rgba(255,255,255,.1)']); c.fillStyle = 'rgba(0,0,0,.1)'; c.fillRect(0, 0, g, 1); c.fillRect(0, 0, 1, g); }),
     acker: mach(32, (c, g) => { koerner(c, g, '#8a7a4e', 60, ['rgba(0,0,0,.1)']); c.fillStyle = 'rgba(60,45,20,.35)'; for (let y = 0; y < g; y += 8) c.fillRect(0, y, g, 3); }),
   };
@@ -293,7 +302,7 @@ function friedhof(ctx, f, i) {
 // ---------- Flächen (unter allem anderen) ----------
 export function zeichneFlaechen(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect), m = musterHolen(ctx);
-  const stil = { wald: m.waldboden, gruen: 'rgba(130,190,85,.3)', acker: m.acker, sport: '#5a9c45', friedhof: 'rgba(60,100,50,.35)',
+  const stil = { wald: m.waldboden, gruen: 'rgba(128,156,92,.3)', acker: m.acker, sport: '#6b9050', friedhof: 'rgba(70,92,58,.35)',
     parkplatz: m.asphalt, platz: m.pflaster, laufbahn: '#b0553c', gewerbe: m.beton, spielplatz: '#ddc995' };
   v.flaechen.forEach((f, i) => {
     if (!schneidet(f.box, r) || !stil[f.a]) return;
@@ -735,8 +744,9 @@ export function zeichneStrassen(ctx, welt, rect) {
     const sd = seedKante(l, seite) + 4, comp = [[2.0, sd, WL], [0.6, sd + 50, 33]];
     const innen = wandern(d, seite * (fb / 2 - 3), []), aussen = wandern(d, seite * (fb / 2 + breite), comp);
     const aussen2 = wandern(d, seite * (fb / 2 + breite + 1.2), comp);
-    bandPfad(ctx, innen, aussen2); ctx.fillStyle = 'rgba(112,110,102,.5)'; ctx.fill();
-    bandPfad(ctx, innen, aussen); ctx.fillStyle = 'rgba(208,206,198,.88)'; ctx.fill();
+    bandPfad(ctx, innen, aussen2); ctx.fillStyle = 'rgba(88,86,80,.55)'; ctx.fill();
+    bandPfad(ctx, innen, aussen); ctx.fillStyle = 'rgba(168,166,160,.9)'; ctx.fill();
+    ctx.fillStyle = musterHolen(ctx).gehfleck; ctx.fill();
   };
   // amtliche Gehwegbreiten (gl/gr, tools/amtlich.py): je Seite ein glatter Streifen, ohne Kachelbeschneidung (die Breiten stammen aus der Nutzungsfläche
   // „Straßenverkehr“, liegen also nicht über Häusern; Dächer und Zäune werden später darübergezeichnet)
@@ -761,8 +771,9 @@ export function zeichneStrassen(ctx, welt, rect) {
   for (const e of v.ecken) {   // Gehweg folgt dem Eckbogen
     if (e.gruppe !== 'fahr' || !(e.gw > 0) || !schneidet(e.box, r)) continue;
     ctx.lineCap = 'butt';
-    ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r - e.gw / 2, e.aT, e.aB, e.acw); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = e.gw + 2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r - e.gw / 2, e.aT, e.aB, e.acw); ctx.strokeStyle = 'rgba(208,206,198,.88)'; ctx.lineWidth = e.gw; ctx.stroke();
+    ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r - e.gw / 2, e.aT, e.aB, e.acw); ctx.strokeStyle = 'rgba(88,86,80,.55)'; ctx.lineWidth = e.gw + 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r - e.gw / 2, e.aT, e.aB, e.acw); ctx.strokeStyle = 'rgba(168,166,160,.9)'; ctx.lineWidth = e.gw; ctx.stroke();
+    ctx.strokeStyle = musterHolen(ctx).gehfleck; ctx.stroke();
     ctx.lineCap = 'round';
   }
   for (const l of hier) if (l.t === 'pedestrian') { pfad(ctx, l.pts); ctx.strokeStyle = m.pflaster; ctx.lineWidth = l.b; ctx.stroke(); }

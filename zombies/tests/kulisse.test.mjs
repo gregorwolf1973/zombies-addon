@@ -11,8 +11,8 @@ import { KUL_SCHLUESSEL, schalterLesen, indexLesen, kachelnFuerRect, puffer, PUF
 after(() => setzeKartengroesse(64, 48));
 const lade = n => JSON.parse(fs.readFileSync(new URL(`../client/karten/${n}.json`, import.meta.url)));
 
-test('Schalter: Standard alle an, nur ein ausdrückliches „aus“ schaltet ab, jede Kombination möglich', () => {
-  assert.deepEqual(schalterLesen(null, undefined, ''), { boden: true, daecher: true, schatten: true, gezeichnet: true });
+test('Schalter: Standard alle an außer Luftbild-Boden (nur ausdrückliches „an“), sonst nur „aus“ schaltet ab, jede Kombination möglich', () => {
+  assert.deepEqual(schalterLesen(null, undefined, ''), { boden: false, daecher: true, schatten: true, gezeichnet: true });
   for (let m = 0; m < 16; m++) {
     const w = [m & 1, m & 2, m & 4, m & 8].map(b => (b ? 'an' : 'aus'));
     assert.deepEqual(schalterLesen(...w), { boden: !!(m & 1), daecher: !!(m & 2), schatten: !!(m & 4), gezeichnet: !!(m & 8) });

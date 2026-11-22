@@ -90,9 +90,9 @@ def korn(E, N, zelle, s=0):
 # ---------- Farben (an aussehen.mjs / vektor.mjs angelehnt) ----------
 def hexf(h): return np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], float)
 F = {k: hexf(v) for k, v in dict(
-    rasen="#4d8c3b", rasen_hell="#6aa44a", rasen_dunkel="#3b7a33", gepflegt="#5d9b44", gebuesch="#3a7030", baum="#3f7634", waldboden="#3d6b2f", wald_dunkel="#2f5a28",
-    trocken="#8a9a52", acker="#8a7a4e", asphalt="#5e5e5d", gehweg="#c9c3b6", pflaster="#bfb39a", ziegel="#b58a73", kies="#c0b290", beton="#b4b1a8",
-    sand="#ddc995", sport="#5a9c45", tartan="#a95a43", wasser="#2a7098", wasser_tief="#1f5c85", ufer="#d3bf8a", schotter="#8f8a82", haus="#8e887d").items()}
+    rasen="#68804a", rasen_hell="#8c9c5c", rasen_dunkel="#566e3e", gepflegt="#7a905a", gebuesch="#50663a", baum="#4c6a3c", waldboden="#46603a", wald_dunkel="#384c30",
+    trocken="#929a5c", acker="#8a7a4e", asphalt="#5e5e5d", gehweg="#a8a6a0", pflaster="#aa9f88", ziegel="#b58a73", kies="#c0b290", beton="#a6a49c",
+    sand="#ddc995", sport="#6b9050", tartan="#a95a43", wasser="#2a7098", wasser_tief="#1f5c85", ufer="#d3bf8a", schotter="#8f8a82", haus="#8e887d").items()}
 
 # ---------- Rasterdaten (0,2 m) auf das Kachelfenster abbilden ----------
 class Daten:
@@ -216,7 +216,7 @@ def rendern(welt, kx, ky):
         f = 1 + (wolke - 0.5) * wolkenstaerke * 0.65 + (korn1 - 0.5) * kornstaerke * 0.7 + helle
         return c[None, None, :] * f[..., None]
     # Rasen: Wolken wie in aussehen.mjs (hell/dunkel), feines Korn, selten Gräsertupfen
-    wiese = moduliere(F["rasen"], 0.55, 0.10)
+    wiese = moduliere(F["rasen"], 0.9, 0.14)
     tupf = klar(wert(E, N, 0.9, 6), 0.72, 0.85)[..., None] * 0.07
     wiese = wiese * (1 - tupf) + F["rasen_dunkel"][None, None] * tupf
     garten = klar(wert(E, N, 40.0, 9), 0.35, 0.6)[..., None] * 0.12
@@ -238,16 +238,16 @@ def rendern(welt, kx, ky):
     asphalt = F["asphalt"][None, None, :] * (np.stack([af * 1.01, af, af * 0.985], -1))
     kies = moduliere(F["kies"], 0.18, 0.16)
     pflaster = moduliere(F["pflaster"], 0.10, 0.07)
-    gehweg = moduliere(F["gehweg"], 0.08, 0.06)
+    gehweg = moduliere(F["gehweg"], 0.22, 0.10)   # fleckig
     beton = moduliere(F["beton"], 0.08, 0.06)
     ziegel = moduliere(F["ziegel"], 0.1, 0.07)
     sand = moduliere(F["sand"], 0.12, 0.10)
-    sport = moduliere(F["sport"], 0.35, 0.06)
+    sport = moduliere(F["sport"], 0.5, 0.08)
     tartan = moduliere(F["tartan"], 0.1, 0.08)
     acker = moduliere(F["acker"], 0.30, 0.12)
     streifen = (0.5 + 0.5 * np.sin((E * 0.8 + N * 0.6) * 2 * math.pi / 2.6))[..., None] * 0.14   # Ackerfurchen
     acker = acker * (1 - streifen)
-    trocken = moduliere(F["trocken"], 0.5, 0.2)
+    trocken = moduliere(F["trocken"], 0.6, 0.2)
     schotter = moduliere(F["schotter"], 0.2, 0.32)
     haus_m = moduliere(F["haus"], 0.06, 0.05)
     # harter Belag je Fläche (Spielraum: Asphalt aus dem Luftbild, sonst nach Farbe)
