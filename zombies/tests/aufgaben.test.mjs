@@ -12,6 +12,7 @@ import { SpielRaum } from '../server/raum.mjs';
 import { Aufgaben } from '../server/aufgaben.mjs';
 import { FUNK_TEILE } from '../server/mission.mjs';
 import { KACHEL, WELT_VERSION } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
 // Figur in den Innenraum eines Safe Rooms setzen (neben die Eingangstür oder an einen Punkt darin)
 function inDenSafeRoom(raum, p, s, wo = 'tuer') {
@@ -21,7 +22,7 @@ function inDenSafeRoom(raum, p, s, wo = 'tuer') {
   return w;
 }
 
-const PORT = 27300 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-aufgaben-'));
 const DB = path.join(ordner, 'spiel.db');

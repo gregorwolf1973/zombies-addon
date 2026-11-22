@@ -15,8 +15,9 @@ import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { LEOPARD, A400M, imFussabdruck, evakArtFuer } from '../client/evak.mjs';
 import { flugplanBerechnen } from '../server/flugplatz.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 27700 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-evak-'));
 let server;

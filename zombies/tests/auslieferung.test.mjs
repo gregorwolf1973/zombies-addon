@@ -7,8 +7,9 @@ import path from 'node:path';
 import http from 'node:http';
 import zlib from 'node:zlib';
 import { starte } from '../server/index.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 27700 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-ausl-'));
 let server, v;
 

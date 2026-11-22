@@ -10,9 +10,10 @@ import { setzeKartengroesse } from '../client/welt.mjs';
 import { LAENGE, LASTER_ANTEIL } from '../server/verkehr.mjs';
 import { setzeAutoBilder, autoVonOben } from '../client/aussehen.mjs';
 import { fzPx } from '../client/masse.mjs';
+import { freierPort } from './hilfe.mjs';
 
 let server;
-const PORT = 27900 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); });
 after(async () => { await server.gracefullyShutdown(false); setzeKartengroesse(64, 48); });
 

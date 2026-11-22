@@ -12,8 +12,9 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { BOT_NAMEN } from '../server/bots.mjs';
 import { BUS_ABSTAND } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 27700 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-botplan-'));
 const DB = path.join(ordner, 'spiel.db');

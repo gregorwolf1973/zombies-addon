@@ -11,8 +11,9 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { evakArtFuer } from '../client/evak.mjs';
 import { bereinige } from '../server/einstellungen.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28300 + Math.floor(Math.random() * 100);
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-evakarten-'));
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

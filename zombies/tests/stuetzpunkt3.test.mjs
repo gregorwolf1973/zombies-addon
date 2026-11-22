@@ -10,8 +10,9 @@ import { bereinige } from '../server/einstellungen.mjs';
 import { WAFFEN_RANG, GRENZE } from '../server/bots.mjs';
 import { KACHEL, BREITE, HOEHE, T, DINGE, WAFFEN, BEUTE, LEICHE_SELTEN, LEICHE_OFT, GRANATE, HANDEL, MUNITION_MAX, TEMPO_MG, bezahlung, setzeKartengroesse, frei, linieFrei, sichtfrei } from '../client/welt.mjs';
 import { rahmen, handelsleute, zeltWandImWeg, planKoord, imLager, fahrFlaeche, PUMA_PARK } from '../client/stuetzpunkt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28100 + Math.floor(Math.random() * 9);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

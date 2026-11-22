@@ -15,8 +15,9 @@ import { bereinige, vorgaben } from '../server/einstellungen.mjs';
 import { fzPx } from '../client/masse.mjs';
 import { FLUGFELD_PUMA } from '../client/flugfeld_deko.mjs';
 import { PUMA_SKALA } from '../client/stuetzpunkt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 27100 + Math.floor(Math.random() * 100);
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-test-'));
 let server;
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: path.join(ordner, 'spiel.db') }); });

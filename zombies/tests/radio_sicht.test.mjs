@@ -5,6 +5,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { Fahrzeug } from '../server/verkehr.mjs';
+import { freierPort } from './hilfe.mjs';
 
 const echtesTimeout = globalThis.setTimeout;
 const warte = ms => new Promise(r => echtesTimeout(r, ms));
@@ -16,7 +17,7 @@ async function bis(bedingung, ms = 3000) {
 
 // ---- Server: Sichtfilter ----
 let server;
-const PORT = 27500 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: ':memory:' }); });
 after(async () => { await server.gracefullyShutdown(false); });
 

@@ -8,8 +8,9 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { setzeKartengroesse } from '../client/welt.mjs';
 import { NetzPuffer } from '../client/netzpuffer.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28700 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
 async function bis(b, ms = 3000) { const e = Date.now() + ms; while (Date.now() < e) { if (b()) return true; await warte(20); } return b(); }

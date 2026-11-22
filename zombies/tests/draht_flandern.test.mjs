@@ -13,6 +13,7 @@ import { KACHEL, WERTE, setzeKartengroesse, frei, tierGelaende, feinWert, bewege
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { rahmen } from '../client/stuetzpunkt.mjs';
 import { FLUGFELD_TOTE } from '../client/flugfeld_deko.mjs';
+import { freierPort } from './hilfe.mjs';
 
 const kartenDatei = name => JSON.parse(fs.readFileSync(new URL(`../client/karten/${name}.json`, import.meta.url)));
 
@@ -108,7 +109,7 @@ test('Flugfeld: haengendStart legt feste Tote ohne Beute und hängende Zombies (
 });
 
 // ---------------- Server: Hängenbleiben, Losreißen, Puma ----------------
-const PORT = 28500 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
 async function bis(bedingung, ms = 3000) {

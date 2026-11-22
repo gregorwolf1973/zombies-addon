@@ -8,8 +8,9 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { setzeKartengroesse, BEUTE, KACHEL } from '../client/welt.mjs';
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28600 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

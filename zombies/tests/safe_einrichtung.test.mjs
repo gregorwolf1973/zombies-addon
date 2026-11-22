@@ -11,6 +11,7 @@ import { KACHEL, T, baueWelt, setzeKartengroesse } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { innenraumFuer, SAFE_MOEBEL } from '../client/innen.mjs';
 import { BEUTE } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
 const WOHNUNG = ['bett', 'badewanne', 'klo', 'herd', 'sofa', 'fernseher', 'couchtisch', 'esstisch', 'kuehlschrank', 'spuele', 'waschbecken'];
 const GEHBAR = new Set([T.BODEN, T.TUER_OFFEN, T.INNENTUER, T.AUSGANG]);
@@ -62,7 +63,7 @@ test('Möblierung ist deterministisch, Beute-Tabellen vorhanden', () => {
   assert.ok(BEUTE.vorratsregal.includes('wasser') && BEUTE.erstehilfe.includes('verband'));
 });
 
-const PORT = 28100 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
 async function bis(f, ms = 3000) { const e = Date.now() + ms; while (Date.now() < e) { if (f()) return true; await warte(20); } return f(); }

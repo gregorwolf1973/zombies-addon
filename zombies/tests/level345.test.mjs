@@ -19,6 +19,7 @@ import { schwierigkeit } from '../server/schwierigkeit.mjs';
 import { heliPlan, bunkerPlan } from '../server/flugplatz.mjs';
 import { SU_BEFEHLE } from '../server/superuser.mjs';
 import { ANSAGEN, ABSPANN_SEKUNDEN } from '../server/finale.mjs';
+import { freierPort } from './hilfe.mjs';
 
 const NEU = { koenigsdorf: 3, kochel: 4, andermatt: 5 };
 
@@ -82,7 +83,7 @@ for (const [karteName, level] of Object.entries(NEU)) for (const seed of [7, 471
 }
 
 // ---------- Finale (Raum mit Andermatt) ----------
-const PORT = 28500 + Math.floor(Math.random() * 100);
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-level345-'));
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
