@@ -2,6 +2,7 @@
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { berechneTuerPose, nachbarPolys, aussenFrei, FREI_M } from './tuerpose.mjs';
 import { zaeuneVorTuerenKappen } from './zaunkappen.mjs';
+import { zaeuneVonStrassen } from './zaunstrasse.mjs';
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite, parkplatzBuchten } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
@@ -830,6 +831,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   for (const h of haeuser) h.umriss = karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss;
   for (const h of haeuser) if (h.tuer) h.tuerPos = berechneTuerPose(h, KACHEL, nbPolys);   // Tür exakt auf der Polygonwand (Nische/Vordach bevorzugt), siehe tuerpose.mjs
   // Zäune/Hecken vor Haustüren wegschneiden (3 m um die Tür, Korridor zur Straße, parallele Zäune an der Hauswand); Fein-Raster und Zeichnung bauen darauf auf
+  if (amtlich && karte.zaeune?.length) karte.zaeune = zaeuneVonStrassen(karte.zaeune, karte.strassen, KACHEL, fahrbahnBreite).zaeune;   // nie auf Fahrbahn/Gehweg (gleiche Breiten wie die Zeichnung)
   if (karte.zaeune?.length) {
     const kap = zaeuneVorTuerenKappen(karte.zaeune, haeuser, karte.gebaeude.map(g => g.umriss), karte.strassen, KACHEL);
     karte.zaeune = kap.zaeune;
