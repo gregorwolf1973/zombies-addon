@@ -11,6 +11,7 @@ import { sichtfrei, frei } from '../client/welt.mjs';
 import { B11_KARTE, b11Geometrie, b11Punkt } from './szene_b11_geo.mjs';
 import { Streife, STREIFE, streifeRoute } from './szene_b11_fahrt.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
+const STUETZ_SPIELER = 150, LEOPARD_STUETZ_M = 45;   // m: Spieler in der Nähe → MG-Reichweite des Leopards
 import { ueberrolleZombies, UEBERROLLEN_PAUSE } from './ueberrollen.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
 import { plattKodieren, plattLesen, PLATT_MAX } from '../client/b11_platt.mjs';
@@ -281,7 +282,15 @@ export class SzeneB11 {
   leopardSchritt(dt) {
     const l = this.leopard;
     if (!l || !this.leopardLogik) return;
-    this.leopardLogik.schritt(l, dt, leopardEinst(this.raum.einstellungen?.()?.bundeswehr ?? {}, 0.8));
+    const e = leopardEinst(this.raum.einstellungen?.()?.bundeswehr ?? {}, 0.8);
+    // Kämpfen Spieler in der Nähe (≤ 150 m), unterstützt der Leopard mit größerer MG-Reichweite (mindestens 45 m) – der Streifenweg endet
+    // oft 30–60 m neben dem Gefecht am Rathaus, und 25 m Grundreichweite reichten dort nicht
+    const p150 = (STUETZ_SPIELER * 8) ** 2;
+    for (const p of this.raum.state.spieler.values()) {
+      if (p.ebene || p.sichtbar === false) continue;
+      if ((p.x - l.x) ** 2 + (p.y - l.y) ** 2 < p150) { e.reichweite = Math.max(e.reichweite, LEOPARD_STUETZ_M * 8); break; }
+    }
+    this.leopardLogik.schritt(l, dt, e);
   }
 
   sendeFahrzeuge() {
