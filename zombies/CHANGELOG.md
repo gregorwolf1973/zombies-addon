@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.84.0 – 22.11.2026
+
+- Neu: Laufstick mit Drehzone – in den ersten 2 mm Fingerweg drehen sich Figur und Taschenlampe nur in die Zugrichtung, danach läuft man los (Android vibriert kurz an der Grenze). Die Lampe bleibt nach dem Loslassen in der gewählten Richtung, Mitspieler sehen die Drehung.
+- Das automatische Zielen dreht stehende Spieler nicht mehr herum; der Körper wendet sich beim Schuss nur kurz zum Ziel, die Lampe bleibt, wohin du sie gedreht hast.
+- Tempo realistisch in km/h: Held geht 20 km/h und schleicht 9 km/h, Zombies jagen mit 15 km/h und wandern mit 4 km/h (bisher 67/31/47/13 km/h). Alle vier Werte sind im Backend einstellbar.
+- Jeder dritte Schuss eines Helden zieht eine Leuchtspur (nicht bei Schrotflinte und Armbrust).
+- Straßen und Wege sind nicht mehr wie mit dem Lineal gezogen: Etwa alle 20–35 m beult ein Rand leicht aus oder die Straße wird etwas breiter.
+- Ausgebrannte Autowracks glühen an einigen Stellen nach, qualmen leicht und haben einen Rußfleck; jedes Wrack sieht bei allen Spielern gleich aus.
+- Polizei an den Straßensperren: 2–3 Polizisten mit Pistole verteidigen jede Sperre gegen Zombies im Umkreis von 25 m, der Streifenwagen blinkt blau-rot. Polizisten können sterben und werden dann zu Zombies; Pistole und Munition bleiben liegen. Im Backend abschaltbar, Anzahl und Munition einstellbar.
+- Behoben: Zombies fanden nicht in schmale Innenhöfe (z. B. BGZ in Geretsried 2) und blieben am engen Eingang hängen.
+
 ## 0.83.0 – 22.11.2026
 
 - Neu: Die Hauptkanone des Leopard erzeugt einen großen Feuerball, einen dichten Rauchkegel bis 25 m in Schussrichtung und aufgewirbelten Staub; ihre Druckwelle schleudert Zombies bis 10 m vor dem Rohr zurück und lässt sie kurz taumeln (Spieler werden nur geschubst).
