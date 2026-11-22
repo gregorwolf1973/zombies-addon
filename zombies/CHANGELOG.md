@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.73.0 – 22.11.2026
+
+- Behoben (maßstäbliche Innenräume): Namen, Lebensbalken, Symbole, Bodenbeute und Zieh-Stick nicht mehr mit dem Innen-Zoom vergrößert; Schränke/Regale bis zum Möbelrand durchsuchbar; Türen schließen (auch über die zweite Taste neben Schränken); Kamera ruckelt drinnen nicht mehr (kein Pixel-Runden bei hohem Zoom).
+- Behoben: In den abfahrenden Evakuierungsbus kann man wieder aufspringen, bis er die Karte verlässt (er rollt langsamer).
+- Behoben: Über Zäune springen sofort (0,25 s) statt nach mehreren Sekunden, Landung direkt hinter dem Zaun, kein Nachlaufen.
+- Geändert: Faust/Schläger werfen Zombies nur noch ~1,4 m statt 4 m zurück.
+- Geändert: Tempo unter Bäumen nach Kronendichte – Einzelbaum volles Tempo, Waldrand 50 %, Wald Backend-Wert, fließender Übergang.
+- Geändert: Alle Fahrzeug- und Zaunschatten fallen in dieselbe Richtung wie die Hausschatten (Nordwest); Schatten dunkler.
+- Geändert: Hecken schmal (~0,9 m) gezeichnet.
+- Neu: Spielplätze (z. B. am Rathaus) mit Holzzaun und Eingang zur Straße.
+
 ## 0.72.0 – 22.11.2026
 
 - Geändert: Pools sind kein Hindernis mehr – im Wasser geht jede Figur mit 10 % Tempo.
