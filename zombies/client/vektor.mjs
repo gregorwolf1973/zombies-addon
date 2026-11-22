@@ -59,9 +59,9 @@ export function vektorGebaeude(welt) { return vorbereiten(welt).gebaeude; }
 function vorbereiten(welt) {
   if (welt._vek) return welt._vek;
   const v = welt.vektor;
-  const linien = v.strassen.map(s => {
+  const linien = v.strassen.map((s, idx) => {
     const pts = []; for (let i = 0; i < s.p.length; i += 2) pts.push([s.p[i] * K, s.p[i + 1] * K]);
-    return { t: s.t, b: s.b * K, pts, box: bbox(pts, (s.b + 2) * K), n: s.n, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0, gl: s.gl, gr: s.gr };
+    return { id: idx, t: s.t, b: s.b * K, pts, box: bbox(pts, (s.b + 2) * K), n: s.n, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0, gl: s.gl, gr: s.gr };
   });
   const flaechen = v.flaechen.map(f => {
     const pts = []; for (let i = 0; i < f.p.length; i += 2) pts.push([f.p[i] * K, f.p[i + 1] * K]);
@@ -97,7 +97,13 @@ function vorbereiten(welt) {
       teil.push(l.pts[i + 1]);
     }
   }
-  welt._vek = { linien, flaechen, gebaeude };
+  // Bordstein nur an Straßen mit Gehweg; sonst weicher Rand Asphalt → Wiese/Erde
+  for (const l of linien) l.kerb = AUTO.has(l.t) && ((l.gl !== undefined || l.gr !== undefined) ? (l.gl > 0 || l.gr > 0) : (l.gehTeile?.length > 0));
+  // gemeinsame Knoten (Einmündungen, Kreuzungen): dort bleiben die Kanten gerade, und die Ecken werden ausgerundet
+  const knoten = new Map();
+  for (const l of linien) for (const p of l.pts) { const k = knotenSchluessel(p); knoten.set(k, (knoten.get(k) ?? 0) + 1); }
+  welt._vek = { linien, flaechen, gebaeude, knoten };
+  welt._vek.ecken = eckenBerechnen(welt, linien, knoten);
   return welt._vek;
 }
 
@@ -508,33 +514,219 @@ function gehwegClip(ctx, welt, r) {
   ctx.clip();
 }
 
+
+// ---------- Leichte Unregelmäßigkeit (nur Darstellung, deterministisch über hash(), einmal je Kartenstück gezeichnet) ----------
+const knotenSchluessel = p => Math.round(p[0] * 2) + ',' + Math.round(p[1] * 2);
+// glattes Rauschen über die Bogenlänge s (Pixel): Werterauschen mit weicher Überblendung, Wert −1…1
+function glatt1(s, wl, seed) {
+  const u = s / wl, i = Math.floor(u), t = u - i, w = t * t * (3 - 2 * t);
+  const a = hash(seed * 7919 + i) * 2 - 1, b = hash(seed * 7919 + i + 1) * 2 - 1;
+  return a + (b - a) * w;
+}
+const rausch = (s, wl, seed) => 0.75 * glatt1(s, wl, seed) + 0.25 * glatt1(s, wl * 0.37, seed + 101);
+const FADE_KNOTEN = 72, FADE_ENDE = 24;   // an Einmündungen/Enden läuft die Abweichung auf 0 aus
+// Linie dicht abtasten (alle ~6 px, Originalpunkte bleiben): Position, Bogenlänge, Normale (links, mit begrenzter Gehrung), Ausblendung
+function dichten(pts, knoten) {
+  const X = [], Y = [], S = [], fix = [];
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    if (i === 0) { X.push(pts[0][0]); Y.push(pts[0][1]); S.push(0); }
+    else {
+      const dx = pts[i][0] - pts[i - 1][0], dy = pts[i][1] - pts[i - 1][1], L = Math.hypot(dx, dy), n = Math.max(1, Math.round(L / 6));
+      for (let k = 1; k <= n; k++) { s += L / n; X.push(pts[i - 1][0] + dx * k / n); Y.push(pts[i - 1][1] + dy * k / n); S.push(s); }
+    }
+    const ende = i === 0 || i === pts.length - 1;
+    if (ende || (knoten.get(knotenSchluessel(pts[i])) ?? 0) > 1) fix.push([s, ende && (knoten.get(knotenSchluessel(pts[i])) ?? 0) <= 1 ? FADE_ENDE : FADE_KNOTEN]);
+  }
+  const n = X.length, mx = new Float32Array(n), my = new Float32Array(n), f = new Float32Array(n);
+  for (let j = 0; j < n; j++) {
+    let nx = 0, ny = 0, c = 0;
+    for (const [a, b] of [[j - 1, j], [j, j + 1]]) {
+      if (a < 0 || b >= n) continue;
+      const dx = X[b] - X[a], dy = Y[b] - Y[a], L = Math.hypot(dx, dy) || 1;
+      nx += -dy / L; ny += dx / L; c++;
+    }
+    const L = Math.hypot(nx, ny) || 1, fk = Math.min(2, c / L);
+    mx[j] = nx / L * fk; my[j] = ny / L * fk;
+    let w = 1; for (const [fs, fl] of fix) w = Math.min(w, Math.abs(S[j] - fs) / fl);
+    f[j] = w >= 1 ? 1 : w * w * (3 - 2 * w);
+  }
+  return { n, x: X, y: Y, s: S, mx, my, f };
+}
+function dichtL(l, v) { return l._d ?? (l._d = dichten(l.pts, v.knoten)); }
+// seitlich um o versetzte, weich schwankende Linie: comps = [[Amplitude px, Seed, Wellenlänge px], …]
+function wandern(d, o, comps) {
+  const out = new Array(d.n);
+  for (let j = 0; j < d.n; j++) {
+    let off = o, r = 0; for (const [a, sd, wl] of comps) r += a * rausch(d.s[j], wl, sd);
+    off += r * d.f[j];
+    out[j] = [d.x[j] + d.mx[j] * off, d.y[j] + d.my[j] * off];
+  }
+  return out;
+}
+// ein einzelner Punkt j der versetzten Linie
+function wandern1(d, j, o, comps) {
+  let r = 0; for (const [a, sd, wl] of comps) r += a * rausch(d.s[j], wl, sd);
+  const off = o + r * d.f[j];
+  return [d.x[j] + d.mx[j] * off, d.y[j] + d.my[j] * off];
+}
+// Teilstück der dichten Linie zwischen den Bogenlängen s0 und s1
+function pfadAb(d, s0, s1) {
+  const out = [];
+  const punkt = (j0, s) => { const j1 = Math.min(d.n - 1, j0 + 1), ds = d.s[j1] - d.s[j0] || 1, t = Math.max(0, Math.min(1, (s - d.s[j0]) / ds)); return [d.x[j0] + (d.x[j1] - d.x[j0]) * t, d.y[j0] + (d.y[j1] - d.y[j0]) * t]; };
+  let lo = 0, hi = d.n - 1;
+  while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (d.s[mid] <= s0) lo = mid; else hi = mid; }
+  out.push(punkt(lo, s0));
+  let j1 = lo;
+  for (let j = lo + 1; j < d.n && d.s[j] < s1; j++) { out.push([d.x[j], d.y[j]]); j1 = j; }
+  out.push(punkt(j1, s1));
+  return out.length > 1 ? out : null;
+}
+// Band zwischen zwei Randlinien als geschlossener Pfad
+function bandPfad(ctx, A, B) {
+  ctx.beginPath(); ctx.moveTo(A[0][0], A[0][1]);
+  for (let i = 1; i < A.length; i++) ctx.lineTo(A[i][0], A[i][1]);
+  for (let i = B.length - 1; i >= 0; i--) ctx.lineTo(B[i][0], B[i][1]);
+  ctx.closePath();
+}
+const WL = 88;   // Wellenlänge der Kantenabweichung (~11 m)
+const seedKante = (l, seite) => l.id * 16 + (seite > 0 ? 1 : 2);
+
+// ---------- Ausgerundete Ecken an Einmündungen und Kreuzungen ----------
+// Je zwei benachbarte Arme eines Knotens: Kreisbogen (Radius r) tangential an beide Fahrbahnkanten; das Stück zwischen Ecke und Bogen wird Fahrbahn.
+const ECKRADIUS = { primary: 9, secondary: 9, tertiary: 8, unclassified: 5.5, residential: 5, living_street: 4, service: 2.5 };
+function eckenBerechnen(welt, linien, knoten) {
+  const SPERR = new Set([T.WAND, T.ZAUN, T.TOR, T.DEKO, T.BODEN, T.TUER, T.WASSER]);
+  const FREI = new Set([T.STRASSE, T.PLATZ, T.WIESE, T.BAUM]);
+  const tile = (x, y) => { const kx = Math.floor(x / K), ky = Math.floor(y / K); return kx < 0 || ky < 0 || kx >= BREITE ? T.ZAUN : welt.hole(kx, ky); };
+  const ergebnis = [];
+  for (const gruppe of ['fahr', 'weg']) {
+    const arme = new Map();
+    for (const l of linien) {
+      const hart = AUTO.has(l.t) || l.t === 'service';
+      if (gruppe === 'fahr' ? !hart : (hart || l.t === 'pedestrian')) continue;
+      const hw = gruppe === 'fahr' ? fahrbahn(l) / 2 : (l.t === 'track' ? 3.5 : 3);
+      const radius = (gruppe === 'fahr' ? (ECKRADIUS[l.t] ?? 5) : 2.5) * METER;
+      const gw = !l.kerb ? 0 : (l.gl !== undefined || l.gr !== undefined) ? Math.min(l.gl ?? 0, l.gr ?? 0) * 8 : GEHWEG;
+      for (let i = 0; i < l.pts.length; i++) {
+        const key = knotenSchluessel(l.pts[i]);
+        if ((knoten.get(key) ?? 0) < 2) continue;
+        for (const dir of [-1, 1]) {
+          let j = i + dir;
+          if (j < 0 || j >= l.pts.length) continue;
+          let dx = l.pts[j][0] - l.pts[i][0], dy = l.pts[j][1] - l.pts[i][1], L = Math.hypot(dx, dy);
+          if (L < 4) continue;
+          // Arm verlängern, solange die Linie fast gerade weiterläuft (≤ ~16°), höchstens 64 px: kurze Endstücke begrenzen den Radius sonst zu sehr
+          const u0x = dx / L, u0y = dy / L;
+          for (let k = j + dir; L < 64 && k >= 0 && k < l.pts.length; k += dir) {
+            const ex = l.pts[k][0] - l.pts[i][0], ey = l.pts[k][1] - l.pts[i][1], EL = Math.hypot(ex, ey);
+            if (EL < 4 || (ex * u0x + ey * u0y) / EL < 0.96) break;
+            dx = ex; dy = ey; L = EL; j = k;
+          }
+          (arme.get(key) ?? arme.set(key, []).get(key)).push({ x: l.pts[i][0], y: l.pts[i][1], ux: dx / L, uy: dy / L, a: Math.atan2(dy, dx), L, hw, radius, gw, kerb: l.kerb, farbe: l.t === 'track' ? '#c9b98f' : '#d8cfb0' });
+        }
+      }
+    }
+    for (const liste of arme.values()) {
+      if (liste.length < 3) continue;
+      liste.sort((p, q) => p.a - q.a);
+      for (let i = 0; i < liste.length; i++) {
+        const A = liste[i], B = liste[(i + 1) % liste.length];
+        let phi = B.a - A.a; if (phi <= 0) phi += Math.PI * 2;
+        if (phi < 0.4 || phi > 2.7) continue;
+        const nax = -A.uy, nay = A.ux, nbx = B.uy, nby = -B.ux;           // Normalen in den Keil hinein
+        const Rx = nbx * B.hw - nax * A.hw, Ry = nby * B.hw - nay * A.hw, det = -Math.sin(phi);
+        const xa = (-Rx * B.uy + B.ux * Ry) / det, yb = (A.ux * Ry - A.uy * Rx) / det;
+        if (!(xa > 0) || !(yb > 0)) continue;
+        const Px = A.x + A.ux * xa + nax * A.hw, Py = A.y + A.uy * xa + nay * A.hw;
+        const th = Math.tan(phi / 2), sh = Math.sin(phi / 2);
+        let r = Math.max(A.radius, B.radius);
+        r = Math.min(r, Math.min(0.9 * A.L - xa, 0.9 * B.L - yb) * th);
+        const bx = A.ux + B.ux, by = A.uy + B.uy, bl = Math.hypot(bx, by) || 1, ex = bx / bl, ey = by / bl;
+        let ok = false;
+        for (let versuch = 0; versuch < 5 && r >= 6; versuch++) {
+          const t = r / th, Cx = Px + ex * r / sh, Cy = Py + ey * r / sh;
+          const Mx = Cx - ex * r, My = Cy - ey * r;
+          const pr = [[Px, Py], [Px + A.ux * t, Py + A.uy * t], [Px + B.ux * t, Py + B.uy * t], [Mx, My], [(Px + Mx) / 2, (Py + My) / 2]];
+          if (!pr.some(([x, y]) => SPERR.has(tile(x, y)))) { ok = true; break; }
+          r *= 0.7;
+        }
+        if (!ok) continue;
+        const t = r / th, Cx = Px + ex * r / sh, Cy = Py + ey * r / sh;
+        const Tax = Px + A.ux * t, Tay = Py + A.uy * t, Tbx = Px + B.ux * t, Tby = Py + B.uy * t;
+        const aT = Math.atan2(Tay - Cy, Tax - Cx), aB = Math.atan2(Tby - Cy, Tbx - Cx);
+        let dd = aB - aT; while (dd > Math.PI) dd -= Math.PI * 2; while (dd < -Math.PI) dd += Math.PI * 2;
+        let gw = A.kerb && B.kerb ? Math.min(A.gw, B.gw) : 0;
+        if (gw > 0) { gw = Math.min(gw, r - 2); const mx = Cx - ex * (r - gw / 2), my = Cy - ey * (r - gw / 2); if (!FREI.has(tile(mx, my))) gw = 0; }
+        ergebnis.push({ gruppe, Px, Py, Tax, Tay, Tbx, Tby, Cx, Cy, r, aT, aB, acw: dd < 0, gw, kerb: A.kerb && B.kerb, farbe: A.farbe, box: { x0: Cx - r - 4, y0: Cy - r - 4, x1: Cx + r + 4, y1: Cy + r + 4 } });
+      }
+    }
+  }
+  return ergebnis;
+}
+function eckPfad(ctx, e) {
+  ctx.beginPath(); ctx.moveTo(e.Px, e.Py); ctx.lineTo(e.Tax, e.Tay);
+  ctx.arc(e.Cx, e.Cy, e.r, e.aT, e.aB, e.acw);
+  ctx.closePath();
+}
+
 export function zeichneStrassen(ctx, welt, rect) {
   const v = vorbereiten(welt), r = pixelRect(rect), m = musterHolen(ctx);
   const hier = v.linien.filter(l => schneidet(l.box, r) && l.pts.length > 1);
   ctx.save();
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   // Stil wie im Prototyp: schmale Fahrbahn mit dunkler Kante, Gehweg nur angedeutet, Fußwege als helle Linien
-  // 1. Fußwege und Feldwege
+  // 1. Fußwege und Feldwege: Mittellinie schwingt leicht (±0,4 m), Ränder verwischt, hellere Laufspur bzw. zwei Fahrspuren, Gras wächst vom Rand herein
   for (const l of hier) {
     if (AUTO.has(l.t) || l.t === 'service' || l.t === 'pedestrian') continue;
-    pfad(ctx, l.pts);
-    ctx.strokeStyle = 'rgba(60,50,30,.25)'; ctx.lineWidth = 9; ctx.stroke();
-    ctx.strokeStyle = l.t === 'track' ? '#c9b98f' : '#d8cfb0'; ctx.lineWidth = 6; ctx.stroke();
+    const d = dichtL(l, v), track = l.t === 'track', sd = l.id * 16 + 5, basis = [[3.4, sd, 96]];
+    const mitte = wandern(d, 0, basis), rand = wandern(d, 0, [[3.4, sd, 96], [1.6, sd + 3, 38]]);
+    pfad(ctx, rand); ctx.strokeStyle = 'rgba(60,50,30,.07)'; ctx.lineWidth = 12; ctx.stroke();
+    pfad(ctx, mitte); ctx.strokeStyle = 'rgba(60,50,30,.19)'; ctx.lineWidth = 9; ctx.stroke();
+    pfad(ctx, mitte); ctx.strokeStyle = track ? '#c9b98f' : '#d8cfb0'; ctx.lineWidth = track ? 7 : 6; ctx.stroke();
+    if (track) {
+      for (const o of [-2.4, 2.4]) { pfad(ctx, wandern(d, o, [[3.4, sd, 96], [0.7, sd + 7 + (o > 0 ? 1 : 0), 31]])); ctx.strokeStyle = 'rgba(80,66,42,.3)'; ctx.lineWidth = 1.6; ctx.stroke(); }
+      pfad(ctx, wandern(d, 0, [[3.4, sd, 96], [0.5, sd + 9, 27]])); ctx.strokeStyle = 'rgba(104,128,62,.3)'; ctx.lineWidth = 1.4; ctx.stroke();
+    } else {
+      pfad(ctx, wandern(d, 0, [[3.4, sd, 96], [1.0, sd + 7, 30]])); ctx.strokeStyle = 'rgba(252,246,228,.3)'; ctx.lineWidth = 2.4; ctx.stroke();
+    }
+    // Grasbüschel vom Rand und Kiesstreu (gesammelt, je ein Strich)
+    const gras = new Path2D(), kies = new Path2D();
+    for (let j = 1; j < d.n - 1; j++) {
+      const h = hash(l.id * 977 + j * 3), h2 = hash(l.id * 733 + j * 5 + 1), seite = h2 < 0.5 ? 1 : -1;
+      if (h < 0.1) {
+        const ex = mitte[j][0] + d.mx[j] * seite * 3.6, ey = mitte[j][1] + d.my[j] * seite * 3.6, ix = -d.mx[j] * seite, iy = -d.my[j] * seite;
+        gras.moveTo(ex, ey); gras.lineTo(ex + ix * 2.6 + iy * 0.8, ey + iy * 2.6 - ix * 0.8);
+        gras.moveTo(ex + 1, ey); gras.lineTo(ex + ix * 1.8 - iy * 1.0, ey + iy * 1.8 + ix * 1.0);
+      } else if (h > 0.8) {
+        const o = seite * (3.8 + hash(l.id * 311 + j) * 2.4);
+        kies.rect(mitte[j][0] + d.mx[j] * o, mitte[j][1] + d.my[j] * o, 1, 1);
+      }
+    }
+    ctx.strokeStyle = 'rgba(78,118,46,.8)'; ctx.lineWidth = 1.1; ctx.stroke(gras);
+    ctx.fillStyle = 'rgba(190,175,140,.5)'; ctx.fill(kies);
+  }
+  for (const e of v.ecken) {   // ausgerundete Ecken der Wege
+    if (e.gruppe !== 'weg' || !schneidet(e.box, r)) continue;
+    eckPfad(ctx, e); ctx.fillStyle = e.farbe; ctx.fill();
   }
   // 2. Gehwege: schmale hellgraue Streifen beidseitig der Fahrstraßen mit feiner Bordsteinlinie.
   // Nur auf freiem Gelände (Straße, Platz, ungezäunte Wiese): nicht über Häusern, Gärten, Zäunen und Wasser.
   const gehwege = hier.filter(l => AUTO.has(l.t));
+  // Gehweg-Außenkante schwankt ±0,25 m, die Innenkante liegt unter der Fahrbahn (verdeckt)
+  const gehStreifen = (l, d, fb, seite, breite) => {
+    const sd = seedKante(l, seite) + 4, comp = [[2.0, sd, WL], [0.6, sd + 50, 33]];
+    const innen = wandern(d, seite * (fb / 2 - 3), []), aussen = wandern(d, seite * (fb / 2 + breite), comp);
+    const aussen2 = wandern(d, seite * (fb / 2 + breite + 1.2), comp);
+    bandPfad(ctx, innen, aussen2); ctx.fillStyle = 'rgba(112,110,102,.5)'; ctx.fill();
+    bandPfad(ctx, innen, aussen); ctx.fillStyle = 'rgba(208,206,198,.88)'; ctx.fill();
+  };
   // amtliche Gehwegbreiten (gl/gr, tools/amtlich.py): je Seite ein glatter Streifen, ohne Kachelbeschneidung (die Breiten stammen aus der Nutzungsfläche
   // „Straßenverkehr“, liegen also nicht über Häusern; Dächer und Zäune werden später darübergezeichnet)
   for (const l of gehwege) {
     if (l.gl === undefined && l.gr === undefined) continue;
-    const fb = fahrbahn(l);
-    for (const [seite, g] of [[1, l.gl ?? 0], [-1, l.gr ?? 0]]) {   // Innenkante knapp unter dem Asphalt; 0 = kein Gehweg auf dieser Seite
-      if (!(g > 0)) continue;
-      const w = g * 8, o = seite * (fb / 2 + w / 2 - 1), pts = versetzt(l.pts, o);
-      pfad(ctx, pts); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = w + 2; ctx.stroke();
-      pfad(ctx, pts); ctx.strokeStyle = 'rgba(208,206,198,.88)'; ctx.lineWidth = w; ctx.stroke();
-    }
+    const fb = fahrbahn(l), d = dichtL(l, v);
+    for (const [seite, g] of [[1, l.gl ?? 0], [-1, l.gr ?? 0]]) if (g > 0) gehStreifen(l, d, fb, seite, g * 8 - 1);   // 0 = kein Gehweg auf dieser Seite
   }
   if (gehwege.some(l => l.gl === undefined && l.gr === undefined)) {
     ctx.save();
@@ -543,22 +735,107 @@ export function zeichneStrassen(ctx, welt, rect) {
       if (l.gl !== undefined || l.gr !== undefined) continue;
       const fb = fahrbahn(l);
       for (const t of l.gehTeile ?? []) {
-        pfad(ctx, t); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = fb + 2 * GEHWEG + 2; ctx.stroke();
-        pfad(ctx, t); ctx.strokeStyle = 'rgba(208,206,198,.88)'; ctx.lineWidth = fb + 2 * GEHWEG; ctx.stroke();
+        const d = t._d ?? (t._d = dichten(t, v.knoten));
+        for (const seite of [1, -1]) gehStreifen(l, d, fb, seite, GEHWEG);
       }
     }
     ctx.restore();
   }
+  for (const e of v.ecken) {   // Gehweg folgt dem Eckbogen
+    if (e.gruppe !== 'fahr' || !(e.gw > 0) || !schneidet(e.box, r)) continue;
+    ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r - e.gw / 2, e.aT, e.aB, e.acw); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = e.gw + 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r - e.gw / 2, e.aT, e.aB, e.acw); ctx.strokeStyle = 'rgba(208,206,198,.88)'; ctx.lineWidth = e.gw; ctx.stroke();
+    ctx.lineCap = 'round';
+  }
   for (const l of hier) if (l.t === 'pedestrian') { pfad(ctx, l.pts); ctx.strokeStyle = m.pflaster; ctx.lineWidth = l.b; ctx.stroke(); }
-  // 3. dunkle Kanten aller Fahrbahnen zuerst, dann der Asphalt – so bleiben Kreuzungen sauber
+  // 3. Kanten aller Fahrbahnen zuerst, dann der Asphalt – so bleiben Kreuzungen sauber.
+  // Mit Bordstein: fast gerade (±0,1 m), einzelne hellere/dunklere Steine, kleine Lücken. Ohne Bordstein: weicher Rand mit Ausfransungen.
   const fahr = hier.filter(l => AUTO.has(l.t) || l.t === 'service');
-  for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = '#a9a8a3'; ctx.lineWidth = fahrbahn(l) + 5; ctx.stroke(); }
-  for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = m.asphalt; ctx.lineWidth = fahrbahn(l); ctx.stroke(); }
+  const KANTE = 0.8, ROH = 2.0;   // Abweichung in Pixeln (8 px = 1 m)
+  for (const l of fahr) {
+    const d = dichtL(l, v), fb = fahrbahn(l);
+    if (l.kerb) {
+      const hell = new Path2D(), dunkel = new Path2D(), luecke = new Path2D();
+      for (const seite of [1, -1]) {
+        const sd = seedKante(l, seite), comp = [[KANTE, sd, WL]];
+        const innen = wandern(d, seite * (fb / 2 - 3), comp), aussen = wandern(d, seite * (fb / 2 + 2.5), comp);
+        bandPfad(ctx, innen, aussen); ctx.fillStyle = '#a9a8a3'; ctx.fill();
+        for (let j = 0; j < d.n - 1; j++) {
+          const h = hash(l.id * 1999 + j * 7 + (seite > 0 ? 0 : 3)), q = hash(l.id * 811 + j * 11 + (seite > 0 ? 1 : 2));
+          const Pf = h < 0.1 ? hell : h > 0.93 ? dunkel : q < 0.025 ? luecke : null;
+          if (!Pf) continue;
+          const a = wandern1(d, j, seite * (fb / 2 + 1.2), comp), b = wandern1(d, j + 1, seite * (fb / 2 + 1.2), comp);
+          Pf.moveTo(a[0], a[1]); Pf.lineTo(b[0], b[1]);
+        }
+      }
+      ctx.lineCap = 'butt'; ctx.lineWidth = 2.4;
+      ctx.strokeStyle = 'rgba(255,255,250,.3)'; ctx.stroke(hell);
+      ctx.strokeStyle = 'rgba(70,66,58,.32)'; ctx.stroke(dunkel);
+      ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(96,86,66,.6)'; ctx.stroke(luecke);
+      ctx.lineCap = 'round';
+    } else {
+      // weicher Übergang: drei flache Schichten Erdton unter dem Asphalt (Verlauf ~0,5 m), danach Ausfransungen
+      for (const seite of [1, -1]) {
+        const sd = seedKante(l, seite), comp = [[ROH, sd, WL], [0.7, sd + 50, 29]], innen = wandern(d, seite * (fb / 2 - 3), []);
+        for (const [zu, al] of [[4.8, 0.07], [3.2, 0.10], [1.6, 0.14]]) {
+          bandPfad(ctx, innen, wandern(d, seite * (fb / 2 + zu), comp)); ctx.fillStyle = `rgba(112,100,76,${al})`; ctx.fill();
+        }
+      }
+    }
+  }
+  for (const l of fahr) {
+    const d = dichtL(l, v), fb = fahrbahn(l), amp = l.kerb ? KANTE : ROH;
+    const extra = s1 => l.kerb ? [] : [[0.7, s1 + 50, 29]];
+    const li = wandern(d, fb / 2, [[amp, seedKante(l, 1), WL], ...extra(seedKante(l, 1))]);
+    const re = wandern(d, -fb / 2, [[amp, seedKante(l, -1), WL], ...extra(seedKante(l, -1))]);
+    bandPfad(ctx, re, li); ctx.fillStyle = m.asphalt; ctx.fill();
+    // Enden ohne Anschluss (Sackgasse) rund abschließen
+    for (const p of [l.pts[0], l.pts[l.pts.length - 1]]) if ((v.knoten.get(knotenSchluessel(p)) ?? 0) <= 1) { ctx.beginPath(); ctx.arc(p[0], p[1], fb / 2, 0, Math.PI * 2); ctx.fillStyle = m.asphalt; ctx.fill(); }
+  }
   // Fahrspur-Verschleiß: Rollspuren etwas heller und glatter, der Mittelstreifen dazwischen dunkler (Öl); nur auf breiten Straßen
   for (const l of fahr) {
     const fb = fahrbahn(l); if (fb < 30) continue;
     pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = fb * 0.72; ctx.stroke();
     pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = fb * 0.2; ctx.stroke();
+  }
+  // Schmutz- und Laubsaum dunkler entlang der Bordsteine
+  for (const l of fahr) {
+    if (!l.kerb) continue;
+    const d = dichtL(l, v), fb = fahrbahn(l), laub = new Path2D();
+    for (const seite of [1, -1]) {
+      const sd = seedKante(l, seite), comp = [[KANTE, sd, WL]];
+      const aussen = wandern(d, seite * (fb / 2), comp), innen = wandern(d, seite * (fb / 2 - 3.2), [[KANTE, sd, WL], [1.1, sd + 70, 41]]);
+      bandPfad(ctx, innen, aussen); ctx.fillStyle = 'rgba(38,32,22,.13)'; ctx.fill();
+      for (let j = 0; j < d.n; j++) {
+        const h = hash(l.id * 6007 + j * 9 + (seite > 0 ? 0 : 4));
+        if (h > 0.05) continue;
+        const [px, py] = wandern1(d, j, seite * (fb / 2 - 1.2 - h * 40), comp); laub.rect(px, py, 1.6, 1.3);
+      }
+    }
+    ctx.fillStyle = 'rgba(118,90,44,.4)'; ctx.fill(laub);
+  }
+  // Ecken: Kantenbogen (Bordstein), dann Fahrbahn bis zum Bogen
+  for (const e of v.ecken) {
+    if (e.gruppe !== 'fahr' || !schneidet(e.box, r)) continue;
+    if (e.kerb) { ctx.lineCap = 'butt'; ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r, e.aT, e.aB, e.acw); ctx.strokeStyle = '#a9a8a3'; ctx.lineWidth = 5; ctx.stroke(); ctx.lineCap = 'round'; }
+    eckPfad(ctx, e); ctx.fillStyle = m.asphalt; ctx.fill();
+    if (e.kerb) { ctx.lineCap = 'butt'; ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r - 1.6, e.aT, e.aB, e.acw); ctx.strokeStyle = 'rgba(38,32,22,.13)'; ctx.lineWidth = 3.2; ctx.stroke(); ctx.lineCap = 'round'; }
+  }
+  // Ausfransungen am weichen Rand (kleine Asphaltzungen, Erdkrümel)
+  for (const l of fahr) {
+    if (l.kerb) continue;
+    const d = dichtL(l, v), fb = fahrbahn(l), zunge = new Path2D(), krumen = new Path2D();
+    for (const seite of [1, -1]) {
+      const sd = seedKante(l, seite), comp = [[ROH, sd, WL], [0.7, sd + 50, 29]];
+      for (let j = 0; j < d.n; j++) {
+        const h = hash(l.id * 4001 + j * 13 + (seite > 0 ? 0 : 7));
+        if (h > 0.3 || d.f[j] < 0.5) continue;
+        const [px, py] = wandern1(d, j, seite * (fb / 2 + (h * 3 - 0.2)), comp), rr = 0.8 + hash(l.id * 17 + j * 5) * 1.0;
+        if (h < 0.17) { zunge.moveTo(px + rr, py); zunge.arc(px, py, rr, 0, Math.PI * 2); } else krumen.rect(px, py, 1, 1);
+      }
+    }
+    ctx.fillStyle = 'rgba(78,76,72,.6)'; ctx.fill(zunge); ctx.fillStyle = 'rgba(122,106,78,.4)'; ctx.fill(krumen);
   }
   // 3a. Zebrastreifen (amtliche Karte, OSM crossing=zebra/marked): weiße Balken längs zur Fahrbahn, nebeneinander über die ganze Fahrbahnbreite
   for (const z of welt.vektor?.zebra ?? []) {
@@ -573,14 +850,26 @@ export function zeichneStrassen(ctx, welt, rect) {
   if (welt.vektor?.strassen) zeichneBuchten(ctx, welt, r, m);
   // 4. Straßennamen leicht sichtbar auf der Fahrbahn (B 11, St 2369 als Nummer dazu)
   strassenNamen(ctx, v, r);
-  // 5. Mittellinie nur auf großen Straßen
+  // 5. Mittellinie nur auf großen Straßen: leicht verblasste, unterbrochene Striche (Alpha schwankt, kleine Fehlstellen)
+  ctx.lineCap = 'butt'; ctx.lineWidth = 1.8;
   for (const l of hier) {
     if (!MITTELLINIE.has(l.t)) continue;
-    pfad(ctx, l.pts);
-    ctx.setLineDash([14, 14]); ctx.lineCap = 'butt';
-    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.8; ctx.stroke();
-    ctx.setLineDash([]); ctx.lineCap = 'round';
+    const d = dichtL(l, v), gesamt = d.s[d.n - 1];
+    for (let k = 0, s0 = 0; s0 < gesamt; k++, s0 += 28) {
+      const h = hash(l.id * 7001 + k), q = hash(l.id * 3001 + k * 3);
+      if (h < 0.06) continue;                                   // Strich fast ganz abgetragen
+      const von = s0 + q * 1.5, bis = Math.min(gesamt, s0 + 14 - hash(l.id * 5003 + k) * 2.5);
+      const luecke = hash(l.id * 9001 + k) > 0.72 ? [von + 3 + q * 5, von + 5.5 + q * 5] : null;
+      ctx.strokeStyle = `rgba(255,255,255,${(0.34 + 0.24 * hash(l.id * 1301 + k * 7)).toFixed(3)})`;
+      for (const [a0, a1] of luecke ? [[von, luecke[0]], [luecke[1], bis]] : [[von, bis]]) {
+        if (a1 - a0 < 1) continue;
+        const sub = pfadAb(d, a0, a1); if (!sub) continue;
+        ctx.beginPath(); ctx.moveTo(sub[0][0], sub[0][1]); for (let i = 1; i < sub.length; i++) ctx.lineTo(sub[i][0], sub[i][1]);
+        ctx.stroke();
+      }
+    }
   }
+  ctx.lineCap = 'round';
   ctx.restore();
 }
 
