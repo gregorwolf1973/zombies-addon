@@ -37,7 +37,7 @@ export function nebelDichte(vergangen, dauer) {
 }
 
 // Faktor für die Sicht der Zombies: 1 ohne Nebel, bei voller Dichte zombieProzent/100
-export const zombieSichtFaktor = (dichte, zombieProzent = NEBEL_VORGABE.zombie) => 1 - Math.max(0, Math.min(1, dichte)) * (1 - zahl(zombieProzent, 10, 100, 50) / 100);
+export const zombieSichtFaktor = (dichte, zombieProzent = NEBEL_VORGABE.zombie) => 1 - Math.max(0, Math.min(1, dichte || 0)) * (1 - zahl(zombieProzent, 10, 100, 50) / 100);
 
 // liegt `marke` (Minute am Tag) im Schritt von `vorher` nach `jetzt` (über Mitternacht gerechnet)?
 export function kreuzt(vorher, jetzt, marke) {
