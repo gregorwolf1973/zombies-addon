@@ -91,7 +91,8 @@ let vorladeLauf = 0;
 const VORLADE_PAUSE_MS = 6000;
 function vorladen() {
   const lauf = ++vorladeLauf;
-  const liste = [...new Set(Object.entries(zuordnung).filter(([id]) => !id.startsWith('musik')).flatMap(([, t]) => t?.dateien ?? []))];
+  const rang = id => /^schuss/.test(id) ? 0 : /^(zombieTod|weg)/.test(id) ? 1 : /^huelse/.test(id) ? 2 : /tuer|tür/i.test(id) ? 3 : 4;   // Rückmeldung zum eigenen Handeln zuerst
+  const liste = [...new Set(Object.entries(zuordnung).filter(([id]) => !id.startsWith('musik')).sort((a, b) => rang(a[0]) - rang(b[0])).flatMap(([, t]) => t?.dateien ?? []))];
   const weiter = () => {
     if (lauf !== vorladeLauf) return;   // neue Zuordnung: neuer Durchlauf
     const d = liste.shift();
@@ -106,7 +107,7 @@ const geladen = d => { const b = puffer.get(d); return b instanceof AudioBuffer 
 // ---------- Stimmenbegrenzung: bei vielen Zombies nicht alles gleichzeitig ----------
 const MAX_STIMMEN = 10, MAX_ZOMBIE_STIMMEN = 5;
 const ZOMBIE_IDS = new Set(['entdeckt', 'kriecher', 'stoehnen', 'zombieTod', 'zombielandTag', 'zombielandNacht']);
-const MIN_ABSTAND = { entdeckt: 3000, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 500, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, wimmern: 4000, soldatRuf: 8000, hundBellen: 2500, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
+const MIN_ABSTAND = { entdeckt: 3000, zombielandTag: 1500, zombielandNacht: 1500, zombieTod: 120, stoehnen: 250, kriecher: 400, menschGebissen: 300, hilferufe: 5000, wimmern: 4000, soldatRuf: 8000, hundBellen: 2500, krankenwagen: 60000, truheLeer: 400 };   // ms je Ereignis-ID
 const stimmen = [];            // laufende Einzel-Geräusche aus Dateien: { ende (s), v, zombie, g, src }
 const zuletzt = new Map();     // Ereignis-ID → Zeitpunkt (ms) des letzten Abspielens
 
@@ -135,6 +136,7 @@ function probe(id, x, y, extra = 1) {
   if (!ctx || !t?.dateien?.length) return false;
   weckeKontext();
   if (zombieStumm(id)) return true;   // Zahnrad: Zombiegeräusche aus – auch kein Ersatzton
+  if (ctx.state !== 'running') return true;   // Kontext schläft: Ereignis verwerfen, kein Ersatzton, keine Warteschlange
   const bereit = t.dateien.map(geladen).filter(Boolean);
   if (!bereit.length) { t.dateien.forEach(laden); return false; }
   if (!abstandOk(id)) return true;   // zu kurz nach dem letzten: verworfen, auch kein Ersatzton
@@ -273,7 +275,7 @@ function weckeKontext() {
   try { Promise.resolve(ctx.resume?.()).catch(() => {}); } catch { /* egal */ }
 }
 // bei jeder Nutzergeste (dauerhaft, nicht nur bis der Ton das erste Mal lief): gesperrten/unterbrochenen Kontext wieder starten
-for (const a of ['pointerdown', 'touchend', 'mousedown', 'keydown', 'click']) document.addEventListener(a, () => { weckT = 0; weckeKontext(); }, true);
+for (const a of ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'keydown', 'click']) document.addEventListener(a, () => { weckT = 0; weckeKontext(); }, true);
 
 // erst nach einer Berührung/einem Klick erlaubt der Browser Ton
 export function tonStarten() {
@@ -281,6 +283,8 @@ export function tonStarten() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* egal */ }   // iOS: Ton trotz Stummschalter, nicht als „Umgebungston“ unterbrechen
+  try { ctx.onstatechange = () => { stimmen.length = 0; }; } catch { /* egal */ }   // Zustandswechsel: alte Stimmen belegen keinen Platz mehr
   haupt = ctx.createGain(); haupt.gain.value = pegelEffekt(); haupt.connect(ctx.destination);
   musikAusgang = ctx.createGain(); musikAusgang.gain.value = pegel(); musikAusgang.connect(ctx.destination);
   musikBus = ctx.createGain(); musikBus.gain.value = musikEin.laut / 100; musikBus.connect(musikAusgang);
@@ -321,6 +325,7 @@ const endlich = (v, ersatz = 0) => Number.isFinite(v) ? v : ersatz;
 function ort(x, y, laut = 1) {
   if (!ctx || stufe === 0) return null;
   weckeKontext();
+  if (ctx.state !== 'running') return null;   // gesperrt/unterbrochen: nichts einreihen (sonst prasselt beim Aufwachen alles auf einmal los)
   let v = laut, pan = 0;
   if (x != null) {
     if (!hoerBekanntSeit || performance.now() - hoerBekanntSeit < 2000) return null;   // Hörer unbekannt (0/0) → sonst volle Lautstärke aus dem Nichts

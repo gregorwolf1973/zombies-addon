@@ -70,3 +70,30 @@ test('gesperrter AudioContext wird bei Nutzung geweckt', () => {
   ton.schuss(300, 200, 1, 'pistole');
   assert.ok(zaehler.resume > r, 'resume() nicht aufgerufen');
 });
+
+test('Betreten und Schuss im selben Tick: eigener Schuss- und Todeston starten trotz alter Ebene/fernem Hörer', async () => {
+  const { ortFuer } = await import('../client/ton_regeln.mjs');
+  FakeCtx.letzte.state = 'running';
+  ton.toeneZuordnen({ schussPistole: { dateien: ['a.wav'], laut: 80 }, zombieTod: { dateien: ['a.wav'], laut: 80 } });
+  zeitVersatz += 1000;
+  ton.hoerer(9000, 9000);   // Hörer noch draußen, weit weg von den Innenraum-Koordinaten des Schusses
+  // Server-Nachrichten: Schuss und Tod in neuer Ebene 'h5eg', Hörer-Ebene im Patch noch ''
+  const schuss = { x1: 300, y1: 200, ebene: 'h5eg', von: 'ich' }, weg = { x: 305, y: 204, ebene: 'h5eg', von: 'ich' };
+  const o1 = ortFuer(schuss, 'ich', '', schuss.x1, schuss.y1), o2 = ortFuer(weg, 'ich', '', weg.x, weg.y);
+  assert.ok(o1.spielen && o2.spielen && o1.x === null && o2.x === null);
+  let s = zaehler.starts; ton.schuss(o1.x, o1.y, 1, 'pistole'); assert.ok(zaehler.starts > s, 'eigener Schuss still');
+  s = zaehler.starts; ton.zombieWeg(o2.x, o2.y); assert.ok(zaehler.starts > s, 'eigener Todeston still');
+  // fremder Schuss in anderer Ebene: verworfen
+  assert.equal(ortFuer({ ...schuss, von: 'anderer' }, 'ich', '', 300, 200).spielen, false);
+  assert.equal(ortFuer({ x: 1, y: 2 }, 'ich', 'h5eg', 1, 2).spielen, true, 'Nachricht ohne Ebene bleibt hörbar');
+  // Todeston kurz hintereinander (Mindestabstand 120 ms)
+  zeitVersatz += 150; s = zaehler.starts; ton.zombieWeg(null, null); assert.ok(zaehler.starts > s, 'zweiter Todeston nach 150 ms still');
+});
+
+test('schlafender AudioContext: nichts wird eingereiht', () => {
+  FakeCtx.letzte.state = 'suspended';
+  zeitVersatz += 1000;
+  const s = zaehler.starts; ton.schuss(null, null, 1, 'pistole'); ton.stoss(null, null, false);
+  assert.equal(zaehler.starts, s);
+  FakeCtx.letzte.state = 'running';
+});

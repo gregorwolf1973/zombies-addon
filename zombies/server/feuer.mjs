@@ -95,7 +95,7 @@ export class Brandstifter {
     if (ziel.fz) { const vi = this.raum.verkehr?.info.get(ziel.fz); if (vi) vi.brennt = true; }
     // Knall und Lärm locken Zombies an; die Feuerwehr rückt aus
     this.raum.laerm(f.x, f.y, ziel.art === 'haus' ? 380 : 520, true, '');
-    this.raum.broadcast('feuer', { x: f.x, y: f.y, art: ziel.art });
+    this.raum.broadcast('feuer', { x: f.x, y: f.y, art: ziel.art, ebene: '' });
     this.raum.broadcast('meldung', { text: ziel.art === 'haus' ? '🔥 Ein Haus brennt!' : '🔥 Ein Fahrzeug ist in Flammen aufgegangen!' });
     // Feuerwehr rückt aus: bei „selten“ nur zu etwa 30 %, bei „normal“ zu 60 %, bei „aus“ nie
     const modus = this.raum.einstellungen?.().blaulicht ?? 'selten';

@@ -55,6 +55,7 @@ import { fundZeigen, fundZu, fundPruefen } from './fundliste.mjs';
 import { alleKandidaten } from './durchsuche_alle.mjs';
 import * as sprache from './sprache.mjs';
 import { merkzettelAnschliessen, merkzettelErwarten } from './merkzettel.mjs';
+import { istEigen, hoertEbene as hoertEbeneRegel } from './ton_regeln.mjs';
 import { GERAET_SCHLUESSEL, kartenbildLesen, stimmenFaktorLesen, anAusLesen, schiessModusLesen, feuerErlaubt as feuerErlaubtRegel } from './einstellungen_regeln.mjs';
 import { fkStart } from './faehigkeiten.mjs';
 import { startwahlStart } from './startwahl.mjs';
@@ -1035,6 +1036,7 @@ class Ort extends Phaser.Scene {
       for (const [id, o] of this.figuren) if (id !== meineId && Math.hypot(o.x - x, o.y - y) < dich) return null;   // ein Mitspieler steht näher
       return f;
     };
+    const hoertEbene = m => hoertEbeneRegel(m, raum.state.spieler.get(meineId)?.ebene);   // Koordinaten gelten nur in derselben Ebene (draußen / Haus / Stockwerk)
     raum.onMessage('schuss', m => {
       const eigen = eigeneTreffer(m.x1, m.y1);
       const fs = eigen ?? naechsteFigur(m.x1, m.y1); if (fs) { fs.schussBis = this.time.now + 150; fs.zielW = Math.atan2(m.y2 - m.y1, m.x2 - m.x1); fs.zielBis = this.time.now + 300; }   // Körper dreht nur kurz zum Ziel
@@ -1043,8 +1045,16 @@ class Ort extends Phaser.Scene {
       fetzenBeiSchuss(this, zombieKarte().values(), m);
       // Schrot kommt als mehrere Linien – nur ein Knall
       const jetzt = performance.now();
-      const gleicheEbene = m.ebene === undefined || (m.ebene ?? '') === (raum.state.spieler.get(meineId)?.ebene ?? '');   // Koordinaten gelten nur in derselben Ebene (draußen / Haus / Stockwerk)
-      if (gleicheEbene && jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'scharfschuetze' ? 1.8 : m.art === 'armbrust' ? 0.3 : m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp' && m.art !== 'armbrust') ton.huelse(m.x1, m.y1); }
+      const ichSchuetze = istEigen(m, meineId);   // eigener Schuss: immer hörbar, am eigenen Helden (die Ebene im Patch kann dem Server noch hinterherhinken)
+      const gleicheEbene = ichSchuetze || hoertEbene(m);
+      const knallKey = m.von ?? '';
+      this.letzterKnall ??= new Map();
+      if (gleicheEbene && jetzt - (this.letzterKnall.get(knallKey) ?? 0) > 60) {
+        const px = ichSchuetze ? null : m.x1, py = ichSchuetze ? null : m.y1;
+        ton.schuss(px, py, m.art === 'scharfschuetze' ? 1.8 : m.art === 'armbrust' ? 0.3 : m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art);
+        this.letzterKnall.set(knallKey, jetzt);
+        if (m.ebene && m.art !== 'mg' && m.art !== 'mp' && m.art !== 'armbrust') ton.huelse(px, py);
+      }
     });
     raum.onMessage('bwschuss', m => m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
@@ -1061,11 +1071,11 @@ class Ort extends Phaser.Scene {
     raum.onMessage('radioWeg', m => this.radioAnz.weg(m));
     raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, zombieKarte().values(), m.x, m.y, m.r ?? 40); });
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
-    raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) { fs.schlagBis = this.time.now + 400; if (typeof m.w === 'number') { fs.zielW = m.w; fs.zielBis = this.time.now + 400; } } if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); ton.stoss(m.x, m.y, m.messer); });
-    raum.onMessage('feuer', m => { if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
-    raum.onMessage('krach', m => { if (!ton.ereignis('krach', m.x, m.y)) { ton.schuss(m.x, m.y, 1.8); ton.stoss(m.x, m.y, false); } this.krachEffekt(m.x, m.y); });
+    raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) { fs.schlagBis = this.time.now + 400; if (typeof m.w === 'number') { fs.zielW = m.w; fs.zielBis = this.time.now + 400; } } if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); if (istEigen(m, meineId)) ton.stoss(null, null, m.messer); else if (hoertEbene(m)) ton.stoss(m.x, m.y, m.messer); });
+    raum.onMessage('feuer', m => { if (hoertEbene(m)) if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
+    raum.onMessage('krach', m => { if (hoertEbene(m) && !ton.ereignis('krach', m.x, m.y)) { ton.schuss(m.x, m.y, 1.8); ton.stoss(m.x, m.y, false); } this.krachEffekt(m.x, m.y); });
     raum.onMessage('blech', m => { if (!ton.ereignis('blech', m.x, m.y)) ton.stoss(m.x, m.y, false); });
-    raum.onMessage('menschGebissen', m => { ton.ereignis('menschGebissen', m.x, m.y); });
+    raum.onMessage('menschGebissen', m => { if (hoertEbene(m)) ton.ereignis('menschGebissen', m.x, m.y); });
     raum.onMessage('hundBellen', m => { if ((m.ebene ?? '') === this.aktEbene) ton.hundBellen(m.x, m.y); });
     raum.onMessage('soldatRuf', m => {
       ton.ereignis('soldatRuf', m.x, m.y);
@@ -1086,8 +1096,8 @@ class Ort extends Phaser.Scene {
       }
     });
     raum.onMessage('sirene', () => {});   // die Sirene läuft dauernd am Fahrzeug (fahrzeuge in abgleichen)
-    raum.onMessage('weg', m => { this.puff(m.x, m.y); ton.zombieWeg(m.x, m.y); });
-    raum.onMessage('entdeckt', m => { ton.entdeckt(m.x, m.y); });
+    raum.onMessage('weg', m => { this.puff(m.x, m.y); if (istEigen(m, meineId)) ton.zombieWeg(null, null); else if (hoertEbene(m)) ton.zombieWeg(m.x, m.y); });   // eigener Kill immer hörbar
+    raum.onMessage('entdeckt', m => { if (hoertEbene(m)) ton.entdeckt(m.x, m.y); });
     raum.onMessage('tonEinst', m => ton.toneEinstellungen(m));   // Backend hat Musik/Radio/Horde geändert
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
