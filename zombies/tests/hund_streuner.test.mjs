@@ -33,12 +33,12 @@ test('Grundwert der Einstellung ist automatisch (-1)', () => {
   assert.equal(grundwerte().hund.streuner, -1);
 });
 
-test('Anzahl: automatisch 1 je 0,5 km² (mindestens 1), 0 = keine, fest = fest', async () => {
+test('Anzahl: automatisch 1 je 0,33 km² (mindestens 1, höchstens 20), 0 = keine, fest = fest', async () => {
   const { raum } = await beitreten('Anzahl');
   const h = raum.hunde, b0 = BREITE, h0 = HOEHE;
   try {
-    // Kachel = 4 m, also 16 m²: 500 × 400 Kacheln = 3,2 km² → 6; 64 × 48 → mindestens 1
-    for (const [b, hh, erw] of [[64, 48, 1], [300, 300, 3], [500, 400, 6], [700, 700, 16]]) {
+    // Kachel = 4 m, also 16 m²: 500 × 400 Kacheln = 3,2 km² → 10; 64 × 48 → mindestens 1; 700 × 700 → gedeckelt 20
+    for (const [b, hh, erw] of [[64, 48, 1], [300, 300, 4], [500, 400, 10], [700, 700, 20]]) {
       setzeKartengroesse(b, hh);
       mitEinstellung(-1, () => assert.equal(h.streunerAnzahl(), erw, `${b}x${hh}`));
     }

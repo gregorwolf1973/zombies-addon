@@ -24,7 +24,7 @@ const START_MIN = 40 * PX;           // Streuner entstehen nicht näher am Start
 const NAH_MIN = 100 * PX, NAH_MAX = 300 * PX;   // ein Streuner streunt in dieser Entfernung vom Startpunkt
 const SICHT = 15 * PX;               // so weit sieht ein Streuner einen Spieler (mit freier Sichtlinie) und läuft ihm zu
 const RUF_HOERWEITE = 35 * PX;       // Streuner-Bellen ist so weit zu hören
-const KM2_JE_HUND = 0.5;             // automatische Anzahl: ein Streuner je 0,5 km² Kartenfläche
+const KM2_JE_HUND = 0.33;            // automatische Anzahl: ein Streuner je 0,33 km² Kartenfläche (Geretsried 2 ≈ 7)
 const FOLGE_NAH = 1.5 * PX, FOLGE_FERN = 3 * PX;   // Abstand zum Besitzer: ab FOLGE_FERN läuft er los, bei FOLGE_NAH bleibt er stehen
 const TELEPORT = 30 * PX;            // weiter weg: springt hinter den Besitzer
 const ABLENK_RADIUS = 8 * PX;        // Zombies so nah am Hund können ihn jagen
@@ -66,7 +66,7 @@ export class Hunde {
     const e = this.streunerEinstellung;
     if (e >= 0) return e;
     const km2 = BREITE * HOEHE * KACHEL * KACHEL / (PX * PX) / 1e6;   // Kacheln → m² → km²
-    return Math.max(1, Math.round(km2 / KM2_JE_HUND));
+    return Math.min(20, Math.max(1, Math.round(km2 / KM2_JE_HUND)));
   }
 
   // Beim Start der Welt: Streuner an zufälligen Orten, der erste streunt 100–300 m vom Start

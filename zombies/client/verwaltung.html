@@ -3618,6 +3618,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   gruppe(ausKarte($('toeneKarte'), '🔊 Geräusche'));
   gruppe(ausKarte(karteVon('titelTest'), '🧪 Testwerkzeuge'));
   // Statusanzeige der alten Sammelkarte behalten (schwebt unten rechts), Karte entfernen
+  rein(document.body, $('diagnoseSchalter'));   // mit 'tnDiagnose' vor dem Entfernen der Sammelkarte retten (kommt später nach „Zugang & Test“)
   if (tn) { var st = $('tnStatus'); if (st) document.body.appendChild(st); tn.remove(); }
 
   // ---------- Zahlenfelder statt Schieber ----------
