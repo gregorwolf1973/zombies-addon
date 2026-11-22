@@ -9,6 +9,14 @@ import { hashe, hashGueltig } from './superuser.mjs';
 import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
 import { NEBEL_VORGABE, bereinigeNebel } from './nebel.mjs';
 
+// Vorlage: im Backend eingestellte Werte, die als Vorgabe übernommen wurden (Stand 22.11.2026) – überschreibt die Grundwerte unten.
+// Arrays werden ganz ersetzt. Neu erzeugen: aktuelle /data/einstellungen.json gegen die Grundwerte vergleichen (ohne Hash, Zugangscode, Test).
+const VORLAGE = (() => { try { return JSON.parse(fs.readFileSync(new URL('./vorlage.json', import.meta.url), 'utf8')); } catch { return {}; } })();
+function mischen(a, b) {
+  if (!b || typeof b !== 'object' || Array.isArray(b) || !a || typeof a !== 'object' || Array.isArray(a)) return b === undefined ? a : JSON.parse(JSON.stringify(b));
+  const o = { ...a }; for (const k of Object.keys(b)) o[k] = mischen(a[k], b[k]); return o;
+}
+
 // 'level1' = Zufallswahl für Level 1: bei jedem Start/Levelwechsel auf Level 1 wird Geretsried oder Geretsried 2 gewürfelt (server/aufgaben.mjs, level1Karte)
 export const KARTEN = ['level1', 'geretsried', 'geretsried2', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt', 'dorf'];
 export const LEVEL_WELTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
@@ -333,7 +341,11 @@ export function bereinige(e = {}, alt = {}) {
   };
 }
 
-export function vorgaben() {
+// Unter node --test (NODE_TEST_CONTEXT gesetzt) bleiben die Grundwerte, damit Tests nicht von der Vorlage abhängen.
+export function vorgaben() { return process.env.NODE_TEST_CONTEXT ? grundwerte() : mitVorlage(); }
+export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
+
+export function grundwerte() {
   return {
     superuserHash: '', zugangscode: '', karte: 'level1', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 6, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, innenMassstab: false, innenTempo: 35, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },

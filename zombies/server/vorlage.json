@@ -1,0 +1,467 @@
+{
+ "karte": "geretsried2",
+ "autos": 49,
+ "nachtAb": 1275,
+ "nachtDunkel": 90,
+ "menschenGroesse": 110,
+ "zombieGroesse": 105,
+ "groesseGesamt": 50,
+ "menschen": 200,
+ "verwandlung": 10,
+ "bissSpieler": 10,
+ "bissSpielerLevel": {
+  "geretsried": 50,
+  "isarauen": 25,
+  "koenigsdorf": 20
+ },
+ "feuer": 1.5,
+ "feuerPhase": 60,
+ "verkehr": 20,
+ "verkehrPhase": 30,
+ "blaulicht": "normal",
+ "innenMassstab": true,
+ "reichweite": {
+  "pistole": 12,
+  "gewehr": 35,
+  "schrotflinte": 17,
+  "mp": 20,
+  "mg": 22,
+  "scharfschuetze": 40,
+  "granatwerfer": 25
+ },
+ "waffen": {
+  "pistole": {
+   "schaden": 75,
+   "pause": 0.65
+  },
+  "gewehr": {
+   "schaden": 110,
+   "magazin": 20,
+   "nachlade": 3
+  },
+  "mp": {
+   "schaden": 80,
+   "nachlade": 3
+  },
+  "mg": {
+   "schaden": 92,
+   "nachlade": 5.2
+  },
+  "armbrust": {
+   "pause": 1.14,
+   "magazin": 3
+  },
+  "scharfschuetze": {
+   "nachlade": 2.3
+  },
+  "schrotflinte": {
+   "schaden": 110,
+   "pause": 0.75
+  },
+  "granatwerfer": {
+   "nachlade": 2.5
+  },
+  "handgranate": {
+   "pause": 1
+  },
+  "schlaeger": {
+   "schaden": 70,
+   "pause": 0.62
+  },
+  "sense": {
+   "schaden": 284,
+   "pause": 1.02
+  },
+  "messer": {
+   "schaden": 40,
+   "pause": 0.93
+  },
+  "faust": {
+   "schaden": 26,
+   "pause": 0.65
+  }
+ },
+ "toeneVorbelegt": [
+  "zombieTod",
+  "kriecher",
+  "entdeckt",
+  "stadt",
+  "zombielandTag",
+  "zombielandNacht",
+  "nachteinbruch",
+  "menschGebissen",
+  "sirene",
+  "schussPistole",
+  "schussGewehr",
+  "schussSchrot",
+  "tuerAuf",
+  "tuerZu",
+  "autoVorbei",
+  "autoradio",
+  "startmusik",
+  "funk",
+  "wasser",
+  "durstMann",
+  "durstFrau",
+  "panzerFaehrt",
+  "huelse",
+  "hilferufe",
+  "krankenwagen",
+  "truheLeer",
+  "chatKlingel",
+  "soldatRuf",
+  "horde",
+  "hordeAkzent",
+  "musikLevel5",
+  "musikLevel1",
+  "hundBellen",
+  "durchsageLevel1",
+  "durchsageLevel2",
+  "durchsageLevel3",
+  "durchsageLevel4",
+  "durchsageLevel5"
+ ],
+ "zombies": {
+  "level": [
+   {
+    "grund": 50,
+    "jeSpieler": 5,
+    "horde": 22,
+    "dauer": 10,
+    "pause": 5,
+    "gleichzeitig": 1,
+    "haeuser": 10
+   },
+   {
+    "grund": 50,
+    "jeSpieler": 6,
+    "horde": 28,
+    "dauer": 12,
+    "pause": 4,
+    "gleichzeitig": 1,
+    "haeuser": 11
+   },
+   {
+    "grund": 200,
+    "jeSpieler": 7,
+    "horde": 37,
+    "dauer": 12,
+    "pause": 3,
+    "gleichzeitig": 2,
+    "haeuser": 12
+   },
+   {
+    "grund": 80,
+    "jeSpieler": 8,
+    "horde": 46,
+    "dauer": 15,
+    "pause": 2,
+    "gleichzeitig": 2,
+    "haeuser": 14
+   },
+   {
+    "grund": 100,
+    "jeSpieler": 10,
+    "horde": 56,
+    "dauer": 15,
+    "pause": 1,
+    "gleichzeitig": 2,
+    "haeuser": 16
+   }
+  ],
+  "nacht": 20,
+  "hordeZiel": 7.5,
+  "hordeZieleZeigen": true,
+  "hordeTrupp": 17,
+  "hordeReichweite": 26,
+  "ueberraschung": 5
+ },
+ "nebel": {
+  "morgen": 40,
+  "abend": 25,
+  "zombie": 15
+ },
+ "sprache": {
+  "hoerweite": 50,
+  "drinnenDraussen": 20,
+  "redenLockt": true
+ },
+ "aufgaben": {
+  "stunde": 19,
+  "anzahl": 3
+ },
+ "tueren": {
+  "frei": 45,
+  "raetsel": 80,
+  "schluessel": 55
+ },
+ "bundeswehr": {
+  "pumaPause": 0.1,
+  "mgMunition": 200,
+  "leopardReichweite": 25,
+  "leopardPause": 0.3
+ },
+ "hund": {
+  "ablenkung": 60
+ },
+ "toene": {
+  "zombieTod": {
+   "dateien": [
+    "dragon-studio-zombie-dying-sound-357974.mp3"
+   ],
+   "laut": 60
+  },
+  "kriecher": {
+   "dateien": [
+    "dragon-studio-zombie-sound-2-357976.mp3"
+   ],
+   "laut": 57
+  },
+  "stoehnen": {
+   "dateien": [
+    "dragon-studio-zombie-dying-sound-357974.mp3"
+   ],
+   "laut": 70
+  },
+  "entdeckt": {
+   "dateien": [
+    "freesound_community-monster-zombie-scream-105972.mp3",
+    "dragon-studio-zombie-screech-sound-effect-312865.mp3"
+   ],
+   "laut": 65
+  },
+  "horde": {
+   "dateien": [
+    "zombie-horde-growls-and-snarls-7c0b158d.mp3",
+    "alice_soundz-zombie-sound-224167.mp3"
+   ]
+  },
+  "hordeAkzent": {
+   "dateien": [
+    "freesound_community-zombie-horde-87204.mp3"
+   ]
+  },
+  "stadt": {
+   "dateien": [
+    "stadt-ferne-autos.mp3"
+   ],
+   "laut": 84
+  },
+  "zombielandTag": {
+   "dateien": [
+    "dragon-studio-zombie-sound-357975.mp3",
+    "dragon-studio-zombie-sound-2-357976.mp3",
+    "dragon-studio-zombie-sfx-450450.mp3",
+    "freesound_community-monster-zombie-scream-105972.mp3",
+    "wasser-schnell.mp3"
+   ],
+   "laut": 61
+  },
+  "zombielandNacht": {
+   "dateien": [
+    "dragon-studio-female-zombie-screams-324744.mp3",
+    "dragon-studio-zombie-scream-324752.mp3",
+    "dragon-studio-zombie-screech-sound-effect-312865.mp3",
+    "dragon-studio-zombie-sfx-450450.mp3",
+    "dragon-studio-zombie-sound-357975.mp3",
+    "dragon-studio-zombie-sound-2-357976.mp3"
+   ],
+   "laut": 63
+  },
+  "nachteinbruch": {
+   "dateien": [
+    "dragon-studio-zombie-screech-sound-effect-312865.mp3"
+   ],
+   "laut": 100
+  },
+  "menschGebissen": {
+   "dateien": [
+    "dragon-studio-woman-screaming-sfx-screaming-sound-effect-320169.mp3"
+   ],
+   "laut": 70
+  },
+  "sirene": {
+   "dateien": [
+    "olenchic-alarm-110066.mp3"
+   ],
+   "laut": 50
+  },
+  "hilferufe": {
+   "dateien": [
+    "hilferufe.mp3"
+   ],
+   "laut": 54
+  },
+  "krankenwagen": {
+   "dateien": [
+    "krankenwagen.mp3"
+   ],
+   "laut": 65
+  },
+  "truheLeer": {
+   "dateien": [
+    "truhe_leer.mp3"
+   ],
+   "laut": 38
+  },
+  "feuer": {
+   "laut": 100
+  },
+  "schussPistole": {
+   "dateien": [
+    "mrfriends-pistol-shot-233473.mp3"
+   ],
+   "laut": 30
+  },
+  "schussGewehr": {
+   "dateien": [
+    "flutie8211-gun-shot-and-echo-549910.mp3"
+   ],
+   "laut": 78
+  },
+  "schussSchrot": {
+   "dateien": [
+    "universfield-gunshot-352466.mp3"
+   ],
+   "laut": 100
+  },
+  "tuerAuf": {
+   "dateien": [
+    "dragon-studio-door-opening-454242.mp3",
+    "dragon-studio-open-door-stock-sfx-454246.mp3",
+    "soundreality-opening-door-411632.mp3"
+   ],
+   "laut": 60
+  },
+  "tuerZu": {
+   "dateien": [
+    "dragon-studio-door-slam-478362.mp3"
+   ],
+   "laut": 55
+  },
+  "autoVorbei": {
+   "dateien": [
+    "tanweraman-car-pass-by-337871.mp3"
+   ],
+   "laut": 76
+  },
+  "durchsageLevel1": {
+   "dateien": [
+    "eilmeldung_geretsried_mann.mp3",
+    "eilmeldung_geretsried_frau.mp3"
+   ]
+  },
+  "durchsageLevel2": {
+   "dateien": [
+    "eilmeldung_geretsried_mann.mp3",
+    "eilmeldung_geretsried_frau.mp3"
+   ]
+  },
+  "autoradio": {
+   "laut": 76
+  },
+  "startmusik": {
+   "laut": 84
+  },
+  "soldatRuf": {
+   "dateien": [
+    "soldat_halt_stehen_bleiben.wav",
+    "soldat_keine_bewegung.wav"
+   ],
+   "laut": 95
+  },
+  "funk": {
+   "dateien": [
+    "alexis_gaming_cam-radio-338296.mp3"
+   ],
+   "laut": 62
+  },
+  "wasser": {
+   "dateien": [
+    "freesound_community-wasser-kleiner-bach4-31822.mp3",
+    "wasser-schnell.mp3"
+   ],
+   "laut": 74
+  },
+  "durstMann": {
+   "dateien": [
+    "durst-mann.mp3"
+   ],
+   "laut": 70
+  },
+  "durstFrau": {
+   "dateien": [
+    "durst-frau.mp3"
+   ],
+   "laut": 70
+  },
+  "panzerFaehrt": {
+   "dateien": [
+    "u_3rdmeaw7un-tank-track-ratteling-197409.mp3"
+   ],
+   "laut": 50
+  },
+  "chatKlingel": {
+   "dateien": [
+    "freesound_community-samsung-whistle-soundalike-105086.mp3"
+   ],
+   "laut": 100
+  },
+  "radio": {
+   "dateien": [
+    "alex-morgan-car-car-music-545487.mp3"
+   ]
+  },
+  "hundBellen": {
+   "dateien": [
+    "dragon-studio-free-dog-bark-419014.mp3",
+    "dragon-studio-dog-bark-382732.mp3"
+   ]
+  },
+  "huelse": {
+   "dateien": [
+    "freesound_community-12-gauge-shell-drop-47604.mp3"
+   ],
+   "laut": 100
+  },
+  "musikLevel1": {
+   "dateien": [
+    "bombinsound-relaxing-romantic-chill-version-7-devil-eyes-632524.mp3",
+    "pink_sound-illusion-drill-hip-hop-background-music-for-video-34-second-580219.mp3"
+   ]
+  },
+  "musikLevel3": {
+   "dateien": [
+    "twowingbeats-hiding-from-zombies-soundtrack-236663.mp3"
+   ]
+  },
+  "musikLevel4": {
+   "dateien": [
+    "maittre-overdrive-ccby3.mp3"
+   ]
+  },
+  "musikLevel5": {
+   "dateien": [
+    "franzian-deo-apocalypse-469581.mp3"
+   ]
+  },
+  "musikLager": {
+   "dateien": [
+    "hriday-talur-dominion-ccby3.mp3"
+   ]
+  },
+  "musikHorde": {
+   "dateien": [
+    "geoffharvey-infestation-382980.mp3"
+   ]
+  }
+ },
+ "toeneHorde": {
+  "voll": 35
+ },
+ "radioStream": {
+  "an": true,
+  "url": "https://dispatcher.rndfnk.com/br/br3/live/mp3/mid",
+  "name": "Bayern 3"
+ }
+}
