@@ -1386,7 +1386,7 @@ export class SpielRaum extends Room {
 
   // ---------- Aktionen der Spieler ----------
 
-  kontext(p) {
+  kontext(p, x = null) {
     if (p.unten || p.zombie > 0 || this.state.phase !== 'spiel') return null;
     const welt = this.wv(p.ebene);
     const safe = safeRoomVon(this.welt, p);
@@ -1426,6 +1426,8 @@ export class SpielRaum extends Room {
       if (d >= bd) continue;
       const zustand = this.state.behaelter.get(b.id);
       if (zustand && zustand.rest === 0) continue;
+      // Munitionskiste, die für DIESEN Spieler schon leer ist (der Client blendet sie aus): die danebenstehende nächste nehmen
+      if (b.art === 'bw_kiste' && x && this.inhalte.get(b.id + '@' + (x.spielerId ?? x.sid ?? ''))?.length === 0) continue;
       if (b.art !== 'bus' && !sichtfrei(welt, p.x, p.y, b.x, b.y) && !p.ebene) continue;
       bd = d; best = b;
     }
@@ -2029,7 +2031,7 @@ export class SpielRaum extends Room {
     if (!p || !x || p.aktion || p.kamera) return;   // Kameraflug: keine Aktionen
     if (p.anBord) return void this.aufgaben?.aussteigen(client.sessionId);   // an Bord: die Aktionstaste steigt aus
     // zweite Taste: die andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
-    const k = zweit ? (p.unten || p.zombie > 0 || this.state.phase !== 'spiel' ? null : this.tuerKontext(p, 'zweit')) : this.kontext(p);
+    const k = zweit ? (p.unten || p.zombie > 0 || this.state.phase !== 'spiel' ? null : this.tuerKontext(p, 'zweit')) : this.kontext(p, x);
     if (!k) return;
     if (k.art === 'raetsel') return this.stelleRaetsel(client);
     if (k.art === 'schlossraetsel') return this.stelleRaetsel(client, { art: 'tuer', key: k.key, tuer: k.tuer, ebene: k.ebene });
