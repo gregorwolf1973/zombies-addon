@@ -75,6 +75,7 @@ import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
 import { NetzPuffer, nachSeq, ausStufe, verzFuerServer, naheAnzeigeVerz } from './netzpuffer.mjs';
 import { STICK_TOT, STICK_WEG, stickWert } from './stick.mjs';
 import { Sammler, geraetTyp } from './diagnose.mjs';
+import { wrackAnimieren } from './wrack.mjs';
 import { dingIcon, dingHtml, setzeDingListe, dingRahmen, hatDingBild } from './dingbild.mjs';
 
 const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
@@ -1837,7 +1838,7 @@ class Ort extends Phaser.Scene {
     } else if (art === 'wrack') {
       autoVonOben(c, { x: breit / 2, y: hoch / 2, senkrecht: false, farbe: 4, gezeichnet: true, ohneSchatten: true });
       c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(30,20,15,.8)'; c.fillRect(0, 0, breit, hoch);
-      c.fillStyle = 'rgba(120,60,20,.5)'; for (let i = 0; i < 12; i++) c.fillRect(8 + Math.random() * 44, 8 + Math.random() * 18, 3, 3);
+      c.fillStyle = 'rgba(120,60,20,.5)'; for (let i = 0; i < 12; i++) c.fillRect(8 + ((i * 7919 + 13) % 997) / 997 * 44, 8 + ((i * 4177 + 5) % 991) / 991 * 18, 3, 3);   // feste Flecken (gleich bei allen Clients)
       c.globalCompositeOperation = 'source-over';
     } else {
       const f = art === 'polizei' ? 2 : farbe;
@@ -2665,6 +2666,7 @@ class Ort extends Phaser.Scene {
         }
         o.vorher = d;
       }
+      wrackAnimieren(this, o, id, f, dt, this.lokal, this.aktEbene);   // ausgebrannte Autos: Glut, Dauerqualm, Ruß (wrack.mjs)
       // Rauch über einem verunglückten Fahrzeug (Server setzt Fahrzeug.rauch bis das Feuer erloschen ist)
       if (f.rauch && !this.aktEbene && this.lokal && Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y) < 900) {
         o.rauchUhr = (o.rauchUhr ?? 0) - dt;
@@ -2712,7 +2714,7 @@ class Ort extends Phaser.Scene {
     }
     for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id) || s.fahrzeuge.get(id).art === 'wrack') {
       ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); ton.sireneStoppen(o.kette); o.sirene = o.radio = o.kette = null;
-      if (!s.fahrzeuge?.has(id)) { o.box.destroy(); o.sch?.destroy(); this.busObj.delete(id); }
+      if (!s.fahrzeuge?.has(id)) { o.box.destroy(); o.sch?.destroy(); o.russ?.destroy(); this.busObj.delete(id); }
     }
     this.parktRadios(s, dt);
     this.feuerDarstellen(s);
