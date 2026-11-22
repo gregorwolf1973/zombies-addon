@@ -97,3 +97,19 @@ test('schlafender AudioContext: nichts wird eingereiht', () => {
   assert.equal(zaehler.starts, s);
   FakeCtx.letzte.state = 'running';
 });
+
+test('Kanone ohne eigene Datei nutzt die Schrot-Datei, eigene Datei hat Vorrang', async () => {
+  ladeModus = 'ok';
+  ton.toeneZuordnen({ schussSchrot: { dateien: ['s.wav'], laut: 10 }, kanone: { dateien: [], laut: 200 } });
+  zeitVersatz += 6000; ton.hoerer(5000, 4000);
+  zeitVersatz += 3000; ton.kanone(5000, 4000);
+  await warte(20); zeitVersatz += 6000;
+  const v = zaehler.starts;
+  ton.kanone(5000, 4000);
+  assert.ok(zaehler.starts > v, 'Schrot-Datei wird für die Kanone nicht abgespielt');
+  ton.toeneZuordnen({ schussSchrot: { dateien: ['s.wav'], laut: 10 }, kanone: { dateien: ['k.wav'], laut: 200 } });
+  ton.kanone(5000, 4000); await warte(20); zeitVersatz += 6000;
+  const w = zaehler.starts;
+  ton.kanone(5000, 4000);
+  assert.ok(zaehler.starts > w, 'eigene Kanonen-Datei wird nicht abgespielt');
+});

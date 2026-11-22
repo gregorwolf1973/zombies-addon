@@ -2424,7 +2424,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '0';
-    slider.max = '100';
+    slider.max = String(ev.lautMax || 100);
     slider.step = '1';
     slider.id = 'laut-' + ev.id;
     slider.value = String(einst.laut);
@@ -2436,7 +2436,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       einst.laut = parseInt(slider.value, 10) || 0;
       wert.textContent = einst.laut + ' %';
       if (audio && audioDatei && einst.dateien.indexOf(audioDatei) !== -1) {
-        try { audio.volume = einst.laut / 100; } catch (e) {}
+        try { audio.volume = Math.min(1, einst.laut / 100); } catch (e) {}
       }
     });
     slider.addEventListener('change', function () {
@@ -2602,12 +2602,12 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var n = document.createElement('div'); n.className = 'mp-name'; n.textContent = ev.name || ev.id;
     var kl = document.createElement('small'); kl.textContent = hat ? einst.dateien.length + (einst.dateien.length === 1 ? ' Datei' : ' Dateien') : 'eigener Ton'; n.appendChild(kl);
     var r = document.createElement('div'); r.className = 'mp-regler';
-    var sl = document.createElement('input'); sl.type = 'range'; sl.min = '0'; sl.max = '100'; sl.step = '1'; sl.value = String(einst.laut); sl.id = 'mp-' + ev.id;
+    var sl = document.createElement('input'); sl.type = 'range'; sl.min = '0'; sl.max = String(ev.lautMax || 100); sl.step = '1'; sl.value = String(einst.laut); sl.id = 'mp-' + ev.id;
     sl.setAttribute('aria-label', 'Lautstärke ' + (ev.name || ev.id));
     var w = document.createElement('span'); w.className = 'mp-wert'; w.textContent = einst.laut + ' %';
     sl.addEventListener('input', function () {
       einst.laut = parseInt(sl.value, 10) || 0; w.textContent = einst.laut + ' %';
-      if (audio && audioDatei && einst.dateien.indexOf(audioDatei) !== -1) { try { audio.volume = einst.laut / 100; } catch (e) {} }
+      if (audio && audioDatei && einst.dateien.indexOf(audioDatei) !== -1) { try { audio.volume = Math.min(1, einst.laut / 100); } catch (e) {} }
     });
     sl.addEventListener('change', function () { einst.laut = parseInt(sl.value, 10) || 0; speichereEreignis(ev.id, einst); });
     r.append(sl, w);

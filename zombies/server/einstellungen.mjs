@@ -94,6 +94,8 @@ export const EREIGNISSE = [
   { id: 'schussPistole', name: 'Schuss: Pistole', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
   { id: 'schussGewehr', name: 'Schuss: Jagdgewehr', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
   { id: 'schussSchrot', name: 'Schuss: Schrotflinte', beschreibung: 'Ohne Zuordnung erzeugt das Spiel einen Knall', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen'] },
+  { id: 'kanone', name: 'Panzerkanone', beschreibung: 'Hauptwaffe von Leopard und Puma; ohne Zuordnung dient die Schrotflinten-Datei bzw. ein tiefer Knall; Regler bis 200 %', art: 'einmal', gruppe: 'bundeswehr', kategorien: ['bundeswehr', 'waffen'], lautVorgabe: 100, lautMax: 200 },
+  { id: 'explosion', name: 'Explosion', beschreibung: 'Granate, Unfall, Fahrzeug; ohne Zuordnung dient die Schrotflinten-Datei bzw. ein tiefer Knall; Regler bis 200 %', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen', 'umgebung'], lautVorgabe: 100, lautMax: 200 },
   { id: 'tuerAuf', name: 'Tür geht auf', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
   { id: 'tuerZu', name: 'Tür fällt zu', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
   { id: 'autoVorbei', name: 'Auto fährt vorbei', beschreibung: 'Wenn ein fahrendes Auto oder der Bus dicht vorbeifährt', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
@@ -233,7 +235,7 @@ export function bereinige(e = {}, alt = {}) {
     const dateien = Array.isArray(neu.dateien) ? neu.dateien : alt.dateien;
     toene[ev.id] = {
       dateien: [...new Set((dateien ?? []).map(String).filter(d => TON_DATEI.test(d)))].slice(0, 12),
-      laut: Math.round(zahl(neu.laut ?? alt.laut, 0, 100, lv)),
+      laut: Math.round(zahl(neu.laut ?? alt.laut, 0, ev.lautMax ?? 100, lv)),
     };
   }
   // Superuser-Testzugang: nur der scrypt-Hash wird gespeichert; ein Klartext-Passwort (superuserPasswort) wird sofort gehasht,
