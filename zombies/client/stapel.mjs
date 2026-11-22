@@ -44,22 +44,20 @@ export function flach(liste) {
   for (const e of liste ?? []) { const id = dingId(e); for (let k = dingN(e); k > 0; k--) r.push(id); }
   return r;
 }
-// Taschen (erhöhen die Platzzahl): im Rucksack insgesamt nur eine
+// Taschen (erhöhen beim Umpacken die Platzzahl): mehrere erlaubt, jede belegt einen eigenen Platz (nicht stapelbar)
 export const istTasche = id => !!DINGE[id]?.plaetze;
 export const hatTasche = liste => (liste ?? []).some(e => istTasche(dingId(e)));
 
-// Wie viele Stück von id passen noch hinein (Plätze insgesamt: plaetze; kiste=true: ohne Taschenregel)?
+// Wie viele Stück von id passen noch hinein (Plätze insgesamt: plaetze; kiste: ohne Wirkung, nur Kompatibilität)?
 export function platzFuer(liste, plaetze, id, kiste = false) {
-  if (!kiste && istTasche(id) && hatTasche(liste)) return 0;
   const m = stapelMax(id);
   let n = Math.max(0, plaetze - (liste?.length ?? 0)) * m;
   for (const e of liste ?? []) if (dingId(e) === id) n += m - dingN(e);
   return n;
 }
 export const kannAufnehmen = (liste, plaetze, id, n = 1, kiste = false) => platzFuer(liste, plaetze, id, kiste) >= n;
-// Grund, warum nichts hineinpasst: '' = passt, 'tasche' = zweite Tasche, 'voll'
+// Grund, warum nichts hineinpasst: '' = passt, 'voll'
 export function blockGrund(liste, plaetze, id, n = 1, kiste = false) {
-  if (!kiste && istTasche(id) && hatTasche(liste)) return 'tasche';
   return platzFuer(liste, plaetze, id, kiste) >= n ? '' : 'voll';
 }
 // Noch nicht belegte Plätze
@@ -68,7 +66,6 @@ export const freiePlaetze = (liste, plaetze) => Math.max(0, plaetze - (liste?.le
 // n Stück hineinlegen: erst auf vorhandene, nicht volle Stapel, dann neue Plätze. Liefert die Zahl wirklich abgelegter Stück.
 export function fuegeHinzu(liste, plaetze, id, n = 1, kiste = false) {
   if (!id || n < 1) return 0;
-  if (!kiste && istTasche(id) && hatTasche(liste)) return 0;
   const m = stapelMax(id);
   let rest = n;
   for (let i = 0; i < liste.length && rest > 0; i++) {

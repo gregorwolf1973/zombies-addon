@@ -58,7 +58,7 @@ function zeichne(ich, dinge) {
   const wahl = () => { z.schritt = 'wahl'; z.sig = null; zeichne(ich, dinge); };
   const gesendet = id => { z.weg.add(id); z.schritt = 'wahl'; z.sig = null; };
   const waehle = it => {   // bei zweiter Tasche antwortet der Server mit einer Meldung
-    if (!brauchtPlatz(it.ding, ich) || kannAufnehmen(ich.rucksack, ich.plaetze, it.ding) || blockGrund(ich.rucksack, ich.plaetze, it.ding) === 'tasche') {
+    if (!brauchtPlatz(it.ding, ich) || kannAufnehmen(ich.rucksack, ich.plaetze, it.ding)) {
       z.raum.send('aufheben_wahl', { id: it.id }); gesendet(it.id); zeichne(ich, dinge.filter(d => d.id !== it.id)); return;
     }
     z.schritt = { item: it };
