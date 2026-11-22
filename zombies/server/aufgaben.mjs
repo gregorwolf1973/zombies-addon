@@ -637,6 +637,13 @@ export class Aufgaben {
   mitnehmen() {
     const s = this.raum.state, f = this.folgenId ? s.fahrzeuge.get(this.folgenId) : null;
     if (!f) return;
+    // Aufspringen: der Bus rollt langsam los, wer ihn noch erreicht, fährt mit (bis er die Karte verlässt)
+    for (const [sid, p] of s.spieler) {
+      if (p.zombie > 0 || p.ebene || p.unten || this.eingestiegen.has(sid) || this.ausgestiegen.has(sid)) continue;
+      if (this.heli || this.fz().art === 'flugzeug' || Math.hypot(p.x - f.x, p.y - f.y) >= BUS_ABSTAND * 1.5) continue;
+      this.eingestiegen.add(sid); p.anBord = true; this.einstiegT.set(sid, Date.now());
+      if (!this.raum.extra.get(sid)?.bot) this.einsteigMeldung(sid);
+    }
     for (const sid of this.eingestiegen) { const p = s.spieler.get(sid); if (p) { p.x = f.x; p.y = f.y; } }
   }
 

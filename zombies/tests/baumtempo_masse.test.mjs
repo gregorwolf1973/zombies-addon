@@ -38,12 +38,38 @@ function reihe(w) {
   throw new Error('keine freie Reihe');
 }
 
-test('baumFaktor: nur auf Baumkacheln draußen', () => {
-  const w = { ebene: '', hole: (x) => (x === 5 ? T.BAUM : T.WIESE) };
-  assert.equal(baumFaktor(w, 5.5 * KACHEL, 10), 0.25);
-  assert.equal(baumFaktor(w, 4.5 * KACHEL, 10), 1);
-  assert.equal(baumFaktor(w, 5.5 * KACHEL, 10, 100), 1, '100 % = kein Unterschied');
-  assert.equal(baumFaktor({ ...w, ebene: 'haus:1' }, 5.5 * KACHEL, 10), 1, 'drinnen nie');
+// Welt aus einem Raster: bauma = Menge "kx,ky" der Baumkacheln; kronen = echte Einzelbäume
+const mini = (baum, kronen) => ({ ebene: '', hole: (x, y) => (baum.has(x + ',' + y) ? T.BAUM : T.WIESE), baeumeEcht: kronen, baeumeFenster: kronen ? [[0, 0, 100000, 100000]] : undefined });
+const block = (x0, y0, x1, y1) => { const m = new Set(); for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) m.add(x + ',' + y); return m; };
+
+test('baumFaktor nach Kronenzahl: Wald-Kacheln = baumTempo, Einzelbaum-Kachel und Wiese = 100 %, drinnen nie', () => {
+  const w = mini(block(10, 10, 15, 15));
+  assert.equal(baumFaktor(w, 12.5 * KACHEL, 12.5 * KACHEL), 0.25, 'mitten im Wald');
+  assert.equal(baumFaktor(w, 5.5 * KACHEL, 12.5 * KACHEL), 1, 'Wiese');
+  assert.equal(baumFaktor(mini(block(5, 5, 5, 5)), 5.5 * KACHEL, 5.5 * KACHEL), 1, 'einzelne Baumkachel = Einzelbaum');
+  assert.equal(baumFaktor(w, 12.5 * KACHEL, 12.5 * KACHEL, 100), 1, '100 % = kein Unterschied');
+  assert.equal(baumFaktor({ ...w, ebene: 'haus:1' }, 12.5 * KACHEL, 12.5 * KACHEL), 1, 'drinnen nie');
+});
+
+test('baumFaktor echte Kronen: 1 Krone 100 %, 2 überlappende 50 %, ab 3 baumTempo; weicher Rand ohne Sprünge', () => {
+  const k = (x, y) => ({ x, y, d: 10, art: 'laub' });   // Kronenradius 40 px
+  const einer = mini(new Set(), [k(1000, 1000)]);
+  assert.equal(baumFaktor(einer, 1000, 1000), 1);
+  assert.equal(baumFaktor(einer, 1020, 1000), 1);
+  const zwei = mini(new Set(), [k(1000, 1000), k(1010, 1000)]);
+  assert.ok(Math.abs(baumFaktor(zwei, 1005, 1000) - 0.5) < 1e-9, '2 Kronen = 50 %');
+  assert.equal(baumFaktor(zwei, 1005 - 60, 1000), 1, 'außerhalb');
+  const drei = mini(new Set(), [k(1000, 1000), k(1010, 1000), k(1005, 1008)]);
+  assert.ok(Math.abs(baumFaktor(drei, 1005, 1003) - 0.25) < 1e-9, '3 Kronen = Wald');
+  assert.ok(Math.abs(baumFaktor(drei, 1005, 1003, 40) - 0.4) < 1e-9, 'baumTempo 40');
+  // Stetigkeit: in 0,25-px-Schritten durch Rand und Überlappung höchstens 5 % Sprung je Schritt
+  let alt = baumFaktor(drei, 900, 1003), max = 0;
+  for (let x = 900; x <= 1100; x += 0.25) { const f = baumFaktor(drei, x, 1003); max = Math.max(max, Math.abs(f - alt)); alt = f; }
+  assert.ok(max < 0.05, 'Tempo springt: ' + max);
+  // Waldrand aus Kacheln: ebenfalls stetig
+  const wald = mini(block(10, 10, 15, 15)); alt = 1; max = 0;
+  for (let x = 8 * KACHEL; x <= 13 * KACHEL; x += 0.25) { const f = baumFaktor(wald, x, 12.5 * KACHEL); max = Math.max(max, Math.abs(f - alt)); alt = f; }
+  assert.ok(max < 0.05, 'Waldrand springt: ' + max);
 });
 
 test('Einstellung baumTempo: Vorgabe 25, begrenzt auf 5–100', () => {
@@ -58,7 +84,7 @@ test('Zombie, Spieler und Mensch laufen unter Bäumen mit 25 % Tempo', async () 
   const w = raum.welt, K = w.kacheln, kopie = K.slice();
   try {
     const { kx, ky } = reihe(w), y = (ky + 0.5) * KACHEL, x0 = (kx + 1) * KACHEL;
-    const baum = (an) => { for (let i = 0; i < 14; i++) K[ky * BREITE + kx + i] = an ? T.BAUM : T.WIESE; };
+    const baum = (an) => { w._baumV = null; for (let j = -2; j <= 2; j++) for (let i = 0; i < 14; i++) K[(ky + j) * BREITE + kx + i] = an ? T.BAUM : (j === 0 ? T.WIESE : kopie[(ky + j) * BREITE + kx + i]); };   // Wald 5 Kacheln breit
     const messeZombie = () => { const z = { x: x0, y, ebene: '', jagt: true }; for (let i = 0; i < 20; i++) raum.zombieGehen(z, 0, 4, 0.05); return z.x - x0; };
     const messeSpieler = () => {
       p.x = x0; p.y = y; p.ebene = ''; p.unten = false; p.zombie = 0; p.sicher = '';
@@ -82,7 +108,7 @@ test('Zombie, Spieler und Mensch laufen unter Bäumen mit 25 % Tempo', async () 
     }
     SpielRaum.einstellungen = { ...SpielRaum.einstellungen, baumTempo: 100 };
     assert.ok(Math.abs(messeZombie() - frei1[0]) < 0.5, '100 % = normal');
-  } finally { K.set(kopie); SpielRaum.einstellungen = { ...SpielRaum.einstellungen, baumTempo: 25 }; await c.leave(); }
+  } finally { K.set(kopie); w._baumV = null; SpielRaum.einstellungen = { ...SpielRaum.einstellungen, baumTempo: 25 }; await c.leave(); }
 });
 
 test('kein Maibaum mehr in den Karten (Dorf und OSM)', () => {

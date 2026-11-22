@@ -95,6 +95,27 @@ test('Abfahrt mit Erfolg: Fahrgast fährt mit dem abfahrenden Fahrzeug bis zum L
   assert.equal(p.anBord, false, 'anBord nach dem Levelwechsel nicht zurückgesetzt');
 }));
 
+test('Einsteigen nach der Abfahrt: der Bus rollt langsam, wer ihn noch erreicht, fährt mit', mitBus(['funk'], async ({ raum, p, bus, ag }) => {
+  assert.equal(ag.fahrtGelingt(), true);
+  raum.weltNeuStarten = () => {};
+  ag.wechselVerzoegerung = 4000;
+  raum.verkehr.evakuierungAb = id => { raum.verkehr.info.get(id).abfahrt = true; raum.state.fahrzeuge.get(id).haelt = false; };   // Testkarte ohne Straßennetz: Bus bleibt als „abfahrend“ stehen
+  p.ebene = ''; p.x = bus.x; p.y = bus.y;   // ein Mitfahrer sorgt für die erfolgreiche Abfahrt ...
+  assert.ok(await bis(() => p.anBord, 2000));
+  ag.busRest = 0.05;
+  assert.ok(await bis(() => ag.wechselLaeuft, 4000), 'keine Abfahrt');
+  // ... der Nachzügler (hier derselbe Spieler, nachträglich ausgebucht) war bei der Abfahrt nicht an Bord
+  ag.eingestiegen.delete(p.id ?? [...raum.state.spieler.keys()][0]); p.anBord = false;
+  { const w = weitWeg(raum, bus, 300); p.x = w.x; p.y = w.y; }
+  await new Promise(r => setTimeout(r, 300));
+  assert.equal(p.anBord, false);
+  const f = raum.state.fahrzeuge.get(ag.folgenId);
+  assert.ok(f, 'Bus nach der Abfahrt weg');
+  p.x = f.x + 20; p.y = f.y;
+  assert.ok(await bis(() => p.anBord, 2000), 'Aufspringen nach der Abfahrt klappt nicht');
+  assert.ok(Math.hypot(p.x - f.x, p.y - f.y) < 1, 'fährt nicht mit');
+}));
+
 test('Bots steigen ebenso ein und sitzen still', mitBus(['funk', 'tor', 'zombies', 'lampen'], async ({ raum, p, bus }) => {
   const bots = [...raum.state.spieler.entries()].filter(([sid]) => raum.extra.get(sid)?.bot);
   assert.ok(bots.length >= 1, 'keine Bots im Raum');

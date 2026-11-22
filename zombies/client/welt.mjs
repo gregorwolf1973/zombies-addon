@@ -657,12 +657,88 @@ export function tierGelaende(welt, x, y, rad) {
   return faktor;
 }
 
-// Tempo unter Bäumen: Faktor (prozent / 100), wenn die Kachel unter (x, y) ein Baum ist, sonst 1 (nicht in Innenräumen, nicht für Fahrzeuge/Hund)
+// Tempo unter Bäumen nach Kronenzahl: wie viele Baumkronen überdecken den Punkt?
+//   1 Krone (Einzelbaum) = volles Tempo, 2 überlappende Kronen (Waldrand) = 50 %, ab 3 Kronen (Wald) = prozent (Einstellung baumTempo).
+// Die Kronenzahl N ist eine stetige Zahl, daher springt das Tempo nie:
+//  - echte Einzelbäume (welt.baeumeEcht, Luftbild): jede Krone zählt 1 innerhalb ihres Radius, mit weichem Rand (Breite 1 m, linear),
+//  - Baumkacheln ohne echte Krone (OSM-/Wald-Kacheln): Wert je Kachel 1 (einzeln) bis 3 (Wald, ab 4 Baum-Nachbarn von 8), zwischen den
+//    Kachelmitten bilinear übergeblendet.
+// Client (Vorhersage) und Server rechnen mit derselben Funktion; nur + − × ÷ und Math.sqrt (keine Winkelfunktionen).
+const KRONE_RAND = 8, KRONE_ZELLE = 128;   // px: Rand weich über 1 m; Zellgröße des Kronen-Index (Radius höchstens 120 px)
+const kroneR = b => Math.max(16, Math.min(240, b.d * 8)) / 2;
+function kronenIndex(welt) {
+  if (welt._kroneIdx !== undefined) return welt._kroneIdx;
+  const liste = welt.baeumeEcht;
+  if (!liste?.length) return (welt._kroneIdx = null);
+  const m = new Map();
+  for (const b of liste) { const k = Math.floor(b.x / KRONE_ZELLE) + ',' + Math.floor(b.y / KRONE_ZELLE); (m.get(k) ?? m.set(k, []).get(k)).push(b); }
+  return (welt._kroneIdx = m);
+}
+function imFensterListe(liste, x, y) {
+  if (!liste) return false;
+  for (const r of liste) if (x >= r[0] && x < r[2] && y >= r[1] && y < r[3]) return true;
+  return false;
+}
+// echte Kronen über (x, y): Summe der weichen Überdeckungen (0..1 je Krone)
+function kronenZahl(welt, x, y) {
+  const idx = kronenIndex(welt);
+  if (!idx) return 0;
+  const cx = Math.floor(x / KRONE_ZELLE), cy = Math.floor(y / KRONE_ZELLE);
+  let n = 0;
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const b of idx.get((cx + i) + ',' + (cy + j)) ?? []) {
+    const r = kroneR(b), dx = b.x - x, dy = b.y - y, aussen = r + KRONE_RAND / 2;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= aussen * aussen) continue;
+    const c = (aussen - Math.sqrt(d2)) / KRONE_RAND;
+    n += c >= 1 ? 1 : c;
+  }
+  return n;
+}
+// Baumkachel-Wert: 0 (kein Baum oder von echter Krone gedeckt), sonst 1 + ½ je Baum-Nachbar (8er-Nachbarschaft), höchstens 3
+function kachelBaumWert(welt, kx, ky) {
+  if (kx < 0 || ky < 0 || kx >= BREITE || ky >= HOEHE) return 0;
+  let c = welt._baumV;
+  if (!c || c.length !== BREITE * HOEHE) c = welt._baumV = new Float32Array(BREITE * HOEHE).fill(-1);
+  const i = ky * BREITE + kx;
+  if (c[i] >= 0) return c[i];
+  let v = 0;
+  if (welt.hole(kx, ky) === T.BAUM) {
+    const mx = (kx + 0.5) * KACHEL, my = (ky + 0.5) * KACHEL;
+    let gedeckt = false;
+    if (kronenIndex(welt) && imFensterListe(welt.baeumeFenster, mx, my)) {
+      const idx = kronenIndex(welt), cx = Math.floor(mx / KRONE_ZELLE), cy = Math.floor(my / KRONE_ZELLE);
+      for (let j = -1; j <= 1 && !gedeckt; j++) for (let k = -1; k <= 1 && !gedeckt; k++) for (const b of idx.get((cx + k) + ',' + (cy + j)) ?? []) {
+        const r = kroneR(b) + KACHEL / 2;
+        if ((b.x - mx) ** 2 + (b.y - my) ** 2 <= r * r) { gedeckt = true; break; }
+      }
+    }
+    if (!gedeckt) {
+      let nb = 0;
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) if ((j || k) && welt.hole(kx + k, ky + j) === T.BAUM) nb++;
+      v = Math.min(3, 1 + nb * 0.5);
+    }
+  }
+  return (c[i] = v);
+}
+export function kronenDichte(welt, x, y) {
+  let n = kronenZahl(welt, x, y);
+  // Kachelanteil: bilinear zwischen den vier umliegenden Kachelmitten
+  const gx = x / KACHEL - 0.5, gy = y / KACHEL - 0.5, kx = Math.floor(gx), ky = Math.floor(gy), fx = gx - kx, fy = gy - ky;
+  const v00 = kachelBaumWert(welt, kx, ky), v10 = kachelBaumWert(welt, kx + 1, ky), v01 = kachelBaumWert(welt, kx, ky + 1), v11 = kachelBaumWert(welt, kx + 1, ky + 1);
+  if (v00 || v10 || v01 || v11) n += (v00 * (1 - fx) + v10 * fx) * (1 - fy) + (v01 * (1 - fx) + v11 * fx) * fy;
+  return n;
+}
+// Tempofaktor aus der Kronenzahl (stetig): N ≤ 1 → 1; 1..2 → bis 50 % (bei prozent > 50: bis zur Mitte zwischen 100 % und prozent); 2..3 → bis prozent
 export function baumFaktor(welt, x, y, prozent = 25) {
   if (welt.ebene) return 1;
   const pool = poolFaktor(welt, x, y);
   if (prozent >= 100) return pool;
-  return (welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL)) === T.BAUM ? Math.max(0.05, prozent / 100) : 1) * pool;
+  const n = kronenDichte(welt, x, y);
+  if (n <= 1) return pool;
+  const wald = Math.max(0.05, prozent / 100), zwei = wald < 0.5 ? 0.5 : (1 + wald) / 2;
+  if (n <= 2) return (1 - (1 - zwei) * (n - 1)) * pool;
+  if (n >= 3) return wald * pool;
+  return (zwei + (wald - zwei) * (n - 2)) * pool;
 }
 
 // Tempo im Pool-Wasser: fest 10 % (Pools sind keine Hindernisse). welt.poolZonen = [{ x0, y0, x1, y1, p? }] in Spielpixeln
@@ -919,9 +995,11 @@ export function zaunUeberstieg(welt, x, y, richtung, rad, streng = false) {
         if (feinWert(welt, x + dx * a, y + dy * a) !== 2) continue;
         const kx = Math.floor((x + dx * a) / KACHEL), ky = Math.floor((y + dy * a) / KACHEL);
         const art = 'hzmw'.includes(zaunart[ky * BREITE + kx]) ? zaunart[ky * BREITE + kx] : 'z';
-        for (let b = a + 6; b <= a + 44; b += 3) {
-          const zx = x + dx * (b + rad), zy = y + dy * (b + rad);
-          if (frei(welt, zx, zy, rad)) return { x: zx, y: zy, art };
+        // Landung direkt hinter dem Zaun: erste freie Stelle jenseits des Zauns (Schritt 1 px; 8 px = 1 m), kein Weitsprung
+        for (let b = a; b <= a + 44; b += 1) {
+          const zx = x + dx * b, zy = y + dy * b;
+          if (feinWert(welt, zx, zy) === 2) continue;
+          if (frei(welt, zx, zy, rad)) return { x: zx + dx, y: zy + dy, art };
         }
         break;
       }
