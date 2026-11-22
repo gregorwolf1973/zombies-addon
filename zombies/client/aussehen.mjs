@@ -31,7 +31,7 @@ function rauschen(x, y) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-// Grundfarbe #4d8c3b mit hellen und dunklen Wolken, je 8×8 Pixel ein Wert; 1 px Rand für weiche Übergänge an Stücknähten
+// Grundfarbe #68804a (gedämpftes Oliv-Graugrün) mit hellen und dunklen Wolken, je 8×8 Pixel ein Wert; 1 px Rand für weiche Übergänge an Stücknähten
 function wiesenWolken(ctx, x0, y0, x1, y1) {
   const F = 8, nx = (x1 - x0) * KACHEL / F, ny = (y1 - y0) * KACHEL / F;
   const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(nx + 2, ny + 2) : Object.assign(document.createElement('canvas'), { width: nx + 2, height: ny + 2 });
@@ -39,10 +39,10 @@ function wiesenWolken(ctx, x0, y0, x1, y1) {
   let i = 0;
   for (let j = -1; j <= ny; j++) for (let k = -1; k <= nx; k++, i += 4) {
     const x = x0 * KACHEL + k * F, y = y0 * KACHEL + j * F;
-    const n = rauschen(x / 90, y / 90) * 0.7 + rauschen(x / 23, y / 23) * 0.3;
-    let r = 77, gr = 140, b = 59;
-    if (n > 0.55) { const a = (n - 0.55) * 0.5; r += (110 - r) * a; gr += (170 - gr) * a; b += (80 - b) * a; }
-    else if (n < 0.4) { const a = (0.4 - n) * 0.45; r += (20 - r) * a; gr += (50 - gr) * a; b += (15 - b) * a; }
+    const n = rauschen(x / 90, y / 90) * 0.6 + rauschen(x / 23, y / 23) * 0.28 + rauschen(x / 7, y / 7) * 0.12;
+    let r = 104, gr = 128, b = 74;
+    if (n > 0.52) { const a = Math.min(1, (n - 0.52) * 0.95); r += (140 - r) * a; gr += (156 - gr) * a; b += (92 - b) * a; }   // helle, trockenere Stellen
+    else if (n < 0.45) { const a = Math.min(1, (0.45 - n) * 0.95); r += (62 - r) * a; gr += (84 - gr) * a; b += (50 - b) * a; }   // dunkle, feuchtere Stellen
     d[i] = r; d[i + 1] = gr; d[i + 2] = b; d[i + 3] = 255;
   }
   g.putImageData(bild, 0, 0);
@@ -148,24 +148,95 @@ function echtStaemme(welt, rect) {
   return welt.baeumeEcht.filter(b => b.x >= rect.x0 * KACHEL - 8 && b.x < rect.x1 * KACHEL + 8 && b.y >= rect.y0 * KACHEL - 8 && b.y < rect.y1 * KACHEL + 8);
 }
 export function hatBaeume(welt, rect) { return baumKronen(welt, rect).length > 0; }
+// ---------- Laubkronen: prozedural gezeichnet (5–9 Laubballen, Licht oben links, Schatten unten rechts, unregelmäßiger Umriss, Blattstruktur) ----------
+// Je Krone ein Wert aus Form (12) × Farbe (20); jede Kombination wird einmal als kleine Textur gezeichnet und danach nur noch kopiert
+// (Zeichenzeit je Stück bleibt wie mit Bildern). Alles aus Hashes der Kronenlage → bei gleicher Karte immer dieselben Bäume.
+const LAUB_FORMEN = 12, LAUB_TEX = 112;
+// Farben als [Farbton °, Sättigung, Helligkeit]: acht Grüntöne von dunklem Grün über Oliv bis Gelbgrün, je in zwei Abwandlungen (±Farbton/Sättigung/Helligkeit), dazu vier Herbstfarben
+const LAUB_GRUEN = [[118, .30, .23], [110, .33, .27], [102, .34, .30], [96, .36, .33], [88, .40, .35], [80, .42, .38], [72, .44, .40], [64, .46, .42]];
+const LAUB_HERBST = [[30, .72, .46], [42, .76, .50], [14, .60, .40], [22, .68, .44]];
+const LAUB_FARBEN = [...LAUB_GRUEN.flatMap(([h, sa, l]) => [[h - 9, sa * 1.12, l * 0.9], [h + 9, sa * 0.87, l * 1.1]]), ...LAUB_HERBST];
+const hsl = (h, s, l) => `hsl(${Math.round(h)} ${Math.round(Math.max(0, Math.min(1, s)) * 100)}% ${Math.round(Math.max(0, Math.min(1, l)) * 100)}%)`;
+// Laubballen (Einheitskreis, Radius 0,5 = Texturrand) je Form: 0 rund, 1 oval quer, 2 oval schräg, 3 mehrstämmig (3 Gruppen); Form/4 = Streuung
+function laubBallen(form) {
+  const art = form % 4, v = Math.floor(form / 4), h = n => hash(form * 977 + n, 31), l = [];
+  const ring = (cx, cy, rx, ry, n, r0, drehung = 0) => {
+    for (let i = 0; i < n; i++) {
+      const w = (i + h(i) * 0.6) / n * TAU, rr = 0.8 + h(i + 20) * 0.35;
+      const x = Math.cos(w) * rx * rr, y = Math.sin(w) * ry * rr;
+      l.push({ x: cx + x * Math.cos(drehung) - y * Math.sin(drehung), y: cy + x * Math.sin(drehung) + y * Math.cos(drehung), r: r0 * (0.8 + h(i + 40) * 0.4) });
+    }
+  };
+  if (art === 0) { l.push({ x: (h(1) - 0.5) * 0.06, y: (h(2) - 0.5) * 0.06, r: 0.22 + v * 0.01 }); ring(0, 0, 0.2, 0.2, 5 + v, 0.19); }
+  else if (art === 1) { l.push({ x: 0, y: 0, r: 0.2 }); ring(0, 0, 0.25, 0.14, 5 + (v > 0 ? 1 : 0), 0.17); }
+  else if (art === 2) { l.push({ x: 0, y: 0, r: 0.19 }); ring(0, 0, 0.26, 0.13, 5 + (v > 1 ? 1 : 0), 0.16, 0.6 + v * 0.35); }
+  else { const n = 3; for (let k = 0; k < n; k++) { const w = k / n * TAU + h(5) + v * 0.4, cx = Math.cos(w) * 0.22, cy = Math.sin(w) * 0.22; l.push({ x: cx, y: cy, r: 0.15 }); ring(cx, cy, 0.1, 0.1, 2, 0.12); } }
+  for (const b of l) { const d = Math.hypot(b.x, b.y) + b.r, k = d > 0.47 ? 0.47 / d : 1; b.x *= k; b.y *= k; b.r *= k; }   // alles innerhalb der Textur
+  return l.sort((a, c) => (a.x + a.y) - (c.x + c.y));   // oben links zuerst: die unteren rechten Ballen liegen darüber
+}
+const laubTexturen = new Map();
+function laubTextur(form, farbe) {
+  const key = form * 32 + farbe, vorhanden = laubTexturen.get(key);
+  if (vorhanden) return vorhanden;
+  const S = LAUB_TEX;
+  const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(S, S) : Object.assign(document.createElement('canvas'), { width: S, height: S });
+  const g = c.getContext('2d'), [fh, fs, fl] = LAUB_FARBEN[farbe], ballen = laubBallen(form);
+  const rnd = (b, n) => hash(form * 1009 + farbe * 13 + n, Math.round((b.x + 1) * 977));
+  const umriss = (b, grow = 1) => {   // unregelmäßiger, weicher Umriss (16 Punkte, ±11 % Radius)
+    const n = 16, p = [];
+    for (let i = 0; i < n; i++) { const w = i / n * TAU, rr = b.r * S * grow * (0.89 + rnd(b, i) * 0.22); p.push([S / 2 + b.x * S + Math.cos(w) * rr, S / 2 + b.y * S + Math.sin(w) * rr]); }
+    g.beginPath(); g.moveTo((p[n - 1][0] + p[0][0]) / 2, (p[n - 1][1] + p[0][1]) / 2);
+    for (let i = 0; i < n; i++) { const q = p[(i + 1) % n]; g.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + q[0]) / 2, (p[i][1] + q[1]) / 2); }
+    g.closePath();
+  };
+  g.fillStyle = hsl(fh, fs, fl * 0.42);   // dunkle Tiefe unter allen Ballen, leicht nach unten rechts versetzt
+  for (const b of ballen) { g.save(); g.translate(S * 0.018, S * 0.026); umriss(b, 1.04); g.fill(); g.restore(); }
+  for (const b of ballen) {
+    const cx = S / 2 + b.x * S, cy = S / 2 + b.y * S, R = b.r * S * 1.1;
+    const gr = g.createRadialGradient(cx - R * 0.38, cy - R * 0.38, R * 0.08, cx, cy, R);
+    gr.addColorStop(0, hsl(fh - 4, fs * 0.9, fl * 1.42)); gr.addColorStop(0.5, hsl(fh, fs, fl)); gr.addColorStop(1, hsl(fh + 3, fs * 1.05, fl * 0.62));
+    umriss(b); g.fillStyle = gr; g.fill();
+    g.save(); umriss(b, 0.98); g.clip();   // Blattstruktur: kleine helle Blätter oben links, dunkle unten rechts
+    const nBlatt = Math.round(b.r * S * 1.9);
+    for (let i = 0; i < nBlatt; i++) {
+      const w = rnd(b, 100 + i) * TAU, d = Math.sqrt(rnd(b, 200 + i)) * R * 0.95, dx = Math.cos(w) * d, dy = Math.sin(w) * d, licht = (dx + dy) / R;
+      g.fillStyle = licht < -0.15 ? hsl(fh - 5, fs * 0.9, fl * (1.5 + rnd(b, 300 + i) * 0.3)) : licht > 0.15 ? hsl(fh + 3, fs * 1.1, fl * (0.5 + rnd(b, 300 + i) * 0.2)) : hsl(fh, fs, fl * (0.8 + rnd(b, 300 + i) * 0.5));
+      g.globalAlpha = 0.5 + rnd(b, 400 + i) * 0.35;
+      g.beginPath(); g.ellipse(cx + dx, cy + dy, 1.1 + rnd(b, 500 + i) * 1.5, 0.7 + rnd(b, 600 + i) * 0.8, rnd(b, 700 + i) * Math.PI, 0, TAU); g.fill();
+    }
+    g.restore();
+    g.globalAlpha = 1; umriss(b); g.strokeStyle = 'rgba(0,0,0,.14)'; g.lineWidth = 0.8; g.stroke();
+  }
+  laubTexturen.set(key, c);
+  return c;
+}
+// Form und Farbe einer Krone aus ihrer Lage (stabil); Herbstfarben nur bei einem Teil der „Herbst“-Bäume
+export function laubWahl(b) {
+  const x = Math.round(b.x), y = Math.round(b.y);
+  const form = Math.floor(hash(x * 5 + 1, y * 3 + 7) * LAUB_FORMEN), s2 = hash(y * 13 + 4, x * 9 + 2), s3 = hash(x * 3 + 9, y * 17 + 1);
+  const herbst = b.art.startsWith('baum_herbst') && s2 < 0.6;
+  return { form, farbe: herbst ? 16 + Math.floor(s2 / 0.6 * 4) : Math.floor(s3 * 16) };
+}
 // Kronen eines Kartenstücks; Bild wird später halbtransparent über den Figuren gezeigt
 export function zeichneKronen(ctx, welt, bilder, rect) {
   ctx.save();
   ctx.translate(-rect.x0 * KACHEL, -rect.y0 * KACHEL);
+  ctx.imageSmoothingEnabled = true;
   for (const b of baumKronen(welt, rect).sort((a, c) => a.y - c.y)) {
     if (b.art === 'nadel') { nadelKrone(ctx, b); continue; }
-    const bild = bilder[b.art];
-    if (!bild) continue;
-    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.dreh); ctx.drawImage(bild, -b.gr / 2, -b.gr / 2, b.gr, b.gr); ctx.restore();
+    const { form, farbe } = laubWahl(b);
+    ctx.drawImage(laubTextur(form, farbe), b.x - b.gr / 2, b.y - b.gr / 2, b.gr, b.gr);   // Licht bleibt oben links, daher nicht gedreht
   }
   ctx.restore();
 }
-// Nadelbaum von oben (kein Bild vorhanden): dunkle Krone aus Zackenringen, Spitze in der Mitte
+// Nadelbaum von oben: dunkle Krone aus Zackenringen, Spitze in der Mitte; Farbton ±12°, Sättigung/Helligkeit ±15 % je Baum
+const NADEL_RINGE = [[1, [135, .41, .20]], [0.74, [140, .43, .26]], [0.48, [142, .41, .32]], [0.22, [140, .33, .44]]];
 function nadelKrone(ctx, b) {
-  const r = b.gr / 2, zacken = 11;
+  const r = b.gr / 2, zacken = 11, x = Math.round(b.x), y = Math.round(b.y);
+  const dh = (hash(x * 7 + 2, y * 5 + 3) - 0.5) * 24, ds = 1 + (hash(x * 11 + 1, y * 3 + 8) - 0.5) * 0.3, dl = 1 + (hash(x * 3 + 6, y * 13 + 4) - 0.5) * 0.3;
   ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.dreh);
-  for (const [f, farbe] of [[1, '#1f4a2a'], [0.74, '#27603a'], [0.48, '#31764a'], [0.22, '#4a9460']]) {
-    ctx.fillStyle = farbe; ctx.beginPath();
+  for (const [f, [h, sa, l]] of NADEL_RINGE) {
+    ctx.fillStyle = hsl(h + dh, sa * ds, l * dl); ctx.beginPath();
     for (let i = 0; i < zacken * 2; i++) { const w = i * Math.PI / zacken, rr = r * f * (i % 2 ? 0.72 : 1); ctx.lineTo(Math.cos(w) * rr, Math.sin(w) * rr); }
     ctx.closePath(); ctx.fill();
   }
@@ -219,7 +290,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
     const gart = welt.details?.garten[ky * BREITE + kx];
     if (gart && gart !== '.' && (t === T.WIESE || t === T.BAUM || t === T.ZAUN)) {
       // gepflegter Rasen: etwas heller, ohne Kachelkanten
-      ctx.fillStyle = 'rgba(150,210,95,.13)'; ctx.fillRect(px, py, KACHEL, KACHEL);
+      ctx.fillStyle = 'rgba(150,176,100,.12)'; ctx.fillRect(px, py, KACHEL, KACHEL);
     }
     if (begehbarWiese(t) || t === T.ZAUN) {
       // Grasbüschel (gesammelt, am Ende ein einziger Strich)
@@ -294,7 +365,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
       ctx.fillStyle = '#8d6e63'; ctx.fillRect(px + m - 3, py + m - 3, 4, 4);
     }
   }
-  ctx.strokeStyle = 'rgba(30,70,25,.55)'; ctx.lineWidth = 1; ctx.stroke(gras);
+  ctx.strokeStyle = 'rgba(50,66,34,.5)'; ctx.lineWidth = 1; ctx.stroke(gras);
   ['#fff59d', '#f8bbd0', '#ffffff', '#ce93d8'].forEach((f, i) => { ctx.fillStyle = f; ctx.fill(blumen[i]); });
   if (vek && !foto) zeichneWasser(ctx, welt, { x0, y0, x1, y1 });
   if (vek && !foto) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });

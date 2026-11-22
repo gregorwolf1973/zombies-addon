@@ -2,11 +2,11 @@
 // Dachdaten (LoD2) lesen und für die Darstellung aufbereiten, Sonne/Schatten.
 // Reine Darstellung: nichts davon geht in die Spielwelt (Fingerabdruck bleibt gleich).
 
-// Geräte-Schalter (localStorage); Standard: alle an, nur ein ausdrückliches 'aus' schaltet ab
+// Geräte-Schalter (localStorage); Standard: alle an außer Luftbild-Boden (nur ein ausdrückliches 'an' schaltet ihn ein), sonst schaltet nur ein ausdrückliches 'aus' ab
 // boden = Luftbild-Boden, gezeichnet = „Gezeichneter Boden“ (stilisiert aus amtlichen Nutzungsflächen); sind beide an, gewinnt das Luftbild (bodenArt)
 export const KUL_SCHLUESSEL = { boden: 'zob_kul_boden', daecher: 'zob_kul_daecher', schatten: 'zob_kul_schatten', gezeichnet: 'zob_kul_gezeichnet' };
 export function schalterLesen(boden, daecher, schatten, gezeichnet) {
-  return { boden: boden !== 'aus', daecher: daecher !== 'aus', schatten: schatten !== 'aus', gezeichnet: gezeichnet !== 'aus' };
+  return { boden: boden === 'an', daecher: daecher !== 'aus', schatten: schatten !== 'aus', gezeichnet: gezeichnet !== 'aus' };
 }
 // Welcher Boden gilt? 'foto' (Luftbild), 'gez' (gezeichnet) oder null (Spiel zeichnet den Boden wie bisher). Luftbild hat Vorrang.
 export function bodenArt(an, hatFoto, hatGez) {
