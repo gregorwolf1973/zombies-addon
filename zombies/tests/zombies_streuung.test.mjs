@@ -35,7 +35,7 @@ test('16 Zombies entdecken gleichzeitig: Startzeiten, Tempo und Kurs streuen', a
     p.hp = 100; p.schleicht = false;
     const Z = [];
     for (let i = 0; i < 16; i++) {
-      const id = raum.setzeZombie(p.x + 150, p.y - 240 + i * 32, '');
+      const id = raum.setzeZombie(p.x + 100, p.y - 60 + i * 8, '');
       const z = raum.state.zombies.get(id), info = raum.zombieInfo.get(id);
       info.steht = false; info.schlaeft = false; z.kriecht = false; z.richtung = Math.PI;
       Z.push({ id, z, info, start: null, kurs: [] });
