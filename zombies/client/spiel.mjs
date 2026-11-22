@@ -2,7 +2,7 @@
 import { fzPx } from './masse.mjs';
 import { groesse } from './groessen.mjs';
 import {
-  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
+  KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
   BODEN_DAUER, HANDEL_RAETSEL, TAUSCH_ABSTAND, BUS_ABSTAND, WAFFEN, aktiveWaffe, vorratVon, HANDEL, HANDEL_ABSTAND, bezahlung, MUNITION_MAX, TEMPO_MG, traegtMg, GRANATE, zaunUeberstieg, ZAUN_NAME, baumFaktor, helligkeit, istNacht, hausHell, fensterLicht, uhrText, setzeTageszeiten, schlossArt, weltFingerabdruck } from './welt.mjs';
 import { NebelEbene } from './nebel.mjs';
@@ -1176,6 +1176,14 @@ class Ort extends Phaser.Scene {
   // ist die aktuelle Ebene ein maßstäblicher Innenraum?
   feinInnen() { return !!(this.aktEbene && this.wv(this.aktEbene)?.kachel); }
 
+  // Maßstab für Bildschirmelemente in der Welt (Namen, Balken, Symbole, Stick): drinnen läuft die Kamera 3,4-fach näher,
+  // diese Dinge sollen aber so groß wirken wie draußen (= Grundzoom × Wahl) – also durch den Innenzoom teilen
+  uiMass() {
+    if (!this.feinInnen()) return 1;
+    const z = this.cameras.main.zoom;
+    return z > 0 ? Math.min(1, this.grundZoom * this.zoomWahl / z) : 1;
+  }
+
   // Kamerazoom: Bildschirmgröße × eigene Wahl (Knöpfe, Mausrad, +/−) × drinnen näher
   zielZoom(ebene = this.aktEbene) { return this.grundZoom * this.zoomWahl * (ebene ? (this.innenWelten.get(ebene)?.kachel ? INNEN_ZOOM_FEIN : INNEN_ZOOM) : 1); }
 
@@ -1197,6 +1205,9 @@ class Ort extends Phaser.Scene {
   // jede Bildfolge: Kamerazoom weich auf den Zielwert ziehen (unabhängig von der Bildrate)
   zoomNachziehen(dt) {
     const cam = this.cameras.main;
+    // Kamera-Rundung (startFollow) rastet den Bildausschnitt auf ganze WELT-Pixel: drinnen bei Zoom ~3,4 sind das 3,4 Bildschirmpixel –
+    // Bild und Figuren ruckeln. Nur bei kleinem Zoom runden.
+    cam.roundPixels = cam.zoom <= 1.5;
     if (cam.zoomEffect?.isRunning) return;   // Szenenwechsel-Zoom (innen/außen) läuft
     const ziel = this.zielZoom(), d = ziel - cam.zoom;
     if (Math.abs(d) < 0.0005) { if (d) cam.setZoom(ziel); return; }
@@ -1879,7 +1890,7 @@ class Ort extends Phaser.Scene {
         if (b.art === 'auto' && s.verbrannt?.has('auto:' + b.id)) continue;
         const leer = b.art === 'bw_kiste' ? this.leereKisten?.has(b.id) : s.behaelter.get(b.id)?.rest === 0;
         const t = pool[n] ??= this.add.text(0, 0, '', { fontSize: '13px', fontFamily: 'sans-serif', color: '#fff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6);
-        t.setText(leer ? '∅' : '📦').setAlpha(leer ? 0.6 : 0.95).setPosition(b.x, b.y - 14).setVisible(true);
+        t.setText(leer ? '∅' : '📦').setAlpha(leer ? 0.6 : 0.95).setScale(this.uiMass()).setPosition(b.x, b.y - 14 * (w.kachel ? 0.3 : 1)).setVisible(true);
         n++;
       }
     }
@@ -2002,7 +2013,7 @@ class Ort extends Phaser.Scene {
     const bretter = this.add.graphics().setDepth(0.46);
     const schild = w.safe ? this.add.text(X + B / 2, Y - 14, '🛡 ' + (w.safeName ?? 'Safe Room'), {
       fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(9.6) : null;
+    }).setOrigin(0.5).setDepth(9.6).setScale(w.kachel ? 0.3 : 1) : null;   // maßstäblich: Schild nicht mit dem Innenzoom aufblasen
     a = { w, bild, tueren, symbole, dunkel, nebel, safe, bretter, schild, X, Y, B, H, stand: '', bekannt: new Set(), nebelStand: -1, bretterWert: -1 };
     this.innenAnsichten.set(ebene, a);
     return a;
@@ -2517,6 +2528,7 @@ class Ort extends Phaser.Scene {
         this.bodenObj.set(id, o);
       }
       o.setVisible((b.ebene ?? '') === this.aktEbene);
+      o.setScale(this.innenWelten.get(b.ebene ?? '')?.kachel ? 0.3 : 1);   // maßstäblich: Beute in echter Größe zur halb so großen Figur
       o.setAlpha(Math.max(0.2, 1 - (b.blass ?? 0) / 10));
     }
     for (const [id, o] of this.bodenObj) if (!s.boden.has(id)) { o.destroy(); this.bodenObj.delete(id); }
@@ -2840,6 +2852,12 @@ class Ort extends Phaser.Scene {
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
     const ton = this.schattenTon(f, f.x, f.y);   // Spieler/Bots: im Schatten dunkler (Körper und Füße)
     f.bild.setTint(ton); f.fuesse.setTint(ton);
+    // Name, Lebensbalken und Symbole: drinnen auf Bildschirmgröße wie draußen zurückrechnen, Abstände zur (halb so großen) Figur
+    const k = this.uiMass(), fp = this.feinInnen() ? INNEN_FIGUR : 1;
+    f.name.setScale(k).setY(-28 * fp);
+    f.hp.setScale(k).setPosition(-12 * k, -18 * fp);
+    f.tun.setScale(k).setPosition(16 * k, -16 * fp);
+    f.sprechen.setScale(k).setPosition(-18 * k, -16 * fp);
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
     const tun = zombie ? '🧟' : p.aktion === 'klettern' ? '🧗' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.aktion === 'funk' ? '📻' : p.ruht ? '💤' : p.infektion > 0 ? '🦠' : '';
@@ -2976,10 +2994,13 @@ class Ort extends Phaser.Scene {
     const j = this.joystick;
     this.stick.clear();
     if (j.id === null) return;
-    this.stick.fillStyle(0xffffff, 0.12).fillCircle(j.bx, j.by, 60);
-    this.stick.lineStyle(2, 0xffffff, 0.3).strokeCircle(j.bx, j.by, 60);
-    this.stick.lineStyle(1, 0xffffff, 0.2).strokeCircle(j.bx, j.by, 33);
-    this.stick.fillStyle(0xffffff, 0.45).fillCircle(j.bx + j.vx * 60, j.by + j.vy * 60, 22);
+    // scrollFactor 0 wird trotzdem vom Kamerazoom gestreckt (um die Bildmitte): drinnen (Zoom ×3,4) auf die Größe draußen zurückrechnen
+    const k = this.uiMass(), cam = this.cameras.main, cx = cam.width / 2, cy = cam.height / 2;
+    const X = v => (v - cx) * k + cx, Y = v => (v - cy) * k + cy;
+    this.stick.fillStyle(0xffffff, 0.12).fillCircle(X(j.bx), Y(j.by), 60 * k);
+    this.stick.lineStyle(2 * k, 0xffffff, 0.3).strokeCircle(X(j.bx), Y(j.by), 60 * k);
+    this.stick.lineStyle(1 * k, 0xffffff, 0.2).strokeCircle(X(j.bx), Y(j.by), 33 * k);
+    this.stick.fillStyle(0xffffff, 0.45).fillCircle(X(j.bx + j.vx * 60), Y(j.by + j.vy * 60), 22 * k);
   }
 
   // ---------- Aktionen ----------
@@ -2993,7 +3014,7 @@ class Ort extends Phaser.Scene {
       const w = this.wv(ich.ebene);
       const KW = kachelVon(w);
       for (const t of w.tueren) {
-        const d = Math.hypot((t.x + 0.5) * KW - x, (t.y + 0.5) * KW - y);
+        const d = abstandTuer(w, t, x, y);
         if (d < (w.kachel ? 14 : 42) && d < bd) { bd = d; best = { key: `${ich.ebene}:${t.x},${t.y}`, tuer: t }; }
       }
       if (w.ausgang && w.nr !== undefined) {
@@ -3044,7 +3065,7 @@ class Ort extends Phaser.Scene {
     if (modus === 'auf') return offen ? null : oeffnen();
     if (modus === 'zu') return offen ? (brett() ?? schliessen()) : null;
     const b = brett();
-    return b ? (offen ? (kaputt ? null : schliessen()) : b) : null;
+    return b ? (offen ? (kaputt ? null : schliessen()) : b) : (offen ? schliessen() : null);   // wie auf dem Server
   }
 
   bestimmeKontext(ich) {
@@ -3108,7 +3129,7 @@ class Ort extends Phaser.Scene {
     }
     let best = null, bd = reichVon(w, AKTION_ABSTAND);
     for (const b of w.behaelter) {
-      const d = Math.hypot(b.x - x, b.y - y);
+      const d = abstandBehaelter(b, x, y);
       if (d >= bd) continue;
       if (raum.state.behaelter.get(b.id)?.rest === 0 || this.leereKisten?.has(b.id)) continue;
       if (!ich.ebene && !sichtfrei(w, x, y, b.x, b.y)) continue;
@@ -3404,6 +3425,7 @@ class Ort extends Phaser.Scene {
     const frei2 = ich && !ich.unten && !ich.aktion && !(ich.zombie > 0) && s.phase === 'spiel' && this.lokal;
     let zweit = frei2 ? this.tuerKontext(ich, 'zweit') : null;
     if (frei2 && !zweit && this.handelKontext && this.kontext !== this.handelKontext && !handelOffen) zweit = this.handelKontext;
+    if (zweit && this.kontext?.art === zweit.art && this.kontext.text === zweit.text) zweit = null;   // dieselbe Aktion nicht doppelt anbieten
     this.zweit = zweit;
     const knopf = $('aktion'), knopf2 = $('aktion2');
     knopf.style.display = this.kontext ? 'block' : 'none';
