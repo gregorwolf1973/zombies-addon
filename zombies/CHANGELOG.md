@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.81.0 – 22.11.2026
+
+- Neu: Mehr streunende Hunde (Geretsried 2 etwa 7, einer nahe am Start); ein Streuner kommt aus 15 m zu dir und bellt ab und zu (lockt keine Zombies); Anzahl im Backend.
+- Neu: Diagnose – Fehler, Ton-Aussetzer und Leistung (Bildrate, Ping, Datenmenge) der Geräte kommen anonym ins Server-Log; Schalter im Backend, Anzeige „📊 Diagnose“ im Zahnrad.
+- Intern: Projekt-Übersicht ARCHITEKTUR.md, Einspiel- und Release-Skript, Tests doppelt so schnell und stabiler (schnelle Stufe ~80 s).
+
+- 
+
 ## 0.80.0 – 22.11.2026
 
 - Behoben: Horden standen unter Dauerfeuer nur und zuckten (jeder Schuss setzte neue Ziele und Verzug) – sie kommen jetzt stetig näher.
