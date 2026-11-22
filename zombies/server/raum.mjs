@@ -35,6 +35,7 @@ import { weltBeschaffen } from './weltcache.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { Nebel, NEBEL_VORGABE, zombieSichtFaktor } from './nebel.mjs';
+import { sichtPx } from '../client/zombiesicht.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
@@ -1154,6 +1155,7 @@ export class SpielRaum extends Room {
   }
 
   // Sicht der Zombies im Nebel (1 = unverändert); Hören bleibt gleich
+  zombieSicht() { return sichtPx(SpielRaum.einstellungen?.zombieSicht, this.state.uhr); }   // Sichtwerte der Zombies in px (Backend „Zombie-Sicht“, Nachtfaktor)
   nebelSichtFaktor() { return zombieSichtFaktor(this.state.nebel, (SpielRaum.einstellungen?.nebel ?? NEBEL_VORGABE).zombie); }
 
   // Tag/Nacht-Zeiten aus den Einstellungen: für die Regeln auf dem Server und im Zustand für die Clients
@@ -3313,14 +3315,15 @@ export class SpielRaum extends Room {
     if (z.haengt) haengtSchritt(this, z, info, dt);   // Zeit im Draht läuft; nach Ablauf frei
     if (info.hundBis && this.hunde?.zombieJagt(z, info, dt)) return;   // lässt sich vom Hund ablenken (server/hund.mjs)
     // Sehen: Kegel in Blickrichtung, schleichende Spieler erst später
+    const SW = this.zombieSicht();
     if (!info.ziel) {
       for (const [sid, p] of this.state.spieler) {
         if (p.unten || p.anBord || p.kamera || p.zombie > 0 || p.ebene !== ebene) continue;
         const d = Math.hypot(p.x - z.x, p.y - z.y);
-        let weite = p.schleicht ? W.sichtWeiteSchleichen : W.sichtWeite;
+        let weite = p.schleicht ? SW.schleichen : SW.gehen;
         const gute = d < 200 ? sichtGuete(welt, z.x, z.y, p.x, p.y) : 0;   // Bäume mindern die Sicht, verdecken sie aber nie ganz
         weite *= gute * this.nebelSichtFaktor();
-        const imKegel = winkelDiff(Math.atan2(p.y - z.y, p.x - z.x), z.richtung) < W.sichtWinkel / 2;
+        const imKegel = winkelDiff(Math.atan2(p.y - z.y, p.x - z.x), z.richtung) < SW.winkel / 2;
         // wer schleicht oder still steht, kann sich von hinten bis zum ersten Schlag heranpirschen
         const e = this.extra.get(sid)?.eingabe;
         const leise = p.schleicht || !e || Math.hypot(e.dx, e.dy) < 0.05;
@@ -3363,9 +3366,9 @@ export class SpielRaum extends Room {
     if (ziel) {
       const d = Math.hypot(ziel.x - z.x, ziel.y - z.y);
       const gute = sichtGuete(welt, z.x, z.y, ziel.x, ziel.y);
-      const sieht = gute > 0 && (d < 40 * R || d < W.sichtWeite * 1.6 * gute * this.nebelSichtFaktor());
+      const sieht = gute > 0 && (d < 40 * R || d < SW.verfolgen * gute * this.nebelSichtFaktor());
       info.verloren = sieht ? 0 : info.verloren + dt;
-      if (info.verloren > 10 || d > W.sichtWeite * 3) {
+      if (info.verloren > 10 || d > SW.aufgeben) {
         info.ziel = null; info.punkt = { x: ziel.x, y: ziel.y }; info.suche = true; z.jagt = false;
       } else {
         const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
@@ -3398,8 +3401,8 @@ export class SpielRaum extends Room {
     if (info.mensch) {
       const m = this.state.menschen.get(info.mensch);
       const d = m ? Math.hypot(m.x - z.x, m.y - z.y) : Infinity;
-      if (!m || !m.sichtbar || m.infiziert || ebene || m.ebene || (m.versteckt && d > VERSTECK_WEITE * 1.5) || d > W.sichtWeite * 1.6 || !sichtfrei(welt, z.x, z.y, m.x, m.y)) {
-        if (m && m.sichtbar && !m.infiziert && d < W.sichtWeite * 1.6) info.punkt = { x: m.x, y: m.y };   // aus den Augen: letzte Stelle ansteuern
+      if (!m || !m.sichtbar || m.infiziert || ebene || m.ebene || (m.versteckt && d > VERSTECK_WEITE * 1.5) || d > this.zombieSicht().verfolgen || !sichtfrei(welt, z.x, z.y, m.x, m.y)) {
+        if (m && m.sichtbar && !m.infiziert && d < this.zombieSicht().verfolgen) info.punkt = { x: m.x, y: m.y };   // aus den Augen: letzte Stelle ansteuern
         info.mensch = null;
       } else {
         z.richtung = Math.atan2(m.y - z.y, m.x - z.x); z.jagt = true;

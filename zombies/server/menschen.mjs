@@ -559,10 +559,11 @@ export class Stadtleben {
       const k = Math.floor(e[1].y / Z) * 4096 + Math.floor(e[1].x / Z);
       const l = raster.get(k); if (l) l.push(e); else raster.set(k, [e]);
     }
+    const SW = this.raum.zombieSicht();
     for (const [zid, z] of zombies) {
       const info = this.raum.zombieInfo.get(zid);
       if (!info || info.ziel || info.schlaeft || info.dran === false) continue;   // ferne Zombies nur in „ihrem“ Takt
-      let best = null, bd = W.sichtWeite;
+      let best = null, bd = SW.gehen;
       const cx = Math.floor(z.x / Z), cy = Math.floor(z.y / Z);
       const kandidaten = [];
       for (let j = cy - 2; j <= cy + 2; j++) for (let i = cx - 2; i <= cx + 2; i++) { const l = raster.get(j * 4096 + i); if (l) for (const e of l) kandidaten.push(e); }
@@ -570,7 +571,7 @@ export class Stadtleben {
         if (m.infiziert) continue;   // schon gebissen: nicht noch einmal jagen
         const d = Math.hypot(m.x - z.x, m.y - z.y);
         if (d > (m.versteckt ? Math.min(bd, VERSTECK_WEITE) : bd)) continue;   // Versteckte bemerkt man erst fast beim Draufstehen
-        const imKegel = winkelDiff(Math.atan2(m.y - z.y, m.x - z.x), z.richtung) < W.sichtWinkel / 2;
+        const imKegel = winkelDiff(Math.atan2(m.y - z.y, m.x - z.x), z.richtung) < SW.winkel / 2;
         if ((imKegel || d < 60) && sichtfrei(welt, z.x, z.y, m.x, m.y)) { bd = d; best = [mid, m]; }
       }
       if (!best) continue;

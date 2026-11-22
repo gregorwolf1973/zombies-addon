@@ -178,6 +178,14 @@
   "lagerWellePause": 10,
   "ueberraschung": 5
  },
+ "zombieSicht": {
+  "gehen": 21,
+  "schleichen": 12,
+  "kegel": 75,
+  "verfolgen": 34,
+  "aufgeben": 64,
+  "nacht": 100
+ },
  "nebel": {
   "morgen": 40,
   "abend": 25,

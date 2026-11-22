@@ -901,6 +901,19 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
   <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
+  <p class="tn-leise" id="zsHinweis">Wie weit und wie breit Zombies sehen: Gehen/Schleichen = ab welcher Entfernung sie einen Spieler im Sichtkegel bemerken; Verfolgen = bis wohin sie ein bemerktes Ziel noch sehen; Aufgeben = darüber verlieren sie es. Nacht skaliert Entdecken und Verfolgen mit der Dunkelheit (100 % = wie am Tag). Nebel wirkt zusätzlich. Grundwerte = bisheriges Verhalten (21 / 12 m, 75°, 34 / 64 m, 100 %).</p>
+  <label for="zsGehen">Sichtweite beim Gehen/Rennen (Entdecken)</label>
+  <div class="tn-zeile"><input type="range" id="zsGehen" min="3" max="80" step="1"><span id="zsGehenWert">21 m</span></div>
+  <label for="zsSchleichen">Sichtweite bei schleichenden Spielern</label>
+  <div class="tn-zeile"><input type="range" id="zsSchleichen" min="2" max="60" step="1"><span id="zsSchleichenWert">12 m</span></div>
+  <label for="zsKegel">Öffnungswinkel des Sichtkegels</label>
+  <div class="tn-zeile"><input type="range" id="zsKegel" min="20" max="180" step="5"><span id="zsKegelWert">75 °</span></div>
+  <label for="zsVerfolgen">Verfolgen: so weit sehen Zombies ihr Ziel weiter</label>
+  <div class="tn-zeile"><input type="range" id="zsVerfolgen" min="5" max="150" step="1"><span id="zsVerfolgenWert">34 m</span></div>
+  <label for="zsAufgeben">Aufgeben: ab dieser Entfernung verlieren sie das Ziel (sonst nach 10 s ohne Sicht)</label>
+  <div class="tn-zeile"><input type="range" id="zsAufgeben" min="10" max="250" step="1"><span id="zsAufgebenWert">64 m</span></div>
+  <label for="zsNacht">Sicht bei Nacht (Faktor auf Entdecken und Verfolgen, wächst mit der Dunkelheit)</label>
+  <div class="tn-zeile"><input type="range" id="zsNacht" min="10" max="200" step="5"><span id="zsNachtWert">100 %</span></div>
   <label class="tn-schalter" id="diagnoseSchalter"><input type="checkbox" id="tnDiagnose"> Diagnose der Geräte: Fehler und Leistung (FPS, Ping, Ton) der Spieler als „[diag]“-Zeilen im Add-on-Log und in /data/diag.jsonl (keine Namen, keine IP)</label>
   <label for="tnInnenTempo">Tempo in maßstäblichen Innenräumen (% vom Tempo draußen; drinnen sind Figuren halb so groß und die Kamera ist näher)</label>
   <div class="tn-zeile"><input type="range" id="tnInnenTempo" min="10" max="100" step="2"><span id="tnInnenTempoWert">35 %</span></div>
@@ -1225,6 +1238,12 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnNebelZombie', nb.zombie === undefined ? 50 : nb.zombie, function (v) { return v + ' %'; });
     if (document.activeElement !== $('tnBlaulicht')) $('tnBlaulicht').value = e.blaulicht || 'selten';
     if (document.activeElement !== $('tnKegel')) $('tnKegel').checked = !!e.sichtkegel;
+    feld('zsGehen', (e.zombieSicht || {}).gehen === undefined ? 21 : e.zombieSicht.gehen, function (v) { return v + ' m'; });
+    feld('zsSchleichen', (e.zombieSicht || {}).schleichen === undefined ? 12 : e.zombieSicht.schleichen, function (v) { return v + ' m'; });
+    feld('zsKegel', (e.zombieSicht || {}).kegel === undefined ? 75 : e.zombieSicht.kegel, function (v) { return v + ' °'; });
+    feld('zsVerfolgen', (e.zombieSicht || {}).verfolgen === undefined ? 34 : e.zombieSicht.verfolgen, function (v) { return v + ' m'; });
+    feld('zsAufgeben', (e.zombieSicht || {}).aufgeben === undefined ? 64 : e.zombieSicht.aufgeben, function (v) { return v + ' m'; });
+    feld('zsNacht', (e.zombieSicht || {}).nacht === undefined ? 100 : e.zombieSicht.nacht, function (v) { return v + ' %'; });
     if (document.activeElement !== $('tnDiagnose')) $('tnDiagnose').checked = e.diagnose !== false;
     if (document.activeElement !== $('tnInnen')) $('tnInnen').checked = !!e.innenMassstab;
     feld('tnInnenTempo', e.innenTempo === undefined ? 35 : e.innenTempo, function (v) { return v + ' %'; });
@@ -1293,6 +1312,12 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnTagAb', uhrText, function (v) { return { tagAb: v }; });
   regler('tnNachtDunkel', function (v) { return v + ' %'; }, function (v) { return { nachtDunkel: v }; });
   regler('tnNachtAb', uhrText, function (v) { return { nachtAb: v }; });
+  regler('zsGehen', function (v) { return v + ' m'; }, function (v) { return { zombieSicht: { gehen: v } }; });
+  regler('zsSchleichen', function (v) { return v + ' m'; }, function (v) { return { zombieSicht: { schleichen: v } }; });
+  regler('zsKegel', function (v) { return v + ' °'; }, function (v) { return { zombieSicht: { kegel: v } }; });
+  regler('zsVerfolgen', function (v) { return v + ' m'; }, function (v) { return { zombieSicht: { verfolgen: v } }; });
+  regler('zsAufgeben', function (v) { return v + ' m'; }, function (v) { return { zombieSicht: { aufgeben: v } }; });
+  regler('zsNacht', function (v) { return v + ' %'; }, function (v) { return { zombieSicht: { nacht: v } }; });
   regler('tnNebelMorgen', function (v) { return v + ' %'; }, function (v) { return { nebel: { morgen: v } }; });
   regler('tnNebelAbend', function (v) { return v + ' %'; }, function (v) { return { nebel: { abend: v } }; });
   regler('tnNebelSicht', function (v) { return v + ' m'; }, function (v) { return { nebel: { sicht: v } }; });
@@ -3575,6 +3600,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   if (zk) {
     zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel');
     zeile(zk.inhalt, 'tnBaumTempo'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
+    var zs = unter('👁 Zombie-Sicht'); rein(zs.inhalt, $('zsHinweis')); ['zsGehen', 'zsSchleichen', 'zsKegel', 'zsVerfolgen', 'zsAufgeben', 'zsNacht'].forEach(function (id) { zeile(zs.inhalt, id); }); zk.inhalt.appendChild(zs);
     var typen = unter('Zombietypen (mindestens einer bleibt an)');
     (window.ZTYPEN || []).forEach(function (k) { schalter(typen.inhalt, 'zt_' + k); });
     var ztt = $('ztTitel'); if (ztt) ztt.remove();

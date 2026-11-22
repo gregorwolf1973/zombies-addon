@@ -614,14 +614,14 @@ export class Zombiewelle {
       if (!lage || t.alter > 300) { this.truppEnde(a, t); continue; }
       t.x = lage.x; t.y = lage.y;
       let sieht = false;
-      for (const id of lebende) { const q = z.get(id); if (Math.hypot(q.x - lage.x, q.y - lage.y) < W.sichtWeite * 1.6) { sieht = true; break; } }
+      for (const id of lebende) { const q = z.get(id); if (Math.hypot(q.x - lage.x, q.y - lage.y) < r.zombieSicht().verfolgen) { sieht = true; break; } }
       // solange das Opfer in Hörweite ist (Zombies im Umkreis), bleibt der Trupp dran
       if (!sieht && this.laermOrt && this.zeit - this.laermOrt.t < 8 && Math.hypot(this.laermOrt.x - lage.x, this.laermOrt.y - lage.y) < 400) sieht = true;
       t.aus = sieht ? 0 : t.aus + dt;
       if (t.aus > t.ausMax) { this.truppEnde(a, t); continue; }
       for (const id of lebende) {   // wer sein Ziel verloren hat, geht zur letzten bekannten Stelle, solange der Trupp es noch sucht
         const info = r.zombieInfo.get(id), q = z.get(id);
-        if (!info.ziel && !info.mensch && !info.punkt && Math.hypot(q.x - lage.x, q.y - lage.y) < W.sichtWeite * 3) info.punkt = { x: lage.x, y: lage.y };
+        if (!info.ziel && !info.mensch && !info.punkt && Math.hypot(q.x - lage.x, q.y - lage.y) < r.zombieSicht().aufgeben) info.punkt = { x: lage.x, y: lage.y };
       }
     }
     for (const [k, bis] of a.cool) if (bis <= a.alter) a.cool.delete(k);

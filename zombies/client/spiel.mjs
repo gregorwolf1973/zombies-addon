@@ -19,6 +19,7 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
+import { sichtPx } from './zombiesicht.mjs';
 import { weltBeschaffen, weltVorrechnen } from './weltladen.mjs';
 import { ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulFoto, kulHatGezeichnet, kulSchatten, fotoStatus, fotoWunsch } from './kulisse.mjs';
 import { KUL_SCHLUESSEL, schattenFaktor } from './kulisse_regeln.mjs';
@@ -197,7 +198,8 @@ async function veraltet() {
 function autostartMerken() { try { sessionStorage.setItem('zob_autostart', '1'); const pw = $('testpw')?.value; if (pw) sessionStorage.setItem('zob_testpwtmp', pw); } catch {} }
 function frischLaden(wiederBeitreten) { if (wiederBeitreten) autostartMerken(); location.reload(); }
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && await veraltet()) frischLaden(!!window.szene); });
-fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); }).catch(() => {});
+let zombieSichtEinst = null;   // Backend „Zombie-Sicht“ (Kegel-Anzeige), aus /info und 'tonEinst'
+fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); zombieSichtEinst = i.zombieSicht; }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 tutorialKnopf(() => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });   // „🎯 Schießstand / Tutorial“ unter „Mitspielen“
 
@@ -1159,7 +1161,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('sirene', () => {});   // die Sirene läuft dauernd am Fahrzeug (fahrzeuge in abgleichen)
     raum.onMessage('weg', m => { this.puff(m.x, m.y); if (istEigen(m, meineId)) ton.zombieWeg(null, null); else if (hoertEbene(m)) ton.zombieWeg(m.x, m.y); });   // eigener Kill immer hörbar
     raum.onMessage('entdeckt', m => { if (hoertEbene(m)) ton.entdeckt(m.x, m.y); });
-    raum.onMessage('tonEinst', m => { if (m?.toene) ton.toeneZuordnen(m.toene); ton.toneEinstellungen(m); });   // Backend hat Musik/Radio/Horde geändert
+    raum.onMessage('tonEinst', m => { if (m?.zombieSicht) zombieSichtEinst = m.zombieSicht; if (m?.toene) ton.toeneZuordnen(m.toene); ton.toneEinstellungen(m); });   // Backend hat Musik/Radio/Horde geändert
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
     raum.onMessage('weltFalsch', m => {
@@ -2491,6 +2493,7 @@ class Ort extends Phaser.Scene {
     for (const [id, f] of this.figuren) if (!s.spieler.has(id)) { f.box.destroy(); this.figuren.delete(id); pf.vergiss('s' + id); }
     // Zombies
     this.kegel.clear();
+    const sk = sichtPx(zombieSichtEinst);
     const cam = this.cameras.main.worldView;
     const zf = zg();   // Menschengröße × Gesamtgröße × Zombiegröße
     const RAND = 150, rx0 = cam.x - RAND, rx1 = cam.right + RAND, ry0 = cam.y - RAND, ry1 = cam.bottom + RAND;   // Ausschnitt + Rand: nur dort wird gezeichnet
@@ -2550,7 +2553,7 @@ class Ort extends Phaser.Scene {
           this.kegel.lineStyle(1, 0xff8a65, 0.35).strokeCircle(f.x, f.y, 110);
         } else {
           this.kegel.fillStyle(z.jagt ? 0xff5252 : 0xfff59d, z.jagt ? 0.18 : 0.13);
-          this.kegel.slice(f.x, f.y, W.sichtWeite, f.r - W.sichtWinkel / 2, f.r + W.sichtWinkel / 2, false).fillPath();
+          this.kegel.slice(f.x, f.y, sk.gehen, f.r - sk.winkel / 2, f.r + sk.winkel / 2, false).fillPath();
         }
       }
     }
