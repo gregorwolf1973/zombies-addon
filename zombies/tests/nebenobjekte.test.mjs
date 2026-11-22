@@ -19,11 +19,10 @@ const rot = (o) => {   // Anteil der Feinfelder im Umriss, die die Hindernis-Anz
   return n / (nx * ny);
 };
 
-test('Nebengebäude und Pools erscheinen in der Hindernis-Anzeige als fest', () => {
+test('Nebengebäude erscheinen in der Hindernis-Anzeige als fest, Pools nicht mehr', () => {
   assert.ok(welt.nebengebaeude.length > 100 && welt.poolsEcht.length > 0);
   for (const o of welt.nebengebaeude.slice(0, 20)) assert.ok(rot(o) > 0.3, 'Nebengebäude rot');
-  // Pools: wo das feine Raster blockiert, zeigt die Anzeige fest (tuerenFreihalten öffnet Wege auch durch Becken, daher nicht jedes Becken ganz)
-  assert.ok(welt.poolsEcht.filter(q => rot(q) > 0.25).length >= 4, 'Pools rot')
+  assert.ok(welt.poolsEcht.filter(q => rot(q) > 0.25).length <= 1, 'Pools sind begehbar, nicht rot');
 });
 
 test('Einzelbäume: im Fenster eine Krone je Eintrag in echter Größe, Fingerabdruck der Welt unberührt', () => {

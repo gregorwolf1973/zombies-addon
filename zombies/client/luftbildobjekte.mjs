@@ -66,7 +66,7 @@ export function feinFuellen(f, fb, FEIN, hole, obj, BLOCKIERT) {
     }
   };
   void BLOCKIERT;
-  for (const o of obj.pools) fuell(o.p);
+  // Pools sind begehbar (Tempo 10 %, welt.poolZonen) und füllen das Raster nicht
   for (const s of obj.schuppen) fuell(s.p);
 }
 

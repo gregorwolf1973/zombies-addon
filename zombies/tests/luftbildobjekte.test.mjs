@@ -56,7 +56,7 @@ test('Hecken aus dem Luftbild: Zaun-Hecke, feines Raster blockiert, Zeichenlinie
   assert.ok(n >= 4, `${n} Feinfelder`);
 });
 
-test('Pools und Schuppen: Hindernis im feinen Raster, Beläge nur Darstellung', () => {
+test('Pools (begehbar, Tempo 10 %), Schuppen (Hindernis), Beläge nur Darstellung', () => {
   const [x, y] = wiesen[30];
   const k = structuredClone(basis);
   const q = (a, b, c, d) => [a, b, c, b, c, d, a, d].map(v => v * KACHEL);
@@ -65,7 +65,7 @@ test('Pools und Schuppen: Hindernis im feinen Raster, Beläge nur Darstellung', 
   k.belaegeLuftbild = [{ p: q(x, y + 6, x + 4, y + 8) }];
   const w = bauen(k), fb = k.breite * FEIN;
   const voll = (x0, y0, x1, y1) => { let n = 0; for (let fy = y0 * FEIN; fy < y1 * FEIN; fy++) for (let fx = x0 * FEIN; fx < x1 * FEIN; fx++) if (w.fein[fy * fb + fx]) n++; return n; };
-  assert.ok(voll(x, y, x + 2, y + 2) >= 60);
+  assert.equal(voll(x, y, x + 2, y + 2), 0, 'Pool ist kein Hindernis');
   assert.ok(voll(x + 8, y, x + 10, y + 1) >= 28);
   assert.equal(voll(x, y + 6, x + 4, y + 8), 0, 'Belag ist begehbar');
   assert.equal(w.poolsEcht.length, 1); assert.equal(w.schuppenEcht.length, 1); assert.equal(w.belaege.length, 1);

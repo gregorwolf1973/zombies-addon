@@ -171,6 +171,8 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   for (let i = 0; i < k.length; i++) k[i] = karte.kacheln.charCodeAt(i) - 48;
   const setze = (x, y, v) => { if (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) k[y * BREITE + x] = v; };
   const hole = (x, y) => (x >= 0 && y >= 0 && x < BREITE && y < HOEHE) ? k[y * BREITE + x] : T.ZAUN;
+  // Pools (OSM-Objekte) sind begehbar (Tempo 10 %, welt.poolZonen): ihre Wasserkacheln werden Wiese, bevor das Wasser geglättet wird
+  for (const o of karte.objekte ?? []) if (o.a === 'pool') for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) if (hole(x, y) === T.WASSER) setze(x, y, T.WIESE);
   wasserGlaetten(k, hole, setze);
 
   // Gebäudeflächen (Boden/Wand) einer Gebäude-Bbox, die zur Tür zusammenhängen
@@ -796,8 +798,15 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   const details = karte.zaunart ? { zaunart: karte.zaunart, garten: karte.garten, objekte: karte.objekte ?? [], zaeune: karte.zaeune ?? null } : null;
   const welt = { seed, karte: true, kacheln: k, hole, haeuser, parkbuchten: buchten, markt, tor, start, safeRooms, behaelter, deko, vektor: karte.strassen ? vektor : null, details, muell, sperren };
   if (pisteInfo) welt.piste = pisteInfo;
-  // Weitere Luftbild-Objekte: Pools und Schuppen sind Hindernisse im feinen Raster, Beläge nur Darstellung (Zeichnung liest welt.poolsEcht, welt.schuppenEcht, welt.belaege)
+  // Weitere Luftbild-Objekte: Schuppen sind Hindernisse im feinen Raster, Pools nicht (poolZonen), Beläge nur Darstellung (Zeichnung liest welt.poolsEcht, welt.schuppenEcht, welt.belaege)
   const lbObj = luftbildObjekte(karte0);
+  welt.poolZonen = [];   // begehbare Pools mit Tempo 10 %: OSM-Rechtecke und Luftbild-Polygone (Spielpixel)
+  for (const o of karte.objekte ?? []) if (o.a === 'pool') welt.poolZonen.push({ x0: o.x * KACHEL, y0: o.y * KACHEL, x1: (o.x + (o.b ?? 1)) * KACHEL, y1: (o.y + (o.h ?? 1)) * KACHEL });
+  for (const o of lbObj.pools) {
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (let i = 0; i < o.p.length; i += 2) { x0 = Math.min(x0, o.p[i]); x1 = Math.max(x1, o.p[i]); y0 = Math.min(y0, o.p[i + 1]); y1 = Math.max(y1, o.p[i + 1]); }
+    welt.poolZonen.push({ x0, y0, x1, y1, p: o.p });
+  }
   welt.poolsEcht = lbObj.pools; welt.schuppenEcht = lbObj.schuppen; welt.belaege = lbObj.belaege;
   if (karte.zaeune) welt.fein = baueFein(welt, karte, lbObj);
   welt.freihalten = freihalteKreise(karte);   // Landeplatz/Bunkertor-Gelände: kein Lager darauf
@@ -852,7 +861,7 @@ function baueFein(welt, karte, lbObj) {
   const fb = BREITE * FEIN, fh = HOEHE * FEIN, f = new Uint8Array(fb * fh);
   const hole = welt.hole, zaunart = welt.details?.zaunart ?? '';
   const grob = new Uint8Array(BREITE * HOEHE);   // 1 = Kachel wird grob übernommen
-  for (const o of welt.details?.objekte ?? []) if (o.a === 'gartenhaus' || o.a === 'pool') for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) grob[y * BREITE + x] = 1;
+  for (const o of welt.details?.objekte ?? []) if (o.a === 'gartenhaus') for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) grob[y * BREITE + x] = 1;
   const kachelFuellen = (kx, ky, wert) => { for (let dy = 0; dy < FEIN; dy++) for (let dx = 0; dx < FEIN; dx++) f[(ky * FEIN + dy) * fb + kx * FEIN + dx] = wert; };
   // 1. grob übernehmen – außer Hauswänden (Polygon) und Gartenzäunen (Linien)
   for (let ky = 0; ky < HOEHE; ky++) for (let kx = 0; kx < BREITE; kx++) {

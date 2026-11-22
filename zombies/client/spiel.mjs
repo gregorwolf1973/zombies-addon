@@ -25,6 +25,20 @@ import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schieß
 import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
+const SCHATTEN_ZELLE = 4, SCHATTEN_DUNKEL = 0.35;   // Raster der Schattenprüfung (px) und Abdunklung der Figuren im Schatten
+// Schattenbild (Deckkraft der gezeichneten Schatten) → Raster b × h, 1 = Schatten (Alpha ab ~50 %)
+function schattenMaske(ctx, B, H) {
+  try {
+    const b = Math.ceil(B / SCHATTEN_ZELLE), h = Math.ceil(H / SCHATTEN_ZELLE), d = new Uint8Array(b * h), px = ctx.getImageData(0, 0, B, H).data;
+    for (let cy = 0; cy < h; cy++) for (let cx = 0; cx < b; cx++) {
+      const x = Math.min(B - 1, cx * SCHATTEN_ZELLE + 2), y = Math.min(H - 1, cy * SCHATTEN_ZELLE + 2);
+      if (px[(y * B + x) * 4 + 3] > 128) d[cy * b + cx] = 1;
+    }
+    return { b, h, d };
+  } catch { return null; }
+}
+// Tönung (0xRRGGBB) mit Faktor f (0..1) abdunkeln
+const tintMal = (c, f) => (Math.round(((c >> 16) & 255) * f) << 16) | (Math.round(((c >> 8) & 255) * f) << 8) | Math.round((c & 255) * f);
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
 import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from './innen_fein_bild.mjs';
@@ -1521,7 +1535,32 @@ class Ort extends Phaser.Scene {
     const ts = this.textures.createCanvas('schatten-' + st.key, st.B, st.H);
     if (!zeichneSchattenStueck(ts.getContext(), st.B, st.H, this.welt, st.rect)) { this.textures.remove('schatten-' + st.key); return; }
     ts.refresh(); this.kanteFesthalten(ts);
+    st.maske = schattenMaske(ts.getContext(), st.B, st.H);   // Schattenraster für „Figuren im Schatten dunkler“
     st.schatten = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'schatten-' + st.key).setOrigin(0).setDepth(0.5).setAlpha(this.schattenAlpha ?? 0.2).setVisible(!this.aktEbene);
+  }
+  // Liegt (x, y) im Haus- oder Baumschatten? Raster 4 px je Zelle aus dem Schattenbild des Kartenstücks (nur Boden, nicht drinnen)
+  imSchatten(x, y) {
+    const st = this.stuecke.get(Math.floor(x / (STUECK * KACHEL)) + ',' + Math.floor(y / (STUECK * KACHEL)));
+    const m = st?.maske;
+    if (!m) return false;
+    const cx = Math.floor((x - st.rect.x0 * KACHEL) / SCHATTEN_ZELLE), cy = Math.floor((y - st.rect.y0 * KACHEL) / SCHATTEN_ZELLE);
+    return cx >= 0 && cy >= 0 && cx < m.b && cy < m.h && m.d[cy * m.b + cx] === 1;
+  }
+  // Figur im Schatten: Tönung (Mischfaktor f = 1 … 0,65) sanft überblenden (~150 ms), Prüfung höchstens alle 100 ms.
+  // o = Figur-Objekt (merkt sich Stufe/Zeit), base = vorhandene Tönung der Figur (0xffffff, Infiziert-Grün …), die damit multipliziert wird
+  schattenTon(o, x, y, base = 0xffffff) {
+    const jetzt = this.time.now;
+    let ziel = 0;
+    if (kulSchatten() && !this.aktEbene && (this.schattenAlpha ?? 0) > 0.02) {
+      if (!(jetzt < (o._schBis ?? 0))) { o._schBis = jetzt + 100; o._schZiel = this.imSchatten(x, y) ? 1 : 0; }
+      ziel = (o._schZiel ?? 0) * Math.min(1, this.schattenAlpha / 0.15);   // nachts/Nebel verschwindet der Schatten, die Figur wird wieder hell
+    }
+    const stufe = o._schStufe ?? 0;
+    if (stufe === ziel && base === 0xffffff && ziel === 0) return base;
+    const dt = Math.min(0.2, Math.max(0, (jetzt - (o._schZeit ?? jetzt)) / 150));
+    o._schZeit = jetzt;
+    o._schStufe = Math.abs(ziel - stufe) <= dt ? ziel : stufe + Math.sign(ziel - stufe) * dt;
+    return tintMal(base, 1 - SCHATTEN_DUNKEL * o._schStufe);
   }
   schattenAlphaSetzen() {
     const st = raum.state, uhr = st.uhr ?? 480;
@@ -2315,7 +2354,7 @@ class Ort extends Phaser.Scene {
         // schlurfen: leicht wanken
         f.bild.setRotation(bildNr < 0 ? 0 : Math.sin((f.lauf ?? 0) / 9) * 0.07).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'zombie_' + typ) * (angriff ? 1.06 : 1));
       }
-      f.bild.setTint(z.jagt ? 0xffd2c8 : 0xffffff);
+      f.bild.setTint(this.schattenTon(f, f.x, f.y, z.jagt ? 0xffd2c8 : 0xffffff));
       if ((s.optionen & 1) && zeigen && !this.aktEbene && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
         if (z.kriecht) {
           // Kriecher sehen nicht, sie spüren ringsum
@@ -2381,7 +2420,7 @@ class Ort extends Phaser.Scene {
       o.box.setVisible(m.sichtbar && this.aktEbene === (m.ebene ?? ''));
       // Versteckte in Häusern zeigen sich erst, wenn man nah genug ist (Wimmern verrät sie vorher)
       o.box.setAlpha(m.ebene && duckt && this.lokal && Math.hypot(m.x - this.lokal.x, m.y - this.lokal.y) > 130 ? 0 : 1);
-      o.bild.setTint(m.infiziert ? 0xb5d99c : duckt && !vk ? 0x777777 : 0xffffff);
+      o.bild.setTint(this.schattenTon(o, o.x, o.y, m.infiziert ? 0xb5d99c : duckt && !vk ? 0x777777 : 0xffffff));
     }
     for (const [id, o] of this.menschenObj) if (!s.menschen?.has(id)) { o.box.destroy(); this.menschenObj.delete(id); pf.vergiss('m' + id); }
     this.hundAnz.aktualisieren(s.hunde, dt, mg(), this.aktEbene, { x0: rx0, x1: rx1, y0: ry0, y1: ry1 });
@@ -2796,6 +2835,8 @@ class Ort extends Phaser.Scene {
       : held ? ZOMBIE_GROESSE * groesse('helden160', `held_${gg0}_leer`) * mg()
       : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg();
     f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
+    const ton = this.schattenTon(f, f.x, f.y);   // Spieler/Bots: im Schatten dunkler (Körper und Füße)
+    f.bild.setTint(ton); f.fuesse.setTint(ton);
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
     const tun = zombie ? '🧟' : p.aktion === 'klettern' ? '🧗' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.aktion === 'funk' ? '📻' : p.ruht ? '💤' : p.infektion > 0 ? '🦠' : '';
