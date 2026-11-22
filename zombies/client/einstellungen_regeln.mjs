@@ -31,6 +31,7 @@ export const GERAET_SCHLUESSEL = {
   stimmen: 'zob_stimmen',          // Stimmen der Mitspieler, Prozent 0–200 (Standard 100)
   zombieTon: 'zob_zombieton',      // Zombiegeräusche an/aus (Standard an)
   musik: 'zob_musik',              // Musik an/aus (Standard an)
+  autoradio: 'zob_autoradio',      // Autoradio an/aus (Standard an), unabhängig von der Musik
   schiessen: 'zob_schiessen',      // 'auto' (Standard) oder 'knopf'
   kartenbild: 'zob_kartenbild',    // Eckkarte: 'luft' (Standard, Luftbild-Hintergrund) oder 'karte' (gezeichnete Karte)
 };

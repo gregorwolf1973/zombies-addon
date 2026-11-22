@@ -23,6 +23,7 @@ import { waehleZiel, schussGuete, ersterBaum } from './baumschuss.mjs';
 import { aussehenMigriert } from '../client/figurbild.mjs';
 import { Granaten } from './granaten.mjs';
 import { Radios } from './radio.mjs';
+import { fahrzeugHatRadio } from '../client/ton_regeln.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { hat, zaehle, flach, indexVon, entferne, nimmEins, nimmStapel, fuegeHinzu, kannAufnehmen, blockGrund, platzFuer, verschiebe, laden as stapelLaden, dingId, dingN, istTasche } from '../client/stapel.mjs';
 import { munitionGeben, kisteOeffnen, munitionPruefen } from './munition.mjs';
@@ -189,6 +190,7 @@ const BRETT_STAERKE = 35;
 
 const TICK = 50; // ms → 20 Simulationsschritte pro Sekunde
 const PATCH = 100; // ms → 10 Zustands-Updates pro Sekunde an die Clients (der Client glättet dazwischen)
+const SICHT_MIN_ZOMBIE = 720, SICHT_MIN_RADIO = 480;   // mindestens so weit (halbe Kantenlänge, px) um den Spieler: Stöhnen/Horde und Autoradios hören alle gleich weit, egal wie groß der Bildschirm ist
 const SICHT_RAND = 260, SICHT_LOESEN = 220;   // Pixel um den Bildausschnitt: dort werden Zombies schon geschickt; erst so viel weiter wieder entfernt
 const SICHT_VORGABE = { w: 1100, h: 700 }, SICHT_MAX = 2600, SICHT_MAX_FLUG = 6000;   // halbe Ausschnittgröße in Pixeln, bis der Client seine meldet
 const EINGABE_GUTHABEN_MAX = 1.5;   // Sekunden Bewegung, die der Server nach einem Netz-Hänger nachholt
@@ -341,14 +343,15 @@ export class SpielRaum extends Room {
       const p = s.spieler.get(c.sessionId);
       if (!p) continue;
       const w = c.sicht?.w ?? SICHT_VORGABE.w, h = c.sicht?.h ?? SICHT_VORGABE.h, eb = p.ebene ?? '';
-      const ax = w + SICHT_RAND, ay = h + SICHT_RAND, lx = ax + SICHT_LOESEN, ly = ay + SICHT_LOESEN;
+      const bx = w + SICHT_RAND, by = h + SICHT_RAND;
       const kam = p.kamera ? this.extra.get(c.sessionId)?.kameraPos ?? null : null;
-      const pruefe = (karte, ids, ebeneVon, immer = null) => {
+      const pruefe = (karte, ids, ebeneVon, immer = null, mind = () => 0) => {
         if (!karte) return;
         for (const id of ids) if (!karte.has(id)) ids.delete(id);
         for (const [id, o] of karte) {
           if (immer?.(o)) { if (!ids.has(id)) { c.view.add(o); ids.add(id); } continue; }   // z. B. Evakuierungsfahrzeug: der Client sucht es (Hinweis, Karte, Einstieg)
           const gleich = ebeneVon(o) === eb;
+          const mn = mind(o, id), ax = Math.max(bx, mn), ay = Math.max(by, mn), lx = ax + SICHT_LOESEN, ly = ay + SICHT_LOESEN;
           let dx = Math.abs(o.x - p.x), dy = Math.abs(o.y - p.y);
           const k = kam;   // Kameraflug: auch rund um die Kamera senden (näherer der beiden Mittelpunkte zählt)
           if (k) { const kx = Math.abs(o.x - k.x), ky = Math.abs(o.y - k.y); if (Math.max(kx - ax, ky - ay) < Math.max(dx - ax, dy - ay)) { dx = kx; dy = ky; } }
@@ -357,9 +360,9 @@ export class SpielRaum extends Room {
           } else if (gleich && dx <= ax && dy <= ay) { c.view.add(o); ids.add(id); }
         }
       };
-      pruefe(s.zombies, c.sichtZ ??= new Set(), z => z.ebene ?? '');
-      pruefe(s.fahrzeuge, c.sichtF ??= new Set(), () => eb, f => f.art === 'evakuierung');   // draußen unterwegs, aber Sirenen/Rauch hört man auch aus dem Haus
-      pruefe(s.menschen, c.sichtM ??= new Set(), m => m.sichtbar === false ? '\u0000' : (m.ebene ?? ''));   // Bewohner im Haus/Bus: nirgends sichtbar
+      pruefe(s.zombies, c.sichtZ ??= new Set(), z => z.ebene ?? '', null, () => SICHT_MIN_ZOMBIE);
+      pruefe(s.fahrzeuge, c.sichtF ??= new Set(), () => eb, f => f.art === 'evakuierung', (f, id) => (fahrzeugHatRadio(id, f.art) ? SICHT_MIN_RADIO : 0));   // draußen unterwegs, aber Sirenen/Rauch hört man auch aus dem Haus
+      pruefe(s.menschen, c.sichtM ??= new Set(), m => m.sichtbar === false ? '\u0000' : (m.ebene ?? ''), null, () => SICHT_MIN_ZOMBIE);   // Bewohner im Haus/Bus: nirgends sichtbar
     }
   }
 

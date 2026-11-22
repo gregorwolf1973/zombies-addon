@@ -8,7 +8,7 @@ import { anAusLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
 let ctx = null, haupt = null, rauschPuffer = null, stufe = 1;
 const BASIS = 0.72;                          // Grundpegel (0.36 → 0.72 mit den gemessenen Lautstärken je Ereignis; früher 0.8)
 const EFFEKT_FAKTOR = 0.75;                  // Spielgeräusche 25 % leiser als zuvor (Stimmen kommen besser durch); Musik behält ihren Pegel
-let zombieTonAn = true, musikAn = true;      // Zahnrad-Menü (je Gerät): Zombie-Einzelgeräusche, Musik
+let zombieTonAn = true, musikAn = true, radioAn = true;      // Zahnrad-Menü (je Gerät): Zombie-Einzelgeräusche, Musik, Autoradio
 const STUFEN = [1, 0.5, 0.25, 0];            // 100 %, 50 %, 25 %, stumm
 let hx = 0, hy = 0;                         // Hörer (eigene Figur) in Pixeln
 let wind = null, brumm = null;
@@ -20,6 +20,7 @@ try {
   else if (localStorage.getItem('zombies_ton') === 'aus') stufe = 0;
   zombieTonAn = anAusLesen(localStorage.getItem(GERAET_SCHLUESSEL.zombieTon));
   musikAn = anAusLesen(localStorage.getItem(GERAET_SCHLUESSEL.musik));
+  radioAn = anAusLesen(localStorage.getItem(GERAET_SCHLUESSEL.autoradio));
 } catch { /* ohne Speicher: 100 % */ }
 
 export function tonAn() { return stufe > 0; }
@@ -38,13 +39,20 @@ const zombieStumm = id => !zombieTonAn && ZOMBIE_IDS.has(id) && id !== 'entdeckt
 export function musikSetzen(an) {
   musikAn = !!an;
   if (!ctx) return;
-  radioPegel();   // Live-Radio zählt als Musik
-  if (musikAn) radioVorstart(); else if (radioEl) radioPausieren(true);
   if (!musikAn) {
     musikAnwenden(null);   // Spielmusik ausblenden; kommt bei „an“ mit der nächsten Lage (≈1 s) wieder
     if (musik) { const m = musik; musik = null; if (m.strom) m.strom.stop(1); else { m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); setTimeout(() => { try { m.src.stop(); } catch { /* schon aus */ } }, 1500); } }
   }
 }
+
+// Autoradio (Live-Radio und Datei in fahrenden/geparkten Autos): eigener Schalter, unabhängig von „Musik“
+export function autoradioSetzen(an) {
+  radioAn = !!an;
+  if (!ctx) return;
+  radioPegel();
+  if (radioAn) radioVorstart(); else if (radioEl) radioPausieren(true);
+}
+export const autoradioAn = () => radioAn;
 
 // ---------- Tondateien (auf der Einstellungsseite Ereignissen zugeordnet) ----------
 let zuordnung = {};                 // Ereignis → { dateien, laut }
@@ -602,7 +610,7 @@ function radioAnlegen() {
     radioEl = new Audio(); radioEl.crossOrigin = 'anonymous'; radioEl.preload = 'none'; radioEl.setAttribute('playsinline', '');
     radioQuelle = ctx.createMediaElementSource(radioEl);
     radioDuck = ctx.createGain(); radioDuck.gain.value = 1; radioQuelle.connect(radioDuck);   // Sender leiser während einer Durchsage
-    radioBus = ctx.createGain(); radioBus.gain.value = musikAn ? radioEin.laut / 100 : 0; radioBus.connect(haupt);
+    radioBus = ctx.createGain(); radioBus.gain.value = radioAn ? radioEin.laut / 100 : 0; radioBus.connect(haupt);
     radioEl.onerror = () => { radioPausieren(true); };
     return true;
   } catch { radioEl = null; return false; }
@@ -611,12 +619,12 @@ function radioAnlegen() {
 function radioPegel() {
   if (!ctx || !radioBus) return;
   const stumm = performance.now() < radioStummBis;
-  radioBus.gain.setTargetAtTime(musikAn && !stumm ? radioEin.laut / 100 : 0, ctx.currentTime, stumm ? 0.05 : 0.6);
+  radioBus.gain.setTargetAtTime(radioAn && !stumm ? radioEin.laut / 100 : 0, ctx.currentTime, stumm ? 0.05 : 0.6);
 }
 // Stream gleich bei Spielbeginn verbinden und für den Vorlauf stumm lassen; danach bleibt er bis zum Verlassen verbunden
 // (sonst spielt der Sender bei jedem neuen Verbindungsaufbau wieder seinen Vorspann)
 function radioVorstart() {
-  if (!ctx || !radioEin.an || !musikAn || !radioAnlegen()) return;
+  if (!ctx || !radioEin.an || !radioAn || !radioAnlegen()) return;
   if (!radioEl.paused && radioEl.src && radioEl.src.startsWith(radioEin.url)) return;
   try {
     radioEl.src = radioEin.url;
@@ -674,7 +682,7 @@ function durchsagePruefen(h) {
   src.start(z + 0.6);
 }
 function radioHandle() {
-  if (!radioEin.an || !musikAn || !radioAnlegen()) return null;
+  if (!radioEin.an || !radioAn || !radioAnlegen()) return null;
   clearTimeout(radioAusTimer);
   if (radioEl.paused || !radioEl.src || !radioEl.src.startsWith(radioEin.url)) radioVorstart();
   const g = ctx.createGain(); g.gain.value = 0;
@@ -691,8 +699,9 @@ function radioHandle() {
 }
 
 // allgemeine Schleife an einem bewegten Ding (z. B. Autoradio); ohne zugeordnete Datei: null
-export function schleifeStarten(id) {
+export function schleifeStarten(id, fahrzeug = false) {
   if (!ctx) return null;
+  if (id === 'autoradio' && fahrzeug && !radioAn) return null;   // Autoradio-Schalter aus: kein Auto spielt Radio
   if (id === 'autoradio' && radioEin.an) { const h = radioHandle(); if (h) return h; }
   const t = zuordnung[id], liste = (t?.dateien ?? []).map(geladen).filter(Boolean);
   if (!liste.length) { (t?.dateien ?? []).forEach(laden); return null; }

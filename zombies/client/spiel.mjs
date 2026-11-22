@@ -55,7 +55,8 @@ import { fundZeigen, fundZu, fundPruefen } from './fundliste.mjs';
 import { alleKandidaten } from './durchsuche_alle.mjs';
 import * as sprache from './sprache.mjs';
 import { merkzettelAnschliessen, merkzettelErwarten } from './merkzettel.mjs';
-import { istEigen, hoertEbene as hoertEbeneRegel } from './ton_regeln.mjs';
+import { istEigen, hoertEbene as hoertEbeneRegel, fahrzeugHatRadio, parktAutoHatRadio } from './ton_regeln.mjs';
+const RADIO_WEITE = 560, PARK_RADIO_WEITE = 320;   // Hörweite in px: fahrende Autos (Server schickt sie bis 480 px), geparkte etwas leiser/näher
 import { GERAET_SCHLUESSEL, kartenbildLesen, stimmenFaktorLesen, anAusLesen, schiessModusLesen, feuerErlaubt as feuerErlaubtRegel } from './einstellungen_regeln.mjs';
 import { fkStart } from './faehigkeiten.mjs';
 import { startwahlStart } from './startwahl.mjs';
@@ -513,12 +514,14 @@ function geraetEinstellungenEinrichten(markieren) {
       v => { const k = kulisse(); if (!k) return; k.an[w] = anAusLesen(v); document.dispatchEvent(new CustomEvent('zob-kulisse')); }, KUL_SCHLUESSEL[w])),
     gruppe('eg-zombieton', () => (anAusLesen(lies(K.zombieTon)) ? 'an' : 'aus'), v => ton.zombieTonSetzen(anAusLesen(v)), K.zombieTon),
     gruppe('eg-musik', () => (anAusLesen(lies(K.musik)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.musikSetzen(anAusLesen(v)); }, K.musik),
+    gruppe('eg-autoradio', () => (anAusLesen(lies(K.autoradio)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.autoradioSetzen(anAusLesen(v)); }, K.autoradio),
   ];
   $('eg-stimmen').oninput = e => { merke(K.stimmen, e.target.value); sprache.stimmenFaktorSetzen(e.target.value); stimmenAnzeige(); };
   // beim Öffnen des Menüs die Markierungen nachziehen (markieren() ruft der Aufrufer auf)
   geraetMarkieren = () => { marks.forEach(m => m()); stimmenAnzeige(); };
   geraetMarkieren();
   ton.zombieTonSetzen(anAusLesen(lies(K.zombieTon)));
+  ton.autoradioSetzen(anAusLesen(lies(K.autoradio)));
   sprache.stimmenFaktorSetzen(lies(K.stimmen) ?? 100);
   // Feuerknopf: Halten = Feuer frei (Touch, Maus), Leertaste am PC
   const fk = $('feuerknopf');
@@ -2578,9 +2581,12 @@ class Ort extends Phaser.Scene {
         const d = Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y);
         if (d < 170 && o.vorher !== undefined && d > o.vorher && !o.vorbei && !f.haelt) { ton.ereignis('autoVorbei', o.x, o.y); o.vorbei = true; }
         if (d > 400) o.vorbei = false;
-        if (f.art === 'auto' && (id.charCodeAt(id.length - 1) % 3 === 0)) {
-          if (!o.radio) o.radio = ton.schleifeStarten('autoradio');
-          if (o.radio) ton.sireneLage(o.radio, o.x, o.y, o.vorher === undefined ? 0 : (o.vorher - d) / Math.max(dt, 0.001));
+        if (fahrzeugHatRadio(id, f.art)) {
+          if (o.radio && !ton.autoradioAn()) { ton.sireneStoppen(o.radio); o.radio = null; }
+          else if (ton.autoradioAn()) {
+            if (!o.radio) o.radio = ton.schleifeStarten('autoradio', true);
+            if (o.radio) ton.sireneLage(o.radio, o.x, o.y, o.vorher === undefined ? 0 : (o.vorher - d) / Math.max(dt, 0.001), RADIO_WEITE);
+          }
         }
         o.vorher = d;
       }
@@ -2630,6 +2636,7 @@ class Ort extends Phaser.Scene {
       ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); ton.sireneStoppen(o.kette); o.sirene = o.radio = o.kette = null;
       if (!s.fahrzeuge?.has(id)) { o.box.destroy(); o.sch?.destroy(); this.busObj.delete(id); }
     }
+    this.parktRadios(s, dt);
     this.feuerDarstellen(s);
     this.spurenDarstellen(s);
     // (kein Kistensymbol 📦/∅ über Behältern – bewusst keine „noch nicht durchsucht“-Anzeige)
@@ -2658,6 +2665,22 @@ class Ort extends Phaser.Scene {
     }
     this.zeichneBarrikaden();
     this.zeichneTor();
+  }
+
+  // Etwa jedes zehnte geparkte Auto am Straßenrand spielt leise Radio (Weltobjekte, nur Tonquelle; nicht, wenn verbrannt oder plattgefahren).
+  // Gleicher Schalter wie die fahrenden Autos (Zahnrad „Autoradio“); nur nahe Autos bekommen eine Tonquelle.
+  parktRadios(s, dt) {
+    if (this.parkRadioWelt !== this.welt) { this.parkRadioWelt = this.welt; this.parkRadioListe = (this.welt?.behaelter ?? []).filter(b => b.art === 'auto' && parktAutoHatRadio(b.id)).map(b => ({ b, h: null })); }
+    const liste = this.parkRadioListe, ich = this.lokal;
+    if (!liste?.length) return;
+    const an = ton.autoradioAn() && !!ich && !this.aktEbene;
+    for (const e of liste) {
+      const b = e.b, d = an ? Math.hypot(b.x - ich.x, b.y - ich.y) : Infinity;
+      const kaputt = s.verbrannt?.has('auto:' + b.id) || s.platt?.has(b.id);
+      if (!e.h && an && !kaputt && d < PARK_RADIO_WEITE * 1.2) { e.h = ton.schleifeStarten('autoradio', true); if (e.h) e.h.laut *= 0.6; }
+      else if (e.h && (!an || kaputt || d > PARK_RADIO_WEITE * 1.6)) { ton.sireneStoppen(e.h); e.h = null; }
+      if (e.h) ton.sireneLage(e.h, b.x, b.y, 0, PARK_RADIO_WEITE);
+    }
   }
 
   // Puma-Texturen 'puma-wanne'/'puma-turm' aus den Modell-Draufsichten (mit Rand R und weichem Schlagschatten, einmal angelegt);
