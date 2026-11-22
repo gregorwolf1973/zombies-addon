@@ -169,3 +169,22 @@ test('Posten aufgegeben: die Panzer stehen still', mitSzene(async ({ raum }) => 
   for (let t = 0; t < 30; t += 0.1) sz.schritt(0.1);
   sz.streifen.forEach((s, i) => assert.deepEqual([s.k.x, s.k.y], vor[i]));
 }));
+
+test('Leopard (B11) unterstützt Spieler in 150 m mit MG auch auf Zombies in 40 m, ohne Spieler in der Nähe schweigt er', mitSzene(async ({ raum, p }) => {
+  const sz = raum.szeneB11, l = sz.leopard, got = [];
+  const alt = raum.broadcast.bind(raum); raum.broadcast = (a, m) => { got.push(a); return alt(a, m); };
+  raum.einstellungen().bundeswehr.leopardReichweite = 25;
+  let id = null;
+  for (let k = 0; k < 36 && !id; k++) {
+    const w = k * Math.PI / 18, x = l.x + Math.cos(w) * 320, y = l.y + Math.sin(w) * 320;
+    if (frei(raum.welt, x, y, 20)) id = zombie(raum, x, y);
+  }
+  assert.ok(id);
+  sz.puma.kuehl = 1e9; sz.leopardLogik.kuehlK = 1e9; sz.streifen.forEach(s => { s.steht = 1e9; s.wartet = 1e9; });
+  const lauf = () => { for (let t = 0; t < 6; t += 0.1) sz.leopardSchritt(0.1); };
+  lauf();   // Spieler fern (100,100): nichts
+  assert.ok(!got.includes('bwschuss'), 'ohne Spieler in der Nähe schießt der Leopard auf 40 m');
+  p.x = l.x + 800; p.y = l.y;   // 100 m
+  lauf();
+  assert.ok(got.includes('bwschuss'), 'Leopard schweigt trotz Spieler in der Nähe');
+}));
