@@ -17,6 +17,8 @@ import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
+import { boxerNah } from './boxer.mjs';
+import { boxerLaden, boxerBild, boxerFahrzeug, boxerSchuss } from './boxerdarstellung.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 import { weltBeschaffen, weltVorrechnen } from './weltladen.mjs';
@@ -887,6 +889,7 @@ class Ort extends Phaser.Scene {
     this.load.image('puma-turm-bild', 'grafik/puma_turm.webp');
     this.load.json('autosliste', 'grafik/autos.json');
     evakLaden(this);   // Leopard 2A7, A400M (Draufsichten, siehe grafik/LIZENZ.txt)
+    boxerLaden(this);  // Radpanzer Boxer (Königsdorf)
     this.load.image('moebel', 'grafik/moebel.webp');
     this.load.json('moebelliste', 'grafik/moebel.json');
     // Gegenstands-Icons (Gemini, tools/dinge_bilder.py); fehlen sie, bleiben die Emojis
@@ -1062,7 +1065,7 @@ class Ort extends Phaser.Scene {
         if (m.ebene && m.art !== 'mg' && m.art !== 'mp' && m.art !== 'armbrust') ton.huelse(px, py);
       }
     });
-    raum.onMessage('bwschuss', m => m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
+    raum.onMessage('bwschuss', m => m.evak === 'boxer' ? boxerSchuss(this, m) : m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
     raum.onMessage('leopardkanone', m => leopardKanone(this, m, raum.state));   // Leopard-Hauptkanone: Mündungsfeuer, Rückstoß, Knall
     raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
@@ -1483,12 +1486,12 @@ class Ort extends Phaser.Scene {
     if ($('aufgabenliste').innerHTML !== zeilen) $('aufgabenliste').innerHTML = zeilen;
     let bus = '';
     const flugPos = ich && this.lokal ? this.lokal : ich;
-    const flugText = ['flugzeug', 'absturz', 'heli', 'bunker'].includes(evakArtVon(s)) ? evakHudText(s, !!(ich?.anBord || s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && Math.hypot(flugPos.x - s.evakX, flugPos.y - s.evakY) < (['heli', 'bunker'].includes(s.evakPhase) ? 90 : BUS_ABSTAND)), uhrText) : null;
+    const flugText = ['flugzeug', 'absturz', 'heli', 'bunker'].includes(evakArtVon(s)) ? evakHudText(s, !!((ich?.anBord && !ich.imBoxer) || s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && Math.hypot(flugPos.x - s.evakX, flugPos.y - s.evakY) < (['heli', 'bunker'].includes(s.evakPhase) ? 90 : BUS_ABSTAND)), uhrText) : null;
     if (flugText) bus = flugText;
     else if (s.busDa) {
       const f = [...(s.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung');
       const px = ich && this.lokal ? this.lokal.x : ich?.x, py = ich && this.lokal ? this.lokal.y : ich?.y;
-      const an = !!ich?.anBord || (s.busSteht && f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND);
+      const an = !!(ich?.anBord && !ich.imBoxer) || (s.busSteht && f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND);
       const pz = evakArtVon(s) === 'panzer', sym = pz ? '🪖' : '🚌', fzg = pz ? 'Evakuierungspanzer' : 'Bus';
       bus = s.busSteht ? `${sym} ${fzg} wartet am Ortsausgang bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ` · ${sym} du bist an Bord` : ''}`
         : `${sym} ${fzg} fährt zum Ortsausgang vor – einsteigen geht, sobald er steht`;
@@ -1726,6 +1729,7 @@ class Ort extends Phaser.Scene {
   // anim: Blaulicht-Bild 1..3 der Polizei (nur mit Bild-Sprite)
   fahrzeugTextur(art, farbe = 0, anim = 0) {
     // Bild-Sprites (autos.webp): Laster je nach Farbe truck/Mini_truck, Polizei mit wechselnden Blaulichtbildern
+    if (art === 'boxer') { const bb = boxerBild(this); if (bb) return bb; }   // Radpanzer Boxer (Königsdorf)
     if (art === 'evakuierung') { const eb = evakFahrzeugBild(this, raum.state); if (eb) return eb; }   // Leopard-Wanne / A400M-Rumpf
     const sprite = art === 'laster' ? autoEintraege('laster') : art === 'polizei' ? autoEintraege('polizei') : [];
     const sp = sprite.length ? sprite[farbe % sprite.length] : null;
@@ -1733,10 +1737,11 @@ class Ort extends Phaser.Scene {
     const key = panzer ? 'fz-evakuierung-panzer' : art === 'auto' ? 'fz-auto-' + (farbe % 8) : art === 'laster' ? (sp ? 'fz-laster-s' + (farbe % sprite.length) : 'fz-laster-' + (farbe % 4))
       : art === 'polizei' && sp ? 'fz-polizei-s' + anim : 'fz-' + art;
     if (this.textures.exists(key)) return key;
-    const breit = panzer ? 80 : art === 'bus' || art === 'evakuierung' ? 112 : art === 'laster' ? 84 : art === 'feuerwehr' ? 84 : 60;
-    const hoch = panzer ? 40 : art === 'bus' || art === 'evakuierung' ? 32 : sp && art === 'laster' ? 32 : 28;
+    const breit = art === 'boxer' ? 64 : panzer ? 80 : art === 'bus' || art === 'evakuierung' ? 112 : art === 'laster' ? 84 : art === 'feuerwehr' ? 84 : 60;
+    const hoch = art === 'boxer' ? 26 : panzer ? 40 : art === 'bus' || art === 'evakuierung' ? 32 : sp && art === 'laster' ? 32 : 28;
     const t = this.textures.createCanvas(key, breit, hoch), c = t.getContext();
-    if (panzer) {
+    if (art === 'boxer') { c.fillStyle = '#4a5a3a'; c.fillRect(0, 1, breit, hoch - 2); c.fillStyle = '#35422b'; c.fillRect(24, 6, 18, hoch - 12); }   // Ersatz ohne Bilder
+    else if (panzer) {
       // Puma-Draufsicht aus dem 3D-Modell (Wanne + Turm nach vorn), Bug nach rechts wie bei allen Fahrzeugen; Wanne 7,3 m = 58 px lang
       const m = this.pumaMasse(fzPx('puma')[0]), wb = this.textures.get('puma-wanne').getSourceImage(), tb = this.textures.get('puma-turm').getSourceImage();
       c.save(); c.translate(breit / 2, hoch / 2); c.scale(m.skala, m.skala); c.drawImage(wb, -wb.width / 2, -wb.height / 2);
@@ -2599,6 +2604,9 @@ class Ort extends Phaser.Scene {
           this.tweens.add({ targets: q, y: q.y - 34 - Math.random() * 20, x: q.x + 8 + Math.random() * 10, alpha: 0, scale: 2.6, duration: 1500 + Math.random() * 600, onComplete: () => q.destroy() });
         }
       }
+      if (f.art === 'boxer') {
+        boxerFahrzeug(this, o, f, dt);
+      }
       if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg())) {
         // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
         const pz = evakArtVon(s) === 'panzer', lx = pz ? -12 : -8, an = Math.floor(this.time.now / 260) % 2;
@@ -3063,6 +3071,9 @@ class Ort extends Phaser.Scene {
       if (Math.hypot(this.korr.x, this.korr.y) > 96 || p.unten || p.anBord) { this.korr.x = 0; this.korr.y = 0; }
       this.lokal.x = pred.x + this.korr.x; this.lokal.y = pred.y + this.korr.y;
     }
+    if (p.imBoxer) {   // im Boxer: die Kamera folgt dem gezeichneten (glatt bewegten) Boxer statt der 20-Hz-Position des Servers
+      for (const [id, v] of raum.state.fahrzeuge ?? []) if (v.art === 'boxer') { const bo = this.busObj.get(id); if (bo) { this.lokal.x = bo.x; this.lokal.y = bo.y; } }
+    }
     f.x = this.lokal.x; f.y = this.lokal.y;
     f.box.setPosition(f.x, f.y);
     this.figurDarstellen(f, p, dt);
@@ -3230,6 +3241,8 @@ class Ort extends Phaser.Scene {
     if (ich?.anBord) return { art: 'aussteigen', text: '🚪 Aussteigen' };   // an Bord eines Evakuierungsfahrzeugs: Taste E/Leertaste und Knopf
     if (!ich || ich.unten || ich.aktion || ich.zombie > 0 || raum.state.phase !== 'spiel' || !this.lokal) return null;
     const { x, y } = this.lokal;
+    // Radpanzer Boxer in Reichweite: einsteigen (Vorrang, wie auf dem Server in starteAktion; nicht auf Ebenen)
+    if (!ich.ebene && [...raum.state.spieler.values()].filter(q => q.imBoxer).length < 4) for (const f of raum.state.fahrzeuge?.values() ?? []) if (f.art === 'boxer' && boxerNah({ x: f.x, y: f.y, richtung: fzRichtung(f) }, x, y)) return { art: 'einsteigen', text: '🛡️ In den Boxer einsteigen' };
     // Arzt oder Soldat im Lager in Reichweite (nur solange der Stützpunkt steht)
     const hp = !ich.ebene && raum.state.stuetzpunkt === 'steht' ? handelPartner(this.welt.stuetzpunkt, x, y, HANDEL_ABSTAND) : null;
     if (hp) this.handelKontext = { art: 'handel', wer: hp.wer, text: hp.wer === 'arzt' ? '🩺 Mit dem Arzt tauschen' : '🎖 Mit dem Soldaten tauschen' };

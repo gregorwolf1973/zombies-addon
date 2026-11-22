@@ -224,7 +224,7 @@ export class Zombiewelle {
     const cy0 = opts ? opts.cy : kl(ref.y + (r.rnd() - 0.5) * 160, ...grenzeY);
     const ziel = opts ? opts.ziel : { x: kl(ref.x + richtung * ZIEL_ABSTAND, ...zielX), y: kl(ref.y, ...zielY) };
     // kein Zombie darf in Sichtweite irgendeines Spielers draußen auftauchen
-    const sehende = [...r.state.spieler.values()].filter(p => !p.ebene && !(p.zombie > 0));
+    const sehende = opts?.blind ? [] : [...r.state.spieler.values()].filter(p => !p.ebene && !(p.zombie > 0));   // blind: Boxer-Horde erscheint bewusst vor den Augen der Insassen
     let sicht = SICHT;   // wird gelockert, wenn die Karte zu klein ist (Testkarte, Kartenrand)
     const gesehen = (x, y) => sehende.some(p => Math.abs(p.x - x) < sicht + 40 && Math.abs(p.y - y) < sicht * 0.75 + 40);
     const plaetze = cy => {

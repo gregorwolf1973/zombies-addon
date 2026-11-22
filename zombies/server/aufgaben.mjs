@@ -640,7 +640,7 @@ export class Aufgaben {
     if (!f) return;
     // Aufspringen: der Bus rollt langsam los, wer ihn noch erreicht, fährt mit (bis er die Karte verlässt)
     for (const [sid, p] of s.spieler) {
-      if (p.zombie > 0 || p.ebene || p.unten || this.eingestiegen.has(sid) || this.ausgestiegen.has(sid)) continue;
+      if (p.zombie > 0 || p.ebene || p.unten || p.imBoxer || this.eingestiegen.has(sid) || this.ausgestiegen.has(sid)) continue;
       if (this.heli || this.fz().art === 'flugzeug' || Math.hypot(p.x - f.x, p.y - f.y) >= BUS_ABSTAND * 1.5) continue;
       this.eingestiegen.add(sid); p.anBord = true; this.einstiegT.set(sid, Date.now());
       if (!this.raum.extra.get(sid)?.bot) this.einsteigMeldung(sid);
@@ -662,7 +662,7 @@ export class Aufgaben {
       // Einsteigen: wer nah genug steht, sitzt im Fahrzeug (Position folgt ihm, Figur weg, Zombies lassen ihn in Ruhe) bis zum Levelwechsel.
       // Fehlt noch etwas für die Abfahrt, sagt die Meldung beim Einsteigen, was – es wirft niemand still wieder raus.
       if (this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) >= abstand) this.ausgestiegen.delete(sid);   // erst wieder einsteigen, wenn er einmal weg war
-      if (!an && !p.ebene && !p.unten && !this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) < abstand && this.einsteigenOffen()) {   // Bunkertor bleibt zu, bis die Missionen erledigt sind (server/finale.mjs meldet, was fehlt)
+      if (!an && !p.ebene && !p.unten && !p.imBoxer && !this.ausgestiegen.has(sid) && Math.hypot(p.x - f.x, p.y - f.y) < abstand && this.einsteigenOffen()) {   // Bunkertor bleibt zu, bis die Missionen erledigt sind (server/finale.mjs meldet, was fehlt)
         an = true; this.eingestiegen.add(sid); p.anBord = true; this.einstiegT.set(sid, Date.now());
         if (this.heli?.art === 'bunker') this.raum.bunker?.betreten?.(sid);   // Haken für einen Bunker-Innenraum (falls vorhanden)
         if (!bot) this.einsteigMeldung(sid);

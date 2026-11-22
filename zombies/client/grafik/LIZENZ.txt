@@ -74,3 +74,8 @@ freigestellt, zugeschnitten und angeordnet mit tools/dinge_bilder.py.
 Begleiter-Hund (grafik/hund.webp, hund.json): „Top-down Dog + Simple Animation“ von harrison-lord, OpenGameArt,
 https://opengameart.org/content/top-down-dog-simple-animation – CC-BY 3.0. Zugeschnitten, verkleinert und zu einem Bogen
 (4 Richtungen x 6 Laufbilder) angeordnet; der schwarze Schlagschatten wurde halbtransparent gemacht.
+
+Radpanzer Boxer (grafik/boxer_wanne.webp, boxer_turm.webp): „Boxer CRV (low-poly)“ von ScurvyWoof, Sketchfab,
+https://sketchfab.com/3d-models/boxer-crv-low-poly-a843d0c9366e408293744e017a0e1d58 – CC BY 4.0. Verändert: Draufsichten aus dem 3D-Modell
+gerendert (three.js, tools/glb_draufsicht/boxer.html), Waffenstation mit Aufbau und Rohr per Dreiecksschnitt als Turm von der Wanne getrennt,
+verkleinert (tools/boxer_bilder.py).

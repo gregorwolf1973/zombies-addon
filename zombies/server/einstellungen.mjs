@@ -336,6 +336,11 @@ export function bereinige(e = {}, alt = {}) {
       leopardKanone: typeof bw.leopardKanone === 'boolean' ? bw.leopardKanone : true,                    // … Hauptkanone auf Zombiehaufen (an/aus)
       leopardKanonePause: Math.round(zahl(bw.leopardKanonePause, 3, 120, 8)),                           // … Sekunden zwischen zwei Kanonenschüssen
       leopardKanoneMin: Math.round(zahl(bw.leopardKanoneMin, 3, 50, 10)),                               // … so viele Zombies müssen auf einem Fleck (6 m Durchmesser) stehen
+      boxerHordeSek: Math.round(zahl(bw.boxerHordeSek, 10, 3600, 120)),                                  // Radpanzer Boxer (Königsdorf): alle … Sekunden eine Horde, solange jemand drinsitzt
+      boxerHordeMin: Math.round(zahl(bw.boxerHordeMin, 1, 500, 20)),                                     // … mindestens so viele Zombies je Horde
+      boxerHordeMax: Math.max(Math.round(zahl(bw.boxerHordeMin, 1, 500, 20)), Math.round(zahl(bw.boxerHordeMax, 1, 500, 50))),   // … höchstens so viele (nie weniger als das Minimum)
+      boxerSchussPause: Math.round(zahl(bw.boxerSchussPause, 0.05, 5, 0.25) * 100) / 100,               // … Sekunden zwischen zwei Schüssen des Turms (Dauerfeuer)
+      boxerReichweite: Math.round(zahl(bw.boxerReichweite, 5, 120, 40)),                                 // … Reichweite des Turms in Metern
     },
     hund: { ablenkung: Math.round(zahl(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)) },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
     funde,
@@ -371,7 +376,7 @@ export function grundwerte() {
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
-    bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, mgMunition: 400, pumaMunition: 200 },
+    bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, mgMunition: 400, pumaMunition: 200 },
     nebel: { ...NEBEL_VORGABE },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },

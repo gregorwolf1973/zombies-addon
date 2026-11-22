@@ -24,8 +24,8 @@ const FAHRBAR = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unc
 const KOSTEN = { primary: 0.55, secondary: 0.6, tertiary: 0.75, unclassified: 1, residential: 1.2, living_street: 1.6, service: 3 };
 export const LASTER_ANTEIL = 0.1;   // Anteil Laster im normalen Verkehr
 const HAUPT = new Set(['primary', 'secondary', 'tertiary']);
-export const LAENGE = { auto: 36, laster: 72, bus: 96, evakuierung: 96, polizei: 39, feuerwehr: 76 };   // Fahrzeuglänge in Pixeln (8 px = 1 m, echte Maße: client/masse.mjs; für den Abstand)
-export const BREITE_FZ = { auto: 16, laster: 23, bus: 22, evakuierung: 22, polizei: 16, feuerwehr: 22 };   // Fahrzeugbreite in Pixeln (Abstandsprüfung)
+export const LAENGE = { auto: 36, laster: 72, bus: 96, evakuierung: 96, polizei: 39, feuerwehr: 76, boxer: 63 };   // Fahrzeuglänge in Pixeln (8 px = 1 m, echte Maße: client/masse.mjs; für den Abstand)
+export const BREITE_FZ = { auto: 16, laster: 23, bus: 22, evakuierung: 22, polizei: 16, feuerwehr: 22, boxer: 24 };   // Fahrzeugbreite in Pixeln (Abstandsprüfung)
 const SCHIEBBAR = new Set(['auto', 'laster', 'polizei', 'feuerwehr', 'bus', 'wrack']);   // diese Fahrzeuge schiebt ein festgefahrenes Fahrzeug zur Seite (nicht Panzer/Evakuierung/Mörser)
 const STAU_WENDEN = 8, STAU_SCHIEBEN = 15, STAU_WEG = 40;   // Sekunden Stillstand bis Wenden / Schieben / (unbeobachtet) Verschwinden
 const SCHUB = 45;                                          // Tempo (px/s), mit dem ein Hindernis zur Seite geschoben wird
