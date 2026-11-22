@@ -1042,7 +1042,8 @@ class Ort extends Phaser.Scene {
       fetzenBeiSchuss(this, zombieKarte().values(), m);
       // Schrot kommt als mehrere Linien – nur ein Knall
       const jetzt = performance.now();
-      if (jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'scharfschuetze' ? 1.8 : m.art === 'armbrust' ? 0.3 : m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp' && m.art !== 'armbrust') ton.huelse(m.x1, m.y1); }
+      const gleicheEbene = m.ebene === undefined || (m.ebene ?? '') === (raum.state.spieler.get(meineId)?.ebene ?? '');   // Koordinaten gelten nur in derselben Ebene (draußen / Haus / Stockwerk)
+      if (gleicheEbene && jetzt - (this.letzterKnall ?? 0) > 60) { ton.schuss(m.x1, m.y1, m.art === 'scharfschuetze' ? 1.8 : m.art === 'armbrust' ? 0.3 : m.art === 'gewehr' ? 1.3 : m.art === 'mg' ? 1.4 : m.art === 'schrotflinte' ? 1.2 : 1, m.art); this.letzterKnall = jetzt; if (raum.state.spieler.get(meineId)?.ebene && m.art !== 'mg' && m.art !== 'mp' && m.art !== 'armbrust') ton.huelse(m.x1, m.y1); }
     });
     raum.onMessage('bwschuss', m => m.evak === 'panzer' ? leopardSchuss(this, m, raum.state) : this.bwSchuss(m));   // Evakuierungspanzer: Lader-MG im Turm
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));

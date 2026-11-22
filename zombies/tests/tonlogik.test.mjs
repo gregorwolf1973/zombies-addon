@@ -31,3 +31,11 @@ test('Zombie-Stimmen bleiben auf 5 begrenzt', () => {
   for (let i = 0; i < 5; i++) stimmen.push({ ende: 9, v: 0.5, zombie: true, quelle: null });
   assert.equal(stimmeZuweisen(stimmen, { jetzt: 0, zombie: true, v: 0.1 }).ok, false);
 });
+
+test("prio (Schuss, Zombie-Tod): wird auch bei voller Stimmenliste nie verworfen", () => {
+  const stimmen = [];
+  for (let i = 0; i < 10; i++) stimmen.push({ ende: 9, v: 0.9, zombie: i < 5, quelle: null });
+  assert.equal(stimmeZuweisen(stimmen, { jetzt: 0, zombie: false, v: 0.1 }).ok, false);
+  assert.equal(stimmeZuweisen(stimmen, { jetzt: 0, zombie: false, v: 0.1, prio: true }).ok, true);
+  assert.equal(stimmeZuweisen(stimmen, { jetzt: 0, zombie: true, v: 0.1, prio: true }).ok, true);
+});

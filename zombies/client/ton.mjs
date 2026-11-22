@@ -66,14 +66,21 @@ function monoMachen(buf) {
     return m;
   } catch { return buf; }
 }
+const LADE_FEHLER = new Map();     // Datei → { n (Versuche), t (ms, letzter Fehlschlag) }
+const LADE_WIEDER_MS = 5000, LADE_MAX = 3;   // fehlgeschlagene Ladeversuche nach 5 s erneut, höchstens 3 Versuche insgesamt
 function laden(datei) {
-  if (puffer.has(datei)) return puffer.get(datei);
+  if (puffer.has(datei)) {
+    const b = puffer.get(datei);
+    if (b !== null) return b;
+    const f = LADE_FEHLER.get(datei);
+    if (!f || f.n >= LADE_MAX || performance.now() - f.t < LADE_WIEDER_MS) return null;   // fehlt (noch): kein Dauer-Abruf
+  }
   const p = fetch('toene/' + encodeURIComponent(datei))
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))
     .then(b => new Promise((ok, fehl) => ctx.decodeAudioData(b, ok, fehl)))
     .then(buf => istMusik(datei) ? buf : monoMachen(buf))
-    .then(buf => { puffer.set(datei, buf); hintergrundPruefen(); return buf; })
-    .catch(() => { puffer.set(datei, null); return null; });
+    .then(buf => { puffer.set(datei, buf); LADE_FEHLER.delete(datei); hintergrundPruefen(); return buf; })
+    .catch(() => { const f = LADE_FEHLER.get(datei); LADE_FEHLER.set(datei, { n: (f?.n ?? 0) + 1, t: performance.now() }); puffer.set(datei, null); return null; });
   puffer.set(datei, p);
   return p;
 }
@@ -111,19 +118,22 @@ function abstandOk(id) {
 function abstandMerken(id) { if (MIN_ABSTAND[id]) zuletzt.set(id, performance.now()); }
 
 // Platz für eine neue Stimme (Lautstärke v)? Dauerfeuer-Quelle: ältester eigener Ton wird abgelöst; sonst leiseste verdrängt – ist es die neue, false
-function stimmePlatz(zombie, v, quelle) {
+function stimmePlatz(zombie, v, quelle, prio = false) {
   const jetzt = ctx.currentTime;
-  const r = stimmeZuweisen(stimmen, { jetzt, zombie, v, quelle });
+  if (ctx.state !== 'running') stimmen.length = 0;   // Uhr steht (gesperrt/unterbrochen): nichts läuft wirklich, keine Stimme belegt Platz
+  const r = stimmeZuweisen(stimmen, { jetzt, zombie, v, quelle, prio });
   for (const l of r.verdraengt) try { l.g.gain.setTargetAtTime(0, jetzt, 0.02); l.src.stop(jetzt + 0.1); } catch { /* schon zu Ende */ }
   return r.ok;
 }
 const SCHUSS_IDS = new Set(['schussPistole', 'schussGewehr', 'schussSchrot']);
+const PRIO_IDS = new Set([...SCHUSS_IDS, 'zombieTod']);   // Rückmeldung zum eigenen Handeln: nie wegen voller Stimmen verwerfen
 const SCHUSS_MAX_SEK = 0.45;   // bei hoher Kadenz Schusstöne kürzen (Ausklingen per Gain-Rampe)
 
 // eine zugeordnete Datei abspielen; false = keine da (dann erzeugt das Spiel selbst einen Ton)
 function probe(id, x, y, extra = 1) {
   const t = zuordnung[id];
   if (!ctx || !t?.dateien?.length) return false;
+  weckeKontext();
   if (zombieStumm(id)) return true;   // Zahnrad: Zombiegeräusche aus – auch kein Ersatzton
   const bereit = t.dateien.map(geladen).filter(Boolean);
   if (!bereit.length) { t.dateien.forEach(laden); return false; }
@@ -135,7 +145,7 @@ function probe(id, x, y, extra = 1) {
   const buf = bereit[Math.floor(Math.random() * bereit.length)], rate = 0.94 + Math.random() * 0.12;
   const kurz = SCHUSS_IDS.has(id);
   const quelle = kurz ? id + ':' + (x == null ? 'ich' : Math.round(x / 400) + ',' + Math.round(y / 400)) : null;
-  if (!stimmePlatz(zombie, v, quelle)) { try { z.disconnect(); } catch { /* egal */ } return true; }
+  if (!stimmePlatz(zombie, v, quelle, PRIO_IDS.has(id))) { try { z.disconnect(); } catch { /* egal */ } return true; }
   const src = ctx.createBufferSource(); src.buffer = buf;
   src.playbackRate.value = rate;
   src.connect(z); src.start();
@@ -144,7 +154,9 @@ function probe(id, x, y, extra = 1) {
     dauer = SCHUSS_MAX_SEK;
     try { const t0 = ctx.currentTime; z.gain.setValueAtTime(v, t0 + dauer - 0.15); z.gain.linearRampToValueAtTime(0, t0 + dauer); src.stop(t0 + dauer + 0.02); } catch { /* egal */ }
   }
-  stimmen.push({ ende: ctx.currentTime + dauer, v, zombie, quelle, g: z, src });
+  const stimme = { ende: ctx.currentTime + dauer, v, zombie, quelle, g: z, src };
+  stimmen.push(stimme);
+  src.onended = () => { const i = stimmen.indexOf(stimme); if (i >= 0) stimmen.splice(i, 1); };   // Stimme sicher freigeben, auch wenn die Uhr steht
   abstandMerken(id);
   return true;
 }
@@ -251,6 +263,18 @@ export function tageszeit(nacht) {
   if (nacht && !erstes) probe('nachteinbruch');
 }
 
+// AudioContext aufwecken, falls der Browser ihn gesperrt/unterbrochen hat (ohne Geste kann das ablehnen – schadet nicht)
+let weckT = 0;
+function weckeKontext() {
+  if (!ctx || ctx.state === 'running' || document.hidden) return;
+  const jetzt = performance.now();
+  if (jetzt - weckT < 500) return;
+  weckT = jetzt;
+  try { Promise.resolve(ctx.resume?.()).catch(() => {}); } catch { /* egal */ }
+}
+// bei jeder Nutzergeste (dauerhaft, nicht nur bis der Ton das erste Mal lief): gesperrten/unterbrochenen Kontext wieder starten
+for (const a of ['pointerdown', 'touchend', 'mousedown', 'keydown', 'click']) document.addEventListener(a, () => { weckT = 0; weckeKontext(); }, true);
+
 // erst nach einer Berührung/einem Klick erlaubt der Browser Ton
 export function tonStarten() {
   if (ctx) { if (!document.hidden) ctx.resume?.(); audioFreischalten(); return; }
@@ -296,6 +320,7 @@ const endlich = (v, ersatz = 0) => Number.isFinite(v) ? v : ersatz;
 // Ausgang für ein Geräusch an Position (x, y); null = zu weit weg
 function ort(x, y, laut = 1) {
   if (!ctx || stufe === 0) return null;
+  weckeKontext();
   let v = laut, pan = 0;
   if (x != null) {
     if (!hoerBekanntSeit || performance.now() - hoerBekanntSeit < 2000) return null;   // Hörer unbekannt (0/0) → sonst volle Lautstärke aus dem Nichts
