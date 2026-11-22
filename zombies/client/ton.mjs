@@ -6,7 +6,7 @@ import { hordeEinstellung, zaehleHoerbare, hordeSchritt, einzelschreiOk, akzentS
 import { musikSchritt, naechstesStueck } from './musiklogik.mjs';
 import { anAusLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
 let ctx = null, haupt = null, rauschPuffer = null, stufe = 1;
-const BASIS = 0.36;                          // Grundpegel (früher 0.8 – war zu laut); die Stufe regelt darunter
+const BASIS = 0.72;                          // Grundpegel (0.36 → 0.72 mit den gemessenen Lautstärken je Ereignis; früher 0.8)
 const EFFEKT_FAKTOR = 0.75;                  // Spielgeräusche 25 % leiser als zuvor (Stimmen kommen besser durch); Musik behält ihren Pegel
 let zombieTonAn = true, musikAn = true;      // Zahnrad-Menü (je Gerät): Zombie-Einzelgeräusche, Musik
 const STUFEN = [1, 0.5, 0.25, 0];            // 100 %, 50 %, 25 %, stumm
