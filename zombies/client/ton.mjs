@@ -139,14 +139,17 @@ const PRIO_IDS = new Set([...SCHUSS_IDS, 'zombieTod']);   // Rückmeldung zum ei
 const SCHUSS_MAX_SEK = 0.45;   // bei hoher Kadenz Schusstöne kürzen (Ausklingen per Gain-Rampe)
 
 // eine zugeordnete Datei abspielen; false = keine da (dann erzeugt das Spiel selbst einen Ton)
+// Ersatzton (ohne Datei): Lautstärke des Ereignisses (Mischpult) gilt auch für den eingebauten Klang; nur für den gleichen Aufruf
+let ersatzLaut = 1;
+function ersatzMerken(t) { ersatzLaut = Math.max(0, Math.min(1, (t?.laut ?? 100) / 100)); queueMicrotask(() => { ersatzLaut = 1; }); }
 function probe(id, x, y, extra = 1) {
   const t = zuordnung[id];
-  if (!ctx || !t?.dateien?.length) return false;
+  if (!ctx || !t?.dateien?.length) { ersatzMerken(t); return false; }
   weckeKontext();
   if (zombieStumm(id)) return true;   // Zahnrad: Zombiegeräusche aus – auch kein Ersatzton
   if (ctx.state !== 'running') return true;   // Kontext schläft: Ereignis verwerfen, kein Ersatzton, keine Warteschlange
   const bereit = t.dateien.map(geladen).filter(Boolean);
-  if (!bereit.length) { t.dateien.forEach(laden); return false; }
+  if (!bereit.length) { t.dateien.forEach(laden); ersatzMerken(t); return false; }
   if (!abstandOk(id)) return true;   // zu kurz nach dem letzten: verworfen, auch kein Ersatzton
   const laut = (t.laut ?? 80) / 100 * extra;
   const z = ort(x, y, laut);
@@ -334,7 +337,7 @@ function ort(x, y, laut = 1) {
   if (!ctx || stufe === 0) return null;
   weckeKontext();
   if (ctx.state !== 'running') return null;   // gesperrt/unterbrochen: nichts einreihen (sonst prasselt beim Aufwachen alles auf einmal los)
-  let v = laut, pan = 0;
+  let v = laut * ersatzLaut, pan = 0;
   if (x != null) {
     if (!hoerBekanntSeit || performance.now() - hoerBekanntSeit < 2000) return null;   // Hörer unbekannt (0/0) → sonst volle Lautstärke aus dem Nichts
     const d = Math.hypot(x - hx, y - hy);

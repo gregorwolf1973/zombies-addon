@@ -1973,6 +1973,23 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     font-variant-numeric: tabular-nums;
   }
 
+
+  /* Mischpult: alle Ereignisse in einer Liste */
+  #tkMischListe .mp-gruppe { margin: 0 0 .5rem; }
+  #tkMischListe .mp-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; min-height: 44px; padding: .25rem .5rem; border-bottom: 1px solid var(--border); }
+  #tkMischListe .mp-name { flex: 1 1 11rem; min-width: 0; font-size: .92rem; }
+  #tkMischListe .mp-name small { color: var(--text-soft); display: block; font-size: .75rem; }
+  #tkMischListe .mp-regler { flex: 1 1 14rem; display: flex; align-items: center; gap: .5rem; }
+  #tkMischListe .mp-regler input[type="range"] { flex: 1 1 auto; min-width: 90px; min-height: 36px; accent-color: var(--akzent); }
+  #tkMischListe .mp-wert { min-width: 3.2em; text-align: right; color: var(--text-soft); font-variant-numeric: tabular-nums; }
+  #tkMischListe .mp-knoepfe { display: flex; gap: .4rem; }
+  #tkMischListe .mp-knoepfe button { min-width: 44px; min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--chip); color: var(--text); cursor: pointer; font-size: 1rem; }
+  #tkMischListe .mp-knoepfe button:disabled { opacity: .4; cursor: default; }
+  #tkMischListe .mp-knoepfe button.tk-aktiv { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); }
+  #tkMischListe .mp-summe { background: var(--card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: .6rem; }
+  #tkMischSumme > label { display: block; margin-top: .4rem; font-weight: 600; }
+  @media (max-width: 520px) { #tkMischListe .mp-name, #tkMischListe .mp-regler { flex-basis: 100%; } }
+
   #toeneKarte .tk-abschnitt { margin: 1.25rem 0 0.6rem; }
 
   #toeneKarte .tk-dateien {
@@ -2515,9 +2532,88 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       });
   }
 
+  // ---------- Mischpult: alle Ereignisse einzeln regeln (gleiche Daten wie die Einzelregler unten) ----------
+  var MP_BEREICHE = [
+    ['Waffen', ['waffen'], []],
+    ['Zombies', ['zombies'], ['kriecher', 'stoehnen', 'entdeckt', 'horde', 'hordeAkzent', 'zombieTod', 'zombielandTag', 'zombielandNacht', 'nachteinbruch'], ['menschGebissen', 'hilferufe']],
+    ['Menschen', [], ['menschGebissen', 'hilferufe', 'durstMann', 'durstFrau', 'chatKlingel']],
+    ['Fahrzeuge & Radio', ['fahrzeuge'], ['autoradio', 'radio', 'autoVorbei', 'sirene', 'krankenwagen', 'krach', 'blech'], ['panzerFaehrt']],
+    ['Bundeswehr & Lager', ['bundeswehr'], ['soldatRuf', 'funk', 'panzerFaehrt']],
+    ['Haus & Türen', ['tueren'], ['truheLeer']],
+    ['Umgebung', ['umgebung', 'tiere'], ['stadt', 'wasser', 'feuer', 'hundBellen', 'nachteinbruch']],
+    ['Musik (je Level, Lager, Horde, Finale)', ['spielmusik'], ['startmusik']],
+    ['Durchsagen', [], ['durchsageLevel1', 'durchsageLevel2', 'durchsageLevel3', 'durchsageLevel4', 'durchsageLevel5']]
+  ];
+  function mpGruppeVon(ev) {
+    // feste Zuordnung je id; sonst nach Gruppe der Ereignisliste
+    var ausnahmen = { menschGebissen: 'Menschen', hilferufe: 'Menschen', durstMann: 'Menschen', durstFrau: 'Menschen', chatKlingel: 'Menschen', truheLeer: 'Haus & Türen',
+      autoradio: 'Fahrzeuge & Radio', radio: 'Fahrzeuge & Radio', autoVorbei: 'Fahrzeuge & Radio', sirene: 'Fahrzeuge & Radio', krankenwagen: 'Fahrzeuge & Radio',
+      panzerFaehrt: 'Bundeswehr & Lager', funk: 'Bundeswehr & Lager', soldatRuf: 'Bundeswehr & Lager', startmusik: 'Musik (je Level, Lager, Horde, Finale)',
+      stadt: 'Umgebung', wasser: 'Umgebung', feuer: 'Umgebung', hundBellen: 'Umgebung', nachteinbruch: 'Umgebung' };
+    if (ausnahmen[ev.id]) return ausnahmen[ev.id];
+    if (/^durchsageLevel/.test(ev.id)) return 'Durchsagen';
+    var m = { waffen: 'Waffen', zombies: 'Zombies', fahrzeuge: 'Fahrzeuge & Radio', bundeswehr: 'Bundeswehr & Lager', tueren: 'Haus & Türen', umgebung: 'Umgebung', tiere: 'Umgebung', spielmusik: 'Musik (je Level, Lager, Horde, Finale)', spieler: 'Menschen', musik: 'Fahrzeuge & Radio' };
+    return m[ev.gruppe] || 'Umgebung';
+  }
+  function mpVorgabe(ev) {
+    var v = daten && daten.vorgaben && daten.vorgaben.toene && daten.vorgaben.toene[ev.id];
+    if (v && typeof v.laut === 'number') return v.laut;
+    return typeof ev.lautVorgabe === 'number' ? ev.lautVorgabe : 80;
+  }
+  function mpZeile(ev) {
+    var einst = findeEinstellung(ev.id), hat = einst.dateien.length > 0;
+    var z = document.createElement('div'); z.className = 'mp-zeile'; z.dataset.id = ev.id;
+    var n = document.createElement('div'); n.className = 'mp-name'; n.textContent = ev.name || ev.id;
+    var kl = document.createElement('small'); kl.textContent = hat ? einst.dateien.length + (einst.dateien.length === 1 ? ' Datei' : ' Dateien') : 'eigener Ton'; n.appendChild(kl);
+    var r = document.createElement('div'); r.className = 'mp-regler';
+    var sl = document.createElement('input'); sl.type = 'range'; sl.min = '0'; sl.max = '100'; sl.step = '1'; sl.value = String(einst.laut); sl.id = 'mp-' + ev.id;
+    sl.setAttribute('aria-label', 'Lautstärke ' + (ev.name || ev.id));
+    var w = document.createElement('span'); w.className = 'mp-wert'; w.textContent = einst.laut + ' %';
+    sl.addEventListener('input', function () {
+      einst.laut = parseInt(sl.value, 10) || 0; w.textContent = einst.laut + ' %';
+      if (audio && audioDatei && einst.dateien.indexOf(audioDatei) !== -1) { try { audio.volume = einst.laut / 100; } catch (e) {} }
+    });
+    sl.addEventListener('change', function () { einst.laut = parseInt(sl.value, 10) || 0; speichereEreignis(ev.id, einst); });
+    r.append(sl, w);
+    var k = document.createElement('div'); k.className = 'mp-knoepfe';
+    var play = document.createElement('button'); play.type = 'button'; play.textContent = '▶'; play.setAttribute('aria-label', 'Probehören: ' + (ev.name || ev.id));
+    if (hat) {
+      if (audioDatei && einst.dateien.indexOf(audioDatei) !== -1) { play.classList.add('tk-aktiv'); play.textContent = '■'; }
+      play.addEventListener('click', function () {
+        if (audio && audioDatei && einst.dateien.indexOf(audioDatei) !== -1) { spiele(audioDatei, einst.laut, play); return; }
+        spiele(einst.dateien[Math.floor(Math.random() * einst.dateien.length)], einst.laut, play);
+      });
+    } else { play.disabled = true; play.title = 'Ersatzton ist nur im Spiel hörbar'; }
+    var rs = document.createElement('button'); rs.type = 'button'; rs.textContent = '↺'; rs.title = 'Standard (' + mpVorgabe(ev) + ' %)'; rs.setAttribute('aria-label', 'Standard: ' + (ev.name || ev.id));
+    rs.addEventListener('click', function () { einst.laut = mpVorgabe(ev); speichereEreignis(ev.id, einst); });
+    k.append(play, rs);
+    z.append(n, r, k);
+    return z;
+  }
+  function baueMischpult() {
+    var box = document.getElementById('tkMischListe');
+    if (!box) return;
+    box.textContent = '';
+    if (!daten || !Array.isArray(daten.ereignisse)) return;
+    var horde = daten.ereignisse.filter(function (e) { return e.id === 'horde'; })[0];
+    if (horde) { var sm = document.createElement('div'); sm.className = 'mp-summe'; sm.appendChild(mpZeile(horde)); box.appendChild(sm); }
+    var nach = {};
+    daten.ereignisse.forEach(function (ev) { var g = mpGruppeVon(ev); (nach[g] = nach[g] || []).push(ev); });
+    MP_BEREICHE.forEach(function (g) {
+      var evs = nach[g[0]]; if (!evs || !evs.length) return;
+      var det = document.createElement('details'); det.className = 'tk-gruppe mp-gruppe';
+      det.open = offen['mp-' + g[0]] !== false;
+      det.addEventListener('toggle', function () { offen['mp-' + g[0]] = det.open; });
+      var sum = document.createElement('summary'); sum.textContent = g[0] + ' (' + evs.length + ')'; det.appendChild(sum);
+      evs.forEach(function (ev) { det.appendChild(mpZeile(ev)); });
+      box.appendChild(det);
+    });
+  }
+
   function neuAufbauen() {
     elLade.style.display = 'none';
     stoppeAudio();
+    baueMischpult();
     elEreignisse.textContent = '';
     if (daten && Array.isArray(daten.ereignisse)) {
       var gruppen = Array.isArray(daten.tonGruppen) ? daten.tonGruppen.slice() : [];
@@ -4018,6 +4114,14 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     tk.removeAttribute('id');
     var tw = el('div', 'ton-wrap'); tw.id = 'toeneKarte';   // CSS (#toeneKarte …) und Skripte finden alles wie bisher
     rein('ton', tw);
+    var misch = neuUnter('🎚 Mischpult (alle Geräusche einzeln)', true); misch.id = 'tkMisch'; tw.appendChild(misch);
+    var mSumme = el('div'); mSumme.id = 'tkMischSumme'; misch.inhalt.appendChild(mSumme);
+    misch.inhalt.appendChild(el('p', 'tk-hinweis', 'Summenregler oben, darunter jedes Ereignis einzeln (0–100 %, ▶ Probehören, ↺ Standard). Änderungen gelten sofort im laufenden Spiel; ohne Datei regelt der Regler den eingebauten Ersatzton.'));
+    var mListe = el('div'); mListe.id = 'tkMischListe'; misch.inhalt.appendChild(mListe);
+    [['muLaut', 'Musik gesamt (%)'], ['rsLaut', 'Live-Autoradio (%)']].forEach(function (x) {
+      var lab = document.querySelector('label[for="' + x[0] + '"]'), zl = $(x[0]) && $(x[0]).closest('.th-zeile');
+      if (lab && zl) { lab.textContent = x[1]; mSumme.append(lab, zl); }
+    });
     var inh = innenInhalt(tk), einheit = null, nodes = [].slice.call(inh.childNodes);
     var NAMEN = { 'Hordengeräusch': '🧟 Hordengeräusch', 'Musik': '🎵 Musik', 'Autoradio als Live-Radio': '📻 Radio', 'Dateien': '📁 Dateien (Anzeigenamen, Hochladen)' };
     nodes.forEach(function (n) {
