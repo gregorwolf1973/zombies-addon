@@ -41,7 +41,7 @@ import { sichtPx } from '../client/zombiesicht.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import {
-  KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, tempoVon, reichVon, abstandBehaelter, abstandTuer, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
+  KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, INNEN_FEIN, setzeInnenFein, setzeInnenTempo, setzeTageszeiten,
   WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
@@ -689,7 +689,7 @@ export class SpielRaum extends Room {
       this.hunde?.besitzerWechsel(sid, client.sessionId);
       this.suAnmeldung(client, alt, auth);
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
-      client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25);
+      client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte());
       this.startwahlSenden(client.sessionId);
       this.einstellungenSenden(client, spielerId, alt.aussehen, optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? '')));
       this.sprachStart(client); this.sprachPartner();
@@ -764,7 +764,7 @@ export class SpielRaum extends Room {
     this.fkSenden(client.sessionId);
     this.startwahlSenden(client.sessionId);
     client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
-    client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25);
+    client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte());
     this.einstellungenSenden(client, spielerId, p.aussehen, gewaehlt);
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
     this.botsAnpassen();
@@ -1170,6 +1170,11 @@ export class SpielRaum extends Room {
   nebelSichtFaktor() { return zombieSichtFaktor(this.state.nebel, (SpielRaum.einstellungen?.nebel ?? NEBEL_VORGABE).zombie); }
 
   // Tag/Nacht-Zeiten aus den Einstellungen: für die Regeln auf dem Server und im Zustand für die Clients
+  tempoWerte() {
+    const e = SpielRaum.einstellungen ?? {};
+    return { gehen: e.tempoHeldGehen ?? 20, schleichen: e.tempoHeldSchleichen ?? 9, jagen: e.tempoZombieJagen ?? 15, wandern: e.tempoZombieWandern ?? 4 };
+  }
+
   tageszeitenUebernehmen() {
     const e = SpielRaum.einstellungen ?? {};
     // Nachtlänge × Schwierigkeit: die Nacht beginnt früher (Faktor 1 = Einstellung unverändert)
@@ -1179,6 +1184,10 @@ export class SpielRaum extends Room {
     setzeTageszeiten(tagAb, nachtAb);
     if (this.state) { this.state.tagAb = tagAb; this.state.nachtAb = nachtAb; this.state.nachtDunkel = e.nachtDunkel ?? 92; this.state.nebelSicht = (e.nebel ?? NEBEL_VORGABE).sicht; this.state.menschenGroesse = e.menschenGroesse ?? 100; this.state.zombieGroesse = e.zombieGroesse ?? 100; this.state.groesseGesamt = e.groesseGesamt ?? 70; }
     const bt = e.baumTempo ?? 25;   // Tempo unter Bäumen (%): kein Schema-Feld mehr frei (Grenze 63), der Client bekommt es als Nachricht
+    const tw = this.tempoWerte();
+    tempoWerteSetzen(W, tw);   // Held- und Zombietempo (km/h) aus den Einstellungen → gemeinsame Spielwerte
+    const twj = JSON.stringify(tw);
+    if (twj !== this.tempoWerteSend) { this.tempoWerteSend = twj; try { this.broadcast('tempoWerte', tw); } catch { /* noch kein Raum */ } }
     if (bt !== this.baumTempoSend) { this.baumTempoSend = bt; try { this.broadcast('baumTempo', bt); } catch { /* noch kein Raum */ } }
   }
 

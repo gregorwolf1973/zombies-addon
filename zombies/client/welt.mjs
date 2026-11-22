@@ -872,14 +872,25 @@ export function drinnen(welt, x, y) {
   return t === T.BODEN || t === T.TUER;
 }
 
+// km/h → px/s (8 px = 1 m); Werte aus den Einstellungen übernehmen
+export const kmhZuPx = kmh => kmh / 3.6 * 8;
+export function tempoWerteSetzen(w, kmh) {
+  if (!kmh) return;
+  const z = (v, d) => (Number.isFinite(v) && v > 0 ? kmhZuPx(v) : kmhZuPx(d));
+  w.tempoGehen = z(kmh.gehen, 20); w.tempoSchleichen = z(kmh.schleichen, 9);
+  w.zombieTempoJagen = z(kmh.jagen, 15); w.zombieTempoWandern = z(kmh.wandern, 4);
+}
+
 // Spielwerte, die Server und Client kennen müssen
 export const WERTE = {
   spielerRadius: 7,       // Kollisionsradius (px), unabhängig von der Anzeigegröße; kleiner = kommt durch enge Lücken
   zombieRadius: 9,
-  tempoGehen: 150,      // px/s
-  tempoSchleichen: 70,
-  zombieTempoWandern: 30,
-  zombieTempoJagen: 105,
+  // Tempo in px/s bei 8 px = 1 m (km/h ÷ 3,6 × 8): Held 20 / 9 km/h, Zombie 15 / 4 km/h. Veränderlich: der Server setzt sie aus den
+  // Einstellungen (tempoWerteSetzen), der Client bekommt sie per Nachricht 'tempoWerte' – beide rechnen daher mit denselben Zahlen.
+  tempoGehen: 20 / 3.6 * 8,
+  tempoSchleichen: 9 / 3.6 * 8,
+  zombieTempoWandern: 4 / 3.6 * 8,
+  zombieTempoJagen: 15 / 3.6 * 8,
   sichtWeite: 170,
   sichtWeiteSchleichen: 95,
   sichtWinkel: Math.PI / 2.4,   // ganzer Kegel ~75°

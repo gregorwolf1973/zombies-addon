@@ -6,7 +6,9 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { WAFFEN, WERTE as W, frei, sichtfrei, BREITE, HOEHE, KACHEL } from '../client/welt.mjs';
-import { freierPort } from './hilfe.mjs';
+import { SpielRaum } from '../server/raum.mjs';
+import { freierPort, altesTempo } from './hilfe.mjs';
+altesTempo(SpielRaum);
 
 const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
