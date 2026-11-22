@@ -80,8 +80,12 @@ export const T = {
   TUER_OFFEN: 17,     // geöffnete Zimmertür
 };
 
-// Bäume sind kein Hindernis (man kann sich darunter verstecken – die Krone verdeckt die Sicht)
-export const BLOCKIERT = new Set([T.WAND, T.WASSER, T.ZAUN, T.TOR, T.DEKO, T.INNENTUER, T.MOEBEL, T.LEER]);
+// Bäume sind kein Hindernis (man kann sich darunter verstecken – die Krone verdeckt die Sicht);
+// Wasser ebenso nicht: man watet mit POOL_TEMPO hindurch (poolFaktor), Platzierung (Häuser, Beute, Spawns) meidet es über BLOCKIERT_BAU / frei()
+export const BLOCKIERT = new Set([T.WAND, T.ZAUN, T.TOR, T.DEKO, T.INNENTUER, T.MOEBEL, T.LEER]);
+
+// Wie BLOCKIERT, aber mit Wasser: für alles, was nichts ins Wasser stellen darf
+export const BLOCKIERT_BAU = new Set([...BLOCKIERT, T.WASSER]);
 
 export function zufall(seed) {
   // mulberry32: klein und auf allen Plattformen gleich
@@ -577,8 +581,13 @@ function freiInnen(welt, x, y, rad) {
   return true;
 }
 // Kreis mit Radius rad frei? Mit feinem Raster: alle überdeckten Feinfelder; sonst die vier Ecken des Quadrats
-const freiStandard = (welt, x, y, rad) => frei(welt, x, y, rad);
+// Bewegung: Wasser ist begehbar (langsam, poolFaktor); frei() dagegen schließt Wasser aus (Spawns, Platzwahl, Sichtprüfungen der KI)
+const freiStandard = (welt, x, y, rad) => freiBewegung(welt, x, y, rad);
 export function frei(welt, x, y, rad) {
+  if (!freiBewegung(welt, x, y, rad)) return false;
+  return welt.kachel || welt.ebene || !welt.hole ? true : welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL)) !== T.WASSER;
+}
+export function freiBewegung(welt, x, y, rad) {
   if (welt.kachel) return freiInnen(welt, x, y, rad);
   const f = welt.fein;
   if (f) {
@@ -745,8 +754,10 @@ export function baumFaktor(welt, x, y, prozent = 25) {
 // (Rechteck der OSM-Pools, p = Polygon der Luftbild-Pools); gilt für alle Figuren über baumFaktor (Server und Client-Vorhersage gleich)
 export const POOL_TEMPO = 0.1;
 export function poolFaktor(welt, x, y) {
+  if (welt.ebene) return 1;
+  if (welt.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL)) === T.WASSER) return POOL_TEMPO;   // Seen und Flüsse: wie im Pool
   const z = welt.poolZonen;
-  if (!z || welt.ebene) return 1;
+  if (!z) return 1;
   for (let i = 0; i < z.length; i++) {
     const q = z[i];
     if (x < q.x0 || x > q.x1 || y < q.y0 || y > q.y1) continue;
@@ -868,11 +879,13 @@ export function linieFrei(welt, x1, y1, x2, y2, rad, freiFn = frei) {
 export function findeWeg(welt, vonX, vonY, nachX, nachY, rad = 11, maxKnoten = Infinity, zaunOk = false) {
   const weg = findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, false);
   // Zombies und Bots dürfen notfalls durch Hecken und Holzzäune (teurer: erst nur der freie Weg, dann mit Zaun)
-  return weg ?? (zaunOk ? findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, true) : null);
+  // Wasser ist begehbar, aber teuer: erst ohne Wasser, dann (letzte Stufe) mit Wasser
+  return weg ?? (zaunOk ? findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, true) : null)
+    ?? (welt.ebene || welt.kachel || !zaunOk ? null : findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, true, true));
 }
-function findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, zaunOk) {
-  const frei_ = zaunOk ? freiTier : frei;
-  const begehbar = (x, y) => { const t = welt.hole(x, y); return BEGEHBAR_WEG.has(t) || (zaunOk && t === T.ZAUN && tierZaunArt(welt, x, y) !== null); };
+function findeWegRaster(welt, vonX, vonY, nachX, nachY, rad, maxKnoten, zaunOk, wasserOk = false) {
+  const frei_ = wasserOk ? freiTier : zaunOk ? (w, x, y, r) => freiTier(w, x, y, r) && (w.kachel || w.ebene || w.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL)) !== T.WASSER) : frei;
+  const begehbar = (x, y) => { const t = welt.hole(x, y); return BEGEHBAR_WEG.has(t) || (wasserOk && t === T.WASSER) || (zaunOk && t === T.ZAUN && tierZaunArt(welt, x, y) !== null); };
   const K = welt.kachel ?? KACHEL, BR = welt.breite ?? BREITE, HO = welt.hoehe ?? HOEHE;   // Innenräume im Feinraster: eigene Größe
   const sx = Math.floor(vonX / K), sy = Math.floor(vonY / K);
   const zx = Math.floor(nachX / K), zy = Math.floor(nachY / K);

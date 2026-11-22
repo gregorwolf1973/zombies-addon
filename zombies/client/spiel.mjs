@@ -62,6 +62,8 @@ import { b11Registrieren, b11Animieren } from './szene_b11.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
+// Seit 0.69.4 ist der Grundzoom ×1,4 näher: Ring und Kegel draußen auf die frühere Bildschirmgröße zurückrechnen
+const AUSSEN_ZOOM_KORREKTUR = 1 / 1.4;
 import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
 import { NetzPuffer, nachSeq, ausStufe } from './netzpuffer.mjs';
 import { dingIcon, dingHtml, setzeDingListe, dingRahmen, hatDingBild } from './dingbild.mjs';
@@ -2177,7 +2179,7 @@ class Ort extends Phaser.Scene {
   // Drinnen nur Mitspieler auf derselben Ebene (Haus und Stockwerk), draußen nur Mitspieler draußen.
   // Ein Kegel für alle (eigene, Mitspieler, Bots, Nebel): gleicher Pinsel, gleiche Länge/Helligkeit; drinnen etwas kürzer
   lampeKegel(ziel, x, y, winkel, innen, alpha = 1) {
-    this.lampenPinsel.setRotation(winkel).setScale((innen ? 0.8 : 1.0) * (innen && this.feinInnen() ? 0.13 : 1)).setAlpha(alpha);   // maßstäblich: Lichtkegel ~7 m lang
+    this.lampenPinsel.setRotation(winkel).setScale((innen ? 0.8 : AUSSEN_ZOOM_KORREKTUR) * (innen && this.feinInnen() ? 0.13 : 1)).setAlpha(alpha);   // maßstäblich: Lichtkegel ~7 m lang
     ziel.erase(this.lampenPinsel, x, y);
   }
 
@@ -2263,7 +2265,9 @@ class Ort extends Phaser.Scene {
     this.fremdeLampen(rt, ox, oy, '');
     const fz = this.flug?.zentrum();
     const lx = (fz ? fz.x : this.lokal.x) - ox, ly = (fz ? fz.y : this.lokal.y) - oy;   // Kameraflug: Schein um die Kamera
-    P.setScale(0.6).setAlpha(0.8); rt.erase(P, lx, ly);
+    // Ring um den Spieler: ohne Taschenlampe wie früher (Bildschirmgröße), mit Lampe nur ein schwacher Schein (~2 m)
+    if (ich.lampe > 0 && !fz) P.setScale(0.125).setAlpha(0.3); else P.setScale(0.6 * AUSSEN_ZOOM_KORREKTUR).setAlpha(0.8);
+    rt.erase(P, lx, ly);
     if (ich.lampe > 0 && !fz) this.lampeKegel(rt, lx, ly, this.lampenRichtung(ich), false);
   }
 

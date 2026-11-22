@@ -134,15 +134,30 @@ export function zeichneWasser(ctx, welt, rect) {
   ctx.restore();
 }
 
-// Luftbild-Boden: Wasser fehlt als Hindernis im Foto → glatte, halbtransparente Fläche mit weichem Rand (kein Kachelraster)
+// Luftbild-Boden: Wasser ist im Foto oft kaum zu erkennen → kräftige, glatte Fläche (Deckkraft ~0,6), helle glatte Uferlinie
+// und dezente Wellenstriche (kein Kachelraster). Man watet hindurch (Tempo 10 %), also muss man es immer sehen.
 export function zeichneWasserHauch(ctx, welt, rect) {
   const r = { x0: rect.x0 * K - 12, y0: rect.y0 * K - 12, x1: rect.x1 * K + 12, y1: rect.y1 * K + 12 };
   const sicht = wasserLinien(welt).filter(l => l.box.x1 >= r.x0 && l.box.x0 <= r.x1 && l.box.y1 >= r.y0 && l.box.y0 <= r.y1);
   if (!sicht.length) return;
   ctx.save();
-  if ('filter' in ctx) ctx.filter = 'blur(2px)';
   ctx.beginPath();
   for (const l of sicht) pfad(ctx, l.p);
-  ctx.fillStyle = 'rgba(42,112,152,.40)'; ctx.fill('evenodd');
+  if ('filter' in ctx) ctx.filter = 'blur(1px)';
+  ctx.fillStyle = 'rgba(38,110,158,.60)'; ctx.fill('evenodd');
+  ctx.filter = 'none';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(235,245,250,.75)'; ctx.lineWidth = 2; ctx.stroke();   // helle glatte Uferlinie
+  ctx.save(); ctx.clip('evenodd');
+  ctx.strokeStyle = 'rgba(20,60,90,.28)'; ctx.lineWidth = 6; ctx.stroke();      // dunkler Streifen innen am Ufer
+  ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1.3; ctx.beginPath();
+  const x0 = Math.max(0, rect.x0 - 1), x1 = Math.min(BREITE, rect.x1 + 1), y0 = Math.max(0, rect.y0 - 1), y1 = Math.min(HOEHE, rect.y1 + 1);
+  for (let ky = y0; ky < y1; ky++) for (let kx = x0; kx < x1; kx++) {
+    if (welt.hole(kx, ky) !== T.WASSER) continue;
+    const wy = ky * K + 8 + hash(kx, ky) * 16, wx = kx * K + hash(ky, kx) * 12;
+    ctx.moveTo(wx, wy); ctx.quadraticCurveTo(wx + 5, wy - 3, wx + 10, wy); ctx.quadraticCurveTo(wx + 15, wy + 3, wx + 20, wy);
+  }
+  ctx.stroke();
+  ctx.restore();
   ctx.restore();
 }

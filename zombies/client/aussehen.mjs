@@ -591,7 +591,7 @@ function zaunTeil(ctx, art, px, py, nb, kx, ky) {
 // Alles, was die Spielfigur blockiert, muss man auch sehen (Superuser-Anzeige „Hindernisse zeigen“ deckte Lücken auf):
 //  - Hausumriss: das Kollisionsraster (1 m) folgt dem OSM-Umriss; ein dunkler Mauersockel (±0,75 m um den Umriss, unter dem Dach) zeigt die blockierte Kante
 //  - Container: blockieren die ganze 4-m-Kachel, das Bild ist nur ca. 1,5–2 m groß → Stellfläche in Kachelgröße
-//  - Luftbild-Boden: Wasserkacheln (blockieren) und der Kartenrand (Zaun) fehlen im Foto bzw. liegen auf dem Raster → dezent einfärben
+//  - Luftbild-Boden: Wasserkacheln (langsam begehbar) und der Kartenrand (Zaun) fehlen im Foto bzw. liegen auf dem Raster → dezent einfärben
 function zeichneKollisionsSockel(ctx, welt, rect, foto) {
   const K = KACHEL, { x0, y0, x1, y1 } = rect;
   if (welt.vektor?.gebaeude) {

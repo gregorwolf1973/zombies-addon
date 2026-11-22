@@ -492,10 +492,30 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     if (!kiste) return null;   // ohne Vorratskiste ist der Safe Room unbrauchbar: im groben Raster bauen
   }
 
-  // Behälter nur halten, wenn sie nicht zu viele Läden-Regale sind (höchstens 10 Ladenbehälter, gleichmäßig gewählt)
+  // Regalreihen: aneinanderstoßende Ladenregal-Module (1 m) zu EINEM Behälter mit gemeinsamem Rechteck zusammenfassen, damit man
+  // an jeder Stelle entlang des Regals durchsuchen kann (Abstand zählt bis zur Rechteck-Kante); teile = Zahl der Module (mehr Beute)
   {
-    const laeden = behaelter.filter(b => b.art === 'laden');
-    if (laeden.length > 10) { const keep = new Set(laeden.filter((_, i) => i % Math.ceil(laeden.length / 10) === 0)); for (let i = behaelter.length - 1; i >= 0; i--) if (behaelter[i].art === 'laden' && !keep.has(behaelter[i])) behaelter.splice(i, 1); }
+    const gleich = (a, b) => Math.abs(a - b) < 0.01;
+    let geaendert = true;
+    while (geaendert) {
+      geaendert = false;
+      const laeden = behaelter.filter(q => q.art === 'laden' && q.rect);
+      for (const a of laeden) {
+        for (const c of laeden) {
+          if (a === c) continue;
+          const reihe = gleich(a.rect.y0, c.rect.y0) && gleich(a.rect.y1, c.rect.y1) && gleich(a.rect.x1, c.rect.x0)
+            || gleich(a.rect.x0, c.rect.x0) && gleich(a.rect.x1, c.rect.x1) && gleich(a.rect.y1, c.rect.y0);
+          if (!reihe) continue;
+          a.rect = { x0: Math.min(a.rect.x0, c.rect.x0), y0: Math.min(a.rect.y0, c.rect.y0), x1: Math.max(a.rect.x1, c.rect.x1), y1: Math.max(a.rect.y1, c.rect.y1) };
+          a.x = (a.rect.x0 + a.rect.x1) / 2; a.y = (a.rect.y0 + a.rect.y1) / 2;
+          a.teile = (a.teile ?? 1) + (c.teile ?? 1);
+          behaelter.splice(behaelter.indexOf(c), 1);
+          geaendert = true;
+          break;
+        }
+        if (geaendert) break;
+      }
+    }
   }
 
   // Türen verschließen (30 %, am Flur bleibt eine offen) und Belohnungstür der Behälter dahinter
