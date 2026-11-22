@@ -29,7 +29,7 @@ import { SzeneB11 } from './szene_b11.mjs';
 import * as FK from './faehigkeiten.mjs';
 import { alleKandidaten, nimmWeite, ALLE_FRAGEN, ALLE_SPERRE } from '../client/durchsuche_alle.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
-import { baueWeltAusKarte } from '../client/osmwelt.mjs';
+import { weltBeschaffen } from './weltcache.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { Nebel, NEBEL_VORGABE, zombieSichtFaktor } from './nebel.mjs';
@@ -363,7 +363,7 @@ export class SpielRaum extends Room {
     return SU.anmelden(SpielRaum.einstellungen.superuserHash, optionen.testzugang, [kontext.ip ? 'ip:' + kontext.ip : 'ohne-ip', sid ? 'id:' + sid : '']);
   }
 
-  onCreate(optionen = {}) {
+  async onCreate(optionen = {}) {
     this.speicher = SpielRaum.speicher;
     SpielRaum.aktiv = this;
     // „frischer Start“: jede neue Spielrunde beginnt mit einer neuen Welt (Spielerstände bleiben)
@@ -379,7 +379,7 @@ export class SpielRaum extends Room {
       setzeKartengroesse(karte.breite, karte.hoehe);
       const passtStand = stand && (stand.karte ?? '') === karte.name && stand.seed === this.state.seed;
       this.state.autos = Math.max(0, Math.min(50, Math.round(passtStand && Number.isFinite(stand.autos) ? stand.autos : (SpielRaum.einstellungen.autoFaktor ?? 1) * 10)));
-      this.welt = baueWeltAusKarte(karte, this.state.seed, { autos: this.state.autos / 10 }); this.weltFp = weltFingerabdruck(this.welt); levelorteSetzen(this.welt, karte.name);   // sofort, bevor Spielstand/Spiel die Welt verändern
+      this.welt = await weltBeschaffen(karte, this.state.seed, this.state.autos / 10); this.weltFp = weltFingerabdruck(this.welt); levelorteSetzen(this.welt, karte.name);   // sofort, bevor Spielstand/Spiel die Welt verändern
       this.state.karte = karte.name;
     } else {
       setzeKartengroesse(64, 48);
