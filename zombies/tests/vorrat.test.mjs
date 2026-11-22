@@ -13,6 +13,7 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, RUCKSACK_PLAETZE, safeRoomVon } from '../client/welt.mjs';
 import { BOTPLAN } from '../server/botplan.mjs';
+import { freierPort } from './hilfe.mjs';
 BOTPLAN.an = false;   // diese Tests prüfen das reine Folgen/Gelegenheiten der Bots; der Team-Planer hat eigene Tests (botplan.test.mjs)
 
 // Figur in den Innenraum eines Safe Rooms setzen (neben die Eingangstür oder an einen Punkt darin)
@@ -23,7 +24,7 @@ function inDenSafeRoom(raum, p, s, wo = 'tuer') {
   return w;
 }
 
-const PORT = 26900 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-test-'));
 const DB = path.join(ordner, 'spiel.db');
@@ -316,7 +317,7 @@ test('Infektion: läuft draußen, ruht im Safe Room, Spritze heilt Mitspieler, V
     // der andere schießt/stößt den Zombie-Spieler um → zurück im Safe Room
     pb.waffe = 'schlaeger';
     // der Helfer bleibt dicht dran (der Schläger stößt den Zombie jedes Mal weg)
-    const nachruecken = setInterval(() => { if (pa.zombie > 0) { pb.x = pa.x + 25; pb.y = pa.y; pb.hp = 100; } }, 100);
+    const nachruecken = setInterval(() => { if (pa.zombie > 0) { pb.x = pa.x + 12; pb.y = pa.y; pb.hp = 100; } }, 20);
     try { assert.ok(await bis(() => pa.zombie === 0, 8000), 'Zombie-Spieler nicht erledigt'); }
     finally { clearInterval(nachruecken); }
     assert.ok(await bis(() => pa.sicher !== ''), 'nicht im Safe Room aufgewacht');

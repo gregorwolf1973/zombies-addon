@@ -7,8 +7,9 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { versteckPunkte, VERSTECK_WEITE } from '../server/menschen.mjs';
 import { KACHEL, T, frei, sichtfrei } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 25900 + Math.floor(Math.random() * 100);
+const PORT = await freierPort();
 let server;
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); });
 after(async () => { await server.gracefullyShutdown(false); });

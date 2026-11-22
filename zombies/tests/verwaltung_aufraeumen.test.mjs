@@ -8,6 +8,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import http from 'node:http';
 import { starte } from '../server/index.mjs';
+import { freierPort } from './hilfe.mjs';
 
 const html = fs.readFileSync(new URL('../client/verwaltung.html', import.meta.url), 'utf8');
 const skripte = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
@@ -66,7 +67,7 @@ test('Seite: Sprungleiste mit sechs Gruppen und Suchfeld', () => {
 });
 
 // ---------- Server ----------
-const PORT = 25791;
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-aufraeumen-'));
 let server;
 before(async () => {

@@ -11,8 +11,9 @@ import { b11Geometrie } from '../server/szene_b11_geo.mjs';
 import { STREIFE, MIN_ABSTAND } from '../server/szene_b11_fahrt.mjs';
 import { plattLesen, plattKodieren, PLATT_MAX } from '../client/b11_platt.mjs';
 import { frei, setzeKartengroesse } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28800 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

@@ -11,8 +11,9 @@ import { bereinige } from '../server/einstellungen.mjs';
 import { WAFFEN_RANG, GRENZE } from '../server/bots.mjs';
 import { KACHEL, BREITE, HOEHE, T, DINGE, WAFFEN, BEUTE, LEICHE_SELTEN, LEICHE_OFT, GRANATE, HANDEL, MUNITION_MAX, TEMPO_MG, bezahlung, setzeKartengroesse, frei, linieFrei, sichtfrei } from '../client/welt.mjs';
 import { rahmen, handelsleute, zeltWandImWeg, planKoord, imLager, fahrFlaeche, PUMA_PARK } from '../client/stuetzpunkt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 27990 + Math.floor(Math.random() * 9);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
@@ -329,7 +330,7 @@ test('Überrennen: nach N Spieltagen fällt der Stützpunkt – Zombies an den P
   const alle = [...raum.state.zombies.values()];
   const postenOrte = sp.teile.filter(t => t.art === 'mgnest' || (t.art === 'posten' && ['soldat', 'arzt', 'verwundet'].includes(t.rolle)));
   assert.ok(postenOrte.every(t => alle.some(z => abstand(z, t) < 110)), 'ein Posten ohne Zombie in der Nähe');
-  assert.ok(nachrichten.meldung.some(m => m.lang && /Der Bundeswehr-Stützpunkt ist gefallen!/.test(m.text)), 'keine lange Meldung');
+  assert.ok(await bis(() => nachrichten.meldung.some(m => m.lang && /Der Bundeswehr-Stützpunkt ist gefallen!/.test(m.text)), 10000), 'keine lange Meldung');   // Nachricht kommt über das Netz: darauf warten, nicht sofort prüfen
   // MG und Puma schweigen
   nachrichten.bwschuss.length = 0;
   for (const id of [...raum.state.zombies.keys()]) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); }

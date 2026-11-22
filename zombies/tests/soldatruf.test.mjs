@@ -9,8 +9,9 @@ import { SpielRaum } from '../server/raum.mjs';
 import { EREIGNISSE } from '../server/einstellungen.mjs';
 import { setzeKartengroesse } from '../client/welt.mjs';
 import { rahmen } from '../client/stuetzpunkt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28200 + Math.floor(Math.random() * 9);
+const PORT = await freierPort();
 let server;
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); });
 after(async () => { await server.gracefullyShutdown(false); setzeKartengroesse(64, 48); });

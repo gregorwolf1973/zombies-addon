@@ -8,8 +8,9 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { setzeKartengroesse, durchsuchDauer } from '../client/welt.mjs';
 import { alleKandidaten } from '../client/durchsuche_alle.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28700 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); });

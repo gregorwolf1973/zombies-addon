@@ -23,6 +23,11 @@ try {
   radioAn = anAusLesen(localStorage.getItem(GERAET_SCHLUESSEL.autoradio));
 } catch { /* ohne Speicher: 100 % */ }
 
+// Diagnose (client/diagnose.mjs): spiel.mjs hängt eine Funktion (art, detail) ein – hier nur Meldungen, keine Arbeit pro Frame
+let diagHaken = null;
+export function diagnoseHaken(f) { diagHaken = typeof f === 'function' ? f : null; }
+export const kontextZustand = () => (ctx ? ctx.state : 'keiner');
+function diag(art, detail) { try { diagHaken?.(art, detail); } catch { /* egal */ } }
 export function tonAn() { return stufe > 0; }
 export function lautstaerke() { return stufe; }
 const pegel = () => BASIS * stufe;
@@ -88,7 +93,7 @@ function laden(datei) {
     .then(b => new Promise((ok, fehl) => ctx.decodeAudioData(b, ok, fehl)))
     .then(buf => istMusik(datei) ? buf : monoMachen(buf))
     .then(buf => { puffer.set(datei, buf); LADE_FEHLER.delete(datei); hintergrundPruefen(); return buf; })
-    .catch(() => { const f = LADE_FEHLER.get(datei); LADE_FEHLER.set(datei, { n: (f?.n ?? 0) + 1, t: performance.now() }); puffer.set(datei, null); return null; });
+    .catch(e => { diag('ladefehler', datei + (e?.message ? ' ' + String(e.message).slice(0, 40) : '')); const f = LADE_FEHLER.get(datei); LADE_FEHLER.set(datei, { n: (f?.n ?? 0) + 1, t: performance.now() }); puffer.set(datei, null); return null; });
   puffer.set(datei, p);
   return p;
 }
@@ -131,6 +136,7 @@ function stimmePlatz(zombie, v, quelle, prio = false) {
   const jetzt = ctx.currentTime;
   if (ctx.state !== 'running') stimmen.length = 0;   // Uhr steht (gesperrt/unterbrochen): nichts läuft wirklich, keine Stimme belegt Platz
   const r = stimmeZuweisen(stimmen, { jetzt, zombie, v, quelle, prio });
+  if (r.verdraengt.length || !r.ok) diag('verdraengt', r.verdraengt.length + (r.ok ? 0 : 1));
   for (const l of r.verdraengt) try { l.g.gain.setTargetAtTime(0, jetzt, 0.02); l.src.stop(jetzt + 0.1); } catch { /* schon zu Ende */ }
   return r.ok;
 }
@@ -147,7 +153,7 @@ function probe(id, x, y, extra = 1) {
   if (!ctx || !t?.dateien?.length) { ersatzMerken(t); return false; }
   weckeKontext();
   if (zombieStumm(id)) return true;   // Zahnrad: Zombiegeräusche aus – auch kein Ersatzton
-  if (ctx.state !== 'running') return true;   // Kontext schläft: Ereignis verwerfen, kein Ersatzton, keine Warteschlange
+  if (ctx.state !== 'running') { diag('stumm', id); return true; }   // Kontext schläft: Ereignis verwerfen, kein Ersatzton, keine Warteschlange
   const bereit = t.dateien.map(geladen).filter(Boolean);
   if (!bereit.length) { t.dateien.forEach(laden); ersatzMerken(t); return false; }
   if (!abstandOk(id)) return true;   // zu kurz nach dem letzten: verworfen, auch kein Ersatzton
@@ -294,8 +300,9 @@ export function tonStarten() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
+  diag('zustand', ctx.state + ' (Start)');
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* egal */ }   // iOS: Ton trotz Stummschalter, nicht als „Umgebungston“ unterbrechen
-  try { ctx.onstatechange = () => { stimmen.length = 0; }; } catch { /* egal */ }   // Zustandswechsel: alte Stimmen belegen keinen Platz mehr
+  try { ctx.onstatechange = () => { stimmen.length = 0; diag('zustand', ctx.state); }; } catch { /* egal */ }   // Zustandswechsel: alte Stimmen belegen keinen Platz mehr
   haupt = ctx.createGain(); haupt.gain.value = pegelEffekt(); haupt.connect(ctx.destination);
   musikAusgang = ctx.createGain(); musikAusgang.gain.value = pegel(); musikAusgang.connect(ctx.destination);
   musikBus = ctx.createGain(); musikBus.gain.value = musikEin.laut / 100; musikBus.connect(musikAusgang);

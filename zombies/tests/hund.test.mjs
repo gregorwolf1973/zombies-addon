@@ -10,8 +10,9 @@ import { SpielRaum } from '../server/raum.mjs';
 import { EREIGNISSE, TON_STANDARD } from '../server/einstellungen.mjs';
 import { setzeKartengroesse, frei, KACHEL } from '../client/welt.mjs';
 import { hundRichtung, hundBild, hundSkala, SCHULTER_PX } from '../client/hund.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28300 + Math.floor(Math.random() * 9);
+const PORT = await freierPort();
 let server;
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); });
 after(async () => { await server.gracefullyShutdown(false); setzeKartengroesse(64, 48); });
@@ -77,10 +78,10 @@ test('Streuner: ein Spieler in 2 m bekommt den Hund, jeder nur einen, Bots keine
   delete xb.bot;
   raum.state.hunde.delete(s1); raum.hunde.info.delete(s1);   // s1 wandert sonst (zufällig) in Berts Nähe und würde ihm später zulaufen
   // weit weg: nichts
-  const s2 = raum.hunde.neuerStreuner(pa.x + 40, pa.y); raum.state.hunde.get(s2).x = pa.x + 40;
+  const s2 = raum.hunde.neuerStreuner(pa.x + 160, pa.y); raum.state.hunde.get(s2).x = pa.x + 160;
   raum.hunde.info.get(s2).steht = true; raum.hunde.info.get(s2).wandelT = 99;
   tick(raum, 5);
-  assert.equal(raum.state.hunde.get(s2).besitzer, '', '5 m: noch kein Zulaufen');
+  assert.equal(raum.state.hunde.get(s2).besitzer, '', '20 m: noch kein Zulaufen (Sichtweite 15 m)');
   // in 2 m: Anna bekommt ihn, mit Meldung
   const h2 = raum.state.hunde.get(s2); h2.x = pa.x + 12; h2.y = pa.y;
   tick(raum, 2);

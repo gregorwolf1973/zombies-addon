@@ -72,6 +72,7 @@ const INNEN_ZOOM = 1.6;
 const AUSSEN_ZOOM_KORREKTUR = 1 / 1.4;
 import { zeichneMensch, zeichneMenschLiegend } from './figuren.mjs';
 import { NetzPuffer, nachSeq, ausStufe, verzFuerServer, naheAnzeigeVerz } from './netzpuffer.mjs';
+import { Sammler, geraetTyp } from './diagnose.mjs';
 import { dingIcon, dingHtml, setzeDingListe, dingRahmen, hatDingBild } from './dingbild.mjs';
 
 const HAARE = ['#5d4037', '#212121', '#ffd54f', '#8d6e63', '#bf360c', '#424242', '#6d4c41', '#fbc02d', '#3e2723', '#9e9e9e'];
@@ -114,6 +115,57 @@ const BASIS = location.href.replace(/[?#].*$/, '').replace(/\/[^/]*$/, '');
 
 let raum = null;
 let meineId = null;
+// ---------- Diagnose (client/diagnose.mjs → POST diag → Server-Log): Fehler sofort, Kennzahlen alle 60 s ----------
+const diag = new Sammler({ geraet: geraetTyp(navigator.userAgent), senden: b => diagSenden(b) });
+let diagSitzung = null, diagTimer = null, diagPingTimer = null, diagAnzeigeTimer = null;
+function diagSenden(b) {
+  if (!diagSitzung) return;
+  try {
+    const t = JSON.stringify({ s: diagSitzung, ...b });
+    if (t.length < 7800) fetch('diag', { method: 'POST', body: t, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+  } catch { /* Diagnose darf nie stören */ }
+}
+window.addEventListener('error', e => { if (e.message) diag.fehler({ meldung: e.message, quelle: e.filename, zeile: e.lineno, stack: e.error?.stack }); });
+window.addEventListener('unhandledrejection', e => { const g = e.reason; diag.fehler({ meldung: 'Promise: ' + String(g?.message ?? g), quelle: '', zeile: 0, stack: g?.stack }); });
+ton.diagnoseHaken((art, d) => {
+  if (art === 'stumm') diag.tonZaehler(1, 0);
+  else if (art === 'verdraengt') diag.tonZaehler(0, Number(d) || 1);
+  else diag.tonProblem(art, d);
+});
+function diagKontext() {
+  const sz = chatSzene, ich = sz?.lokal;
+  return { zoom: sz?.zoomWahl ? Math.round(sz.zoomWahl * 100) / 100 : null, bild: `${window.innerWidth}x${window.innerHeight}`, karte: raum?.state?.karte || '', drinnen: !!sz?.aktEbene, ton: ton.kontextZustand(), zombies: sz?.zombies?.size ?? null };
+}
+function diagStarten(r) {
+  diagSitzung = r.sessionId;
+  clearInterval(diagTimer); clearInterval(diagPingTimer);
+  const nachrichten = () => { try { r.connection.transport.ws.addEventListener('message', e => diag.empfangen(e.data?.byteLength ?? e.data?.length ?? 0)); } catch { /* ohne Zählung */ } };
+  nachrichten();
+  r.onReconnect(nachrichten);
+  r.onMessage('pong', t => diag.pingSetzen(performance.now() - t));
+  const ping = () => { if (!document.hidden) try { r.send('ping', performance.now()); } catch { /* egal */ } };
+  diagPingTimer = setInterval(ping, 10000); ping();
+  diagTimer = setInterval(() => { if (!document.hidden) diag.kpi(diagKontext()); else diag.neuFenster(); }, 60000);
+}
+// Diagnose-Anzeige (Zahnrad „📊 Diagnose anzeigen“): kleine Ecke, einmal pro Sekunde aktualisiert, nur wenn an
+function diagAnzeige(an) {
+  clearInterval(diagAnzeigeTimer); diagAnzeigeTimer = null;
+  let el = document.getElementById('diagAnzeige');
+  if (!an) { el?.remove(); return; }
+  if (!el) {
+    el = document.createElement('div'); el.id = 'diagAnzeige';
+    el.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:60;background:rgba(0,0,0,.6);color:#9f9;font:11px/1.35 monospace;padding:3px 6px;border-radius:4px;pointer-events:none;white-space:pre';
+    document.body.appendChild(el);
+  }
+  let f0 = diag.gesamtFrames, b0 = diag.gesamtBytes, t0 = performance.now();
+  diagAnzeigeTimer = setInterval(() => {
+    const t = performance.now(), sek = Math.max(0.2, (t - t0) / 1000), k = diagKontext();
+    const fps = (diag.gesamtFrames - f0) / sek, kbs = (diag.gesamtBytes - b0) / 1024 / sek;
+    f0 = diag.gesamtFrames; b0 = diag.gesamtBytes; t0 = t;
+    el.textContent = `FPS ${fps.toFixed(0)}  Ping ${diag.ping == null ? '–' : Math.round(diag.ping) + ' ms'}\n${kbs.toFixed(1)} kB/s  Zombies ${k.zombies ?? '–'}\nTon ${k.ton}`;
+  }, 1000);
+}
+
 let wikiAdresse = '', externeAdresse = '';
 
 // fester, geheimer Spieler-Schlüssel dieses Browsers – daran hängt der Spielstand
@@ -147,7 +199,7 @@ async function veraltet() {
 function autostartMerken() { try { sessionStorage.setItem('zob_autostart', '1'); const pw = $('testpw')?.value; if (pw) sessionStorage.setItem('zob_testpwtmp', pw); } catch {} }
 function frischLaden(wiederBeitreten) { if (wiederBeitreten) autostartMerken(); location.reload(); }
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && await veraltet()) frischLaden(!!window.szene); });
-fetch('info').then(r => r.json()).then(i => { seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); }).catch(() => {});
+fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 tutorialKnopf(() => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });   // „🎯 Schießstand / Tutorial“ unter „Mitspielen“
 
@@ -371,6 +423,7 @@ async function mitspielen() {
     ladenZeigen(15, 'Generiere Welt … verbunden');
     ton.musikAusblenden(4);   // Startmusik sanft ausblenden
     meineId = r.sessionId;
+    diagStarten(r);
     try { if (!TUT.an) sessionStorage.setItem('zob_token', r.reconnectionToken); } catch {}
     raum.onDrop(() => { $('verbindung').style.display = 'block'; });
     raum.onReconnect(() => {
@@ -516,12 +569,14 @@ function geraetEinstellungenEinrichten(markieren) {
       v => { const k = kulisse(); if (!k) return; k.an[w] = anAusLesen(v); document.dispatchEvent(new CustomEvent('zob-kulisse')); }, KUL_SCHLUESSEL[w])),
     gruppe('eg-zombieton', () => (anAusLesen(lies(K.zombieTon)) ? 'an' : 'aus'), v => ton.zombieTonSetzen(anAusLesen(v)), K.zombieTon),
     gruppe('eg-musik', () => (anAusLesen(lies(K.musik)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.musikSetzen(anAusLesen(v)); }, K.musik),
+    gruppe('eg-diagnose', () => (lies(K.diagnose) === 'an' ? 'an' : 'aus'), v => diagAnzeige(v === 'an'), K.diagnose),
     gruppe('eg-autoradio', () => (anAusLesen(lies(K.autoradio)) ? 'an' : 'aus'), v => { ton.tonStarten(); ton.autoradioSetzen(anAusLesen(v)); }, K.autoradio),
   ];
   $('eg-stimmen').oninput = e => { merke(K.stimmen, e.target.value); sprache.stimmenFaktorSetzen(e.target.value); stimmenAnzeige(); };
   // beim Öffnen des Menüs die Markierungen nachziehen (markieren() ruft der Aufrufer auf)
   geraetMarkieren = () => { marks.forEach(m => m()); stimmenAnzeige(); };
   geraetMarkieren();
+  diagAnzeige(lies(K.diagnose) === 'an');
   ton.zombieTonSetzen(anAusLesen(lies(K.zombieTon)));
   ton.autoradioSetzen(anAusLesen(lies(K.autoradio)));
   sprache.stimmenFaktorSetzen(lies(K.stimmen) ?? 100);
@@ -1090,7 +1145,7 @@ class Ort extends Phaser.Scene {
       ton.ereignis('soldatRuf', m.x, m.y);
       const e = this.stuetzpunktObj?.soldaten.find(q => q.n === m.n);
       if (e?.tot) return;
-      const t = this.add.text(m.x, m.y - 34, m.t ? 'Keine Bewegung!' : 'Halt! Stehen bleiben!', { fontSize: '11px', fontFamily: 'sans-serif', color: '#fff', backgroundColor: '#000a', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(50);
+      const t = this.add.text(m.x, m.y - 18, m.t ? 'Keine Bewegung!' : 'Halt! Stehen bleiben!', { fontSize: '11px', fontFamily: 'sans-serif', color: '#fff', backgroundColor: '#000a', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(50);
       this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, delay: 1500, duration: 700, onComplete: () => t.destroy() });
     });
     raum.onMessage('hilferufe', m => { ton.ereignis('hilferufe', m.x, m.y); });
@@ -1100,7 +1155,7 @@ class Ort extends Phaser.Scene {
       if (m.id === meineId && this.lokal) this.sprung = { vx: this.lokal.x, vy: this.lokal.y, nx: m.x, ny: m.y, t: 0 };
       ton.schritt(false); ton.schritt(false);
       for (let i = 0; i < 5; i++) {
-        const c = this.add.circle(m.x + (Math.random() - 0.5) * 16, m.y + 8, 3 + Math.random() * 3, 0xa1887f, 0.7).setDepth(3.9);
+        const c = this.add.circle(m.x + (Math.random() - 0.5) * 16, m.y + 8, 1.5 + Math.random() * 1.5, 0xa1887f, 0.7).setDepth(3.9);
         this.tweens.add({ targets: c, y: c.y - 10, alpha: 0, scale: 1.8, duration: 450, onComplete: () => c.destroy() });
       }
     });
@@ -2600,8 +2655,8 @@ class Ort extends Phaser.Scene {
         o.rauchUhr = (o.rauchUhr ?? 0) - dt;
         if (o.rauchUhr <= 0) {
           o.rauchUhr = 0.18 + Math.random() * 0.12;
-          const q = this.add.circle(o.x + (Math.random() - 0.5) * 14, o.y + (Math.random() - 0.5) * 10, 5 + Math.random() * 4, 0x555555, 0.55).setDepth(7.6);
-          this.tweens.add({ targets: q, y: q.y - 34 - Math.random() * 20, x: q.x + 8 + Math.random() * 10, alpha: 0, scale: 2.6, duration: 1500 + Math.random() * 600, onComplete: () => q.destroy() });
+          const q = this.add.circle(o.x + (Math.random() - 0.5) * 14, o.y + (Math.random() - 0.5) * 10, 3 + Math.random() * 2, 0x555555, 0.55).setDepth(7.6);
+          this.tweens.add({ targets: q, y: q.y - 20 - Math.random() * 12, x: q.x + 8 + Math.random() * 10, alpha: 0, scale: 2.6, duration: 1500 + Math.random() * 600, onComplete: () => q.destroy() });
         }
       }
       if (f.art === 'boxer') {
@@ -2655,9 +2710,9 @@ class Ort extends Phaser.Scene {
       if (!o) {
         o = this.add.container(b.x, b.y).setDepth(1.7);
         const bild = hatDingBild(b.ding) && this.textures.get('dinge').has(b.ding === 'handgranate' ? 'granate' : b.ding)
-          ? this.add.image(0, 0, 'dinge', b.ding === 'handgranate' ? 'granate' : b.ding).setScale((b.ding === 'handgranate' ? 12 : 24) / 128).setOrigin(0.5)
-          : this.add.text(0, 0, DINGE[b.ding]?.zeichen ?? '?', { fontSize: '16px' }).setOrigin(0.5);
-        o.add([this.add.ellipse(0, 7, 20, 6, 0x000000, 0.3), bild]);
+          ? this.add.image(0, 0, 'dinge', b.ding === 'handgranate' ? 'granate' : b.ding).setScale((b.ding === 'handgranate' ? 8 : 12) / 128).setOrigin(0.5)
+          : this.add.text(0, 0, DINGE[b.ding]?.zeichen ?? '?', { fontSize: '10px' }).setOrigin(0.5);
+        o.add([this.add.ellipse(0, 4, 10, 3, 0x000000, 0.3), bild]);
         this.tweens.add({ targets: o, y: b.y - 3, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         this.bodenObj.set(id, o);
       }
@@ -2848,8 +2903,8 @@ class Ort extends Phaser.Scene {
     // Leuchtspur: kurzer heller Streifen, der zum Ziel läuft
     const g = this.add.graphics().setDepth(7);
     const l0 = 0.0, l1 = Math.min(1, 70 / Math.max(1, Math.hypot(m.x2 - mx, m.y2 - my)));
-    g.lineStyle(kanone ? 3 : 2, kanone ? 0xffcc80 : 0xffee58, 1).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
-    g.lineStyle(1, 0xffffff, 0.9).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
+    g.lineStyle(kanone ? 1.5 : 1, kanone ? 0xffcc80 : 0xffee58, 1).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
+    g.lineStyle(0.6, 0xffffff, 0.9).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
     this.tweens.add({ targets: g, x: (m.x2 - mx) * (1 - l1), y: (m.y2 - my) * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => g.destroy() });
     this.muendungsLicht(mx, my, '', kanone ? (o?.turm ? 'puma' : 'kanone') : (evak ? 'leopard' : 'mg'));
     // Mündungsblitz (additiv) und Pulverrauch
@@ -2858,8 +2913,8 @@ class Ort extends Phaser.Scene {
     this.tweens.add({ targets: blitz, alpha: 0, duration: kanone ? 100 : 60, onComplete: () => blitz.destroy() });
     if (kanone) {
       for (let i = 0; i < 6; i++) {
-        const r = this.add.circle(mx + (Math.random() - 0.5) * 10, my + (Math.random() - 0.5) * 10, 5 + Math.random() * 5, 0xbdbdbd, 0.55).setDepth(6.5);
-        this.tweens.add({ targets: r, x: r.x + c * (10 + Math.random() * 24) + (Math.random() - 0.5) * 16, y: r.y + sn * (10 + Math.random() * 24) + (Math.random() - 0.5) * 16, alpha: 0, scale: 2.2, duration: 700, onComplete: () => r.destroy() });
+        const r = this.add.circle(mx + (Math.random() - 0.5) * 5, my + (Math.random() - 0.5) * 5, 2.5 + Math.random() * 2.5, 0xbdbdbd, 0.55).setDepth(6.5);
+        this.tweens.add({ targets: r, x: r.x + c * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, y: r.y + sn * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, alpha: 0, scale: 2.2, duration: 700, onComplete: () => r.destroy() });
       }
       this.explosion(m.x2, m.y2, 24, 0.45);
     }
@@ -2894,11 +2949,11 @@ class Ort extends Phaser.Scene {
   krachEffekt(x, y) {
     if (this.aktEbene) return;
     for (let i = 0; i < 10; i++) {
-      const w = Math.random() * Math.PI * 2, d = 14 + Math.random() * 26;
-      const f = this.add.circle(x, y, 1.5 + Math.random() * 2, i % 2 ? 0xffd54f : 0xcfd8dc, 0.95).setDepth(7.8);
+      const w = Math.random() * Math.PI * 2, d = 8 + Math.random() * 14;
+      const f = this.add.circle(x, y, 0.8 + Math.random() * 1.2, i % 2 ? 0xffd54f : 0xcfd8dc, 0.95).setDepth(7.8);
       this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, duration: 260 + Math.random() * 240, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
     }
-    const staub = this.add.circle(x, y, 10, 0x9e9e9e, 0.5).setDepth(7.7);
+    const staub = this.add.circle(x, y, 5, 0x9e9e9e, 0.5).setDepth(7.7);
     this.tweens.add({ targets: staub, scale: 3, alpha: 0, duration: 900, onComplete: () => staub.destroy() });
     if (this.lokal) {
       const nah = Math.max(0, 1 - Math.hypot(this.lokal.x - x, this.lokal.y - y) / 300);
@@ -2916,13 +2971,13 @@ class Ort extends Phaser.Scene {
     const n = Math.round(14 * staerke) + 4;
     for (let i = 0; i < n; i++) {
       const w = Math.random() * Math.PI * 2, d = r * (0.5 + Math.random() * 0.9);
-      const f = this.add.circle(x, y, 3 + Math.random() * 5, [0xffd54f, 0xff9800, 0xf4511e, 0xd84315][i % 4], 0.95).setBlendMode('ADD').setDepth(7.8);
+      const f = this.add.circle(x, y, 1 + Math.random() * 2, [0xffd54f, 0xff9800, 0xf4511e, 0xd84315][i % 4], 0.95).setBlendMode('ADD').setDepth(7.8);
       this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, scale: 0.4, duration: 350 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
     }
     for (let i = 0; i < Math.round(9 * staerke) + 2; i++) {
       const w = Math.random() * Math.PI * 2, d = r * (0.2 + Math.random() * 0.8);
-      const rauch = this.add.circle(x, y, 6 + Math.random() * 7, 0x4a4a4a, 0.6).setDepth(7.7);
-      this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 14 - Math.random() * 16, alpha: 0, scale: 2.4 + Math.random() * 1.2, duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
+      const rauch = this.add.circle(x, y, 3.6 + Math.random() * 4.2, 0x4a4a4a, 0.6).setDepth(7.7);
+      this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 8 - Math.random() * 10, alpha: 0, scale: 2.4 + Math.random() * 1.2, duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
     }
     const brand = this.add.circle(x, y, r * 0.35, 0x1b1b1b, 0.5).setDepth(0.95);   // Brandfleck am Boden
     this.tweens.add({ targets: brand, alpha: 0, duration: 6000, onComplete: () => brand.destroy() });
@@ -3396,22 +3451,23 @@ class Ort extends Phaser.Scene {
 
   stoss(m) {
     const g = this.add.graphics().setDepth(7);
-    if (m.sense) { g.lineStyle(4, 0xe0e0e0, 0.9).beginPath().arc(m.x, m.y, 52, m.w - 1.4, m.w + 1.4).strokePath(); g.lineStyle(2, 0x8d6e63, 0.9).beginPath().arc(m.x, m.y, 40, m.w - 1.2, m.w + 1.2).strokePath(); }
-    else if (m.messer) g.lineStyle(2, 0xeceff1, 0.95).beginPath().arc(m.x, m.y, 24, m.w - 0.5, m.w + 0.5).strokePath();
-    else g.lineStyle(m.schlag ? 5 : 3, m.schlag ? 0xd7ccc8 : 0xffffff, 0.85).beginPath().arc(m.x, m.y, m.schlag ? 34 : 26, m.w - 0.8, m.w + 0.8).strokePath();
+    if (m.sense) { g.lineStyle(2.5, 0xe0e0e0, 0.9).beginPath().arc(m.x, m.y, 26, m.w - 1.4, m.w + 1.4).strokePath(); g.lineStyle(1.5, 0x8d6e63, 0.9).beginPath().arc(m.x, m.y, 20, m.w - 1.2, m.w + 1.2).strokePath(); }
+    else if (m.messer) g.lineStyle(1, 0xeceff1, 0.95).beginPath().arc(m.x, m.y, 12, m.w - 0.5, m.w + 0.5).strokePath();
+    else g.lineStyle(m.schlag ? 2.5 : 1.5, m.schlag ? 0xd7ccc8 : 0xffffff, 0.85).beginPath().arc(m.x, m.y, m.schlag ? 17 : 13, m.w - 0.8, m.w + 0.8).strokePath();
     this.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
   }
 
   puff(x, y) {
     for (let i = 0; i < 7; i++) {
-      const c = this.add.circle(x, y, 4 + Math.random() * 4, i % 2 ? 0x558b2f : 0x8bc34a, 0.9).setDepth(7);
-      const w = Math.random() * Math.PI * 2, d = 14 + Math.random() * 18;
+      const c = this.add.circle(x, y, 1 + Math.random() * 1.5, i % 2 ? 0x558b2f : 0x8bc34a, 0.7).setDepth(7);
+      const w = Math.random() * Math.PI * 2, d = 6 + Math.random() * 8;
       this.tweens.add({ targets: c, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, duration: 450, onComplete: () => c.destroy() });
     }
   }
 
   // ---------- Schleife ----------
   update(_t, ms) {
+    diag.bild();   // einziger Zähler pro Frame
     if (!this.bereit) return;
     const dt = Math.min(0.1, ms / 1000);
     if (this.hordeInfo) this.hordeZeichnen();

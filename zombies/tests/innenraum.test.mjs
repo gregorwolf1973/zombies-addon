@@ -9,9 +9,10 @@ import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, T, sichtfrei, frei } from '../client/welt.mjs';
 import { hausHell, helligkeit, istNacht } from '../client/welt.mjs';
 import { BOTPLAN } from '../server/botplan.mjs';
+import { freierPort } from './hilfe.mjs';
 BOTPLAN.an = false;   // diese Tests prüfen das reine Folgen/Gelegenheiten der Bots; der Team-Planer hat eigene Tests (botplan.test.mjs)
 
-const PORT = 27300 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
@@ -306,7 +307,7 @@ test('Neue Waffen: Schrot trifft mehrere und braucht Munition, Sense mäht im Bo
     for (let y = 5; y < 40 && !ort; y++) for (let x = 5; x < 55 && !ort; x++) {
       const px = x * KACHEL + 16, py = y * KACHEL + 16;
       if ([0, 60, 120, 200, 300].every(dx => [-40, 0, 40].every(dy => frei(welt, px + dx, py + dy, 16)))
-        && [[300, 0], [90, -12], [100, 14], [40, -25], [40, 25]].every(([dx, dy]) => sichtfrei(welt, px, py, px + dx, py + dy))) ort = { x: px, y: py };
+        && [[300, 0], [90, -12], [100, 14], [20, -12], [20, 12]].every(([dx, dy]) => sichtfrei(welt, px, py, px + dx, py + dy))) ort = { x: px, y: py };
     }
     assert.ok(ort, 'kein freier Platz');
     const aufstellen = punkte => {
@@ -327,7 +328,7 @@ test('Neue Waffen: Schrot trifft mehrere und braucht Munition, Sense mäht im Bo
     assert.ok(p.munition < 3, 'keine Munition verbraucht');
     // Sense: zwei Zombies links und rechts vorne
     p.waffe = 'sense'; p.munition = 0; p.x = ort.x; p.y = ort.y;
-    zs = aufstellen([[40, -25], [40, 25]]);
+    zs = aufstellen([[20, -12], [20, 12]]);
     assert.ok(await bis(() => zs.every(z => z.hp < 100), 3000), 'Sense trifft nicht beide');
     // Gewehr: weit entfernter Zombie
     p.waffe = 'gewehr'; p.munition = 2; p.x = ort.x; p.y = ort.y;

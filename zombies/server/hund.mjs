@@ -15,12 +15,16 @@ export const Hund = schema({
 }, 'Hund');
 entkoppeln(Hund, ['x', 'y']);
 
-export const HUND = { ablenkung: 40 };   // Vorgabe der Einstellung: Wahrscheinlichkeit in %, dass ein Zombie in der Nähe den Hund jagt
+export const HUND = { ablenkung: 40, streuner: -1 };   // Vorgabe der Einstellung: Wahrscheinlichkeit in %, dass ein Zombie in der Nähe den Hund jagt
 
 const PX = 8;
 const RAD = 5;                       // Kollisionsradius
 const ZULAUF = 2 * PX;               // so nah muss ein Spieler kommen, damit ihm der Streuner zuläuft
 const START_MIN = 40 * PX;           // Streuner entstehen nicht näher am Start
+const NAH_MIN = 100 * PX, NAH_MAX = 300 * PX;   // ein Streuner streunt in dieser Entfernung vom Startpunkt
+const SICHT = 15 * PX;               // so weit sieht ein Streuner einen Spieler (mit freier Sichtlinie) und läuft ihm zu
+const RUF_HOERWEITE = 35 * PX;       // Streuner-Bellen ist so weit zu hören
+const KM2_JE_HUND = 0.33;            // automatische Anzahl: ein Streuner je 0,33 km² Kartenfläche (Geretsried 2 ≈ 7)
 const FOLGE_NAH = 1.5 * PX, FOLGE_FERN = 3 * PX;   // Abstand zum Besitzer: ab FOLGE_FERN läuft er los, bei FOLGE_NAH bleibt er stehen
 const TELEPORT = 30 * PX;            // weiter weg: springt hinter den Besitzer
 const ABLENK_RADIUS = 8 * PX;        // Zombies so nah am Hund können ihn jagen
@@ -52,11 +56,24 @@ export class Hunde {
     return Number.isFinite(a) ? Math.max(0, Math.min(100, a)) : HUND.ablenkung;
   }
 
-  // Beim Start der Welt: 1–2 Streuner an zufälligen Orten
+  get streunerEinstellung() {
+    const a = Number(this.raum.constructor.einstellungen?.hund?.streuner);
+    return Number.isFinite(a) ? Math.max(-1, Math.min(20, Math.round(a))) : HUND.streuner;
+  }
+
+  // Anzahl Streuner: Einstellung (-1 = automatisch: 1 je 0,5 km² Kartenfläche, mindestens 1; 0 = keine; sonst fest)
+  streunerAnzahl() {
+    const e = this.streunerEinstellung;
+    if (e >= 0) return e;
+    const km2 = BREITE * HOEHE * KACHEL * KACHEL / (PX * PX) / 1e6;   // Kacheln → m² → km²
+    return Math.min(20, Math.max(1, Math.round(km2 / KM2_JE_HUND)));
+  }
+
+  // Beim Start der Welt: Streuner an zufälligen Orten, der erste streunt 100–300 m vom Start
   start(anzahl = null) {
-    const n = anzahl ?? (this.raum.rnd() < 0.5 ? 1 : 2);
+    const n = anzahl ?? this.streunerAnzahl();
     for (let i = 0; i < n; i++) {
-      const o = this.streunerOrt();
+      const o = (i === 0 && this.raum.welt.start ? this.streunerOrt(NAH_MIN, NAH_MAX) : null) ?? this.streunerOrt();
       if (o) this.neuerStreuner(o.x, o.y);
     }
     this.raum.onMessage('hundWeg', client => {
@@ -65,13 +82,14 @@ export class Hunde {
     });
   }
 
-  streunerOrt() {
+  // Ort für einen Streuner: ohne Entfernungsangabe mindestens START_MIN vom Start, sonst zwischen min und max (px)
+  streunerOrt(min = START_MIN, max = Infinity) {
     const r = this.raum, w = r.welt, rnd = r.rnd;
-    for (let i = 0; i < 800; i++) {
+    for (let i = 0; i < 1500; i++) {
       const kx = 1 + Math.floor(rnd() * (BREITE - 2)), ky = 1 + Math.floor(rnd() * (HOEHE - 2));
       if (!ERLAUBT.has(w.hole(kx, ky))) continue;
       const x = (kx + 0.5) * KACHEL, y = (ky + 0.5) * KACHEL;
-      if (w.start && Math.hypot(x - w.start.x, y - w.start.y) < START_MIN) continue;
+      if (w.start) { const d = Math.hypot(x - w.start.x, y - w.start.y); if (d < min || d > max) continue; }
       if (!frei(w, x, y, RAD + 3)) continue;
       return { x, y };
     }
@@ -82,7 +100,7 @@ export class Hunde {
     const h = new Hund(), id = 'd' + (++this.nummer);
     h.x = x; h.y = y; h.richtung = this.raum.rnd() * Math.PI * 2; h.ebene = ebene ?? ''; h.besitzer = besitzer ?? '';
     h.laeuft = false; h.winselt = false;
-    this.info.set(id, { modus: besitzer ? 'folgt' : 'streuner', wandelT: 0, steht: true, wandelW: 0, fluchtT: 0, fluchtW: 0, bogen: 1, bellT: 0, pruefT: 0.5, winselT: 0, weg: null, wegT: 0, steckt: 0, geht: false });
+    this.info.set(id, { modus: besitzer ? 'folgt' : 'streuner', wandelT: 0, steht: true, wandelW: 0, fluchtT: 0, fluchtW: 0, bogen: 1, bellT: 0, rufT: this.t + 20 + this.raum.rnd() * 20, pruefT: 0.5, winselT: 0, weg: null, wegT: 0, steckt: 0, geht: false });
     this.raum.state.hunde.set(id, h);
     return id;
   }
@@ -166,7 +184,13 @@ export class Hunde {
     inf.wandelT -= dt;
     if (inf.wandelT <= 0) { inf.wandelT = 2 + r() * 4; inf.steht = r() < 0.4; inf.wandelW = r() * Math.PI * 2; }
     h.laeuft = false;
-    if (!inf.steht) {
+    if (this.t >= inf.rufT) { inf.rufT = this.t + 20 + r() * 20; this.rufen(h); }
+    const ziel = this.sichtZiel(h);
+    if (ziel) {   // sieht einen Spieler: läuft zu ihm
+      const a = Math.atan2(ziel.y - h.y, ziel.x - h.x), v = W.tempoGehen * 0.9 * dt;
+      gehe(w, h, Math.cos(a) * v, Math.sin(a) * v);
+      h.richtung = a; h.laeuft = true; inf.steht = false; inf.wandelT = 0.5;
+    } else if (!inf.steht) {
       const v = W.tempoGehen * 0.4 * dt, x0 = h.x, y0 = h.y;
       gehe(w, h, Math.cos(inf.wandelW) * v, Math.sin(inf.wandelW) * v);
       const k = w.hole(Math.floor(h.x / KACHEL), Math.floor(h.y / KACHEL));
@@ -180,6 +204,28 @@ export class Hunde {
       x.hund = true; h.besitzer = sid; inf.modus = 'folgt'; inf.weg = null; inf.pruefT = 0.5;
       this.raum.clients.find(c => c.sessionId === sid)?.send('meldung', { text: '🐕 Ein Hund läuft dir zu!' });
       break;
+    }
+  }
+
+  // Spieler (kein Bot, ohne eigenen Hund), den dieser Streuner im Umkreis SICHT mit freier Sichtlinie sieht (nächster)
+  sichtZiel(h) {
+    const w = this.raum.wv(''), s = this.raum.state;
+    let best = null, bd = SICHT;
+    for (const [sid, p] of s.spieler) {
+      const x = this.raum.extra.get(sid);
+      if (!x || x.bot || x.hund || p.verbunden === false || p.unten || p.anBord || p.zombie > 0 || (p.ebene ?? '') !== (h.ebene ?? '')) continue;
+      const d = Math.hypot(p.x - h.x, p.y - h.y);
+      if (d < bd && sichtfrei(w, h.x, h.y, p.x, p.y)) { best = p; bd = d; }
+    }
+    return best;
+  }
+
+  // Streuner bellt von selbst: nur Spieler in RUF_HOERWEITE auf gleicher Ebene hören es; kein Lärm für Zombies
+  rufen(h) {
+    const msg = { x: h.x, y: h.y, ebene: h.ebene ?? '' };
+    for (const c of this.raum.clients) {
+      const p = this.raum.state.spieler.get(c.sessionId);
+      if (p && (p.ebene ?? '') === msg.ebene && Math.hypot(p.x - h.x, p.y - h.y) < RUF_HOERWEITE) c.send('hundBellen', msg);
     }
   }
 

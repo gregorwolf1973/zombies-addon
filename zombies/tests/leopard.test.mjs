@@ -9,6 +9,7 @@ import { Leopard, leopardEinst, turmDrehen, winkelDiff, TURM_TEMPO, ZIEL_TOLERAN
 import { bereinige } from '../server/einstellungen.mjs';
 import { SS_START } from '../client/schiessstand_welt.mjs';
 import { LEOPARD } from '../client/evak.mjs';
+import { freierPort } from './hilfe.mjs';
 
 // ---------- Einheiten mit einem Spielraum-Ersatz ----------
 function attrappe() {
@@ -120,7 +121,7 @@ test('Einstellungen: leopardKanone (an), leopardKanonePause (8), leopardKanoneMi
 });
 
 // ---------- Schießstand: Fahrzeugwahl ----------
-const PORT = 27400 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 let server;
 const warte = ms => new Promise(rr => setTimeout(rr, ms));
 async function bis(bedingung, ms = 5000) {

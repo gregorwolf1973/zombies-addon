@@ -10,8 +10,9 @@ import { SpielRaum } from '../server/raum.mjs';
 import { begrenzungZuruecksetzen, hashe, pruefe } from '../server/superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
 import { KACHEL, MUNITION_MAX } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 31500 + Math.floor(Math.random() * 100);   // eigener Bereich (superuser.test.mjs nutzt 25990+)
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const TESTPW = 'Nur-Ein-Testwert-42';   // nur für diesen Test
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-su-'));

@@ -8,8 +8,9 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { setzeKartengroesse, BEUTE, KACHEL } from '../client/welt.mjs';
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28600 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
@@ -105,11 +106,19 @@ test('Überraschungszombie: bei 100 % springt er heraus (Durchsuchen bricht ab),
   await frisch();
   const { c, raum, p } = await beitreten('Schreck');
   const einst = SpielRaum.einstellungen, alt = einst.ueberraschung;
-  const w = ebenen(raum).find(w => w.behaelter.some(b => b.art === 'schrank' || b.art === 'spind'));
-  const b = w.behaelter.find(b => b.art === 'schrank' || b.art === 'spind');
-  p.ebene = w.ebene; p.x = b.x; p.y = b.y; p.sicher = '';
+  // Der Zombie braucht freien Platz neben dem Behälter (24 Versuche): bei zugestelltem Schrank passiert nichts – also den ersten Behälter mit Platz nehmen
+  const kandidaten = [];
+  for (const w0 of ebenen(raum)) for (const b0 of w0.behaelter) if (b0.art === 'schrank' || b0.art === 'spind') kandidaten.push([w0, b0]);
+  assert.ok(kandidaten.length, 'kein Schrank');
   einst.ueberraschung = 100;
-  let r = suche(raum, c, p, b);
+  p.sicher = '';
+  let w, b, r;
+  for (const [w0, b0] of kandidaten) {
+    p.ebene = w0.ebene; p.x = b0.x; p.y = b0.y;
+    r = suche(raum, c, p, b0);
+    if (r.zombies === 1) { w = w0; b = b0; break; }
+  }
+  assert.ok(b, 'kein Zombie (bei keinem von ' + kandidaten.length + ' Schränken)');
   assert.equal(r.zombies, 1, 'kein Zombie');
   assert.deepEqual(r.inhalt, [], 'Durchsuchen nicht abgebrochen');
   assert.ok(!raum.inhalte.has(b.id));
@@ -128,10 +137,14 @@ test('Überraschungszombie: bei 100 % springt er heraus (Durchsuchen bricht ab),
   assert.equal(n, 0);
   // Auto draußen bei 100 %
   einst.ueberraschung = 100;
-  const auto = raum.welt.behaelter.find(b => b.art === 'auto');
-  assert.ok(auto, 'kein Auto');
-  p.ebene = ''; p.x = auto.x; p.y = auto.y;
-  r = suche(raum, c, p, auto);
+  const autos = raum.welt.behaelter.filter(b => b.art === 'auto');
+  assert.ok(autos.length, 'kein Auto');
+  r = { zombies: 0 };
+  for (const auto of autos.slice(0, 40)) {   // wie oben: ein Auto mit freiem Platz daneben
+    p.ebene = ''; p.x = auto.x; p.y = auto.y;
+    r = suche(raum, c, p, auto);
+    if (r.zombies === 1) break;
+  }
   assert.equal(r.zombies, 1, 'Auto: kein Zombie');
   // Safe Room: nie
   const safe = raum.welt.safeRooms[0];
