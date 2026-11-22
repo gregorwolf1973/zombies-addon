@@ -2639,7 +2639,7 @@ class Ort extends Phaser.Scene {
       if (!o) {
         o = this.add.container(b.x, b.y).setDepth(1.7);
         const bild = hatDingBild(b.ding) && this.textures.get('dinge').has(b.ding === 'handgranate' ? 'granate' : b.ding)
-          ? this.add.image(0, 0, 'dinge', b.ding === 'handgranate' ? 'granate' : b.ding).setScale(24 / 128).setOrigin(0.5)
+          ? this.add.image(0, 0, 'dinge', b.ding === 'handgranate' ? 'granate' : b.ding).setScale((b.ding === 'handgranate' ? 12 : 24) / 128).setOrigin(0.5)
           : this.add.text(0, 0, DINGE[b.ding]?.zeichen ?? '?', { fontSize: '16px' }).setOrigin(0.5);
         o.add([this.add.ellipse(0, 7, 20, 6, 0x000000, 0.3), bild]);
         this.tweens.add({ targets: o, y: b.y - 3, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -2843,14 +2843,15 @@ class Ort extends Phaser.Scene {
     // sonst kam die Granate beim Laufen scheinbar von hinten/der Seite)
     const werfer = m.wer === meineId ? this.lokal : this.figuren?.get(m.wer)?.box;
     if (werfer && Math.hypot(werfer.x - m.x1, werfer.y - m.y1) < 160) m = { ...m, x1: werfer.x, y1: werfer.y };
-    const schatten = this.add.circle(m.x1, m.y1, 4, 0x000000, 0.3).setDepth(3.9);
-    const bild = this.add.circle(m.x1, m.y1, 4.5, 0x4b5320).setStrokeStyle(1, 0x1d2112).setDepth(7.5);
+    // echte Größe: Handgranate ~7 cm, gezeichnet ~0,4 m (sonst wirkte sie wie ein Ball)
+    const schatten = this.add.circle(m.x1, m.y1, 1.6, 0x000000, 0.3).setDepth(3.9);
+    const bild = this.add.circle(m.x1, m.y1, 1.8, 0x4b5320).setStrokeStyle(0.6, 0x1d2112).setDepth(7.5);
     const t0 = this.time.now, flug = m.flug * 1000;
     const tick = () => {
       const k = Math.min(1, (this.time.now - t0) / flug);
       const x = m.x1 + (m.x2 - m.x1) * k, y = m.y1 + (m.y2 - m.y1) * k;
       schatten.setPosition(x, y);
-      bild.setPosition(x, y - Math.sin(k * Math.PI) * (m.werfer ? 9 : 26)).setScale(1 + Math.sin(k * Math.PI) * 0.5);
+      bild.setPosition(x, y - Math.sin(k * Math.PI) * (m.werfer ? 9 : 26)).setScale(1 + Math.sin(k * Math.PI) * 0.3);
       if (k >= 1) { this.events.off('update', tick); bild.setFillStyle(0x6a6f3a); this.tweens.add({ targets: bild, alpha: 0.35, yoyo: true, repeat: 5, duration: 140 }); }
     };
     this.events.on('update', tick);
