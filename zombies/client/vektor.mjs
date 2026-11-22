@@ -683,20 +683,17 @@ function schatten(ctx, g) {
   ctx.restore();
 }
 
-// gut sichtbare Haustür im Ursprung (x entlang der Wand, y nach außen): heller Rahmen, kräftig rotbraunes Türblatt mit Füllungen, goldene Klinke, Stufe und Fußabtreter davor
+// Haustür im Ursprung (x entlang der Wand, y nach außen): ca. 1,5 m breit (12 px), bündig in der Wand, ragt höchstens ~0,3 m heraus;
+// schlanker heller Rahmen, rotbraunes Türblatt mit Füllungen, goldene Klinke, flache Schwelle (keine Stufe)
 export function haustuerZeichnen(ctx) {
-  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-15, 3, 32, 13);                      // Schlagschatten
-  ctx.fillStyle = '#e0dcd0'; ctx.fillRect(-16, 4, 32, 11);                              // Stufe (heller Stein)
-  ctx.fillStyle = '#9e9a8c'; ctx.fillRect(-16, 13, 32, 2);                              // Stufenkante
-  ctx.fillStyle = '#2e5d34'; ctx.fillRect(-9, 7, 18, 5);                                // Fußabtreter
-  ctx.fillStyle = '#7fb069'; for (let x = -7; x <= 5; x += 4) ctx.fillRect(x, 8, 2, 3);
-  ctx.fillStyle = '#fff6dc'; ctx.fillRect(-14, -7, 28, 12);                             // heller Türrahmen
-  ctx.strokeStyle = '#1b0f0a'; ctx.lineWidth = 1; ctx.strokeRect(-13.5, -6.5, 27, 11);
-  ctx.fillStyle = '#a63a1a'; ctx.fillRect(-11, -5, 22, 8);                              // Türblatt (Holzrot)
-  ctx.fillStyle = '#6e2410'; ctx.fillRect(-11, -5, 22, 1.5); ctx.fillRect(-0.5, -3.5, 1, 6.5);   // Oberkante, Mittelfuge
-  ctx.fillStyle = '#c4572e'; ctx.fillRect(-9, -2.5, 7, 4.5); ctx.fillRect(2, -2.5, 7, 4.5);        // Füllungen
-  ctx.fillStyle = '#ffd54f'; ctx.fillRect(5.5, -0.5, 3, 3);                             // Klinke
-  ctx.strokeStyle = '#5a4300'; ctx.lineWidth = 0.8; ctx.strokeRect(5.5, -0.5, 3, 3);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(-6.5, 1, 13, 2.5);                   // Schatten an der Wand
+  ctx.fillStyle = '#fff6dc'; ctx.fillRect(-6, -2.5, 12, 5);                             // schlanker Rahmen (innen halb in der Wand, außen 2,5 px davor)
+  ctx.strokeStyle = '#1b0f0a'; ctx.lineWidth = 0.6; ctx.strokeRect(-5.8, -2.3, 11.6, 4.6);
+  ctx.fillStyle = '#a63a1a'; ctx.fillRect(-5, -1.6, 10, 3.4);                           // Türblatt (Holzrot)
+  ctx.fillStyle = '#6e2410'; ctx.fillRect(-5, -1.6, 10, 0.8); ctx.fillRect(-0.25, -0.8, 0.5, 2.6);   // Oberkante, Mittelfuge
+  ctx.fillStyle = '#c4572e'; ctx.fillRect(-4.2, -0.4, 3.4, 1.9); ctx.fillRect(0.8, -0.4, 3.4, 1.9);  // Füllungen
+  ctx.fillStyle = '#ffd54f'; ctx.fillRect(2.8, 0.1, 1.4, 1.4);                         // Klinke
+  ctx.fillStyle = '#9e9a8c'; ctx.fillRect(-6, 2.5, 12, 0.7);                            // flache Schwelle
 }
 
 // Eingangsmarkierung eines Safe Rooms, ÜBER dem Safe-Dach (das Dach großer/unregelmäßiger Gebäude deckt Tür und Vorplatz sonst zu):
@@ -714,7 +711,7 @@ export function zeichneSafeEingang(ctx, w) {
   ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.strokeRect(sx - 15, sy - 8, 30, 15);
   ctx.fillStyle = '#ffffff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('SAFE', sx, sy);
-  const tx = nx * 19, ty = ny * 19;   // Pfeilspitze an der Stufenkante
+  const tx = nx * 8, ty = ny * 8;   // Pfeilspitze an der Tür
   ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.moveTo(nx * 35, ny * 35); ctx.lineTo(tx + nx * 6, ty + ny * 6); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + nx * 8 - ny * 5, ty + ny * 8 + nx * 5); ctx.lineTo(tx + nx * 8 + ny * 5, ty + ny * 8 - nx * 5); ctx.closePath(); ctx.fill();
@@ -747,28 +744,11 @@ export function zeichneVektorDaecher(ctx, welt, rect) {
 // Lage der Haustür auf der echten Hauswand: { wx, wy } = Türmitte an der Wand, w = Drehwinkel (+y zeigt nach draußen, x läuft entlang der Wand)
 export function tuerPose(welt, h) { return tuerAufWand(vorbereiten(welt), h); }
 
-// nächster Punkt auf dem Gebäudeumriss zur Rastertür; w = Winkel, bei dem +y nach draußen zeigt
+// Pose der Haustür: exakt auf der Hauswand (h.tuerPos aus tuerpose.mjs: Nische/Vordach bevorzugt, mind. 1 m von den Ecken); w = Winkel, bei dem +y nach draußen zeigt
 function tuerAufWand(v, h) {
   if (h._tuerWand) return h._tuerWand;
-  const px = (h.tuer.x + 0.5 + h.raus.dx * 0.5) * K, py = (h.tuer.y + 0.5 + h.raus.dy * 0.5) * K;
-  const g = v.gebaeude.find(q => q.kx === h.x && q.ky === h.y);
-  let erg = { x: px, y: py, w: Math.atan2(h.raus.dy, h.raus.dx) - Math.PI / 2, wx: (h.tuer.x + 0.5 + h.raus.dx * 0.5) * K, wy: (h.tuer.y + 0.5 + h.raus.dy * 0.5) * K };
-  if (g) {
-    let bd = Infinity;
-    for (let i = 0; i < g.pts.length; i++) {
-      const [ax, ay] = g.pts[i], [bx, by] = g.pts[(i + 1) % g.pts.length];
-      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1;
-      const tt = Math.max(0.15, Math.min(0.85, ((px - ax) * dx + (py - ay) * dy) / l2));   // nicht in die Hausecke
-      const qx = ax + dx * tt, qy = ay + dy * tt, d = Math.hypot(qx - px, qy - py);
-      if (d < bd && d < K * 1.6) {
-        bd = d;
-        let nx = -dy, ny = dx; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
-        if (nx * h.raus.dx + ny * h.raus.dy < 0) { nx = -nx; ny = -ny; }   // Normale nach draußen
-        erg = { x: qx + nx * (UEBERSTAND + 3), y: qy + ny * (UEBERSTAND + 3), w: Math.atan2(ny, nx) - Math.PI / 2, wx: qx, wy: qy };   // unter dem Dachüberstand hervor; wx/wy = Punkt auf der Wand
-      }
-    }
-  }
-  return (h._tuerWand = erg);
+  const t = h.tuerPos ?? { x: (h.tuer.x + 0.5 + h.raus.dx * 0.5) * K, y: (h.tuer.y + 0.5 + h.raus.dy * 0.5) * K, nx: h.raus.dx, ny: h.raus.dy };
+  return (h._tuerWand = { x: t.x, y: t.y, w: Math.atan2(t.ny, t.nx) - Math.PI / 2, wx: t.x, wy: t.y, nx: t.nx, ny: t.ny });
 }
 
 // Dach eines Safe Rooms (eigene Grafik, wird beim Betreten durchsichtig)

@@ -79,8 +79,9 @@ test('Geretsried im Spiel: Zombies nur in der Nähe, Haus betreten', async () =>
     assert.ok(raum.wv(`h${apo.nr}eg`).behaelter.some(b => b.art === 'laden_apotheke'), 'Apotheke ohne Regal');
     // Haus betreten (Tür in beliebiger Richtung)
     const h = raum.welt.haeuser.find(h => h.betretbar);
-    p.x = (h.tuer.x + 0.5 + h.raus.dx) * KACHEL; p.y = (h.tuer.y + 0.5 + h.raus.dy) * KACHEL;
-    c.send('eingabe', { dx: -h.raus.dx, dy: -h.raus.dy });
+    const q = h.tuerPos;   // Haustür: an der Wand gezielt hineinlaufen
+    p.x = q.x + q.nx * 24; p.y = q.y + q.ny * 24;
+    c.send('eingabe', { dx: -q.nx, dy: -q.ny });
     assert.ok(await bis(() => p.ebene === `h${h.nr}eg`, 4000), 'nicht hineingekommen');
     c.send('eingabe', { dx: 0, dy: 0 });
   } finally { await c.leave(); }

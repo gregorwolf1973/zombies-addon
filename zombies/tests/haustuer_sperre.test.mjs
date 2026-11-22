@@ -29,12 +29,18 @@ test('Haustür: nach dem Hinausgehen sofort ein anderes Haus betreten, die eigen
   const mitte = k => ({ x: (k.x + 0.5) * KACHEL, y: (k.y + 0.5) * KACHEL });
   const p = { ebene: `h${A.nr}eg`, ...mitte(innenraumFuer(1, welt, `h${A.nr}eg`).ausgang) };
   const x = {};
+  // Betreten: an die Wandlinie der Tür stellen und 0,4 s gezielt hineinlaufen (Haustür-Regel: Wandlinie + Eingaberichtung ≥ 0,3 s)
+  const eintreten = h => {
+    const q = h.tuerPos;
+    Object.assign(p, { x: q.x + q.nx * 3, y: q.y + q.ny * 3 });
+    x.eingabe = { dx: -q.nx, dy: -q.ny, s: false };
+    r.uebergang('s1', p, x, 0.2); r.uebergang('s1', p, x, 0.2);
+  };
   r.uebergang('s1', p, x, 0.05);
   assert.equal(p.ebene, '', 'aus Haus A hinausgegangen');
   r.uebergang('s1', p, x, 0.3);   // Wechselsperre läuft ab
   // zur Haustür von B (weit weg von A): muss sofort klappen
-  Object.assign(p, mitte(B.tuer));
-  r.uebergang('s1', p, x, 0.05);
+  eintreten(B);
   assert.equal(p.ebene, `h${B.nr}eg`, `Haus ${B.nr} ließ sich nach dem Verlassen von Haus ${A.nr} nicht betreten`);
 
   // eigene Tür: direkt nach dem Hinausgehen gesperrt (gehaltene Taste), nach Weggehen wieder offen
@@ -45,12 +51,10 @@ test('Haustür: nach dem Hinausgehen sofort ein anderes Haus betreten, die eigen
   assert.equal(p.ebene, '');
   r.uebergang('s1', p, x, 0.3);
   const vor = { x: p.x, y: p.y };
-  Object.assign(p, mitte(B.tuer));
-  r.uebergang('s1', p, x, 0.05);
+  eintreten(B);
   assert.equal(p.ebene, '', 'direkt zurück durch die eigene Tür ist gesperrt');
   Object.assign(p, { x: vor.x + B.raus.dx * KACHEL * 3, y: vor.y + B.raus.dy * KACHEL * 3 });
   r.uebergang('s1', p, x, 0.05);   // weggegangen: Sperre fällt
-  Object.assign(p, mitte(B.tuer));
-  r.uebergang('s1', p, x, 0.05);
+  eintreten(B);
   assert.equal(p.ebene, `h${B.nr}eg`, 'nach dem Weggehen geht die eigene Tür wieder');
 });
