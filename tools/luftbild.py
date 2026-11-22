@@ -205,7 +205,18 @@ def webp_speichern(bild, B, H, ziel, grenze=250_000):
     ziel.write_bytes(puffer.getvalue())
     return q, puffer.tell()
 
+def nur_daecher(name):
+    """--nur-daecher: nur Dachfarbe/First/Dachart je Gebäude neu berechnen (nach einem Umbau der Gebäudeumrisse, z. B. tools/hausumringe.py);
+    Klassen, Versatz und Navi-Bild bleiben unverändert"""
+    pfad = KARTEN / f"{name}.json"; roh = pfad.read_text(); karte = json.loads(roh)
+    bild = Gebiet(name, karte).bild()   # geretsried2 hat keinen Versatz (luftbildVersatz fehlt)
+    print("  Dächer:", daecher(bild, karte), "von", len(karte["gebaeude"]))
+    pfad.write_text(json.dumps(karte, ensure_ascii=False) + ("\n" if roh.endswith("\n") else ""))
+
 def main():
+    if "--nur-daecher" in sys.argv:
+        for name in [a for a in sys.argv[1:] if not a.startswith("--")]: nur_daecher(name)
+        return
     namen = sys.argv[1:] or ["geretsried", "geretsried2", "isarauen", "koenigsdorf", "kochel", "andermatt"]
     for name in namen:
         pfad = KARTEN / f"{name}.json"; roh = pfad.read_text(); karte = json.loads(roh)

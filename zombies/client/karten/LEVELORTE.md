@@ -21,6 +21,9 @@ Daten © OpenStreetMap-Mitwirkende, ODbL 1.0 (wie geretsried/isarauen; Feld "que
 - Höhenlinien gibt es im Spiel nicht; "Hang" ist nur nach Lage (Nordrand, Gütsch-Seite) gewählt.
 
 ## geretsried2 (zweite Level-1-Karte, Geretsried Nord/Ost, bbox 47.872 11.4584 47.8872 11.4766)
-- 340x421 Kacheln, OSM-Rohdaten wie bei den anderen Karten nur lokal (tools/osm/roh_*.json ist ignoriert; Neuaufbau: `python3 tools/osm_karte.py 47.872 11.4584 47.8872 11.4766 4 zombies/client/karten/geretsried2.json`).
+- 340x421 Kacheln, OSM-Rohdaten wie bei den anderen Karten nur lokal (tools/osm/roh_*.json ist ignoriert).
+- Gebäude = amtliche Hausumringe (Bayerische Vermessungsverwaltung, CC BY 4.0; WELT_VERSION 30), OSM liefert nur Name/Art/Adresse. Neuaufbau: `python3 tools/hausumringe.py geretsried2` (Auszug aus tools/luftbild/cache/bayern/hausumringe), dann `python3 tools/osm_karte.py 47.872 11.4584 47.8872 11.4766 4 zombies/client/karten/geretsried2.json --hausumringe=tools/osm/hausumringe_geretsried2.json` (behält Luftbild-Felder), danach `python3 tools/luftbild.py --nur-daecher geretsried2`, `python3 tools/nebengebaeude.py geretsried2`, `python3 tools/kulisse.py geretsried2 daecher`.
+- Reihenhäuser (gemeinsame Wand, 40–160 m²) sind zu einem Umriss vereinigt; Bauten unter 4 Rasterkacheln sind Nebengebäude (karte.nebengebaeude, nicht betretbar).
+- Festes Safehouse „Wohnhaus“ (FESTES_SAFEHOUSE_G2 in client/osmwelt.mjs): Kachel 225,62 (Haus 221,60).
 - Level 1 wählt bei jedem Start/Levelwechsel zufällig Geretsried oder Geretsried 2 (Backend „Karte“ = Level 1 Zufall; feste Wahl möglich). Missionen, Biss-Werte, Evakuierung (Bus zum Ortsausgang) wie Geretsried.
-- Weltstart (Seed 7): Pixel 5168,6288; 3 Safe Rooms, Bundeswehr-Stützpunkt vorhanden.
+- Weltstart (Seed 7): Pixel 6352,7120 (vor den Hausumringen 5168,6288); 3 Safe Rooms (Wohnhaus, Evangelische Gemeinschaft, Feuerwehr), Bundeswehr-Stützpunkt vorhanden (Kachel 109,383).

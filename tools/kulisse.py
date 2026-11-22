@@ -8,7 +8,7 @@ Ergebnis in zombies/client/karten/kulisse/<karte>/:
   <kx>_<ky>.webp + index.json   Luftbild-Bodenkacheln: 128 m × 128 m = 512 px (0,25 m/px), Kachel (kx, ky) beginnt bei Spielkachel (kx*32, ky*32)
                                 lagegenau im Raster der Karte (Projektion wie tools/osm_karte.py), leicht entsättigt/abgedunkelt (eingebacken),
                                 Autos auf Fahrbahnen/Parkplätzen per Median abgeschwächt (das Spiel zeichnet eigene Autos)
-  daecher.json                  Dachflächen der LoD2-Gebäude, den OSM-Gebäuden der Karte zugeordnet (Schlüssel = x,y des OSM-Gebäudes):
+  daecher.json                  Dachflächen der LoD2-Gebäude, den Gebäuden der Karte zugeordnet (Schlüssel = x,y des Gebäudes; geretsried2: amtliche Hausumringe):
                                 {"g":[{"k":[x,y],"h":Firsthöhe dm,"t":Traufhöhe dm,"f":[{"p":[x,y,…],"n":Neigung°,"a":Richtung°,"e":Höhe der tiefsten Ecke dm}]}]}
                                 x, y in Spielpixeln (32 je Kachel, 8 je Meter), ganzzahlig
 Rohdaten (Foto-Kacheln, GML) liegen unter tools/luftbild/cache/ (nicht im Repo). Höflich: sequenziell, Pausen, eigener User-Agent."""
@@ -281,33 +281,51 @@ def daecher(name, karte, K):
                 tr = float(at.get("HoeheTraufe") or at.get("HoeheDach") or 0)
                 roh.append({"c": (sx / cnt, sy / cnt), "h": round((float(at.get("HoeheDach") or 0) - grund) * 10), "t": round((tr - grund) * 10), "f": fl})
     print(f"LoD2: {len(roh)} Gebäude in der Karte", flush=True)
-    # den OSM-Gebäuden zuordnen: Schwerpunkt des Dachs im Umriss (sonst nächster Umriss-Schwerpunkt bis 1,5 Kacheln)
+    # den Gebäuden der Karte zuordnen. Umringe der Karte (Hausumringe, tools/hausumringe.py) und LoD2 stammen aus derselben amtlichen Quelle:
+    # Schwerpunkt der Dachflächen im Umriss trifft fast immer. Sonst: die meisten Dachflächen-Schwerpunkte im selben Umriss (L-Formen).
+    # Kein Abstandsverfahren mehr: LoD2-Gebäude ohne Umriss in der Karte (Garagen, Schuppen) sind Nebengebäude (tools/nebengebaeude.py)
+    # und dürfen ihr Dach nicht einem Nachbarhaus geben. (Karten mit OSM-Umrissen: Schwerpunkt-Abstand bis 1,5 Kacheln als Rückfall, --osm.)
+    OSM_RUECKFALL = "--osm" in sys.argv
     geb = [(g["x"], g["y"], g["umriss"]) for g in karte["gebaeude"] if g.get("umriss")]
     rost = {}
     for i, (x, y, u) in enumerate(geb):
         xs, ys = u[0::2], u[1::2]
         for gx in range(int(min(xs)) // 8 - 1, int(max(xs)) // 8 + 2):
             for gy in range(int(min(ys)) // 8 - 1, int(max(ys)) // 8 + 2): rost.setdefault((gx, gy), []).append(i)
-    erg = []; belegt = set()
+    erg = []; belegt = set(); stat = {"schwerpunkt": 0, "flaechen": 0, "rueckfall": 0, "ohne": 0}
     for b in roh:
-        cx, cy = b["c"][0] / SP, b["c"][1] / SP; treffer = None
+        cx, cy = b["c"][0] / SP, b["c"][1] / SP; treffer = None; art = None
         for i in rost.get((int(cx) // 8, int(cy) // 8), []):
-            if im_polygon(cx, cy, geb[i][2]): treffer = i; break
+            if im_polygon(cx, cy, geb[i][2]): treffer, art = i, "schwerpunkt"; break
         if treffer is None:
+            zaehl = {}
+            for f in b["f"]:
+                fx, fy = sum(f["p"][0::2]) / (len(f["p"]) // 2) / SP, sum(f["p"][1::2]) / (len(f["p"]) // 2) / SP
+                for i in rost.get((int(fx) // 8, int(fy) // 8), []):
+                    if im_polygon(fx, fy, geb[i][2]): zaehl[i] = zaehl.get(i, 0) + 1; break
+            if zaehl:
+                i, n = max(zaehl.items(), key=lambda kv: kv[1])
+                if n * 2 >= len(b["f"]): treffer, art = i, "flaechen"
+        if treffer is None and OSM_RUECKFALL:
             best = 1.5
             for i in rost.get((int(cx) // 8, int(cy) // 8), []):
                 u = geb[i][2]; mx, my = sum(u[0::2]) / (len(u) // 2), sum(u[1::2]) / (len(u) // 2)
                 d = math.hypot(mx - cx, my - cy)
-                if d < best: best, treffer = d, i
-        if treffer is None: continue
-        belegt.add(treffer)
+                if d < best: best, treffer, art = d, i, "rueckfall"
+        if treffer is None:
+            stat["ohne"] += 1
+            if sum(abs(sum(f["p"][2 * j] * f["p"][(2 * j + 3) % len(f["p"])] - f["p"][(2 * j + 2) % len(f["p"])] * f["p"][2 * j + 1] for j in range(len(f["p"]) // 2))) / 2 for f in b["f"]) / 64 > 100:
+                stat["ohne_gross"] = stat.get("ohne_gross", 0) + 1   # Dachfläche über 100 m² ohne Umriss in der Karte: sollte es nicht geben
+            continue
+        stat[art] += 1; belegt.add(treffer)
         erg.append({"k": [geb[treffer][0], geb[treffer][1]], "h": b["h"], "t": b["t"], "f": b["f"]})
+    print("Zuordnung:", stat, f"(Schwerpunkt im Umriss: {stat['schwerpunkt'] / max(1, len(roh)) * 100:.1f} %, mit Rückfällen {(len(roh) - stat['ohne']) / max(1, len(roh)) * 100:.1f} % von {len(roh)} LoD2-Gebäuden)")
     ziel = KARTEN / "kulisse" / name; ziel.mkdir(parents=True, exist_ok=True)
     (ziel / "daecher.json").write_text(json.dumps({"einheit": "Spielpixel (32 je Kachel); h, t, e in Dezimetern; n, a in Grad", "g": erg}, separators=(",", ":")))
     index_schreiben(ziel, {"quelle": QUELLE, "daecher": True})
     d = (ziel / "daecher.json").read_bytes()
     print(f"daecher.json: {len(erg)} Gebäude, {sum(len(g['f']) for g in erg)} Dachflächen, {len(d) // 1024} KB roh, {len(gzip.compress(d)) // 1024} KB gzip; "
-          f"OSM-Häuser mit Dach: {len(belegt)} von {len(geb)}")
+          f"Häuser mit Dach: {len(belegt)} von {len(geb)}")
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
