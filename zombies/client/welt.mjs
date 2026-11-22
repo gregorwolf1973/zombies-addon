@@ -62,6 +62,31 @@ export function ladenArt(h) {
   for (const [kat, liste] of Object.entries(LADEN_ARTEN)) if (liste.includes(a)) return kat;
   return '';
 }
+// Große Gebäude mit eigener Einrichtung (Halle als ein Raum): buero, supermarkt, werkstatt, moebelhaus, lagerhalle; '' = normales Haus.
+// Entscheidung nur aus OSM-Tags (building/shop/amenity), Gewerbefläche und Grundfläche (h.flaeche in Kacheln à 16 m²), Rest per Hash der Lage.
+const WOHN_BAU = new Set(['residential', 'house', 'apartments', 'terrace', 'detached', 'semidetached_house', 'garage', 'garages', 'shed', 'roof', 'church', 'kindergarten', 'school', 'construction', 'hut', 'cabin', 'bungalow', 'dormitory', 'carport']);
+const MOEBEL_LADEN = ['furniture', 'interior_decoration', 'houseware', 'carpet', 'bed', 'kitchen', 'curtain', 'lighting', 'doityourself'];
+const WERK_LADEN = ['car', 'car_repair', 'tyres', 'car_parts', 'motorcycle', 'trade', 'locksmith', 'machine', 'agrarian', 'bicycle'];
+export function grossArt(h) {
+  if (!h || h.safe) return '';
+  const m2 = (h.flaeche ?? 0) * 16, bau = h.bau ?? '', art = h.art ?? '';
+  if (WOHN_BAU.has(bau) || m2 < 200) return '';
+  const lade = ladenArt(h);
+  if (lade === 'lebensmittel') return m2 >= 400 ? 'supermarkt' : '';
+  if (lade) return '';
+  if (MOEBEL_LADEN.includes(art)) return 'moebelhaus';
+  if (WERK_LADEN.includes(art) || art === 'car_wash') return 'werkstatt';
+  if (art && !['vacant', 'bank', 'travel_agency', 'hairdresser', 'optician', 'beauty'].includes(art)) return '';
+  if (m2 < 300) return '';
+  if (bau === 'office') return 'buero';
+  if (bau === 'warehouse') return 'lagerhalle';
+  if (bau === 'retail') return 'supermarkt';
+  if (bau === 'industrial' || bau === 'commercial' || h.gewerbe) {
+    const r = ((Math.imul((h.x | 0) * 73 + (h.y | 0) * 131 + (h.b | 0) * 7 + 17, 0x9e3779b1) >>> 7) & 1023) / 1024;
+    return r < 0.4 ? 'werkstatt' : r < 0.75 ? 'lagerhalle' : 'buero';
+  }
+  return '';
+}
 export function seiteVon(h) {
   const r = h?.raus ?? { dx: 0, dy: 1 };
   return r.dy < 0 ? 'oben' : r.dy > 0 ? 'unten' : r.dx < 0 ? 'links' : 'rechts';
@@ -456,7 +481,8 @@ export const STAPEL_MAX = 5;   // je Platz bis zu 5 Stück derselben Art (client
 export const MUNITIONSKISTE_SCHUSS = 30;   // Schuss je Munitionskiste
 export const MUNITION_KISTE_AB = 120;      // fällt der Munitionszähler auf diesen Wert oder weniger, wird eine Kiste geöffnet
 export const BEHAELTER_NAME = { bad: 'Toilette / Waschbecken', muelltonne: 'Mülltonnen', container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', herd: 'Herd', spuele: 'Spüle', spind_belohnung: 'Spind', auto: 'Kofferraum', einkaufswagen: 'Einkaufswagen', leiche: 'Zombie', bus: 'Bus',
-  vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal', laden_polizei: 'Waffenschrank' };
+  vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal', laden_polizei: 'Waffenschrank',
+  aktenschrank: 'Aktenschrank', kuehlregal: 'Kühlregal', wagenecke: 'Einkaufswagen', werkbank: 'Werkbank', werkzeugschrank: 'Werkzeugschrank', ausstellungsschrank: 'Ausstellungsschrank', hochregal: 'Hochregal', kartonstapel: 'Kartons' };
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
   schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'munitionskiste', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', 'pfeil', 'radio', null, null],
@@ -473,6 +499,15 @@ export const BEUTE = {
   laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', 'armbrust', 'pfeil', 'pfeil', 'radio', null],
   laden_gaststaette: ['essen', 'essen', 'wasser', 'wasser', 'messer', 'schokoriegel', null],
   laden: ['essen', 'wasser', 'schokoriegel', null, null],
+  // große Gebäude (innen_gross.mjs): Büro, Supermarkt, Werkstatt, Möbelhaus, Lagerhalle
+  aktenschrank: ['verband', 'schokoriegel', 'wasser', 'schluessel', 'funkgeraet', 'taschenlampe', 'radio', null, null, null],
+  kuehlregal: ['essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', null],
+  wagenecke: ['wasser', 'wasser', 'wasser', 'wasser', 'essen', 'essen', 'essen', 'essen', 'schokoriegel', null],
+  werkbank: ['brechstange', 'bretter', 'bretter', 'seil', 'messer', 'schluessel', 'taschenlampe', 'schlaeger', null, null],
+  werkzeugschrank: ['brechstange', 'brechstange', 'seil', 'messer', 'schluessel', 'taschenlampe', 'verband', 'sense', null, null],
+  ausstellungsschrank: ['kleidung', 'kleidung', 'kleidung', 'taschenlampe', 'taschenlampe', 'seil', 'verband', 'tasche', null, null],
+  hochregal: ['essen', 'essen', 'wasser', 'wasser', 'bretter', 'seil', 'kleidung', 'verband', 'schokoriegel', 'trekking', null, null],
+  kartonstapel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'schokoriegel', 'bretter', 'kleidung', null, null],
   vorratsregal: ['wasser', 'wasser', 'wasser', 'essen', 'essen', 'essen', 'verband', 'bretter', 'schokoriegel', 'schokoriegel', 'spritze', 'funkgeraet', null],
   erstehilfe: ['verband', 'verband', 'verband', 'spritze', null],
   // Bundeswehr-Stützpunkt (Teil 2 ergänzt hier die neuen Waffen)

@@ -201,6 +201,14 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     return zellen;
   };
 
+  // Punkt im Polygon (flache Liste x,y,x,y …; nur + − × ÷, deterministisch): liegt das Haus in einer Gewerbefläche?
+  const imGewerbePoly = (p, px, py) => {
+    let drin = false;
+    for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
+      if ((p[i + 1] > py) !== (p[j + 1] > py) && px < (p[j] - p[i]) * (py - p[i + 1]) / (p[j + 1] - p[i + 1]) + p[i]) drin = !drin;
+    }
+    return drin;
+  };
   // Abstand (Kacheln, Weg um Wände/Wasser herum) zur nächsten Straße: bestimmt, an welcher Hausseite die Tür sitzt
   const strDist = new Int16Array(BREITE * HOEHE).fill(32767);
   { const q = [];
@@ -268,7 +276,8 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
       setze(wahl.tuer.x, wahl.tuer.y, T.TUER);
     }
     const h = { x: g.x, y: g.y, b: g.b, h: g.h, tuer: { ...wahl.tuer }, raus: wahl.raus, nr: haeuser.length, name: g.name ?? '',
-      art: g.shop ?? g.amenity ?? '', flaeche: g.flaeche };
+      art: g.shop ?? g.amenity ?? '', flaeche: g.flaeche, bau: g.building ?? '',
+      gewerbe: (karte.flaechen ?? []).some(f => f.a === 'gewerbe' && imGewerbePoly(f.p, g.x + g.b / 2, g.y + g.h / 2)) };
     haeuser.push(h);
   }
   // Safe Rooms auf echte Gebäude
