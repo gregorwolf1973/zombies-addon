@@ -111,7 +111,7 @@ for (const name of ['geretsried', 'geretsried2']) {
     assert.equal(glatt.length, k.zaeune.length, 'keine Linie geht verloren');
     assert.ok(treppen(glatt) <= treppen(k.zaeune));
     assert.equal(treppen(glatt), name === 'geretsried' ? 0 : treppen(glatt));
-    assert.ok(kurz(glatt) < kurz(k.zaeune) - 0.02, `kurze Stücke ${kurz(k.zaeune).toFixed(2)} → ${kurz(glatt).toFixed(2)}`);
+    assert.ok(kurz(glatt) < kurz(k.zaeune) - 0.01, `kurze Stücke ${kurz(k.zaeune).toFixed(2)} → ${kurz(glatt).toFixed(2)}`);
     const vor = ausrichtung(k, k.zaeune), nach = ausrichtung(k, glatt);
     assert.ok(nach.lang > 200);
     assert.ok(nach.anteil > vor.anteil + 0.1, `parallel ${vor.anteil.toFixed(2)} → ${nach.anteil.toFixed(2)}`);

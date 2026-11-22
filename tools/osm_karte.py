@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Holt OpenStreetMap-Daten (Overpass) für ein Gebiet und rechnet sie in das Kachelraster des Spiels um.
 Daten © OpenStreetMap-Mitwirkende, Lizenz ODbL 1.0 – die erzeugte Karte steht ebenfalls unter ODbL.
-Aufruf: python3 tools/osm_karte.py <süd> <west> <nord> <ost> <meter_pro_kachel> <ausgabe.json> [--neu] [--fluss=<Meter>]
+Aufruf: python3 tools/osm_karte.py <süd> <west> <nord> <ost> <meter_pro_kachel> <ausgabe.json> [--neu] [--fluss=<Meter>] [--hausumringe=<Datei>]
+  --hausumringe=<Datei>: Gebäude aus den amtlichen Hausumringen (tools/hausumringe.py) statt aus OSM-Umrissen; OSM-Angaben (Name, Art, Adresse) per Überlappung übertragen.
   --fluss=<Meter>: waterway=river (Linie) mindestens so breit zeichnen (für große Flüsse wie die Isar); ohne Angabe bleibt es bei 3 Kacheln.
   Umgebungsvariable OVERPASS_URL: anderer Overpass-Server."""
 import json, math, sys, os, urllib.request, urllib.parse, pathlib, collections
@@ -36,7 +37,7 @@ B = int(math.ceil(kx(ost))); H = int(math.ceil(ky(sued)))
 WIESE, STRASSE, WAND, BODEN, TUER, WASSER, BAUM, PLATZ, ZAUN = 0, 1, 2, 3, 4, 5, 6, 7, 8
 k = [[WIESE] * B for _ in range(H)]
 
-def flach(pts): return [round(v, 1) for p in pts for v in p]   # Umriss für die Darstellung: [x0, y0, x1, y1, …] in Kacheln
+def flach(pts, stellen=1): return [round(v, stellen) for p in pts for v in p]   # Umriss für die Darstellung: [x0, y0, x1, y1, …] in Kacheln
 def poly(w): return [(kx(knoten[n][1]), ky(knoten[n][0])) for n in w["nodes"] if n in knoten]
 def innen(px, py, pts):
     drin = False
@@ -44,14 +45,16 @@ def innen(px, py, pts):
         x1, y1 = pts[i]; x2, y2 = pts[i - 1]
         if (y1 > py) != (y2 > py) and px < (x2 - x1) * (py - y1) / (y2 - y1) + x1: drin = not drin
     return drin
-def fuelle(pts, wert, nur=None):
+def fuelle(pts, wert, nur=None, trocken=False):
+    """füllt das Polygon im Raster (trocken=True: nur zählen, Raster unverändert); gibt die betroffenen Kacheln zurück"""
     if len(pts) < 3: return []
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
     belegt = []
     for y in range(max(0, int(min(ys))), min(H, int(max(ys)) + 1)):
         for x in range(max(0, int(min(xs))), min(B, int(max(xs)) + 1)):
             if innen(x + 0.5, y + 0.5, pts) and (nur is None or k[y][x] in nur):
-                k[y][x] = wert; belegt.append((x, y))
+                if not trocken: k[y][x] = wert
+                belegt.append((x, y))
     return belegt
 def linie(pts, breite, wert, nur=None):
     r = breite / 2
@@ -83,17 +86,102 @@ for w in wege:
 # 3. Gebäude (Rand = Wand, innen Boden), Tür zur nächsten Straße
 gebaeude = []
 punkt_infos = [(kx(p["lon"]), ky(p["lat"]), p["tags"]) for p in punkte]
-for w in wege:
-    t = w["tags"]
-    if "building" not in t: continue
-    pts = poly(w)
+INFO_KEYS = ("name", "amenity", "shop", "building", "addr:street", "addr:housenumber")
+NAMENS_KEYS = ("name", "amenity", "shop")
+
+def umringe_mit_tags(datei):
+    """--hausumringe=<Datei> (tools/hausumringe.py): Gebäude = amtliche Hausumringe statt OSM-Umrisse. Die OSM-Angaben (Name, Art,
+    Adresse) gehen per Flächenüberlappung an die Hausumringe: jeder Umring bekommt die Angaben des OSM-Gebäudes, das ihn am meisten
+    überdeckt (mindestens 30 % der kleineren der beiden Flächen); Name, Art (amenity/shop) und Adresse nur bei mindestens halber Überdeckung und nicht
+    viel kleiner als der größte Umring dieses OSM-Gebäudes (kleine Anbauten bleiben „Gebäude“). OSM-Gebäude mit Name/Art, zu denen
+    kein Umring passt (Neubauten, Fehler), bleiben als OSM-Umriss erhalten."""
+    ringe = [[(u[i], u[i + 1]) for i in range(0, len(u), 2)] for u in (h["u"] for h in json.loads(pathlib.Path(datei).read_text())["haeuser"])]
+    osm = []
+    for w in wege:
+        if "building" not in w["tags"]: continue
+        pts = poly(w)
+        if len(pts) > 1 and pts[0] == pts[-1]: pts = pts[:-1]
+        if len(pts) < 3: continue
+        t = {key: w["tags"][key] for key in INFO_KEYS if key in w["tags"]}
+        for (px, py, pt) in punkt_infos:       # Name/Art aus POI-Punkten im OSM-Gebäude (wie beim reinen OSM-Kartenbau)
+            if innen(px, py, pts):
+                for key in NAMENS_KEYS:
+                    if key in pt and key not in t: t[key] = pt[key]
+        osm.append((pts, t))
+    GR = 8
+    rost = {}
+    for i, (pts, _) in enumerate(osm):
+        for gx in range(int(min(p[0] for p in pts)) // GR, int(max(p[0] for p in pts)) // GR + 1):
+            for gy in range(int(min(p[1] for p in pts)) // GR, int(max(p[1] for p in pts)) // GR + 1): rost.setdefault((gx, gy), []).append(i)
+    osm_n = [abs(sum(p[j][0] * p[(j + 1) % len(p)][1] - p[(j + 1) % len(p)][0] * p[j][1] for j in range(len(p)))) / 2 / 0.125 ** 2 for p, _ in osm]   # Stichproben je OSM-Gebäude
+    SCHRITT = 0.125     # Stichprobenraster in Kacheln (0,5 m)
+    treffer = []        # je Umring: {OSM-Index: Anzahl Stichproben}, Gesamtzahl
+    for ring in ringe:
+        xs, ys = [p[0] for p in ring], [p[1] for p in ring]; zaehl = {}; n = 0
+        y = min(ys) + SCHRITT / 2
+        while y < max(ys):
+            x = min(xs) + SCHRITT / 2
+            while x < max(xs):
+                if innen(x, y, ring):
+                    n += 1
+                    for i in rost.get((int(x) // GR, int(y) // GR), []):
+                        if innen(x, y, osm[i][0]): zaehl[i] = zaehl.get(i, 0) + 1
+                x += SCHRITT
+            y += SCHRITT
+        treffer.append((zaehl, n))
+    # größter Umring je OSM-Gebäude (nach überdeckten Stichproben)
+    groesster = {}
+    for zaehl, n in treffer:
+        for i, c in zaehl.items(): groesster[i] = max(groesster.get(i, 0), c)
+    ergebnis, benutzt = [], set()
+    for ring, (zaehl, n) in zip(ringe, treffer):
+        info = {"building": "yes"}
+        # Kandidaten nach Überlappung; Überlappung zur kleineren der beiden Flächen (OSM-Umriss liegt oft nur teilweise im Hausumring)
+        kand = [(c, i) for i, c in sorted(zaehl.items(), key=lambda kv: (-kv[1], kv[0])) if n and c >= 0.3 * min(n, osm_n[i])]
+        if kand:
+            c0, i0 = kand[0]; benutzt.add(i0)
+            info = {key: osm[i0][1][key] for key in INFO_KEYS if key in osm[i0][1]}
+            for key in NAMENS_KEYS + ("addr:street", "addr:housenumber"): info.pop(key, None)
+            # Name/Art/Adresse vom besten Kandidaten, der sie hat, bei mindestens halber Überdeckung und nicht viel kleinerem Umring als sein größter
+            for c, i in kand:
+                t = osm[i][1]
+                if any(key in t for key in NAMENS_KEYS) and c >= 0.5 * min(n, osm_n[i]) and c >= 0.25 * groesster[i]:
+                    benutzt.add(i)
+                    for key in NAMENS_KEYS + ("addr:street", "addr:housenumber"):
+                        if key in t: info[key] = t[key]
+                    break
+            else:
+                t = osm[i0][1]
+                if c0 >= 0.5 * min(n, osm_n[i0]) and c0 >= 0.25 * groesster[i0]:    # reine Adresse ohne Namen
+                    for key in ("addr:street", "addr:housenumber"):
+                        if key in t: info[key] = t[key]
+        ergebnis.append((ring, info))
+    verwaist = 0
+    for i, (pts, t) in enumerate(osm):
+        if i in benutzt or not any(key in t for key in NAMENS_KEYS): continue
+        ueber = sum(1 for zaehl, n in treffer if i in zaehl)
+        if ueber == 0: ergebnis.append((pts, {key: t[key] for key in INFO_KEYS if key in t})); verwaist += 1
+    print(f"Hausumringe: {len(ringe)} Umringe, {sum(1 for _, i in ergebnis if i.get('name') or i.get('amenity') or i.get('shop'))} mit Name/Art, "
+          f"{len(osm)} OSM-Gebäude, {verwaist} benannte OSM-Gebäude ohne Umring behalten")
+    return ergebnis
+
+HAUSUMRINGE = next((a[14:] for a in sys.argv if a.startswith("--hausumringe=")), None)
+if HAUSUMRINGE:
+    bauten = umringe_mit_tags(HAUSUMRINGE)
+else:
+    bauten = []
+    for w in wege:
+        t = w["tags"]
+        if "building" not in t: continue
+        bauten.append((poly(w), {key: t[key] for key in INFO_KEYS if key in t}))
+for pts, info in bauten:
+    if HAUSUMRINGE and len(fuelle(pts, BODEN, nur={WIESE, PLATZ, BAUM}, trocken=True)) < 4: continue   # kleine Bauten bleiben Nebengebäude: keine verwaisten Bodenkacheln
     zellen = fuelle(pts, BODEN, nur={WIESE, PLATZ, BAUM})
     if len(zellen) < 4: continue
     menge = set(zellen)
     for (x, y) in zellen:
         if any((x + dx, y + dy) not in menge for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))): k[y][x] = WAND
     # Name/Art aus den Tags oder aus Punkten im Gebäude
-    info = {key: t[key] for key in ("name", "amenity", "shop", "building", "addr:street", "addr:housenumber") if key in t}
     for (px, py, pt) in punkt_infos:
         if innen(px, py, pts):
             for key in ("name", "amenity", "shop"):
@@ -119,7 +207,7 @@ for w in wege:
     xs, ys = [z[0] for z in zellen], [z[1] for z in zellen]
     gebaeude.append({"x": min(xs), "y": min(ys), "b": max(xs) - min(xs) + 1, "h": max(ys) - min(ys) + 1,
                      "tuer": {"x": beste[0], "y": beste[1]} if beste else None, "flaeche": len(zellen), **info,
-                     "umriss": flach(pts[:-1] if pts and pts[0] == pts[-1] else pts)})
+                     "umriss": flach(pts[:-1] if pts and pts[0] == pts[-1] else pts, 2 if HAUSUMRINGE else 1)})
 # 3b. Vektordaten nur fürs Aussehen (Kollision bleibt beim Raster): Straßenlinien und Flächen
 strassen, flaechen = [], []
 for w in wege:
@@ -151,7 +239,8 @@ garten = [[-1] * B for _ in range(H)]          # Besitzer (Index in gebaeude) je
 zaunart = [['.'] * B for _ in range(H)]
 objekte = []
 WOHN = {"yes", "house", "detached", "residential", "semidetached_house", "terrace", "bungalow"}
-haeuser_g = [i for i, g in enumerate(gebaeude) if g["tuer"] and 12 <= g["flaeche"] <= 140
+GARTEN_MIN = 11 if HAUSUMRINGE else 12   # amtliche Umringe sind genauer (kleiner) als die OSM-Umrisse
+haeuser_g = [i for i, g in enumerate(gebaeude) if g["tuer"] and GARTEN_MIN <= g["flaeche"] <= 140
              and not (g.get("name") or g.get("shop") or g.get("amenity")) and g.get("building", "yes") in WOHN]
 # Mehrquellen-Breitensuche: jede Wiesenkachel bis 4 Schritte vom Haus gehört dem nächsten Haus
 from collections import deque
@@ -346,13 +435,17 @@ for y in range(H): k[y][0] = k[y][B - 1] = ZAUN
 
 zaehl = collections.Counter(v for zeile in k for v in zeile)
 benannt = [g for g in gebaeude if g.get("name") or g.get("amenity") or g.get("shop")]
-ausgabe.write_text(json.dumps({"quelle": "© OpenStreetMap-Mitwirkende (ODbL 1.0)", "bbox": [sued, west, nord, ost],
-                               "meterProKachel": mpk, "breite": B, "hoehe": H,
-                               "kacheln": "".join("0123456789"[v] for zeile in k for v in zeile), "gebaeude": gebaeude,
-                               "strassen": strassen, "flaechen": flaechen,
-                               "zaunart": "".join("".join(r) for r in zaunart), "garten": "".join("".join(r) for r in gartenzeichen),
-                               "objekte": objekte, "zaeune": zaeune},
-                              ensure_ascii=False))
+erg = {"quelle": "© OpenStreetMap-Mitwirkende (ODbL 1.0)" + ("; Gebäudeumrisse: © Bayerische Vermessungsverwaltung, Hausumringe (CC BY 4.0)" if HAUSUMRINGE else ""),
+       "bbox": [sued, west, nord, ost], "meterProKachel": mpk, "breite": B, "hoehe": H,
+       "kacheln": "".join("0123456789"[v] for zeile in k for v in zeile), "gebaeude": gebaeude,
+       "strassen": strassen, "flaechen": flaechen,
+       "zaunart": "".join("".join(r) for r in zaunart), "garten": "".join("".join(r) for r in gartenzeichen),
+       "objekte": objekte, "zaeune": zaeune}
+if HAUSUMRINGE and ausgabe.exists():
+    # Felder, die spätere Werkzeuge ergänzt haben (Luftbild-Klassen, Autos/Bäume/Pools aus dem Luftbild, Nebengebäude), bleiben erhalten;
+    # Dachfarben je Gebäude und Nebengebäude müssen danach neu berechnet werden (tools/luftbild.py-Dächer, tools/nebengebaeude.py)
+    for key, wert in json.loads(ausgabe.read_text()).items(): erg.setdefault(key, wert)
+ausgabe.write_text(json.dumps(erg, ensure_ascii=False))
 print(f"{B}×{H} Kacheln ({mpk} m), Gebäude {len(gebaeude)} (mit Tür {sum(1 for g in gebaeude if g['tuer'])}), benannt {len(benannt)}")
 print("Kacheln:", {n: zaehl[v] for n, v in [("Wiese", WIESE), ("Straße", STRASSE), ("Wand", WAND), ("Boden", BODEN), ("Tür", TUER), ("Wasser", WASSER), ("Baum", BAUM), ("Platz", PLATZ)]})
 print(f"Vektor: {len(strassen)} Straßen, {len(flaechen)} Flächen")
