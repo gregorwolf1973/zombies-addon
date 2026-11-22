@@ -3310,7 +3310,7 @@ export class SpielRaum extends Room {
     }
     if (!ebene) {   // Wandernde meiden Haustüren (~4 m): abdrehen, vom Türpunkt weg
       const td = this.tuerNahe(z.x, z.y, TUER_MEIDEN);
-      if (td) { z.richtung = Math.atan2(z.y - td.y, z.x - td.x) + (info.versatz ?? 0) * 0.5; info.steht = false; info.wechsel = Math.max(info.wechsel, 1); }
+      if (td && !(td.nr !== undefined && [...this.state.spieler.values()].some(q => Number(EBENE_MUSTER.exec(q.ebene ?? '')?.[1]) === td.nr))) { z.richtung = Math.atan2(z.y - td.y, z.x - td.x) + (info.versatz ?? 0) * 0.5; info.steht = false; info.wechsel = Math.max(info.wechsel, 1); }
     }
     if (!info.steht && !this.zombieGehen(z, z.richtung, W.zombieTempoWandern * (z.kriecht ? 0.5 : 1) * dt, dt, info)) {
       z.richtung += Math.PI * (0.5 + this.rnd());
@@ -3458,8 +3458,8 @@ export class SpielRaum extends Room {
   tuerNahe(x, y, abstand) {
     if (!this.tuerRaster) {
       this.tuerRaster = new Map();
-      const add = (px, py) => { const k = Math.floor(px / 128) + ',' + Math.floor(py / 128); (this.tuerRaster.get(k) ?? this.tuerRaster.set(k, []).get(k)).push({ x: px, y: py }); };
-      for (const h of this.welt.haeuser) if (h.tuer) add((h.tuer.x + 0.5) * KACHEL, (h.tuer.y + 0.5) * KACHEL);
+      const add = (px, py, nr) => { const k = Math.floor(px / 128) + ',' + Math.floor(py / 128); (this.tuerRaster.get(k) ?? this.tuerRaster.set(k, []).get(k)).push({ x: px, y: py, nr }); };
+      for (const h of this.welt.haeuser) if (h.tuer) add((h.tuer.x + 0.5) * KACHEL, (h.tuer.y + 0.5) * KACHEL, h.nr);
       for (const sr of this.welt.safeRooms) if (sr.vorTuer) add(sr.vorTuer.x, sr.vorTuer.y);
     }
     const cx = Math.floor(x / 128), cy = Math.floor(y / 128);
