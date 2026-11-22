@@ -9,9 +9,10 @@ import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, T, sichtfrei, frei } from '../client/welt.mjs';
 import { hausHell, helligkeit, istNacht } from '../client/welt.mjs';
 import { BOTPLAN } from '../server/botplan.mjs';
+import { freierPort } from './hilfe.mjs';
 BOTPLAN.an = false;   // diese Tests prüfen das reine Folgen/Gelegenheiten der Bots; der Team-Planer hat eigene Tests (botplan.test.mjs)
 
-const PORT = 27300 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

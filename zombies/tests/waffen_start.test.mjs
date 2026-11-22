@@ -6,8 +6,9 @@ import { starte } from '../server/index.mjs';
 import { WAFFEN, DINGE, BEUTE, ziehe, aktiveWaffe, ladenArt } from '../client/welt.mjs';
 import * as FK from '../server/faehigkeiten.mjs';
 import * as WP from '../server/waffenplaetze.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 26170 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

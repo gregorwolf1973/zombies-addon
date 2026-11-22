@@ -2,8 +2,9 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 25900 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

@@ -11,8 +11,9 @@ import { SpielRaum } from '../server/raum.mjs';
 import { begrenzungZuruecksetzen } from '../server/superuser.mjs';
 import { radPixel, radFaktor, FLUG_TEMPO, FLUG_TEMPO_SCHNELL } from '../client/kameraflug.mjs';
 import { frei, WERTE as W, BREITE, HOEHE, KACHEL } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 26200 + Math.floor(Math.random() * 100);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const TESTPW = 'Nur-Ein-Testwert-42';   // nur für diesen Test
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-kam-'));

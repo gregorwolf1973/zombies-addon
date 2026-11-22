@@ -11,8 +11,9 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { evakArtFuer } from '../client/evak.mjs';
 import { bereinige } from '../server/einstellungen.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28300 + Math.floor(Math.random() * 100);
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-evakarten-'));
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
@@ -145,7 +146,7 @@ test('Bunker: alle im Bunker und Aufgaben erledigt → Countdown springt auf 10 
   ag.fahrtGelingt = () => true;
   assert.ok(await bis(() => p.anBord), 'geht nicht hinein');
   assert.ok(await bis(() => s.finaleRest <= 10), 'Countdown springt nicht auf 10 s: ' + s.finaleRest);
-  assert.ok(meldungen.some(m => m.includes('Alle im Bunker – Tor schließt in 10 s')), meldungen.join(' | '));
+  assert.ok(await bis(() => meldungen.some(m => m.includes('Alle im Bunker – Tor schließt in 10 s')), 10000), meldungen.join(' | '));   // Meldung kommt über das Netz
   raum.finale.rest = 0.05;
   assert.ok(await bis(() => s.evakPhase === 'sieg', 3000), 'kein Sieg: ' + s.evakPhase);
 }));

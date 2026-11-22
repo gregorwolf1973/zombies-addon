@@ -5,8 +5,10 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { WAFFEN, GRANATE } from '../client/welt.mjs';
+import { freierPort, seedZufall } from './hilfe.mjs';
+seedZufall(4711);
 
-const PORT = 26700 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
@@ -200,7 +202,13 @@ test('Beide Plätze mit leeren Waffen: Faust schlägt zu, Waffen bleiben (rot) i
     p.waffe = 'pistole'; p.wp1 = 'gewehr'; p.munition = 0;
     await warte(300);
     assert.equal(p.wp1, 'gewehr'); assert.equal(p.magazin, 0);
-    const id = zombieIn(raum, p, 20);
+    // Faust-Reichweite 16 px; je nach Welt (Seed) steht am Startplatz ein Baum im Weg: eine Richtung mit freier Sicht suchen
+    let id = null;
+    for (const [dx, dy] of [[12, 0], [-12, 0], [0, 12], [0, -12], [9, 9], [-9, -9]]) {
+      raum.state.zombies.clear(); raum.zombieInfo.clear();
+      id = zombieIn(raum, p, dx, dy);
+      if (raum.naechsterZombie(p.x, p.y, 16, p)) break;
+    }
     const hp0 = raum.state.zombies.get(id).hp;
     assert.ok(await bis(() => !raum.state.zombies.has(id) || raum.state.zombies.get(id).hp < hp0, 2500), 'Faust schlägt nicht zu');
     assert.equal(p.wp0, 'pistole', 'leere Waffe bleibt im Platz');

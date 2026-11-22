@@ -9,6 +9,7 @@ import { starte } from '../server/index.mjs';
 import { KACHEL, T, setzeKartengroesse, frei, findeWeg, seiteVon } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { baueInnenraum } from '../client/innen.mjs';
+import { freierPort } from './hilfe.mjs';
 
 const karte = JSON.parse(fs.readFileSync(new URL('../client/karten/geretsried.json', import.meta.url)));
 
@@ -55,7 +56,7 @@ test('Geretsried: Autos meist in Parkbuchten/auf Parkplätzen, Buchten frei, kei
 });
 
 let server;
-const PORT = 27700 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const warte = ms => new Promise(r => setTimeout(r, ms));
 async function bis(f, ms = 3000) { const e = Date.now() + ms; while (Date.now() < e) { if (f()) return true; await warte(20); } return f(); }
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); });

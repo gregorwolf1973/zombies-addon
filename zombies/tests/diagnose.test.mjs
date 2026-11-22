@@ -8,6 +8,7 @@ import http from 'node:http';
 import { Sammler, geraetTyp, kuerzeStack } from '../client/diagnose.mjs';
 import { Diagnose, bereinige, logzeile, DIAG_RATE, DIAG_EINTRAEGE } from '../server/diagnose.mjs';
 import { starte } from '../server/index.mjs';
+import { freierPort } from './hilfe.mjs';
 
 test('geraetTyp: grob Plattform und Browser, ohne Feinheiten', () => {
   assert.equal(geraetTyp('Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1'), 'iOS Safari/17');
@@ -107,7 +108,7 @@ test('Diagnose.annehmen: Rate, Sitzung, aus; Ringpuffer-Datei begrenzt', () => {
 });
 
 // ---------- Route POST /diag ----------
-const PORT = 28100 + Math.floor(Math.random() * 100);
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-diagroute-'));
 let server; const zeilenLog = []; const altLog = console.log;
 before(async () => {

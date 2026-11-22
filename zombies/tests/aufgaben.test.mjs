@@ -12,6 +12,7 @@ import { SpielRaum } from '../server/raum.mjs';
 import { Aufgaben } from '../server/aufgaben.mjs';
 import { FUNK_TEILE } from '../server/mission.mjs';
 import { KACHEL, WELT_VERSION } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
 // Figur in den Innenraum eines Safe Rooms setzen (neben die Eingangstür oder an einen Punkt darin)
 function inDenSafeRoom(raum, p, s, wo = 'tuer') {
@@ -21,7 +22,7 @@ function inDenSafeRoom(raum, p, s, wo = 'tuer') {
   return w;
 }
 
-const PORT = 27300 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-aufgaben-'));
 const DB = path.join(ordner, 'spiel.db');
@@ -233,7 +234,7 @@ test('Evakuierungsbus: nur mit Funkspruch, wartet, wer nahe steht ist an Bord', 
     assert.equal(bus.haelt, true);
     const tor = raum.welt.tor;
     assert.ok(Math.hypot(bus.x - (tor.x + 1) * KACHEL, bus.y - (tor.y + 1) * KACHEL) < 400, 'Bus steht nicht am Ortsausgang');
-    assert.ok(await bis(() => [...a.c.state.fahrzeuge.values()].some(f => f.art === 'evakuierung')), 'Client sieht den Bus nicht');
+    assert.ok(await bis(() => [...(a.c.state?.fahrzeuge?.values() ?? [])].some(f => f.art === 'evakuierung')), 'Client sieht den Bus nicht');
 
     // Eins steht am Bus, Zwei weit weg: 1 von 2 an Bord, der Bus wartet
     a.p.ebene = ''; a.p.x = bus.x + 20; a.p.y = bus.y;
@@ -247,7 +248,7 @@ test('Evakuierungsbus: nur mit Funkspruch, wartet, wer nahe steht ist an Bord', 
     assert.equal(raum.state.busDa, true, 'Bus fuhr ohne geschaffte Aufgaben sofort los');
     raum.aufgaben.busRest = 0;
     assert.ok(await bis(() => raum.state.busDa === false), 'Bus fährt nicht, obwohl alle an Bord sind');
-    assert.ok(meldungen.some(t => t.includes('ohne euch abgefahren')), 'keine Meldung: ' + meldungen.join(' | '));
+    assert.ok(await bis(() => meldungen.some(t => t.includes('ohne euch abgefahren')), 10000), 'keine Meldung: ' + meldungen.join(' | '));
     assert.equal(busVon(raum), undefined, 'Bus bleibt stehen');
     assert.equal(raum.state.level, 1, 'Level gewechselt');
     assert.equal(raum.state.aufgaben.size, 4, 'Aufgaben verschwunden');
@@ -331,8 +332,8 @@ test('Levelwechsel: mit erfüllten Aufgaben fährt der Bus los, die Karte wechse
     const m = await Promise.race([neustart, warte(5000).then(() => null)]);
     assert.ok(m, 'kein Levelwechsel');
     assert.equal(m.level, 2);
-    assert.ok(meldungen.some(t => t.includes('🎉 Geschafft! Weiter nach Level 2')), 'keine Erfolgsmeldung: ' + meldungen.join(' | '));
-    assert.ok(meldungen.some(t => t.includes('trotzdem mit')), 'keine Mitkommen-Meldung');
+    assert.ok(await bis(() => meldungen.some(t => t.includes('🎉 Geschafft! Weiter nach Level 2')), 10000), 'keine Erfolgsmeldung: ' + meldungen.join(' | '));
+    assert.ok(await bis(() => meldungen.some(t => t.includes('trotzdem mit')), 10000), 'keine Mitkommen-Meldung');
     const stand = SpielRaum.speicher.ladeWelt();
     assert.equal(stand.level, 2);
     assert.ok(['geretsried', 'geretsried2'].includes(stand.karte), 'Level-1-Karte: ' + stand.karte);   // Level 1 = Zufall aus beiden Geretsried-Karten

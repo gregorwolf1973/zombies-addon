@@ -4,8 +4,9 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { sauberName } from '../server/raum.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 25670 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

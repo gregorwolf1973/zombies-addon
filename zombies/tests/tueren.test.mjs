@@ -10,8 +10,9 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, T, frei, schlossArt, ladenArt } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 27300 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-tueren-'));
 let server;

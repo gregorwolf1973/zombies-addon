@@ -15,9 +15,10 @@ import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, T, INNEN_FEIN, WERTE as W, frei, sichtfrei, kachelVon, reichVon, tempoVon, AKTION_ABSTAND, safeRoomVon, poolFaktor } from '../client/welt.mjs';
 import { BOTPLAN } from '../server/botplan.mjs';
 import { hat } from '../client/stapel.mjs';
+import { freierPort } from './hilfe.mjs';
 BOTPLAN.an = false;
 
-const PORT = 28400 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-fein-'));
 let server;

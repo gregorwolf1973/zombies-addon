@@ -7,8 +7,9 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { SS_START } from '../client/schiessstand_welt.mjs';
 import { WAFFEN, MUNITION_MAX } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 27170 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

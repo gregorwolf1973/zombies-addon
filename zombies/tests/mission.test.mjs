@@ -14,6 +14,7 @@ import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { missionsPlan, missionListe, kreisSchrumpfen, SUCH_MIN, FUNK_TEILE, MISSION_MAX, MISSIONEN, ortText, missionsBehaelter, behaelterAufKarte } from '../server/mission.mjs';
 import { schwierigkeit, LEVEL_TABELLE } from '../server/schwierigkeit.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
+import { freierPort } from './hilfe.mjs';
 
 const karte = n => JSON.parse(fs.readFileSync(new URL(`../client/karten/${n}.json`, import.meta.url)));
 
@@ -104,7 +105,7 @@ test('Schwierigkeit: steigt je Level und je Spieltag (gedeckelt), Regler multipl
 });
 
 // ---------- mit laufendem Raum ----------
-const PORT = 27600 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-mission-'));
 let server;

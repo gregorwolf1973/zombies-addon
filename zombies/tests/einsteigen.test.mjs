@@ -11,8 +11,9 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { BUS_ABSTAND, frei } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28100 + Math.floor(Math.random() * 100);
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-einsteigen-'));
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));

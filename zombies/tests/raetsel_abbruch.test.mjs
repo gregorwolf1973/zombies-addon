@@ -7,8 +7,9 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { setzeKartengroesse } from '../client/welt.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 28800 + Math.floor(Math.random() * 90);
+const PORT = await freierPort();
 let server;
 before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); });
 after(async () => { await server.gracefullyShutdown(false); setzeKartengroesse(64, 48); });

@@ -16,7 +16,6 @@ let worker = null, naechsteId = 1, leerlauf = null;
 function workerStarten() {
   if (worker) return worker;
   const w = new Worker(new URL('./weltworker.mjs', import.meta.url));
-  w.unref();
   w.on('message', ({ id, welt, fehler }) => {
     const a = offen.get(id); offen.delete(id); if (!a) return;
     if (fehler) a.nein(new Error(fehler)); else a.ja(welt);
@@ -24,6 +23,7 @@ function workerStarten() {
   });
   const aus = e => { for (const a of offen.values()) a.nein(e instanceof Error ? e : new Error('Worker beendet')); offen.clear(); if (worker === w) worker = null; };
   w.on('error', aus); w.on('exit', () => aus(new Error('Worker beendet')));
+  w.unref();   // erst nach den Listenern: ein 'message'-Listener holt den Port sonst wieder in die Ereignisschleife (Prozess wartete bis zum Leerlauf-Ende)
   worker = w;
   return w;
 }

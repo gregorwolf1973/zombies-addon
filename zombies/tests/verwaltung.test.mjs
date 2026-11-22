@@ -7,8 +7,9 @@ import path from 'node:path';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { bereinige, EREIGNISSE, TON_GRUPPEN, tonKategorien } from '../server/einstellungen.mjs';
+import { freierPort } from './hilfe.mjs';
 
-const PORT = 25790;
+const PORT = await freierPort();
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-verwaltung-'));
 let server;
 before(async () => {

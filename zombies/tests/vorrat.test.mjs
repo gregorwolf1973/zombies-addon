@@ -13,6 +13,7 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, RUCKSACK_PLAETZE, safeRoomVon } from '../client/welt.mjs';
 import { BOTPLAN } from '../server/botplan.mjs';
+import { freierPort } from './hilfe.mjs';
 BOTPLAN.an = false;   // diese Tests prüfen das reine Folgen/Gelegenheiten der Bots; der Team-Planer hat eigene Tests (botplan.test.mjs)
 
 // Figur in den Innenraum eines Safe Rooms setzen (neben die Eingangstür oder an einen Punkt darin)
@@ -23,7 +24,7 @@ function inDenSafeRoom(raum, p, s, wo = 'tuer') {
   return w;
 }
 
-const PORT = 26900 + Math.floor(Math.random() * 200);
+const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;
 const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-test-'));
 const DB = path.join(ordner, 'spiel.db');

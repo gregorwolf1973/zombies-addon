@@ -123,11 +123,11 @@ Wichtige Dateien:
 
 ## Tests
 
-- Alle: `cd zombies && npm test` (= `node --test --test-concurrency=3 tests/`). Einzeln: `cd zombies && node --test tests/<datei>.test.mjs`.
+- Alle: `cd zombies && npm test` (= `node --test --test-concurrency=3 tests/*.test.mjs`, ca. 6 min). Schnell: `npm run test:schnell` (ca. 1,5 min, Liste in `tests/schnell.txt`; Kern-/Logiktests ohne lange Echtzeit-Simulation). Mehr in `zombies/tests/README.md`. Einzeln: `cd zombies && node --test tests/<datei>.test.mjs`.
 - Voraussetzung: `zombies/node_modules` (im Worktree als Symlink auf das Hauptverzeichnis; nicht committen).
 - Tests starten echte Colyseus-Räume im Speicher (Datenbank `:memory:`); `NODE_TEST_CONTEXT` setzt die Grundwerte.
   `innen_fein_spiel.test.mjs` schaltet per `ZOMBIES_INNEN1M` den Feinraster ein.
-- Eine schnelle Teilstufe gibt es derzeit nicht; geänderte Bereiche gezielt als Einzeldateien laufen lassen, vor dem Einspielen die ganze Suite.
+- Während der Arbeit `npm run test:schnell` und betroffene Einzeldateien, vor dem Einspielen die ganze Suite. Testhilfen (freier Port, Seed) in `tests/hilfe.mjs`.
 - Bekannt wacklig (besonders unter Last/parallelen Läufen): Hund-Tests (`hund.test.mjs`), Pool-/Tempo-Tests (`pooltempo.test.mjs`),
   zeitabhängige Netz-/Verkehrstests (`netz*.test.mjs`). Bei Fehlschlag zuerst allein wiederholen, bevor Code geändert wird.
 - Vor dem Einspielen: `shellcheck` für Shell-Skripte, `node --check` für geänderte JS-Dateien.
