@@ -17,7 +17,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage as ndi
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from kulisse import Karte, KARTEN, KACHEL_KK, PX, PPK, RAND, index_schreiben
+from kulisse import Karte, KARTEN, KACHEL_KK, PX, PPK, index_schreiben
+RAND = 40                   # Rand beim Rechnen (Median, Ausrundung der Straßenecken), wird abgeschnitten; größer als in kulisse.py, damit Kacheln nahtlos bleiben
 
 WURZEL = pathlib.Path(__file__).resolve().parent
 LB = WURZEL / "luftbild" / "cache" / "bayern"
@@ -112,6 +113,22 @@ class Daten:
 def glatt(a, s): return ndi.gaussian_filter(a, s, mode="nearest")
 def klar(a, lo, hi): return np.clip((a - lo) / (hi - lo), 0, 1)
 
+def kante(m, E, N, s, r_px=0, stark=1.0, sperre=None, zone=None):
+    """Straßen-/Wegmasken: Ecken ausrunden (Schließen mit Radius r_px, nur in `zone`, nie über `sperre`) und die Kanten
+    leicht verwischen: niederfrequente Abweichung ±0,2–0,3 m (Wellenlänge ~9 m) plus feine Ausfransung, weicher Rand ~0,4 m (Antialiasing, nie treppig)."""
+    out = m
+    if r_px > 0:
+        b = m > 0.5
+        dil = ndi.distance_transform_edt(~b) <= r_px
+        zu = ndi.distance_transform_edt(dil) > r_px              # Schließen = Dilatation, dann Erosion: füllt nur konkave Ecken
+        zusatz = (zu & ~b).astype(np.float32)
+        if sperre is not None: zusatz *= (sperre < 0.5)
+        if zone is not None: zusatz *= zone
+        out = np.maximum(m, glatt(zusatz, 1.2))
+    mb = glatt(out, 1.4)
+    nz = (wert(E, N, 9.0, s) - 0.5) * 2 * 0.27 + (wert(E, N, 1.3, s + 1) - 0.5) * 2 * 0.10
+    return klar(mb, 0.3 + nz * stark, 0.7 + nz * stark)
+
 class Welt:
     def __init__(self, karte):
         self.karte = karte; self.K = Karte(karte)
@@ -179,6 +196,19 @@ def rendern(welt, kx, ky):
         hell_g = glatt(ndi.median_filter(hell, size=17), 2.0)       # nur große helle Flächen (Gehweg), keine Autos
     else:
         gruen = np.ones((W, W), np.float32); hoch = baum = asph = haus = rot = warm = hell = hell_g = np.zeros((W, W), np.float32)
+    # Straßen und Wege: Ecken ausrunden (Straße ~4 m, Weg ~2,5 m), Kanten dezent verwischen/ausfransen; Fläche nehmen/geben die übrigen Arten
+    def abgeben(nm, neu):
+        gew = np.clip(neu - Zn[nm], 0, 1)
+        for k in Zn:
+            if k != nm: Zn[k] = Zn[k] * (1 - gew)
+        Zn[nm] = neu
+    strasse0 = Zn.get("strasse")
+    if "strasse" in Zn: abgeben("strasse", kante(Zn["strasse"], E, N, 41, 0, 0.8))
+    if "weg" in Zn: abgeben("weg", kante(Zn["weg"], E, N, 45, 10, 1.2, sperre=haus))
+    if d is not None:
+        zone = np.zeros((W, W), np.float32) if strasse0 is None else (ndi.distance_transform_edt(~(strasse0 > 0.3)) <= 6).astype(np.float32)
+        asph = kante(asph, E, N, 43, 14, 1.0, sperre=haus, zone=zone)
+    rest = np.clip(1 - z(*Z), 0, 1)
     # Maßstabsfreies Rauschen (Meter-Koordinaten)
     wolke = wert(E, N, 11.0, 1) * 0.55 + wert(E, N, 3.2, 2) * 0.3 + wert(E, N, 1.1, 3) * 0.15
     korn1, korn2 = korn(E, N, 0.25, 4), korn(E, N, 0.5, 5)
