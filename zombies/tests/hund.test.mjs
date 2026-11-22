@@ -75,6 +75,7 @@ test('Streuner: ein Spieler in 2 m bekommt den Hund, jeder nur einen, Bots keine
   assert.equal(raum.state.hunde.get(s1).besitzer, '', 'Bot bekommt keinen Hund');
   assert.ok(!xb.hund);
   delete xb.bot;
+  raum.state.hunde.delete(s1); raum.hunde.info.delete(s1);   // s1 wandert sonst (zufällig) in Berts Nähe und würde ihm später zulaufen
   // weit weg: nichts
   const s2 = raum.hunde.neuerStreuner(pa.x + 40, pa.y); raum.state.hunde.get(s2).x = pa.x + 40;
   raum.hunde.info.get(s2).steht = true; raum.hunde.info.get(s2).wandelT = 99;
