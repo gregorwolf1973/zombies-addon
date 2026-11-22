@@ -16,6 +16,7 @@ import { LEVEL1_KARTEN, level1Karte } from './aufgaben.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
 import { clientAuslieferung, auslieferungsVersion } from './statisch.mjs';
+import { Diagnose, DIAG_MAX_BYTES } from './diagnose.mjs';
 import { EinstellungsDatei, oeffentlich, ohneGeheimnisse, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, TON_STANDARD, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
@@ -64,6 +65,7 @@ export async function starte({
   port = Number(process.env.PORT) || 2567,
   optionen = leseOptionen(),
   leise = false,
+  diagnosePruefung = null,   // nur Tests: ersetzt die Prüfung „verbundener Spieler“
   datenbank = process.env.ZOMBIES_DB || '/data/zombies.db',
   einstellungsDatei = process.env.ZOMBIES_EINSTELLUNGEN ?? (datenbank === ':memory:' ? null : path.join(path.dirname(datenbank), 'einstellungen.json')),
   // Tondateien: mitgelieferte liegen in /share (nicht im öffentlichen Repo – Lizenz), hochgeladene in /data
@@ -114,7 +116,7 @@ export async function starte({
       bissSpielerLevel: Object.fromEntries(Object.entries(w.bissSpielerLevel ?? {}).map(([k, v]) => [k, v / 100])),   // je Karte/Level
       waffen: w.waffen,                            // je Waffe { schaden, pause }
       zombieTypen: ZOMBIE_TYPEN.filter(k => w.zombies.typen[k]).map(k => ZOMBIE_TYPEN.indexOf(k)),
-      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, unfallMinuten: w.unfall, unfallExplosion: w.unfallExplosion, unfallSchaden: w.unfallSchaden, blaulicht: w.blaulicht, hordeZiel: w.zombies.hordeZiel, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTrupp: w.zombies.hordeTrupp, hordeReichweite: w.zombies.hordeReichweite, lagerWelle: w.zombies.lagerWelle, lagerWellePause: w.zombies.lagerWellePause, ueberraschung: w.zombies.ueberraschung, sichtkegel: w.sichtkegel, innenMassstab: w.innenMassstab, innenTempo: w.innenTempo,
+      feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, unfallMinuten: w.unfall, unfallExplosion: w.unfallExplosion, unfallSchaden: w.unfallSchaden, blaulicht: w.blaulicht, hordeZiel: w.zombies.hordeZiel, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTrupp: w.zombies.hordeTrupp, hordeReichweite: w.zombies.hordeReichweite, lagerWelle: w.zombies.lagerWelle, lagerWellePause: w.zombies.lagerWellePause, ueberraschung: w.zombies.ueberraschung, sichtkegel: w.sichtkegel, diagnose: w.diagnose !== false, innenMassstab: w.innenMassstab, innenTempo: w.innenTempo,
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,
@@ -315,6 +317,20 @@ export async function starte({
   app.get('/', (req, res, next) => req.get('x-ingress-path') && !('spielen' in req.query)
     ? res.set('Cache-Control', 'no-cache').sendFile(path.join(hier, '..', 'client', 'verwaltung.html')) : next());
 
+  // Diagnose: Fehler und Kennzahlen echter Geräte (client/diagnose.mjs) → kompakte Zeilen im Log + Ringpuffer /data/diag.jsonl
+  const diagnose = new Diagnose({
+    an: () => datei.werte.diagnose !== false,
+    sitzungOk: diagnosePruefung ?? (s => !!SpielRaum.aktiv?.clients?.some(c => c.sessionId === s)),
+    datei: datenbank === ':memory:' ? null : path.join(path.dirname(datenbank), 'diag.jsonl'),
+    log: z => console.log(z),
+  });
+  app.post('/diag', express.text({ type: () => true, limit: DIAG_MAX_BYTES }), (req, res) => {
+    let body = null;
+    try { body = JSON.parse(typeof req.body === 'string' ? req.body : ''); } catch { /* ungültig */ }
+    res.status(diagnose.annehmen(body).status).end();
+  });
+  app.use('/diag', (err, req, res, next) => res.status(err?.status === 413 ? 413 : 400).end());
+
   app.get('/gesund', (req, res) => res.json({ ok: true }));
   // sagt dem Client, ob er nach dem Zugangscode fragen muss
   app.get('/info', (req, res) => res.json({
@@ -322,6 +338,7 @@ export async function starte({
     version: paketVersion,                     // Client vergleicht mit der Version beim Laden der Seite (alter Code im Speicher → neu laden)
     wiki: String(optionen.wiki_adresse ?? '').trim(),
     extern: String(optionen.externe_adresse ?? '').trim(),   // https-Adresse, unter der das Mikrofon geht
+    diagnose: datei.werte.diagnose !== false,   // Client schickt Fehler/Kennzahlen nur, wenn an
     toene: datei.werte.toene,
     toeneHorde: datei.werte.toeneHorde,   // Hordengeräusch: Schwellen und Hörweite (client/hordenlogik.mjs)
     musik: datei.werte.musik,             // Musik: laut (%), blende (s)

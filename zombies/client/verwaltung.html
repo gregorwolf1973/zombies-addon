@@ -901,6 +901,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
   <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
+  <label class="tn-schalter" id="diagnoseSchalter"><input type="checkbox" id="tnDiagnose"> Diagnose der Geräte: Fehler und Leistung (FPS, Ping, Ton) der Spieler als „[diag]“-Zeilen im Add-on-Log und in /data/diag.jsonl (keine Namen, keine IP)</label>
   <label for="tnInnenTempo">Tempo in maßstäblichen Innenräumen (% vom Tempo draußen; drinnen sind Figuren halb so groß und die Kamera ist näher)</label>
   <div class="tn-zeile"><input type="range" id="tnInnenTempo" min="10" max="100" step="2"><span id="tnInnenTempoWert">35 %</span></div>
   <label class="tn-schalter"><input type="checkbox" id="tnInnen"> Maßstäbliche Innenräume (echter Grundriss, Wände 25 cm, Möbel in echten Maßen; wirkt sofort – wer drinnen ist, kommt an die Haustür)</label>
@@ -1221,6 +1222,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnNebelZombie', nb.zombie === undefined ? 50 : nb.zombie, function (v) { return v + ' %'; });
     if (document.activeElement !== $('tnBlaulicht')) $('tnBlaulicht').value = e.blaulicht || 'selten';
     if (document.activeElement !== $('tnKegel')) $('tnKegel').checked = !!e.sichtkegel;
+    if (document.activeElement !== $('tnDiagnose')) $('tnDiagnose').checked = e.diagnose !== false;
     if (document.activeElement !== $('tnInnen')) $('tnInnen').checked = !!e.innenMassstab;
     feld('tnInnenTempo', e.innenTempo === undefined ? 35 : e.innenTempo, function (v) { return v + ' %'; });
     var rw = e.reichweite || {};
@@ -1319,6 +1321,9 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   });
   $('tnBlaulicht').addEventListener('change', function () {
     anfrage('verwaltung/api', { blaulicht: $('tnBlaulicht').value }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
+  $('tnDiagnose').addEventListener('change', function () {
+    anfrage('verwaltung/api', { diagnose: $('tnDiagnose').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
   $('tnKegel').addEventListener('change', function () {
     anfrage('verwaltung/api', { sichtkegel: $('tnKegel').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
@@ -4168,6 +4173,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   if (zc && zc.closest('.feld')) zug.appendChild(zc.closest('.feld'));
   if (suF) zug.appendChild(suF);
   rein('zugang', zug);
+  var dgs = $('diagnoseSchalter'); if (dgs) zug.appendChild(dgs);
   var test = unter('Testwerkzeuge'); if (test) { test.open = true; rein('zugang', test); }
 
   // ---------- einsetzen, alte Hülle entfernen ----------
