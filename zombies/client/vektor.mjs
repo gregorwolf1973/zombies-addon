@@ -102,6 +102,36 @@ function vorbereiten(welt) {
 }
 
 // ---------- Muster (im Weltraum verankert, damit Kartenstücke nahtlos aneinanderpassen) ----------
+// Echter Asphalt: warmes Anthrazit, Splitt in zwei Körnungen (helle und dunkle Körner), Flickstellen, vereinzelte Risse.
+// Kachel nahtlos (alles wird an den Rändern mitgezeichnet), deterministisch über hash(); wird einmal erzeugt.
+function asphaltKachel(c, g) {
+  const rest = (v) => ((v % g) + g) % g;
+  c.fillStyle = '#5d5d5c'; c.fillRect(0, 0, g, g);
+  const wrapped = (zeichne) => { for (const dx of [-g, 0, g]) for (const dy of [-g, 0, g]) { c.save(); c.translate(dx, dy); zeichne(); c.restore(); } };
+  // Flickstellen: wenige weiche, unregelmäßige Flächen etwas dunkler/heller
+  for (let i = 0; i < 7; i++) {
+    const x = hash(i * 17 + 301) * g, y = hash(i * 19 + 302) * g, r = 10 + hash(i * 23 + 303) * 20, hell = hash(i * 29 + 304) > 0.55;
+    const pts = []; for (let k = 0; k < 9; k++) { const a = k / 9 * Math.PI * 2, rr = r * (0.7 + hash(i * 31 + k * 7 + 305) * 0.5); pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.75]); }
+    c.fillStyle = hell ? 'rgba(255,250,240,.045)' : 'rgba(0,0,0,.07)';
+    wrapped(() => { c.beginPath(); c.moveTo((pts[0][0] + pts[8][0]) / 2, (pts[0][1] + pts[8][1]) / 2); for (let k = 0; k < 9; k++) { const p = pts[k], q = pts[(k + 1) % 9]; c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); } c.closePath(); c.fill(); });
+  }
+  // grobes Korn (Wolkigkeit) und feiner Splitt, helle und dunkle Körner
+  for (let i = 0; i < 90; i++) { c.fillStyle = hash(i * 5 + 401) > 0.5 ? 'rgba(255,255,255,.035)' : 'rgba(0,0,0,.06)'; c.fillRect(rest(hash(i * 3 + 400) * g), rest(hash(i * 7 + 402) * g), 2 + hash(i + 403) * 3, 2 + hash(i + 404) * 3); }
+  for (let i = 0; i < 1100; i++) {
+    const a = hash(i * 3 + 500);
+    c.fillStyle = a < 0.45 ? 'rgba(0,0,0,.16)' : a < 0.8 ? 'rgba(255,255,255,.07)' : a < 0.93 ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.3)';
+    c.fillRect(Math.floor(hash(i * 5 + 501) * g), Math.floor(hash(i * 7 + 502) * g), 1 + (hash(i + 503) > 0.8 ? 1 : 0), 1);
+  }
+  // dünne dunkle Risse, vereinzelt
+  c.strokeStyle = 'rgba(25,25,26,.5)'; c.lineWidth = 0.8; c.lineCap = 'round'; c.lineJoin = 'round';
+  for (let i = 0; i < 2; i++) {
+    let x = hash(i * 13 + 601) * g, y = hash(i * 17 + 602) * g, w = hash(i * 19 + 603) * Math.PI * 2;
+    const p = [[x, y]];
+    for (let k = 0; k < 8; k++) { w += (hash(i * 41 + k * 5 + 604) - 0.5) * 1.3; x += Math.cos(w) * 5; y += Math.sin(w) * 5; p.push([x, y]); }
+    wrapped(() => { c.beginPath(); c.moveTo(p[0][0], p[0][1]); for (const q of p) c.lineTo(q[0], q[1]); c.stroke(); });
+  }
+}
+
 let muster = null;
 function musterHolen(ctx) {
   if (muster) return muster;
@@ -111,7 +141,7 @@ function musterHolen(ctx) {
     for (let i = 0; i < n; i++) { c.fillStyle = farben[i % farben.length]; c.fillRect(hash(i * 3) * gr, hash(i * 5 + 1) * gr, 1 + hash(i) * 1.5, 1 + hash(i + 9) * 1.5); }
   };
   muster = {
-    asphalt: mach(64, (c, g) => koerner(c, g, '#5b5d61', 260, ['rgba(255,255,255,.07)', 'rgba(0,0,0,.18)', 'rgba(255,255,255,.04)'])),
+    asphalt: mach(128, asphaltKachel),
     gehweg: mach(32, (c, g) => {
       koerner(c, g, '#c9c3b6', 40, ['rgba(0,0,0,.06)', 'rgba(255,255,255,.12)']);
       c.fillStyle = 'rgba(90,80,70,.28)'; c.fillRect(0, 0, g, 1); c.fillRect(0, 0, 1, g); c.fillRect(0, g / 2, g, 1); c.fillRect(g / 2, 0, 1, g / 2);
@@ -522,8 +552,14 @@ export function zeichneStrassen(ctx, welt, rect) {
   for (const l of hier) if (l.t === 'pedestrian') { pfad(ctx, l.pts); ctx.strokeStyle = m.pflaster; ctx.lineWidth = l.b; ctx.stroke(); }
   // 3. dunkle Kanten aller Fahrbahnen zuerst, dann der Asphalt – so bleiben Kreuzungen sauber
   const fahr = hier.filter(l => AUTO.has(l.t) || l.t === 'service');
-  for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = '#34363a'; ctx.lineWidth = fahrbahn(l) + 5; ctx.stroke(); }
+  for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = '#a9a8a3'; ctx.lineWidth = fahrbahn(l) + 5; ctx.stroke(); }
   for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = m.asphalt; ctx.lineWidth = fahrbahn(l); ctx.stroke(); }
+  // Fahrspur-Verschleiß: Rollspuren etwas heller und glatter, der Mittelstreifen dazwischen dunkler (Öl); nur auf breiten Straßen
+  for (const l of fahr) {
+    const fb = fahrbahn(l); if (fb < 30) continue;
+    pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = fb * 0.72; ctx.stroke();
+    pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = fb * 0.2; ctx.stroke();
+  }
   // 3a. Zebrastreifen (amtliche Karte, OSM crossing=zebra/marked): weiße Balken längs zur Fahrbahn, nebeneinander über die ganze Fahrbahnbreite
   for (const z of welt.vektor?.zebra ?? []) {
     if (z.x < r.x0 - 60 || z.x > r.x1 + 60 || z.y < r.y0 - 60 || z.y > r.y1 + 60) continue;

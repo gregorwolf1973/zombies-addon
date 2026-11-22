@@ -90,7 +90,7 @@ def korn(E, N, zelle, s=0):
 def hexf(h): return np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], float)
 F = {k: hexf(v) for k, v in dict(
     rasen="#4d8c3b", rasen_hell="#6aa44a", rasen_dunkel="#3b7a33", gepflegt="#5d9b44", gebuesch="#3a7030", baum="#3f7634", waldboden="#3d6b2f", wald_dunkel="#2f5a28",
-    trocken="#8a9a52", acker="#8a7a4e", asphalt="#5b5d61", gehweg="#c9c3b6", pflaster="#bfb39a", ziegel="#b58a73", kies="#c0b290", beton="#b4b1a8",
+    trocken="#8a9a52", acker="#8a7a4e", asphalt="#5e5e5d", gehweg="#c9c3b6", pflaster="#bfb39a", ziegel="#b58a73", kies="#c0b290", beton="#b4b1a8",
     sand="#ddc995", sport="#5a9c45", tartan="#a95a43", wasser="#2a7098", wasser_tief="#1f5c85", ufer="#d3bf8a", schotter="#8f8a82", haus="#8e887d").items()}
 
 # ---------- Rasterdaten (0,2 m) auf das Kachelfenster abbilden ----------
@@ -196,7 +196,16 @@ def rendern(welt, kx, ky):
     wald = moduliere(F["waldboden"], 0.7, 0.30)
     wald = wald * (1 - klar(wert(E, N, 1.6, 7), 0.62, 0.8)[..., None] * 0.25) + F["wald_dunkel"][None, None] * klar(wert(E, N, 1.6, 7), 0.62, 0.8)[..., None] * 0.25
     gruen_mat = rasen * (1 - hoch[..., None] * 0.7) + (gebuesch * (1 - baum[..., None]) + baumb * baum[..., None]) * hoch[..., None] * 0.7
-    asphalt = moduliere(F["asphalt"], 0.12, 0.10)
+    # Asphalt wie echt: warmes Anthrazit (Alter 0,92…1,08), Splitt in zwei Körnungen mit hellen/dunklen Körnern, Flickstellen, vereinzelte Risse
+    alter = 0.92 + wert(E, N, 35.0, 21) * 0.16
+    flick = klar(wert(E, N, 7.0, 22) * 0.6 + wert(E, N, 2.4, 23) * 0.4, 0.60, 0.64)           # weiche Kante, kein Treppeneffekt
+    flick_hell = klar(wert(E, N, 23.0, 24), 0.48, 0.52)
+    risse_wo = klar(wert(E, N, 15.0, 26), 0.66, 0.72)
+    riss = (1 - klar(np.abs(wert(E, N, 3.3, 25) - 0.5), 0.0, 0.022)) * risse_wo
+    k1 = korn(E, N, 0.25, 31); k2 = wert(E, N, 0.7, 32); k3 = korn(E, N, 0.25, 33)
+    splitt = (k1 - 0.5) * 0.12 + (k2 - 0.5) * 0.08 + (k3 > 0.965) * 0.16 - (k3 < 0.04) * 0.14
+    af = alter * (1 + (wolke - 0.5) * 0.10) * (1 - flick * (1 - flick_hell) * 0.10 + flick * flick_hell * 0.06) * (1 - riss * 0.18) + splitt
+    asphalt = F["asphalt"][None, None, :] * (np.stack([af * 1.01, af, af * 0.985], -1))
     kies = moduliere(F["kies"], 0.18, 0.16)
     pflaster = moduliere(F["pflaster"], 0.10, 0.07)
     gehweg = moduliere(F["gehweg"], 0.08, 0.06)

@@ -234,7 +234,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
     }
     if (t === T.STRASSE) {
       const n = hash(kx, ky) * 10;
-      ctx.fillStyle = `rgb(${86 + n},${88 + n},${92 + n})`; ctx.fillRect(px, py, KACHEL, KACHEL);
+      ctx.fillStyle = `rgb(${92 + n},${92 + n},${91 + n})`; ctx.fillRect(px, py, KACHEL, KACHEL);   // warmes Anthrazit wie echter Asphalt
       ctx.fillStyle = 'rgba(0,0,0,.12)';
       for (let k = 0; k < 4; k++) ctx.fillRect(px + hash(kx + k, ky) * 30, py + hash(kx, ky + k) * 30, 2, 2);
       // Randlinie und Bordstein zur Nicht-Straße
