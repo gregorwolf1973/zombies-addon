@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.75.0 – 22.11.2026
+
+- Geändert (Geretsried 2): Gebäude aus den amtlichen Hausumringen (Bayerische Vermessungsverwaltung, CC BY 4.0) statt OSM – die 3D-Dächer sitzen jetzt genau auf den Häusern (1451 von 1457). Reihen-/Doppelhäuser sind innen ein gemeinsames Haus, Garagen/Schuppen aus dem 3D-Modell. Das feste Safehouse „Wohnhaus“ steht ein Haus weiter.
+
 ## 0.74.0 – 22.11.2026
 
 - Schneller: Die Welt wird im Hintergrund gebaut und im Browser gespeichert (zweiter Besuch/Levelwechsel am Handy etwa doppelt so schnell); der Server baut das nächste Level schon während der Pause in einem eigenen Thread und stockt beim Levelwechsel nicht mehr.
