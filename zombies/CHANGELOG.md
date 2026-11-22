@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.82.0 – 22.11.2026
+
+- Neuer Radpanzer Boxer am Flugfeld Königsdorf (Level 3): Mit E bzw. dem Aktionsknopf einsteigen, bis zu 4 Spieler. Wer zuerst einsteigt, fährt. Gelenkt wird mit der Gehen-Taste bzw. dem Joystick. Der Boxer überrollt Zombies, kommt aber nicht durch Häuser oder Wasser.
+- Insassen sind unsichtbar und vor Zombies sicher. Der Boxer nimmt keinen Schaden. Sein Turm schießt Dauerfeuer auf den nächsten Zombie, mit unendlicher Munition.
+- Solange jemand im Boxer sitzt, kommt alle 120 s eine Horde mit 20–50 Zombies von vorne auf ihn zu. Steigt der Letzte aus, kommen keine neuen Horden mehr. Bots steigen nicht ein.
+- Backend, Bereich Bundeswehr: Hordenabstand, Hordengröße, Schussfolge und Reichweite des Boxers sind einstellbar.
+- Die Grafik stammt aus dem Modell „Boxer CRV (low-poly)“ von ScurvyWoof (CC BY 4.0) und wurde als Draufsicht gerendert.
+
 ## 0.81.0 – 22.11.2026
 
 - Neu: Mehr streunende Hunde (Geretsried 2 etwa 7, einer nahe am Start); ein Streuner kommt aus 15 m zu dir und bellt ab und zu (lockt keine Zombies); Anzahl im Backend.
