@@ -164,7 +164,10 @@ function wasserGlaetten(k, hole, setze, durchgaenge = 3, R = 4) {
 
 // optionen.autos: Faktor für geparkte Autos (1 = normal)
 export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
-  const karte0 = spielplatzZaeune(zaeuneAusduennen(heckenEinfuegen(karteOrig)));   // Spielplatzzäune erst nach dem Ausdünnen (Lücke = Eingang bleibt exakt)
+  // Karten mit amtlichen Daten (karte.amtlich, tools/amtlich.py): Hecken und Zäune liegen fertig in karte.zaeune (Lücken an Einfahrten schon in den Daten),
+  // kein Glätten/Ausdünnen/Zufall; sonst wie bisher. Spielplatzzäune erst nach dem Ausdünnen (Lücke = Eingang bleibt exakt)
+  const amtlich = !!karteOrig.amtlich;
+  const karte0 = amtlich ? spielplatzZaeune(heckenEinfuegen(karteOrig)) : spielplatzZaeune(zaeuneAusduennen(heckenEinfuegen(karteOrig)));
   //   // Hecken aus dem Luftbild (heckenLuftbild) zählen wie OSM-Hecken
   // veränderbare Kopie (ländliche Details ergänzen Zäune, Hecken und Feldwege); die Eingabekarte bleibt unberührt
   const karte = karte0.zaeune ? { ...karte0, zaeune: [...karte0.zaeune], strassen: karte0.strassen ? [...karte0.strassen] : karte0.strassen } : karte0;
@@ -568,7 +571,16 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
 
     // 1. Mülltonnen: Gruppen aus 2–4 Tonnen an der Hauswand neben der Haustür (nie auf der Vorkachel der Tür selbst)
     const TONNEN = ['gelb', 'gruen', 'braun', 'blau'];
-    for (const h of haeuser) {
+    if (amtlich) {
+      // amtliche Karte: fertige Tonnengruppen am Grundstücksrand (tools/amtlich.py), je Gruppe das zugehörige Haus; keine Zufallszüge (r() bleibt unberührt)
+      for (const e of karte.muelltonnen ?? []) {
+        const h = haeuser.find(q => q.x === e.g[0] && q.y === e.g[1]);
+        if (!h || !h.tuer || !h.betretbar) continue;
+        muell.tonnen.push({ x: e.x, y: e.y, winkel: e.w, farben: e.f.slice(), rund: !!e.r, haus: h.nr });
+        behaelter.push({ id: 't' + muell.tonnen.length, art: 'muelltonne', x: e.x, y: e.y });
+      }
+    }
+    for (const h of amtlich ? [] : haeuser) {
       if (!h.tuer || !h.betretbar) continue;
       const wohnblock = bauart.get(h.x + ',' + h.y + ',' + h.b + ',' + h.h) === 'apartments';
       if (r() > (wohnblock ? 0.9 : 0.5)) continue;
@@ -775,7 +787,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
       }
     }
     // Ländliche Karten mit wenig Wald: Alleen an Landstraßen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen (laendlich.mjs, ohne r())
-    if (karte !== karte0) {
+    if (karte !== karte0 && !amtlich) {
       const zaunart = karte.zaunart ? karte.zaunart.split('') : null;
       if (zaunart) { laendlicheDetails({ karte, k, hole, setze, haeuser, deko, nein, zone, start, zaunart, ohneBaeume: !!luftbild }); karte.zaunart = zaunart.join(''); }
     }
@@ -789,6 +801,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   // Vektordaten nur fürs Aussehen: echte Gebäudeumrisse, Straßenlinien, Flächen
   const safeBox = haeuser.filter(h => h.safe);
   const vektor = {
+    laternen: karte.laternen ?? null, zebra: karte.zebra ?? null,   // amtliche Karten: Laternen und Zebrastreifen fertig aus tools/amtlich.py
     strassen: karte.strassen ?? [], flaechen: luftbild ? [...(karte.flaechen ?? []), ...luftbildAcker(karte0, k)] : karte.flaechen ?? [], piste: karte.piste ?? null,
     gebaeude: karte.gebaeude.filter(g => g.umriss?.length >= 6).map(g => ({
       p: g.umriss, typ: g.building ?? 'yes', flaeche: g.flaeche, x: g.x, y: g.y, b: g.b, h: g.h,
@@ -913,6 +926,12 @@ function baueFein(welt, karte, lbObj) {
   }
   // 3b. Pools und Schuppen aus dem Luftbild
   if (lbObj) feinFuellen(f, fb, FEIN, hole, lbObj, BLOCKIERT);
+  // 3c. Laternenmasten (amtliche Karte, karte.laternen in Spielpixeln): kleines festes Hindernis, ein Feinfeld (1 m) am Fahrbahnrand
+  for (const l of karte.laternen ?? []) {
+    const fx = Math.floor(l.x / FEIN_PX), fy = Math.floor(l.y / FEIN_PX);
+    if (fx < 0 || fy < 0 || fx >= fb || fy >= fh || hole(Math.floor(l.x / KACHEL), Math.floor(l.y / KACHEL)) === T.TUER) continue;
+    f[fy * fb + fx] = 1;
+  }
   // 4. vor jeder Haustür einen Zugang freihalten (Türkachel und die zwei Kacheln davor)
   for (const h of welt.haeuser) {
     if (!h.tuer) continue;
