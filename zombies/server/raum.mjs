@@ -40,6 +40,7 @@ import { Nebel, NEBEL_VORGABE, zombieSichtFaktor } from './nebel.mjs';
 import { sichtPx } from '../client/zombiesicht.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
+import { feinDurchgang, feldZielpunkt } from './wegfeld.mjs';
 import {
   KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, tempoVon, reichVon, abstandBehaelter, abstandTuer, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, INNEN_FEIN, setzeInnenFein, setzeInnenTempo, setzeTageszeiten,
@@ -3191,7 +3192,7 @@ export class SpielRaum extends Room {
         if (nx < 0 || ny < 0 || nx >= BR || ny >= HO) continue;
         const j = ny * BR + nx;
         if (feld[j] !== -1) continue;
-        if (BLOCKIERT_FELD.has(welt.hole(nx, ny))) continue;
+        if (BLOCKIERT_FELD.has(welt.hole(nx, ny)) && !(BLOCKIERT.has(welt.hole(nx, ny)) && feinDurchgang(welt, x, y, nx, ny))) continue;   // Kachel gesperrt, im Feinraster aber offen (schmaler Durchgang): passierbar
         feld[j] = feld[i] + 1;
         if (feld[j] < tiefe) q.push(j);   // weiter weg ist das Feld nicht nötig (Zombies sehen/hören höchstens ~500 px)
       }
@@ -3213,6 +3214,7 @@ export class SpielRaum extends Room {
       if (w >= 0 && w < bw) { bw = w; best = [nx, ny]; }
     }
     if (!best) return null;
+    if (KW === KACHEL && !welt.kachel) { const p = feldZielpunkt(welt, best[0], best[1]); return Math.atan2(p.y - y, p.x - x); }   // Engpass: Ersatzpunkt statt Kachelmitte
     return Math.atan2((best[1] + 0.5) * KW - y, (best[0] + 0.5) * KW - x);
   }
 
@@ -3387,11 +3389,17 @@ export class SpielRaum extends Room {
       if (info.verloren > 10 || d > SW.aufgeben) {
         info.ziel = null; info.punkt = { x: ziel.x, y: ziel.y }; info.suche = true; z.jagt = false;
       } else {
-        const w = sieht ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
+        // Sichtlinie (Kachelkarte) frei, aber im Feinraster eine Wand/Ecke im Weg: klemmt er, folgt er kurz dem Wegefeld statt geradeaus
+        if (info.umwegT > 0) info.umwegT -= dt;
+        const direkt = sieht && !(info.umwegT > 0);
+        const w = direkt ? Math.atan2(ziel.y - z.y, ziel.x - z.x) : (this.feldRichtung(z.x, z.y, ebene) ?? z.richtung);
         z.richtung = w;
         const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
         const iv = this.zombieIndiv(info, dt, d < 24 * R);
-        if (!iv.halt && d > (W.spielerRadius + W.zombieRadius + 3) * R) this.zombieGehen(z, w + iv.dw, W.zombieTempoJagen * lahm * dt, dt, info);   // geht bis knapp in Bissreichweite
+        if (!iv.halt && d > (W.spielerRadius + W.zombieRadius + 3) * R) {   // geht bis knapp in Bissreichweite
+          const ging = this.zombieGehen(z, w + iv.dw, W.zombieTempoJagen * lahm * dt, dt, info);
+          if (direkt && !ging) { if ((info.klemmT = (info.klemmT ?? 0) + dt) > 0.5) { info.klemmT = 0; info.umwegT = 2; } } else if (direkt) info.klemmT = 0;
+        }
         // Biss nur bei Berührung (+ ca. 0,5 m): nach aktueller Stelle UND nach der Stelle, die der Spieler gerade angezeigt bekommt (Lag-Kompensation)
         const bissR = (W.spielerRadius + W.zombieRadius + 4) * R;
         let beisst = d < bissR;
@@ -3535,6 +3543,8 @@ export class SpielRaum extends Room {
     // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)
     const schritt = weg * this.baumTempo(welt, z) * Math.min(tierGelaende(welt, x0, y0, W.zombieRadius) || 1, tierGelaende(welt, x0 + Math.cos(w) * weg, y0 + Math.sin(w) * weg, W.zombieRadius) || 1);
     bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.zombieRadius, freiTier);
+    // Engpass (Innenhof-Eingang, schmale Passage): Wo der Zombie beim Verfolgen nicht weiterkommt, aber ein Spieler (kleinerer Radius) durchpasst, rutscht er mit Spielerradius durch
+    if (eifrig && Math.hypot(z.x - x0, z.y - y0) < schritt * 0.3) bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.spielerRadius, freiTier);
     // geschlossene oder verbarrikadierte Tür (Haustür, Zimmertür): nicht durch, sondern dagegen hämmern
     const sperre = this.zombieSperre(z, w, welt);
     if (sperre) {

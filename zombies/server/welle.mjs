@@ -11,6 +11,7 @@
 // und taumelt, leichte Schwarmregeln (Abstand, schwache Kohäsion, lockere Ausrichtung) ergeben einen langgezogenen Haufen.
 // Kommt die Horde in Reichweite von Spielern/Bots/Soldaten/Menschen, löst sich ein Angriffstrupp und jagt sein Ziel mit der
 // normalen Jagdlogik (info.ziel / info.mensch / info.punkt); danach kehrt er zurück oder streunt.
+import { feinDurchgang } from './wegfeld.mjs';
 import { KACHEL, BREITE, HOEHE, WERTE as W, T, BLOCKIERT, frei, drinnen, ladenArt } from '../client/welt.mjs';
 
 export const WELLE_MAX = 1000;       // so viele Zombies je Horde höchstens
@@ -286,7 +287,8 @@ export class Zombiewelle {
     for (let k = 0; k < q.length; k++) {
       const i = q[k], x = i % BREITE, y = (i - x) / BREITE;
       for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-        if (!frei_(nx, ny) || feld[ny * BREITE + nx] !== -1) continue;
+        if (nx < 0 || ny < 0 || nx >= BREITE || ny >= HOEHE || feld[ny * BREITE + nx] !== -1) continue;
+        if (!frei_(nx, ny) && !(BLOCKIERT.has(welt.hole(nx, ny)) && feinDurchgang(welt, x, y, nx, ny))) continue;   // Kachel gesperrt, im Feinraster aber offen (schmaler Durchgang)
         feld[ny * BREITE + nx] = feld[i] + 1; q.push(ny * BREITE + nx);
       }
     }
