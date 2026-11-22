@@ -17,10 +17,10 @@ export const boxerBild = scene => scene.textures.exists('boxer-wanne') ? 'boxer-
 // Zusatzteile und Skalierung des Boxers (Container o: box, bild, sch; Rotation des Containers = Fahrtrichtung)
 export function boxerFahrzeug(scene, o, f, dt) {
   if (!scene.textures.exists('boxer-turm')) return;
-  o.bild.setScale(BOXER.skala);
-  o.sch?.setScale(BOXER.skala);
+  o.bild.setScale(BOXER.skala, BOXER.skalaQuer);
+  o.sch?.setScale(BOXER.skala, BOXER.skalaQuer);
   if (!o.turm) {
-    o.turm = scene.add.image(BOXER.turmX, BOXER.turmY, 'boxer-turm').setOrigin(BOXER.turmOx, BOXER.turmOy).setScale(BOXER.skala);
+    o.turm = scene.add.image(BOXER.turmX, BOXER.turmY, 'boxer-turm').setOrigin(BOXER.turmOx, BOXER.turmOy).setScale(BOXER.skala, BOXER.skalaQuer);
     o.box.addAt(o.turm, 1); o.turmW = Number.isFinite(f.turm) ? f.turm : o.r;
   }
   // Turmwinkel kommt vom Server (dreht dort mit begrenztem Tempo); hier wird nur geglättet. Der Turm hängt im Container der Wanne: lokaler Winkel = Welt − Wanne

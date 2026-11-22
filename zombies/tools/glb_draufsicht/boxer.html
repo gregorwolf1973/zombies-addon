@@ -53,8 +53,8 @@ try {
   else {   // seite: Blick von der rechten Fahrzeugseite, Bug nach rechts
     cam.position.set(cx, cy, b.max.z + 50); cam.up.set(0, 1, 0); cam.lookAt(cx, cy, cz); }
   const sz = new THREE.Scene(); sz.add(root);
-  sz.add(new THREE.AmbientLight(0xffffff, 1.2));
-  const sonne = new THREE.DirectionalLight(0xffffff, 2.2); sonne.position.set(cx - 20, b.max.y + 60, cz - 30); sonne.target.position.set(cx, 0, cz); sz.add(sonne, sonne.target);
+  sz.add(new THREE.AmbientLight(0xffffff, +(q.get('amb') || 1.2)));
+  const sonne = new THREE.DirectionalLight(0xffffff, +(q.get('sonne') || 2.2)); sonne.position.set(cx - 30, b.max.y + 25, cz - 45); sonne.target.position.set(cx, 0, cz); sz.add(sonne, sonne.target);
   r.render(sz, cam);
   out.textContent = 'BILD ' + JSON.stringify({ w, h, min: b.min, max: b.max, px: PX }) + '\n' + r.domElement.toDataURL('image/png');
 } catch (e) { if (e !== 0) out.textContent = 'FEHLER ' + (e && e.stack || e); }
