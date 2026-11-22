@@ -7,6 +7,9 @@
 - Solange jemand im Boxer sitzt, kommt alle 120 s eine Horde mit 20–50 Zombies von vorne auf ihn zu. Steigt der Letzte aus, kommen keine neuen Horden mehr. Bots steigen nicht ein.
 - Backend, Bereich Bundeswehr: Hordenabstand, Hordengröße, Schussfolge und Reichweite des Boxers sind einstellbar.
 - Die Grafik stammt aus dem Modell „Boxer CRV (low-poly)“ von ScurvyWoof (CC BY 4.0) und wurde als Draufsicht gerendert.
+- Zombie-Sicht im Backend einstellbar (Gegner → Zombies → 👁 Zombie-Sicht).
+- Fahrende Fahrzeuge überfahren Zombies: ab ca. 25 km/h sind sie tot. Eine Horde kann ein Auto stoppen oder einen Unfall auslösen. Neuer Ton „Aufprall“.
+- Panzerkanone und Explosion haben eigene Lautstärkeregler bis 200 %, ein Limiter verhindert Übersteuern.
 
 ## 0.81.0 – 22.11.2026
 
