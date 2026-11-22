@@ -6,15 +6,19 @@ import { KACHEL, BREITE, HOEHE } from '../client/welt.mjs';
 import { B11_KARTE, b11Sperrkanten } from './szene_b11_geo.mjs';
 import { frei } from '../client/welt.mjs';
 import { Unfaelle } from './unfall.mjs';
+import { entkoppeln } from './netzfeld.mjs';
 
 export const Fahrzeug = schema({
-  x: t.number(), y: t.number(), richtung: t.number(),
+  x: t.int16(), y: t.int16(),   // übertragen in ganzen Pixeln (server/netzfeld.mjs; der Server rechnet genau)
+  rq: t.uint8(),            // Fahrtrichtung in 256 Stufen (f.richtung im Bogenmaß bleibt Server-Eigenschaft, siehe SpielRaum.netzAbgleich)
   art: t.string(),          // 'bus' | 'auto' | 'laster' | 'polizei' | 'feuerwehr' | 'wrack' | 'evakuierung' (stehender Bus am Tor, server/aufgaben.mjs)
   farbe: t.uint8(),
   haelt: t.boolean(),
   rauch: t.boolean(),       // Unfallfahrzeug raucht (server/unfall.mjs; der Client zeichnet Rauch darüber)
   turm: t.number(),         // Leopard (Evakuierungspanzer): Turmrichtung in Weltkoordinaten (Server dreht ihn mit begrenztem Tempo)
 }, 'Fahrzeug');
+entkoppeln(Fahrzeug, ['x', 'y']);
+Fahrzeug.prototype.richtung = 0;
 
 const FAHRBAR = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service']);
 const KOSTEN = { primary: 0.55, secondary: 0.6, tertiary: 0.75, unclassified: 1, residential: 1.2, living_street: 1.6, service: 3 };

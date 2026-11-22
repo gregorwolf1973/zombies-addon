@@ -233,7 +233,7 @@ export class Stuetzpunkt {
     if (this.sendT > 0) return;
     this.sendT = bewegt ? 0.2 : 1;
     const rund = a => Math.round(a * 10) / 10;
-    this.raum.broadcast('bwSoldaten', { s: this.schuetzen.map(q => [q.n, rund(q.x), rund(q.y), Math.round(q.blick * 100) / 100, q.tot ? 1 : 0]) });
+    this.raum.sendeNah('bwSoldaten', { s: this.schuetzen.map(q => [q.n, rund(q.x), rund(q.y), Math.round(q.blick * 100) / 100, q.tot ? 1 : 0]) }, [this.sp && { x: this.sp.x * KACHEL, y: this.sp.y * KACHEL }, ...this.schuetzen]);   // nur Spieler in der Nähe, nur bei Änderung
   }
 
   // Soldaten rufen „Halt, sofort stehen bleiben!“, wenn sich ein Spieler dem Lager nähert (je Spieler alle 45–60 s),

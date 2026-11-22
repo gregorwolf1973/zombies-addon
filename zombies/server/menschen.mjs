@@ -2,6 +2,7 @@
 // Menschen gehen von zu Hause zum Einkaufen, zum Platz und zur Bushaltestelle, ein Bus fährt die Haltestellen ab.
 // Zombies wittern Menschen und beißen sie; Gebissene werden nach einer einstellbaren Zeit selbst zu Zombies.
 import { schema, t } from '@colyseus/schema';
+import { entkoppeln } from './netzfeld.mjs';
 import { KACHEL, BREITE, HOEHE, kachelVon, tempoVon, T, findeWeg, sichtfrei, bewege, baumFaktor, frei, ladenArt, zufall, DINGE, WERTE as W } from '../client/welt.mjs';
 
 export const Mensch = schema({
@@ -16,6 +17,7 @@ export const Mensch = schema({
   versteckt: t.boolean(),      // geduckt im Versteck (Zombies bemerken sie viel schwerer)
   folgt: t.boolean(),          // folgt einem Spieler (angesprochen, wird gerettet)
 }, 'Mensch');
+entkoppeln(Mensch, ['x', 'y']);
 
 
 export const POLIZIST_ANTEIL = 0.06;
