@@ -89,7 +89,7 @@ function abgleich1(p, x, einst) {
 }
 
 // Ist die Waffe in Platz i noch brauchbar (Nahwaffe oder Schuss da)?
-function brauchbar(p, x, i) {
+export function brauchbar(p, x, i) {
   const name = p[PLATZ_FELD[i]];
   if (!name) return false;
   const w = WAFFEN[name];
@@ -140,6 +140,13 @@ export function startNachladen(raum, p, x, einst) {
   return true;
 }
 
+// kein jagender Zombie näher als 15 m (Maßstab 8 px/m, drinnen mit Raumfaktor)?
+function ruhig(raum, p) {
+  const r = 120 * (raum.wv(p.ebene)?.reich ?? 1);
+  for (const z of raum.state.zombies.values()) if (z.jagt && (z.ebene ?? '') === (p.ebene ?? '') && Math.hypot(z.x - p.x, z.y - p.y) < r) return false;
+  return true;
+}
+
 // jeden Tick je Spieler (auch Bots): Nachladen vorantreiben, bei leerem Magazin selbst nachladen, bei leerer Waffe wechseln
 export function schritt(raum, client, p, x, dt, einst) {
   abgleich(p, x, einst);
@@ -155,6 +162,8 @@ export function schritt(raum, client, p, x, dt, einst) {
     return;
   }
   if (p.magazin <= 0 && vorratVon(p, w) > 0) { startNachladen(raum, p, x, einst); return; }
+  // ruhiger Moment (kein jagender Zombie näher als ~15 m) und Magazin unter der Hälfte: von selbst auffüllen
+  if (p.magazin > 0 && p.magazin < magGroesse(p.waffe, einst) * 0.5 && vorratVon(p, w) > 0 && ruhig(raum, p) && startNachladen(raum, p, x, einst)) return;
   // Magazin und Vorrat leer: auf den anderen Platz (Fernwaffe mit Schuss oder Nahwaffe), sonst Faust
   if (p.magazin <= 0) {
     const ziel = [1 - p.wplatz].find(i => brauchbar(p, x, i));

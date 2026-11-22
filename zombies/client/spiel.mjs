@@ -3498,7 +3498,7 @@ class Ort extends Phaser.Scene {
       else if (wf.fern) {
         // „🔫 Pistole 12/15 · 48“: Magazin/Max · Vorrat (Pfeile bzw. Granaten beim Armbrust/Granatwerfer)
         const vorrat = vorratVon(ich, wf), leer = !(ich.magazin > 0) && vorrat <= 0;
-        waffe = `${dingIcon(ich.waffe, 16)} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ' · 🔄 lädt nach' : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
+        waffe = `${dingIcon(ich.waffe, 16)} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ` · <b style="color:#ffb300">🔄 Nachladen … ${Math.round(Math.min(1, ich.nachladen) * 100)} %</b>` : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
       } else waffe = `${dingIcon(ich.waffe, 16)} ${d.name}${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
       htmlSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
         + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));

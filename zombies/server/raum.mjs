@@ -323,6 +323,7 @@ export class SpielRaum extends Room {
     const x = this.extra.get(client.sessionId);
     if (!x) return null;
     if (m.verz !== undefined) { const v = Number(m.verz); if (Number.isFinite(v)) x.verz = Math.max(0, Math.min(VERZ_MAX_MS, Math.round(v))); }   // Anzeigeverzögerung des Clients (ms) für die Biss-Prüfung
+    if (m.f === true && x.feuerAus) x.feuerSchuldT = 0.5;   // Tipper auf den Feuerknopf: ein Schuss geschuldet, auch wenn der Knopf vor dem nächsten Tick wieder los ist
     x.feuerAus = m.f === false;   // Feuerknopf-Modus: Client meldet f:false, solange der Knopf nicht gehalten wird (fehlt f: wie bisher automatisch)
     const n = Number(m.n), d = Number(m.d);
     if (Number.isInteger(n) && n >= 0 && Number.isFinite(d)) {
@@ -2779,7 +2780,7 @@ export class SpielRaum extends Room {
     p.sicher = safe ? safe.id : this.imLagerSafe(p) ? 'lager' : '';
     if (safe) { x.letzterSafe = safe.id; if (!x.bot) this.teamSafe = safe.id; }   // Team-Safe: zuletzt von einem echten Spieler betreten
     if (p.unten || p.anBord || p.kamera) { this.eingabeVerwerfen(p, x); return; }   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
-    if (x.sprungT > 0) { x.sprungT -= dt; this.eingabeVerwerfen(p, x); return; }   // Zaunsprung läuft: keine Bewegung, Client und Server bleiben einig
+    if (x.sprungT > 0) { x.sprungT -= dt; this.eingabeVerwerfen(p, x); this.waffeSchritt(id, p, x, dt, welt, false); return; }   // Zaunsprung läuft: keine Bewegung, Client und Server bleiben einig
     const schritte = this.eingabeSchritte(p, x, dt);
     const e = x.eingabe;
     if (p.zombie > 0) {
@@ -2821,26 +2822,63 @@ export class SpielRaum extends Room {
     this.uebergang(id, p, x, dt);
     if (p.ebene !== ebeneVorher) this.eingabeVerwerfen(p, x);   // neue Ebene: alte Eingaben gehören zum alten Ort
     else this.tuerAuto(p, x, dt, e);
-    // automatischer Angriff (nicht während man durchsucht)
+    this.waffeSchritt(id, p, x, dt, welt, bewegt);
+  }
+
+  // Waffe je Tick: Nachladen, Abbruch von Aktionen bei Gefahr, automatischer Angriff (läuft auch während des Zaunsprungs)
+  waffeSchritt(id, p, x, dt, welt, bewegt) {
+    const client = x.bot ? null : this.clients.find(c => c.sessionId === id);
     // Magazin, Nachladen und Waffenwechsel bei leerer Waffe (Server ist maßgeblich; Bots wie Spieler)
-    WP.schritt(this, x.bot ? null : this.clients.find(c => c.sessionId === id), p, x, dt, SpielRaum.einstellungen);
-    if (p.munition <= MUNITION_KISTE_AB) munitionPruefen(p, x.bot ? null : t => this.clients.find(c => c.sessionId === id)?.send('meldung', { text: t }));   // Reserve-Kiste öffnen
-    let pause = x.pause - dt;
-    if (pause <= 0 && !p.aktion) {
-      const [name, wf0] = aktiveWaffe(p);
-      const meter = SpielRaum.einstellungen.reichweite?.[name];
-      const ew = SpielRaum.einstellungen.waffen?.[name];   // Verwaltung: Schaden und Abklingzeit je Waffe
-      const wf = { ...wf0 };
-      if (meter) wf.reichweite = meter * KACHEL / 4;   // eingestellte Reichweite (Meter, 4 m je Kachel)
-      if (!wf0.fern && welt.reich) wf.reichweite = Math.round(wf.reichweite * welt.reich);   // Nahkampf drinnen: Reichweite im Maßstab des Raums
-      if (ew) {
-        if (wf0.nebenSchaden) wf.nebenSchaden = wf0.nebenSchaden * ew.schaden / wf0.schaden;
-        wf.schaden = ew.schaden; wf.pause = ew.pause;
+    WP.schritt(this, client, p, x, dt, SpielRaum.einstellungen);
+    if (p.munition <= MUNITION_KISTE_AB) munitionPruefen(p, x.bot ? null : t => client?.send('meldung', { text: t }));   // Reserve-Kiste öffnen
+    const reich = welt.reich ?? 1, nahR = 24 * reich;   // „nah“ = 3 m
+    x.feuerSchuldT = Math.max(0, (x.feuerSchuldT ?? 0) - dt);
+    // Kommt ein Zombie (jagt dich innerhalb 6 m oder steht innerhalb 3 m in Sicht), bricht jede Aktion ab: erst kämpfen
+    if (p.aktion && !p.sicher) {
+      let gefahr = false;
+      for (const [zid, z] of this.state.zombies) {
+        if ((z.ebene ?? '') !== (p.ebene ?? '')) continue;
+        const d = Math.hypot(z.x - p.x, z.y - p.y);
+        if ((d <= nahR && sichtfrei(welt, p.x, p.y, z.x, z.y)) || (d <= 48 * reich && this.zombieInfo.get(zid)?.ziel === id)) { gefahr = true; break; }
       }
-      // Fernwaffe lädt nach oder Magazin leer: kein Schuss (der Server lädt von selbst nach)
+      if (gefahr) { p.aktion = ''; p.fortschritt = 0; x.aktionZiel = null; client?.send('meldung', { text: 'Abgebrochen – Zombie!' }); }
+    }
+    let pause = x.pause - dt;
+    if (pause > 0.5 && x.pauseFern && this.naechsterZombie(p.x, p.y, nahR, p)) pause = 0.5;   // langer Schussabstand nach fernem Ziel: nahem Zombie nicht ausliefern
+    if (pause <= 0 && !p.aktion) {
+      let [name, wf0] = aktiveWaffe(p);
+      const bauWf = (n, w0) => {
+        const meter = SpielRaum.einstellungen.reichweite?.[n];
+        const ew = SpielRaum.einstellungen.waffen?.[n];   // Verwaltung: Schaden und Abklingzeit je Waffe
+        const w = { ...w0 };
+        if (meter) w.reichweite = meter * KACHEL / 4;   // eingestellte Reichweite (Meter, 4 m je Kachel)
+        if (!w0.fern && welt.reich) w.reichweite = Math.round(w.reichweite * welt.reich);   // Nahkampf drinnen: Reichweite im Maßstab des Raums
+        if (ew) {
+          if (w0.nebenSchaden) w.nebenSchaden = w0.nebenSchaden * ew.schaden / w0.schaden;
+          w.schaden = ew.schaden; w.pause = ew.pause;
+        }
+        return w;
+      };
+      let wf = bauWf(name, wf0);
+      // Fernwaffe lädt nach oder Magazin leer: kein Schuss (der Server lädt von selbst nach) – dann Stoß
       const ladet = wf0.fern && (p.nachladen > 0 || p.magazin <= 0);
-      let ziel = ladet || wf0.wurf || x.feuerAus ? null : this.naechsterZombie(p.x, p.y, wf.reichweite, p);
-      if (ziel && wf.granate && Math.hypot(ziel[1].x - p.x, ziel[1].y - p.y) < GRANATE.radius + 12) ziel = null;   // zu nah: Splitter träfen den Schützen
+      // Feuerknopf-Modus: ein kurzer Tipper zwischen zwei Ticks bleibt als „ein Schuss geschuldet“ (0,5 s) erhalten
+      const feuerAus = x.feuerAus && !(x.feuerSchuldT > 0);
+      let ziel = null, zuNah = false;
+      if (!feuerAus && !ladet && !wf0.wurf) {
+        ziel = this.naechsterZombie(p.x, p.y, Math.min(wf.reichweite, nahR), p) || this.naechsterZombie(p.x, p.y, wf.reichweite, p);   // nächster Zombie (< 3 m) zuerst
+        if (ziel && wf.granate && Math.hypot(ziel[1].x - p.x, ziel[1].y - p.y) < GRANATE.radius + 12) { ziel = null; zuNah = true; }   // zu nah: Splitter träfen den Schützen
+      }
+      if (!feuerAus && !ziel && (ladet || wf0.wurf || zuNah)) {
+        // Waffe kann nicht angreifen: Faust-Stoß, sonst (Wurf/zu nah) die andere Waffe nehmen
+        name = 'faust'; wf0 = WAFFEN.faust; wf = bauWf(name, wf0);
+        ziel = this.naechsterZombie(p.x, p.y, wf.reichweite, p);
+        if (!ziel && !ladet && p.nachladen <= 0) {
+          const anderer = 1 - p.wplatz;
+          const nahJagd = [...this.state.zombies].some(([zid, z]) => (z.ebene ?? '') === (p.ebene ?? '') && this.zombieInfo.get(zid)?.ziel === id && Math.hypot(z.x - p.x, z.y - p.y) < 48 * reich);
+          if (nahJagd && !WAFFEN[p[`wp${anderer}`]]?.wurf && WP.brauchbar(p, x, anderer) && WP.wechsle(this, client, p, x, anderer, SpielRaum.einstellungen)) pause = 0.2;
+        }
+      }
       if (ziel) {
         const [zid, z] = ziel;
         const w = Math.atan2(z.y - p.y, z.x - p.x);
@@ -2880,11 +2918,14 @@ export class SpielRaum extends Room {
           treffer([ziel], wf.schaden);
         }
         pause = wf.pause;
+        x.pauseFern = !!wf.fern && Math.hypot(z.x - p.x, z.y - p.y) >= nahR;   // Schuss auf fernes Ziel: nahe Zombies müssen nicht die volle Pause warten
+        x.feuerSchuldT = 0;
         if (!bewegt) p.richtung = w;   // nur im Stehen zum Ziel drehen; im Lauf bleibt die Laufrichtung (sonst läuft die Figur seitwärts/rückwärts)
       } else pause = 0;
     }
     x.pause = Math.max(0, pause);
   }
+
 
   // Über Hecken, Gartenzäune und -mauern steigen: kurz (0,25 s) dagegenlaufen, dann Sprung direkt hinter den Zaun.
   // Kurze Aussetzer (Rutschen am Zaun, Zellkante) setzen den Zähler nicht zurück; während des Sprungs (Client: 0,32 s) ruht die Eingabe.
