@@ -3262,7 +3262,9 @@ class Ort extends Phaser.Scene {
     if (funkPunkt && Math.hypot(x - funkPunkt[0], y - funkPunkt[1]) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
     // Vorratskisten des Bundeswehr-Lagers (Safe House, solange es steht): gemeinsame Kisten, Munition darf hinein
     if (!ich.ebene && raum.state.stuetzpunkt === 'steht') {
-      const vk = this.welt.stuetzpunkt?.teile.find(q => q.art === 'vorratskiste' && Math.hypot(x - q.x, y - q.y) < AKTION_ABSTAND + 20);
+      // die NÄCHSTE Vorratskiste (vier stehen nebeneinander; der Server nimmt ebenfalls die nächste, sonst zeigt das Fenster eine andere Kiste als die, in die man legt)
+      let vk = null, vd = AKTION_ABSTAND + 20;
+      for (const q of this.welt.stuetzpunkt?.teile ?? []) { if (q.art !== 'vorratskiste') continue; const dd = Math.hypot(x - q.x, y - q.y); if (dd < vd) { vd = dd; vk = q; } }
       if (vk) return { art: 'kiste', text: 'Vorratskiste öffnen (Lager)', safe: { id: vk.id, name: 'Bundeswehr-Lager' } };
     }
     {
@@ -3607,7 +3609,7 @@ class Ort extends Phaser.Scene {
       fundPruefen(this.lokal, this.aktEbene ? this.wv(this.aktEbene) : null);
     }
     if (zweit && knopf2.__text !== zweit.text) { knopf2.__text = zweit.text; knopf2.textContent = nurText(zweit.text); }
-    if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste')) kisteZu();
+    if (kisteOffen && (!this.kontext || this.kontext.art !== 'kiste' || this.kontext.safe?.id !== kisteOffen.id)) { const neu = this.kontext?.art === 'kiste' ? this.kontext.safe : null; kisteZu(); if (neu) kisteAuf(neu); }   // andere (nähere) Kiste: Fenster wechselt mit
     if (ich && this.lokal) auswahlPruefen(raum.state.boden, ich, { x: this.lokal.x, y: this.lokal.y }, reichVon(this.wv(ich.ebene), AKTION_ABSTAND));   // bleibt offen, aktualisiert sich, schließt nur wenn nichts mehr da ist
     if (kisteOffen) kisteZeigen(ich, kisteOffen);
     tauschRucksack();
