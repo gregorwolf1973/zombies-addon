@@ -33,6 +33,7 @@ export const GERAET_SCHLUESSEL = {
   musik: 'zob_musik',              // Musik an/aus (Standard an)
   autoradio: 'zob_autoradio',      // Autoradio an/aus (Standard an), unabhängig von der Musik
   schiessen: 'zob_schiessen',      // 'auto' (Standard) oder 'knopf'
+  diagnose: 'zob_diagnose',        // Diagnose-Anzeige (FPS, Ping, kB/s) 'an' oder 'aus' (Standard aus)
   kartenbild: 'zob_kartenbild',    // Eckkarte: 'luft' (Standard, Luftbild-Hintergrund) oder 'karte' (gezeichnete Karte)
 };
 
