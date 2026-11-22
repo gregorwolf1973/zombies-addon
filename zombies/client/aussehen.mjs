@@ -12,6 +12,7 @@ import { zeichneEinkaufswagen } from './einkaufswagen.mjs';
 import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach, vektorGebaeude } from './vektor.mjs';
 import { kulBoden, fotoStatus, zeichneFoto, zeichneSchatten } from './kulisse.mjs';
 import { imGebiet } from './luftbild.mjs';
+import { SCHATTEN_JE_M } from './kulisse_regeln.mjs';
 import { zeichneNebengebaeude, zeichnePools } from './nebenobjekte.mjs';
 
 const TAU = Math.PI * 2;
@@ -505,24 +506,35 @@ function autoVariante(b) {
   const wahl = farbige.length && h % 3 !== 0 ? farbige : pool;
   return wahl[Math.floor(h / 220) % wahl.length];
 }
+// Fahrzeugschatten: fällt wie die Kulisse-Schatten der Häuser in dieselbe WELTrichtung (Sonne fest Südost → Schatten nach Nordwesten),
+// nicht im gedrehten Fahrzeugsystem. Versatz einer ca. 1 m hohen Karosserie in Pixeln; Deckkraft ~40 % stärker als früher.
+export const FZ_SCHATTEN = { dx: SCHATTEN_JE_M.dx * 1.0, dy: SCHATTEN_JE_M.dy * 1.0, alpha: 0.42 };
+// Weltversatz (dx, dy) in das Koordinatensystem umrechnen, das um den Winkel ang gedreht und mit (kx, ky) skaliert ist
+function weltVersatz(ang, kx = 1, ky = 1, f = 1) {
+  const c = Math.cos(ang), s = Math.sin(ang), dx = FZ_SCHATTEN.dx * f, dy = FZ_SCHATTEN.dy * f;
+  return [(c * dx + s * dy) / kx, (-s * dx + c * dy) / ky];
+}
 export function autoVonOben(ctx, b) {
   const lang = 46, breit = 21, f = AUTO_FARBEN[b.farbe % AUTO_FARBEN.length];
   const bildAuto = autoVariante(b);
   ctx.save();
   ctx.translate(b.x, b.y);
-  if (Number.isFinite(b.winkel)) ctx.rotate(b.winkel);   // längs zur Straße
-  else if (b.senkrecht) ctx.rotate(Math.PI / 2);
-  if (!b.vorwaerts && (b.farbe + Math.round(b.x)) % 2) ctx.rotate(Math.PI);   // mal vorwärts, mal rückwärts geparkt
+  let ang = 0;
+  if (Number.isFinite(b.winkel)) ang = b.winkel;   // längs zur Straße
+  else if (b.senkrecht) ang = Math.PI / 2;
+  if (!b.vorwaerts && (b.farbe + Math.round(b.x)) % 2) ang += Math.PI;   // mal vorwärts, mal rückwärts geparkt
+  ctx.rotate(ang);
+  const sAlpha = b.ohneSchatten ? 0 : FZ_SCHATTEN.alpha;
   if (bildAuto) {
-    const [l, br] = autoSollMass(bildAuto);
-    ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.roundRect(-l / 2 + 3, -br / 2 + 4, l, br, 7); ctx.fill();
+    const [l, br] = autoSollMass(bildAuto), [sx, sy] = weltVersatz(ang);
+    if (sAlpha) { ctx.fillStyle = `rgba(0,0,0,${sAlpha})`; ctx.beginPath(); ctx.roundRect(-l / 2 + sx, -br / 2 + sy, l, br, 7); ctx.fill(); }
     zeichneAutoBild(ctx, bildAuto, 0, 0);
     ctx.restore();
     return;
   }
   const [zl, zb] = fzPx('pkw'); ctx.scale(zl / lang, zb / breit);   // gezeichnete Fassung (ohne Bildbogen) auf PKW-Maß 4,5 × 2 m
   const rund = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
-  ctx.fillStyle = 'rgba(0,0,0,.32)'; rund(-lang / 2 + 3, -breit / 2 + 4, lang, breit, 7); ctx.fill();
+  if (sAlpha) { const [sx, sy] = weltVersatz(ang, zl / lang, zb / breit); ctx.fillStyle = `rgba(0,0,0,${sAlpha})`; rund(-lang / 2 + sx, -breit / 2 + sy, lang, breit, 7); ctx.fill(); }
   const g = ctx.createLinearGradient(0, -breit / 2, 0, breit / 2);
   g.addColorStop(0, f); g.addColorStop(0.5, f); g.addColorStop(1, 'rgba(0,0,0,.35)');
   ctx.fillStyle = f; rund(-lang / 2, -breit / 2, lang, breit, 7); ctx.fill();
@@ -630,16 +642,18 @@ function zaunLinien(ctx, welt, rect) {
     };
     if (z.a !== 'h' && z.a !== 'w') strich('rgba(70,62,50,.3)', 12);   // Grundstreifen in der blockierten Breite (Kollision ±6 px), sonst wäre ein Drahtzaun fast unsichtbar
     if (z.a === 'h') {
-      strich('rgba(0,0,0,.22)', 19, 3, 4); strich('#2f6b2a', 19);
+      // Hecke ~0,9 m breit (7 px, 8 px = 1 m), glatte Linie; Kollision bleibt breiter (Feinraster)
+      const sv = FZ_SCHATTEN.dx * 0.5, sw = FZ_SCHATTEN.dy * 0.5;   // niedrige Hecke: halber Schattenversatz, selbe Weltrichtung wie die Häuser
+      strich(`rgba(0,0,0,${FZ_SCHATTEN.alpha * 0.7})`, 7, sv, sw); strich('#2f6b2a', 7);
       ctx.fillStyle = '#3f8a37';
-      entlang(9, (x, y, s) => { ctx.beginPath(); ctx.arc(x + (hash(s, 1) - 0.5) * 8, y + (hash(1, s) - 0.5) * 8, 4.5, 0, TAU); ctx.fill(); });
+      entlang(5, (x, y, s) => { ctx.beginPath(); ctx.arc(x + (hash(s, 1) - 0.5) * 3, y + (hash(1, s) - 0.5) * 3, 2.4, 0, TAU); ctx.fill(); });
     } else if (z.a === 'm') {
-      strich('rgba(0,0,0,.18)', 3, 2, 2); strich('#90a4ae', 2);
+      strich('rgba(0,0,0,.25)', 3, FZ_SCHATTEN.dx * 0.3, FZ_SCHATTEN.dy * 0.3); strich('#90a4ae', 2);
       ctx.fillStyle = '#455a64'; entlang(22, (x, y) => ctx.fillRect(x - 2.5, y - 2.5, 5, 5));
     } else if (z.a === 'w') {
-      strich('rgba(0,0,0,.25)', 10, 3, 3); strich('#8a8580', 10); strich('#b5b0a8', 5);
+      strich('rgba(0,0,0,.35)', 10, FZ_SCHATTEN.dx * 0.5, FZ_SCHATTEN.dy * 0.5); strich('#8a8580', 10); strich('#b5b0a8', 5);
     } else {
-      strich('rgba(0,0,0,.22)', 7, 3, 3); strich('#a1887f', 6); strich('#8d6e63', 2);
+      strich('rgba(0,0,0,.31)', 7, FZ_SCHATTEN.dx * 0.4, FZ_SCHATTEN.dy * 0.4); strich('#a1887f', 6); strich('#8d6e63', 2);
       ctx.fillStyle = '#5d4037'; entlang(18, (x, y) => ctx.fillRect(x - 3.5, y - 3.5, 7, 7));
     }
   });
@@ -721,12 +735,12 @@ function traktorVonOben(ctx, x, y) {
 }
 
 // Bus von oben: lang, mit Fensterreihen und Dachaufbauten
-export function busVonOben(ctx, x, y, senkrecht, v) {
+export function busVonOben(ctx, x, y, senkrecht, v, ohneSchatten = false) {
   ctx.translate(x, y);
   if (senkrecht) ctx.rotate(Math.PI / 2);
   const [L, B] = fzPx('bus');   // 12 × 2,7 m
   const farbe = v < 0.5 ? '#c62828' : v < 0.8 ? '#1565c0' : '#f9a825';
-  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(-L / 2 + 4, -B / 2 + 5, L, B);
+  if (!ohneSchatten) { const [sx, sy] = weltVersatz(senkrecht ? Math.PI / 2 : 0); ctx.fillStyle = `rgba(0,0,0,${FZ_SCHATTEN.alpha})`; ctx.fillRect(-L / 2 + sx, -B / 2 + sy, L, B); }
   ctx.fillStyle = farbe; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-L / 2, -B / 2, L, B, 6) : ctx.rect(-L / 2, -B / 2, L, B); ctx.fill();
   ctx.fillStyle = '#eceff1'; ctx.fillRect(-L / 2 + 6, -B / 2 + 4, L - 12, B - 8);    // helles Dach
   ctx.fillStyle = '#263238';

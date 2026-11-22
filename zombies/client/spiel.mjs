@@ -11,7 +11,7 @@ import { laternen, tuerPose, zeichneSafeEingang } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt, aussehenMigriert } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
-import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
+import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, FZ_SCHATTEN, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
@@ -273,7 +273,6 @@ try {
 // Gepanzerter Schulbus von oben (Front rechts, Länge 124 px): knallgelb-orange, Warnstreifen, Gitter vor den Fenstern, Gewehrläufe, rotes Dachschild
 function zeichneSchulbus(c, breit, hoch) {
   const L = 124, B = 30, x0 = (breit - L) / 2, y0 = (hoch - B) / 2, mx = breit / 2, my = hoch / 2;
-  c.fillStyle = 'rgba(0,0,0,.3)'; c.beginPath(); c.roundRect(x0 + 3, y0 + 4, L, B, 6); c.fill();
   // Gewehrläufe seitlich aus den Fenstern (unter dem Aufbau gezeichnet, ragen heraus)
   c.strokeStyle = '#1c1c1c'; c.lineWidth = 2.2; c.lineCap = 'round';
   for (const fx of [26, 50, 74, 98]) for (const sg of [-1, 1]) {
@@ -1547,7 +1546,7 @@ class Ort extends Phaser.Scene {
     if (!zeichneSchattenStueck(ts.getContext(), st.B, st.H, this.welt, st.rect)) { this.textures.remove('schatten-' + st.key); return; }
     ts.refresh(); this.kanteFesthalten(ts);
     st.maske = schattenMaske(ts.getContext(), st.B, st.H);   // Schattenraster für „Figuren im Schatten dunkler“
-    st.schatten = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'schatten-' + st.key).setOrigin(0).setDepth(0.5).setAlpha(this.schattenAlpha ?? 0.2).setVisible(!this.aktEbene);
+    st.schatten = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'schatten-' + st.key).setOrigin(0).setDepth(0.5).setAlpha(this.schattenAlpha ?? 0.28).setVisible(!this.aktEbene);
   }
   // Liegt (x, y) im Haus- oder Baumschatten? Raster 4 px je Zelle aus dem Schattenbild des Kartenstücks (nur Boden, nicht drinnen)
   imSchatten(x, y) {
@@ -1575,7 +1574,7 @@ class Ort extends Phaser.Scene {
   }
   schattenAlphaSetzen() {
     const st = raum.state, uhr = st.uhr ?? 480;
-    const a = 0.2 * schattenFaktor(1 - helligkeit(uhr), st.nebel ?? 0);
+    const a = 0.28 * schattenFaktor(1 - helligkeit(uhr), st.nebel ?? 0);
     if (Math.abs(a - (this.schattenAlpha ?? -1)) < 0.004) return;
     this.schattenAlpha = a;
     for (const s of this.stuecke.values()) s.schatten?.setAlpha(a);
@@ -1698,13 +1697,12 @@ class Ort extends Phaser.Scene {
       // echte Maße (Laster 9 × 2,9 m, Polizei 4,9 × 2 m; client/masse.mjs, LAENGE in server/verkehr.mjs): zeichneAutoBild bringt das Sprite darauf
       const e = art === 'polizei' ? autoAnimEintrag(sp, anim) : sp;
       c.save(); c.translate(breit / 2, hoch / 2); zeichneAutoBild(c, e, 0, 0); c.restore();
-    } else if (art === 'bus') busVonOben(c, breit / 2, hoch / 2, false, 0.6);
+    } else if (art === 'bus') busVonOben(c, breit / 2, hoch / 2, false, 0.6, true);
     else if (art === 'evakuierung') {   // Schulbus 12 × 2,7 m (gezeichnet für 124 × 30 px)
       const [l, b] = fzPx('evakuierung');
       c.save(); c.translate(breit / 2, hoch / 2); c.scale(l / 124, b / 30); c.translate(-breit / 2, -hoch / 2); zeichneSchulbus(c, breit, hoch); c.restore();
     } else if (art === 'feuerwehr') {
       c.save(); c.translate(0, hoch / 2); c.scale(1, 22 / 24); c.translate(0, -hoch / 2);   // Drehleiter 9,5 × 2,7 m
-      c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(6, 7, 74, 24);
       c.fillStyle = '#c62828'; c.beginPath(); c.roundRect(2, 4, 76, 24, 5); c.fill();
       c.fillStyle = '#eceff1'; c.fillRect(8, 8, 44, 16);                     // Drehleiter
       c.strokeStyle = '#90a4ae'; c.lineWidth = 1.5; for (let x = 10; x < 52; x += 6) { c.beginPath(); c.moveTo(x, 8); c.lineTo(x, 24); c.stroke(); }
@@ -1715,7 +1713,6 @@ class Ort extends Phaser.Scene {
       c.save(); c.translate(breit / 2, hoch / 2); c.scale(72 / 87, 23 / 26); c.translate(-breit / 2, -hoch / 2);   // gezeichnete Fassung auf 9 × 2,9 m
       // Kastenwagen: Ladefläche mit Plane, Fahrerhaus vorn (rechts)
       const plane = ['#eceff1', '#1565c0', '#f9a825', '#2e7d32'][farbe % 4];
-      c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(6, 7, 84, 24);
       c.fillStyle = plane; c.beginPath(); c.roundRect(2, 4, 64, 26, 3); c.fill();
       c.fillStyle = 'rgba(0,0,0,.14)'; for (let x = 10; x < 62; x += 10) c.fillRect(x, 5, 1.5, 24);
       c.fillStyle = 'rgba(255,255,255,.2)'; c.fillRect(4, 6, 60, 3);
@@ -1725,17 +1722,26 @@ class Ort extends Phaser.Scene {
       c.fillStyle = '#e53935'; c.fillRect(2, 7, 2, 4); c.fillRect(2, 23, 2, 4);
       c.restore();
     } else if (art === 'wrack') {
-      autoVonOben(c, { x: breit / 2, y: hoch / 2, senkrecht: false, farbe: 4, gezeichnet: true });
+      autoVonOben(c, { x: breit / 2, y: hoch / 2, senkrecht: false, farbe: 4, gezeichnet: true, ohneSchatten: true });
       c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(30,20,15,.8)'; c.fillRect(0, 0, breit, hoch);
       c.fillStyle = 'rgba(120,60,20,.5)'; for (let i = 0; i < 12; i++) c.fillRect(8 + Math.random() * 44, 8 + Math.random() * 18, 3, 3);
       c.globalCompositeOperation = 'source-over';
     } else {
       const f = art === 'polizei' ? 2 : farbe;
-      autoVonOben(c, { id: 'fz' + art + f * 7919, x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f, vorwaerts: true, gezeichnet: art === 'polizei' });
+      autoVonOben(c, { id: 'fz' + art + f * 7919, x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f, vorwaerts: true, gezeichnet: art === 'polizei', ohneSchatten: true });
       if (art === 'polizei') { c.fillStyle = '#1565c0'; c.fillRect(14, hoch / 2 - 7, 32, 2); c.fillRect(14, hoch / 2 + 5, 32, 2); c.fillStyle = '#263238'; c.fillRect(28, hoch / 2 - 4, 5, 8); }
     }
     t.refresh();
     return key;
+  }
+
+  // Schattenbild eines Fahrzeugs: schwarze Silhouette der Fahrzeugtextur (Textur 'sh-<key>'); wird in Weltrichtung versetzt (FZ_SCHATTEN), nicht mit dem Fahrzeug gedreht
+  fahrzeugSchattenTextur(key) {
+    const k = 'sh-' + key;
+    if (this.textures.exists(k)) return k;
+    const q = this.textures.get(key).getSourceImage(), t = this.textures.createCanvas(k, q.width, q.height), c = t.getContext();
+    c.drawImage(q, 0, 0); c.globalCompositeOperation = 'source-in'; c.fillStyle = '#000'; c.fillRect(0, 0, q.width, q.height); t.refresh();
+    return k;
   }
 
   // Brände: Flammen und Rauch als Partikel; ausgebrannte Häuser und Autos dunkel
@@ -2446,13 +2452,15 @@ class Ort extends Phaser.Scene {
       if (!o) {
         const bild = this.add.image(0, 0, key);
         const licht = this.add.graphics();
-        o = { box: this.add.container(f.x, f.y, [bild, licht]).setDepth(4.6), bild, licht, x: f.x, y: f.y, r: f.richtung };
+        const sch = f.art === 'evakuierung' && evakArtVon(raum.state) === 'flugzeug' ? null : this.add.image(0, 0, this.fahrzeugSchattenTextur(key)).setDepth(4.55).setAlpha(FZ_SCHATTEN.alpha);
+        o = { box: this.add.container(f.x, f.y, [bild, licht]).setDepth(4.6), bild, licht, sch, x: f.x, y: f.y, r: f.richtung };
         this.busObj.set(id, o);
       }
-      if (o.bild.texture.key !== key) o.bild.setTexture(key);
+      if (o.bild.texture.key !== key) { o.bild.setTexture(key); o.sch?.setTexture(this.fahrzeugSchattenTextur(key)); }
       o.x += (f.x - o.x) * glatt; o.y += (f.y - o.y) * glatt;
       o.r = Phaser.Math.Angle.RotateTo(o.r, f.richtung, dt * 6);
       o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
+      o.sch?.setPosition(o.x + FZ_SCHATTEN.dx, o.y + FZ_SCHATTEN.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible);
       o.licht.clear();
       // dicht vorbeifahrende Autos und Busse rauschen vorbei; jedes dritte Auto hat das Radio an
       if ((f.art === 'auto' || f.art === 'bus' || f.art === 'laster') && this.lokal && !this.aktEbene) {
@@ -2509,7 +2517,7 @@ class Ort extends Phaser.Scene {
     }
     for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id) || s.fahrzeuge.get(id).art === 'wrack') {
       ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); ton.sireneStoppen(o.kette); o.sirene = o.radio = o.kette = null;
-      if (!s.fahrzeuge?.has(id)) { o.box.destroy(); this.busObj.delete(id); }
+      if (!s.fahrzeuge?.has(id)) { o.box.destroy(); o.sch?.destroy(); this.busObj.delete(id); }
     }
     this.feuerDarstellen(s);
     this.spurenDarstellen(s);
@@ -2550,8 +2558,7 @@ class Ort extends Phaser.Scene {
       if (this.textures.exists(key)) continue;
       const img = this.textures.get(key + '-bild').getSourceImage();
       const tex = this.textures.createCanvas(key, img.width + 2 * R, img.height + 2 * R), c = tex.getContext();
-      c.shadowColor = `rgba(0,0,0,${schatten})`; c.shadowBlur = 5; c.shadowOffsetX = 3; c.shadowOffsetY = 4;
-      c.drawImage(img, R, R); tex.refresh();
+            c.drawImage(img, R, R); tex.refresh();
     }
     const f = L / PUMA_BILD.laenge;
     return { f, skala: f / PUMA_BILD.px, R };
@@ -2578,6 +2585,7 @@ class Ort extends Phaser.Scene {
       const m = this.pumaMasse(pumaT.laenge), tb = this.textures.get('puma-turm').getSourceImage(), k = PUMA_SKALA * m.f;
       o.pumaVersatz = { x: PUMA_BILD.turmX * k, y: PUMA_BILD.turmY * k };
       o.pumaMuendung = PUMA_BILD.muendung * k;
+      o.wanneSchatten = this.add.image(pumaT.x + FZ_SCHATTEN.dx, pumaT.y + FZ_SCHATTEN.dy, this.fahrzeugSchattenTextur('puma-wanne')).setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(4.9).setAlpha(FZ_SCHATTEN.alpha);
       o.wanne = this.add.image(pumaT.x, pumaT.y, 'puma-wanne').setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(5);
       o.turm = this.add.image(0, 0, 'puma-turm').setOrigin((PUMA_BILD.turmMx + m.R) / tb.width, (PUMA_BILD.turmMy + m.R) / tb.height)
         .setRotation(pumaT.turm.winkel).setScale(PUMA_SKALA * m.skala).setDepth(5.1);
@@ -2636,6 +2644,7 @@ class Ort extends Phaser.Scene {
       let dw = st.bwW - o.wanne.rotation; dw = Math.atan2(Math.sin(dw), Math.cos(dw));
       o.wanne.setRotation(o.wanne.rotation + dw * k);
       this.pumaTurmSetzen();
+      o.wanneSchatten?.setPosition(o.wanne.x + FZ_SCHATTEN.dx, o.wanne.y + FZ_SCHATTEN.dy).setRotation(o.wanne.rotation);
       // Kettenrasseln (Ereignis „Panzer fährt“), nur solange er sich bewegt, draußen und in Hörweite
       const faehrt = o.letztX !== undefined && Math.hypot(st.bwX - o.letztX, st.bwY - o.letztY) > 0.05;
       o.letztX = st.bwX; o.letztY = st.bwY;

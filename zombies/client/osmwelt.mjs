@@ -6,6 +6,7 @@ import { baueStuetzpunkt } from './stuetzpunkt.mjs';
 import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
 import { laendlicheDetails, b11Ausduennen, freihalteKreise } from './laendlich.mjs';
 import { zaeuneGlaetten } from './zaunglatt.mjs';
+import { spielplatzZaeune } from './spielplatzzaun.mjs';
 import { baueEinkaufswagen } from './einkaufswagen.mjs';
 import { luftbildBaeume, luftbildAcker, luftbildEinzelbaeume, imGebiet } from './luftbild.mjs';
 import { heckenEinfuegen, luftbildObjekte, feinFuellen, nebenPlatzieren } from './luftbildobjekte.mjs';
@@ -162,7 +163,8 @@ function wasserGlaetten(k, hole, setze, durchgaenge = 3, R = 4) {
 
 // optionen.autos: Faktor für geparkte Autos (1 = normal)
 export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
-  const karte0 = zaeuneAusduennen(heckenEinfuegen(karteOrig));   // Hecken aus dem Luftbild (heckenLuftbild) zählen wie OSM-Hecken
+  const karte0 = spielplatzZaeune(zaeuneAusduennen(heckenEinfuegen(karteOrig)));   // Spielplatzzäune erst nach dem Ausdünnen (Lücke = Eingang bleibt exakt)
+  //   // Hecken aus dem Luftbild (heckenLuftbild) zählen wie OSM-Hecken
   // veränderbare Kopie (ländliche Details ergänzen Zäune, Hecken und Feldwege); die Eingabekarte bleibt unberührt
   const karte = karte0.zaeune ? { ...karte0, zaeune: [...karte0.zaeune], strassen: karte0.strassen ? [...karte0.strassen] : karte0.strassen } : karte0;
   const autoFaktor = Number.isFinite(optionen.autos) ? Math.max(0, optionen.autos) : 1;
