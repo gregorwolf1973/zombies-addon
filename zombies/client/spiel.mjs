@@ -2279,7 +2279,8 @@ class Ort extends Phaser.Scene {
   lampenRichtung(ich) {
     if (this.lampenRichtungBild === this.game.loop.frame && this.lampenWinkel !== undefined) return this.lampenWinkel;   // je Bild nur einmal nachführen
     this.lampenRichtungBild = this.game.loop.frame;
-    const e = this.eingabe, ziel = Math.hypot(e.dx, e.dy) > 0.1 ? Math.atan2(e.dy, e.dx) : (this.lampenWinkel ?? ich.richtung);
+    // ohne eigene Eingabe (Stillstand oder AFK-Bot steuert den Helden) zählt die Blickrichtung vom Server
+    const e = this.eingabe, ziel = Math.hypot(e.dx, e.dy) > 0.1 ? Math.atan2(e.dy, e.dx) : (ich.richtung ?? this.lampenWinkel ?? 0);
     this.lampenWinkel = Phaser.Math.Angle.RotateTo(this.lampenWinkel ?? ziel, ziel, this.game.loop.delta / 1000 * 3.5);
     return this.lampenWinkel;
   }
