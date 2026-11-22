@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.73.1 – 22.11.2026
+
+- Schneller: Spieldateien werden versioniert ausgeliefert und bleiben dauerhaft im Browser (zweiter Besuch lädt kein JS/keine Karten neu), Text gzip/br-komprimiert (erster Besuch ~40 % weniger Daten).
+
 ## 0.73.0 – 22.11.2026
 
 - Behoben (maßstäbliche Innenräume): Namen, Lebensbalken, Symbole, Bodenbeute und Zieh-Stick nicht mehr mit dem Innen-Zoom vergrößert; Schränke/Regale bis zum Möbelrand durchsuchbar; Türen schließen (auch über die zweite Taste neben Schränken); Kamera ruckelt drinnen nicht mehr (kein Pixel-Runden bei hohem Zoom).
