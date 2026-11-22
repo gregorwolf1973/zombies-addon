@@ -79,7 +79,7 @@ test('Soldaten sterben im Nahkampf; sind alle tot, fällt das Lager', async () =
   amErsten(); const halten = setInterval(amErsten, 200);
   const gestorben = await bis(() => erster.tot, 8000); clearInterval(halten);
   assert.ok(gestorben, 'Soldat stirbt nicht ' + JSON.stringify({ hp: erster.hp, z: [...raum.state.zombies.values()].map(z => [z.x, z.y, z.hp, z.ebene]), s: [erster.x, erster.y], f: st.einst(), stz: raum.state.stuetzpunkt }));
-  assert.ok(nachrichten.soldatTot.some(m => m.n === erster.n), 'keine Todesmeldung');
+  assert.ok(await bis(() => nachrichten.soldatTot.some(m => m.n === erster.n), 10000), 'keine Todesmeldung');   // kommt über das Netz
   assert.equal(raum.state.stuetzpunkt, 'steht', 'ein Toter lässt das Lager nicht fallen');
   const nachlegen = setInterval(() => { for (const q of st.schuetzen) if (!q.tot && ![...raum.state.zombies.values()].some(z => Math.hypot(z.x - q.x, z.y - q.y) < 20)) zombieBei(raum, sp, ...Object.values(planKoord(sp, q.x, q.y))); }, 200);
   assert.ok(await bis(() => raum.state.stuetzpunkt === 'gefallen', 25000), 'Lager fällt nicht ' + JSON.stringify(st.schuetzen.map(q => [q.tot, Math.round(q.hp)])));
