@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.76.0 – 22.11.2026
+
+- Neu (Geretsried 2, amtliche Daten): Hecken an echten Grundstücksgrenzen, gemessen aus Höhenmodell und Infrarot-Luftbild (26 km), Zäune nur an Wohngrundstücken mit Lücken an Einfahrten und Hauswegen; zufällige Zäune, Hecken und Mauern entfallen.
+- Neu: 7886 Bäume aus dem amtlichen Einzelbaum-Datensatz mit gemessener Krone; Straßen in echter Breite mit Gehwegen, Zebrastreifen an markierten Übergängen, 629 Laternen (nachts mit Licht), Mülltonnen am Grundstücksrand.
+- Neu: Kulisse-Schalter „🎨 Gezeichneter Boden“ (aus amtlichen Nutzungsflächen: Rasen, Pflaster, Kies, Asphalt, Wald, Wasser …) – mit 3D-Dächern und Schatten eine Alternative zum Luftbild; sind beide an, gewinnt das Luftbild.
+
 ## 0.75.0 – 22.11.2026
 
 - Geändert (Geretsried 2): Gebäude aus den amtlichen Hausumringen (Bayerische Vermessungsverwaltung, CC BY 4.0) statt OSM – die 3D-Dächer sitzen jetzt genau auf den Häusern (1451 von 1457). Reihen-/Doppelhäuser sind innen ein gemeinsames Haus, Garagen/Schuppen aus dem 3D-Modell. Das feste Safehouse „Wohnhaus“ steht ein Haus weiter.
