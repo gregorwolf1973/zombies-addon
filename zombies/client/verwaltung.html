@@ -1099,6 +1099,11 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <label for="tnPumaMunition">Panzer (Puma): Munition (0 = unbegrenzt)</label>
   <div class="tn-zeile"><input type="range" id="tnPumaMunition" min="0" max="1000" step="25"><span id="tnPumaMunitionWert">200</span></div>
   <p class="tn-leise">Ist die Munition leer, holen zwei Soldaten Nachschub vom Bundeswehr-Container.</p>
+  <label class="tn-schalter"><input type="checkbox" id="tnPolAktiv"> Polizisten an den Straßensperren (schießen mit Pistole, werden bei Tod zu Zombies)</label>
+  <label for="tnPolAnzahl">Polizisten je Straßensperre</label>
+  <div class="tn-zeile"><input type="range" id="tnPolAnzahl" min="1" max="6" step="1"><span id="tnPolAnzahlWert">3</span></div>
+  <label for="tnPolMunition">Polizist: Munition je Kopf (0 = unbegrenzt)</label>
+  <div class="tn-zeile"><input type="range" id="tnPolMunition" min="0" max="200" step="5"><span id="tnPolMunitionWert">30</span></div>
   <p class="tn-leise" id="bwInfoPuma"></p>
   <label for="tnLeoReich">Evakuierungspanzer (Leopard 2A7, Isarauen): MG-Reichweite</label>
   <div class="tn-zeile"><input type="range" id="tnLeoReich" min="5" max="80" step="1"><span id="tnLeoReichWert">29 m</span></div>
@@ -1294,6 +1299,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnPumaMunition', bwe.pumaMunition === undefined ? 200 : bwe.pumaMunition, function (v) { return v ? String(v) : 'unbegrenzt'; });
     feld('tnBwTage', bwe.falltage === undefined ? 3 : bwe.falltage, function (v) { return v ? v + (v === 1 ? ' Tag' : ' Tage') : 'nie'; });
     if (document.activeElement !== $('tnBwAktiv')) $('tnBwAktiv').checked = bwe.aktiv !== false;
+    var pol = e.polizei || {};
+    if (document.activeElement !== $('tnPolAktiv')) $('tnPolAktiv').checked = pol.aktiv !== false;
+    feld('tnPolAnzahl', pol.anzahl === undefined ? 3 : pol.anzahl, function (v) { return String(v); });
+    feld('tnPolMunition', pol.munition === undefined ? 30 : pol.munition, function (v) { return v ? String(v) : 'unbegrenzt'; });
     var spz = d.stuetzpunkt;
     $('tnBwStatus').textContent = !spz || !spz.zustand ? 'Auf der laufenden Karte gibt es keinen Stützpunkt (nur Geretsried und Isarauen).'
       : 'Gerade: ' + ({ steht: 'steht', gefallen: 'gefallen', aus: 'abgeschaltet' }[spz.zustand] || spz.zustand) + ' · ' + String(spz.tage).replace('.', ',') + ' Spieltage seit Weltbeginn.';
@@ -1421,6 +1430,11 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   $('tnLeoUeberroll').addEventListener('change', function () {
     anfrage('verwaltung/api', { bundeswehr: { leopardUeberrollen: $('tnLeoUeberroll').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
+  $('tnPolAktiv').addEventListener('change', function () {
+    anfrage('verwaltung/api', { polizei: { aktiv: $('tnPolAktiv').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
+  regler('tnPolAnzahl', function (v) { return String(v); }, function (v) { return { polizei: { anzahl: v } }; });
+  regler('tnPolMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { polizei: { munition: v } }; });
   regler('tnMgMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { bundeswehr: { mgMunition: v } }; });
   regler('tnPumaMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { bundeswehr: { pumaMunition: v } }; });
   ZTYPEN.forEach(function (k) {
@@ -3650,6 +3664,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     gruppe(rw);
     var bw = unter('🎖 Bundeswehr, Panzer');
     schalter(bw.inhalt, 'tnBwAktiv');
+    schalter(bw.inhalt, 'tnPolAktiv'); zeile(bw.inhalt, 'tnPolAnzahl'); zeile(bw.inhalt, 'tnPolMunition');
     zeile(bw.inhalt, 'tnBwTage'); zeile(bw.inhalt, 'tnPumaPause'); zeile(bw.inhalt, 'tnMgMunition'); zeile(bw.inhalt, 'tnPumaMunition'); rein(bw.inhalt, $('bwInfoPuma'));
     ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden', 'tnLeoKanonePause', 'tnLeoKanoneMin', 'tnBoxHordeSek', 'tnBoxHordeMin', 'tnBoxHordeMax', 'tnBoxPause', 'tnBoxReich'].forEach(function (id) { zeile(bw.inhalt, id); });
     schalter(bw.inhalt, 'tnLeoUeberroll'); schalter(bw.inhalt, 'tnLeoKanone'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
