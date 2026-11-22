@@ -28,12 +28,18 @@ test('Bäume folgen dem Luftbild: neue Bäume nur auf Luftbild-Baumkacheln', () 
     let neu = 0, falsch = 0, ziel = 0, gesetzt = 0;
     for (let y = 0; y < karte.hoehe; y++) for (let x = 0; x < karte.breite; x++) {
       const i = y * karte.breite + x, war = karte.kacheln.charCodeAt(i) - 48, ist = w.hole(x, y);
-      if (ist === T.BAUM && war !== T.BAUM) { neu++; if (lb.charCodeAt(i) - 48 !== LB_BAUM) falsch++; }
+      if (ist === T.BAUM && war !== T.BAUM) {
+        neu++;
+        if (karte.amtlich) {   // amtliche Einzelbäume: neue Baumkachel nur unter einer Krone (Radius + 1 Kachel)
+          const mx = (x + 0.5) * KACHEL, my = (y + 0.5) * KACHEL;
+          if (!karte.baeumeLuftbild.some(b => (b.x - mx) ** 2 + (b.y - my) ** 2 <= (b.d * 4 + KACHEL) ** 2)) falsch++;
+        } else if (lb.charCodeAt(i) - 48 !== LB_BAUM) falsch++;
+      }
       if (war === T.WIESE && lb.charCodeAt(i) - 48 === LB_BAUM) { ziel++; if (ist === T.BAUM) gesetzt++; }
     }
     assert.ok(neu > 100, `${n}: es entstehen Bäume (${neu})`);
     assert.ok(falsch <= neu * 0.01, `${n}: generierte Bäume außerhalb des Luftbild-Baums: ${falsch} von ${neu} (nur Reste anderer Weltteile erlaubt)`);
-    assert.ok(gesetzt / ziel > 0.4, `${n}: Anteil gesetzter Luftbild-Baumkacheln ${(gesetzt / ziel).toFixed(2)}`);
+    if (!karte.amtlich) assert.ok(gesetzt / ziel > 0.4, `${n}: Anteil gesetzter Luftbild-Baumkacheln ${(gesetzt / ziel).toFixed(2)}`);
   }
 });
 

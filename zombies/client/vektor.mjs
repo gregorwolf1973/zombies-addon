@@ -61,7 +61,7 @@ function vorbereiten(welt) {
   const v = welt.vektor;
   const linien = v.strassen.map(s => {
     const pts = []; for (let i = 0; i < s.p.length; i += 2) pts.push([s.p[i] * K, s.p[i + 1] * K]);
-    return { t: s.t, b: s.b * K, pts, box: bbox(pts, (s.b + 2) * K), n: s.n, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0 };
+    return { t: s.t, b: s.b * K, pts, box: bbox(pts, (s.b + 2) * K), n: s.n, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0, gl: s.gl, gr: s.gr };
   });
   const flaechen = v.flaechen.map(f => {
     const pts = []; for (let i = 0; i < f.p.length; i += 2) pts.push([f.p[i] * K, f.p[i + 1] * K]);
@@ -88,6 +88,7 @@ function vorbereiten(welt) {
   };
   for (const l of linien) {
     if (!AUTO.has(l.t)) continue;
+    if (l.gl !== undefined || l.gr !== undefined) { l.gehTeile = [l.pts]; continue; }   // amtliche Gehwegbreiten (tools/amtlich.py): ganze Linie, je Seite eigene Breite
     l.gehTeile = []; let teil = null;
     for (let i = 0; i + 1 < l.pts.length; i++) {
       const [ax, ay] = l.pts[i], [bx, by] = l.pts[i + 1];
@@ -438,6 +439,21 @@ function zeichneBuchten(ctx, welt, r, m) {
 }
 
 const GEHWEG = 10;   // Breite eines Gehwegs in Pixeln (gut 1 m)
+// Linie seitlich versetzt (o > 0: links, linke Normale (−dy, dx) wie die Laternen): Eckpunkte entlang der Winkelhalbierenden, Verlängerung begrenzt
+function versetzt(pts, o) {
+  const aus = [];
+  for (let i = 0; i < pts.length; i++) {
+    let nx = 0, ny = 0, n = 0;
+    for (const [a, b] of [[pts[i - 1], pts[i]], [pts[i], pts[i + 1]]]) {
+      if (!a || !b) continue;
+      const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.sqrt(dx * dx + dy * dy) || 1;
+      nx += -dy / L; ny += dx / L; n++;
+    }
+    const L = Math.sqrt(nx * nx + ny * ny) || 1, f = Math.min(2, n / L);   // Gehrung 1 / cos(halber Knickwinkel), höchstens doppelt
+    aus.push([pts[i][0] + nx / L * o * f, pts[i][1] + ny / L * o * f]);
+  }
+  return aus;
+}
 // Beschneidung auf die Kacheln, auf denen ein Gehweg liegen darf (je Aufruf nur der sichtbare Ausschnitt, Läufe zu Rechtecken verbunden)
 function gehwegClip(ctx, welt, r) {
   const kx0 = Math.max(0, Math.floor(r.x0 / K) - 1), kx1 = Math.min(BREITE - 1, Math.ceil(r.x1 / K) + 1);
@@ -478,10 +494,23 @@ export function zeichneStrassen(ctx, welt, rect) {
   // 2. Gehwege: schmale hellgraue Streifen beidseitig der Fahrstraßen mit feiner Bordsteinlinie.
   // Nur auf freiem Gelände (Straße, Platz, ungezäunte Wiese): nicht über Häusern, Gärten, Zäunen und Wasser.
   const gehwege = hier.filter(l => AUTO.has(l.t));
-  if (gehwege.length) {
+  // amtliche Gehwegbreiten (gl/gr, tools/amtlich.py): je Seite ein glatter Streifen, ohne Kachelbeschneidung (die Breiten stammen aus der Nutzungsfläche
+  // „Straßenverkehr“, liegen also nicht über Häusern; Dächer und Zäune werden später darübergezeichnet)
+  for (const l of gehwege) {
+    if (l.gl === undefined && l.gr === undefined) continue;
+    const fb = fahrbahn(l);
+    for (const [seite, g] of [[1, l.gl ?? 0], [-1, l.gr ?? 0]]) {   // Innenkante knapp unter dem Asphalt; 0 = kein Gehweg auf dieser Seite
+      if (!(g > 0)) continue;
+      const w = g * 8, o = seite * (fb / 2 + w / 2 - 1), pts = versetzt(l.pts, o);
+      pfad(ctx, pts); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = w + 2; ctx.stroke();
+      pfad(ctx, pts); ctx.strokeStyle = 'rgba(208,206,198,.88)'; ctx.lineWidth = w; ctx.stroke();
+    }
+  }
+  if (gehwege.some(l => l.gl === undefined && l.gr === undefined)) {
     ctx.save();
     gehwegClip(ctx, welt, r);
     for (const l of gehwege) {
+      if (l.gl !== undefined || l.gr !== undefined) continue;
       const fb = fahrbahn(l);
       for (const t of l.gehTeile ?? []) {
         pfad(ctx, t); ctx.strokeStyle = 'rgba(112,110,102,.5)'; ctx.lineWidth = fb + 2 * GEHWEG + 2; ctx.stroke();
@@ -495,6 +524,15 @@ export function zeichneStrassen(ctx, welt, rect) {
   const fahr = hier.filter(l => AUTO.has(l.t) || l.t === 'service');
   for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = '#34363a'; ctx.lineWidth = fahrbahn(l) + 5; ctx.stroke(); }
   for (const l of fahr) { pfad(ctx, l.pts); ctx.strokeStyle = m.asphalt; ctx.lineWidth = fahrbahn(l); ctx.stroke(); }
+  // 3a. Zebrastreifen (amtliche Karte, OSM crossing=zebra/marked): weiße Balken längs zur Fahrbahn, nebeneinander über die ganze Fahrbahnbreite
+  for (const z of welt.vektor?.zebra ?? []) {
+    if (z.x < r.x0 - 60 || z.x > r.x1 + 60 || z.y < r.y0 - 60 || z.y > r.y1 + 60) continue;
+    ctx.save(); ctx.translate(z.x, z.y); ctx.rotate(Math.atan2(z.uy, z.ux));   // x = Fahrtrichtung, y = quer über die Fahrbahn
+    ctx.fillStyle = 'rgba(244,244,238,.9)';
+    const n = Math.max(2, Math.floor(z.l / 8));
+    for (let i = 0; i < n; i++) ctx.fillRect(-12, -z.l / 2 + 2 + i * 8, 24, 4);   // Balken 3 m × 0,5 m, Abstand 0,5 m
+    ctx.restore();
+  }
   // 3b. Parkbuchten (Autos zeichnet später zeichneBoden)
   if (welt.vektor?.strassen) zeichneBuchten(ctx, welt, r, m);
   // 4. Straßennamen leicht sichtbar auf der Fahrbahn (B 11, St 2369 als Nummer dazu)
@@ -750,6 +788,7 @@ export function zeichneVektorSafeDach(ctx, welt, h, rand) {
 // Straßenlaternen: an Fahrstraßen etwa alle 36 m auf dem Gehweg, abwechselnd links und rechts
 export function laternen(welt) {
   if (welt._laternen) return welt._laternen;
+  if (welt.vektor?.laternen?.length) return (welt._laternen = welt.vektor.laternen);   // amtliche Karte: fertige Standorte (Abstand 30–35 m, tools/amtlich.py)
   const v = vorbereiten(welt), liste = [], ABSTAND = 9 * K;
   for (const l of v.linien) {
     if (!AUTO.has(l.t)) continue;

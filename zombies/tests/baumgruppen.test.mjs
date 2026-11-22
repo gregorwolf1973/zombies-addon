@@ -70,6 +70,12 @@ test('Echte Karte Geretsried 2: Kronen 4–8 m, höchstens eine Krone je 2 Baumk
   let kacheln = 0; for (let y = 100; y < 160; y++) for (let x = 100; x < 160; x++) if (w.hole(x, y) === T.BAUM) kacheln++;
   const k = baumKronen(w, { x0: 100, y0: 100, x1: 160, y1: 160 }).filter(b => b.x >= 100 * KACHEL && b.x < 160 * KACHEL && b.y >= 100 * KACHEL && b.y < 160 * KACHEL);
   assert.ok(kacheln > 50, 'Testausschnitt braucht Bäume: ' + kacheln);
+  if (karte.amtlich) {
+    // amtliche Einzelbäume (Kronendurchmesser aus dem Oberflächenmodell): echte Kronen 2–30 m, übrige Waldkacheln wie bisher 4–8 m
+    assert.ok(k.length > 20, `Kronen ${k.length}`);
+    for (const b of k) assert.ok(b.echt ? b.gr >= 16 - 1e-9 && b.gr <= 240 + 1e-9 : b.gr >= 32 - 1e-9 && b.gr <= 64 + 1e-9, `Krone ${b.gr} echt=${!!b.echt}`);
+    return;
+  }
   assert.ok(k.length <= kacheln * 0.75 && k.length >= kacheln * 0.3, `Kronen ${k.length} für ${kacheln} Baumkacheln`);
   for (const b of k) assert.ok(b.gr >= 32 - 1e-9 && b.gr <= 64 + 1e-9);
 });

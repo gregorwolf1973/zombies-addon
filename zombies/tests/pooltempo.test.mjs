@@ -11,7 +11,9 @@ setzeKartengroesse(karte.breite, karte.hoehe);
 const w = baueWeltAusKarte(karte, 4711);
 
 test('OSM-Pools: Kachel begehbar, Tempo 10 %, daneben normal', () => {
-  const o = karte.objekte.find(q => q.a === 'pool');
+  // erster Pool, dessen Mitte frei liegt (mit amtlichen Hecken kann eine Grundstückshecke einen Pool am Rand streifen)
+  const o = karte.objekte.find(q => q.a === 'pool' && frei(w, (q.x + (q.b ?? 1) / 2) * KACHEL, (q.y + (q.h ?? 1) / 2) * KACHEL, W.spielerRadius));
+  assert.ok(o, 'ein Pool mit freier Mitte');
   const x = (o.x + (o.b ?? 1) / 2) * KACHEL, y = (o.y + (o.h ?? 1) / 2) * KACHEL;
   assert.notEqual(w.hole(o.x, o.y), T.WASSER);
   assert.equal(poolFaktor(w, x, y), 0.1);

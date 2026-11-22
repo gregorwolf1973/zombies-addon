@@ -105,7 +105,8 @@ function treppen(zae) {   // drei kurze Stücke (≤ 1,6 Kacheln) mit wechselnde
 }
 const kurz = zae => { let n = 0, s = 0; for (const z of zae) for (let i = 0; i + 3 < z.p.length; i += 2) { s++; if (Math.hypot(z.p[i + 2] - z.p[i], z.p[i + 3] - z.p[i + 1]) <= 1.6) n++; } return n / s; };
 
-for (const name of ['geretsried', 'geretsried2']) {
+// geretsried2 hat amtliche Zäune (kein Glätten nötig): eigener Test unten
+for (const name of ['geretsried']) {
   test(`Zäune ${name}: Treppen/Zickzack weg, weniger kurze Stücke, parallel zu Straße und Haus`, () => {
     const k = lade(name), glatt = zaeuneGlaetten(k).zaeune;
     assert.equal(glatt.length, k.zaeune.length, 'keine Linie geht verloren');
@@ -132,6 +133,21 @@ for (const name of ['geretsried', 'geretsried2']) {
     }
   });
 }
+
+test('Zäune geretsried2 (amtlich): Hecken und Zäune aus Flurstücksgrenzen, glatt, ohne Rastertreppen, in der Karte', () => {
+  const k = lade('geretsried2');
+  assert.ok(k.amtlich);
+  const h = k.zaeune.filter(z => z.a === 'h'), z = k.zaeune.filter(z => z.a === 'z');
+  assert.ok(h.length > 1000 && z.length > 1000, `Hecken ${h.length}, Zäune ${z.length}`);
+  assert.ok(!k.zaeune.some(q => q.a === 'm' || q.a === 'w'), 'keine Mauer-/Wandzäune aus Zufall/OSM');
+  assert.ok(treppen(k.zaeune) <= 10, 'kaum Rastertreppen: ' + treppen(k.zaeune));   // Linien stammen aus Flurstücksgrenzen (0,7 m vereinfacht), nicht aus dem 4-m-Raster
+  for (const q of k.zaeune) {
+    assert.ok(q.p.length >= 4 && q.p.every(Number.isFinite));
+    for (let i = 0; i < q.p.length; i += 2) assert.ok(q.p[i] >= 0 && q.p[i] <= k.breite && q.p[i + 1] >= 0 && q.p[i + 1] <= k.hoehe);
+  }
+  // Hecken ≥ 3 m (0,75 Kacheln)
+  for (const q of h) { let L = 0; for (let i = 0; i + 3 < q.p.length; i += 2) L += Math.hypot(q.p[i + 2] - q.p[i], q.p[i + 3] - q.p[i + 1]); assert.ok(L >= 0.75 - 0.05, 'Hecke zu kurz: ' + L); }
+});
 
 test('Zäune: Idempotent, deterministisch und Gartenzäune bleiben begehbar durch Lücken', () => {
   const k = karte;
