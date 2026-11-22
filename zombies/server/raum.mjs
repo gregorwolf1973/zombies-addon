@@ -2243,7 +2243,6 @@ export class SpielRaum extends Room {
   // Gegenstände in den Rucksack (Munition direkt zur Pistole); Rest bleibt liegen
   einpacken(p, inhalt) {
     const genommen = [];
-    let tascheZu = false;
     for (let i = 0; i < inhalt.length;) {
       const d = inhalt[i];
       if (d === 'munition') { this.munitionNehmen(p, MUNITION_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
@@ -2258,10 +2257,8 @@ export class SpielRaum extends Room {
       if (d === 'taschenlampe' && !(p.lampe > 0)) { p.lampe = LAMPE_DAUER; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'kleidung' && !(p.kleidung > 0)) { p.kleidung = 100; genommen.push(d); inhalt.splice(i, 1); continue; }
       if (fuegeHinzu(p.rucksack, p.plaetze, d) > 0) { genommen.push(d); inhalt.splice(i, 1); continue; }
-      if (istTasche(d) && blockGrund(p.rucksack, p.plaetze, d) === 'tasche') tascheZu = true;
       i++;
     }
-    if (tascheZu) this.clients.find(c => this.state.spieler.get(c.sessionId) === p)?.send('meldung', { text: '🎒 Du trägst schon eine Tasche – eine zweite geht nicht' });
     return genommen;
   }
 
@@ -2431,7 +2428,6 @@ export class SpielRaum extends Room {
     else if (d === 'kleidung' && !(p.kleidung > 0)) p.kleidung = 100;
     else {
       const grund = blockGrund(p.rucksack, p.plaetze, d);
-      if (grund === 'tasche') return client?.send('meldung', { text: '🎒 Du trägst schon eine Tasche – eine zweite geht nicht' });
       if (grund) return client?.send('meldung', { text: '🎒 Rucksack voll' });
       fuegeHinzu(p.rucksack, p.plaetze, d);
     }
@@ -2448,7 +2444,6 @@ export class SpielRaum extends Room {
     const d = b.ding;
     // wandert der Gegenstand nicht in den Rucksack (Waffe/Munition/Lampe/Kleidung), braucht er keinen Platz
     if (this.bodenBrauchtPlatz(p, d)) {
-      if (blockGrund(p.rucksack, p.plaetze, d) === 'tasche') return client.send('meldung', { text: '🎒 Du trägst schon eine Tasche – eine zweite geht nicht' });
       if (!kannAufnehmen(p.rucksack, p.plaetze, d)) {
         const i = Number(m.platz);
         if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return client.send('meldung', { text: '🎒 Rucksack voll – wähle, was du ablegst' });
@@ -2559,7 +2554,7 @@ export class SpielRaum extends Room {
       if (!Number.isInteger(i) || i < 0 || i >= kiste.length) return;
       const id = dingId(kiste[i]), n = dingN(kiste[i]);
       const raus = Math.min(n, platzFuer(p.rucksack, p.plaetze, id));
-      if (raus < 1) { if (blockGrund(p.rucksack, p.plaetze, id) === 'tasche') client.send('meldung', { text: '🎒 Du trägst schon eine Tasche – eine zweite geht nicht' }); return; }
+      if (raus < 1) return;
       fuegeHinzu(p.rucksack, p.plaetze, id, raus); nimmEins(kiste, i, raus);
     }
   }

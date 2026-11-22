@@ -653,7 +653,7 @@ export class Stuetzpunkt {
     } else {
       const probe = [...p.rucksack];   // passt es, nachdem bezahlt wurde?
       for (const d of zahl) entferne(probe, d, 1);
-      if (!kannAufnehmen(probe, p.plaetze, a.gibt, a.menge)) return sag(blockGrund(probe, p.plaetze, a.gibt, a.menge) === 'tasche' ? 'Du trägst schon eine Tasche' : 'Dein Rucksack ist zu voll');
+      if (!kannAufnehmen(probe, p.plaetze, a.gibt, a.menge)) return sag('Dein Rucksack ist zu voll');
     }
     for (const d of zahl) entferne(p.rucksack, d, 1);
     if (a.gibt === 'munition') p.munition = Math.min(MUNITION_MAX, p.munition + a.menge);

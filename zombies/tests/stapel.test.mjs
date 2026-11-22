@@ -49,18 +49,20 @@ test('Waffen stapeln nicht, Messer und Handgranate schon', () => {
   assert.deepEqual(l, ['pistole', 'pistole', 'messer*5', 'messer', 'granate*5', 'granate']);
 });
 
-test('Taschen und Missionsgegenstände stapeln nicht; nur eine Tasche tragbar', () => {
+test('Taschen und Missionsgegenstände stapeln nicht; mehrere Taschen tragbar, jede mit eigenem Platz', () => {
   assert.equal(stapelbar('tasche'), false);
   assert.equal(stapelbar('m_funk'), false);
   const l = [];
   assert.equal(fuegeHinzu(l, 8, 'tasche'), 1);
-  assert.equal(fuegeHinzu(l, 8, 'trekking'), 0);
-  assert.equal(fuegeHinzu(l, 8, 'tasche'), 0);
-  assert.equal(blockGrund(l, 8, 'trekking'), 'tasche');
-  assert.equal(kannAufnehmen(l, 8, 'trekking'), false);
-  // in der Kiste gilt die Regel nicht
-  const k = [];
-  assert.equal(fuegeHinzu(k, 24, 'tasche', 2, true), 2);
+  assert.equal(fuegeHinzu(l, 8, 'trekking'), 1);
+  assert.equal(fuegeHinzu(l, 8, 'tasche'), 1);
+  assert.equal(l.length, 3);
+  assert.equal(blockGrund(l, 8, 'trekking'), '');
+  assert.equal(kannAufnehmen(l, 8, 'trekking'), true);
+  // jede Tasche belegt einen Platz: bei vollem Rucksack geht keine weitere hinein
+  const v = ['tasche', 'tasche', 'tasche'];
+  assert.equal(fuegeHinzu(v, 3, 'trekking'), 0);
+  assert.equal(blockGrund(v, 3, 'trekking'), 'voll');
 });
 
 test('Entnehmen: ein Stück, ganzer Stapel, nach Art', () => {

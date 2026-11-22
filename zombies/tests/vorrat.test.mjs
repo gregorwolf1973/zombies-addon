@@ -916,7 +916,7 @@ test('Zombies und Bots: durch Hecke und Holzzaun langsam, Metallzaun bleibt zu',
   }
 });
 
-test('Stapel im Rucksack: Benutzen/Wegwerfen nehmen 1 Stück, Aufheben stapelt, zweite Tasche geht nicht, Munitionskiste öffnet sich', async () => {
+test('Stapel im Rucksack: Benutzen/Wegwerfen nehmen 1 Stück, Aufheben stapelt, mehrere Taschen, Munitionskiste öffnet sich', async () => {
   const a = await beitreten('Stapler');
   try {
     const { raum, p, c } = a;
@@ -934,13 +934,21 @@ test('Stapel im Rucksack: Benutzen/Wegwerfen nehmen 1 Stück, Aufheben stapelt, 
     c.send('aufheben_wahl', { id });
     assert.ok(await bis(() => raum.state.boden.size === 0), 'nicht aufgehoben');
     assert.deepEqual([...p.rucksack], ['wasser*2']);
-    // nur eine Tasche tragbar: die zweite bleibt liegen
-    p.rucksack.clear(); p.rucksack.push('tasche');
+    // mehrere Taschen tragbar (je ein Platz); Plätze = größte benutzte Tasche, Ablegen einer Tasche ändert sie nicht
+    p.rucksack.clear(); p.rucksack.push('tasche'); p.plaetze = 8;
     const t2 = raum.legeHin('trekking', p.x, p.y);
     c.send('aufheben_wahl', { id: t2 });
+    assert.ok(await bis(() => !raum.state.boden.has(t2)), 'zweite Tasche nicht aufgehoben');
+    assert.deepEqual([...p.rucksack], ['tasche', 'trekking']);
+    c.send('benutze', { platz: 1 });
+    assert.ok(await bis(() => p.plaetze === 16), 'Trekking nicht umgepackt');
+    c.send('benutze', { platz: 0 });
     await new Promise(r => setTimeout(r, 200));
-    assert.ok(raum.state.boden.has(t2), 'zweite Tasche aufgehoben');
+    assert.equal(p.plaetze, 16, 'kleinere Tasche darf Plätze nicht senken');
     assert.deepEqual([...p.rucksack], ['tasche']);
+    c.send('wegwerfen', { platz: 0 });
+    assert.ok(await bis(() => p.rucksack.length === 0));
+    assert.equal(p.plaetze, 16);
     // Munitionskiste: bei Vorrat <= 120 öffnet sie sich von selbst (+30)
     p.rucksack.clear(); p.rucksack.push('munitionskiste*2'); p.munition = 100;
     assert.ok(await bis(() => p.munition + p.magazin >= 130 && zaehle(p.rucksack, 'munitionskiste') === 1), 'Kiste öffnet sich nicht: ' + p.munition + ' ' + JSON.stringify([...p.rucksack]));
