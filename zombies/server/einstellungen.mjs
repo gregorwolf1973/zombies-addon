@@ -8,6 +8,7 @@ import { MUNITIONSGLUECK } from './munitionsglueck.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
 import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
 import { NEBEL_VORGABE, bereinigeNebel } from './nebel.mjs';
+import { SICHT_VORGABE, bereinigeSicht } from '../client/zombiesicht.mjs';
 
 // Vorlage: im Backend eingestellte Werte, die als Vorgabe übernommen wurden (Stand 22.11.2026) – überschreibt die Grundwerte unten.
 // Arrays werden ganz ersetzt. Neu erzeugen: aktuelle /data/einstellungen.json gegen die Grundwerte vergleichen (ohne Hash, Zugangscode, Test).
@@ -297,6 +298,7 @@ export function bereinige(e = {}, alt = {}) {
       ueberraschung: Math.round(zahl(z.ueberraschung, 0, 100, 3)),   // % Chance, dass beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto ein Zombie herausspringt
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
+    zombieSicht: bereinigeSicht(e.zombieSicht, a.zombieSicht),   // Zombie-Sicht: Meter/Grad/% (client/zombiesicht.mjs)
     nebel: bereinigeNebel(e.nebel, a.nebel),   // Nebel als Wetterlage (server/nebel.mjs)
     sprache: {
       an: typeof sp.an === 'boolean' ? sp.an : true,                          // Sprachübertragung zwischen Mitspielern
@@ -382,6 +384,7 @@ export function grundwerte() {
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
     bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, mgMunition: 400, pumaMunition: 200 },
     nebel: { ...NEBEL_VORGABE },
+    zombieSicht: { ...SICHT_VORGABE },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     hund: { ...HUND },

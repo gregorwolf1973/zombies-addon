@@ -107,6 +107,7 @@ export async function starte({
       autoFaktor: w.autos / 10,
       schwierigkeit: w.schwierigkeit,               // 'leicht' | 'normal' | 'schwer' (server/schwierigkeit.mjs)
       tagMinuten: w.tagMinuten,
+      zombieSicht: w.zombieSicht,                   // { gehen, schleichen, kegel, verfolgen, aufgeben, nacht } (client/zombiesicht.mjs)
       nebel: w.nebel,                               // { an, morgen, abend, sicht, zombie } (server/nebel.mjs)
       tagAb: w.tagAb, nachtAb: w.nachtAb, nachtDunkel: w.nachtDunkel, menschenGroesse: w.menschenGroesse, zombieGroesse: w.zombieGroesse, groesseGesamt: w.groesseGesamt, baumTempo: w.baumTempo, zombieLeben: w.zombieLeben,
       menschen: w.menschen,
@@ -267,6 +268,7 @@ export async function starte({
     if (neu.karte !== vorher) { level1Merken(neu.karte); level1Gewuerfelt = null; }   // Backend-Wahl geändert: Zufall neu würfeln bzw. feste Karte
     anwenden(neu);
     // Ton-Einstellungen sofort an laufende Spiele (sonst erst nach Neuladen der Seite)
+    if ('zombieSicht' in (req.body ?? {})) { try { SpielRaum.aktiv?.broadcast('tonEinst', { zombieSicht: neu.zombieSicht }); } catch { /* kein Raum */ } }
     if (['radioStream', 'musik', 'toeneHorde', 'toene'].some(k => k in (req.body ?? {}))) {
       try { SpielRaum.aktiv?.broadcast('tonEinst', { radioStream: neu.radioStream, musik: neu.musik, toeneHorde: neu.toeneHorde, toene: neu.toene }); } catch { /* kein Raum */ }
     }
@@ -339,6 +341,7 @@ export async function starte({
     wiki: String(optionen.wiki_adresse ?? '').trim(),
     extern: String(optionen.externe_adresse ?? '').trim(),   // https-Adresse, unter der das Mikrofon geht
     diagnose: datei.werte.diagnose !== false,   // Client schickt Fehler/Kennzahlen nur, wenn an
+    zombieSicht: datei.werte.zombieSicht,   // Client: Sichtkegel-Anzeige
     toene: datei.werte.toene,
     toeneHorde: datei.werte.toeneHorde,   // Hordengeräusch: Schwellen und Hörweite (client/hordenlogik.mjs)
     musik: datei.werte.musik,             // Musik: laut (%), blende (s)
