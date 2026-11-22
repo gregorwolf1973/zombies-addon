@@ -3,9 +3,16 @@
 // Reine Darstellung: nichts davon geht in die Spielwelt (Fingerabdruck bleibt gleich).
 
 // Geräte-Schalter (localStorage); Standard: alle an, nur ein ausdrückliches 'aus' schaltet ab
-export const KUL_SCHLUESSEL = { boden: 'zob_kul_boden', daecher: 'zob_kul_daecher', schatten: 'zob_kul_schatten' };
-export function schalterLesen(boden, daecher, schatten) {
-  return { boden: boden !== 'aus', daecher: daecher !== 'aus', schatten: schatten !== 'aus' };
+// boden = Luftbild-Boden, gezeichnet = „Gezeichneter Boden“ (stilisiert aus amtlichen Nutzungsflächen); sind beide an, gewinnt das Luftbild (bodenArt)
+export const KUL_SCHLUESSEL = { boden: 'zob_kul_boden', daecher: 'zob_kul_daecher', schatten: 'zob_kul_schatten', gezeichnet: 'zob_kul_gezeichnet' };
+export function schalterLesen(boden, daecher, schatten, gezeichnet) {
+  return { boden: boden !== 'aus', daecher: daecher !== 'aus', schatten: schatten !== 'aus', gezeichnet: gezeichnet !== 'aus' };
+}
+// Welcher Boden gilt? 'foto' (Luftbild), 'gez' (gezeichnet) oder null (Spiel zeichnet den Boden wie bisher). Luftbild hat Vorrang.
+export function bodenArt(an, hatFoto, hatGez) {
+  if (hatFoto && an.boden) return 'foto';
+  if (hatGez && an.gezeichnet) return 'gez';
+  return null;
 }
 
 export const PUFFER_MAX = 12;   // Luftbild-Kacheln gleichzeitig im Speicher
@@ -19,7 +26,7 @@ export function indexLesen(roh) {
   const daecher = !!roh.daecher;
   if (!foto && !daecher) return null;
   return { kachel: kachel > 0 ? kachel : 32, px: Number(roh.px) || 512, nx: nx || 0, ny: ny || 0, breite: Number(roh.breite) || 0, hoehe: Number(roh.hoehe) || 0,
-    foto, daecher, quelle: String(roh.quelle ?? ''), format: roh.format === 'png' ? 'png' : 'webp' };
+    foto, daecher, boden: !!roh.boden, quelle: String(roh.quelle ?? ''), format: roh.format === 'png' ? 'png' : 'webp' };
 }
 
 export const kachelName = (kx, ky) => kx + '_' + ky;

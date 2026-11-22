@@ -1,21 +1,27 @@
 // Kulisse „Echt“ (Darstellung, nichts davon verändert die Spielwelt). Drei unabhängige Schalter (Zahnrad-Menü, je Gerät):
 //   Luftbild-Boden  amtliches Orthofoto (Bayern DOP, CC BY 4.0) statt gezeichnetem Boden, als 128-m-Bildkacheln nachgeladen (tools/kulisse.py)
+//   Gezeichneter Boden  stilisierter Boden aus amtlichen Nutzungsflächen (ALKIS, CC BY 4.0; karten/kulisse/<karte>/boden/, tools/boden.py); Luftbild hat Vorrang
 //   Echte Dächer    Dachflächen aus dem 3D-Gebäudemodell LoD2 Bayern (CC BY 4.0), auf den OSM-Umriss zugeschnitten
 //   Schatten        weiche Schlagschatten von Häusern und Bäumen (Sonne fest Vormittag Südost), nachts und im Nebel ausgeblendet
 // Daten je Karte: karten/kulisse/<karte>/index.json (+ <kx>_<ky>.webp, daecher.json). Ohne Daten bleibt alles wie bisher.
 import { KACHEL as K } from './welt.mjs';
 import { ASSETS } from './basis.mjs';
-import { KUL_SCHLUESSEL, schalterLesen, indexLesen, kachelName, kachelnFuerRect, puffer, daecherLesen, flaecheAufbereiten,
+import { KUL_SCHLUESSEL, schalterLesen, bodenArt, indexLesen, kachelName, kachelnFuerRect, puffer, daecherLesen, flaecheAufbereiten,
   SCHATTEN_JE_M, STANDARD_HAUSHOEHE, baumHoehe } from './kulisse_regeln.mjs';
 
 let kul = null;
 
 export function kulisse() { return kul; }
 export const kulisseVorhanden = () => !!kul;
-export const kulBoden = () => !!(kul?.index.foto && kul.an.boden);
+// Boden aus Bildkacheln (Luftbild oder gezeichnet): 'foto' | 'gez' | null
+export const kulBodenArt = () => (kul ? bodenArt(kul.an, !!kul.index.foto, !!kul.ebenen.gez) : null);
+export const kulBoden = () => kulBodenArt() !== null;          // irgendein Bildkachel-Boden aktiv (Kacheln werden nachgeladen)
+export const kulFoto = () => kulBodenArt() === 'foto';        // nur das Luftbild (zeigt die Bäume selbst)
+const ebene = () => kul.ebenen[kulBodenArt()];
 export const kulDaecher = () => !!(kul?.daecher && kul.an.daecher);
 export const kulSchatten = () => !!(kul && kul.an.schatten);
 export const kulHatFoto = () => !!kul?.index.foto;
+export const kulHatGezeichnet = () => !!kul?.ebenen.gez;
 export const kulHatDaecher = () => !!kul?.daecher;
 
 export async function ladeKulisse(karte) {
@@ -27,37 +33,42 @@ export async function ladeKulisse(karte) {
   if (!index) return null;
   let daecher = null;
   if (index.daecher) { try { const r = await fetch(basis + 'daecher.json'); if (r.ok) daecher = daecherLesen(await r.json()); } catch { /* ohne Dächer */ } }
-  const an = schalterLesen(lies(KUL_SCHLUESSEL.boden), lies(KUL_SCHLUESSEL.daecher), lies(KUL_SCHLUESSEL.schatten));
-  const q = new URLSearchParams(location.search);   // zum Prüfen: ?kul=boden,daecher,schatten (nur diese an) oder ?kul=aus
-  if (q.has('kul')) { const w = q.get('kul').split(','); an.boden = w.includes('boden'); an.daecher = w.includes('daecher'); an.schatten = w.includes('schatten'); }
-  kul = { karte, basis, index, daecher: daecher?.size ? daecher : null, an, kacheln: new Map(), stat: { geladen: 0, bytes: 0, fehler: 0, entladen: 0 } };
+  let gezIndex = null;   // gezeichneter Boden: eigener Index unter boden/
+  if (index.boden) { try { const r = await fetch(basis + 'boden/index.json'); if (r.ok) { const i = indexLesen(await r.json()); if (i?.foto) gezIndex = i; } } catch { /* ohne gezeichneten Boden */ } }
+  const an = schalterLesen(lies(KUL_SCHLUESSEL.boden), lies(KUL_SCHLUESSEL.daecher), lies(KUL_SCHLUESSEL.schatten), lies(KUL_SCHLUESSEL.gezeichnet));
+  const q = new URLSearchParams(location.search);   // zum Prüfen: ?kul=boden,gezeichnet,daecher,schatten (nur diese an) oder ?kul=aus
+  if (q.has('kul')) { const w = q.get('kul').split(','); an.boden = w.includes('boden'); an.gezeichnet = w.includes('gezeichnet'); an.daecher = w.includes('daecher'); an.schatten = w.includes('schatten'); }
+  const kacheln = new Map();
+  kul = { karte, basis, index, daecher: daecher?.size ? daecher : null, an, kacheln, stat: { geladen: 0, bytes: 0, fehler: 0, entladen: 0 },
+    ebenen: { foto: index.foto ? { index, basis, kacheln } : null, gez: gezIndex ? { index: gezIndex, basis: basis + 'boden/', kacheln: new Map() } : null } };
   globalThis.__kulisse = kul;
   return kul;
 }
 
 // ---------- Luftbild-Kacheln: lazy laden, höchstens PUFFER_MAX im Speicher ----------
 const laedt = new Set();
-async function kachelLaden(key) {
+async function kachelLaden(eb, key) {
   const [kx, ky] = key.split('_').map(Number);
-  laedt.add(key);
+  const lk = eb === kul.ebenen.gez ? 'g' + key : key;
+  laedt.add(lk);
   try {
-    const r = await fetch(`${kul.basis}${kachelName(kx, ky)}.${kul.index.format}`);
+    const r = await fetch(`${eb.basis}${kachelName(kx, ky)}.${eb.index.format}`);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const blob = await r.blob();
     const bmp = await createImageBitmap(blob);
     kul.stat.geladen++; kul.stat.bytes += blob.size;
-    kul.kacheln.set(key, { s: 'da', bmp });
+    eb.kacheln.set(key, { s: 'da', bmp });
   } catch (e) {
-    kul.stat.fehler++; kul.kacheln.set(key, { s: 'fehlt', bmp: null });   // Ersatz: gezeichneter Boden
-  } finally { laedt.delete(key); }
+    kul.stat.fehler++; eb.kacheln.set(key, { s: 'fehlt', bmp: null });   // Ersatz: vom Spiel gezeichneter Boden
+  } finally { laedt.delete(lk); }
 }
 
 // 'bereit' (alle Bildkacheln des Ausschnitts da), 'laedt' (noch nicht) oder 'fehlt' (nicht ladbar: gezeichneter Boden als Ersatz)
 export function fotoStatus(rect) {
   if (!kulBoden()) return 'fehlt';
-  let alle = true;
-  for (const [kx, ky] of kachelnFuerRect(kul.index, rect)) {
-    const e = kul.kacheln.get(kachelName(kx, ky));
+  const eb = ebene(); let alle = true;
+  for (const [kx, ky] of kachelnFuerRect(eb.index, rect)) {
+    const e = eb.kacheln.get(kachelName(kx, ky));
     if (e?.s === 'fehlt') return 'fehlt';
     if (e?.s !== 'da') alle = false;
   }
@@ -67,26 +78,27 @@ export function fotoStatus(rect) {
 // Rechtecke (in Spielkacheln), die bald gebraucht werden, nach Wichtigkeit sortiert → fehlende Bildkacheln anfordern, ungebrauchte entladen
 export function fotoWunsch(rects) {
   if (!kulBoden()) return;
+  const eb = ebene(), pre = eb === kul.ebenen.gez ? 'g' : '';
   const wunsch = [];
-  for (const r of rects) for (const [kx, ky] of kachelnFuerRect(kul.index, r)) {
-    const k = kachelName(kx, ky), e = kul.kacheln.get(k);
+  for (const r of rects) for (const [kx, ky] of kachelnFuerRect(eb.index, r)) {
+    const k = kachelName(kx, ky), e = eb.kacheln.get(k);
     if (e?.s === 'fehlt') continue;
     wunsch.push(k);
   }
-  const vorhanden = [...kul.kacheln].filter(([, e]) => e.s === 'da').map(([k]) => k);
-  const { laden, entladen } = puffer(wunsch, vorhanden, [...laedt]);
-  for (const k of entladen) { kul.kacheln.get(k)?.bmp?.close?.(); kul.kacheln.delete(k); kul.stat.entladen++; }
-  for (const k of laden) kachelLaden(k);
+  const vorhanden = [...eb.kacheln].filter(([, e]) => e.s === 'da').map(([k]) => k);
+  const { laden, entladen } = puffer(wunsch, vorhanden, [...laedt].filter(k => k.startsWith(pre) && (pre || !k.startsWith('g'))).map(k => k.slice(pre.length)));
+  for (const k of entladen) { eb.kacheln.get(k)?.bmp?.close?.(); eb.kacheln.delete(k); kul.stat.entladen++; }
+  for (const k of laden) kachelLaden(eb, k);
 }
 
-// Luftbild in einen Bodenstück-Canvas (ctx steht im Weltraum, rect in Spielkacheln)
+// Luftbild bzw. gezeichneten Boden in einen Bodenstück-Canvas (ctx steht im Weltraum, rect in Spielkacheln)
 export function zeichneFoto(ctx, rect) {
-  const idx = kul.index, k = idx.kachel, ppk = idx.px / k;
+  const eb = ebene(), idx = eb.index, k = idx.kachel, ppk = idx.px / k;
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   for (const [kx, ky] of kachelnFuerRect(idx, rect)) {
-    const e = kul.kacheln.get(kachelName(kx, ky));
+    const e = eb.kacheln.get(kachelName(kx, ky));
     if (e?.s !== 'da') continue;
-    kul.kacheln.delete(kachelName(kx, ky)); kul.kacheln.set(kachelName(kx, ky), e);   // zuletzt benutzt
+    eb.kacheln.delete(kachelName(kx, ky)); eb.kacheln.set(kachelName(kx, ky), e);   // zuletzt benutzt
     const ax = Math.max(rect.x0, kx * k), ay = Math.max(rect.y0, ky * k), bx = Math.min(rect.x1, (kx + 1) * k), by = Math.min(rect.y1, (ky + 1) * k);
     if (bx <= ax || by <= ay) continue;
     ctx.drawImage(e.bmp, (ax - kx * k) * ppk, (ay - ky * k) * ppk, (bx - ax) * ppk, (by - ay) * ppk, ax * K, ay * K, (bx - ax) * K, (by - ay) * K);

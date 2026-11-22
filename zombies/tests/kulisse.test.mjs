@@ -6,18 +6,29 @@ import { KACHEL, T, setzeKartengroesse, weltFingerabdruck } from '../client/welt
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { parkplatzBuchten } from '../client/vektor.mjs';
 import { KUL_SCHLUESSEL, schalterLesen, indexLesen, kachelnFuerRect, puffer, PUFFER_MAX, daecherLesen, flaecheAufbereiten,
-  schattenFaktor, SCHATTEN_JE_M, SONNE } from '../client/kulisse_regeln.mjs';
+  schattenFaktor, SCHATTEN_JE_M, SONNE, bodenArt } from '../client/kulisse_regeln.mjs';
 
 after(() => setzeKartengroesse(64, 48));
 const lade = n => JSON.parse(fs.readFileSync(new URL(`../client/karten/${n}.json`, import.meta.url)));
 
 test('Schalter: Standard alle an, nur ein ausdrückliches „aus“ schaltet ab, jede Kombination möglich', () => {
-  assert.deepEqual(schalterLesen(null, undefined, ''), { boden: true, daecher: true, schatten: true });
-  for (let m = 0; m < 8; m++) {
-    const w = [m & 1, m & 2, m & 4].map(b => (b ? 'an' : 'aus'));
-    assert.deepEqual(schalterLesen(...w), { boden: !!(m & 1), daecher: !!(m & 2), schatten: !!(m & 4) });
+  assert.deepEqual(schalterLesen(null, undefined, ''), { boden: true, daecher: true, schatten: true, gezeichnet: true });
+  for (let m = 0; m < 16; m++) {
+    const w = [m & 1, m & 2, m & 4, m & 8].map(b => (b ? 'an' : 'aus'));
+    assert.deepEqual(schalterLesen(...w), { boden: !!(m & 1), daecher: !!(m & 2), schatten: !!(m & 4), gezeichnet: !!(m & 8) });
   }
-  assert.equal(new Set(Object.values(KUL_SCHLUESSEL)).size, 3);
+  assert.equal(new Set(Object.values(KUL_SCHLUESSEL)).size, 4);
+});
+
+test('Bodenart: Luftbild hat Vorrang vor dem gezeichneten Boden, einzeln schaltbar, ohne Daten nichts', () => {
+  const an = (boden, gezeichnet) => ({ boden, gezeichnet, daecher: true, schatten: true });
+  assert.equal(bodenArt(an(true, true), true, true), 'foto');      // beide an: Luftbild gewinnt
+  assert.equal(bodenArt(an(false, true), true, true), 'gez');      // nur gezeichnet
+  assert.equal(bodenArt(an(true, false), true, true), 'foto');
+  assert.equal(bodenArt(an(false, false), true, true), null);
+  assert.equal(bodenArt(an(true, true), false, true), 'gez');      // kein Luftbild in den Daten
+  assert.equal(bodenArt(an(true, true), true, false), 'foto');
+  assert.equal(bodenArt(an(true, true), false, false), null);
 });
 
 test('Index: gültig, ohne Foto/Dächer unbrauchbar', () => {
@@ -26,6 +37,7 @@ test('Index: gültig, ohne Foto/Dächer unbrauchbar', () => {
   const i = indexLesen({ kachel: 32, px: 512, nx: 11, ny: 14, foto: true, daecher: true, quelle: 'Q', format: 'webp' });
   assert.deepEqual([i.kachel, i.nx, i.ny, i.foto, i.daecher, i.quelle], [32, 11, 14, true, true, 'Q']);
   assert.equal(indexLesen({ daecher: true }).foto, false);   // nur Dächer: kein Luftbild-Boden
+  assert.equal(indexLesen({ daecher: true, boden: true }).boden, true); assert.equal(i.boden, false);   // Hinweis auf boden/index.json
 });
 
 test('Kachelwahl für einen Sichtbereich', () => {

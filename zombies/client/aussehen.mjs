@@ -10,7 +10,7 @@ import { fzPx } from './masse.mjs';
 import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben } from './stuetzpunkt.mjs';
 import { zeichneEinkaufswagen } from './einkaufswagen.mjs';
 import { zeichneFlaechen, zeichneStrassen, zeichneVektorDaecher, zeichneVektorSafeDach, vektorGebaeude } from './vektor.mjs';
-import { kulBoden, fotoStatus, zeichneFoto, zeichneSchatten } from './kulisse.mjs';
+import { kulBodenArt, fotoStatus, zeichneFoto, zeichneSchatten } from './kulisse.mjs';
 import { imGebiet } from './luftbild.mjs';
 import { SCHATTEN_JE_M } from './kulisse_regeln.mjs';
 import { zeichneNebengebaeude, zeichnePools } from './nebenobjekte.mjs';
@@ -202,12 +202,14 @@ export function zeichneBoden(ctx, welt, rect = null) {
   // Wiese als Grundfläche mit Farbwolken: ein Pixel je 8×8-Feld rechnen und weich vergrößert zeichnen
   // (früher ein fillRect je Feld – das waren 16.000 Aufrufe je Kartenstück)
   // Kulisse „Luftbild-Boden“: Foto statt Wiese, Flächen, Straßen, Wasser (fehlt die Bildkachel, bleibt der gezeichnete Boden)
-  const foto = kulBoden() && fotoStatus({ x0, y0, x1, y1 }) === 'bereit';
-  if (foto) zeichneFoto(ctx, { x0, y0, x1, y1 }); else wiesenWolken(ctx, x0, y0, x1, y1);
+  // Kulisse „Gezeichneter Boden“ (gez): Bildkachel aus amtlichen Nutzungsflächen statt Wiese/Flächen; Straßen, Wasser, Bäume zeichnet das Spiel darüber wie bisher
+  const art = kulBodenArt(), bereit = !!art && fotoStatus({ x0, y0, x1, y1 }) === 'bereit';
+  const foto = bereit && art === 'foto', gez = bereit && art === 'gez';
+  if (bereit) zeichneFoto(ctx, { x0, y0, x1, y1 }); else wiesenWolken(ctx, x0, y0, x1, y1);
   const gras = new Path2D(), blumen = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
   const vek = !!welt.vektor;
-  if (vek && !foto) zeichneFlaechen(ctx, welt, { x0, y0, x1, y1 });
-  for (let ky = y0; ky < y1 && !foto; ky++) for (let kx = x0; kx < x1; kx++) {
+  if (vek && !bereit) zeichneFlaechen(ctx, welt, { x0, y0, x1, y1 });
+  for (let ky = y0; ky < y1 && !bereit; ky++) for (let kx = x0; kx < x1; kx++) {
     const t = welt.hole(kx, ky), px = kx * KACHEL, py = ky * KACHEL;
     const nb = (dx, dy) => welt.hole(kx + dx, ky + dy);
     if (vek && (t === T.STRASSE || t === T.PLATZ || t === T.WASSER)) continue;   // Wasser kommt als glatte Fläche (wasser.mjs)   // kommen als glatte Linien/Flächen
