@@ -77,10 +77,10 @@ test('Streuner: ein Spieler in 2 m bekommt den Hund, jeder nur einen, Bots keine
   delete xb.bot;
   raum.state.hunde.delete(s1); raum.hunde.info.delete(s1);   // s1 wandert sonst (zufällig) in Berts Nähe und würde ihm später zulaufen
   // weit weg: nichts
-  const s2 = raum.hunde.neuerStreuner(pa.x + 40, pa.y); raum.state.hunde.get(s2).x = pa.x + 40;
+  const s2 = raum.hunde.neuerStreuner(pa.x + 160, pa.y); raum.state.hunde.get(s2).x = pa.x + 160;
   raum.hunde.info.get(s2).steht = true; raum.hunde.info.get(s2).wandelT = 99;
   tick(raum, 5);
-  assert.equal(raum.state.hunde.get(s2).besitzer, '', '5 m: noch kein Zulaufen');
+  assert.equal(raum.state.hunde.get(s2).besitzer, '', '20 m: noch kein Zulaufen (Sichtweite 15 m)');
   // in 2 m: Anna bekommt ihn, mit Meldung
   const h2 = raum.state.hunde.get(s2); h2.x = pa.x + 12; h2.y = pa.y;
   tick(raum, 2);

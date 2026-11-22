@@ -204,7 +204,8 @@
   "leopardPause": 0.3
  },
  "hund": {
-  "ablenkung": 60
+  "ablenkung": 60,
+  "streuner": -1
  },
  "toene": {
   "zombieTod": {

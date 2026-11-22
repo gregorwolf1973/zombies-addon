@@ -338,7 +338,10 @@ export function bereinige(e = {}, alt = {}) {
       leopardKanonePause: Math.round(zahl(bw.leopardKanonePause, 3, 120, 8)),                           // … Sekunden zwischen zwei Kanonenschüssen
       leopardKanoneMin: Math.round(zahl(bw.leopardKanoneMin, 3, 50, 10)),                               // … so viele Zombies müssen auf einem Fleck (6 m Durchmesser) stehen
     },
-    hund: { ablenkung: Math.round(zahl(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)) },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
+    hund: {
+      ablenkung: Math.round(zahl(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)),
+      streuner: Math.round(zahl(e.hund?.streuner ?? a.hund?.streuner, -1, 20, HUND.streuner)),   // Streuner-Hunde: -1 = automatisch (1 je 0,5 km²), 0 = keine, 1–20 fest
+    },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
     funde,
     munitionsglueck: {                                                        // Munitionsglück (server/munitionsglueck.mjs), alles in %
       schritt: Math.round(zahl(mgl.schritt, 0, 100, MG.schritt)),
