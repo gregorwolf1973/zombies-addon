@@ -119,8 +119,8 @@ export function leopardSchuss(scene, m, s) {
   g.lineStyle(2, 0xffee58, 1).lineBetween(mx, my, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
   g.lineStyle(1, 0xffffff, 0.9).lineBetween(mx, my, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
   scene.tweens.add({ targets: g, x: (m.x2 - mx) * (1 - l1), y: (m.y2 - my) * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => g.destroy() });
-  const blitz = scene.add.image(mx, my, 'figuren2', scene.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(w).setScale(0.55).setDepth(7);
-  scene.tweens.add({ targets: blitz, alpha: 0, scale: 0.7, duration: 90, onComplete: () => blitz.destroy() });
+  const blitz = scene.add.image(mx, my, 'figuren2', scene.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(w).setScale(0.32).setDepth(7);
+  scene.tweens.add({ targets: blitz, alpha: 0, duration: 60, onComplete: () => blitz.destroy() });
   if (m.t) fetzen(scene, m.x2, m.y2, w, 0.8);
   const jetzt = performance.now();
   if (jetzt - (scene.letzterBwKnall ?? 0) > 70) { scene.letzterBwKnall = jetzt; ton.schuss(m.x1, m.y1, 1.4, 'gewehr'); }
@@ -132,8 +132,8 @@ export function leopardKanone(scene, m, s) {
   const o = id ? scene.busObj.get(id) : null;
   if (o) o.rueck = 1;
   const w = m.w, c = Math.cos(w), sn = Math.sin(w);
-  const blitz = scene.add.image(m.x1, m.y1, 'figuren2', scene.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(w).setScale(1.9).setDepth(7);
-  scene.tweens.add({ targets: blitz, alpha: 0, scale: 2.8, duration: 220, onComplete: () => blitz.destroy() });
+  const blitz = scene.add.image(m.x1, m.y1, 'figuren2', scene.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(w).setScale(1.1).setDepth(7);
+  scene.tweens.add({ targets: blitz, alpha: 0, duration: 160, onComplete: () => blitz.destroy() });
   for (let i = 0; i < 12; i++) {
     const r = scene.add.circle(m.x1 + c * Math.random() * 14, m.y1 + sn * Math.random() * 14, 6 + Math.random() * 6, 0xbdbdbd, 0.6).setDepth(6.5);
     scene.tweens.add({ targets: r, x: r.x + c * (14 + Math.random() * 40) + (Math.random() - 0.5) * 22, y: r.y + sn * (14 + Math.random() * 40) + (Math.random() - 0.5) * 22, alpha: 0, scale: 2.6, duration: 1000, onComplete: () => r.destroy() });
@@ -141,7 +141,7 @@ export function leopardKanone(scene, m, s) {
   const g = scene.add.graphics().setDepth(7);   // Leuchtspur der Granate
   g.lineStyle(3, 0xffcc80, 1).lineBetween(m.x1, m.y1, m.x2, m.y2);
   scene.tweens.add({ targets: g, alpha: 0, duration: 140, onComplete: () => g.destroy() });
-  if (scene.lokal && Math.hypot(scene.lokal.x - m.x1, scene.lokal.y - m.y1) < 700) scene.cameras.main.shake(180, 0.006);
+  if (scene.lokal && Math.hypot(scene.lokal.x - m.x1, scene.lokal.y - m.y1) < 500) scene.cameras.main.shake(110, 0.003);
   ton.kanone(m.x1, m.y1);
 }
 
@@ -262,7 +262,7 @@ export function absturzAktualisieren(scene, s, dt, aktEbene) {
   if (!a.wrack) {
     a.wrack = true;
     scene.explosion?.(s.evakAX, s.evakAY, 90, 1.3);
-    if (scene.lokal && Math.hypot(scene.lokal.x - s.evakAX, scene.lokal.y - s.evakAY) < 900) scene.cameras.main.shake(500, 0.012);
+    if (scene.lokal && Math.hypot(scene.lokal.x - s.evakAX, scene.lokal.y - s.evakAY) < 700) scene.cameras.main.shake(300, 0.006);
   }
   a.box.setPosition(s.evakAX, s.evakAY).setRotation(s.evakW + 0.12).setScale(1);
   a.bild.setTint(0x3d3a38);

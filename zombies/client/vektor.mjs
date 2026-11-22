@@ -524,7 +524,7 @@ function glatt1(s, wl, seed) {
   return a + (b - a) * w;
 }
 const rausch = (s, wl, seed) => 0.75 * glatt1(s, wl, seed) + 0.25 * glatt1(s, wl * 0.37, seed + 101);
-const FADE_KNOTEN = 72, FADE_ENDE = 24;   // an Einmündungen/Enden läuft die Abweichung auf 0 aus
+const FADE_KNOTEN = 72, FADE_ENDE = 24, KNOTEN_FREI = 120;   // um Knoten (Eckbögen) bleiben die Kanten auf 120 px exakt gerade   // an Einmündungen/Enden läuft die Abweichung auf 0 aus
 // Linie dicht abtasten (alle ~6 px, Originalpunkte bleiben): Position, Bogenlänge, Normale (links, mit begrenzter Gehrung), Ausblendung
 function dichten(pts, knoten) {
   const X = [], Y = [], S = [], fix = [];
@@ -548,12 +548,28 @@ function dichten(pts, knoten) {
     }
     const L = Math.hypot(nx, ny) || 1, fk = Math.min(2, c / L);
     mx[j] = nx / L * fk; my[j] = ny / L * fk;
-    let w = 1; for (const [fs, fl] of fix) w = Math.min(w, Math.abs(S[j] - fs) / fl);
+    let w = 1; for (const [fs, fl] of fix) w = Math.min(w, Math.max(0, Math.abs(S[j] - fs) - (fl === FADE_KNOTEN ? KNOTEN_FREI : 0)) / fl);
     f[j] = w >= 1 ? 1 : w * w * (3 - 2 * w);
   }
   return { n, x: X, y: Y, s: S, mx, my, f };
 }
-function dichtL(l, v) { return l._d ?? (l._d = dichten(l.pts, v.knoten)); }
+// Knicke von Feld- und Fußwegen glatt runden (Eckenschneiden, Anschlusspunkte und Enden bleiben fest)
+function weichLinie(pts, knoten) {
+  let p = pts;
+  for (let it = 0; it < 2 && p.length > 2; it++) {
+    const q = [p[0]];
+    for (let i = 1; i < p.length - 1; i++) {
+      if ((knoten.get(knotenSchluessel(p[i])) ?? 0) > 1) { q.push(p[i]); continue; }
+      const a = p[i - 1], b = p[i], c = p[i + 1];
+      const l1 = Math.hypot(b[0] - a[0], b[1] - a[1]), l2 = Math.hypot(c[0] - b[0], c[1] - b[1]);
+      const f1 = Math.min(0.5, 14 / (l1 || 1)), f2 = Math.min(0.5, 14 / (l2 || 1));
+      q.push([b[0] + (a[0] - b[0]) * f1, b[1] + (a[1] - b[1]) * f1], [b[0] + (c[0] - b[0]) * f2, b[1] + (c[1] - b[1]) * f2]);
+    }
+    q.push(p[p.length - 1]); p = q;
+  }
+  return p;
+}
+function dichtL(l, v) { return l._d ?? (l._d = dichten(AUTO.has(l.t) || l.t === 'service' || l.t === 'pedestrian' ? l.pts : weichLinie(l.pts, v.knoten), v.knoten)); }
 // seitlich um o versetzte, weich schwankende Linie: comps = [[Amplitude px, Seed, Wellenlänge px], …]
 function wandern(d, o, comps) {
   const out = new Array(d.n);
@@ -620,7 +636,8 @@ function eckenBerechnen(welt, linien, knoten) {
           const u0x = dx / L, u0y = dy / L;
           for (let k = j + dir; L < 64 && k >= 0 && k < l.pts.length; k += dir) {
             const ex = l.pts[k][0] - l.pts[i][0], ey = l.pts[k][1] - l.pts[i][1], EL = Math.hypot(ex, ey);
-            if (EL < 4 || (ex * u0x + ey * u0y) / EL < 0.96) break;
+            const sx = l.pts[k][0] - l.pts[k - dir][0], sy = l.pts[k][1] - l.pts[k - dir][1], SL = Math.hypot(sx, sy) || 1;
+            if (EL < 4 || (ex * u0x + ey * u0y) / EL < 0.985 || (sx * u0x + sy * u0y) / SL < 0.975) break;
             dx = ex; dy = ey; L = EL; j = k;
           }
           (arme.get(key) ?? arme.set(key, []).get(key)).push({ x: l.pts[i][0], y: l.pts[i][1], ux: dx / L, uy: dy / L, a: Math.atan2(dy, dx), L, hw, radius, gw, kerb: l.kerb, farbe: l.t === 'track' ? '#c9b98f' : '#d8cfb0' });

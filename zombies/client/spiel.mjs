@@ -1207,9 +1207,11 @@ class Ort extends Phaser.Scene {
   // Maßstab für Bildschirmelemente in der Welt (Namen, Balken, Symbole, Stick): drinnen läuft die Kamera 3,4-fach näher,
   // diese Dinge sollen aber so groß wirken wie draußen (= Grundzoom × Wahl) – also durch den Innenzoom teilen
   uiMass() {
-    if (!this.feinInnen()) return 1;
     const z = this.cameras.main.zoom;
-    return z > 0 ? Math.min(1, this.grundZoom * this.zoomWahl / z) : 1;
+    if (!(z > 0)) return 1;
+    const deckel = 1.18 / z;   // Namen (11 px) wachsen beim Ranzoomen nicht über ~13 px Bildschirmhöhe
+    if (!this.feinInnen()) return Math.min(1, deckel);
+    return Math.min(1, deckel, this.grundZoom * this.zoomWahl / z);
   }
 
   // Kamerazoom: Bildschirmgröße × eigene Wahl (Knöpfe, Mausrad, +/−) × drinnen näher
@@ -2772,8 +2774,8 @@ class Ort extends Phaser.Scene {
     this.tweens.add({ targets: g, x: (m.x2 - mx) * (1 - l1), y: (m.y2 - my) * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => g.destroy() });
     // Mündungsblitz (additiv) und Pulverrauch
     const blitz = this.add.image(mx, my, 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(wb)
-      .setScale(kanone || evak ? 1.0 : 0.5).setDepth(7);
-    this.tweens.add({ targets: blitz, alpha: 0, scale: blitz.scale * 1.25, duration: kanone ? 160 : 90, onComplete: () => blitz.destroy() });
+      .setScale(kanone || evak ? 0.6 : 0.32).setDepth(7);
+    this.tweens.add({ targets: blitz, alpha: 0, duration: kanone ? 100 : 60, onComplete: () => blitz.destroy() });
     if (kanone) {
       for (let i = 0; i < 6; i++) {
         const r = this.add.circle(mx + (Math.random() - 0.5) * 10, my + (Math.random() - 0.5) * 10, 5 + Math.random() * 5, 0xbdbdbd, 0.55).setDepth(6.5);
@@ -2818,8 +2820,8 @@ class Ort extends Phaser.Scene {
     const staub = this.add.circle(x, y, 10, 0x9e9e9e, 0.5).setDepth(7.7);
     this.tweens.add({ targets: staub, scale: 3, alpha: 0, duration: 900, onComplete: () => staub.destroy() });
     if (this.lokal) {
-      const nah = Math.max(0, 1 - Math.hypot(this.lokal.x - x, this.lokal.y - y) / 420);
-      if (nah > 0) this.cameras.main.shake(140, 0.003 + 0.006 * nah);
+      const nah = Math.max(0, 1 - Math.hypot(this.lokal.x - x, this.lokal.y - y) / 300);
+      if (nah > 0) this.cameras.main.shake(100, 0.0015 + 0.003 * nah);
     }
   }
 
@@ -2844,8 +2846,14 @@ class Ort extends Phaser.Scene {
     const brand = this.add.circle(x, y, r * 0.35, 0x1b1b1b, 0.5).setDepth(0.95);   // Brandfleck am Boden
     this.tweens.add({ targets: brand, alpha: 0, duration: 6000, onComplete: () => brand.destroy() });
     if (this.lokal) {
-      const d = Math.hypot(this.lokal.x - x, this.lokal.y - y), nah = Math.max(0, 1 - d / 520);
-      if (nah > 0) this.cameras.main.shake(120 + 220 * staerke * nah, 0.004 + 0.012 * staerke * nah);
+      const d = Math.hypot(this.lokal.x - x, this.lokal.y - y);
+      if (staerke < 0.5) {   // Puma-Einschlag: nur leichtes Zucken, 25 m Umkreis
+        const nah = Math.max(0, 1 - d / 200);
+        if (nah > 0) this.cameras.main.shake(100, 0.0008 * nah);
+      } else {
+        const nah = Math.max(0, 1 - d / 450);
+        if (nah > 0) this.cameras.main.shake(60 + 110 * staerke * nah, 0.002 + 0.006 * staerke * nah);
+      }
     }
     if (staerke >= 0.9) ton.explosion(x, y);
   }
@@ -3067,12 +3075,13 @@ class Ort extends Phaser.Scene {
     this.stick.clear();
     if (j.id === null) return;
     // scrollFactor 0 wird trotzdem vom Kamerazoom gestreckt (um die Bildmitte): drinnen (Zoom ×3,4) auf die Größe draußen zurückrechnen
-    const k = this.uiMass(), cam = this.cameras.main, cx = cam.width / 2, cy = cam.height / 2;
+    // konstante Bildschirmgröße: den Kamerazoom (Streckung um die Bildmitte) herausrechnen, drinnen wie draußen
+    const cam = this.cameras.main, cx = cam.width / 2, cy = cam.height / 2, k = cam.zoom > 0 ? 1 / cam.zoom : 1;
     const X = v => (v - cx) * k + cx, Y = v => (v - cy) * k + cy;
-    this.stick.fillStyle(0xffffff, 0.12).fillCircle(X(j.bx), Y(j.by), 60 * k);
-    this.stick.lineStyle(2 * k, 0xffffff, 0.3).strokeCircle(X(j.bx), Y(j.by), 60 * k);
-    this.stick.lineStyle(1 * k, 0xffffff, 0.2).strokeCircle(X(j.bx), Y(j.by), 33 * k);
-    this.stick.fillStyle(0xffffff, 0.45).fillCircle(X(j.bx + j.vx * 60), Y(j.by + j.vy * 60), 22 * k);
+    this.stick.fillStyle(0xffffff, 0.08).fillCircle(X(j.bx), Y(j.by), 80 * k);
+    this.stick.lineStyle(1.5 * k, 0xffffff, 0.22).strokeCircle(X(j.bx), Y(j.by), 80 * k);
+    this.stick.lineStyle(1 * k, 0xffffff, 0.15).strokeCircle(X(j.bx), Y(j.by), 48 * k);
+    this.stick.fillStyle(0xffffff, 0.35).fillCircle(X(j.bx + j.vx * 60), Y(j.by + j.vy * 60), 28 * k);
   }
 
   // ---------- Aktionen ----------
@@ -3279,18 +3288,18 @@ class Ort extends Phaser.Scene {
       return;
     }
     const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr' || m.art === 'mg' || m.art === 'scharfschuetze';
-    const vorn = 16, lang = gewehr ? 38 : schrot ? 22 : 26;
+    const vorn = 16, fk = gewehr ? 0.55 : schrot ? 0.65 : 0.4, lang = (gewehr ? 38 : schrot ? 22 : 26) * fk, br = 3.5 * fk;
     const g = this.add.graphics().setDepth(7);
     // Feuerzunge: breit und gelb an der Mündung, schmal und rot nach vorn auslaufend
     g.fillStyle(0xffe082, 0.95);
-    g.fillTriangle(m.x1 + c * vorn - sn * 3.5, m.y1 + sn * vorn + c * 3.5, m.x1 + c * vorn + sn * 3.5, m.y1 + sn * vorn - c * 3.5, m.x1 + c * (vorn + lang), m.y1 + sn * (vorn + lang));
+    g.fillTriangle(m.x1 + c * vorn - sn * br, m.y1 + sn * vorn + c * br, m.x1 + c * vorn + sn * br, m.y1 + sn * vorn - c * br, m.x1 + c * (vorn + lang), m.y1 + sn * (vorn + lang));
     g.fillStyle(0xff7043, 0.8);
-    g.fillTriangle(m.x1 + c * (vorn + 4) - sn * 2, m.y1 + sn * (vorn + 4) + c * 2, m.x1 + c * (vorn + 4) + sn * 2, m.y1 + sn * (vorn + 4) - c * 2, m.x1 + c * (vorn + lang * 0.7), m.y1 + sn * (vorn + lang * 0.7));
+    g.fillTriangle(m.x1 + c * (vorn + 4) - sn * br * 0.57, m.y1 + sn * (vorn + 4) + c * br * 0.57, m.x1 + c * (vorn + 4) + sn * br * 0.57, m.y1 + sn * (vorn + 4) - c * br * 0.57, m.x1 + c * (vorn + lang * 0.7), m.y1 + sn * (vorn + lang * 0.7));
     this.tweens.add({ targets: g, alpha: 0, duration: schrot ? 90 : 110, onComplete: () => g.destroy() });
     // Mündungsblitz (Survivor-Paket), additiv: das Schwarz im Bild verschwindet
     const blitz = this.add.image(m.x1 + c * (vorn - 4), m.y1 + sn * (vorn - 4), 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5)
-      .setBlendMode('ADD').setRotation(w).setScale(gewehr ? 0.59 : schrot ? 0.53 : 0.42).setDepth(7);
-    this.tweens.add({ targets: blitz, alpha: 0, duration: 90, onComplete: () => blitz.destroy() });
+      .setBlendMode('ADD').setRotation(w).setScale(gewehr ? 0.32 : schrot ? 0.34 : 0.17).setDepth(7);
+    this.tweens.add({ targets: blitz, alpha: 0, duration: 60, onComplete: () => blitz.destroy() });
   }
 
   stoss(m) {
