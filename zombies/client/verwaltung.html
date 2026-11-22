@@ -556,6 +556,24 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     </div>
 
     <div class="feld">
+      <label for="lagerWelle">Lager-Welle: Zombies</label>
+      <div class="wertzeile">
+        <input type="range" id="lagerWelle" min="0" max="400" step="10">
+        <span class="wert" id="lagerWelleWert">200</span>
+      </div>
+      <p class="hinweis">Sobald alle Menschen (Bots zählen nicht) gleichzeitig im Bundeswehr-Lager sind, greift eine Welle von so vielen Zombies aus drei bis vier Richtungen an, gestaffelt über etwa 30 Sekunden. Sie zählt nicht zur normalen Zombie-Obergrenze, die übrigen Zombies bleiben; die Soldaten verteidigen wie gewohnt. 0 = aus.</p>
+    </div>
+
+    <div class="feld">
+      <label for="lagerWellePause">Lager-Welle: Pause</label>
+      <div class="wertzeile">
+        <input type="range" id="lagerWellePause" min="1" max="120" step="1">
+        <span class="wert" id="lagerWellePauseWert">10 min</span>
+      </div>
+      <p class="hinweis">Höchstens alle so viele (echte) Minuten eine Lager-Welle. Ausgelöst wird sie bei jedem erneuten Zustand „alle im Lager“, nachdem die Pause vorbei ist.</p>
+    </div>
+
+    <div class="feld">
       <label class="schalter" for="hordeZieleZeigen">
         <input type="checkbox" id="hordeZieleZeigen">
         <span class="anzeige" aria-hidden="true"></span>
@@ -2857,13 +2875,13 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     var tempo = $("tempo");
     if (!zeitGeber["tempo"] && !istFokussiert(tempo)) { tempo.value = z.tempo; }
     $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
-    [["hordeZiel", z.hordeZiel || 3.5], ["hordeTrupp", z.hordeTrupp || 10], ["hordeReichweite", z.hordeReichweite || 18], ["ueberraschung", z.ueberraschung === undefined ? 3 : z.ueberraschung]].forEach(function (p) {
+    [["hordeZiel", z.hordeZiel || 3.5], ["hordeTrupp", z.hordeTrupp || 10], ["hordeReichweite", z.hordeReichweite || 18], ["lagerWelle", z.lagerWelle === undefined ? 200 : z.lagerWelle], ["lagerWellePause", z.lagerWellePause || 10], ["ueberraschung", z.ueberraschung === undefined ? 3 : z.ueberraschung]].forEach(function (p) {
       var el = $(p[0]);
       if (!zeitGeber[p[0]] && !istFokussiert(el)) el.value = p[1];
       $(p[0] + "Wert").textContent = welleText(p[0], Number(el.value));
     });
   }
-  function welleText(id, v) { return id === "hordeZiel" ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : id === "ueberraschung" ? v + " %" : String(v); }
+  function welleText(id, v) { return id === "hordeZiel" ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : id === "lagerWelle" ? (v ? String(v) : "aus") : id === "lagerWellePause" ? v + " min" : id === "ueberraschung" ? v + " %" : String(v); }
 
   function rendereSpiel(d) {
     var e = d.einstellungen || {};
@@ -3002,7 +3020,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
       sendenTeil("zombies", "tempo", Number(tempo.value));
     });
 
-    ["hordeZiel", "hordeTrupp", "hordeReichweite", "ueberraschung"].forEach(function (id) {
+    ["hordeZiel", "hordeTrupp", "hordeReichweite", "lagerWelle", "lagerWellePause", "ueberraschung"].forEach(function (id) {
       var el = $(id);
       el.addEventListener("input", function () { $(id + "Wert").textContent = welleText(id, Number(el.value)); });
       el.addEventListener("change", function () {
@@ -3309,7 +3327,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
 
   // ---------- Zahlenfelder statt Schieber ----------
   var ORIG = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-  var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
+  var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', lagerWelle: 'zombies.lagerWelle', lagerWellePause: 'zombies.lagerWellePause', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
     tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnNebelMorgen: 'nebel.morgen', tnNebelAbend: 'nebel.abend', tnNebelSicht: 'nebel.sicht', tnNebelZombie: 'nebel.zombie', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',

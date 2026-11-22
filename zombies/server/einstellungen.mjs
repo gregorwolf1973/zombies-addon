@@ -291,6 +291,8 @@ export function bereinige(e = {}, alt = {}) {
       hordeZieleZeigen: typeof z.hordeZieleZeigen === 'boolean' ? z.hordeZieleZeigen : false,   // Prüfwerkzeug: Ziel der Horde für Superuser anzeigen
       hordeTrupp: Math.round(zahl(z.hordeTrupp, 1, 300, 10)),   // Angriffstrupp je Ziel: Größe in Zombies (±30 % Streuung im Code, wächst mit der Horde)
       hordeReichweite: Math.round(zahl(z.hordeReichweite, 5, 60, 18)), // so nah (Meter) an Spielern/Bots/Soldaten/Menschen löst sich ein Trupp
+      lagerWelle: Math.round(zahl(z.lagerWelle, 0, 400, 200)),   // Zombies der Welle, wenn alle Menschen im Bundeswehr-Lager sind (0 = aus)
+      lagerWellePause: Math.round(zahl(z.lagerWellePause, 1, 120, 10)),   // höchstens alle … Minuten eine Lager-Welle
       ueberraschung: Math.round(zahl(z.ueberraschung, 0, 100, 3)),   // % Chance, dass beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto ein Zombie herausspringt
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
@@ -364,7 +366,7 @@ export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
 export function grundwerte() {
   return {
     superuserHash: '', zugangscode: '', karte: 'level1', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, innenMassstab: false, innenTempo: 35, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
-    zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
+    zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },
