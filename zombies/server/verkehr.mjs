@@ -308,7 +308,7 @@ export class Verkehr {
       const imWeg = [...s.spieler.values(), ...s.menschen.values()].some(p => !p.ebene && p.sichtbar !== false && Math.hypot(p.x - vorn.x, p.y - vorn.y) < 30);
       // Abstand halten, Vorfahrt an Kreuzungen, Festgefahren: siehe fahrtFaktor / festgefahren
       const lauf = this.fahrtFaktor(id, f, inf, dt);
-      let rest = (TEMPO[f.art] ?? 100) * dt * (imWeg ? (inf.durchfahrt ? 0.3 : 0) : 1) * lauf.faktor;
+      let rest = (TEMPO[f.art] ?? 100) * dt * (imWeg ? (inf.durchfahrt ? 0.3 : 0) : 1) * lauf.faktor * (inf.evakuierung && inf.abfahrt ? 0.6 : 1);   // abfahrender Evakuierungsbus rollt langsam: man kann noch aufspringen
       const x0 = f.x, y0 = f.y;
       while (rest > 0) {
         const ziel = inf.weg[inf.pos + 1];

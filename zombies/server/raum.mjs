@@ -190,7 +190,7 @@ const SICHT_VORGABE = { w: 1100, h: 700 }, SICHT_MAX = 2600, SICHT_MAX_FLUG = 60
 const EINGABE_GUTHABEN_MAX = 1.5;   // Sekunden Bewegung, die der Server nach einem Netz-Hänger nachholt
 const ZWEI_PI = Math.PI * 2;
 const ZOMBIE_HP = 100;   // Vorgabe; wirksam ist die Einstellung zombieLeben
-const STOSS_WEG = 34;   // Schläger und Faust stoßen den Zombie zurück (Waffenwerte: WAFFEN in client/welt.mjs)
+const STOSS_WEG = 11;   // Schläger und Faust stoßen den Zombie etwa 1,4 m zurück (echter Maßstab 8 px/m; früher 34 px = 4 m; Waffenwerte: WAFFEN in client/welt.mjs)
 const ANKUNFT_ZOMBIEFREI = 144;   // Pixel (4,5 Kacheln): so weit um den Ankunftspunkt entstehen beim ersten Betreten keine Zombies
 const SCHONZEIT_EBENE = 1;   // Sekunden nach einem Ebenenwechsel, in denen Zombies nicht beißen
 const BISS_PRO_SEK = 14;
@@ -241,6 +241,7 @@ const blassStufe = rest => rest >= 20 ? 0 : Math.max(0, Math.min(10, Math.ceil((
 // Spielerdaten in der Form, die lautstaerke() erwartet
 const sprachDaten_ = p => ({ x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: flach(p.rucksack) });
 
+const KLETTER_ZEIT = 0.25, KLETTER_SPRUNG = 0.3;   // s: Dagegenlaufen bis zum Sprung; Ruhe der Eingabe während des Sprungs
 export class SpielRaum extends Room {
   maxClients = 10;
   // Gesendet wird direkt nach jedem PATCH/TICK-ten Simulationsschritt (siehe setSimulationInterval), damit der Zeitstempel
@@ -1365,7 +1366,7 @@ export class SpielRaum extends Room {
     const tuerK = this.tuerKontext(p, 'zu');
     if (tuerK) return tuerK;
     // an einer Hecke, einem Gartenzaun oder einer Gartenmauer: drübersteigen
-    if (!p.ebene) { const z = zaunUeberstieg(this.welt, p.x, p.y, p.richtung, W.spielerRadius); if (z) return { art: 'klettern', ziel: z, dauer: 0.7 }; }
+    if (!p.ebene) { const z = zaunUeberstieg(this.welt, p.x, p.y, p.richtung, W.spielerRadius); if (z) return { art: 'klettern', ziel: z, dauer: 0.25 }; }
     return null;
   }
 
@@ -1944,7 +1945,7 @@ export class SpielRaum extends Room {
       if (k.tuer && !x.bot) x.tuerSperre = { key: k.key, x: (k.tuer.x + 0.5) * kachelVon(this.wv(p.ebene)), y: (k.tuer.y + 0.5) * kachelVon(this.wv(p.ebene)), ebene: p.ebene ?? '' };
     }
     else if (k.art === 'ansprechen') this.stadt?.ansprechen(sid, p, k.id);
-    else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; this.broadcast('klettern', { x: p.x, y: p.y, id: sid }); }
+    else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; x.sprungT = KLETTER_SPRUNG; this.broadcast('klettern', { x: p.x, y: p.y, id: sid }); }
     else if (k.art === 'aufheben') {
       const b = this.state.boden.get(k.id);
       if (!b || (this.bodenBrauchtPlatz(p, b.ding) && !kannAufnehmen(p.rucksack, p.plaetze, b.ding))) return;
@@ -2702,6 +2703,7 @@ export class SpielRaum extends Room {
     p.sicher = safe ? safe.id : this.imLagerSafe(p) ? 'lager' : '';
     if (safe) { x.letzterSafe = safe.id; if (!x.bot) this.teamSafe = safe.id; }   // Team-Safe: zuletzt von einem echten Spieler betreten
     if (p.unten || p.anBord || p.kamera) { this.eingabeVerwerfen(p, x); return; }   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
+    if (x.sprungT > 0) { x.sprungT -= dt; this.eingabeVerwerfen(p, x); return; }   // Zaunsprung läuft: keine Bewegung, Client und Server bleiben einig
     const schritte = this.eingabeSchritte(p, x, dt);
     const e = x.eingabe;
     if (p.zombie > 0) {
@@ -2808,15 +2810,16 @@ export class SpielRaum extends Room {
     x.pause = Math.max(0, pause);
   }
 
-  // Über Hecken, Gartenzäune und -mauern steigen: etwa 0,9 s an derselben Stelle dagegenlaufen
+  // Über Hecken, Gartenzäune und -mauern steigen: kurz (0,25 s) dagegenlaufen, dann Sprung direkt hinter den Zaun.
+  // Kurze Aussetzer (Rutschen am Zaun, Zellkante) setzen den Zähler nicht zurück; während des Sprungs (Client: 0,32 s) ruht die Eingabe.
   klettern(id, p, x, e, laenge, steckt, dt) {
-    // zählt, solange direkt in Laufrichtung ein Zaun ist – auch wenn man dabei am Zaun entlangrutscht
     const z = p.ebene ? null : zaunUeberstieg(this.welt, p.x, p.y, Math.atan2(e.dy, e.dx), W.spielerRadius, true);
-    if (!z) { x.kletter = 0; return; }
+    if (!z) { x.kletterLos = (x.kletterLos ?? 0) + dt; if (x.kletterLos > 0.2) x.kletter = 0; return; }
+    x.kletterLos = 0;
     x.kletter = (x.kletter ?? 0) + dt;
-    if (x.kletter < 0.8) return;
+    if (x.kletter < KLETTER_ZEIT) return;
     x.kletter = 0;
-    p.x = z.x; p.y = z.y;
+    p.x = z.x; p.y = z.y; x.sprungT = KLETTER_SPRUNG;
     this.broadcast('klettern', { x: z.x, y: z.y, id });
   }
 

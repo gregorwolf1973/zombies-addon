@@ -170,8 +170,14 @@ test('Über Gartenzäune steigen: länger dagegenlaufen, dann drüber; Kartenran
     // 1. schräg dagegenlaufen (am Handy selten genau senkrecht)
     p.ebene = ''; p.x = (ort.x + 0.5) * KACHEL; p.y = (ort.fy - 1.1) * KACHEL;
     c.send('eingabe', { dx: 0.3, dy: 0.95 });
+    const t0 = Date.now();
     assert.ok(await bis(() => p.y > (ort.fy + 0.4) * KACHEL, 5000), 'nicht automatisch hinübergestiegen: ' + Math.round(p.x) + ',' + Math.round(p.y) + ' Ort ' + JSON.stringify(ort) + ' fein ' + !!w.fein);
     c.send('eingabe', { dx: 0, dy: 0 });
+    // Sprung kommt schnell (Anlauf ~1 s + 0,25 s Dagegenlaufen), Landung direkt hinter dem Zaun (Zaun 1 m = 8 px; kein Weitsprung)
+    assert.ok(Date.now() - t0 < 2500, 'Überstieg dauert zu lange: ' + (Date.now() - t0) + ' ms');
+    assert.ok(p.y - (ort.fy + 0.125) * KACHEL < 24, 'Landung zu weit hinter dem Zaun: ' + Math.round(p.y - (ort.fy + 0.125) * KACHEL) + ' px');
+    const ly = p.y; await new Promise(r => setTimeout(r, 500));
+    assert.ok(Math.abs(p.y - ly) < 1, 'Figur läuft nach dem Sprung nach');
     // 2. mit dem Aktionsknopf zurück
     await new Promise(r => setTimeout(r, 300));
     p.x = (ort.x + 0.5) * KACHEL; p.y = ort.fy * KACHEL + 16; p.richtung = -Math.PI / 2;
