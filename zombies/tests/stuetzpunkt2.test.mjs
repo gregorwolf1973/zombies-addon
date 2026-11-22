@@ -330,7 +330,7 @@ test('Überrennen: nach N Spieltagen fällt der Stützpunkt – Zombies an den P
   const alle = [...raum.state.zombies.values()];
   const postenOrte = sp.teile.filter(t => t.art === 'mgnest' || (t.art === 'posten' && ['soldat', 'arzt', 'verwundet'].includes(t.rolle)));
   assert.ok(postenOrte.every(t => alle.some(z => abstand(z, t) < 110)), 'ein Posten ohne Zombie in der Nähe');
-  assert.ok(nachrichten.meldung.some(m => m.lang && /Der Bundeswehr-Stützpunkt ist gefallen!/.test(m.text)), 'keine lange Meldung');
+  assert.ok(await bis(() => nachrichten.meldung.some(m => m.lang && /Der Bundeswehr-Stützpunkt ist gefallen!/.test(m.text)), 10000), 'keine lange Meldung');   // Nachricht kommt über das Netz: darauf warten, nicht sofort prüfen
   // MG und Puma schweigen
   nachrichten.bwschuss.length = 0;
   for (const id of [...raum.state.zombies.keys()]) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); }
