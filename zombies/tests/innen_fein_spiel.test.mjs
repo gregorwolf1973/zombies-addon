@@ -218,9 +218,24 @@ test('Zimmertür schließen: Standpunkt neben der offenen Tür, auch mit Schrank
     // wer im Türrechteck steht (nicht nur in der Mitte), verhindert das Schließen
     const rand = zellMitte(w, t.zellen[0]);
     const zid = raum.setzeZombie(rand.x, rand.y, w.ebene, false);
-    assert.equal(raum.tuerKontext(p, 'zu'), null, 'Zombie in der Tür: Schließen müsste gesperrt sein');
+    assert.ok(raum.tuerBlockiert(raum.tuerKontext(p, 'zu'), p), 'Zombie in der Tür: Schließen müsste gesperrt sein');
+    {   // Aktion wird mit Meldung verweigert
+      const msgs = []; const cl = raum.clients.find(q => q.sessionId === c.sessionId), alt2 = cl.send; cl.send = (t, m) => { if (t === 'meldung') msgs.push(m.text); };
+      raum.starteAktion(cl);
+      cl.send = alt2;
+      assert.equal(p.aktion, '', 'Aktion trotz blockierter Tür gestartet');
+      assert.ok(msgs.some(m => /blockiert/.test(m)), 'keine Meldung „Tür blockiert“: ' + msgs);
+    }
     raum.state.zombies.delete(zid); raum.zombieInfo.delete(zid);
     w.behaelter = [];
+    // wer direkt in der Tür steht, blockiert sich nicht selbst und wird auf seine Seite geschoben
+    { const m = zellMitte(w, t.zellen[0]); Object.assign(p, m);
+      const k = raum.tuerKontext(p, 'zu');
+      assert.ok(!raum.tuerBlockiert(k, p), 'Schließender blockiert sich selbst');
+      raum.tuerSchieben(k, p);
+      const r = raum.tuerRechteck({ tuer: t, ebene: w.ebene });
+      assert.ok(p.x <= r.x0 || p.x >= r.x1 || p.y <= r.y0 || p.y >= r.y1, 'Schließender steht noch im Türblatt'); }
+    Object.assign(p, a);
     c.send('aktion');
     assert.ok(await bis(() => !raum.state.tueren.get(key).offen), 'Tür geht nicht zu');
     assert.ok(t.zellen.every(([x, y]) => w.hole(x, y) === T.INNENTUER), 'geschlossene Tür: nicht alle Zellen zu');

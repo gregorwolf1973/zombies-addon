@@ -1687,6 +1687,39 @@ export class SpielRaum extends Room {
     return [mitte(h.tuer, ''), ...(a ? [mitte(a, `h${wahl.nr}eg`)] : [])];
   }
 
+  // Rechteck des Türblatts (Feinraster: alle Zellen der Tür), sonst null
+  tuerRechteck(wahl) {
+    if (!wahl.tuer?.zellen) return null;
+    const K = kachelVon(this.wv(wahl.ebene)), xs = wahl.tuer.zellen.map(c => c[0]), ys = wahl.tuer.zellen.map(c => c[1]);
+    return { x0: Math.min(...xs) * K, y0: Math.min(...ys) * K, x1: (Math.max(...xs) + 1) * K, y1: (Math.max(...ys) + 1) * K, K };
+  }
+
+  // Blockiert eine Figur das Schließen? Nur Figuren, deren Mittelpunkt im Türblatt (plus ~halbe Zelle Rand) steht; wer schließt (`wer`), blockiert nie
+  tuerBlockiert(k, wer) {
+    const wahl = { key: k.key, tuer: k.tuer, ebene: k.ebene, nr: this.hausNr(k.key) };
+    const rect = this.tuerRechteck(wahl), rand = rect ? rect.K * 0.5 : 0;
+    return this.tuerStellen(wahl).some(o => [...this.state.spieler.values(), ...this.state.zombies.values()]
+      .some(q => q !== wer && !q.unten && (q.ebene ?? '') === o.ebene && (rect
+        ? q.x > rect.x0 - rand && q.x < rect.x1 + rand && q.y > rect.y0 - rand && q.y < rect.y1 + rand
+        : Math.hypot(q.x - o.x, q.y - o.y) < reichVon(this.wv(o.ebene), 20))));
+  }
+
+  // Der Schließende steht im Türblatt: auf seine Seite schieben (weg von der Tür, ~1 Zelle hinter den Rand)
+  tuerSchieben(k, p) {
+    const rect = this.tuerRechteck({ tuer: k.tuer, ebene: k.ebene });
+    if (!rect) return;
+    const rand = rect.K * 0.5;
+    if (!(p.x > rect.x0 - rand && p.x < rect.x1 + rand && p.y > rect.y0 - rand && p.y < rect.y1 + rand)) return;
+    const w = this.wv(k.ebene), dick = (rect.x1 - rect.x0) <= (rect.y1 - rect.y0);   // Türblatt dünn in x: Seiten links/rechts
+    const mx = (rect.x0 + rect.x1) / 2, my = (rect.y0 + rect.y1) / 2;
+    const rad = W.spielerRadius * (w.rs ?? 1), abst = rect.K + rad;
+    const kand = dick
+      ? [p.x < mx ? rect.x0 - abst : rect.x1 + abst, p.x < mx ? rect.x1 + abst : rect.x0 - abst].map(x => ({ x, y: p.y }))
+      : [p.y < my ? rect.y0 - abst : rect.y1 + abst, p.y < my ? rect.y1 + abst : rect.y0 - abst].map(y => ({ x: p.x, y }));
+    const ziel = kand.find(c => frei(w, c.x, c.y, W.spielerRadius));
+    if (ziel) { p.x = ziel.x; p.y = ziel.y; }
+  }
+
   // nächste bedienbare Tür: Zimmertür, Haustür von innen (am Ausgang) oder von außen
   tuerWahl(p) {
     let best = null, bd = Infinity;
@@ -1724,14 +1757,7 @@ export class SpielRaum extends Room {
     const offen = st ? st.offen : true, kaputt = !!st?.kaputt;
     const bar = this.tuerBarrikade(wahl.key);
     const basis = { key: wahl.key, tuer: wahl.tuer, ebene: wahl.ebene };
-    const schliessen = () => {
-      if (kaputt) return null;
-      const wf = wahl.tuer?.zellen ? this.wv(wahl.ebene) : null;   // Feinraster: mehrzellige Tür – belegt, wenn eine Figur das Türrechteck berührt (nicht nur die Mitte)
-      const rect = wf ? (() => { const K = kachelVon(wf), xs = wahl.tuer.zellen.map(c => c[0]), ys = wahl.tuer.zellen.map(c => c[1]); return { x0: Math.min(...xs) * K, y0: Math.min(...ys) * K, x1: (Math.max(...xs) + 1) * K, y1: (Math.max(...ys) + 1) * K }; })() : null;
-      const belegt = this.tuerStellen(wahl).some(o => [...this.state.spieler.values(), ...this.state.zombies.values()]
-        .some(q => (q.ebene ?? '') === o.ebene && (rect ? abstandBehaelter({ rect }, q.x, q.y) < (wf.radMax ?? 3) + 0.5 : Math.hypot(q.x - o.x, q.y - o.y) < reichVon(this.wv(o.ebene), 20))));
-      return belegt ? null : { ...basis, art: 'tuer_zu', dauer: 0.25 };
-    };
+    const schliessen = () => kaputt ? null : { ...basis, art: 'tuer_zu', dauer: 0.25 };   // ob etwas im Weg steht, prüft tuerBlockiert beim Start/Ende der Aktion
     const oeffnen = () => {
       const art = st?.verschlossen ? this.tuerArt(wahl.key) : 'frei';
       if (art === 'frei') return { ...basis, art: 'tuer_auf', dauer: 0.25 };
@@ -1950,6 +1976,7 @@ export class SpielRaum extends Room {
     if (k.art === 'durchsuchen' && k.behaelter?.art === 'auto' && !hat(p.rucksack, 'brechstange')) {
       return client.send('meldung', { text: '🔒 Der Kofferraum ist zu – dafür brauchst du eine ⚒️ Brechstange' });
     }
+    if (k.art === 'tuer_zu' && this.tuerBlockiert(k, p)) return client.send('meldung', { text: '🚪 Tür blockiert' });
     p.aktion = k.art; p.fortschritt = 0;
     x.aktionZiel = k;
     x.laermUhr = 0;
@@ -1982,9 +2009,11 @@ export class SpielRaum extends Room {
     }
     else if (k.art === 'funk') this.aufgaben?.funkAbsetzen(p, k.safe);
     else if (k.art === 'tuer_zu') {
+      if (this.tuerBlockiert(k, p)) { client?.send('meldung', { text: '🚪 Tür blockiert' }); return; }
+      this.tuerSchieben(k, p);
       this.setzeTuer(k.key, false);
       // von Hand geschlossen: die Auto-Öffnung greift für diese Tür erst wieder, wenn man sich > 80 px entfernt hat
-      if (k.tuer && !x.bot) x.tuerSperre = { key: k.key, x: (k.tuer.x + 0.5) * kachelVon(this.wv(p.ebene)), y: (k.tuer.y + 0.5) * kachelVon(this.wv(p.ebene)), ebene: p.ebene ?? '' };
+      if (k.tuer && !x.bot) x.tuerSperre = { key: k.key, tuer: k.tuer, ebene: p.ebene ?? '' };
     }
     else if (k.art === 'ansprechen') this.stadt?.ansprechen(sid, p, k.id);
     else if (k.art === 'klettern') { p.x = k.ziel.x; p.y = k.ziel.y; x.sprungT = KLETTER_SPRUNG; this.broadcast('klettern', { x: p.x, y: p.y, id: sid }); }
@@ -2719,7 +2748,7 @@ export class SpielRaum extends Room {
     const vorher = x.tuerPos; x.tuerPos = { x: p.x, y: p.y };
     const reset = () => { x.tuerT = 0; x.tuerKey = null; };
     const sp = x.tuerSperre;   // nach manuellem Schließen: Sperre bis > 80 px Abstand zur Tür
-    if (sp && (Math.hypot(p.x - sp.x, p.y - sp.y) > reichVon(this.wv(p.ebene), 80) || (p.ebene ?? '') !== sp.ebene)) x.tuerSperre = null;
+    if (sp && (abstandTuer(this.wv(sp.ebene), sp.tuer, p.x, p.y) > reichVon(this.wv(p.ebene), 80) || (p.ebene ?? '') !== sp.ebene)) x.tuerSperre = null;
     if (x.bot || p.unten || p.aktion || p.zombie > 0 || this.state.phase !== 'spiel' || x.ankunft || !p.ebene) return reset();
     const wahl = this.tuerWahl(p);
     if (!wahl?.tuer) return reset();
