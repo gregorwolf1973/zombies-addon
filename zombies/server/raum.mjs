@@ -541,6 +541,7 @@ export class SpielRaum extends Room {
     this.onMessage('kuehlschrank', client => this.kuehlschrank(client));
     this.onMessage('ausruhen', client => this.ausruhen(client));
     this.onMessage('antwort', (client, m) => this.antwort(client, m));
+    this.onMessage('raetsel_abbruch', (client, m) => this.raetselAbbruch(client, m));
     this.onMessage('fk_punkt', (client, m) => this.fkPunkt(client, m));
     this.onMessage('startwahl', (client, m) => this.startwahl(client, m));
     this.onMessage('tausch_start', (client, m) => this.tauschStart(client, m));
@@ -2571,6 +2572,12 @@ export class SpielRaum extends Room {
     const { antworten, richtigIndex } = mischeAntworten(f, this.rnd);
     this.offeneRaetsel.set(client.sessionId, { id: f.id, richtigIndex, seite: f.seite, richtig: f.richtig, bis: Date.now() + 120000, zweck });
     client.send('raetsel', { id: f.id, thema: f.thema, frage: f.frage, antworten, geloest: this.state.torGeloest, noetig: TOR_RAETSEL, tuer: zweck?.art === 'tuer', alle: zweck?.art === 'alle' ? { nr: zweck.nr, von: ALLE_FRAGEN } : null, handel: zweck?.art === 'handel' ? { nr: zweck.nr, von: zweck.von } : null });
+  }
+
+  // Frage weggeklickt (ohne Antwort): offene Frage verwerfen, der nächste Versuch bekommt eine neue
+  raetselAbbruch(client, m) {
+    const offen = this.offeneRaetsel.get(client.sessionId);
+    if (offen && (!m?.id || m.id === offen.id)) this.offeneRaetsel.delete(client.sessionId);
   }
 
   antwort(client, m) {

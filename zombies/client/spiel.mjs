@@ -3946,7 +3946,7 @@ function zeigeAufloesung(m) {
   }
 }
 let raetselAlle = false;
-function raetselZu() { clearTimeout(raetselTimer); raetselId = null; $('raetsel').style.display = 'none'; }
+function raetselZu() { clearTimeout(raetselTimer); if (raetselId) raum.send('raetsel_abbruch', { id: raetselId }); raetselId = null; $('raetsel').style.display = 'none'; }
 
 function balkenSetzen(id, wert) {
   const el = $(id).firstElementChild;
