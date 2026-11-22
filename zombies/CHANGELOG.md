@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.83.0 – 22.11.2026
+
+- Neu: Die Hauptkanone des Leopard erzeugt einen großen Feuerball, einen dichten Rauchkegel bis 25 m in Schussrichtung und aufgewirbelten Staub; ihre Druckwelle schleudert Zombies bis 10 m vor dem Rohr zurück und lässt sie kurz taumeln (Spieler werden nur geschubst).
+
 ## 0.82.0 – 22.11.2026
 
 - Neuer Radpanzer Boxer am Flugfeld Königsdorf (Level 3): Mit E bzw. dem Aktionsknopf einsteigen, bis zu 4 Spieler. Wer zuerst einsteigt, fährt. Gelenkt wird mit der Gehen-Taste bzw. dem Joystick. Der Boxer überrollt Zombies, kommt aber nicht durch Häuser oder Wasser.

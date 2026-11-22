@@ -53,3 +53,4 @@ tests/weltcache.test.mjs
 tests/welt.test.mjs
 tests/zaunkappen.test.mjs
 tests/zaunluecken.test.mjs
+tests/kanonenrauch.test.mjs
