@@ -204,7 +204,7 @@ const DURST_DAUER = 3600, HUNGER_DAUER = 5400;   // Sekunden von voll bis leer
 const SPEICHER_TAKT = 30;
 const ID_MUSTER = /^[a-f0-9]{32}$/;
 // Wegfeld der Zombies: geschlossene Zimmertüren zählen als Weg (sie hämmern sie auf), alles andere Blockierte nicht
-const BLOCKIERT_FELD = new Set([...BLOCKIERT].filter(t => t !== T.INNENTUER));
+const BLOCKIERT_FELD = new Set([...BLOCKIERT, T.WASSER].filter(t => t !== T.INNENTUER));
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const FERN_WEITE = 900;     // weiter als so viele px von allen Spielern weg: nur jeden FERN_TAKT-ten Takt rechnen
 const FERN_TAKT = 4;
@@ -2129,7 +2129,7 @@ export class SpielRaum extends Room {
     if ((art === 'schrank' || art === 'spind') && b.tuer && this.tuerArt(`${b.id.slice(0, b.id.lastIndexOf(':'))}:${b.tuer[0]},${b.tuer[1]}`) === 'raetsel') art = 'spind_belohnung';
     const tabelle = BEUTE[art] ?? [];
     const funde = [];
-    const n = 1 + (this.rnd() < 0.45 ? 1 : 0);
+    const n = Math.min(5, 1 + (this.rnd() < 0.45 ? 1 : 0) + Math.round(((b.teile ?? 1) - 1) * 0.6));   // langes Regal aus mehreren Modulen: mehr Beute
     let faktoren = this.fundFaktoren(b);
     const glueck = p && x && !x.bot ? SpielRaum.einstellungen.munitionsglueck : null;
     if (glueck) faktoren = mitMunitionsglueck(faktoren, p, x.munSerie, glueck);

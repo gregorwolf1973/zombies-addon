@@ -732,7 +732,7 @@ export function zeichneVektorDaecher(ctx, welt, rect) {
     const b = dachBild(g);
     if (b) begrenzt(g, () => { ctx.drawImage(b.bild, b.x, b.y, b.b, b.h); dachDetails(ctx, g); });
   });
-  for (const l of laternen(welt)) if (l.x > r.x0 - 30 && l.x < r.x1 + 30 && l.y > r.y0 - 30 && l.y < r.y1 + 30) laterneZeichnen(ctx, l);
+  // Laternenmasten werden nicht mehr gezeichnet (nur der nächtliche Lichtschein bleibt, Positionen: laternen(welt))
   // Haustüren: auf der echten Hauswand, an der Stelle, die der Rastertür am nächsten liegt, entlang der Wand gedreht
   for (const h of welt.haeuser) {
     if (!h.betretbar || !h.tuer) continue;

@@ -37,7 +37,7 @@ const TRUPP_TAKT = 0.5;               // Sekunden zwischen Trupp-Prüfungen
 const TRUPP_SPERRE = 25;              // Sekunden, bis dasselbe Ziel wieder einen Trupp bekommt
 const SEP = 26;                       // Schwarm: Abstand, ab dem Nachbarn sich abstoßen (px)
 const FELD_GEWICHT = 2.2;             // Wegefeld überwiegt Schwarmkräfte deutlich: zügiger Zug statt Wuseln
-const GESPERRT = new Set([...BLOCKIERT, T.TUER, T.BODEN].filter(t => t !== T.INNENTUER));   // Wegefeld führt nie durch Häuser (Türen sind zu): sonst hämmert die Horde an Haustüren
+const GESPERRT = new Set([...BLOCKIERT, T.WASSER, T.TUER, T.BODEN].filter(t => t !== T.INNENTUER));   // Wegefeld führt nie durch Häuser (Türen sind zu): sonst hämmert die Horde an Haustüren
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 
 export class Zombiewelle {

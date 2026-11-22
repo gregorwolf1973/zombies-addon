@@ -1,6 +1,6 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
-import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite, parkplatzBuchten } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
 import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
@@ -280,7 +280,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   }
   const nimm = (h, anzeige) => {
     const zellen = flaecheVon(h).filter(([x, y]) => hole(x, y) === T.BODEN);
-    if (zellen.length < 6 || BLOCKIERT.has(hole(h.tuer.x + h.raus.dx, h.tuer.y + h.raus.dy))) return false;   // Tür muss ins Freie führen
+    if (zellen.length < 6 || BLOCKIERT_BAU.has(hole(h.tuer.x + h.raus.dx, h.tuer.y + h.raus.dy))) return false;   // Tür muss ins Freie führen
     h.safe = anzeige; h.safeId = 's' + safeRooms.length;
     safeRooms.push({ id: h.safeId, name: anzeige, haus: h });
     return true;
@@ -340,7 +340,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     // der erste Platz in einem nicht winzigen Gebiet gewinnt
     const frei3 = i => {
       const cx = i % BREITE, cy = (i - cx) / BREITE;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (BLOCKIERT.has(hole(cx + dx, cy + dy))) return false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (BLOCKIERT_BAU.has(hole(cx + dx, cy + dy))) return false;
       return true;
     };
     const gebiet = new Int32Array(BREITE * HOEHE).fill(-1), groessen = [];
@@ -611,7 +611,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     const containerOK = (x, y) => {
       const t = hole(x, y);
       if ((t !== T.WIESE && t !== T.PLATZ) || imGarten(x, y) || objektKachel.has(y * BREITE + x)) return false;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (BLOCKIERT.has(hole(x + dx, y + dy))) return false;   // nie eine Engstelle zustellen
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (BLOCKIERT_BAU.has(hole(x + dx, y + dy))) return false;   // nie eine Engstelle zustellen
       if (nahTuer(x, y, 2)) return false;
       const cx = (x + 0.5) * KACHEL, cy = (y + 0.5) * KACHEL;
       if (Math.hypot(cx - start.x, cy - start.y) < KACHEL * 5) return false;
@@ -926,12 +926,7 @@ function baueFein(welt, karte, lbObj) {
   }
   // 3b. Pools und Schuppen aus dem Luftbild
   if (lbObj) feinFuellen(f, fb, FEIN, hole, lbObj, BLOCKIERT);
-  // 3c. Laternenmasten (amtliche Karte, karte.laternen in Spielpixeln): kleines festes Hindernis, ein Feinfeld (1 m) am Fahrbahnrand
-  for (const l of karte.laternen ?? []) {
-    const fx = Math.floor(l.x / FEIN_PX), fy = Math.floor(l.y / FEIN_PX);
-    if (fx < 0 || fy < 0 || fx >= fb || fy >= fh || hole(Math.floor(l.x / KACHEL), Math.floor(l.y / KACHEL)) === T.TUER) continue;
-    f[fy * fb + fx] = 1;
-  }
+  // 3c. Laternen sind keine Hindernisse mehr (karte.laternen liefert nur noch die Positionen für den nächtlichen Lichtschein)
   // 4. vor jeder Haustür einen Zugang freihalten (Türkachel und die zwei Kacheln davor)
   for (const h of welt.haeuser) {
     if (!h.tuer) continue;
