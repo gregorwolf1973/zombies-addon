@@ -248,6 +248,8 @@ const blassStufe = rest => rest >= 20 ? 0 : Math.max(0, Math.min(10, Math.ceil((
 const sprachDaten_ = p => ({ x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: flach(p.rucksack) });
 
 const KLETTER_ZEIT = 0.25, KLETTER_SPRUNG = 0.3;   // s: Dagegenlaufen bis zum Sprung; Ruhe der Eingabe während des Sprungs
+const TUER_SPAWN_ABSTAND = 120;   // px (8 px = 1 m): so nah an Haustüren erscheinen keine Zombies
+const TUER_MEIDEN = 32;           // px: Wandernde drehen ab, wenn sie näher an eine Haustür kommen
 export class SpielRaum extends Room {
   maxClients = 10;
   // Gesendet wird direkt nach jedem PATCH/TICK-ten Simulationsschritt (siehe setSimulationInterval), damit der Zeitstempel
@@ -2865,12 +2867,12 @@ export class SpielRaum extends Room {
             const alle = imWinkel(wf.kegel).filter(t => t[0] !== zid);
             for (let i = -2; i <= 2; i++) {   // Schrotgarbe
               const ww = w + i * wf.kegel / 2.5;
-              this.broadcast('schuss', { x1: p.x, y1: p.y, x2: p.x + Math.cos(ww) * wf.reichweite, y2: p.y + Math.sin(ww) * wf.reichweite, art: name });
+              this.broadcast('schuss', { x1: p.x, y1: p.y, x2: p.x + Math.cos(ww) * wf.reichweite, y2: p.y + Math.sin(ww) * wf.reichweite, art: name, ebene: p.ebene ?? '' });
             }
             treffer([ziel], wf.schaden); treffer(alle, wf.nebenSchaden);
           } else {
             const baum = gueteVon(ziel) >= 1 ? null : ersterBaum(welt, p.x, p.y, z.x, z.y), fehl = !!baum && !(this.rnd() < gueteVon(ziel));   // Fehlschuss: Spur endet am ersten Baum
-            this.broadcast('schuss', fehl ? { x1: p.x, y1: p.y, x2: baum.x, y2: baum.y, art: name } : { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name, z: zid });
+            this.broadcast('schuss', fehl ? { x1: p.x, y1: p.y, x2: baum.x, y2: baum.y, art: name, ebene: p.ebene ?? '' } : { x1: p.x, y1: p.y, x2: z.x, y2: z.y, art: name, z: zid, ebene: p.ebene ?? '' });
             if (!fehl) this.schaden(zid, z, wf.schaden * faktor(ziel), p, id);
             if (wf.pfeil) this.legeHin('pfeil', fehl ? baum.x : z.x, fehl ? baum.y : z.y, p.ebene);   // der Pfeil bleibt am Einschlagort liegen und lässt sich aufheben
           }
@@ -3306,6 +3308,10 @@ export class SpielRaum extends Room {
       info.steht = this.rnd() < 0.4;
       if (!info.steht) z.richtung = this.rnd() * Math.PI * 2;
     }
+    if (!ebene) {   // Wandernde meiden Haustüren (~4 m): abdrehen, vom Türpunkt weg
+      const td = this.tuerNahe(z.x, z.y, TUER_MEIDEN);
+      if (td) { z.richtung = Math.atan2(z.y - td.y, z.x - td.x) + (info.versatz ?? 0) * 0.5; info.steht = false; info.wechsel = Math.max(info.wechsel, 1); }
+    }
     if (!info.steht && !this.zombieGehen(z, z.richtung, W.zombieTempoWandern * (z.kriecht ? 0.5 : 1) * dt, dt, info)) {
       z.richtung += Math.PI * (0.5 + this.rnd());
     }
@@ -3448,6 +3454,25 @@ export class SpielRaum extends Room {
     this.nachspawn = mangel > Math.max(4, soll * 0.3) ? 1 : 2.5;
   }
 
+  // Türpunkte draußen (Haustüren + Safe-Room-Türen) im Raster; liefert den nächsten Türpunkt näher als `abstand` (höchstens 128 px) oder null
+  tuerNahe(x, y, abstand) {
+    if (!this.tuerRaster) {
+      this.tuerRaster = new Map();
+      const add = (px, py) => { const k = Math.floor(px / 128) + ',' + Math.floor(py / 128); (this.tuerRaster.get(k) ?? this.tuerRaster.set(k, []).get(k)).push({ x: px, y: py }); };
+      for (const h of this.welt.haeuser) if (h.tuer) add((h.tuer.x + 0.5) * KACHEL, (h.tuer.y + 0.5) * KACHEL);
+      for (const sr of this.welt.safeRooms) if (sr.vorTuer) add(sr.vorTuer.x, sr.vorTuer.y);
+    }
+    const cx = Math.floor(x / 128), cy = Math.floor(y / 128);
+    let best = null, bd = abstand;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      for (const t of this.tuerRaster.get((cx + dx) + ',' + (cy + dy)) ?? []) {
+        const d = Math.hypot(t.x - x, t.y - y);
+        if (d < bd) { bd = d; best = t; }
+      }
+    }
+    return best;
+  }
+
   neuerZombie(abstand) {
     // im Ring um einen zufälligen Spieler draußen (bei großen Karten), sonst irgendwo
     const draussen = [...this.state.spieler.values()].filter(p => !p.ebene);
@@ -3460,7 +3485,7 @@ export class SpielRaum extends Room {
         if (x < KACHEL || y < KACHEL || x > (BREITE - 1) * KACHEL || y > (HOEHE - 1) * KACHEL) continue;
       } else { x = (1 + this.rnd() * (BREITE - 8)) * KACHEL; y = (1 + this.rnd() * (HOEHE - 2)) * KACHEL; }
       if (!frei(this.welt, x, y, W.zombieRadius + 2)) continue;
-      if (this.welt.safeRooms.some(r => Math.hypot(r.vorTuer.x - x, r.vorTuer.y - y) < 120)) continue;
+      if (this.tuerNahe(x, y, TUER_SPAWN_ABSTAND)) continue;   // nie dicht an Haus-/Safe-Room-Türen erscheinen
       const nah = [...this.state.spieler.values()].some(p => Math.hypot(p.x - x, p.y - y) < abstand);
       if (nah) continue;
       // in Häusern lauern auch welche, aber seltener

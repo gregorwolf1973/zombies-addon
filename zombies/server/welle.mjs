@@ -142,7 +142,7 @@ export class Zombiewelle {
         const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
         if (x < KACHEL || y < KACHEL || x > (BREITE - 1) * KACHEL || y > (HOEHE - 1) * KACHEL) continue;
         if (!frei(welt, x, y, W.zombieRadius + 2) || drinnen(welt, x, y) || gesehen(x, y)) continue;
-        if (welt.safeRooms.some(s => Math.hypot(s.vorTuer.x - x, s.vorTuer.y - y) < 120)) continue;
+        if (r.tuerNahe(x, y, 120)) continue;   // nie dicht an Haus-/Safe-Room-Türen
         if (liste.some(q => Math.hypot(q.x - x, q.y - y) < W.zombieRadius * 1.6)) continue;
         liste.push({ x, y });
       }
