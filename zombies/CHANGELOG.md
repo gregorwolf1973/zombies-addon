@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.80.0 – 22.11.2026
+
+- Behoben: Horden standen unter Dauerfeuer nur und zuckten (jeder Schuss setzte neue Ziele und Verzug) – sie kommen jetzt stetig näher.
+- Behoben: Durchsuchen der Munitionskisten und Vorratskisten im Bundeswehr-Lager „hing“ (für dich leere Kiste wurde erneut gewählt; Fenster zeigte eine andere Kiste als die benutzte).
+- Behoben: Der Leopard an der B11 greift ins Gefecht am Rathaus ein (MG mindestens 45 m, wenn Spieler in der Nähe sind).
+- Geändert: Effekte im richtigen Maßstab (Zombietod, Blut, Rauch, Funken, Staub, Leuchtspur, Gegenstände am Boden, Schlagbögen); Nahkampf-Reichweiten etwa halbiert (Faust 2 m).
+- Geändert: Gezeichneter Boden mit gedämpftem Grün, betongraue Gehwege, Bäume neu gezeichnet (12 Formen, 20 Farben, jeder anders); Luftbild-Boden standardmäßig aus.
+- Geändert: Alle Geräte hören dieselben Zombies (Umkreis 90 m, unabhängig von der Bildschirmgröße); eigener Schalter „📻 Autoradio“ unabhängig von der Musik, Radio-Autos bis 60 m hörbar, jedes zehnte geparkte Auto spielt Radio.
+- Neu (Backend): Mischpult – alle Geräusche, Musik und Radio mit Regler, Probehören und Standard in einer Liste, wirkt sofort im Spiel.
+
 ## 0.79.0 – 22.11.2026
 
 - Behoben: Töne fielen beim Betreten/Verlassen eines Hauses aus – eigene Schüsse, Kills und Stöße sind jetzt immer hörbar; Töne aus anderen Häusern klingen nicht mehr mit; fremde Schüsse verdrängen die eigenen nicht; Ton wacht nach dem Sperrbildschirm zuverlässig auf.
