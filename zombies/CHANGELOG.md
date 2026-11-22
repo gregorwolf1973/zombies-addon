@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.79.0 – 22.11.2026
+
+- Behoben: Töne fielen beim Betreten/Verlassen eines Hauses aus – eigene Schüsse, Kills und Stöße sind jetzt immer hörbar; Töne aus anderen Häusern klingen nicht mehr mit; fremde Schüsse verdrängen die eigenen nicht; Ton wacht nach dem Sperrbildschirm zuverlässig auf.
+- Behoben: Der Held schießt im Nahbereich zuverlässig – Stoß beim Nachladen (Nachladen gut sichtbar, in Ruhe automatisch), ein naher Zombie bricht Durchsuchen/Türen ab, kurze Pause unter 3 m, Granate in der Hand → Stoß oder andere Waffe, kurzes Antippen des Feuerknopfs geht nicht verloren.
+- Geändert: Zombies laufen nicht mehr im Gleichschritt (eigener Reaktionsverzug, eigenes Tempo, Schlängeln, Taumeln, verstreute Lärmziele, eigener Schritttakt).
+- Neu: Lager-Welle – sind alle Spieler im Bundeswehr-Lager, greifen 200 Zombies aus mehreren Richtungen an (Anzahl und Pause im Backend, Vorgabe alle 10 Minuten).
+- Neu (Backend): Sprungleiste mit Suche, feste Statuszeile mit „Rückgängig“, Uhrzeiten als HH:MM, Faktoren als ×, Waffen als Tabelle, Geräusche mit Suche und Filter, größere Tippziele, Vorlagen sichern/laden/exportieren, nur noch ein Abruf.
+- Schneller: deutlich weniger Datenverkehr (normal etwa −88 %, große Horden etwa −58 %) durch Kompression, Autos nur im Sichtbereich, schlankere Zombie- und Eingabedaten.
+- Behoben: Bei einigen Häusern war der Startpunkt im Innenraum von Möbeln zugestellt; Handgranate in glaubhafter Größe.
+
 ## 0.78.0 – 22.11.2026
 
 - Behoben (Backend): Nach dem Umbau zeigte die Seite ab „Tempo unter Bäumen“ falsche Werte (Waffen, Nebel, Biss, Zombietypen, Verkehr, Bundeswehr …) und speicherte beim Antippen von +/− den falschen Wert; Baumtempo und maßstäbliche Innenräume sind wieder einstellbar.

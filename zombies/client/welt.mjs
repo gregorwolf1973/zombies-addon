@@ -15,7 +15,7 @@ export function setzeKartengroesse(b, h) { BREITE = b; HOEHE = h; }
 // Ohne Schalter bleibt alles beim Alten. Der Server gibt den Schalter vor (Einstellung oder ZOMBIES_INNEN1M), der Client folgt ihm.
 export let INNEN_FEIN = false;
 export function setzeInnenFein(an) { INNEN_FEIN = !!an; }
-export const INNEN_VERSION = 3;
+export const INNEN_VERSION = 4;
 // Tempo und Reichweiten drinnen: Figuren erscheinen drinnen halb so groß (INNEN_FIGUR) und die Kamera ist 3,4-fach näher;
 // 8 px = 1 m gilt drinnen wie draußen, aber das Bild läuft sonst 3,4-mal schneller vorbei. Faktor so, dass das Vorbeilaufen des Bildes
 // etwa wie draußen aussieht (ein Haus von 14 m durchquert man in gut 2 s).
