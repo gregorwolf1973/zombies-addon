@@ -147,17 +147,18 @@ const SCHUSS_MAX_SEK = 0.45;   // bei hoher Kadenz Schusstöne kürzen (Auskling
 // eine zugeordnete Datei abspielen; false = keine da (dann erzeugt das Spiel selbst einen Ton)
 // Ersatzton (ohne Datei): Lautstärke des Ereignisses (Mischpult) gilt auch für den eingebauten Klang; nur für den gleichen Aufruf
 let ersatzLaut = 1;
-function ersatzMerken(t) { ersatzLaut = Math.max(0, Math.min(1, (t?.laut ?? 100) / 100)); queueMicrotask(() => { ersatzLaut = 1; }); }
-function probe(id, x, y, extra = 1) {
-  const t = zuordnung[id];
-  if (!ctx || !t?.dateien?.length) { ersatzMerken(t); return false; }
+function ersatzMerken(t, max = 1) { ersatzLaut = Math.max(0, Math.min(max, (t?.laut ?? 100) / 100)); queueMicrotask(() => { ersatzLaut = 1; }); }
+// dateiId: woher die Datei kommt; lautId: wessen Regler gilt (Standard: dieselbe). Regler bis 200 % nur für Kanone/Explosion (lautMax)
+function probe(id, x, y, extra = 1, lautId = id) {
+  const t = zuordnung[id], tl = zuordnung[lautId] ?? t, lmax = lautId === 'kanone' || lautId === 'explosion' ? 2 : 1;
+  if (!ctx || !t?.dateien?.length) { ersatzMerken(lautId === id ? t : tl, lmax); return false; }
   weckeKontext();
   if (zombieStumm(id)) return true;   // Zahnrad: Zombiegeräusche aus – auch kein Ersatzton
   if (ctx.state !== 'running') { diag('stumm', id); return true; }   // Kontext schläft: Ereignis verwerfen, kein Ersatzton, keine Warteschlange
   const bereit = t.dateien.map(geladen).filter(Boolean);
-  if (!bereit.length) { t.dateien.forEach(laden); ersatzMerken(t); return false; }
+  if (!bereit.length) { t.dateien.forEach(laden); ersatzMerken(lautId === id ? t : tl, lmax); return false; }
   if (!abstandOk(id)) return true;   // zu kurz nach dem letzten: verworfen, auch kein Ersatzton
-  const laut = (t.laut ?? 80) / 100 * extra;
+  const laut = Math.min(3, (tl.laut ?? (lmax > 1 ? 100 : 80)) / 100 * extra);   // Deckel: kein Übersteuern (zusätzlich Limiter an haupt)
   const z = ort(x, y, laut);
   if (!z) return true;   // zu weit weg: still, aber auch kein Ersatzton
   const v = z.gain.value, zombie = ZOMBIE_IDS.has(id);
@@ -303,7 +304,17 @@ export function tonStarten() {
   diag('zustand', ctx.state + ' (Start)');
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* egal */ }   // iOS: Ton trotz Stummschalter, nicht als „Umgebungston“ unterbrechen
   try { ctx.onstatechange = () => { stimmen.length = 0; diag('zustand', ctx.state); }; } catch { /* egal */ }   // Zustandswechsel: alte Stimmen belegen keinen Platz mehr
-  haupt = ctx.createGain(); haupt.gain.value = pegelEffekt(); haupt.connect(ctx.destination);
+  haupt = ctx.createGain(); haupt.gain.value = pegelEffekt();
+  // sanfter Begrenzer: Kanone/Explosion dürfen bis 200 % laut werden, ohne dass es hart abgeschnitten wird (leise Töne bleiben unberührt)
+  let ausgang = ctx.destination;
+  try {
+    if (ctx.createDynamicsCompressor) {
+      const k = ctx.createDynamicsCompressor();
+      k.threshold.value = -6; k.knee.value = 12; k.ratio.value = 12; k.attack.value = 0.003; k.release.value = 0.15;
+      k.connect(ctx.destination); ausgang = k;
+    }
+  } catch { ausgang = ctx.destination; }
+  haupt.connect(ausgang);
   musikAusgang = ctx.createGain(); musikAusgang.gain.value = pegel(); musikAusgang.connect(ctx.destination);
   musikBus = ctx.createGain(); musikBus.gain.value = musikEin.laut / 100; musikBus.connect(musikAusgang);
   // 2 s weißes Rauschen als Grundstoff für Schuss, Wind, Schlurfen
@@ -397,12 +408,17 @@ export function schuss(x, y, laut = 1, art = 'pistole') {
 }
 
 // Kanone (Puma) und Handgranate: das lauteste vorhandene Schussgeräusch (Schrotflinte), sonst ein tiefer Knall mit langem Nachhall
+// eigene Datei des Ereignisses, sonst Schrotflinten-Datei – Lautstärke immer vom eigenen Regler (nicht vom Schrot-Regler)
+function kanoneDatei(id, x, y, extra) {
+  const eigen = zuordnung[id]?.dateien?.length;
+  return probe(eigen ? id : 'schussSchrot', x, y, extra, id);
+}
 export function kanone(x, y) {
-  if (probe('schussSchrot', x, y, 1.9)) return;
+  if (kanoneDatei('kanone', x, y, 1.9)) return;
   boom(x, y, 1.6);
 }
 export function explosion(x, y) {
-  if (probe('schussSchrot', x, y, 2.2)) return;
+  if (kanoneDatei('explosion', x, y, 2.2)) return;
   boom(x, y, 2.2);
 }
 function boom(x, y, laut) {

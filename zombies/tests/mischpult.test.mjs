@@ -46,3 +46,22 @@ test('Ersatzton nutzt laut des Ereignisses (Standard 100 % ohne Eintrag)', async
   assert.ok(Math.abs(halb / voll - 0.5) < 0.01, `halb ${halb} voll ${voll}`);
   assert.equal(stumm, 0);
 });
+
+test('Kanone/Explosion: 200 % erlaubt, übrige Ereignisse bleiben bei 100 %', () => {
+  const e = bereinige({ toene: { kanone: { dateien: [], laut: 200 }, explosion: { dateien: [], laut: 900 }, schussSchrot: { dateien: [], laut: 150 } } });
+  assert.equal(e.toene.kanone.laut, 200);
+  assert.equal(e.toene.explosion.laut, 200);
+  assert.equal(e.toene.schussSchrot.laut, 100);
+  assert.equal(bereinige({}).toene.kanone.laut, 100);
+});
+
+test('Kanone: eigener Regler statt Schrot-Regler (Ersatzton)', async () => {
+  const ton = await import('../client/ton.mjs');
+  ton.tonStarten();
+  const pegel = (z, f = 'kanone') => { ton.toeneZuordnen(z); gains.length = 0; ton[f](null, null); return gains[0]?.gain.value ?? 0; };
+  const a = pegel({ kanone: { dateien: [], laut: 100 }, schussSchrot: { dateien: [], laut: 10 } });
+  const b = pegel({ kanone: { dateien: [], laut: 200 }, schussSchrot: { dateien: [], laut: 10 } });
+  assert.ok(a > 0 && Math.abs(b / a - 2) < 0.01, `a ${a} b ${b}`);
+  const c = pegel({ explosion: { dateien: [], laut: 50 }, schussSchrot: { dateien: [], laut: 100 } }, 'explosion');
+  assert.ok(Math.abs(c / (a * 2.2 / 1.6) - 0.5) < 0.01, `c ${c}`);
+});
