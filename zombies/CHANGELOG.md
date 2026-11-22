@@ -6,8 +6,6 @@
 - Neu: Diagnose – Fehler, Ton-Aussetzer und Leistung (Bildrate, Ping, Datenmenge) der Geräte kommen anonym ins Server-Log; Schalter im Backend, Anzeige „📊 Diagnose“ im Zahnrad.
 - Intern: Projekt-Übersicht ARCHITEKTUR.md, Einspiel- und Release-Skript, Tests doppelt so schnell und stabiler (schnelle Stufe ~80 s).
 
-- 
-
 ## 0.80.0 – 22.11.2026
 
 - Behoben: Horden standen unter Dauerfeuer nur und zuckten (jeder Schuss setzte neue Ziele und Verzug) – sie kommen jetzt stetig näher.

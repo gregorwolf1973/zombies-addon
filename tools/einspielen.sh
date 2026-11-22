@@ -47,7 +47,9 @@ sv() { python3 "$ZOMBIES_HA_WS" "$1"; }
 # Feld aus JSON-Antwort (Pfad wie data.version_latest); leer, wenn nicht vorhanden
 jfeld() { python3 -c 'import json,sys
 d=json.load(sys.stdin)
-for k in sys.argv[1].split("."):
+d=d.get("result",d) if isinstance(d,dict) else d
+d=d.get("data",d) if isinstance(d,dict) and isinstance(d.get("data"),dict) else d
+for k in sys.argv[1].replace("data.","",1).split("."):
     d=d.get(k) if isinstance(d,dict) else None
 print("" if d is None else d)' "$1"; }
 addon_info() { sv "{\"type\":\"supervisor/api\",\"endpoint\":\"/addons/$ZOMBIES_SLUG/info\",\"method\":\"get\",\"timeout\":60}" 2>/dev/null || true; }
