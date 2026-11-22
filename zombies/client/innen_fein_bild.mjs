@@ -13,11 +13,14 @@ const BODEN = {
   flur: ['#cbb592', 'fliese'], kueche: ['#e3dac6', 'schach'], bad: ['#a9cbdc', 'fliese_klein'],
   wohnzimmer: ['#a9794d', 'parkett'], schlafzimmer: ['#b38559', 'parkett'], kinderzimmer: ['#bf9566', 'parkett'],
   abstellraum: ['#908677', 'beton'], kellerraum: ['#7b7b78', 'beton'], heizungsraum: ['#6f6f6c', 'beton'],
-  vorratskeller: ['#80786c', 'beton'], dachboden: ['#8a6a48', 'dielen'], verkaufsraum: ['#dcd6c8', 'fliese'], lager: ['#8f8a80', 'beton'],
+  vorratskeller: ['#80786c', 'beton'], dachboden: ['#8a6a48', 'dielen'], verkaufsraum: ['#dcd6c8', 'fliese'], lager: ['#8f8a80', 'beton'], halle: ['#9a9a96', 'beton'], nebenraum: ['#c9cfd2', 'fliese_klein'],
   notlager: ['#9a9e92', 'linoleum'],
 };
 // Verkaufsraum je Ladenart (leichte Tönung des Bodens)
 const LADEN_BODEN = { lebensmittel: '#e0dccd', apotheke: '#e6ece6', kaufhaus: '#d9d4c8', gaststaette: '#b99567', polizei: '#cdd0d2' };
+
+// Boden der großen Gebäude (Halle)
+const HALLE_BODEN = { buero: ['#a8b2bb', 'linoleum'], werkstatt: ['#6f7276', 'beton'], moebelhaus: ['#d9cdb8', 'fliese'], lagerhalle: ['#8c8f90', 'beton'] };
 
 // deterministischer Zufall aus Zellkoordinaten (nur Zeichnung)
 const hs = (x, y, n = 0) => { let h = Math.imul(x * 73856093 ^ y * 19349663 ^ n * 83492791, 0x9e3779b1); h ^= h >>> 15; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; return (h >>> 0) / 4294967296; };
@@ -55,7 +58,7 @@ function moebel(ctx, m, w) {
   let oben = 0, unten = 0;
   if (quer) { for (let i = 0; i < m.b; i++) { if (wand(m.x + i, m.y - 1)) oben++; if (wand(m.x + i, m.y + m.h)) unten++; } }
   else { for (let j = 0; j < m.h; j++) { if (wand(m.x + m.b, m.y + j)) oben++; if (wand(m.x - 1, m.y + j)) unten++; } }   // senkrecht: lokal oben = rechts
-  const spiegeln = unten > oben;
+  const spiegeln = m.sp !== undefined ? !!m.sp : unten > oben;
   ctx.save();
   ctx.translate(x, y);
   if (!quer) { ctx.translate(b, 0); ctx.rotate(Math.PI / 2); }
@@ -65,7 +68,7 @@ function moebel(ctx, m, w) {
   ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(0.2, 0.25, L + 0.5, S + 0.5);
   const k = (f, rx, ry, rb, rh, r) => rund(ctx, f, rx, ry, rb, rh, r ?? Math.min(0.5, S * 0.15));
   const sx = m.x, sy = m.y;
-  const behaelter = ['schrank', 'alter_schrank', 'kommode', 'garderobe', 'kiste', 'kuehlschrank', 'herd', 'spuele', 'klo', 'waschbecken', 'regal_lang', 'vorratsregal', 'erstehilfe'].includes(m.art);
+  const behaelter = ['schrank', 'alter_schrank', 'kommode', 'garderobe', 'kiste', 'kuehlschrank', 'herd', 'spuele', 'klo', 'waschbecken', 'regal_lang', 'vorratsregal', 'erstehilfe', 'aktenschrank', 'kuehlregal', 'wagenecke', 'werkbank', 'werkzeugschrank', 'ausstellungsschrank', 'hochregal', 'kartonstapel'].includes(m.art);
   switch (m.art) {
     case 'bett': case 'einzelbett': case 'feldbett': {
       const feld = m.art === 'feldbett';
@@ -106,7 +109,7 @@ function moebel(ctx, m, w) {
       for (const cx of [L * 0.27, L * 0.67]) for (const cy of [S * 0.22, S * 0.62]) { kreis(ctx, '#f5f5f5', cx + 0.5, cy + 0.4, 0.75); kreis(ctx, '#e0e0e0', cx + 0.5, cy + 0.4, 0.45); }   // Teller
       break;
     }
-    case 'schrank': case 'alter_schrank': {
+    case 'schrank': case 'alter_schrank': case 'ausstellungsschrank': {
       const alt = m.art === 'alter_schrank';
       k(alt ? '#5a3f33' : '#7b5a4a', 0, 0, L, S, 0.4); k(alt ? '#6b4b3d' : '#8a6a5a', 0.35, 0.35, L - 0.7, S - 0.7, 0.3);
       maserung(ctx, L, S, sx, sy, 'rgba(40,22,12,.28)');
@@ -242,6 +245,143 @@ function moebel(ctx, m, w) {
       ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 0.12; ctx.strokeRect(0.5, 0.8, L * 0.42, S - 1.3); ctx.strokeRect(L * 0.55, 0.9, L * 0.36, S - 1.4);
       break;
     }
+    case 'schreibtischinsel': {   // zwei Reihen Schreibtische Rücken an Rücken, Monitor, Tastatur, Drehstuhl
+      const n = Math.max(1, Math.round(L / 6));
+      for (let rr = 0; rr < 2; rr++) {
+        const y0 = rr * S / 2;
+        for (let i = 0; i < n; i++) {
+          const x0 = i * L / n + 0.3, bw = L / n - 0.6, dh = S / 2;
+          k('#b9a27c', x0, y0 + 0.1, bw, dh - 0.2, 0.3); k('#cdb892', x0 + 0.3, y0 + 0.4, bw - 0.6, dh - 0.8, 0.2);
+          const my = rr === 0 ? y0 + dh - 1.1 : y0 + 0.5;
+          k('#263238', x0 + bw / 2 - 0.9, my, 1.8, 0.35, 0.1); k('#4fc3f7', x0 + bw / 2 - 0.75, my + 0.05, 1.5, 0.25, 0.1);
+          k('#eceff1', x0 + bw / 2 - 0.7, rr === 0 ? y0 + 0.6 : y0 + dh - 1.0, 1.4, 0.4, 0.1);
+          const sy2 = rr === 0 ? y0 - 1.2 : y0 + dh + 0.1;
+          kreis(ctx, '#37474f', x0 + bw / 2, sy2 + 0.75, 0.95); kreis(ctx, '#546e7a', x0 + bw / 2, sy2 + 0.75, 0.6);
+        }
+      }
+      break;
+    }
+    case 'aktenschrank': {
+      k('#78909c', 0, 0, L, S, 0.3); k('#90a4ae', 0.3, 0.3, L - 0.6, S - 0.6, 0.2);
+      const n = Math.max(2, Math.round(L / 1.5));
+      for (let i = 1; i < n; i++) linie(ctx, 'rgba(0,0,0,.35)', 0.12, L * i / n, 0.3, L * i / n, S - 0.3);
+      for (let i = 0; i < n; i++) k('#cfd8dc', L * (i + 0.5) / n - 0.4, S * 0.55, 0.8, 0.22, 0.1);
+      break;
+    }
+    case 'kopierer': {
+      k('#cfd8dc', 0, 0, L, S, 0.4); k('#eceff1', 0.35, 0.35, L - 0.7, S - 0.7, 0.3);
+      k('#37474f', L * 0.12, S * 0.2, L * 0.5, S * 0.45, 0.2); k('#80cbc4', L * 0.7, S * 0.28, L * 0.18, S * 0.2, 0.2);
+      k('#fafafa', L * 0.2, S * 0.7, L * 0.35, 0.3, 0.05);
+      break;
+    }
+    case 'pflanze': {
+      k('#8d6e63', 0, 0, L, S, 0.8);
+      for (let i = 0; i < 7; i++) { const dx = [0.3, 0.2, -0.2, -0.3, -0.1, 0.1, 0][i], dy = [0, 0.25, 0.25, -0.05, -0.28, -0.25, 0][i]; kreis(ctx, i % 2 ? '#2e7d32' : '#43a047', L / 2 + dx * L, S / 2 + dy * S, L * 0.26); }
+      kreis(ctx, '#66bb6a', L / 2, S / 2, L * 0.22);
+      break;
+    }
+    case 'besprechungstisch': {
+      for (let i = 0; i < 5; i++) { const cx = L * (i + 0.5) / 5 - 0.6; rund(ctx, '#455a64', cx, -1.5, 1.4, 1.4, 0.5); rund(ctx, '#455a64', cx, S + 0.1, 1.4, 1.4, 0.5); }
+      k('#6d4c41', 0, 0, L, S, 0.8); k('#8d6e63', 0.4, 0.4, L - 0.8, S - 0.8, 0.6);
+      maserung(ctx, L, S, sx, sy, 'rgba(40,22,12,.22)');
+      k('#eceff1', L * 0.4, S * 0.35, L * 0.2, S * 0.3, 0.2);
+      break;
+    }
+    case 'kuehlregal': {
+      k('#b3e5fc', 0, 0, L, S, 0.3); k('#e1f5fe', 0.3, 0.3, L - 0.6, S - 0.6, 0.2);
+      const waren = ['#e53935', '#fdd835', '#43a047', '#1e88e5', '#fb8c00', '#ffffff'];
+      for (let i = 0; i < 9; i++) { ctx.fillStyle = waren[Math.floor(hs(sx + i, sy, 12) * waren.length)]; ctx.fillRect(0.6 + i * (L - 1.2) / 9, 0.6, (L - 1.2) / 9 - 0.2, S - 1.2); }
+      ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(0.3, 0.3, L - 0.6, S * 0.3);
+      break;
+    }
+    case 'wagenecke': {
+      ctx.strokeStyle = '#9e9e9e'; ctx.lineWidth = 0.2;
+      for (let i = 0; i < 3; i++) { const o = i * 0.5; ctx.strokeRect(0.3 + o, 0.4, L - 1.6, S - 0.8); linie(ctx, '#cfd8dc', 0.15, 0.3 + o, 0.8, L - 1.3 + o, 0.8); }
+      k('#e53935', L - 1.6, 0.5, 1.2, 0.5, 0.1);
+      break;
+    }
+    case 'werkbank': {
+      k('#5d4037', 0, 0, L, S, 0.3); k('#a1887f', 0.3, 0.3, L - 0.6, S * 0.6, 0.2);
+      k('#546e7a', L * 0.1, S * 0.2, 1.4, 1.0, 0.1);
+      linie(ctx, '#cfd8dc', 0.25, L * 0.4, S * 0.35, L * 0.6, S * 0.5); linie(ctx, '#e53935', 0.35, L * 0.65, S * 0.3, L * 0.85, S * 0.3);
+      ctx.fillStyle = '#8d6e63'; for (let i = 1; i < 4; i++) ctx.fillRect(L * i / 4, S * 0.65, 0.12, S * 0.3);
+      break;
+    }
+    case 'werkzeugschrank': {
+      k('#c62828', 0, 0, L, S, 0.3); k('#e53935', 0.3, 0.3, L - 0.6, S - 0.6, 0.2);
+      for (let i = 1; i < 5; i++) linie(ctx, 'rgba(0,0,0,.3)', 0.12, L * i / 5, 0.3, L * i / 5, S - 0.3);
+      for (let i = 0; i < 5; i++) k('#cfd8dc', L * (i + 0.5) / 5 - 0.3, S * 0.55, 0.6, 0.2, 0.1);
+      break;
+    }
+    case 'oelfass': {
+      kreis(ctx, '#1565c0', L / 2, S / 2, L * 0.48); kreis(ctx, '#1e88e5', L / 2, S / 2, L * 0.36); kreis(ctx, '#0d47a1', L / 2, S / 2, L * 0.12);
+      break;
+    }
+    case 'drehbank': {
+      k('#37474f', 0, 0, L, S, 0.3); k('#607d8b', 0.3, 0.3, L - 0.6, S - 0.6, 0.2);
+      k('#455a64', 0.3, 0.3, L * 0.22, S - 0.6, 0.2); kreis(ctx, '#cfd8dc', L * 0.2, S / 2, S * 0.28);
+      linie(ctx, '#b0bec5', 0.5, L * 0.3, S / 2, L * 0.72, S / 2); k('#ff8f00', L * 0.78, S * 0.2, L * 0.16, S * 0.6, 0.2);
+      break;
+    }
+    case 'fraese': {
+      k('#455a64', 0, 0, L, S, 0.3); k('#78909c', 0.3, 0.3, L - 0.6, S - 0.6, 0.2);
+      kreis(ctx, '#263238', L / 2, S * 0.4, Math.min(L, S) * 0.22); kreis(ctx, '#cfd8dc', L / 2, S * 0.4, Math.min(L, S) * 0.1);
+      k('#2e7d32', L * 0.25, S * 0.68, L * 0.5, S * 0.2, 0.1);
+      break;
+    }
+    case 'standbohrmaschine': {
+      k('#5d6d73', 0, 0, L, S, 0.3); kreis(ctx, '#90a4ae', L / 2, S / 2, Math.min(L, S) * 0.36); kreis(ctx, '#37474f', L / 2, S / 2, Math.min(L, S) * 0.2);
+      kreis(ctx, '#ffca28', L / 2, S / 2, Math.min(L, S) * 0.08);
+      break;
+    }
+    case 'hebebuehne': {   // Auto-Silhouette auf der Hebebühne
+      k('#546e7a', 0, 0, L, S, 0.4); k('#ffca28', 0.4, 0.4, L - 0.8, 0.5, 0.1); k('#ffca28', 0.4, S - 0.9, L - 0.8, 0.5, 0.1);
+      k('#37474f', L * 0.12, S * 0.2, L * 0.76, S * 0.6, 1.4);
+      k('#90caf9', L * 0.64, S * 0.26, L * 0.12, S * 0.48, 0.6); k('#90caf9', L * 0.2, S * 0.28, L * 0.1, S * 0.44, 0.6);
+      k('#455a64', L * 0.34, S * 0.26, L * 0.28, S * 0.48, 0.6);
+      for (const a of [0.16, 0.74]) for (const c of [0.1, 0.78]) k('#111111', L * a, S * c, L * 0.1, S * 0.12, 0.3);
+      break;
+    }
+    case 'kuechenzeile': {
+      k('#cfd8dc', 0, 0, L, S, 0.3); k('#eceff1', 0.3, 0.3, L - 0.6, S - 0.6, 0.2);
+      for (let i = 1; i < 4; i++) linie(ctx, 'rgba(0,0,0,.25)', 0.1, L * i / 4, 0.3, L * i / 4, S - 0.3);
+      for (let i = 0; i < 4; i++) kreis(ctx, '#37474f', L * 0.12 + i * L * 0.06, S * 0.3, 0.45);
+      k('#90a4ae', L * 0.62, S * 0.2, L * 0.28, S * 0.55, 0.3); kreis(ctx, '#cfd8dc', L * 0.76, S * 0.47, 0.35);
+      break;
+    }
+    case 'couchgruppe': {   // Ausstellungsinsel: Teppich, Sofa, zwei Sessel, Couchtisch
+      k('#8e3b46', 0, 0, L, S, 0.4); k('#a64d58', 0.5, 0.5, L - 1, S - 1, 0.3);
+      ctx.strokeStyle = 'rgba(240,220,170,.6)'; ctx.lineWidth = 0.2; ctx.strokeRect(1, 1, L - 2, S - 2);
+      k('#455a64', L * 0.1, S * 0.08, L * 0.55, S * 0.28, 0.8); k('#546e7a', L * 0.12, S * 0.1, L * 0.51, S * 0.14, 0.6);
+      k('#455a64', L * 0.72, S * 0.15, L * 0.18, S * 0.3, 0.8); k('#455a64', L * 0.12, S * 0.62, L * 0.2, S * 0.26, 0.8);
+      k('#8d6e63', L * 0.3, S * 0.45, L * 0.3, S * 0.22, 0.3);
+      kreis(ctx, '#f5f5f5', L * 0.42, S * 0.56, 0.4);
+      break;
+    }
+    case 'hochregal': case 'regalzeile': {
+      k('#1565c0', 0, 0, L, S, 0.2); k('#90a4ae', 0.2, 0.5, L - 0.4, S - 1, 0.1);
+      const kart = ['#c8a06a', '#b98a54', '#d7b27e', '#a87b4a'];
+      for (let i = 0; i < 8; i++) { ctx.fillStyle = kart[Math.floor(hs(sx + i, sy, 13) * kart.length)]; ctx.fillRect(0.4 + i * (L - 0.8) / 8, 0.7, (L - 0.8) / 8 - 0.2, S - 1.4); }
+      for (let i = 0; i <= 4; i++) k('#e65100', 0.1 + i * (L - 0.5) / 4, 0, 0.35, S, 0.05);
+      break;
+    }
+    case 'palette': {
+      k('#b08850', 0, 0, L, S, 0.2);
+      for (let i = 0; i < 5; i++) linie(ctx, 'rgba(60,35,15,.4)', 0.12, 0.3, S * (i + 0.5) / 5, L - 0.3, S * (i + 0.5) / 5);
+      k('#d7b27e', 0.5, 0.5, L - 1, S - 1, 0.2); linie(ctx, 'rgba(255,255,255,.4)', 0.2, 0.5, S / 2, L - 0.5, S / 2);
+      break;
+    }
+    case 'kartonstapel': {
+      k('#a1763c', 0, 0, L, S, 0.2); k('#c8a06a', 0.3, 0.3, L / 2 - 0.4, S - 0.6, 0.15); k('#b98a54', L / 2 + 0.1, 0.3, L / 2 - 0.4, S - 0.6, 0.15);
+      linie(ctx, '#7b5a2c', 0.15, 0.3, S / 2, L - 0.3, S / 2); linie(ctx, '#7b5a2c', 0.15, L / 2, 0.3, L / 2, S - 0.3);
+      break;
+    }
+    case 'gabelstapler': {
+      k('#fbc02d', L * 0.15, 0.2, L - L * 0.15, S - 0.4, 0.8); k('#f9a825', L * 0.45, 0.6, L * 0.4, S - 1.2, 0.6);
+      k('#455a64', L * 0.25, S * 0.12, 0.5, S * 0.76, 0.1); ctx.fillStyle = '#546e7a'; ctx.fillRect(0, S * 0.18, L * 0.3, 0.45); ctx.fillRect(0, S * 0.7, L * 0.3, 0.45);
+      kreis(ctx, '#263238', L * 0.5, S * 0.5, S * 0.18);
+      break;
+    }
     case 'erstehilfe': {
       k('#fafafa', 0, 0, L, S, 0.35); ctx.strokeStyle = '#9e9e9e'; ctx.lineWidth = 0.16; ctx.strokeRect(0.25, 0.25, L - 0.5, S - 0.5);
       ctx.fillStyle = '#d32f2f'; ctx.fillRect(L / 2 - 0.3, 0.55, 0.6, S - 1.1); ctx.fillRect(0.55, S / 2 - 0.3, L - 1.1, 0.6);
@@ -270,6 +410,7 @@ function boden(ctx, w) {
     if (!r) continue;
     let [farbe, muster] = BODEN[r.typ] ?? ['#b08a62', 'parkett'];
     if (r.typ === 'verkaufsraum' && w.laden) farbe = LADEN_BODEN[w.laden] ?? farbe;
+    if (r.typ === 'halle' && HALLE_BODEN[w.halle]) [farbe, muster] = HALLE_BODEN[w.halle];
     const px = x * Z, py = y * Z;
     if (muster === 'parkett' || muster === 'dielen') {
       // Dielen quer zur x-Achse: Streifen von 3 Zellen (0,75 m)? nein – Dielenbreite 0,19 m ≈ 1,5 px; Zelle hat 2 px: je Zelle eine Diele, Stöße versetzt

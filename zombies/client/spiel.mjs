@@ -44,6 +44,7 @@ const tintMal = (c, f) => (Math.round(((c >> 16) & 255) * f) << 16) | (Math.roun
 const STUECK = 16;   // Kartenstücke à 16×16 Kacheln (512 px: kurz genug zum Bauen in einem Bild, auch am Handy)
 import { innenraumFuer } from './innen.mjs';
 import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from './innen_fein_bild.mjs';
+import { lichtRichtungWelt, lichtSeite, fensterFlecken } from './fensterlicht.mjs';
 // ?innen1m in der Adresse: nur noch zum Testen vorgesehen; maßgeblich ist der Schalter des Servers (state.optionen, siehe erzeuge())
 import { hindernisFelder, hindernisFelderFein, hindernisPixel } from './hindernisse.mjs';
 import * as ton from './ton.mjs';
@@ -2164,6 +2165,7 @@ class Ort extends Phaser.Scene {
     const lampe = ich.lampe > 0;
     d.clear();
     d.fill(0x030405, lampe ? (w.stock === 'keller' ? 0.94 : 0.88) : 0.965);
+    this.fensterLichtZeichnen(d, a, m, 1 - helligkeit(uhr));
     const lx = this.lokal.x - a.X, ly = this.lokal.y - a.Y;
     const lk = w.kachel ? 0.3 : 1;   // maßstäblich: Lichtkreis um die Figur im Maßstab des Raums (Radius ~2 m statt ~12 m)
     this.lichtPinsel.setScale((lampe ? 0.42 : 0.36) * lk).setAlpha(lampe ? 1 : 0.8);
@@ -2173,6 +2175,31 @@ class Ort extends Phaser.Scene {
     }
     this.fremdeLampen(d, a.X, a.Y, ebene);
     this.setzeGrau(!lampe);
+  }
+
+  // Nachts fällt durch die Fenster der Laternenseite schwaches Licht (bläulich-gelblich) auf den Boden: in die Abdunklung radiert, nicht im Keller.
+  // Die Flecken werden je Ebene einmal berechnet (a.fenster), pro Bild nur die nahen gezeichnet.
+  fensterLichtZeichnen(d, a, m, daemmer) {
+    const w = a.w;
+    if (!m || !w.kachel || w.stock === 'keller' || daemmer < 0.05) return;
+    if (!a.fenster) {
+      const haus = this.welt.haeuser?.[Number(m[1])];
+      const seite = haus ? lichtSeite(w, lichtRichtungWelt(haus, this.laternenListe, this.welt, KACHEL, T.STRASSE)) : null;
+      a.fenster = fensterFlecken(w, seite);
+    }
+    if (!a.fenster.length) return;
+    const v = this.cameras.main.worldView, P = this.weichPinsel, k = Math.min(1, daemmer * 1.4);
+    P.setAlpha(0.14 * k);
+    for (const f of a.fenster) {
+      if (a.X + f.x < v.x - 160 || a.X + f.x > v.right + 160 || a.Y + f.y < v.y - 160 || a.Y + f.y > v.bottom + 160) continue;
+      P.setScale(f.sx, f.sy); d.erase(P, f.x, f.y);
+    }
+    P.setTint(0xdfe8ff).setAlpha(0.05 * k);   // leicht kühler Schimmer über dem aufgehellten Boden
+    for (const f of a.fenster) {
+      if (a.X + f.x < v.x - 160 || a.X + f.x > v.right + 160 || a.Y + f.y < v.y - 160 || a.Y + f.y > v.bottom + 160) continue;
+      P.setScale(f.sx, f.sy); d.draw(P, f.x, f.y);
+    }
+    P.clearTint();
   }
 
   // Taschenlampen der Mitspieler: Kegel in Blickrichtung (weich nachgeführt), gleiche Pinsel-Technik wie der eigene; höchstens 8 (nächste zuerst).

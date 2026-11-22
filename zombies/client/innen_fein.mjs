@@ -4,7 +4,8 @@
 // Türen 5 Zellen (1,25 m), Möbel in Zellen nach echten Maßen. Die Ergebnisstruktur entspricht baueInnenraum() aus innen.mjs,
 // dazu: kachel (px je Zelle), breite/hoehe (eigenes Raster), rs/radMax (Figurenradius drinnen), zellen-Listen bei Türen und Treppen.
 // Weltcode: Server und Browser bauen getrennt, daher nur + − × ÷ Math.sqrt und Ganzzahlen, keine Winkelfunktionen.
-import { T, zufall, ladenArt, seiteVon, INNEN_REICH } from './welt.mjs';
+import { T, zufall, ladenArt, grossArt, seiteVon, INNEN_REICH } from './welt.mjs';
+import { GROSS_MASSE, GROSS_BEHAELTER, halleEinrichten } from './innen_gross.mjs';
 
 export const INNEN_Z = 2;          // px je Zelle
 const ZM = 4;                      // Zellen je Meter
@@ -27,6 +28,8 @@ const ZUGANG_NOETIG = new Set(['funktisch', 'vorratskiste', 'safe_kuehlschrank']
 const GEHBAR = new Set([T.BODEN, T.TUER_OFFEN, T.INNENTUER, T.AUSGANG, T.TREPPE_RUNTER, T.TREPPE_HOCH]);
 const SEITE_NACH = { oben: [0, 1], unten: [0, -1], links: [1, 0], rechts: [-1, 0] };
 
+Object.assign(M, GROSS_MASSE);
+for (const a of GROSS_BEHAELTER) BEHAELTER.add(a);
 export const MOEBEL_MASSE = M;
 
 // ---------- Grundriss aus dem OSM-Umriss ----------
@@ -69,7 +72,7 @@ function grundriss(haus) {
 }
 
 // ---------- Generator ----------
-export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unten', safe = false) {
+export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unten', safe = false, halle = '') {
   const rng = zufall(seed ^ Math.imul(nr + 1, 7919) ^ (stock === 'eg' ? 0 : stock === 'keller' ? 0x51ed : 0xa77e) ^ 0x1f1e);
   const g = grundriss(haus), GB = g.GB, GH = g.GH;
   if (g.zuGross) return null;   // über 100 m: passt nicht in das Raster (400 × 400 Zellen), das Haus bleibt im groben Raster
@@ -121,13 +124,13 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     if (vert) {
       const spiel = r.b - 2 * MINR - 1;
       let wx = r.x + MINR + Math.floor(rng() * (spiel + 1));
-      if (laden && raeume.length === 1) { const lager = Math.max(MINR, Math.round(r.b * 0.3)); wx = g.tuer.x > r.x + r.b / 2 ? r.x + lager : r.x + r.b - lager - 1; }   // Laden: das kleinere Lager liegt von der Haustür abgewandt
+      if (laden && raeume.length === 1) { const lager = Math.min(Math.max(MINR, Math.round(r.b * 0.3)), halle ? 24 : 9999); wx = g.tuer.x > r.x + r.b / 2 ? r.x + lager : r.x + r.b - lager - 1; }   // Laden: das kleinere Lager liegt von der Haustür abgewandt
       for (let y = r.y; y < r.y + r.h; y++) if (k[idx(wx, y)] === T.BODEN) k[idx(wx, y)] = T.WAND;
       raeume.splice(i, 1, { x: r.x, y: r.y, b: wx - r.x, h: r.h }, { x: wx + 1, y: r.y, b: r.x + r.b - wx - 1, h: r.h });
     } else {
       const spiel = r.h - 2 * MINR - 1;
       let wy = r.y + MINR + Math.floor(rng() * (spiel + 1));
-      if (laden && raeume.length === 1) { const lager = Math.max(MINR, Math.round(r.h * 0.3)); wy = g.tuer.y > r.y + r.h / 2 ? r.y + lager : r.y + r.h - lager - 1; }
+      if (laden && raeume.length === 1) { const lager = Math.min(Math.max(MINR, Math.round(r.h * 0.3)), halle ? 24 : 9999); wy = g.tuer.y > r.y + r.h / 2 ? r.y + lager : r.y + r.h - lager - 1; }
       for (let x = r.x; x < r.x + r.b; x++) if (k[idx(x, wy)] === T.BODEN) k[idx(x, wy)] = T.WAND;
       raeume.splice(i, 1, { x: r.x, y: r.y, b: r.b, h: wy - r.y }, { x: r.x, y: wy + 1, b: r.b, h: r.y + r.h - wy - 1 });
     }
@@ -231,7 +234,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
   // Zimmerarten
   const typ = new Array(raeume.length).fill('');
   if (safe) raeume.forEach((_, i) => { typ[i] = 'notlager'; });
-  else if (stock === 'eg' && laden) raeume.forEach((_, i) => { typ[i] = i === flurIndex ? 'verkaufsraum' : 'lager'; });
+  else if (stock === 'eg' && laden) raeume.forEach((_, i) => { typ[i] = i === flurIndex ? (halle && halle !== 'supermarkt' ? 'halle' : 'verkaufsraum') : (halle && halle !== 'supermarkt' ? 'nebenraum' : 'lager'); });
   else if (stock === 'eg') {
     typ[flurIndex] = 'flur';
     // größte Zimmer zuerst, das kleinste Zimmer ist das Bad
@@ -407,9 +410,10 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
       }
     }
     for (const liste of stufen) {
-      if (opt.fern) liste.sort((p, q) => { const dq = { x: q.x + q.b / 2 - opt.fern.x, y: q.y + q.h / 2 - opt.fern.y }, dp = { x: p.x + p.b / 2 - opt.fern.x, y: p.y + p.h / 2 - opt.fern.y }; return (dq.x * dq.x + dq.y * dq.y) - (dp.x * dp.x + dp.y * dp.y); });   // am weitesten von der Haustür weg
+      if (opt.nah) liste.sort((p, q) => { const dq = { x: q.x + q.b / 2 - opt.nah.x, y: q.y + q.h / 2 - opt.nah.y }, dp = { x: p.x + p.b / 2 - opt.nah.x, y: p.y + p.h / 2 - opt.nah.y }; return (dp.x * dp.x + dp.y * dp.y) - (dq.x * dq.x + dq.y * dq.y); });   // am nächsten an der Haustür
+      else if (opt.fern) liste.sort((p, q) => { const dq = { x: q.x + q.b / 2 - opt.fern.x, y: q.y + q.h / 2 - opt.fern.y }, dp = { x: p.x + p.b / 2 - opt.fern.x, y: p.y + p.h / 2 - opt.fern.y }; return (dq.x * dq.x + dq.y * dq.y) - (dp.x * dp.x + dp.y * dp.y); });   // am weitesten von der Haustür weg
       for (let v = 0; v < 6 && liste.length; v++) {
-        const i = opt.fern ? 0 : Math.floor(rng() * liste.length), p = liste.splice(i, 1)[0];
+        const i = opt.fern || opt.nah ? 0 : Math.floor(rng() * liste.length), p = liste.splice(i, 1)[0];
         if (platzieren(art, p.x, p.y, p.b, p.h)) return true;
       }
     }
@@ -426,6 +430,7 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
     kellerraum: [['regal'], ['kiste'], ['kiste'], ['kiste']],
     vorratskeller: [['regal'], ['kiste'], ['kiste'], ['kiste']],
     heizungsraum: [['heizung'], ['kiste']],
+    nebenraum: [['klo'], ['waschbecken'], ['regal'], ['kiste'], ['schrank']],
     lager: [['regal'], ['regal'], ['regal'], ['regal'], ['regal'], ['regal'], ['regal'], ['regal'], ['kiste'], ['kiste'], ['kiste'], ['kiste'], ['kiste'], ['kiste']],
   };
   raeume.forEach((r, ri) => {
@@ -454,6 +459,11 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
       }
       // Kasse: am Rand der Eingangsseite, nahe der Tür aber nicht davor
       setze(ri, 'kasse', { tuerAbst: 7 });
+      if (halle === 'supermarkt') halleEinrichten({ halle, r, ri, k, T, idx, freiVon, platzieren, setze, moebel, behaelter, zelleZ: INNEN_Z, erreichbar, startZ, tueren, treppen, ausgang });
+      return;
+    }
+    if (typ[ri] === 'halle') {
+      halleEinrichten({ halle, r, ri, k, T, idx, freiVon, platzieren, setze, moebel, behaelter, zelleZ: INNEN_Z, erreichbar, startZ, tueren, treppen, ausgang });
       return;
     }
     for (const [art, opt] of MOEBEL_JE_RAUM[typ[ri]] ?? []) {
@@ -561,8 +571,8 @@ export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unt
 // auch Keller und Dachboden müssen sich bauen lassen (Größe, Erreichbarkeit). Gleiche Entscheidung auf Server und Client (alles deterministisch).
 const ENTSCHEIDUNG = new WeakMap();
 function bauen(seed, nr, stock, haus) {
-  const safe = !!haus.safe, kat = safe ? '' : ladenArt(haus);
-  return baueInnenFein(seed, nr, safe ? 'eg' : stock, haus, !!kat, seiteVon(haus), safe);
+  const safe = !!haus.safe, kat = safe ? '' : ladenArt(haus), halle = safe ? '' : grossArt(haus);
+  return baueInnenFein(seed, nr, safe ? 'eg' : stock, haus, !!kat || !!halle, seiteVon(haus), safe, halle);
 }
 function feinMoeglich(seed, welt, nr, haus) {
   let m = ENTSCHEIDUNG.get(welt);
@@ -593,6 +603,8 @@ export function innenraumFein(seed, welt, ebene, muster) {
   if (m[2] === 'eg' && e.eg) { w = e.eg; e.eg = null; } else w = bauen(seed, nr, m[2], haus);
   if (!w) return null;
   if (kat) { w.behaelter.forEach(b => { if (b.art === 'laden') b.art = 'laden_' + kat; }); w.moebel.forEach(q => { if (q.art === 'regal_lang') q.kat = kat; }); w.laden = kat; }
+  if (!safe && !kat) { const hl = grossArt(haus); if (hl) w.halle = hl; }
+  if (kat === 'lebensmittel' && grossArt(haus) === 'supermarkt') w.halle = 'supermarkt';
   w.ebene = ebene; w.nr = nr; w.stock = m[2];
   w.behaelter = w.behaelter.map(b => ({ ...b, id: ebene + ':' + b.id }));
   if (safe) { w.safe = haus.safeId; w.safeName = haus.safe; w.zombiePlaetze = []; w.hatKeller = false; w.hatDach = false; for (const t of w.tueren) { t.verschlossen = false; t.offen = true; } }
