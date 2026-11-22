@@ -131,6 +131,7 @@ export async function starte({
       tueren: w.tueren,                             // { frei, raetsel, schluessel } in %
       faehigkeiten: w.faehigkeiten,                 // { an, xpFaktor }
       bundeswehr: w.bundeswehr,                     // { aktiv, falltage }
+      polizei: w.polizei,                           // { aktiv, anzahl, munition }
       ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,
       munitionsglueck: w.munitionsglueck,           // { schritt, max, lebenUnter, lebenFaktor, notUnter, notFaktor } in %

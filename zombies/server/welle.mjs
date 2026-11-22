@@ -587,6 +587,12 @@ export class Zombiewelle {
       for (const q of sp.schuetzen) { if (q.tot) continue; const d = Math.hypot(q.x - a.mitte.x, q.y - a.mitte.y); if (d < bd) { bd = d; best = q; } }
       if (best) out.push({ key: 'bw', art: 'soldat', x: best.x, y: best.y });
     }
+    const pol = r.polizei?.lebende?.() ?? [];   // Polizisten an den Straßensperren (ein Ziel je Sperre: der nächste)
+    for (const k of new Set(pol.map(q => q.sperre))) {
+      let best = null, bd = Infinity;
+      for (const q of pol) if (q.sperre === k) { const d = Math.hypot(q.x - a.mitte.x, q.y - a.mitte.y); if (d < bd) { bd = d; best = q; } }
+      if (best) out.push({ key: 'pol' + k, art: 'polizei', x: best.x, y: best.y });
+    }
     for (const [mid, m] of s.menschen) if (m.sichtbar && !m.infiziert && !m.ebene) out.push({ key: 'm:' + mid, art: 'mensch', mid, x: m.x, y: m.y });
     return out;
   }
@@ -596,6 +602,11 @@ export class Zombiewelle {
     const r = this.raum, s = r.state;
     if (t.art === 'spieler') { const p = s.spieler.get(t.sid); return p && !p.ebene && !p.unten && !p.anBord && !(p.zombie > 0) ? p : null; }
     if (t.art === 'mensch') { const m = s.menschen.get(t.mid); return m && m.sichtbar && !m.infiziert && !m.ebene ? m : null; }
+    if (t.art === 'polizei') {
+      let best = null, bd = Infinity;
+      for (const q of r.polizei?.lebende?.() ?? []) { const d = Math.hypot(q.x - t.x, q.y - t.y); if (d < bd && d < 400) { bd = d; best = q; } }
+      return best;
+    }
     const sp = r.stuetzpunkt;
     if (!sp?.schuetzen || s.stuetzpunkt !== 'steht' || !(sp.einst().falltage > 0)) return null;
     let best = null, bd = Infinity;

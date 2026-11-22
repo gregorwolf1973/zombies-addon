@@ -30,6 +30,7 @@ import * as WP from './waffenplaetze.mjs';
 import { hat, zaehle, flach, indexVon, entferne, nimmEins, nimmStapel, fuegeHinzu, kannAufnehmen, blockGrund, platzFuer, verschiebe, laden as stapelLaden, dingId, dingN, istTasche } from '../client/stapel.mjs';
 import { munitionGeben, kisteOeffnen, munitionPruefen } from './munition.mjs';
 import { SzeneB11 } from './szene_b11.mjs';
+import { Polizei } from './polizei.mjs';
 import * as FK from './faehigkeiten.mjs';
 import { alleKandidaten, nimmWeite, ALLE_FRAGEN, ALLE_SPERRE } from '../client/durchsuche_alle.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
@@ -540,6 +541,7 @@ export class SpielRaum extends Room {
     this.granaten = new Granaten(this);
     this.radios = new Radios(this);
     this.szeneB11 = new SzeneB11(this); this.szeneB11.start();   // „Stau auf der B11“ (nur geretsried2)
+    this.polizei = new Polizei(this); this.polizei.start();   // Polizisten an den Straßensperren, siehe server/polizei.mjs
     this.hunde = new Hunde(this); this.hunde.start();   // Streuner-Hunde (Begleiter), siehe server/hund.mjs
     this.optionenSetzen();
     this.tuerAnteileUebernehmen();
@@ -2810,6 +2812,7 @@ export class SpielRaum extends Room {
     this.granaten?.schritt(dt);
     this.radios?.schritt(dt);
     this.szeneB11?.schritt(dt);
+    this.polizei?.schritt(dt);
     this.messen('stuetzpunkt', t0);
     this.sprachSchritt(dt);
     this.aufhelfen(dt);
@@ -3237,6 +3240,7 @@ export class SpielRaum extends Room {
       for (const q of sp.nester ?? []) add('', q.x, q.y);
       if (sp.puma) add('', sp.puma.x, sp.puma.y);
     }
+    for (const q of this.polizei?.beamte ?? []) if (!q.tot) add('', q.x, q.y);   // Zombies an den Sperren laufen sauber
     this.nahPunkte = m;
   }
 

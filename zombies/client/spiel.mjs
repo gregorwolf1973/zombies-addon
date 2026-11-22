@@ -66,6 +66,7 @@ import { startwahlStart } from './startwahl.mjs';
 import { Uebersicht } from './uebersicht.mjs';
 import { Kameraflug, radEinrichten, ZOOM_MIN, ZOOM_MAX, FLUG_ZOOM_MIN } from './kameraflug.mjs';
 import { b11Registrieren, b11Animieren } from './szene_b11.mjs';
+import { polizeiRegistrieren, polizeiAnimieren } from './polizei.mjs';
 
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
@@ -1130,6 +1131,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('leopardkanone', m => leopardKanone(this, m, raum.state));   // Leopard-Hauptkanone: Mündungsfeuer, Rückstoß, Knall
     raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
     b11Registrieren(this, raum, { skala: () => BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg() });   // Szene „Stau auf der B11“
+    polizeiRegistrieren(this, raum, { skala: () => BOGEN2_GROESSE * 0.95 * groesse('figuren2', 'polizist') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'polizist') * mg() });   // Polizisten an den Straßensperren
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => this.granateFliegt(m));
@@ -3520,6 +3522,7 @@ class Ort extends Phaser.Scene {
     this.wurfBogenZeichnen();
     this.stuetzpunktAnimieren();
     b11Animieren(this);
+    polizeiAnimieren(this);
     if (this.lokal) this.radioAnz?.update(this.aktEbene, this.lokal.x, this.lokal.y);
     const meine = raum.state.spieler.get(meineId);
     if (meine && (meine.ebene ?? '') !== this.aktEbene) {
