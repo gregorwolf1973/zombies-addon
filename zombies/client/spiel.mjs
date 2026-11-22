@@ -1084,7 +1084,7 @@ class Ort extends Phaser.Scene {
       ton.ereignis('soldatRuf', m.x, m.y);
       const e = this.stuetzpunktObj?.soldaten.find(q => q.n === m.n);
       if (e?.tot) return;
-      const t = this.add.text(m.x, m.y - 34, m.t ? 'Keine Bewegung!' : 'Halt! Stehen bleiben!', { fontSize: '11px', fontFamily: 'sans-serif', color: '#fff', backgroundColor: '#000a', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(50);
+      const t = this.add.text(m.x, m.y - 18, m.t ? 'Keine Bewegung!' : 'Halt! Stehen bleiben!', { fontSize: '11px', fontFamily: 'sans-serif', color: '#fff', backgroundColor: '#000a', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(50);
       this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, delay: 1500, duration: 700, onComplete: () => t.destroy() });
     });
     raum.onMessage('hilferufe', m => { ton.ereignis('hilferufe', m.x, m.y); });
@@ -1094,7 +1094,7 @@ class Ort extends Phaser.Scene {
       if (m.id === meineId && this.lokal) this.sprung = { vx: this.lokal.x, vy: this.lokal.y, nx: m.x, ny: m.y, t: 0 };
       ton.schritt(false); ton.schritt(false);
       for (let i = 0; i < 5; i++) {
-        const c = this.add.circle(m.x + (Math.random() - 0.5) * 16, m.y + 8, 3 + Math.random() * 3, 0xa1887f, 0.7).setDepth(3.9);
+        const c = this.add.circle(m.x + (Math.random() - 0.5) * 16, m.y + 8, 1.5 + Math.random() * 1.5, 0xa1887f, 0.7).setDepth(3.9);
         this.tweens.add({ targets: c, y: c.y - 10, alpha: 0, scale: 1.8, duration: 450, onComplete: () => c.destroy() });
       }
     });
@@ -2589,8 +2589,8 @@ class Ort extends Phaser.Scene {
         o.rauchUhr = (o.rauchUhr ?? 0) - dt;
         if (o.rauchUhr <= 0) {
           o.rauchUhr = 0.18 + Math.random() * 0.12;
-          const q = this.add.circle(o.x + (Math.random() - 0.5) * 14, o.y + (Math.random() - 0.5) * 10, 5 + Math.random() * 4, 0x555555, 0.55).setDepth(7.6);
-          this.tweens.add({ targets: q, y: q.y - 34 - Math.random() * 20, x: q.x + 8 + Math.random() * 10, alpha: 0, scale: 2.6, duration: 1500 + Math.random() * 600, onComplete: () => q.destroy() });
+          const q = this.add.circle(o.x + (Math.random() - 0.5) * 14, o.y + (Math.random() - 0.5) * 10, 3 + Math.random() * 2, 0x555555, 0.55).setDepth(7.6);
+          this.tweens.add({ targets: q, y: q.y - 20 - Math.random() * 12, x: q.x + 8 + Math.random() * 10, alpha: 0, scale: 2.6, duration: 1500 + Math.random() * 600, onComplete: () => q.destroy() });
         }
       }
       if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg())) {
@@ -2640,9 +2640,9 @@ class Ort extends Phaser.Scene {
       if (!o) {
         o = this.add.container(b.x, b.y).setDepth(1.7);
         const bild = hatDingBild(b.ding) && this.textures.get('dinge').has(b.ding === 'handgranate' ? 'granate' : b.ding)
-          ? this.add.image(0, 0, 'dinge', b.ding === 'handgranate' ? 'granate' : b.ding).setScale((b.ding === 'handgranate' ? 12 : 24) / 128).setOrigin(0.5)
-          : this.add.text(0, 0, DINGE[b.ding]?.zeichen ?? '?', { fontSize: '16px' }).setOrigin(0.5);
-        o.add([this.add.ellipse(0, 7, 20, 6, 0x000000, 0.3), bild]);
+          ? this.add.image(0, 0, 'dinge', b.ding === 'handgranate' ? 'granate' : b.ding).setScale((b.ding === 'handgranate' ? 8 : 12) / 128).setOrigin(0.5)
+          : this.add.text(0, 0, DINGE[b.ding]?.zeichen ?? '?', { fontSize: '10px' }).setOrigin(0.5);
+        o.add([this.add.ellipse(0, 4, 10, 3, 0x000000, 0.3), bild]);
         this.tweens.add({ targets: o, y: b.y - 3, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         this.bodenObj.set(id, o);
       }
@@ -2817,8 +2817,8 @@ class Ort extends Phaser.Scene {
     // Leuchtspur: kurzer heller Streifen, der zum Ziel läuft
     const g = this.add.graphics().setDepth(7);
     const l0 = 0.0, l1 = Math.min(1, 70 / Math.max(1, Math.hypot(m.x2 - mx, m.y2 - my)));
-    g.lineStyle(kanone ? 3 : 2, kanone ? 0xffcc80 : 0xffee58, 1).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
-    g.lineStyle(1, 0xffffff, 0.9).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
+    g.lineStyle(kanone ? 1.5 : 1, kanone ? 0xffcc80 : 0xffee58, 1).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
+    g.lineStyle(0.6, 0xffffff, 0.9).lineBetween(mx + (m.x2 - mx) * l0, my + (m.y2 - my) * l0, mx + (m.x2 - mx) * l1, my + (m.y2 - my) * l1);
     this.tweens.add({ targets: g, x: (m.x2 - mx) * (1 - l1), y: (m.y2 - my) * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => g.destroy() });
     this.muendungsLicht(mx, my, '', kanone ? (o?.turm ? 'puma' : 'kanone') : (evak ? 'leopard' : 'mg'));
     // Mündungsblitz (additiv) und Pulverrauch
@@ -2827,8 +2827,8 @@ class Ort extends Phaser.Scene {
     this.tweens.add({ targets: blitz, alpha: 0, duration: kanone ? 100 : 60, onComplete: () => blitz.destroy() });
     if (kanone) {
       for (let i = 0; i < 6; i++) {
-        const r = this.add.circle(mx + (Math.random() - 0.5) * 10, my + (Math.random() - 0.5) * 10, 5 + Math.random() * 5, 0xbdbdbd, 0.55).setDepth(6.5);
-        this.tweens.add({ targets: r, x: r.x + c * (10 + Math.random() * 24) + (Math.random() - 0.5) * 16, y: r.y + sn * (10 + Math.random() * 24) + (Math.random() - 0.5) * 16, alpha: 0, scale: 2.2, duration: 700, onComplete: () => r.destroy() });
+        const r = this.add.circle(mx + (Math.random() - 0.5) * 5, my + (Math.random() - 0.5) * 5, 2.5 + Math.random() * 2.5, 0xbdbdbd, 0.55).setDepth(6.5);
+        this.tweens.add({ targets: r, x: r.x + c * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, y: r.y + sn * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, alpha: 0, scale: 2.2, duration: 700, onComplete: () => r.destroy() });
       }
       this.explosion(m.x2, m.y2, 24, 0.45);
     }
@@ -2863,11 +2863,11 @@ class Ort extends Phaser.Scene {
   krachEffekt(x, y) {
     if (this.aktEbene) return;
     for (let i = 0; i < 10; i++) {
-      const w = Math.random() * Math.PI * 2, d = 14 + Math.random() * 26;
-      const f = this.add.circle(x, y, 1.5 + Math.random() * 2, i % 2 ? 0xffd54f : 0xcfd8dc, 0.95).setDepth(7.8);
+      const w = Math.random() * Math.PI * 2, d = 8 + Math.random() * 14;
+      const f = this.add.circle(x, y, 0.8 + Math.random() * 1.2, i % 2 ? 0xffd54f : 0xcfd8dc, 0.95).setDepth(7.8);
       this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, duration: 260 + Math.random() * 240, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
     }
-    const staub = this.add.circle(x, y, 10, 0x9e9e9e, 0.5).setDepth(7.7);
+    const staub = this.add.circle(x, y, 5, 0x9e9e9e, 0.5).setDepth(7.7);
     this.tweens.add({ targets: staub, scale: 3, alpha: 0, duration: 900, onComplete: () => staub.destroy() });
     if (this.lokal) {
       const nah = Math.max(0, 1 - Math.hypot(this.lokal.x - x, this.lokal.y - y) / 300);
@@ -2885,13 +2885,13 @@ class Ort extends Phaser.Scene {
     const n = Math.round(14 * staerke) + 4;
     for (let i = 0; i < n; i++) {
       const w = Math.random() * Math.PI * 2, d = r * (0.5 + Math.random() * 0.9);
-      const f = this.add.circle(x, y, 3 + Math.random() * 5, [0xffd54f, 0xff9800, 0xf4511e, 0xd84315][i % 4], 0.95).setBlendMode('ADD').setDepth(7.8);
+      const f = this.add.circle(x, y, 1 + Math.random() * 2, [0xffd54f, 0xff9800, 0xf4511e, 0xd84315][i % 4], 0.95).setBlendMode('ADD').setDepth(7.8);
       this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, scale: 0.4, duration: 350 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
     }
     for (let i = 0; i < Math.round(9 * staerke) + 2; i++) {
       const w = Math.random() * Math.PI * 2, d = r * (0.2 + Math.random() * 0.8);
-      const rauch = this.add.circle(x, y, 6 + Math.random() * 7, 0x4a4a4a, 0.6).setDepth(7.7);
-      this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 14 - Math.random() * 16, alpha: 0, scale: 2.4 + Math.random() * 1.2, duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
+      const rauch = this.add.circle(x, y, 3.6 + Math.random() * 4.2, 0x4a4a4a, 0.6).setDepth(7.7);
+      this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 8 - Math.random() * 10, alpha: 0, scale: 2.4 + Math.random() * 1.2, duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
     }
     const brand = this.add.circle(x, y, r * 0.35, 0x1b1b1b, 0.5).setDepth(0.95);   // Brandfleck am Boden
     this.tweens.add({ targets: brand, alpha: 0, duration: 6000, onComplete: () => brand.destroy() });
@@ -3358,16 +3358,16 @@ class Ort extends Phaser.Scene {
 
   stoss(m) {
     const g = this.add.graphics().setDepth(7);
-    if (m.sense) { g.lineStyle(4, 0xe0e0e0, 0.9).beginPath().arc(m.x, m.y, 52, m.w - 1.4, m.w + 1.4).strokePath(); g.lineStyle(2, 0x8d6e63, 0.9).beginPath().arc(m.x, m.y, 40, m.w - 1.2, m.w + 1.2).strokePath(); }
-    else if (m.messer) g.lineStyle(2, 0xeceff1, 0.95).beginPath().arc(m.x, m.y, 24, m.w - 0.5, m.w + 0.5).strokePath();
-    else g.lineStyle(m.schlag ? 5 : 3, m.schlag ? 0xd7ccc8 : 0xffffff, 0.85).beginPath().arc(m.x, m.y, m.schlag ? 34 : 26, m.w - 0.8, m.w + 0.8).strokePath();
+    if (m.sense) { g.lineStyle(2.5, 0xe0e0e0, 0.9).beginPath().arc(m.x, m.y, 26, m.w - 1.4, m.w + 1.4).strokePath(); g.lineStyle(1.5, 0x8d6e63, 0.9).beginPath().arc(m.x, m.y, 20, m.w - 1.2, m.w + 1.2).strokePath(); }
+    else if (m.messer) g.lineStyle(1, 0xeceff1, 0.95).beginPath().arc(m.x, m.y, 12, m.w - 0.5, m.w + 0.5).strokePath();
+    else g.lineStyle(m.schlag ? 2.5 : 1.5, m.schlag ? 0xd7ccc8 : 0xffffff, 0.85).beginPath().arc(m.x, m.y, m.schlag ? 17 : 13, m.w - 0.8, m.w + 0.8).strokePath();
     this.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
   }
 
   puff(x, y) {
     for (let i = 0; i < 7; i++) {
-      const c = this.add.circle(x, y, 4 + Math.random() * 4, i % 2 ? 0x558b2f : 0x8bc34a, 0.9).setDepth(7);
-      const w = Math.random() * Math.PI * 2, d = 14 + Math.random() * 18;
+      const c = this.add.circle(x, y, 1 + Math.random() * 1.5, i % 2 ? 0x558b2f : 0x8bc34a, 0.7).setDepth(7);
+      const w = Math.random() * Math.PI * 2, d = 6 + Math.random() * 8;
       this.tweens.add({ targets: c, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, duration: 450, onComplete: () => c.destroy() });
     }
   }

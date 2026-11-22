@@ -13,7 +13,7 @@ const zufall = (a, b) => a + Math.random() * (b - a);
 function nimm(scene) {
   const st = scene.fetzenStand ??= { pool: [], aktiv: 0 };
   let o = st.pool.pop();
-  if (!o || !o.scene) o = scene.add.circle(0, 0, 3, 0x8b0000);
+  if (!o || !o.scene) o = scene.add.circle(0, 0, 1.2, 0x8b0000);
   st.aktiv++;
   return o.setActive(true).setVisible(true).setAlpha(1).setScale(1);
 }
@@ -34,18 +34,18 @@ export function fetzen(scene, x, y, w = null, menge = 1, ebene = '') {
   const nBlut = Math.min(MAX_AKTIV - st.aktiv, Math.round(5 * menge)), nStueck = Math.min(MAX_AKTIV - st.aktiv - nBlut, Math.round(3 * menge));
   const richtung = () => (w === null || Math.random() < 0.25 ? Math.random() * Math.PI * 2 : w + zufall(-0.8, 0.8));
   for (let i = 0; i < nBlut; i++) {
-    const o = nimm(scene), a = richtung(), d = zufall(14, 44) * weit;
+    const o = nimm(scene), a = richtung(), d = zufall(7, 22) * weit;
     o.setPosition(x, y).setFillStyle(BLUT[i % BLUT.length]).setScale(zufall(0.5, 1)).setDepth(7.2);
     scene.tweens.add({ targets: o, x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, alpha: 0, scale: o.scale * 0.5, duration: zufall(350, 650), ease: 'Cubic.easeOut', onComplete: () => gib(scene, o) });
   }
   for (let i = 0; i < nStueck; i++) {
-    const o = nimm(scene), a = richtung(), d = zufall(10, 34) * weit;
+    const o = nimm(scene), a = richtung(), d = zufall(5, 17) * weit;
     o.setPosition(x, y).setFillStyle(FLEISCH[i % FLEISCH.length]).setScale(zufall(0.8, 1.4)).setDepth(7.2);
     scene.tweens.add({ targets: o, x: x + Math.cos(a) * d, y: y + Math.sin(a) * d + 6, alpha: 0.2, scale: o.scale * 0.8, duration: zufall(500, 900), ease: 'Quad.easeOut', onComplete: () => gib(scene, o) });
   }
   if (st.aktiv < MAX_AKTIV) {   // Fleck am Boden, verblasst langsam
-    const f = nimm(scene), a = richtung(), d = zufall(0, 10) * weit;
-    f.setPosition(x + Math.cos(a) * d, y + Math.sin(a) * d).setFillStyle(0x5a0808).setScale(zufall(1.4, 2.4) * weit).setAlpha(0.55).setDepth(0.7);
+    const f = nimm(scene), a = richtung(), d = zufall(0, 5) * weit;
+    f.setPosition(x + Math.cos(a) * d, y + Math.sin(a) * d).setFillStyle(0x5a0808).setScale(zufall(1.7, 2.5) * weit).setAlpha(0.55).setDepth(0.7);
     scene.tweens.add({ targets: f, alpha: 0, duration: 2500, delay: 400, onComplete: () => gib(scene, f) });
   }
 }

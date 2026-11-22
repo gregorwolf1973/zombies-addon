@@ -316,7 +316,7 @@ test('Infektion: läuft draußen, ruht im Safe Room, Spritze heilt Mitspieler, V
     // der andere schießt/stößt den Zombie-Spieler um → zurück im Safe Room
     pb.waffe = 'schlaeger';
     // der Helfer bleibt dicht dran (der Schläger stößt den Zombie jedes Mal weg)
-    const nachruecken = setInterval(() => { if (pa.zombie > 0) { pb.x = pa.x + 25; pb.y = pa.y; pb.hp = 100; } }, 100);
+    const nachruecken = setInterval(() => { if (pa.zombie > 0) { pb.x = pa.x + 12; pb.y = pa.y; pb.hp = 100; } }, 20);
     try { assert.ok(await bis(() => pa.zombie === 0, 8000), 'Zombie-Spieler nicht erledigt'); }
     finally { clearInterval(nachruecken); }
     assert.ok(await bis(() => pa.sicher !== ''), 'nicht im Safe Room aufgewacht');

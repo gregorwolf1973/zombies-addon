@@ -886,7 +886,7 @@ export const WERTE = {
   hoerweiteSchuss: 380,
   hoerweiteRennen: 110,
   pistoleReichweite: 230,
-  nahkampfReichweite: 34,
+  nahkampfReichweite: 16,
   aufhelfenAbstand: 40,
   aufhelfenDauer: 3,      // s
 };
@@ -1010,9 +1010,9 @@ export const WAFFEN = {
   granatwerfer: { fern: true, granate: true, vorrat: 'granaten', magazin: 1, nachlade: 3, reichweite: 60 * 8, schaden: 220, pause: 2.2, laut: 1.5, ueberraschung: 1, bild: 1 },
   // Handgranaten als Waffe: kein Auto-Schuss (wurf), Wurf auf den angetippten Punkt (Bogen 60° vor der Figur), Magazin 5, Aufschlagzündung
   handgranate: { fern: true, wurf: true, vorrat: 'handgranaten', magazin: 5, nachlade: 1.5, reichweite: 200, schaden: 220, pause: 0.6, laut: 1, ueberraschung: 1, bild: 0 },
-  schlaeger: { reichweite: 42, schaden: 40, pause: 0.6, stoss: true, ueberraschung: 3, bild: 2 },
-  sense: { reichweite: 58, schaden: 55, bogen: 1.4, pause: 0.85, ueberraschung: 3, bild: 2 },
-  messer: { reichweite: 36, schaden: 30, pause: 0.45, ueberraschung: 4, bild: 3 },
+  schlaeger: { reichweite: 21, schaden: 40, pause: 0.6, stoss: true, ueberraschung: 3, bild: 2 },
+  sense: { reichweite: 28, schaden: 55, bogen: 1.4, pause: 0.85, ueberraschung: 3, bild: 2 },
+  messer: { reichweite: 18, schaden: 30, pause: 0.45, ueberraschung: 4, bild: 3 },
   faust: { reichweite: WERTE.nahkampfReichweite, schaden: 20, pause: 0.7, stoss: true, ueberraschung: 2.5, bild: 0 },
 };
 // Vorrat für die Fernwaffe (außerhalb des Magazins): Granaten beim Granatwerfer, Pfeile bei der Armbrust, sonst Munition
