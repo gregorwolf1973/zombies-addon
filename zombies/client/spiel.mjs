@@ -1750,30 +1750,33 @@ class Ort extends Phaser.Scene {
         const anzahl = haus ? 3 + Math.floor(Math.random() * 3) : 1;
         for (let i = 0; i < anzahl; i++) { const w = Math.random() * Math.PI * 2, rr = haus ? f.r * (0.15 + Math.random() * 0.45) : 0; herde.push({ x: Math.cos(w) * rr, y: Math.sin(w) * rr }); }
         const anHerd = streu => ({ type: 'random', source: { getRandomPoint: p => { const h = herde[Math.floor(Math.random() * herde.length)]; p.x = h.x + (Math.random() - 0.5) * streu; p.y = h.y + (Math.random() - 0.5) * streu * 0.6; return p; } } });
-        const zone = anHerd(haus ? 26 : 22), kernZone = anHerd(haus ? 14 : 12);
-        const schein = this.add.image(f.x, f.y, 'flamme').setTint(0xff6d00).setBlendMode('ADD').setDepth(1.2).setScale(f.r / 9).setAlpha(0.35);
+        // Fahrzeuge im echten Maßstab (Auto ~4,5 m): kleinere, feinere Flammen, mehr Zungen, wenig Schein/Rauch (sonst ein unscharfer Fleck über dem Auto)
+        const k = haus ? 1 : 0.45, dicht = haus ? 1 : 2.2;
+        const zone = anHerd(haus ? 26 : 16), kernZone = anHerd(haus ? 14 : 8);
+        const scheinMass = haus ? f.r / 9 : f.r / 22;
+        const schein = this.add.image(f.x, f.y, 'flamme').setTint(0xff6d00).setBlendMode('ADD').setDepth(1.2).setScale(scheinMass).setAlpha(0.35);
         const flammen = this.add.particles(f.x, f.y, 'zunge', {
-          speed: { min: 35, max: 90 }, angle: { min: 258, max: 282 }, scale: { start: 1.0, end: 0.25 }, alpha: { start: 0.85, end: 0 },
-          lifespan: { min: 380, max: 800 }, frequency: 12 / menge, tint: [0xffa726, 0xff7043, 0xf4511e, 0xc62828], blendMode: 'ADD', emitZone: zone,
+          speed: { min: 35 * k, max: 90 * k }, angle: { min: 258, max: 282 }, scale: { start: 1.0 * k, end: 0.25 * k }, alpha: { start: 0.85, end: 0 },
+          lifespan: { min: 380, max: 800 }, frequency: 12 / menge / dicht, tint: [0xffa726, 0xff7043, 0xf4511e, 0xc62828], blendMode: 'ADD', emitZone: zone,
         }).setDepth(5.6);
         const kern = this.add.particles(f.x, f.y, 'zunge', {
-          speed: { min: 15, max: 45 }, angle: { min: 255, max: 285 }, scale: { start: 0.65, end: 0 }, alpha: { start: 0.9, end: 0 },
-          lifespan: { min: 250, max: 500 }, frequency: 25 / menge, tint: [0xffffff, 0xfff59d, 0xffe082], blendMode: 'ADD', emitZone: kernZone,
+          speed: { min: 15 * k, max: 45 * k }, angle: { min: 255, max: 285 }, scale: { start: 0.65 * k, end: 0 }, alpha: { start: 0.9, end: 0 },
+          lifespan: { min: 250, max: 500 }, frequency: 25 / menge / dicht, tint: [0xffffff, 0xfff59d, 0xffe082], blendMode: 'ADD', emitZone: kernZone,
         }).setDepth(5.65);
         const funken = this.add.particles(f.x, f.y, 'flamme', {
-          speed: { min: 50, max: 140 }, angle: { min: 225, max: 315 }, gravityY: 25, scale: { start: 0.18, end: 0.05 }, alpha: { start: 1, end: 0 },
+          speed: { min: 50 * k, max: 140 * k }, angle: { min: 225, max: 315 }, gravityY: 25 * k, scale: { start: 0.18 * Math.sqrt(k), end: 0.05 }, alpha: { start: 1, end: 0 },
           lifespan: { min: 700, max: 1500 }, frequency: 110 / menge, tint: [0xffd180, 0xffab40], blendMode: 'ADD', emitZone: kernZone,
         }).setDepth(5.66);
         const rauch = this.add.particles(f.x, f.y, 'flamme', {
-          speedY: { min: -60, max: -25 }, speedX: { min: 5, max: 30 }, scale: { start: 1.1, end: 3.8 }, alpha: { start: 0.3, end: 0 },
+          speedY: { min: -60 * k, max: -25 * k }, speedX: { min: 5 * k, max: 30 * k }, scale: { start: 1.1 * k, end: 3.8 * k }, alpha: { start: haus ? 0.3 : 0.22, end: 0 },
           lifespan: { min: 2400, max: 3600 }, frequency: 70 / menge, tint: [0x2b2b2b, 0x3d3d3d, 0x4a4542], emitZone: zone, rotate: { min: 0, max: 360 },
         }).setDepth(5.7);
-        o = { schein, teile: [flammen, kern, funken, rauch], basis: [18 / menge, 25 / menge, 110 / menge, 70 / menge] };
+        o = { schein, scheinMass, teile: [flammen, kern, funken, rauch], basis: [18 / menge / dicht, 25 / menge / dicht, 110 / menge, 70 / menge] };
         this.feuerObj.set(id, o);
       }
       const st = Math.max(0.05, f.staerke), sichtbar = this.aktEbene === '';
       o.teile.forEach((t, i) => { t.frequency = o.basis[i] / st; t.setVisible(sichtbar); });
-      o.schein.setVisible(sichtbar).setAlpha((0.22 + Math.random() * 0.12) * st).setScale(f.r / 9 * (0.95 + Math.random() * 0.1));
+      o.schein.setVisible(sichtbar).setAlpha((0.22 + Math.random() * 0.12) * st).setScale(o.scheinMass * (0.95 + Math.random() * 0.1));
     }
     for (const [id, o] of this.feuerObj) if (!s.feuer?.has(id)) { o.teile.forEach(t => t.destroy()); o.schein.destroy(); this.feuerObj.delete(id); }
     // Ruinen und ausgebrannte Autos/Busse (nur neu zeichnen, wenn sich etwas ändert)
