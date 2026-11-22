@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.77.0 – 22.11.2026
+
+- Behoben: Zombies beißen nur noch, wenn sie dich auf dem Bildschirm auch berühren (Server rechnet die Anzeigeverzögerung zurück, kürzere Bissweite, nahe Zombies ohne Verzögerung gezeichnet).
+- Geändert: Haustüren schmal und bündig auf der Hauswand, bevorzugt in Nischen unter dem Vordach; ins Haus geht es erst, wenn man kurz gezielt gegen die Tür läuft. Zäune und Hecken vor Türen und auf dem Weg zur Straße entfallen.
+- Behoben: Innentüren lassen sich schließen, auch wenn man direkt davor steht; „Tür blockiert“, wenn jemand im Türblatt steht. Rätsel-Türen kann man nach Abbruch sofort wieder versuchen (neue Frage).
+- Neu: Große Gebäude sind eingerichtet – Großraumbüros, Werkstätten mit Maschinen und Hebebühne, Lagerhallen mit Hochregalen, Supermärkte mit Kühlregalen und Kassen, Möbelhäuser; nachts fällt Laternenlicht durch die Fenster einer Seite.
+- Geändert: Wasser ist kein Hindernis mehr (10 % Tempo wie im Pool) und auch mit Luftbild deutlich zu erkennen; Laternen ohne Mast, das Licht bleibt.
+- Geändert: Lichtring nachts nur ohne Taschenlampe, Taschenlampe wieder so weit wie früher; weniger Fenster; Regale über die ganze Länge durchsuchbar; Asphalt mit Splitt, Flicken und Rollspuren, heller Bordstein; Bushaltestellen parallel zur Straße.
+- Geändert: Verkehr nach Straßenlänge (Geretsried 2 etwa 19 Autos), Autos auch in Wohnstraßen, nach 25 Minuten bleibt ein Drittel unterwegs; Einstellung „Verkehr“ ist die Obergrenze.
+- Geändert: Zombies erscheinen nicht mehr in der Nähe von Haustüren und wandern dort nicht herum.
+- Neu (Backend): Geräusche haben Anzeigenamen statt Dateinamen (✏️ in der Dateiliste, Name beim Hochladen).
+- Behoben: Töne fielen oft aus (Stimmen blieben belegt, Ladefehler wurden nie wiederholt, Schüsse anderer Ebenen); Schüsse und Zombie-Tod haben jetzt Vorrang.
+
 ## 0.76.0 – 22.11.2026
 
 - Neu (Geretsried 2, amtliche Daten): Hecken an echten Grundstücksgrenzen, gemessen aus Höhenmodell und Infrarot-Luftbild (26 km), Zäune nur an Wohngrundstücken mit Lücken an Einfahrten und Hauswegen; zufällige Zäune, Hecken und Mauern entfallen.
