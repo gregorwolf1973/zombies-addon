@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.72.0 – 22.11.2026
+
+- Geändert: Pools sind kein Hindernis mehr – im Wasser geht jede Figur mit 10 % Tempo.
+- Neu: Figuren werden im Schlagschatten von Häusern und Bäumen dunkler (Kulisse-Schalter „Schatten“, tagsüber ohne Nebel).
+- Geändert: Brennende Autos mit kleineren, feineren Flammen im echten Maßstab (weniger Schein und Rauch).
+- Geändert: Die im Backend eingestellten Werte sind jetzt die Vorgabe für neue Installationen (Waffen, Zombies, Töne, Radio Bayern 3, Nebel, Türen, maßstäbliche Innenräume an u. a.).
+
 ## 0.71.0 – 22.11.2026
 
 - Neu (Geretsried 2): Objekte aus Luftbild und 3D-Modell – 243 geparkte Autos an ihren echten Plätzen (Gemini, Präzision ~90 %), 500 Einzelbäume mit echter Kronengröße, 8 Pools, 559 Garagen/Gartenhäuser/Nebengebäude mit echten Dächern als Hindernisse.
