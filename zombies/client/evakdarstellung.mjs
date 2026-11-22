@@ -4,6 +4,7 @@ import { LEOPARD, A400M, HELI, TANKLASTER, evakArtFuer } from './evak.mjs';
 import { fetzen } from './effekte.mjs';
 import * as ton from './ton.mjs';
 import { kettenSpur } from './ketten.mjs';
+import { RauchZeichner } from './kanonenrauch.mjs';
 
 const TAU = Math.PI * 2;
 const ABSTURZ_MS = 14000;   // wie ABSTURZ_DAUER im Server (Landeanflug bis zum Einschlag)
@@ -136,10 +137,9 @@ export function leopardKanone(scene, m, s) {
   scene.muendungsLicht(m.x1, m.y1, '', 'leopard');
   const blitz = scene.add.image(m.x1, m.y1, 'figuren2', scene.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(w).setScale(1.1).setDepth(7);
   scene.tweens.add({ targets: blitz, alpha: 0, duration: 160, onComplete: () => blitz.destroy() });
-  for (let i = 0; i < 12; i++) {
-    const r = scene.add.circle(m.x1 + c * Math.random() * 14, m.y1 + sn * Math.random() * 14, 6 + Math.random() * 6, 0xbdbdbd, 0.6).setDepth(6.5);
-    scene.tweens.add({ targets: r, x: r.x + c * (14 + Math.random() * 40) + (Math.random() - 0.5) * 22, y: r.y + sn * (14 + Math.random() * 40) + (Math.random() - 0.5) * 22, alpha: 0, scale: 2.6, duration: 1000, onComplete: () => r.destroy() });
-  }
+  // Feuerball, dichter Rauchkegel nach vorn, Staubring um den Panzer, Staub an der Schussbahn (Pool, kanonenrauch.mjs)
+  const rauch = scene.kanonenRauch ??= new RauchZeichner(scene), ab = LEOPARD.muendung + LEOPARD.turmX;
+  rauch.schuss(m.x1, m.y1, w, m.x1 - c * ab, m.y1 - sn * ab);
   const g = scene.add.graphics().setDepth(7);   // Leuchtspur der Granate
   g.lineStyle(3, 0xffcc80, 1).lineBetween(m.x1, m.y1, m.x2, m.y2);
   scene.tweens.add({ targets: g, alpha: 0, duration: 140, onComplete: () => g.destroy() });

@@ -6,6 +6,7 @@
 // Mensch im Sicherheitsradius um den Einschlag steht (Zielwahl: server/zielwahl.mjs).
 import { LEOPARD } from '../client/evak.mjs';
 import { PX, gefaehrdet, haufenZiel } from './zielwahl.mjs';
+import { bewege, WERTE as W } from '../client/welt.mjs';
 
 export const TURM_TEMPO = 0.7;                     // rad/s (ca. 40 °/s)
 export const ZIEL_TOLERANZ = 10 * Math.PI / 180;   // so genau muss der Turm zielen, bevor gefeuert wird
@@ -16,6 +17,9 @@ export const KANONE = {
   sicherheit: 9,                                   // Meter um den Einschlag, in denen kein Spieler/Mensch stehen darf
   scan: 0.25,                                      // so oft (s) wird nach Haufen gesucht
 };
+// Druckwelle der Hauptkanone vor dem Rohr: Kegel (±20°) bis 10 m; Zombies werden vom Rohr weg geschleudert (3–8 m, nahe am Rohr weiter)
+// und taumeln ~0,6 s; Spieler bekommen keinen Schaden, nur einen Schubs von ~1 m (nicht durch Wände).
+export const DRUCKWELLE = { weite: 10, halbWinkel: 20 * Math.PI / 180, wegMin: 3, wegMax: 8, taumeln: 0.6, spielerSchub: 1 };
 const MG_TREFFER = 0.8;
 
 export const winkelDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
@@ -102,6 +106,7 @@ export class Leopard {
     const r = this.raum, s = r.state, R = KANONE.schadenRadius * PX;
     const mu = turmPunkt(f, f.turm, LEOPARD.muendung, 0);
     r.broadcast('leopardkanone', { x1: mu.x, y1: mu.y, x2: ziel.x, y2: ziel.y, w: f.turm, r: R });
+    this.druckwelle(mu, f.turm);
     const von = this.von(ziel.x, ziel.y);
     const vorher = s.besiegt;
     for (const [id, z] of [...s.zombies]) {
@@ -115,5 +120,35 @@ export class Leopard {
     s.besiegt = vorher;
     r.broadcast('explosion', { x: ziel.x, y: ziel.y, r: R, ebene: '' });
     r.laerm?.(ziel.x, ziel.y, 700, true, '');
+  }
+
+  // Druckwelle im Kegel vor der Mündung (nur Leopard; der Puma hat keine). Rückgabe: Anzahl geschleuderter Zombies
+  druckwelle(mu, w) {
+    const r = this.raum, s = r.state, D = DRUCKWELLE, weite = D.weite * PX, welt = r.wv?.('');
+    const schieb = (o, wk, strecke, rad) => {
+      const n = Math.max(1, Math.ceil(strecke / 4)), dx = Math.cos(wk) * strecke / n, dy = Math.sin(wk) * strecke / n;
+      for (let i = 0; i < n; i++) { if (welt) bewege(welt, o, dx, dy, rad); else { o.x += dx; o.y += dy; } }
+    };
+    const imKegel = o => {
+      if (o.ebene) return null;
+      const d = Math.hypot(o.x - mu.x, o.y - mu.y);
+      if (d > weite) return null;
+      const wk = d < 1 ? w : Math.atan2(o.y - mu.y, o.x - mu.x);
+      return Math.abs(winkelDiff(w, wk)) <= D.halbWinkel ? { d, wk } : null;
+    };
+    let n = 0;
+    for (const [id, z] of s.zombies) {
+      if (!(z.hp > 0)) continue;
+      const k = imKegel(z); if (!k) continue;
+      schieb(z, k.wk, (D.wegMin + (D.wegMax - D.wegMin) * (1 - k.d / weite)) * PX, W.zombieRadius);
+      const info = r.zombieInfo?.get(id);
+      if (info) { info.reakT = Math.max(info.reakT ?? 0, D.taumeln); info.tmT = 0; }
+      n++;
+    }
+    for (const p of s.spieler.values()) {
+      if (p.unten || p.anBord) continue;
+      const k = imKegel(p); if (k) schieb(p, k.wk, D.spielerSchub * PX, W.spielerRadius);
+    }
+    return n;
   }
 }

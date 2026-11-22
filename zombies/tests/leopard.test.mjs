@@ -173,3 +173,36 @@ test('Schießstand: Fahrzeugwahl – ohne Wahl schießt keins; der Leopard steht
     assert.ok(await bis(() => raum.fahrzeug === ''), 'ss_panzer aus');
   } finally { await c.leave(); }
 });
+
+// ---------- Druckwelle der Hauptkanone ----------
+test('Druckwelle: Zombies im Kegel vor dem Rohr werden zurückgeschleudert und taumeln, außerhalb nichts; Spieler ohne Schaden', async () => {
+  const { DRUCKWELLE } = await import('../server/leopard.mjs');
+  const { r } = attrappe(), l = new Leopard(r), mu = { x: 1000, y: 1000 }, px = 8;
+  r.zombieInfo = new Map([['a', {}], ['b', {}], ['c', {}], ['d', {}]]);
+  Z(r, 'a', 1000 + 4 * px, 1000);
+  Z(r, 'b', 1000 + 6 * px, 1000 + 1.5 * px);
+  Z(r, 'c', 1000 + 4 * px, 1000 + 4 * px);     // 45 Grad daneben: außerhalb
+  Z(r, 'd', 1000 + 14 * px, 1000);             // zu weit
+  r.state.spieler.set('s', { x: 1000 + 3 * px, y: 1000, hp: 100, ebene: '' });
+  r.state.spieler.set('t', { x: 1000, y: 1000 + 5 * px, hp: 100, ebene: '' });
+  const vor = new Map([...r.state.zombies].map(([k, z]) => [k, { x: z.x, y: z.y }]));
+  assert.equal(l.druckwelle(mu, 0), 2);
+  for (const k of ['a', 'b']) {
+    const z = r.state.zombies.get(k);
+    assert.ok(z.x - vor.get(k).x >= DRUCKWELLE.wegMin * px - 1, 'zu wenig geschleudert ' + k);
+    assert.equal(r.zombieInfo.get(k).reakT, DRUCKWELLE.taumeln);
+  }
+  for (const k of ['c', 'd']) { const z = r.state.zombies.get(k); assert.deepEqual({ x: z.x, y: z.y }, vor.get(k)); assert.equal(r.zombieInfo.get(k).reakT, undefined); }
+  const s = r.state.spieler.get('s');
+  assert.equal(s.hp, 100); assert.ok(Math.abs(s.x - (1000 + 4 * px)) < 0.5, 'Spieler ~1 m geschubst');
+  assert.deepEqual({ x: r.state.spieler.get('t').x, y: r.state.spieler.get('t').y }, { x: 1000, y: 1000 + 5 * px });
+});
+
+test('Kanonenschuss des Leopards löst die Druckwelle aus, der Puma (Stützpunkt/B11) nicht', async () => {
+  const { r } = attrappe(), l = new Leopard(r), f = wanne();
+  let n = 0; l.druckwelle = () => { n++; };
+  l.kanonenSchuss(f, { x: 500, y: 500 }, { x: 500 + 30 * 8, y: 500 });
+  assert.equal(n, 1);
+  const { readFileSync } = await import('node:fs');
+  for (const d of ['stuetzpunkt', 'szene_b11']) assert.ok(!/druckwelle/i.test(readFileSync(new URL(`../server/${d}.mjs`, import.meta.url), 'utf8')), d + ' darf keine Druckwelle haben');
+});
