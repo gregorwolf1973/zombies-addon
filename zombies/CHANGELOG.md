@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.74.0 – 22.11.2026
+
+- Schneller: Die Welt wird im Hintergrund gebaut und im Browser gespeichert (zweiter Besuch/Levelwechsel am Handy etwa doppelt so schnell); der Server baut das nächste Level schon während der Pause in einem eigenen Thread und stockt beim Levelwechsel nicht mehr.
+- Intern: Version kommt aus config.yaml, package.json bleibt fest (schnelleres Einspielen, npm-Schritt aus dem Zwischenspeicher).
+
 ## 0.73.1 – 22.11.2026
 
 - Schneller: Spieldateien werden versioniert ausgeliefert und bleiben dauerhaft im Browser (zweiter Besuch lädt kein JS/keine Karten neu), Text gzip/br-komprimiert (erster Besuch ~40 % weniger Daten).

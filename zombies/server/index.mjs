@@ -195,7 +195,9 @@ export async function starte({
   const lokal = req => process.env.ZOMBIES_VERWALTUNG_LOKAL === '1' && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress);
   const nurIngress = (req, res, next) => req.get('x-ingress-path') || lokal(req) ? next() : res.status(403).json({ fehler: 'Nur über die Home-Assistant-Seitenleiste' });
   let paketVersion = '';
-  try { paketVersion = JSON.parse(fs.readFileSync(path.join(hier, '..', 'package.json'), 'utf8')).version; } catch { /* egal */ }
+  // Version aus config.yaml (Add-on-Version); package.json bleibt fest, damit HA beim Einspielen den npm-Schritt aus dem Docker-Zwischenspeicher nimmt
+  try { paketVersion = /^version:\s*"?([^"\s]+)"?/m.exec(fs.readFileSync(path.join(hier, '..', 'config.yaml'), 'utf8'))?.[1] ?? ''; } catch { /* egal */ }
+  if (!paketVersion) try { paketVersion = JSON.parse(fs.readFileSync(path.join(hier, '..', 'package.json'), 'utf8')).version; } catch { /* egal */ }
   const lage = () => {
     const raum = SpielRaum.aktiv;
     return {

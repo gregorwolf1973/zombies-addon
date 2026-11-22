@@ -15,6 +15,7 @@ RUN npm ci --omit=dev --no-audit --no-fund \
 
 COPY server/ server/
 COPY client/ client/
+COPY config.yaml ./config.yaml
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
 
