@@ -418,7 +418,7 @@
 .sf-zeile > span.sf-einheit { min-width: 0 !important; width: auto; text-align: left !important; font-size: .8rem; font-weight: 400; color: var(--text-soft); white-space: nowrap; }
 .sf-weg { display: none !important; }
 .sf { display: inline-flex; align-items: center; gap: 4px; }
-.sf button { margin: 0; min-width: 38px; min-height: 38px; padding: 0 8px; font-size: 1.1rem; line-height: 1; }
+.sf button { margin: 0; min-width: 44px; min-height: 44px; padding: 0 8px; font-size: 1.1rem; line-height: 1; }
 .sf button.sf-vorgabe { min-width: 34px; font-size: 1rem; color: var(--text-soft); }
 .sf button.sf-vorgabe[disabled] { opacity: .3; cursor: default; }
 .sf input[type="number"] { width: 5.6em; min-height: 38px; text-align: center; font: inherit; font-variant-numeric: tabular-nums; padding: 0 4px; -moz-appearance: textfield; appearance: textfield; }
@@ -444,8 +444,8 @@ table.lv-tabelle thead th { font-size: .8rem; font-weight: 600; color: var(--tex
 table.lv-tabelle tbody th { text-align: left; font-weight: 400; padding-right: 8px; min-width: 150px; }
 table.lv-tabelle tbody tr + tr th, table.lv-tabelle tbody tr + tr td { border-top: 1px solid var(--border); }
 table.lv-tabelle .sf { gap: 2px; }
-table.lv-tabelle .sf button { min-width: 30px; min-height: 36px; padding: 0 4px; }
-table.lv-tabelle .sf input[type="number"] { width: 3.6em; min-height: 36px; }
+table.lv-tabelle .sf button { min-width: 44px; min-height: 44px; padding: 0 4px; }
+table.lv-tabelle .sf input[type="number"], table.lv-tabelle .sf input[type="text"] { width: 4em; min-height: 44px; }
 table.lv-tabelle .sf-vorgabe { min-width: 30px; }
 .lv-status { min-height: 1.2em; font-size: .85rem; color: var(--akzent); margin: 4px 0 0; }
 table.lv-vorschau { border-collapse: collapse; width: 100%; min-width: 420px; font-variant-numeric: tabular-nums; }
@@ -454,7 +454,193 @@ table.lv-vorschau thead th { border-top: 0; font-size: .8rem; color: var(--text-
 table.lv-vorschau tbody th { text-align: left; font-weight: 600; white-space: nowrap; }
 table.lv-vorschau td small { display: block; color: var(--text-soft); font-size: .75rem; }
 .lv-formel { font-size: .8rem; color: var(--text-soft); margin: 6px 0; }
+/* ---- Aufräumen: Sprungleiste, Statuszeile, Gruppen, Tippziele ---- */
+body { padding-bottom: 72px; }
+.speicher-zeile { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 6px 14px;
+  background: var(--card); color: var(--text-soft); border-top: 3px solid var(--border); box-shadow: 0 -1px 6px rgba(0,0,0,.18); font-weight: 600; font-size: .92rem; }
+.speicher-zeile.ok { border-top-color: #2e7d32; color: var(--text); }
+.speicher-zeile.info { border-top-color: var(--akzent); color: var(--text); }
+.speicher-zeile.fehler { background: var(--gefahr); border-top-color: var(--gefahr); color: #fff; }
+.speicher-zeile button { min-height: 44px; min-width: 44px; background: var(--akzent); color: var(--akzent-text); border: none; font-weight: 700; white-space: nowrap; }
+.speicher-zeile button[hidden] { display: none; }
+#tnStatus, .lv-status, #meldung { display: none !important; }
+.sprungleiste { position: sticky; top: 0; z-index: 50; background: var(--bg); padding: 8px 0; margin: 0 0 8px; display: flex; gap: 8px; align-items: center; }
+.sprungleiste input[type="search"] { flex: 0 1 190px; min-width: 128px; min-height: 44px; font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 22px; padding: 0 14px; }
+.sprungleiste .sprung-chips { display: flex; gap: 6px; overflow-x: auto; flex: 1 1 auto; scrollbar-width: none; padding: 2px 0; }
+.sprungleiste .sprung-chips::-webkit-scrollbar { display: none; }
+.sprungleiste button.sprung { min-height: 44px; white-space: nowrap; border-radius: 22px; padding: 0 16px; font-weight: 600; flex: 0 0 auto; }
+.sprungleiste button.sprung.aktiv { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); }
+.such-leer { display: none; text-align: center; color: var(--text-soft); padding: 18px; }
+.suche .such-leer.zeigen { display: block; }
+.gruppe { margin-bottom: 8px; }
+.ez > .sf-zeile { flex-wrap: wrap; }
+button, button.klein, select, input[type="text"], input[type="password"], input[type="number"] { min-height: 44px; }
+.bots-feld button.klein { min-width: 44px; }
+.gruppe-titel { font-size: 1.3rem; margin: 20px 2px 10px; scroll-margin-top: 70px; }
+.gruppe > details.unter { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 14px; border-top: 0; overflow: hidden; }
+.such-aus { display: none !important; }
+details.unter > summary, .gruppe summary { min-height: 44px; display: flex; align-items: center; }
+details.unter > summary { list-style-position: inside; }
+.gruppe .karte > h2 { font-size: 1.05rem; }
+.karte-zeile { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.karte-zeile select { flex: 1 1 180px; min-height: 44px; }
+.karte-zeile button { min-height: 44px; flex: 0 0 auto; }
+.sf button { min-width: 44px; min-height: 44px; }
+.sf button.sf-vorgabe { min-width: 44px; font-size: .85rem; padding: 0 10px; white-space: nowrap; }
+.sf input[type="number"], .sf input[type="text"] { width: 5.6em; min-height: 44px; text-align: center; font: inherit; font-variant-numeric: tabular-nums; padding: 0 4px; }
+table.lv-tabelle .sf button { min-width: 44px; min-height: 44px; }
+table.lv-tabelle .sf input { width: 4em; min-height: 44px; }
+table.lv-tabelle thead th:first-child, table.lv-tabelle tbody th { position: sticky; left: 0; z-index: 2; background: var(--card); box-shadow: 1px 0 0 var(--border); }
+table.lv-tabelle tbody th { min-width: 120px; }
+table.lv-tabelle .sf-vorgabe.reihe { min-height: 44px; min-width: 44px; }
+table.wf-tabelle { min-width: 640px; }
+table.wf-tabelle tbody th { min-width: 96px; max-width: 120px; font-size: .9rem; }
+table.wf-tabelle td.wf-info { text-align: left; font-size: .8rem; color: var(--text-soft); }
+table.wf-tabelle tr.wf-infozeile td { border-top: 0 !important; padding-top: 0; }
+table.wf-tabelle tr.wf-infozeile summary { cursor: pointer; font-size: .8rem; color: var(--text-soft); min-height: 44px; display: flex; align-items: center; }
+.wf-alt { display: none !important; }
+label:has(> input[type="checkbox"]):not(.schalter) { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; padding: 4px 0; }
+label:has(> input[type="checkbox"]) input[type="checkbox"]:not(.schalter *) { width: 24px; height: 24px; flex: 0 0 auto; }
+.schalter { min-height: 44px; }
+.vorlagen-knoepfe { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.vorlagen-knoepfe button, .vorlagen-knoepfe a.knopf, .vorlagen-knoepfe select { min-height: 44px; }
+a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); text-decoration: none; background: var(--card); }
+.tk-suche { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.tk-suche input[type="search"] { flex: 1 1 200px; min-height: 44px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; }
+.erklaerung { font-size: .8rem; color: var(--text-soft); margin: 2px 0 8px; }
+@media (max-width: 520px) { .sprungleiste input[type="search"] { flex-basis: 128px; } }
+
 </style>
+<script>
+// Gemeinsame Schicht für alle Skripte dieser Seite (muss zuerst laufen):
+//  - EIN Abruf von verwaltung/api alle 5 s (alle setInterval(…, 5000) laufen gemeinsam, pausiert bei versteckter Seite;
+//    gleichzeitige GET-Anfragen teilen sich eine Antwort)
+//  - feste Speicher-Statuszeile (unten): ✓ Gespeichert HH:MM / ⚠ Fehler …
+//  - Rückgängig: nach jedem Speichern 5 s lang, stellt die vorigen Werte per API wieder her
+(function () {
+  'use strict';
+  var origFetch = window.fetch.bind(window), origSI = window.setInterval.bind(window);
+  var stand = null, cache = null, rueck = null, rueckTimer = null, getFehler = false;
+  var GEHEIM = ['superuserPasswort', 'superuserLoeschen', 'zugangscode', 'superuserHash'];
+  var zeitText = function () { var d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  var istObj = function (v) { return v && typeof v === 'object' && !Array.isArray(v); };
+
+  // ---------- Statuszeile ----------
+  var zeileEl = null, textEl = null, knopfEl = null, wartend = null;
+  function bauen() {
+    if (zeileEl || !document.body) return;
+    zeileEl = document.createElement('div'); zeileEl.id = 'speicherZeile'; zeileEl.className = 'speicher-zeile'; zeileEl.setAttribute('role', 'status'); zeileEl.setAttribute('aria-live', 'polite');
+    textEl = document.createElement('span'); textEl.id = 'speicherText'; textEl.textContent = 'Änderungen werden sofort gespeichert';
+    knopfEl = document.createElement('button'); knopfEl.type = 'button'; knopfEl.id = 'speicherRueck'; knopfEl.textContent = '↩ Rückgängig'; knopfEl.hidden = true;
+    knopfEl.addEventListener('click', rueckgaengig);
+    zeileEl.append(textEl, knopfEl); document.body.appendChild(zeileEl);
+    if (wartend) { zStatus(wartend[0], wartend[1], wartend[2]); wartend = null; }
+  }
+  function zStatus(text, art, mitRueck) {
+    if (!zeileEl) { wartend = [text, art, mitRueck]; return; }
+    textEl.textContent = text; zeileEl.className = 'speicher-zeile ' + (art || 'info'); knopfEl.hidden = !mitRueck;
+  }
+  window.zStatus = zStatus;
+  window.zFehler = function (text) { zStatus('⚠ ' + text, 'fehler'); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bauen); else bauen();
+
+  // ---------- Rückgängig ----------
+  function vorherZu(neu, alt) {
+    var aus = {};
+    Object.keys(neu).forEach(function (k) {
+      if (GEHEIM.indexOf(k) >= 0) return;
+      var n = neu[k], a = alt ? alt[k] : undefined;
+      if (a === undefined) return;
+      if (istObj(n)) { var t = vorherZu(n, istObj(a) ? a : {}); if (Object.keys(t).length) aus[k] = t; }
+      else if (JSON.stringify(n) !== JSON.stringify(a)) aus[k] = JSON.parse(JSON.stringify(a));
+    });
+    return aus;
+  }
+  function behalten(ziel, quelle) {   // schon Vorhandenes (der erste Stand vor der Änderungsserie) bleibt
+    Object.keys(quelle).forEach(function (k) {
+      if (!(k in ziel)) ziel[k] = quelle[k];
+      else if (istObj(ziel[k]) && istObj(quelle[k])) behalten(ziel[k], quelle[k]);
+    });
+    return ziel;
+  }
+  function merkeRueck(v) {
+    if (!v || !Object.keys(v).length) { zStatus('✓ Gespeichert ' + zeitText(), 'ok'); return; }
+    rueck = behalten(rueck || {}, v);
+    zStatus('✓ Gespeichert ' + zeitText(), 'ok', true);
+    clearTimeout(rueckTimer);
+    rueckTimer = setTimeout(function () { rueck = null; if (knopfEl) knopfEl.hidden = true; }, 5000);
+  }
+  function rueckgaengig() {
+    var v = rueck; rueck = null; clearTimeout(rueckTimer); knopfEl.hidden = true;
+    if (!v) return;
+    cache = null;
+    origFetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        if (d && d.einstellungen) stand = d.einstellungen;
+        zStatus('↩ Rückgängig gemacht ' + zeitText(), 'ok');
+        document.dispatchEvent(new CustomEvent('z:rueckgaengig', { detail: d }));
+        tick();
+      }).catch(function (e) { zStatus('⚠ Rückgängig fehlgeschlagen: ' + e.message, 'fehler'); });
+  }
+
+  // ---------- fetch: gemeinsamer GET, überwachter Schreibzugriff ----------
+  var antwort = function (o) { return new Response(o.text, { status: o.status, headers: { 'Content-Type': o.typ || 'application/json' } }); };
+  function merken(o) {
+    if (!o.ok) return;
+    try { var d = JSON.parse(o.text); if (d && d.einstellungen) stand = d.einstellungen; } catch (e) { /* kein JSON */ }
+  }
+  function holen(url, init) {
+    var jetzt = Date.now();
+    if (!cache || jetzt - cache.zeit > 1500) {
+      var c = { zeit: jetzt };
+      c.p = origFetch(url, init).then(function (r) {
+        return r.text().then(function (t) { var o = { ok: r.ok, status: r.status, text: t, typ: r.headers.get('content-type') }; merken(o); return o; });
+      });
+      c.p.then(function (o) {
+        if (o.ok && getFehler) { getFehler = false; zStatus('✓ Verbunden ' + zeitText(), 'ok'); }
+        if (!o.ok && o.status !== 403) { getFehler = true; zStatus('⚠ Laden fehlgeschlagen (HTTP ' + o.status + ')', 'fehler'); }
+      }, function () { cache = null; getFehler = true; zStatus('⚠ Keine Verbindung zum Spielserver', 'fehler'); });
+      cache = c;
+    }
+    return cache.p.then(antwort);
+  }
+  function schreiben(url, init, istApi) {
+    var vorher = null;
+    if (istApi && stand && init && typeof init.body === 'string') { try { vorher = vorherZu(JSON.parse(init.body), stand); } catch (e) { vorher = null; } }
+    cache = null;
+    zStatus('Speichert …', 'info');
+    return origFetch(url, init).then(function (r) {
+      cache = null;
+      if (!r.ok) { zStatus('⚠ Fehler beim Speichern (HTTP ' + r.status + ')', 'fehler'); return r; }
+      if (istApi) {
+        r.clone().text().then(function (t) { merken({ ok: true, text: t }); }).catch(function () { /* egal */ });
+        merkeRueck(vorher);
+      } else zStatus('✓ Erledigt ' + zeitText(), 'ok');
+      return r;
+    }, function (e) { cache = null; zStatus('⚠ Fehler beim Speichern: keine Verbindung', 'fehler'); throw e; });
+  }
+  window.fetch = function (url, init) {
+    var u = String(typeof url === 'string' ? url : (url && url.url) || '').split('?')[0];
+    var m = String((init && init.method) || 'GET').toUpperCase();
+    if (!/(^|\/)verwaltung\//.test(u)) return origFetch(url, init);
+    var istApi = /(^|\/)verwaltung\/api$/.test(u);
+    if (m === 'GET') return istApi ? holen(url, init) : origFetch(url, init);
+    return schreiben(url, init, istApi);
+  };
+
+  // ---------- ein gemeinsamer 5-s-Takt ----------
+  var ticks = [], ticker = null;
+  function tick() { if (document.hidden) return; ticks.slice().forEach(function (f) { try { f(); } catch (e) { /* weiter */ } }); }
+  window.setInterval = function (fn, ms) {
+    if (ms === 5000 && typeof fn === 'function') { ticks.push(fn); if (!ticker) ticker = origSI(tick, 5000); return ticker; }
+    return origSI.apply(window, arguments);
+  };
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
+  window.zStand = function () { return stand; };
+  window.zAbrufe = function () { return ticks.length; };   // für Tests/Prüfung
+})();
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -577,7 +763,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
       <label class="schalter" for="hordeZieleZeigen">
         <input type="checkbox" id="hordeZieleZeigen">
         <span class="anzeige" aria-hidden="true"></span>
-        <span>Horden für Superuser anzeigen (Prüfhilfe)</span>
+        <span>Horden für Superuser einblenden (Prüfmodus: Ziellinie, Fahne, Liste)</span>
       </label>
       <p class="hinweis">Zeigt Superusern je Horde eine Linie zum Ziel, die Zielfahne mit Name und die Hordenliste (Größe, Restzeit, nächstes Ziel; unter dem Zählerfenster). Im ☰-Menü je Person schaltbar.</p>
     </div>
@@ -718,7 +904,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <label for="tnInnenTempo">Tempo in maßstäblichen Innenräumen (% vom Tempo draußen; drinnen sind Figuren halb so groß und die Kamera ist näher)</label>
   <div class="tn-zeile"><input type="range" id="tnInnenTempo" min="10" max="100" step="2"><span id="tnInnenTempoWert">35 %</span></div>
   <label class="tn-schalter"><input type="checkbox" id="tnInnen"> Maßstäbliche Innenräume (echter Grundriss, Wände 25 cm, Möbel in echten Maßen; wirkt sofort – wer drinnen ist, kommt an die Haustür)</label>
-  <label for="tnZLeben">Lebenspunkte eines Zombies (100 = normal; ein Kriecher hat danach 35 % davon)</label>
+  <label for="tnZLeben">Lebenspunkte eines Zombies (100 = normal; ein Kriecher – ein Zombie, der nach dem Tod am Boden weiterkriecht – hat 35 % davon)</label>
   <div class="tn-zeile"><input type="range" id="tnZLeben" min="20" max="500" step="5"><span id="tnZLebenWert">100</span></div>
   <label for="tnBaumTempo">Tempo unter Bäumen (%)</label>
   <span class="hilfe">Menschen, Zombies, Spieler und Bots laufen auf Baumkacheln nur mit diesem Anteil ihres Tempos (Vorgabe 25 % = 75 % langsamer; 100 = kein Unterschied). Fahrzeuge und der Hund sind nicht betroffen.</span>
@@ -774,7 +960,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <p class="tn-leise" id="wfHinweis"></p>
   <label for="wfS_pistole">🔫 Pistole: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_pistole" min="1" max="300" step="1"><span id="wfS_pistoleWert"></span></div>
-  <label for="wfP_pistole">🔫 Pistole: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_pistole">🔫 Pistole: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_pistole" min="0.05" max="3" step="0.01"><span id="wfP_pistoleWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_pistole"></p>
   <label for="wfM_pistole">🔫 Pistole: Magazin (Schuss)</label>
@@ -783,7 +969,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_pistole" min="0.5" max="10" step="0.1"><span id="wfN_pistoleWert"></span></div>
   <label for="wfS_gewehr">🎯 Jagdgewehr: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_gewehr" min="1" max="300" step="1"><span id="wfS_gewehrWert"></span></div>
-  <label for="wfP_gewehr">🎯 Jagdgewehr: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_gewehr">🎯 Jagdgewehr: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_gewehr" min="0.05" max="3" step="0.01"><span id="wfP_gewehrWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_gewehr"></p>
   <label for="wfM_gewehr">🎯 Jagdgewehr: Magazin (Schuss)</label>
@@ -792,7 +978,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_gewehr" min="0.5" max="10" step="0.1"><span id="wfN_gewehrWert"></span></div>
   <label for="wfS_schrotflinte">💥 Schrotflinte: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_schrotflinte" min="1" max="300" step="1"><span id="wfS_schrotflinteWert"></span></div>
-  <label for="wfP_schrotflinte">💥 Schrotflinte: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_schrotflinte">💥 Schrotflinte: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_schrotflinte" min="0.05" max="3" step="0.01"><span id="wfP_schrotflinteWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_schrotflinte"></p>
   <label for="wfM_schrotflinte">💥 Schrotflinte: Magazin (Schuss)</label>
@@ -801,7 +987,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_schrotflinte" min="0.5" max="10" step="0.1"><span id="wfN_schrotflinteWert"></span></div>
   <label for="wfS_mp">🪖 Maschinenpistole: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_mp" min="1" max="300" step="1"><span id="wfS_mpWert"></span></div>
-  <label for="wfP_mp">🪖 Maschinenpistole: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_mp">🪖 Maschinenpistole: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_mp" min="0.05" max="3" step="0.01"><span id="wfP_mpWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_mp"></p>
   <label for="wfM_mp">🪖 Maschinenpistole: Magazin (Schuss)</label>
@@ -810,7 +996,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_mp" min="0.5" max="10" step="0.1"><span id="wfN_mpWert"></span></div>
   <label for="wfS_mg">🔥 Maschinengewehr: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_mg" min="1" max="300" step="1"><span id="wfS_mgWert"></span></div>
-  <label for="wfP_mg">🔥 Maschinengewehr: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_mg">🔥 Maschinengewehr: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_mg" min="0.05" max="3" step="0.01"><span id="wfP_mgWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_mg"></p>
   <label for="wfM_mg">🔥 Maschinengewehr: Magazin (Schuss)</label>
@@ -819,7 +1005,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_mg" min="0.5" max="10" step="0.1"><span id="wfN_mgWert"></span></div>
   <label for="wfS_armbrust">🏹 Armbrust: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_armbrust" min="1" max="300" step="1"><span id="wfS_armbrustWert"></span></div>
-  <label for="wfP_armbrust">🏹 Armbrust: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_armbrust">🏹 Armbrust: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_armbrust" min="0.05" max="3" step="0.01"><span id="wfP_armbrustWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_armbrust"></p>
   <label for="wfM_armbrust">🏹 Armbrust: Magazin (Schuss)</label>
@@ -828,7 +1014,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_armbrust" min="0.5" max="10" step="0.1"><span id="wfN_armbrustWert"></span></div>
   <label for="wfS_scharfschuetze">🔭 Scharfschützengewehr: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_scharfschuetze" min="1" max="300" step="1"><span id="wfS_scharfschuetzeWert"></span></div>
-  <label for="wfP_scharfschuetze">🔭 Scharfschützengewehr: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_scharfschuetze">🔭 Scharfschützengewehr: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_scharfschuetze" min="0.05" max="3" step="0.01"><span id="wfP_scharfschuetzeWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_scharfschuetze"></p>
   <label for="wfM_scharfschuetze">🔭 Scharfschützengewehr: Magazin (Schuss)</label>
@@ -837,7 +1023,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_scharfschuetze" min="0.5" max="10" step="0.1"><span id="wfN_scharfschuetzeWert"></span></div>
   <label for="wfS_granatwerfer">💥 Granatwerfer: Schaden (Explosion, Zombies)</label>
   <div class="tn-zeile"><input type="range" id="wfS_granatwerfer" min="1" max="300" step="1"><span id="wfS_granatwerferWert"></span></div>
-  <label for="wfP_granatwerfer">💥 Granatwerfer: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_granatwerfer">💥 Granatwerfer: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_granatwerfer" min="0.05" max="5" step="0.01"><span id="wfP_granatwerferWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_granatwerfer"></p>
   <label for="wfM_granatwerfer">💥 Granatwerfer (40 mm): Magazin (Schuss)</label>
@@ -846,7 +1032,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_granatwerfer" min="0.5" max="10" step="0.1"><span id="wfN_granatwerferWert"></span></div>
   <label for="wfS_handgranate">💣 Handgranaten: Schaden (Explosion, Zombies)</label>
   <div class="tn-zeile"><input type="range" id="wfS_handgranate" min="1" max="300" step="1"><span id="wfS_handgranateWert"></span></div>
-  <label for="wfP_handgranate">💣 Handgranaten: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_handgranate">💣 Handgranaten: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_handgranate" min="0.05" max="5" step="0.01"><span id="wfP_handgranateWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_handgranate"></p>
   <label for="wfM_handgranate">💣 Handgranaten: Magazin (Schuss)</label>
@@ -855,22 +1041,22 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   <div class="tn-zeile"><input type="range" id="wfN_handgranate" min="0.5" max="10" step="0.1"><span id="wfN_handgranateWert"></span></div>
   <label for="wfS_schlaeger">🏏 Baseballschläger: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_schlaeger" min="1" max="300" step="1"><span id="wfS_schlaegerWert"></span></div>
-  <label for="wfP_schlaeger">🏏 Baseballschläger: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_schlaeger">🏏 Baseballschläger: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_schlaeger" min="0.05" max="3" step="0.01"><span id="wfP_schlaegerWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_schlaeger"></p>
   <label for="wfS_sense">🌾 Sense: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_sense" min="1" max="300" step="1"><span id="wfS_senseWert"></span></div>
-  <label for="wfP_sense">🌾 Sense: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_sense">🌾 Sense: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_sense" min="0.05" max="3" step="0.01"><span id="wfP_senseWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_sense"></p>
   <label for="wfS_messer">🔪 Messer: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_messer" min="1" max="300" step="1"><span id="wfS_messerWert"></span></div>
-  <label for="wfP_messer">🔪 Messer: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_messer">🔪 Messer: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_messer" min="0.05" max="3" step="0.01"><span id="wfP_messerWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_messer"></p>
   <label for="wfS_faust">✊ Faust: Schaden</label>
   <div class="tn-zeile"><input type="range" id="wfS_faust" min="1" max="300" step="1"><span id="wfS_faustWert"></span></div>
-  <label for="wfP_faust">✊ Faust: Abklingzeit (Schussfolge)</label>
+  <label for="wfP_faust">✊ Faust: Pause zwischen Schüssen</label>
   <div class="tn-zeile"><input type="range" id="wfP_faust" min="0.05" max="3" step="0.01"><span id="wfP_faustWert"></span></div>
   <p class="tn-leise wf-info" id="wfInfo_faust"></p>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px">Automatische Schussreichweite</div>
@@ -1088,7 +1274,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   // Magazin und Nachladezeit je Fernwaffe: [Schuss, Sekunden] (client/welt.mjs, WAFFEN[..].magazin/nachlade)
   var WFMAG = { pistole: [15, 4], gewehr: [30, 4], schrotflinte: [6, 4], mp: [30, 4], mg: [100, 4], armbrust: [1, 2], scharfschuetze: [5, 4], granatwerfer: [1, 3], handgranate: [5, 1.5] };
   window.WFMAG = WFMAG;
-  function laden() { anfrage('verwaltung/api').then(zeige).catch(function () {}); }
+  function laden() { anfrage('verwaltung/api').then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   function regler(id, wert, teil) {
     var el = $(id);
     el.addEventListener('input', function () { aktiv = id; $(id + 'Wert').textContent = wert(el.value); });
@@ -1400,7 +1586,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   });
   $('spAn').addEventListener('change', function () { senden({ an: $('spAn').checked }); });
   $('spLockt').addEventListener('change', function () { senden({ redenLockt: $('spLockt').checked }); });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
   setInterval(laden, 5000);
 })();
@@ -1471,7 +1657,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   });
   $('agAn').addEventListener('change', function () { senden({ an: $('agAn').checked }); });
   $('agEvakArt').addEventListener('change', function () { senden({ evakArt: $('agEvakArt').value }); });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
   setInterval(laden, 5000);
 })();
@@ -1516,7 +1702,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   $('fkFaktor').addEventListener('input', function () { aktiv = true; $('fkFaktorWert').textContent = $('fkFaktor').value + ' %'; });
   $('fkFaktor').addEventListener('change', function () { senden({ xpFaktor: Number($('fkFaktor').value) }); });
   $('fkAn').addEventListener('change', function () { senden({ an: $('fkAn').checked }); });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
   setInterval(laden, 5000);
 })();
@@ -1568,7 +1754,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     el.addEventListener('input', function () { aktiv = r[0]; $(r[0] + 'Wert').textContent = el.value + ' %'; });
     el.addEventListener('change', function () { var t = {}; t[r[1]] = Number(el.value); senden(t); });
   });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
   setInterval(laden, 5000);
 })();
@@ -1630,7 +1816,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     }
     function senden(teil) {
       return fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ radioStream: teil }) })
-        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function () {});
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); });
     }
     $('rsAn').addEventListener('change', function () { senden({ an: $('rsAn').checked }); });
     $('rsName').addEventListener('change', function () { senden({ name: $('rsName').value }); });
@@ -1638,7 +1824,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     $('rsLaut').addEventListener('change', function () { senden({ laut: Number($('rsLaut').value) }); });
     $('rsDurchsage').addEventListener('change', function () { senden({ durchsage: Number($('rsDurchsage').value) }); });
     $('rsVorlauf').addEventListener('change', function () { senden({ vorlauf: Number($('rsVorlauf').value) }); });
-    fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {});
+    fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); });
   })();
   </script>
 
@@ -2524,7 +2710,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     el.addEventListener('input', function () { aktiv = f[0]; });
     el.addEventListener('change', function () { senden(f, Number(el.value)); });
   });
-  fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {});
+  fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); });
 })();
 </script>
 
@@ -3235,7 +3421,9 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     var u = unter(titel || (sec.querySelector(':scope > h2') || {}).textContent || '');
     var h = sec.querySelector(':scope > h2'); if (h) h.remove();
     while (sec.firstChild) u.inhalt.appendChild(sec.firstChild);
+    var alteId = sec.id;
     sec.remove();
+    if (alteId) u.id = alteId;   // die CSS-Selektoren (#toeneKarte …, #spracheKarte …, #fkKarte …) greifen weiter
     return u;
   }
 
@@ -3357,24 +3545,26 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   // Gemeinsamer Baustein: [−] [Zahl] [+] [↺]; opt = { lies(), schreibe(v) → angewendeter Wert, live(v), fertig(v), vorgabe(), step, name }
   function baustein(opt) {
     var box = el('span', 'sf');
-    var minus = el('button', '', '−'), plus = el('button', '', '+'), zur = el('button', 'sf-vorgabe', '↺');
+    var minus = el('button', '', '−'), plus = el('button', '', '+'), zur = el('button', 'sf-vorgabe', '↺ Standard');
     minus.type = plus.type = zur.type = 'button';
     minus.setAttribute('aria-label', (opt.name || 'Wert') + ' verringern'); plus.setAttribute('aria-label', (opt.name || 'Wert') + ' erhöhen');
-    var num = el('input'); num.type = 'number'; num.step = String(opt.step || 1); num.inputMode = 'decimal';
+    var fmt = opt.fmt || null;
+    var num = el('input'); num.type = fmt ? 'text' : 'number'; num.step = String(opt.step || 1); num.inputMode = fmt ? (fmt.modus || 'text') : 'decimal';
+    var zt = fmt ? fmt.an : zahlText;
     num.setAttribute('aria-label', opt.name || 'Wert');
     box.append(minus, num, plus, zur);
     var timer = null;
     function zeigen() {
       var v = opt.lies();
-      if (document.activeElement !== num) num.value = zahlText(v);
+      if (document.activeElement !== num) num.value = zt(v);
       var d = opt.vorgabe ? opt.vorgabe() : undefined;
       if (d === undefined || d === null) { zur.disabled = true; zur.title = 'Vorgabe unbekannt'; return; }
       zur.disabled = Math.abs(Number(v) - Number(d)) < 1e-9;
-      zur.title = zur.disabled ? 'Wert entspricht der Vorgabe (' + zahlText(d) + ')' : 'Auf Vorgabe zurücksetzen (' + zahlText(d) + ')';
+      zur.title = zur.disabled ? 'Wert entspricht der Vorgabe (' + zt(d) + ')' : 'Auf Vorgabe zurücksetzen (' + zt(d) + ')';
     }
     function setzen(v, sofort) {
       var a = opt.schreibe(v);
-      num.value = zahlText(a); zeigen();
+      num.value = zt(a); zeigen();
       if (opt.live) opt.live(a);
       clearTimeout(timer);
       if (sofort) opt.fertig(a); else timer = setTimeout(function () { opt.fertig(opt.lies()); }, 450);
@@ -3384,8 +3574,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     plus.addEventListener('click', function () { setzen(schritt(1), false); });
     zur.addEventListener('click', function () { var d = opt.vorgabe && opt.vorgabe(); if (d !== undefined && d !== null) setzen(Number(d), true); });
     num.addEventListener('change', function () {
-      var v = parseFloat(String(num.value).replace(',', '.'));
-      if (!isFinite(v)) { num.value = zahlText(opt.lies()); return; }
+      var v = fmt ? fmt.ein(num.value) : parseFloat(String(num.value).replace(',', '.'));
+      if (v === null || !isFinite(v)) { num.value = zt(opt.lies()); return; }
       setzen(v, true);
     });
     num.addEventListener('focus', function () { try { num.select(); } catch (e) { /* egal */ } });
@@ -3395,6 +3585,17 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     return { box: box, zeigen: zeigen, num: num };
   }
 
+  // Anzeigeformate (intern bleiben Minuten bzw. Zehntel): Uhrzeit HH:MM, Faktor ×2,0
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
+  var FMT_UHR = { modus: 'numeric',
+    an: function (v) { v = Math.round(Number(v)); return pad2(Math.floor(v / 60)) + ':' + pad2(v % 60); },
+    ein: function (t) { var m = /^\s*(\d{1,2})\s*(?:[:.,hH]\s*(\d{1,2}))?\s*(?:Uhr)?\s*$/.exec(String(t)); if (!m) return null; var h = +m[1], mi = +(m[2] || 0); return h > 24 || mi > 59 ? null : h * 60 + mi; } };
+  var FMT_STUNDE = { modus: 'numeric', an: function (v) { return pad2(Math.round(Number(v))) + ':00'; },
+    ein: function (t) { var r = FMT_UHR.ein(t); return r === null ? null : Math.round(r / 60); } };
+  var FMT_FAKTOR = { modus: 'decimal', an: function (v) { return '×' + (Number(v) / 10).toFixed(1).replace('.', ','); },
+    ein: function (t) { var x = parseFloat(String(t).replace(/[×x\s]/gi, '').replace(',', '.')); return isFinite(x) ? Math.round(x * 10) : null; } };
+  var FORMATE = { tnTagAb: FMT_UHR, tnNachtAb: FMT_UHR, agStunde: FMT_STUNDE, tnNacht: FMT_FAKTOR, tnAutos: FMT_FAKTOR };
+
   // Schieber → Zeile mit Zahlenfeld (Schieber bleibt unsichtbar als Modell, Programmzugriffe auf .value werden gespiegelt)
   function aufruesten(r) {
     if (r.dataset.sf) return;
@@ -3403,7 +3604,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     var label = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
     var name = label ? label.textContent.replace(/\s+/g, ' ').trim().slice(0, 80) : r.id;
     var b = baustein({
-      name: name, step: Number(r.step) || 1,
+      name: name, step: Number(r.step) || 1, fmt: FORMATE[r.id],
       lies: function () { return Number(ORIG.get.call(r)); },
       schreibe: function (v) { ORIG.set.call(r, v); return Number(ORIG.get.call(r)); },
       live: function () { r.dispatchEvent(new Event('input', { bubbles: true })); },
@@ -3489,8 +3690,8 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
         lvZellen.push(b);
         td.appendChild(b.box); z.appendChild(td);
       });
-      var tdv = el('td'), alle = el('button', 'sf-vorgabe', '↺');
-      alle.type = 'button'; alle.style.minHeight = '36px'; alle.title = 'Diese Zeile bei allen Leveln auf die Vorgabe setzen';
+      var tdv = el('td'), alle = el('button', 'sf-vorgabe', '↺ Standard');
+      alle.type = 'button'; alle.classList.add('reihe'); alle.style.minHeight = '44px'; alle.title = 'Diese Zeile bei allen Leveln auf die Vorgabe setzen';
       alle.setAttribute('aria-label', f.t + ' bei allen Leveln auf Vorgabe');
       alle.addEventListener('click', function () {
         if (!VORGABEN || !lv) return;
@@ -3537,6 +3738,10 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
   document.addEventListener('input', function (e) { if (e.target && e.target.id === 'tnNacht') vorschau(); });
 
   lvBauen();
+  document.addEventListener('z:rueckgaengig', function (e) {   // Rückgängig: Tabelle auf den wiederhergestellten Stand
+    var neu = e.detail && e.detail.einstellungen && e.detail.einstellungen.zombies && e.detail.einstellungen.zombies.level;
+    if (neu) { lv = JSON.parse(JSON.stringify(neu)); lvZellen.forEach(function (c) { c.zeigen(); }); vorschau(); }
+  });
 
   // Daten holen: Vorgaben (für ↺) und die Tabelle
   fetch('verwaltung/api').then(function (r) { return r.json(); }).then(function (d) {
@@ -3588,7 +3793,7 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     var pp = wert('tnPumaPause', 2.5);
     if ($('bwInfoPuma')) $('bwInfoPuma').textContent = 'Panzer (Puma): Kanone ' + KANONE + ' Schaden, tötet einen Zombie mit ' + treffer(hp, KANONE) + (treffer(hp, KANONE) === 1 ? ' Schuss' : ' Schüssen') + ' (' + kommaZahl(KANONE / pp, 1) + ' Schaden/s); Splitterschaden ' + FLAECHE + ' im Umkreis ca. 4 m, ' + tText(treffer(hp, FLAECHE)) + '. Kanonen- und Soldatenschaden sind fest.';
     if ($('bwInfoLeo')) { var ls = wert('tnLeoSchaden', 100), lp = wert('tnLeoPause', 0.4); $('bwInfoLeo').textContent = 'Leopard-MG: Schaden ' + ls + ', tötet einen Zombie mit ' + treffer(hp, ls) + (treffer(hp, ls) === 1 ? ' Treffer' : ' Treffern') + ' (80 % der Schüsse treffen, ca. ' + kommaZahl(ls * 0.8 / lp, 0) + ' Schaden/s). Überrollte Zombies sind sofort tot.'; }
-    if ($('wfHinweis')) $('wfHinweis').textContent = 'Zombie-Leben: ' + hp + ' (Einstellung im Reiter Zombies). Überrascht = der Zombie hat noch niemanden bemerkt (von hinten anschleichen). Fähigkeiten ändern den Waffenschaden nicht. Schaden/s = Schaden ÷ Abklingzeit (echte Sekunden). Ein Viertel der Zombies kriecht nach dem Tod mit '
+    if ($('wfHinweis')) $('wfHinweis').textContent = 'Zombie-Leben: ' + hp + ' (Einstellung unter Gegner › Zombies). Überrascht = der Zombie hat noch niemanden bemerkt (von hinten anschleichen). Fähigkeiten ändern den Waffenschaden nicht. Schaden/s = Schaden ÷ Pause zwischen den Schüssen (echte Sekunden). Ein Viertel der Zombies kriecht nach dem Tod mit '
       + kh + ' Leben weiter. Granaten (150 Schaden) sind fest.';
   }
   // Echtzeit je Spielzeit-Einheit: ein Spieltag = 1440 Spielminuten = tagMinuten echte Minuten
@@ -3648,8 +3853,281 @@ table.lv-vorschau td small { display: block; color: var(--text-soft); font-size:
     senden({ superuserPasswort: w }).then(function () { $('suPasswort').value = ''; });
   });
   $('suLoeschen').addEventListener('click', function () { senden({ superuserLoeschen: true }); });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function () {}); }
+  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
+})();
+</script>
+<script>
+// Gliederung der Seite in sechs Gruppen (Runde, Gegner, Welt, Ausrüstung, Ton, Zugang & Test) mit klebender Sprungleiste und Suche.
+// Läuft nach dem Umbau der Karten (siehe oben); verschiebt nur vorhandene Elemente, alle ids bleiben.
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var el = function (tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+  var wrap = document.querySelector('.wrap');
+  if (!wrap) return;
+  var kartVon = function (titelId) { var h = $(titelId); return h ? h.closest('section') : null; };
+  function unter(text) {
+    var s = [].filter.call(document.querySelectorAll('details.unter > summary'), function (x) { return x.textContent.indexOf(text) >= 0; })[0];
+    return s ? s.parentElement : null;
+  }
+  function neuUnter(titel, offen) {
+    var d = el('details', 'unter'); if (offen) d.open = true;
+    d.appendChild(el('summary', '', titel));
+    d.inhalt = el('div', 'unter-inhalt'); d.appendChild(d.inhalt);
+    return d;
+  }
+  function titel(d, text) { var s = d && d.querySelector(':scope > summary'); if (s && text) s.textContent = text; }
+  var zeileVon = function (id) { var e = $(id); return e && (e.closest('.ez') || e.closest('label') || e.parentElement); };
+  var GRUPPEN = [['runde', 'Runde'], ['gegner', 'Gegner'], ['welt', 'Welt'], ['ausruestung', 'Ausrüstung'], ['ton', 'Ton'], ['zugang', 'Zugang & Test']];
+  var G = {};
+  var neustartKarte = kartVon('titelNeustart');
+  var kopf = wrap.querySelector('.kopf');
+  GRUPPEN.forEach(function (g) { var s = el('section', 'gruppe'); s.id = 'g_' + g[0]; s.appendChild(el('h2', 'gruppe-titel', g[1])); G[g[0]] = s; wrap.appendChild(s); });   // gleich einhängen: getElementById findet nur Elemente im Dokument
+  var rein = function (g, e) { if (e) G[g].appendChild(e); };
+  // Innenleben der Unterpunkte merken, bevor etwas verschoben wird
+  var innenInhalt = function (d) { return d && d.inhalt ? d.inhalt : (d ? d.querySelector(':scope > .unter-inhalt') : null); };
+
+  // ---------- Runde ----------
+  rein('runde', kartVon('titelSpiel'));
+  var spiel = kartVon('titelSpielEinst');
+  if (spiel) {
+    spiel.querySelector('h2').textContent = 'Karte, Bots, Schwierigkeit';
+    var kf = $('karteAuswahl');
+    if (kf) {   // „Jetzt neu starten“ direkt neben der Kartenwahl
+      var zl = el('div', 'karte-zeile'); kf.parentElement.insertBefore(zl, kf); zl.appendChild(kf);
+      var nb = el('button', 'gefahr', '↻ Jetzt neu starten'); nb.type = 'button'; nb.id = 'neustartKnopf2';
+      nb.addEventListener('click', function () { var o = $('neustartKnopf'); if (o) o.click(); });
+      zl.appendChild(nb);
+    }
+    rein('runde', spiel);
+  }
+  var tn = $('zeitKarte');
+  var uhrKarte = el('section', 'karte'); uhrKarte.id = 'uhrKarte'; uhrKarte.appendChild(el('h2', '', '🕒 Uhrzeit setzen'));
+  if (tn) {
+    [tn.querySelector('.tn-uhr'), tn.querySelector('.tn-knoepfe'), [].filter.call(tn.querySelectorAll('p.tn-leise'), function (p) { return /Uhrzeit setzen/.test(p.textContent); })[0]]
+      .forEach(function (e) { if (e) uhrKarte.appendChild(e); });
+  }
+  rein('runde', uhrKarte);
+  // Vorlagen
+  var vor = el('section', 'karte'); vor.id = 'vorlagenKarte';
+  vor.appendChild(el('h2', '', '📋 Vorlagen'));
+  vor.appendChild(el('p', 'hinweis', 'Eine Vorlage ist ein Satz aller Einstellungen (ohne Zugangscode und Superuser-Passwort). Die mitgelieferte Vorlage ist der Stand des Add-ons; die eigene sicherst du hier selbst.'));
+  var vk = el('div', 'vorlagen-knoepfe');
+  var bSichern = el('button', 'prim', 'Aktuelle Einstellungen als Vorlage sichern'); bSichern.type = 'button'; bSichern.id = 'vorlageSichern';
+  var wahl = el('select'); wahl.id = 'vorlageWahl'; wahl.setAttribute('aria-label', 'Vorlage');
+  wahl.innerHTML = '<option value="mitgeliefert">Mitgelieferte Vorlage</option><option value="eigen">Eigene Vorlage</option>';
+  var bLaden = el('button', '', 'Vorlage laden'); bLaden.type = 'button'; bLaden.id = 'vorlageLaden';
+  var exp = el('a', 'knopf', '⬇ Export JSON'); exp.id = 'vorlageExport'; exp.href = 'verwaltung/export'; exp.setAttribute('download', 'zombies-einstellungen.json');
+  vk.append(bSichern, wahl, bLaden, exp); vor.appendChild(vk);
+  var vInfo = el('p', 'hinweis'); vInfo.id = 'vorlageInfo'; vor.appendChild(vInfo);
+  function eigeneMerken(d) {
+    var da = d && d.eigeneVorlage;
+    wahl.querySelector('option[value="eigen"]').disabled = !da;
+    vInfo.textContent = da ? 'Eigene Vorlage gesichert (/data/vorlage_eigen.json).' : 'Noch keine eigene Vorlage gesichert.';
+    if (!da && wahl.value === 'eigen') wahl.value = 'mitgeliefert';
+  }
+  function vorlageAnfrage(koerper) {
+    return fetch('verwaltung/vorlage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(koerper) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) throw new Error(j.fehler || ('HTTP ' + r.status)); return j; }); });
+  }
+  bSichern.addEventListener('click', function () {
+    vorlageAnfrage({ aktion: 'sichern' }).then(eigeneMerken).catch(function (e) { window.zFehler('Vorlage nicht gesichert: ' + e.message); });
+  });
+  bLaden.addEventListener('click', function () {
+    var eigen = wahl.value === 'eigen';
+    if (!window.confirm('Alle Einstellungen mit der ' + (eigen ? 'eigenen' : 'mitgelieferten') + ' Vorlage überschreiben? (Zugangscode und Superuser bleiben.)')) return;
+    vorlageAnfrage({ aktion: 'laden', quelle: wahl.value }).then(function () { window.zStatus('✓ Vorlage geladen – Seite wird neu geladen', 'ok'); setTimeout(function () { location.reload(); }, 700); })
+      .catch(function (e) { window.zFehler('Vorlage nicht geladen: ' + e.message); });
+  });
+  fetch('verwaltung/api').then(function (r) { return r.json(); }).then(eigeneMerken).catch(function () { /* Fehler zeigt die Statuszeile */ });
+  document.addEventListener('z:rueckgaengig', function (e) { eigeneMerken(e.detail); });
+  rein('runde', vor);
+  rein('runde', neustartKarte);
+
+  // ---------- Gegner ----------
+  rein('gegner', $('levelKarte'));
+  var zk = unter('🧟 Zombies'); titel(zk, '🧟 Zombies: Tempo, Leben, Typen, Größen'); rein('gegner', zk);
+  var hor = unter('Horden und Angriffstrupps'); titel(hor, '🧟 Horden und Angriffstrupps (inkl. Lager-Welle)'); rein('gegner', hor);
+  var aus = unter('Ausbruch und Biss'); titel(aus, '🦠 Biss und Ansteckung'); rein('gegner', aus);
+
+  // ---------- Welt ----------
+  rein('welt', tn);
+  if (tn) { var th = tn.querySelector('h2'); if (th) th.textContent = '🌗 Tag/Nacht und Nebel'; }
+  var stadt = unter('Autos, Verkehr'); titel(stadt, '🚗 Verkehr, Autos, Feuer'); rein('welt', stadt);
+  rein('welt', $('tuerKarte'));
+  rein('welt', $('aufgabenKarte'));
+  rein('welt', unter('Bundeswehr'));
+  var innen = neuUnter('🏠 Innenräume und Baumtempo');
+  ['tnInnen', 'tnInnenTempo', 'tnBaumTempo'].forEach(function (id) { var z = zeileVon(id); if (z) innen.inhalt.appendChild(z); });
+  if ($('tnBaumTempo')) {
+    innen.inhalt.appendChild(el('p', 'erklaerung', 'Unter Bäumen laufen Menschen, Zombies, Spieler und Bots nur mit diesem Anteil ihres Tempos (25 % = 75 % langsamer, 100 % = kein Unterschied).'));
+  }
+  rein('welt', innen);
+
+  // ---------- Ausrüstung ----------
+  var wk = unter('Waffen'); rein('ausruestung', wk);
+  titel(unter('Automatische Schussreichweite'), '🎯 Reichweiten (automatisches Schießen)'); rein('ausruestung', unter('Reichweiten'));
+  var funde = unter('Fundhäufigkeit'); titel(funde, '🎒 Funde und Munitionsglück'); rein('ausruestung', funde);
+  rein('ausruestung', $('fkKarte'));
+  rein('ausruestung', unter('Begleiter-Hund'));
+
+  // Waffen als Tabelle: Waffe × Schaden / Pause / Magazin / Nachladen (die Zahlenfelder wandern, die Regler bleiben unsichtbar im Hintergrund)
+  if (wk && window.WFVORGABE) {
+    var inhaltWk = innenInhalt(wk);
+    var alt = el('div', 'wf-alt'), tabBox = el('div', 'lv-scroll');
+    var tab = el('table', 'lv-tabelle wf-tabelle'), thd = el('thead'), tr0 = el('tr');
+    ['Waffe', 'Schaden', 'Pause (s)', 'Magazin', 'Nachladen (s)', ''].forEach(function (t) { tr0.appendChild(el('th', '', t)); });
+    thd.appendChild(tr0); tab.appendChild(thd);
+    var tbd = el('tbody');
+    var PRE = ['wfS_', 'wfP_', 'wfM_', 'wfN_'];
+    Object.keys(window.WFVORGABE).forEach(function (k) {
+      var lab = document.querySelector('label[for="wfP_' + k + '"]') || document.querySelector('label[for="wfS_' + k + '"]');
+      var name = lab ? (lab.childNodes[0].textContent || k).split(':')[0].trim() : k;
+      var tr = el('tr'), th = el('th', '', name); th.scope = 'row'; tr.appendChild(th);
+      var boxen = [];
+      PRE.forEach(function (p) {
+        var td = el('td'), r = $(p + k), rz = zeileVon(p + k);
+        var box = r && r.parentElement && r.parentElement.querySelector('.sf');
+        if (box) { var z = box.querySelector('.sf-vorgabe'); if (z) { z.style.display = 'none'; boxen.push(z); } td.appendChild(box); } else td.textContent = '–';
+        if (rz) alt.appendChild(rz);
+        tr.appendChild(td);
+      });
+      var tdv = el('td'), alle = el('button', 'sf-vorgabe reihe', '↺ Standard'); alle.type = 'button';
+      alle.setAttribute('aria-label', name + ' auf Standard zurücksetzen');
+      alle.addEventListener('click', function () { boxen.forEach(function (z) { if (!z.disabled) z.click(); }); });
+      tdv.appendChild(alle); tr.appendChild(tdv); tbd.appendChild(tr);
+      var info = $('wfInfo_' + k);
+      if (info) {
+        var ir = el('tr', 'wf-infozeile'), itd = el('td'); itd.colSpan = 6; itd.className = 'wf-info';
+        var dd = el('details'); dd.appendChild(el('summary', '', 'ℹ Treffer bis Tod'));
+        dd.appendChild(info); itd.appendChild(dd); ir.appendChild(itd); tbd.appendChild(ir);
+      }
+    });
+    tab.appendChild(tbd); tabBox.appendChild(tab);
+    inhaltWk.appendChild(tabBox);
+    // restliche, nun leere Zeilen (mit den Reglern) unsichtbar ablegen
+    [].slice.call(inhaltWk.children).forEach(function (c) { if (c !== tabBox && c.id !== 'wfHinweis' && c.tagName !== 'P') alt.appendChild(c); });
+    inhaltWk.appendChild(alt);
+    titel(wk, '🔫 Waffen: Schaden, Pause, Magazin');
+  }
+
+  // ---------- Ton ----------
+  var tk = unter('Geräusche');
+  if (tk) {
+    tk.removeAttribute('id');
+    var tw = el('div', 'ton-wrap'); tw.id = 'toeneKarte';   // CSS (#toeneKarte …) und Skripte finden alles wie bisher
+    rein('ton', tw);
+    var inh = innenInhalt(tk), einheit = null, nodes = [].slice.call(inh.childNodes);
+    var NAMEN = { 'Hordengeräusch': '🧟 Hordengeräusch', 'Musik': '🎵 Musik', 'Autoradio als Live-Radio': '📻 Radio', 'Dateien': '📁 Dateien (Anzeigenamen, Hochladen)' };
+    nodes.forEach(function (n) {
+      if (n.nodeType === 3 && !n.textContent.trim()) return;
+      if (n.nodeType === 1 && n.tagName === 'H3' && n.classList.contains('tk-abschnitt')) {
+        var t = n.textContent.trim(); einheit = neuUnter(NAMEN[t] || t); n.remove(); tw.appendChild(einheit); return;
+      }
+      if (n.nodeType === 1 && n.id === 'tkStatus') { einheit = neuUnter('🔔 Ereignisse (Tondateien zuordnen)'); einheit.id = 'tkEreignisseUnter'; tw.appendChild(einheit); }
+      if (!einheit) { tw.appendChild(n); return; }   // Einleitung vor dem ersten Abschnitt
+      einheit.inhalt.appendChild(n);
+    });
+    // Suche und Filter „nur zugeordnete“ für die Ereignisse
+    var ev = $('tkEreignisseUnter');
+    if (ev) {
+      var tbar = el('div', 'tk-suche');
+      var sf = el('input'); sf.type = 'search'; sf.id = 'tkSuche'; sf.placeholder = 'Ereignis suchen …'; sf.setAttribute('aria-label', 'Ereignis suchen');
+      var lb = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.id = 'tkNurZugeordnet'; lb.append(cb, document.createTextNode(' nur zugeordnete'));
+      tbar.append(sf, lb); ev.inhalt.insertBefore(tbar, ev.inhalt.firstChild);
+      var filtern = function () {
+        var q = sf.value.trim().toLowerCase(), nur = cb.checked, st = window.zStand && window.zStand(), toene = (st && st.toene) || {};
+        [].forEach.call(document.querySelectorAll('#tkEreignisse .tk-gruppe'), function (g) {
+          var sicht = 0;
+          [].forEach.call(g.querySelectorAll('.tk-block'), function (b) {
+            var l = b.querySelector('input[id^="laut-"]'), id = l ? l.id.slice(5) : '';
+            var zu = !!(toene[id] && toene[id].dateien && toene[id].dateien.length);
+            var ok = (!q || b.textContent.toLowerCase().indexOf(q) >= 0) && (!nur || zu);
+            b.classList.toggle('such-aus', !ok); if (ok) sicht++;
+          });
+          g.classList.toggle('such-aus', !sicht);
+          if (q && sicht) g.open = true;
+        });
+      };
+      sf.addEventListener('input', filtern); cb.addEventListener('change', filtern);
+      var elE = $('tkEreignisse');
+      if (elE) new MutationObserver(function () { if (sf.value || cb.checked) filtern(); }).observe(elE, { childList: true });
+    }
+    tk.remove();
+  }
+  rein('ton', unter('Sprache'));
+
+  // ---------- Zugang & Test ----------
+  var zug = el('section', 'karte'); zug.id = 'zugangKarte'; zug.appendChild(el('h2', '', '🔑 Zugang'));
+  var zc = $('zugangscode'), suF = $('suFeld');
+  if (zc && zc.closest('.feld')) zug.appendChild(zc.closest('.feld'));
+  if (suF) zug.appendChild(suF);
+  rein('zugang', zug);
+  var test = unter('Testwerkzeuge'); if (test) { test.open = true; rein('zugang', test); }
+
+  // ---------- einsetzen, alte Hülle entfernen ----------
+  var feinSec = document.querySelector('section.feinheiten');
+  if (feinSec) feinSec.remove();
+
+  // ---------- Sprungleiste + Suche ----------
+  var nav = el('nav', 'sprungleiste'); nav.setAttribute('aria-label', 'Gruppen');
+  var such = el('input'); such.type = 'search'; such.id = 'seitenSuche'; such.placeholder = '🔍 Suche'; such.setAttribute('aria-label', 'Alle Einstellungen durchsuchen');
+  var chips = el('div', 'sprung-chips');
+  GRUPPEN.forEach(function (g) {
+    var b = el('button', 'sprung', g[1]); b.type = 'button'; b.dataset.ziel = 'g_' + g[0];
+    b.addEventListener('click', function () { var z = $('g_' + g[0]); if (z) z.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    chips.appendChild(b);
+  });
+  nav.append(such, chips);
+  if (kopf && kopf.nextSibling) wrap.insertBefore(nav, kopf.nextSibling); else wrap.insertBefore(nav, wrap.firstChild);
+  var leer = el('p', 'such-leer', 'Nichts gefunden.'); wrap.appendChild(leer);
+
+  var einheiten = function () { return [].slice.call(wrap.querySelectorAll('.gruppe > section.karte, .gruppe > details.unter, .gruppe > div.ton-wrap > details.unter')); };
+  var zeilen = function (u) { return [].slice.call(u.querySelectorAll('.ez, .feld, .tk-block, .lv-tabelle tbody tr:not(.wf-infozeile)')); };
+  var offenVorher = new Map();
+  function suchen() {
+    var q = such.value.trim().toLowerCase();
+    document.body.classList.toggle('suche', !!q);
+    var treffer = 0;
+    einheiten().forEach(function (u) {
+      var det = u.tagName === 'DETAILS';
+      if (!q) {
+        u.classList.remove('such-aus'); zeilen(u).forEach(function (z) { z.classList.remove('such-aus'); });
+        if (det && offenVorher.has(u)) { u.open = offenVorher.get(u); offenVorher.delete(u); }
+        return;
+      }
+      var kopfText = ((u.querySelector(':scope > summary, :scope > h2') || {}).textContent || '').toLowerCase();
+      var gesamt = u.textContent.toLowerCase();
+      var passt = gesamt.indexOf(q) >= 0;
+      u.classList.toggle('such-aus', !passt);
+      if (!passt) return;
+      treffer++;
+      if (det) { if (!offenVorher.has(u)) offenVorher.set(u, u.open); u.open = true; }
+      var allesZeigen = kopfText.indexOf(q) >= 0;
+      zeilen(u).forEach(function (z) { z.classList.toggle('such-aus', !allesZeigen && z.textContent.toLowerCase().indexOf(q) < 0); });
+    });
+    GRUPPEN.forEach(function (g) {
+      var s = $('g_' + g[0]); var sichtbar = [].some.call(s.children, function (c) { return c.tagName !== 'H2' && !c.classList.contains('such-aus'); });
+      s.classList.toggle('such-aus', !!q && !sichtbar);
+    });
+    leer.classList.toggle('zeigen', !!q && !treffer);
+  }
+  such.addEventListener('input', suchen);
+
+  // aktive Gruppe in der Sprungleiste hervorheben
+  var merk = 0;
+  function aktiv() {
+    var cur = GRUPPEN[0][0];
+    GRUPPEN.forEach(function (g) { var s = $('g_' + g[0]); if (s && !s.classList.contains('such-aus') && s.getBoundingClientRect().top < 120) cur = g[0]; });
+    [].forEach.call(chips.children, function (b) { b.classList.toggle('aktiv', b.dataset.ziel === 'g_' + cur); });
+  }
+  window.addEventListener('scroll', function () { if (merk) return; merk = setTimeout(function () { merk = 0; aktiv(); }, 100); }, { passive: true });
+  aktiv();
+
+  // Erklärung für das Hordenanzeige-Häkchen
+  var hz = $('hordeZieleZeigen');
+  if (hz && hz.closest('.feld')) { var h = hz.closest('.feld').querySelector('.hinweis'); if (h && !/Prüfmodus/.test(h.textContent)) h.textContent = 'Prüfmodus für Tester: ' + h.textContent; }
 })();
 </script>
 </body>

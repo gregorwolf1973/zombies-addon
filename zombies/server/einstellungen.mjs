@@ -424,3 +424,9 @@ export function oeffentlich(werte) {
   const { superuserHash, superuserPasswort, ...rest } = werte;
   return { ...rest, superuserGesetzt: hashGueltig(superuserHash) };
 }
+
+// Für Vorlagen und Export: ohne Zugangscode, Superuser-Hash/-Passwort und ohne die Testschalter
+export function ohneGeheimnisse(werte) {
+  const { superuserHash, superuserPasswort, zugangscode, test, superuserGesetzt, ...rest } = werte ?? {};
+  return JSON.parse(JSON.stringify(rest));
+}

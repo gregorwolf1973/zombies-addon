@@ -1,6 +1,7 @@
 // Einstieg: liefert die Spieldateien aus und startet den Colyseus-Spielserver.
 import http from 'node:http';
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -15,7 +16,7 @@ import { LEVEL1_KARTEN, level1Karte } from './aufgaben.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
 import { clientAuslieferung, auslieferungsVersion } from './statisch.mjs';
-import { EinstellungsDatei, oeffentlich, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, TON_STANDARD, ZOMBIE_TYPEN } from './einstellungen.mjs';
+import { EinstellungsDatei, oeffentlich, ohneGeheimnisse, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, TON_STANDARD, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
@@ -214,11 +215,46 @@ export async function starte({
       toene: toeneListe(), ereignisse: EREIGNISSE, tonGruppen: TON_GRUPPEN,
       uhr: raum ? Math.floor(raum.state.uhr) : null, autosWelt: raum ? raum.state.autos : null,
       bewohner: raum ? { gesund: [...raum.state.menschen.values()].filter(m => !m.infiziert).length, gebissen: [...raum.state.menschen.values()].filter(m => m.infiziert).length, zombies: raum.state.zombies.size } : null,
-      version: paketVersion,
+      version: paketVersion, eigeneVorlage: !!eigeneLesen(),
       stuetzpunkt: raum ? { zustand: raum.state.stuetzpunkt, tage: Math.round(raum.stuetzpunkt?.spieltage() * 10) / 10 } : null,
     };
   };
-  app.get('/verwaltung/api', nurIngress, (req, res) => res.json(lage()));
+  // Antwort der Verwaltungs-API gzip-komprimiert (wird alle 5 s abgefragt), sonst unverändert
+  const jsonKomprimiert = (req, res, daten) => {
+    const roh = Buffer.from(JSON.stringify(daten));
+    res.set('Vary', 'Accept-Encoding').type('application/json');
+    if (roh.length > 1024 && /\bgzip\b/.test(req.get('accept-encoding') ?? '')) return res.set('Content-Encoding', 'gzip').send(zlib.gzipSync(roh, { level: 6 }));
+    res.send(roh);
+  };
+  app.get('/verwaltung/api', nurIngress, (req, res) => jsonKomprimiert(req, res, lage()));
+  // Vorlagen: eigene Vorlage in /data/vorlage_eigen.json (neben einstellungen.json), ohne Geheimnisse
+  const eigenePfad = einstellungsDatei ? path.join(path.dirname(einstellungsDatei), 'vorlage_eigen.json') : null;
+  let eigeneImSpeicher = null;
+  const eigeneLesen = () => {
+    if (!eigenePfad) return eigeneImSpeicher;
+    try { return JSON.parse(fs.readFileSync(eigenePfad, 'utf8')); } catch { return null; }
+  };
+  app.post('/verwaltung/vorlage', nurIngress, express.json({ limit: '2kb' }), (req, res) => {
+    const aktion = req.body?.aktion, quelle = req.body?.quelle === 'eigen' ? 'eigen' : 'mitgeliefert';
+    if (aktion === 'sichern') {
+      const v = ohneGeheimnisse(datei.werte);
+      if (!eigenePfad) eigeneImSpeicher = v;
+      else try { fs.mkdirSync(path.dirname(eigenePfad), { recursive: true }); fs.writeFileSync(eigenePfad + '.neu', JSON.stringify(v, null, 2)); fs.renameSync(eigenePfad + '.neu', eigenePfad); }
+      catch (e) { return res.status(500).json({ fehler: 'Nicht gespeichert: ' + e.message }); }
+      return res.json({ ...lage(), eigeneVorlage: true });
+    }
+    if (aktion === 'laden') {
+      const v = quelle === 'eigen' ? eigeneLesen() : ohneGeheimnisse(vorgaben());
+      if (!v) return res.status(404).json({ fehler: 'Keine eigene Vorlage gespeichert' });
+      const neu = datei.aendern(ohneGeheimnisse(v));   // Zugangscode und Superuser bleiben, wie sie sind
+      anwenden(neu);
+      return res.json({ ...lage(), eigeneVorlage: !!eigeneLesen() });
+    }
+    res.status(400).json({ fehler: 'Unbekannte Aktion' });
+  });
+  app.get('/verwaltung/export', nurIngress, (req, res) => {
+    res.set('Content-Disposition', 'attachment; filename="zombies-einstellungen.json"').type('application/json').send(JSON.stringify(ohneGeheimnisse(datei.werte), null, 2));
+  });
   app.post('/verwaltung/api', nurIngress, express.json({ limit: '20kb' }), (req, res) => {
     const vorher = datei.werte.karte;
     const neu = datei.aendern(req.body ?? {});
