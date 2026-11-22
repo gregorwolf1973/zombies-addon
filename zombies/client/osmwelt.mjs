@@ -1,6 +1,6 @@
 // Spielwelt aus einer umgerechneten OpenStreetMap-Karte (tools/osm_karte.py).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
-import { berechneTuerPose } from './tuerpose.mjs';
+import { berechneTuerPose, nachbarPolys, aussenFrei, FREI_M } from './tuerpose.mjs';
 import { zaeuneVorTuerenKappen } from './zaunkappen.mjs';
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite, parkplatzBuchten } from './vektor.mjs';
@@ -228,6 +228,8 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   // Türseite wählen (deterministisch, ohne Zufall): OSM-Eingang (g.eingang) hat Vorrang; sonst bleibt die Kartentür, wenn sie ins Freie führt,
   // dort mindestens 2 Kacheln bis zum Nachbarhaus/Hindernis frei sind und die Straße nicht deutlich weiter entfernt ist als an der besten Seite;
   // andernfalls wandert die Tür an die Wandkachel mit dem kürzesten Weg zur Straße (Safe-Room-Kandidaten nur oben/unten).
+  // Nachbarhäuser (amtliche Umrisse): die Tür darf nicht auf einer angebauten Wand sitzen und davor müssen 2,5 m frei von anderen Gebäuden sein (aussenFrei)
+  const nbPolys = nachbarPolys(karte.gebaeude, KACHEL);
   const tuerWaehlen = (g, raus) => {
     const innenOk = (x, y) => hole(x, y) === T.BODEN;
     const pruefe = (x, y, dx, dy) => {
@@ -237,19 +239,24 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
       if (!AUSSEN_OK.has(aussen) || ENG.has(hole(x + 2 * dx, y + 2 * dy))) return null;
       return strDist[(y + dy) * BREITE + x + dx];
     };
+    const freiM = (x, y, dx, dy) => aussenFrei((x + 0.5 + dx * 0.5) * KACHEL, (y + 0.5 + dy * 0.5) * KACHEL, dx, dy, nbPolys, g);
     if (g.eingang) for (const [dx, dy] of RICHTUNGEN) {
       const d = pruefe(g.eingang.x, g.eingang.y, dx, dy);
-      if (d !== null) return { tuer: { x: g.eingang.x, y: g.eingang.y }, raus: { dx, dy } };
+      if (d !== null && freiM(g.eingang.x, g.eingang.y, dx, dy) >= FREI_M) return { tuer: { x: g.eingang.x, y: g.eingang.y }, raus: { dx, dy } };
     }
-    const alt = pruefe(g.tuer.x, g.tuer.y, raus.dx, raus.dy);
+    const altD = pruefe(g.tuer.x, g.tuer.y, raus.dx, raus.dy), altF = altD === null ? 0 : freiM(g.tuer.x, g.tuer.y, raus.dx, raus.dy);
+    const alt = altF >= FREI_M ? altD : null;
     const moeglichSafe = g.flaeche >= 40 || SAFE_WUNSCH.some(([m]) => m.test(g.name ?? '')) || SAFE_ZUSATZ.some(([m]) => m.test(g.name ?? ''));
-    let best = null;
+    let best = null, notfall = null;
     for (let y = g.y - 1; y <= g.y + g.h; y++) for (let x = g.x - 1; x <= g.x + g.b; x++) for (const [dx, dy] of RICHTUNGEN) {
       if (moeglichSafe && dx !== 0) continue;
       const d = pruefe(x, y, dx, dy); if (d === null) continue;
       const w = d * 1000 + Math.abs(x - g.tuer.x) + Math.abs(y - g.tuer.y);
-      if (!best || w < best.w) best = { w, d, tuer: { x, y }, raus: { dx, dy } };
+      const fm = freiM(x, y, dx, dy);
+      if (fm >= FREI_M) { if (!best || w < best.w) best = { w, d, tuer: { x, y }, raus: { dx, dy } }; }
+      else if (!notfall || fm > notfall.fm || (fm === notfall.fm && w < notfall.w)) notfall = { fm, w, d, tuer: { x, y }, raus: { dx, dy } };
     }
+    if (!best && alt === null && notfall && notfall.fm > altF) best = notfall;   // ringsum bebaut: Wand mit dem größten freien Abstand
     if (!best) return { tuer: { ...g.tuer }, raus };
     if (alt !== null && alt <= best.d + 3) return { tuer: { ...g.tuer }, raus };
     return { tuer: best.tuer, raus: best.raus };
@@ -821,7 +828,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
     })),
   };
   for (const h of haeuser) h.umriss = karte.gebaeude.find(g => g.x === h.x && g.y === h.y && g.b === h.b && g.h === h.h)?.umriss;
-  for (const h of haeuser) if (h.tuer) h.tuerPos = berechneTuerPose(h, KACHEL);   // Tür exakt auf der Polygonwand (Nische/Vordach bevorzugt), siehe tuerpose.mjs
+  for (const h of haeuser) if (h.tuer) h.tuerPos = berechneTuerPose(h, KACHEL, nbPolys);   // Tür exakt auf der Polygonwand (Nische/Vordach bevorzugt), siehe tuerpose.mjs
   // Zäune/Hecken vor Haustüren wegschneiden (3 m um die Tür, Korridor zur Straße, parallele Zäune an der Hauswand); Fein-Raster und Zeichnung bauen darauf auf
   if (karte.zaeune?.length) {
     const kap = zaeuneVorTuerenKappen(karte.zaeune, haeuser, karte.gebaeude.map(g => g.umriss), karte.strassen, KACHEL);
@@ -1155,6 +1162,13 @@ function tuerenFreihalten(welt, setze, abstandRechteck) {
       }
     }
     baueKlassen(); erreicht = flut();
+  }
+  // Türpose auf der Wand: liegt 1,25 m vor ihr kein von der Straße erreichbares Feld (Ecke/Nachbarobjekt daneben), zurück auf die Rastertür (garantiert frei)
+  for (const h of betr) {
+    const q = h.tuerPos; if (!q) continue;
+    const cx = Math.floor((q.x + q.nx * 10) / FEIN_PX), cy = Math.floor((q.y + q.ny * 10) / FEIN_PX);
+    if (cx >= 0 && cy >= 0 && cx < fb && cy < fh && erreicht[cy * fb + cx]) continue;
+    h.tuerPos = { x: (h.tuer.x + 0.5 + h.raus.dx * 0.5) * K, y: (h.tuer.y + 0.5 + h.raus.dy * 0.5) * K, nx: h.raus.dx, ny: h.raus.dy, nische: false };
   }
   // Feinraster am Vorplatz: Zaunfelder im Vorplatzfenster entfernen (auch wenn schon ein Weg besteht)
   for (const h of betr) {
