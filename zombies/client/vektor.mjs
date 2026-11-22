@@ -2,6 +2,7 @@
 // Nur Aussehen – Kollision und Türen bleiben beim Kachelraster (osmwelt.mjs).
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { KACHEL, BREITE, T } from './welt.mjs';
+import { ausbeulung } from './strassenrand.mjs';
 import { kulDaecher, zeichneEchtesDach } from './kulisse.mjs';
 
 const K = KACHEL;
@@ -583,7 +584,7 @@ function dichtL(l, v) { return l._d ?? (l._d = dichten(AUTO.has(l.t) || l.t === 
 function wandern(d, o, comps) {
   const out = new Array(d.n);
   for (let j = 0; j < d.n; j++) {
-    let off = o, r = 0; for (const [a, sd, wl] of comps) r += a * rausch(d.s[j], wl, sd);
+    let off = o, r = 0; for (const c of comps) r += typeof c === 'function' ? c(d.s[j]) : c[0] * rausch(d.s[j], c[2], c[1]);
     off += r * d.f[j];
     out[j] = [d.x[j] + d.mx[j] * off, d.y[j] + d.my[j] * off];
   }
@@ -591,7 +592,7 @@ function wandern(d, o, comps) {
 }
 // ein einzelner Punkt j der versetzten Linie
 function wandern1(d, j, o, comps) {
-  let r = 0; for (const [a, sd, wl] of comps) r += a * rausch(d.s[j], wl, sd);
+  let r = 0; for (const c of comps) r += typeof c === 'function' ? c(d.s[j]) : c[0] * rausch(d.s[j], c[2], c[1]);
   const off = o + r * d.f[j];
   return [d.x[j] + d.mx[j] * off, d.y[j] + d.my[j] * off];
 }
@@ -616,6 +617,8 @@ function bandPfad(ctx, A, B) {
 }
 const WL = 88;   // Wellenlänge der Kantenabweichung (~11 m)
 const seedKante = (l, seite) => l.id * 16 + (seite > 0 ? 1 : 2);
+// Ausbeulung je Linie und Seite (eigener Seed, gemerkt); wird an Kantenkomponenten angehängt, damit Bordstein/Gehweg/Saum mitwandern
+const beule = (l, seite) => (l._beule ??= {})[seite > 0 ? 1 : -1] ??= ausbeulung(seedKante(l, seite) * 3 + 11, seite);
 
 // ---------- Ausgerundete Ecken an Einmündungen und Kreuzungen ----------
 // Je zwei benachbarte Arme eines Knotens: Kreisbogen (Radius r) tangential an beide Fahrbahnkanten; das Stück zwischen Ecke und Bogen wird Fahrbahn.
@@ -710,6 +713,10 @@ export function zeichneStrassen(ctx, welt, rect) {
     pfad(ctx, rand); ctx.strokeStyle = 'rgba(60,50,30,.07)'; ctx.lineWidth = 12; ctx.stroke();
     pfad(ctx, mitte); ctx.strokeStyle = 'rgba(60,50,30,.19)'; ctx.lineWidth = 9; ctx.stroke();
     pfad(ctx, mitte); ctx.strokeStyle = track ? '#c9b98f' : '#d8cfb0'; ctx.lineWidth = track ? 7 : 6; ctx.stroke();
+    for (const seite of [1, -1]) {   // einseitige Ausbeulungen: der Weg wird stellenweise breiter 
+      const br = track ? 3.5 : 3, ab = wandern(d, seite * (br - 1), [[3.4, sd, 96]]), au = wandern(d, seite * (br - 1), [[3.4, sd, 96], beule(l, seite)]);
+      bandPfad(ctx, ab, au); ctx.fillStyle = track ? '#c9b98f' : '#d8cfb0'; ctx.fill();
+    }
     if (track) {
       for (const o of [-2.4, 2.4]) { pfad(ctx, wandern(d, o, [[3.4, sd, 96], [0.7, sd + 7 + (o > 0 ? 1 : 0), 31]])); ctx.strokeStyle = 'rgba(80,66,42,.3)'; ctx.lineWidth = 1.6; ctx.stroke(); }
       pfad(ctx, wandern(d, 0, [[3.4, sd, 96], [0.5, sd + 9, 27]])); ctx.strokeStyle = 'rgba(104,128,62,.3)'; ctx.lineWidth = 1.4; ctx.stroke();
@@ -740,8 +747,8 @@ export function zeichneStrassen(ctx, welt, rect) {
   // Nur auf freiem Gelände (Straße, Platz, ungezäunte Wiese): nicht über Häusern, Gärten, Zäunen und Wasser.
   const gehwege = hier.filter(l => AUTO.has(l.t));
   // Gehweg-Außenkante schwankt ±0,25 m, die Innenkante liegt unter der Fahrbahn (verdeckt)
-  const gehStreifen = (l, d, fb, seite, breite) => {
-    const sd = seedKante(l, seite) + 4, comp = [[2.0, sd, WL], [0.6, sd + 50, 33]];
+  const gehStreifen = (l, d, fb, seite, breite, mitBeule = true) => {
+    const sd = seedKante(l, seite) + 4, comp = [[2.0, sd, WL], [0.6, sd + 50, 33], ...(mitBeule ? [beule(l, seite)] : [])];
     const innen = wandern(d, seite * (fb / 2 - 3), []), aussen = wandern(d, seite * (fb / 2 + breite), comp);
     const aussen2 = wandern(d, seite * (fb / 2 + breite + 1.2), comp);
     bandPfad(ctx, innen, aussen2); ctx.fillStyle = 'rgba(88,86,80,.55)'; ctx.fill();
@@ -763,7 +770,7 @@ export function zeichneStrassen(ctx, welt, rect) {
       const fb = fahrbahn(l);
       for (const t of l.gehTeile ?? []) {
         const d = t._d ?? (t._d = dichten(t, v.knoten));
-        for (const seite of [1, -1]) gehStreifen(l, d, fb, seite, GEHWEG);
+        for (const seite of [1, -1]) gehStreifen(l, d, fb, seite, GEHWEG, false);   // Teilstücke haben eigene Bogenlänge: ohne Beule
       }
     }
     ctx.restore();
@@ -786,7 +793,7 @@ export function zeichneStrassen(ctx, welt, rect) {
     if (l.kerb) {
       const hell = new Path2D(), dunkel = new Path2D(), luecke = new Path2D();
       for (const seite of [1, -1]) {
-        const sd = seedKante(l, seite), comp = [[KANTE, sd, WL]];
+        const sd = seedKante(l, seite), comp = [[KANTE, sd, WL], beule(l, seite)];
         const innen = wandern(d, seite * (fb / 2 - 3), comp), aussen = wandern(d, seite * (fb / 2 + 2.5), comp);
         bandPfad(ctx, innen, aussen); ctx.fillStyle = '#a9a8a3'; ctx.fill();
         for (let j = 0; j < d.n - 1; j++) {
@@ -805,7 +812,7 @@ export function zeichneStrassen(ctx, welt, rect) {
     } else {
       // weicher Übergang: drei flache Schichten Erdton unter dem Asphalt (Verlauf ~0,5 m), danach Ausfransungen
       for (const seite of [1, -1]) {
-        const sd = seedKante(l, seite), comp = [[ROH, sd, WL], [0.7, sd + 50, 29]], innen = wandern(d, seite * (fb / 2 - 3), []);
+        const sd = seedKante(l, seite), comp = [[ROH, sd, WL], [0.7, sd + 50, 29], beule(l, seite)], innen = wandern(d, seite * (fb / 2 - 3), []);
         for (const [zu, al] of [[4.8, 0.07], [3.2, 0.10], [1.6, 0.14]]) {
           bandPfad(ctx, innen, wandern(d, seite * (fb / 2 + zu), comp)); ctx.fillStyle = `rgba(112,100,76,${al})`; ctx.fill();
         }
@@ -815,8 +822,8 @@ export function zeichneStrassen(ctx, welt, rect) {
   for (const l of fahr) {
     const d = dichtL(l, v), fb = fahrbahn(l), amp = l.kerb ? KANTE : ROH;
     const extra = s1 => l.kerb ? [] : [[0.7, s1 + 50, 29]];
-    const li = wandern(d, fb / 2, [[amp, seedKante(l, 1), WL], ...extra(seedKante(l, 1))]);
-    const re = wandern(d, -fb / 2, [[amp, seedKante(l, -1), WL], ...extra(seedKante(l, -1))]);
+    const li = wandern(d, fb / 2, [[amp, seedKante(l, 1), WL], ...extra(seedKante(l, 1)), beule(l, 1)]);
+    const re = wandern(d, -fb / 2, [[amp, seedKante(l, -1), WL], ...extra(seedKante(l, -1)), beule(l, -1)]);
     bandPfad(ctx, re, li); ctx.fillStyle = m.asphalt; ctx.fill();
     // Enden ohne Anschluss (Sackgasse) rund abschließen
     for (const p of [l.pts[0], l.pts[l.pts.length - 1]]) if ((v.knoten.get(knotenSchluessel(p)) ?? 0) <= 1) { ctx.beginPath(); ctx.arc(p[0], p[1], fb / 2, 0, Math.PI * 2); ctx.fillStyle = m.asphalt; ctx.fill(); }
@@ -832,8 +839,8 @@ export function zeichneStrassen(ctx, welt, rect) {
     if (!l.kerb) continue;
     const d = dichtL(l, v), fb = fahrbahn(l), laub = new Path2D();
     for (const seite of [1, -1]) {
-      const sd = seedKante(l, seite), comp = [[KANTE, sd, WL]];
-      const aussen = wandern(d, seite * (fb / 2), comp), innen = wandern(d, seite * (fb / 2 - 3.2), [[KANTE, sd, WL], [1.1, sd + 70, 41]]);
+      const sd = seedKante(l, seite), comp = [[KANTE, sd, WL], beule(l, seite)];
+      const aussen = wandern(d, seite * (fb / 2), comp), innen = wandern(d, seite * (fb / 2 - 3.2), [[KANTE, sd, WL], [1.1, sd + 70, 41], beule(l, seite)]);
       bandPfad(ctx, innen, aussen); ctx.fillStyle = 'rgba(38,32,22,.13)'; ctx.fill();
       for (let j = 0; j < d.n; j++) {
         const h = hash(l.id * 6007 + j * 9 + (seite > 0 ? 0 : 4));
@@ -855,7 +862,7 @@ export function zeichneStrassen(ctx, welt, rect) {
     if (l.kerb) continue;
     const d = dichtL(l, v), fb = fahrbahn(l), zunge = new Path2D(), krumen = new Path2D();
     for (const seite of [1, -1]) {
-      const sd = seedKante(l, seite), comp = [[ROH, sd, WL], [0.7, sd + 50, 29]];
+      const sd = seedKante(l, seite), comp = [[ROH, sd, WL], [0.7, sd + 50, 29], beule(l, seite)];
       for (let j = 0; j < d.n; j++) {
         const h = hash(l.id * 4001 + j * 13 + (seite > 0 ? 0 : 7));
         if (h > 0.3 || d.f[j] < 0.5) continue;
