@@ -13,3 +13,4 @@ zombies/tools/glb_draufsicht/*.zip
 zombies/tools/glb_draufsicht/modelle/
 tools/quellen/
 tools/luftbild/cache/
+tools/.pylib/
