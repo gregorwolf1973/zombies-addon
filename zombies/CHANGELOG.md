@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.86.0 – 23.11.2026
+
+- Neue Zombies: fünf Figuren (Soldat, Polizist, Frau, Bürger, abgemagerter Zombie) mit echten Bewegungen von oben – schlurfen, rennen, angreifen, beißen, kriechen, sterben. Alte Zombie-Bilder per Backend-Schalter weiter verfügbar.
+- Karten Isarauen, Königsdorf und Kochel neu aus amtlichen Daten wie Geretsried 2 (Häuserformen, Luftbild, Hecken, Zäune, Einzelbäume); Gebäude ohne Dachdaten bekommen ein graues Flachdach.
+- Fahrzeuge: Über parkende Autos klettert man langsam (20 % Tempo); fahrende Fahrzeuge blockieren, wer erfasst wird, taumelt zur Seite und verliert etwas Leben (einstellbar).
+- Superuser-Menü: jede Waffe wählen; Boxer, Puma oder Leopard neben sich setzen und selbst fahren (Leopard mit Kanone), auch am Schießstand.
+- Straßen: Enden gerade mit bröckelndem Teer und Schotter, Flicken, Schlaglöcher, Staub und Dreck; Panzerschatten liegen dichter am Fahrzeug.
+- Taschenlampe läuft am Ende weich aus; nachts ohne Lampe ist der Schein um die Figur kleiner, dunkler und neutral.
+- Hubschrauber landet 20 m neben dem Landelicht. Aus Häusern kommt man sofort wieder hinaus, auch schräg und am Türrand.
+- A400M: Beim Ausrollen fallen Munitionskisten heraus (je Spieler 80 Schuss und 3 Handgranaten).
+- Munitionskisten bleiben immer durchsuchbar: kleine Zufallsbeute je Tag, sonst Hinweis auf die nächste Lieferung.
+- Der Hund lenkt Zombies im Umkreis von 25 m deutlich wirksamer ab.
+
 ## 0.85.0 – 23.11.2026
 
 - Funde: Nur noch 30 % der Möbel (Schränke, Küche, Bad, Regale …) enthalten etwas; Läden, Autos, Leichen und Bundeswehr-Kisten sind ausgenommen. Die Regel „Munitionsglück“ ist entfernt.
