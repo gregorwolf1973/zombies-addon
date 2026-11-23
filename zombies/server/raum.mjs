@@ -24,6 +24,7 @@ import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
 import { nachSeq } from '../client/netzpuffer.mjs';
+import { zfWaehle, zfVariante } from '../client/zombiefiguren.mjs';
 import { waehleZiel, schussGuete, ersterBaum } from './baumschuss.mjs';
 import { aussehenMigriert } from '../client/figurbild.mjs';
 import { Granaten } from './granaten.mjs';
@@ -1572,7 +1573,9 @@ export class SpielRaum extends Room {
   setzeZombie(x, y, ebene = '', schlaeft = false) {
     const z = new Zombie();
     z.x = x; z.y = y; z.hp = SpielRaum.einstellungen?.zombieLeben ?? ZOMBIE_HP; z.richtung = this.rnd() * Math.PI * 2; z.jagt = false;
-    z.kriecht = false; {
+    z.kriecht = false; if (SpielRaum.einstellungen?.zombieFigurenNeu !== false && SpielRaum.einstellungen?.zombieFiguren) {
+      z.variante = zfVariante(zfWaehle(SpielRaum.einstellungen.zombieFiguren, this.rnd()));   // neue Figuren: Auswahl nach Verwaltung (Anteile), Sonderfälle setzen variante danach selbst
+    } else {
       const erlaubt = SpielRaum.einstellungen.zombieTypen;   // Verwaltung: erlaubte Zombietypen (Nummern), sonst alle
       z.variante = erlaubt?.length ? erlaubt[Math.floor(this.rnd() * erlaubt.length)] : Math.floor(this.rnd() * 25);
     } z.ebene = ebene;

@@ -965,6 +965,11 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       <span class="hilfe" id="grMassstab">Alle im selben Maßstab wie im Spiel: Mann, Frau, Survivor, Held, Heldin, Soldat, Zombie, Leiche. Unter jeder Figur steht die sichtbare Breite (Schulterbreite) in Spielpixeln.</span>
     </div>
   </div>
+  <div id="zfBlock" hidden>
+    <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px">Zombie-Figuren (mindestens eine bleibt an)</div>
+    <p class="tn-leise">Häkchen = Figur kommt vor; der Anteil bestimmt, wie oft sie unter den aktiven Figuren gewählt wird. Soldaten im Lager und verwandelte Polizisten behalten immer ihre Figur.</p>
+    <div id="zfListe"></div>
+  </div>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="ztTitel">Zombietypen (mindestens einer bleibt an)</div>
   <label class="tn-schalter"><input type="checkbox" id="zt_tarn"> Tarnjacke</label>
   <label class="tn-schalter"><input type="checkbox" id="zt_dirndl"> Dirndl</label>
@@ -1264,6 +1269,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnBissSpKoenigsdorf', bsl.koenigsdorf === undefined ? 14 : bsl.koenigsdorf, bsf);
     feld('tnBissSpKochel', bsl.kochel === undefined ? 16 : bsl.kochel, bsf);
     feld('tnBissSpAndermatt', bsl.andermatt === undefined ? 18 : bsl.andermatt, bsf);
+    if (window.zfZeige) window.zfZeige(e);
     var typenE = (e.zombies && e.zombies.typen) || {};
     ZTYPEN.forEach(function (k) { if (document.activeElement !== $('zt_' + k)) $('zt_' + k).checked = typenE[k] !== false; });
     var wfE = e.waffen || {};
@@ -1501,6 +1507,63 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnBeuteMoebel', function (v) { return v + ' %'; }, function (v) { return { beute: { moebel: v } }; });
   regler('tnMgMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { bundeswehr: { mgMunition: v } }; });
   regler('tnPumaMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { bundeswehr: { pumaMunition: v } }; });
+  // Neue Zombie-Figuren (Liste aus zombiefiguren.mjs, dieselbe wie im Server): Zeile je Figur mit Häkchen, Vorschau aus dem Atlas und Anteil
+  var ZF = { liste: null, atlas: null, bild: {}, zuletzt: null };
+  window.zfZeige = function zfZeige(e) {
+    ZF.zuletzt = e; window.zfLetzte = e;
+    var neu = e.zombieFigurenNeu !== false, blk = $('zfBlock');
+    if (blk) blk.hidden = !neu;
+    var alt = $('ztAlt'); if (alt) alt.hidden = neu;
+    if (!ZF.liste) { zfLaden(); return; }
+    var fe = (e.zombies && e.zombies.figuren) || {};
+    ZF.liste.forEach(function (f) {
+      var q = fe[f.id] || { an: true, anteil: f.anteil }, cb = $('zf_' + f.id), rg = $('zfA_' + f.id);
+      if (cb && document.activeElement !== cb) cb.checked = q.an !== false;
+      if (rg && document.activeElement !== rg && aktiv !== 'zfA_' + f.id) { rg.value = q.anteil; $('zfA_' + f.id + 'Wert').textContent = q.anteil + ' %'; }
+    });
+  };
+  function zfBauen() {
+    var box = $('zfListe');
+    if (!box || box.firstChild) return;
+    ZF.liste.forEach(function (f) {
+      var z = document.createElement('div'); z.className = 'zf-zeile';
+      z.innerHTML = '<label class="tn-schalter"><input type="checkbox" id="zf_' + f.id + '"> <canvas class="zt-vorschau" id="zfv_' + f.id + '" width="48" height="48"></canvas> <span class="zf-name"></span></label>' +
+        '<div class="tn-zeile"><input type="range" id="zfA_' + f.id + '" min="0" max="100" step="5" aria-label="Anteil ' + f.name + '"><span id="zfA_' + f.id + 'Wert"></span><span class="tn-leise"> empfohlen ' + f.anteil + ' %</span></div>';
+      z.querySelector('.zf-name').textContent = f.name + ' (' + f.id + ')';
+      box.appendChild(z);
+      $('zf_' + f.id).addEventListener('change', function () {
+        var t = {}; t[f.id] = { an: $('zf_' + f.id).checked };
+        anfrage('verwaltung/api', { zombies: { figuren: t } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (er) { status('Fehler: ' + er.message, true); });
+      });
+      regler('zfA_' + f.id, function (v) { return v + ' %'; }, function (v) { var t = {}; t[f.id] = { anteil: v }; return { zombies: { figuren: t } }; });
+    });
+    zfVorschau();
+  }
+  // Vorschau: erstes walk-Bild des Atlas, auf den sichtbaren Umriss zugeschnitten
+  function zfVorschau() {
+    if (!ZF.atlas || !ZF.liste) return;
+    ZF.liste.forEach(function (f) {
+      var cv = $('zfv_' + f.id), file = ZF.atlas.atlas && ZF.atlas.atlas[f.id], r = ZF.atlas.bilder && ZF.atlas.bilder[f.id + '_walk_00'];
+      if (!cv || !file || !r) return;
+      var img = ZF.bild[f.id];
+      if (!img) { img = ZF.bild[f.id] = new Image(); img.onload = zfVorschau; img.src = 'grafik/' + file; return; }
+      if (!img.naturalWidth) return;
+      var c = document.createElement('canvas'); c.width = r[2]; c.height = r[3];
+      var cx = c.getContext('2d'); cx.drawImage(img, r[0], r[1], r[2], r[3], 0, 0, r[2], r[3]);
+      var d = cx.getImageData(0, 0, c.width, c.height).data, x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+      for (var y = 0; y < c.height; y++) for (var x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 16) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (x1 < x0) return;
+      var w = x1 - x0 + 1, h = y1 - y0 + 1, m = Math.max(w, h), g = cv.getContext('2d');
+      g.clearRect(0, 0, 48, 48);
+      g.drawImage(c, x0, y0, w, h, (48 - w * 44 / m) / 2, (48 - h * 44 / m) / 2, w * 44 / m, h * 44 / m);
+    });
+  }
+  function zfLaden() {
+    if (ZF.laden) return; ZF.laden = true;
+    import('./zombiefiguren.mjs').then(function (m) { ZF.liste = m.ZF_LISTE; zfBauen(); if (ZF.zuletzt) zfZeige(ZF.zuletzt); })
+      .then(function () { return fetch('grafik/zombies_neu.json').then(function (r) { return r.json(); }); })
+      .then(function (j) { ZF.atlas = j; zfVorschau(); }).catch(function () {});
+  }
   ZTYPEN.forEach(function (k) {
     $('zt_' + k).addEventListener('change', function () {
       var t = {}; t[k] = $('zt_' + k).checked;
@@ -3704,13 +3767,15 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel'); schalter(zk.inhalt, 'tnZFNeu');
     ['tnTZombieJagen', 'tnTZombieWandern', 'tnTHeldGehen', 'tnTHeldSchleichen'].forEach(function (id) { zeile(zk.inhalt, id); }); zeile(zk.inhalt, 'tnBaumTempo'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
     var zs = unter('👁 Zombie-Sicht'); rein(zs.inhalt, $('zsHinweis')); ['zsGehen', 'zsSchleichen', 'zsKegel', 'zsVerfolgen', 'zsAufgeben', 'zsNacht'].forEach(function (id) { zeile(zs.inhalt, id); }); zk.inhalt.appendChild(zs);
-    var typen = unter('Zombietypen (mindestens einer bleibt an)');
+    var zfb = $('zfBlock'); if (zfb) { zk.inhalt.appendChild(zfb); rein(zfb, $('zfListe')); }   // 'zfListe' bleibt im Block
+    var typen = unter('Alte Zombiebilder (nur ohne neue Figuren; mindestens ein Typ bleibt an)'); typen.id = 'ztAlt';
     (window.ZTYPEN || []).forEach(function (k) { schalter(typen.inhalt, 'zt_' + k); });
     var ztt = $('ztTitel'); if (ztt) ztt.remove();
     zk.inhalt.appendChild(typen);
     var gr = $('grAbschnitt');
     if (gr) { var groessen = unter('Größen'); var t = $('grTitel'); if (t) t.remove(); groessen.inhalt.appendChild(gr); zk.inhalt.appendChild(groessen); }
     gruppe(zk);
+    if (window.zfZeige && window.zfLetzte) window.zfZeige(window.zfLetzte);
   }
   // Horden und Angriffstrupps
   gruppe(ausKarte(karteVon('titelHorden'), '🧟 Horden und Angriffstrupps'));

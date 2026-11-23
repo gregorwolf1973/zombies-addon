@@ -117,6 +117,7 @@ export async function starte({
       bissSpieler: w.bissSpieler / 100,            // je Sekunde Biss eines lebenden Zombies (global)
       bissSpielerLevel: Object.fromEntries(Object.entries(w.bissSpielerLevel ?? {}).map(([k, v]) => [k, v / 100])),   // je Karte/Level
       waffen: w.waffen,                            // je Waffe { schaden, pause }
+      zombieFiguren: w.zombies.figuren,
       zombieTypen: ZOMBIE_TYPEN.filter(k => w.zombies.typen[k]).map(k => ZOMBIE_TYPEN.indexOf(k)),
       feuerMinuten: w.feuer, feuerPhase: w.feuerPhase, verkehr: w.verkehr, verkehrPhase: w.verkehrPhase, unfallMinuten: w.unfall, unfallExplosion: w.unfallExplosion, unfallSchaden: w.unfallSchaden, fahrzeugStoss: w.fahrzeugStoss, blaulicht: w.blaulicht, hordeZiel: w.zombies.hordeZiel, hordeZieleZeigen: w.zombies.hordeZieleZeigen, hordeTrupp: w.zombies.hordeTrupp, hordeReichweite: w.zombies.hordeReichweite, lagerWelle: w.zombies.lagerWelle, lagerWellePause: w.zombies.lagerWellePause, ueberraschung: w.zombies.ueberraschung, sichtkegel: w.sichtkegel, zombieFigurenNeu: w.zombieFigurenNeu !== false, diagnose: w.diagnose !== false, innenMassstab: w.innenMassstab, innenTempo: w.innenTempo, tempoHeldGehen: w.tempoHeldGehen, tempoHeldSchleichen: w.tempoHeldSchleichen, tempoZombieJagen: w.tempoZombieJagen, tempoZombieWandern: w.tempoZombieWandern,
       reichweite: w.reichweite,
