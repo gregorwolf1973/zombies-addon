@@ -14,3 +14,6 @@ Helden (Prototyp): helden_jobs.json (Auftragsliste, Waffenwerte) + held.html (re
    Ablauf: CDP_PORT=9444 WARTE=900 node cdp.mjs 'http://127.0.0.1:8828/held.html?fig=jennifer' o/jennifer.txt ; python3 held_streifen.py o/jennifer.txt o jennifer 192 ;
            python3 held_proto.py <o> <zombie-streifen> helden_proto.html   (Farbstil C, Szene mit Zombies)
    Jennifers stehen.fbx ist laut Dauer ein Lauf-Clip: held.html nimmt dafür den Leerlauf von swatguy (Präfix mixamorig1 -> mixamorig wird umbenannt).
+6. Helden fürs Spiel: Streifen je Figur wie oben (held_streifen.py <o> <ordner> <fig> 160 0, je fig=jennifer|swatguy), dann
+   PYTHONPATH=<pil> python3 helden_atlas_bauen.py <ordner> ../../client/grafik -> helden_held.webp / helden_heldin.webp (2560x4040) + helden_neu.json (Clips, Weg je Zyklus, Mündung je Schussbild).
+   Waffenlängen in helden_jobs.json = echte Länge (Render doppelt so groß); Logik client/heldenfiguren.mjs, Einbau client/spiel.mjs (figurDarstellen, schuss), Schalter heldenFigurenNeu (Bit 512).

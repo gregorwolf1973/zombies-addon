@@ -13,5 +13,5 @@ for i in range(1, len(txt) - 1, 2):
         sh = Image.new('RGBA', (f * 8, f * 2), (104, 146, 70, 255))
         for j in range(N): sh.alpha_composite(neu.crop((j * f, 0, (j + 1) * f, f)), ((j % 8) * f, (j // 8) * f))
         sh.save(f"{ziel}/{pre}_{k['name']}_kontakt.png")
-    json.dump({'dauer': k['dauer'], 'N': N, 'f': f, 'einmal': k.get('einmal', 0), 'feld_m': W / 80}, open(f"{ziel}/{pre}_{k['name']}_meta.json", 'w'))
+    json.dump({'dauer': k['dauer'], 'N': N, 'f': f, 'einmal': k.get('einmal', 0), 'feld_m': W / 80, 'weg_m': k.get('weg', 0), 'mund': [[round(m[0] * f / W, 1), round(m[1] * f / W, 1), m[2]] for m in k.get('mund', [])]}, open(f"{ziel}/{pre}_{k['name']}_meta.json", 'w'))
     print(k['name'], 'dauer', round(k['dauer'], 2), 'gier', round(k['gier']), 'sek', k['sek'], k['waffe'])

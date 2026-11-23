@@ -4,6 +4,7 @@ import { fzPx } from './masse.mjs';
 import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from './fzkollision.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
+import { HF_FIGUREN, HF_GROESSE, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung } from './heldenfiguren.mjs';
 import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
@@ -958,6 +959,9 @@ class Ort extends Phaser.Scene {
     // neue Zombie-Figuren (Mixamo von oben, tools/mixamo): je Figur ein Atlas, Rahmen in zombies_neu.json; Rückfall = alte Bögen (Backend-Schalter)
     this.load.json('zombieneu', 'grafik/zombies_neu.json');
     for (const f of ZF_FIGUREN) this.load.image('zf_' + f, 'grafik/zombies_' + f + '.webp');
+    // neue Helden-Figuren (Mixamo von oben, tools/mixamo/helden_atlas_bauen.py): je Figur ein Atlas, Clips in helden_neu.json; Rückfall = Heldenbilder von Gemini (Backend-Schalter)
+    this.load.json('heldenneu', 'grafik/helden_neu.json');
+    for (const f of HF_FIGUREN) this.load.image('hf_' + f, 'grafik/helden_' + f + '.webp');
     // Helden (Gemini): Körper mit roten Haaren/blauer Jacke zum Umfärben + Stiefel als eigene Ebene
     this.load.spritesheet('helden160', 'grafik/helden160.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('heldenliste', 'grafik/helden160.json');
@@ -1134,6 +1138,9 @@ class Ort extends Phaser.Scene {
       const eigen = eigeneTreffer(m.x1, m.y1);
       const fs = eigen ?? naechsteFigur(m.x1, m.y1); if (fs) { fs.schussBis = this.time.now + 150; fs.zielW = Math.atan2(m.y2 - m.y1, m.x2 - m.x1); fs.zielBis = this.time.now + 300; }   // Körper dreht nur kurz zum Ziel
       if (eigen) m = { ...m, x1: this.lokal.x, y1: this.lokal.y };   // Mündung an der gezeichneten Figur
+      // Mixamo-Held: Mündung des Schussclips (Versatz je Waffengruppe aus dem Render) statt fester 16 px vor der Figur
+      const hm = fs?.hf && this.hfClips ? this.hfClips[fs.hf.gruppe + '_schiessen']?.mund?.[fs.hf.fig]?.[0] : null;
+      if (hm && typeof fs.zielW === 'number') { const o = hfMuendung(hm, fs.zielW, fs.bild.scaleX); m = { ...m, mx: m.x1 + o.x, my: m.y1 + o.y }; }
       this.schuss(m);
       fetzenBeiSchuss(this, zombieKarte().values(), m);
       // Schrot kommt als mehrere Linien – nur ein Knall
@@ -1361,6 +1368,7 @@ class Ort extends Phaser.Scene {
     this.figurListe2 = this.cache.json.get('figurenliste2')?.bilder ?? {};
     this.figurListe3 = this.cache.json.get('figurenliste3')?.bilder ?? {};
     this.zfNamen = this.zombieAtlasEinrichten();
+    this.hfNamen = this.heldenAtlasEinrichten();
     this.heldenListe = this.cache.json.get('heldenliste')?.bilder ?? {};
     this.buergerListe = this.cache.json.get('buergerliste')?.bilder ?? {};
     this.stuecke = new Map();
@@ -1837,6 +1845,26 @@ class Ort extends Phaser.Scene {
     }
     return namen;
   }
+
+  // Rahmen der Helden-Atlanten anlegen (Zeile je Clip, Bilder nebeneinander); liefert hfNamen[figur][clip][i] oder null, wenn die Bilder fehlen
+  heldenAtlasEinrichten() {
+    const j = this.cache.json.get('heldenneu');
+    if (!j?.clips) return null;
+    this.hfClips = j.clips;
+    const namen = {};
+    for (const f of HF_FIGUREN) {
+      if (!this.textures.exists('hf_' + f)) return null;
+      const tex = this.textures.get('hf_' + f); namen[f] = {};
+      for (const [c, k] of Object.entries(j.clips)) {
+        namen[f][c] = [];
+        for (let i = 0; i < k.n; i++) { const n = hfName(c, i); if (!tex.has(n)) tex.add(n, 0, i * k.feld, k.y, k.feld, k.feld); namen[f][c].push(n); }
+      }
+    }
+    return namen;
+  }
+
+  // neue Helden-Figuren aktiv: Backend-Schalter (state.optionen Bit 512, Vorgabe an) und Bilder geladen
+  heldNeu() { return !!this.hfNamen && !!((raum.state?.optionen ?? 0) & 512); }
 
   // neue Zombie-Figuren aktiv: Backend-Schalter (state.optionen Bit 256, Vorgabe an) und Bilder geladen
   zombieNeu() { return !!this.zfNamen && !!((raum.state?.optionen ?? 0) & 256); }
@@ -3144,13 +3172,32 @@ class Ort extends Phaser.Scene {
     // Haltung nach Ausrüstung: Pistole, Nahkampf/Lampe in der Hand, sonst ohne
     let textur, bild = 0;
     const survivor = !p.unten && !zombie && String(p.aussehen ?? '').startsWith('s');
-    const held = !p.unten && !zombie && istHeld(String(p.aussehen ?? '')[0]);
+    const hn = !zombie && istHeld(String(p.aussehen ?? '')[0]) && this.heldNeu();   // Mixamo-Held/Heldin (heldenfiguren.mjs), auch liegend
+    const held = !hn && !p.unten && !zombie && istHeld(String(p.aussehen ?? '')[0]);
     const tempo = weg / Math.max(dt, 0.001) / tfa;
     // Laufrichtung: Füße und (außer kurz beim Schuss/Schlag) Körper zeigen immer in Laufrichtung; der eigene Held nimmt sie sofort aus der Eingabe
     let lr = p.richtung;
     if (f === this.figuren.get(meineId) && this.eingabe) lr = this.eigeneBlickRichtung(p);   // Laufen: Eingabe; Stand: Drehzone/letzte Richtung
     const kr = !p.unten && f.zielBis > this.time.now && typeof f.zielW === 'number' ? f.zielW : lr;
-    if (p.unten) textur = 'liegend-' + f.n;
+    let hfRot = null;
+    if (hn) {
+      // Clip nach Zustand: Sterben/Liegen, Schuss, Stechen/Schlagen (nur Messer/Schläger-Gruppe), Rennen, Gehen, Stehen; Phase beim Gehen nach Weg (langsamer = Schleichen)
+      const a = aussehenLesen(p.aussehen), fig = a.g === 'f' ? 'heldin' : 'held', gr = hfGruppe(aktiveWaffe(p)[0]), jetzt = this.time.now;
+      if (!p.unten) f.hfTod = undefined; else if (f.hfTod === undefined) f.hfTod = f.hfGesehen ? jetzt : -1e9;   // schon beim ersten Sehen unten: liegt gleich
+      f.hfGesehen = true;
+      const seitSchuss = f.schussBis > 0 ? jetzt - (f.schussBis - 150) : 1e9, seitSchlag = f.schlagBis > 0 ? jetzt - (f.schlagBis - 400) : 1e9;
+      let art = 'stehen', ms = 1000;
+      if (p.unten) { art = 'tod'; ms = HF_TOD_MS; }
+      else if (seitSchuss >= 0 && seitSchuss < HF_SCHUSS_MS && (gr === 'pistole' || gr === 'gewehr' || gr === 'schrot')) { art = 'schiessen'; ms = HF_SCHUSS_MS; }
+      else if (seitSchlag >= 0 && seitSchlag < HF_NAHKAMPF_MS) { art = 'nahkampf'; ms = HF_NAHKAMPF_MS; }
+      else if (geht) art = tempo > W.tempoGehen * 1.25 ? 'rennen' : 'gehen';
+      const cn = hfClip(gr, art), k = this.hfClips[cn];
+      const i = hfBild(k, { lauf: f.lauf, zeitMs: jetzt + f.n * 997, seit: art === 'tod' ? jetzt - f.hfTod : art === 'schiessen' ? seitSchuss : seitSchlag, ms });
+      textur = 'hf_' + fig; bild = this.hfNamen[fig][cn][i];
+      f.hf = { fig, gruppe: gr };
+      if (art === 'schiessen' && typeof f.zielW === 'number') hfRot = hfMuendung(k.mund[fig][i], f.zielW, 1).rot;   // Körper dreht, bis die Waffe zum Ziel zeigt
+    }
+    else if (p.unten) textur = 'liegend-' + f.n;
     else if (zombie) { textur = 'figuren'; bild = this.figurBild('zombie_hemd', geht ? Math.floor(f.lauf / 11) : 0); }
     else if (survivor) {
       // Survivor (Riley Gombart): Haltung je Waffe; Schießen, Zuschlagen, Gehen, Stehen
@@ -3182,10 +3229,10 @@ class Ort extends Phaser.Scene {
     f.fuesse.setVisible(survivor || held);
     if (f.bild.texture.key !== textur || f.bild.frame.name != bild) f.bild.setTexture(textur, bild);   // eslint-disable-line eqeqeq
     // beim Gehen leicht wippen
-    const wipp = geht ? Math.sin(f.lauf / 7) : 0;
-    f.bild.setRotation(p.unten ? 0 : kr + wipp * 0.07);
+    const wipp = geht && !hn ? Math.sin(f.lauf / 7) : 0;
+    f.bild.setRotation(hn ? (hfRot ?? (p.unten ? lr : kr)) : p.unten ? 0 : kr + wipp * 0.07);
     const gg0 = aussehenLesen(p.aussehen).g === 'f' ? 'w' : 'm';
-    const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg() : survivor ? BOGEN2_GROESSE * mg()
+    const s0 = hn ? ZOMBIE_GROESSE * HF_GROESSE * mg() : p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg() : survivor ? BOGEN2_GROESSE * mg()
       : held ? ZOMBIE_GROESSE * groesse('helden160', `held_${gg0}_leer`) * mg()
       : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg();
     // Klettern über ein stehendes Auto (20 % Tempo): Figur leicht größer und angehoben, wippt; Taumeln nach einem Fahrzeugstoß: Figur schwankt
@@ -3193,7 +3240,7 @@ class Ort extends Phaser.Scene {
     const aufAutoJa = !p.unten && !zombie && !p.ebene && aufAuto(this.welt, (this.fzAnz ??= fzRechtecke(raum.state.fahrzeuge, fzRichtung)), f.x, f.y, W.spielerRadius);
     const taumelt = !p.unten && f.taumelBis > perf;
     const klettern = aufAutoJa ? 1.08 + Math.sin(jetzt / 90) * 0.015 : 1;
-    f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03) * klettern);
+    f.bild.setScale(s0 * (p.schleicht && !p.unten && !hn ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03) * klettern);
     f.bild.setY(aufAutoJa ? -3 + Math.sin(jetzt / 70) * 1.2 : 0); f.fuesse.setY(f.bild.y);
     if (taumelt) f.bild.setRotation(f.bild.rotation + Math.sin(perf / 45) * 0.35 * Math.min(1, (f.taumelBis - perf) / 300));
     if (f === this.figuren.get(meineId) && aufAutoJa && jetzt - (this.kletterTon ?? 0) > 380) { this.kletterTon = jetzt; ton.schritt(false); }   // Klettern: Schrittgeräusch (kein eigener Ton nötig)
@@ -3567,14 +3614,15 @@ class Ort extends Phaser.Scene {
   // ---------- Effekte ----------
   // Schuss: Mündungsblitz und ein kurzer, angedeuteter Feuerstrahl Richtung Ziel (kein durchgehender Strich)
   schuss(m) {
-    const w = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), c = Math.cos(w), sn = Math.sin(w);
+    const w = Math.atan2(m.y2 - (m.my ?? m.y1), m.x2 - (m.mx ?? m.x1)), c = Math.cos(w), sn = Math.sin(w);
+    const bx = m.mx ?? m.x1 + c * 16, by = m.my ?? m.y1 + sn * 16;   // Mündung (Mixamo-Held: aus dem Render, sonst 16 px vor der Figur)
     // Armbrust: kein Mündungsblitz, ein sichtbarer Bolzen fliegt zum Ziel
     if (m.art === 'armbrust') {
       const g = this.add.graphics().setDepth(7).setRotation(w);
       g.lineStyle(2.5, 0x6d4c41, 1).lineBetween(-9, 0, 5, 0);
       g.lineStyle(2.5, 0xcfd8dc, 1).lineBetween(5, 0, 9, 0);
       g.lineStyle(1.5, 0xeeeeee, 0.9).lineBetween(-9, -2, -12, -3).lineBetween(-9, 2, -12, 3);
-      g.setPosition(m.x1 + c * 14, m.y1 + sn * 14);
+      g.setPosition(m.mx ?? m.x1 + c * 14, m.my ?? m.y1 + sn * 14);
       this.tweens.add({ targets: g, x: m.x2, y: m.y2, duration: Math.min(260, 60 + Math.hypot(m.x2 - m.x1, m.y2 - m.y1) * 0.7), onComplete: () => g.destroy() });
       return;
     }
@@ -3585,24 +3633,24 @@ class Ort extends Phaser.Scene {
       this.spurZaehler.set(m.von ?? '', n % 3);
       if (n % 3 === 0) {
         const lg = this.add.graphics().setDepth(7);
-        const sx = m.x1 + c * 16, sy = m.y1 + sn * 16, dx = m.x2 - sx, dy = m.y2 - sy, l1 = Math.min(1, 70 / Math.max(1, Math.hypot(dx, dy)));
+        const sx = bx, sy = by, dx = m.x2 - sx, dy = m.y2 - sy, l1 = Math.min(1, 70 / Math.max(1, Math.hypot(dx, dy)));
         lg.lineStyle(1, 0xffee58, 1).lineBetween(sx, sy, sx + dx * l1, sy + dy * l1);
         lg.lineStyle(0.6, 0xffffff, 0.9).lineBetween(sx, sy, sx + dx * l1, sy + dy * l1);
         this.tweens.add({ targets: lg, x: dx * (1 - l1), y: dy * (1 - l1), alpha: 0.2, duration: 110, onComplete: () => lg.destroy() });
       }
     }
     const schrot = m.art === 'schrotflinte', gewehr = m.art === 'gewehr' || m.art === 'mg' || m.art === 'scharfschuetze';
-    this.muendungsLicht(m.x1 + c * 16, m.y1 + sn * 16, m.ebene, m.art);
-    const vorn = 16, fk = gewehr ? 0.55 : schrot ? 0.65 : 0.4, lang = (gewehr ? 38 : schrot ? 22 : 26) * fk, br = 3.5 * fk;
+    this.muendungsLicht(bx, by, m.ebene, m.art);
+    const fk = gewehr ? 0.55 : schrot ? 0.65 : 0.4, lang = (gewehr ? 38 : schrot ? 22 : 26) * fk, br = 3.5 * fk;
     const g = this.add.graphics().setDepth(7);
     // Feuerzunge: breit und gelb an der Mündung, schmal und rot nach vorn auslaufend
     g.fillStyle(0xffe082, 0.95);
-    g.fillTriangle(m.x1 + c * vorn - sn * br, m.y1 + sn * vorn + c * br, m.x1 + c * vorn + sn * br, m.y1 + sn * vorn - c * br, m.x1 + c * (vorn + lang), m.y1 + sn * (vorn + lang));
+    g.fillTriangle(bx - sn * br, by + c * br, bx + sn * br, by - c * br, bx + c * lang, by + sn * lang);
     g.fillStyle(0xff7043, 0.8);
-    g.fillTriangle(m.x1 + c * (vorn + 4) - sn * br * 0.57, m.y1 + sn * (vorn + 4) + c * br * 0.57, m.x1 + c * (vorn + 4) + sn * br * 0.57, m.y1 + sn * (vorn + 4) - c * br * 0.57, m.x1 + c * (vorn + lang * 0.7), m.y1 + sn * (vorn + lang * 0.7));
+    g.fillTriangle(bx + c * 4 - sn * br * 0.57, by + sn * 4 + c * br * 0.57, bx + c * 4 + sn * br * 0.57, by + sn * 4 - c * br * 0.57, bx + c * lang * 0.7, by + sn * lang * 0.7);
     this.tweens.add({ targets: g, alpha: 0, duration: schrot ? 90 : 110, onComplete: () => g.destroy() });
     // Mündungsblitz (Survivor-Paket), additiv: das Schwarz im Bild verschwindet
-    const blitz = this.add.image(m.x1 + c * (vorn - 4), m.y1 + sn * (vorn - 4), 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5)
+    const blitz = this.add.image(bx - c * 4, by - sn * 4, 'figuren2', this.figurBild2('muendungsblitz')).setOrigin(0.5)
       .setBlendMode('ADD').setRotation(w).setScale(gewehr ? 0.32 : schrot ? 0.34 : 0.17).setDepth(7);
     this.tweens.add({ targets: blitz, alpha: 0, duration: 60, onComplete: () => blitz.destroy() });
   }

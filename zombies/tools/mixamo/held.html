@@ -9,7 +9,7 @@ import { FBXLoader } from './lib/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from './lib/examples/jsm/loaders/GLTFLoader.js';
 const out = document.getElementById('out');
 const q = new URLSearchParams(location.search);
-const N = +(q.get('n') || 16), PX = +(q.get('px') || 80), GROSS = +(q.get('gross') || 2);
+const N0 = +(q.get('n') || 16), PX = +(q.get('px') || 80), GROSS = +(q.get('gross') || 2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const ergebnis = [];
 try {
@@ -42,6 +42,7 @@ try {
       const geo = new THREE.LatheGeometry(pr, 20); geo.rotateZ(-Math.PI / 2);   // Achse y -> +x
       m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xb98a55, roughness: 0.7 })); const grp = new THREE.Group(); grp.add(m); m = grp;
     } else { m = (await gl.loadAsync('fbx/' + w.datei)).scene; }
+    if (w.metall) m.traverse(o => { if (o.isMesh) { o.material = [].concat(o.material).map(mt => { const c = mt.clone(); if (c.color) c.color.lerp(new THREE.Color(0x8a9098), 0.45); if (c.emissive) c.emissive.set(0x24262a); if ('metalness' in c) { c.metalness = 0.5; c.roughness = 0.35; } return c; }); if (o.material.length === 1) o.material = o.material[0]; } });   // dunkles Metall, aber vor schwarzer Kleidung sichtbar (Kontrast statt Größe)
     if (w.glanz) m.traverse(o => { if (o.isMesh) o.material = new THREE.MeshPhongMaterial({ color: 0xe4e8ee, specular: 0xffffff, shininess: 90, emissive: 0x2a2e34 }); });
     // Mittelachsen bestimmen
     m.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(m); const sz3 = bb.getSize(new THREE.Vector3());
@@ -76,12 +77,14 @@ try {
   const nur = (q.get('nur') || '').split(',').filter(Boolean);
   for (const job of cfg.auftraege) {
     if (nur.length && !nur.includes(job.name)) continue;
-    const t0 = performance.now();
+    const t0 = performance.now(); const N = job.n || N0;
     const clip = await clipLaden((F.ersatz && F.ersatz[job.name] || job.clip).replace('{o}', F.o));
     const pre = bL.name.match(/^mixamorig\d*/)[0]; for (const t of clip.tracks) t.name = t.name.replace(/^mixamorig\d*/, pre);   // Rigs mit anderem Präfix (mixamorig1) bedienen
+    let wegM = 0; for (const t of clip.tracks) if (/Hips\.position$/.test(t.name)) { const v = t.values, n = v.length - 3; wegM = Math.hypot(v[n] - v[0], v[n + 2] - v[2]) * SK; }   // Hüftweg über den Clip (m, mit Übergröße) = Weg je Schrittzyklus
     for (const t of clip.tracks) if (/Hips\.position$/.test(t.name)) { const v = t.values; const x0 = v[0], z0 = v[2]; for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; } }
     mixer.stopAllAction(); mixer.uncacheRoot(g); const act = mixer.clipAction(clip); act.play();
-    const EINMAL = !!job.einmal, dauer = clip.duration, TZ = i => EINMAL ? dauer * Math.min(i, N - 1) / (N - 1) : dauer * i / N;
+    const ANT = job.anteil || 1;   // einmalige Clips: nur der Abschnitt von..anteil (Bruchteile der Dauer)
+    const EINMAL = !!job.einmal, dauer = clip.duration, VON = job.von || 0, TZ = i => EINMAL ? dauer * (VON + (ANT - VON) * Math.min(i, N - 1) / (N - 1)) : dauer * i / N;
     // Blickrichtung: Standard Hüfte (Schleifen über 16 Phasen, sonst Bild 0); richtung = 'lr' | 'fa' (Ziel-/Schlagrichtung aus den Armen bei Zeit rr) für bewaffnete Haltungen
     let fx = 0, fz = 0; g.rotation.y = 0; const nref = job.schleife ? 16 : 1;
     if (job.richtung) {
@@ -120,9 +123,13 @@ try {
     else { cam.position.set(cx + 20, y0 + 1.1 * GROSS, cz); cam.up.set(0, 1, 0); cam.lookAt(cx, y0 + 1.1 * GROSS, cz); }
     sonne.position.set(cx - 6, y0 + 12, cz - 8); sonne.target.position.set(cx, y0, cz);
     const strip = document.createElement('canvas'); strip.width = Wpx * N; strip.height = Wpx; const sc = strip.getContext('2d');
-    for (let i = 0; i < N; i++) { mixer.setTime(TZ(i)); g.updateMatrixWorld(true); r.render(sz, cam); sc.drawImage(r.domElement, i * Wpx, 0); }
+    const mund = [];
+    for (let i = 0; i < N; i++) {
+      mixer.setTime(TZ(i)); g.updateMatrixWorld(true); r.render(sz, cam); sc.drawImage(r.domElement, i * Wpx, 0);
+      if (holder && job.mund) { const w = waffen[job.waffe].w; const tip = new THREE.Vector3((1 - w.griff) * w.laenge, 0, 0); waffen[job.waffe].obj.localToWorld(tip); const gr = waffen[job.waffe].obj.localToWorld(new THREE.Vector3()); mund.push([+((tip.x - cx) * PX).toFixed(1), +((tip.z - cz) * PX).toFixed(1), +Math.atan2(tip.z - gr.z, tip.x - gr.x).toFixed(3)]); }   // Mündung in Bildpunkten ab Bildmitte (x nach vorn, y nach unten)
+    }
     if (holder) hand.remove(holder);
-    ergebnis.push('JOB ' + JSON.stringify({ name: job.name, einmal: job.einmal ? 1 : 0, W: Wpx, N, dauer, gier: gier * 180 / Math.PI, sek: +((performance.now() - t0) / 1000).toFixed(1), waffe: winfo }) + '\n' + strip.toDataURL('image/png'));
+    ergebnis.push('JOB ' + JSON.stringify({ name: job.name, einmal: job.einmal ? 1 : 0, W: Wpx, N, dauer, gier: gier * 180 / Math.PI, sek: +((performance.now() - t0) / 1000).toFixed(1), waffe: winfo, weg: +wegM.toFixed(3), mund }) + '\n' + strip.toDataURL('image/png'));
   }
   out.textContent = 'FERTIG\n' + ergebnis.join('\n');
 } catch (e) { out.textContent = 'FEHLER ' + (e && e.stack || e) + '\n' + ergebnis.join('\n'); }
