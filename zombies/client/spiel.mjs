@@ -20,7 +20,8 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { boxerNah } from './boxer.mjs';
 import { boxerLaden, boxerBild, boxerFahrzeug, boxerSchuss } from './boxerdarstellung.mjs';
-import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
+import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, kisteFaellt, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
+import { heliStand } from './evak.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 import { sichtPx } from './zombiesicht.mjs';
 import { weltBeschaffen, weltVorrechnen } from './weltladen.mjs';
@@ -1195,6 +1196,7 @@ class Ort extends Phaser.Scene {
       else meldung('Nichts Brauchbares gefunden');
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
     });
+    raum.onMessage('kistenFall', m => { if ((this.aktEbene ?? '') === '') kisteFaellt(this, m); });   // A400M: Munitionskiste fällt aus dem Heck
     raum.onMessage('fundorte', m => { this.fundorte = Array.isArray(m?.l) ? m.l : []; });   // gesuchte Dinge in geöffneten Behältern (Karte)
     raum.onMessage('fundliste', m => fundZeigen(raum, m, this.lokal, meldung));
     raum.onMessage('alle_sperre', m => { this.alleSperreBis = Date.now() + (m.sek ?? 30) * 1000; });
@@ -1421,6 +1423,12 @@ class Ort extends Phaser.Scene {
     return !!(a && a.size && this.welt?.tor && [...a.values()].every(x => !x.pflicht || x.erledigt) && [...a.values()].some(x => x.pflicht));
   }
 
+  // Entfernung zum Einstiegspunkt der Evakuierung (Hubschrauber: Standort 20 m neben dem Landelicht)
+  evakEntfernung(pos, s) {
+    const q = s.evakPhase === 'heli' ? heliStand(this.welt, s.evakX, s.evakY) : { x: s.evakX, y: s.evakY };
+    return Math.hypot(pos.x - q.x, pos.y - q.y);
+  }
+
   // Abholpunkt in Pixeln: Ortsausgang, bei A400M/Hubschrauber der Server-Punkt (Heckrampe bzw. Landeplatz)
   abholPunkt() {
     const st = raum.state;
@@ -1556,7 +1564,7 @@ class Ort extends Phaser.Scene {
     if ($('aufgabenliste').innerHTML !== zeilen) $('aufgabenliste').innerHTML = zeilen;
     let bus = '';
     const flugPos = ich && this.lokal ? this.lokal : ich;
-    const flugText = ['flugzeug', 'absturz', 'heli', 'bunker'].includes(evakArtVon(s)) ? evakHudText(s, !!((ich?.anBord && !ich.imBoxer) || s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && Math.hypot(flugPos.x - s.evakX, flugPos.y - s.evakY) < (['heli', 'bunker'].includes(s.evakPhase) ? 90 : BUS_ABSTAND)), uhrText) : null;
+    const flugText = ['flugzeug', 'absturz', 'heli', 'bunker'].includes(evakArtVon(s)) ? evakHudText(s, !!((ich?.anBord && !ich.imBoxer) || s.busSteht && flugPos && !ich.ebene && s.evakX > 0 && this.evakEntfernung(flugPos, s) < (['heli', 'bunker'].includes(s.evakPhase) ? 90 : BUS_ABSTAND)), uhrText) : null;
     if (flugText) bus = flugText;
     else if (s.busDa) {
       const f = [...(s.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung');
@@ -2111,7 +2119,9 @@ class Ort extends Phaser.Scene {
     for (let i = 0; i < 14; i++) {
       const w = 0.16 + i * 0.03;
       const h = d.createRadialGradient(0, 256, 10, 0, 256, 512);
-      h.addColorStop(0, 'rgba(255,255,255,0.14)'); h.addColorStop(0.55, 'rgba(255,255,255,0.09)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+      // Länge: bis ~45 % voll, danach weich (Kosinus) über mehr als die halbe Länge auf 0 (kein Abbrechen kurz vor dem Ende); Summe der 14 Lagen ~1
+      h.addColorStop(0, 'rgba(255,255,255,0.075)');
+      for (let k = 0; k <= 10; k++) { const t = 0.45 + k * 0.055, f = 0.5 + 0.5 * Math.cos(Math.PI * Math.min(1, k / 10)); h.addColorStop(Math.min(1, t), 'rgba(255,255,255,' + (0.075 * f).toFixed(4) + ')'); }
       d.fillStyle = h; d.beginPath(); d.moveTo(0, 256); d.arc(0, 256, 512, -w, w); d.closePath(); d.fill();
     }
     lampe.refresh();

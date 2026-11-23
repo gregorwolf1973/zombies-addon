@@ -456,6 +456,9 @@ export const DINGE = {
   schokoriegel: { name: 'Schokoriegel', zeichen: '🍫' },
   // Reserve-Munition: 30 Schuss; füllt den Munitionszähler automatisch auf, wenn er auf MUNITION_KISTE_AB fällt (server/munition.mjs)
   munitionskiste: { name: 'Munitionskiste', zeichen: '📦' },
+  // Aus dem A400M (Königsdorf) gefallene Munitionskisten: fester Inhalt, am Boden (bleibt = verschwindet nicht), beim Aufheben sofort verbraucht (server/a400m_kisten.mjs)
+  a400m_kiste_a: { name: 'Munitionskiste (voll)', zeichen: '📦', intern: true, bleibt: true },
+  a400m_kiste_b: { name: 'Munitionskiste (angebrochen)', zeichen: '📦', intern: true, bleibt: true },
   tasche: { name: 'Sporttasche (12 Plätze)', zeichen: '👜', plaetze: 12 },
   trekking: { name: 'Trekkingrucksack (16 Plätze)', zeichen: '🎒', plaetze: 16 },
   // Missionsgegenstände (server/mission.mjs): nie in Beutetabellen, nicht wegwerfbar (nur in die Safe-Room-Kiste legen), verschwinden nie vom Boden

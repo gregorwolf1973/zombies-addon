@@ -3,7 +3,7 @@
 // bleibt das Emoji aus DINGE. Für Phaser: dingRahmen(scene) legt je Gegenstand einen Rahmen im Bild 'dinge' an.
 import { DINGE } from './welt.mjs';
 
-export const DING_ALIAS = { handgranate: 'granate', munitionskiste: 'munition' };   // gleiches Bild
+export const DING_ALIAS = { handgranate: 'granate', munitionskiste: 'munition', a400m_kiste_a: 'munition', a400m_kiste_b: 'munition' };   // gleiches Bild
 let liste = null;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
