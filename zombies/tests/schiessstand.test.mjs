@@ -153,3 +153,17 @@ test('Panzer: nur an schießt der Puma, Abschüsse zählen für den Panzer', asy
     assert.equal(Object.values(raum.stat).reduce((a, s) => a + s.kills, 0), 0, 'Panzerabschuss ist kein Spielerabschuss');
   } finally { await c.leave(); }
 });
+
+test('Laufen mit der kompakten Eingabe e (wie der echte Client) und Drehzone-Blick', async () => {
+  const { c, raum, p } = await beitreten('Laeufer');
+  c.onMessage('*', () => {});
+  try {
+    const x0 = p.x, y0 = p.y;
+    // [n, dx·100, dy·100, Bits, ms] – nach unten/rechts (vom Start weg), 10 Stücke à 50 ms
+    for (let n = 1; n <= 10; n++) c.send('e', [n, 0, 100, 0, 50]);
+    assert.ok(await bis(() => Math.hypot(p.x - x0, p.y - y0) > 5), `Figur bewegt sich nicht (${p.x},${p.y})`);
+    assert.ok(await bis(() => p.seq === 10), 'Nummer nicht bestätigt');
+    c.send('blick', [0, 10]);   // nach rechts schauen
+    assert.ok(await bis(() => Math.abs(p.richtung) < 0.01), 'Blick nicht übernommen: ' + p.richtung);
+  } finally { await c.leave(); }
+});

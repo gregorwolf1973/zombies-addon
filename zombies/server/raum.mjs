@@ -201,6 +201,14 @@ const SICHT_RAND = 260, SICHT_LOESEN = 220;   // Pixel um den Bildausschnitt: do
 const SICHT_VORGABE = { w: 1100, h: 700 }, SICHT_MAX = 2600, SICHT_MAX_FLUG = 6000;   // halbe Ausschnittgröße in Pixeln, bis der Client seine meldet
 const EINGABE_GUTHABEN_MAX = 1.5;   // Sekunden Bewegung, die der Server nach einem Netz-Hänger nachholt
 const ZWEI_PI = Math.PI * 2;
+
+// kompakte Eingabe 'e' (Client ≥ 0.78): [n, dx·100, dy·100, Bits (1 = Shift, 2 = Feuer), d in ms, verz?] → Objektform für eingabeEmpfangen
+export function eingabeKompakt(a) {
+  if (!Array.isArray(a) || a.length < 5) return null;
+  const m = { dx: Number(a[1]) / 100, dy: Number(a[2]) / 100, s: !!(a[3] & 1), f: !!(a[3] & 2), n: a[0], d: Number(a[4]) / 1000 };
+  if (a.length > 5) m.verz = a[5];
+  return m;
+}
 const ZOMBIE_RQ_STUFEN = 8, ZOMBIE_FERN = 300;
 const NAH_WIEDERHOLEN = 10000;   // ms
 const NAH_MELDUNG = 1500;   // Bundeswehr-Soldaten/-Fahrzeuge (b11, b11f, bwSoldaten): nur an Spieler in dieser Nähe (px)
@@ -394,6 +402,13 @@ export class SpielRaum extends Room {
     return { x, bewegt: Math.hypot(dx, dy) > 0.05 };
   }
 
+  // Blickrichtung im Stand [Richtung in 256 Stufen, letzte Eingabe-Nummer] (auch im Schießstand)
+  blickEmpfangen(client, a) {
+    const x = this.extra.get(client.sessionId), q = Number(a?.[0]), n = Number(a?.[1]);
+    if (!x || !Number.isInteger(q) || q < 0 || q > 255 || !Number.isInteger(n)) return;
+    x.blick = { w: q / 256 * ZWEI_PI, n: n & 0xffff };
+  }
+
   // Bewegungsstücke dieses Takts: [[eingabe, sekunden], …]
   eingabeSchritte(p, x, dt) {
     if (x.bot || !x.warte) return [[x.eingabe, dt]];
@@ -553,19 +568,14 @@ export class SpielRaum extends Room {
     });
     // kompakte Form der Eingabe (Client ≥ diese Version): [n, dx·100, dy·100, Bits (1 = Shift, 2 = Feuer), d in ms, verz?] statt Objekt mit langen Schlüsseln
     this.onMessage('e', (client, a) => {
-      if (!Array.isArray(a) || a.length < 5) return;
-      const m = { dx: Number(a[1]) / 100, dy: Number(a[2]) / 100, s: !!(a[3] & 1), f: !!(a[3] & 2), n: a[0], d: Number(a[4]) / 1000 };
-      if (a.length > 5) m.verz = a[5];
+      const m = eingabeKompakt(a);
+      if (!m) return;
       const r = this.eingabeEmpfangen(client, m);
       if (r?.bewegt) this.ruehrt(client.sessionId);
     });
     // Blickrichtung im Stand (Drehzone des Laufsticks: Figur und Taschenlampe drehen, ohne zu laufen): [Richtung in 256 Stufen, letzte gesendete Eingabe-Nummer].
     // Gilt erst, wenn der Server alle Bewegungsstücke bis zu dieser Nummer abgearbeitet hat (sonst überschriebe die alte Laufrichtung sie).
-    this.onMessage('blick', (client, a) => {
-      const x = this.extra.get(client.sessionId), q = Number(a?.[0]), n = Number(a?.[1]);
-      if (!x || !Number.isInteger(q) || q < 0 || q > 255 || !Number.isInteger(n)) return;
-      x.blick = { w: q / 256 * ZWEI_PI, n: n & 0xffff };
-    });
+    this.onMessage('blick', (client, a) => this.blickEmpfangen(client, a));
     // halbe Größe des Bildausschnitts in Weltpixeln (je nach Bildschirm und Zoom): bestimmt, welche Zombies der Client bekommt
     this.onMessage('sicht', (client, m) => {
       const w = Number(m?.w), h = Number(m?.h);
@@ -3409,7 +3419,7 @@ export class SpielRaum extends Room {
         z.richtung = w;
         const lahm = z.kriecht ? KRIECHER_TEMPO : 1;
         const iv = this.zombieIndiv(info, dt, d < 24 * R);
-        if (!iv.halt && d > (W.spielerRadius + W.zombieRadius + 3) * R) {   // geht bis knapp in Bissreichweite
+        if (!iv.halt && d > (W.spielerRadius + W.zombieRadius) * R) {   // geht bis zur Berührung (16 px): Biss (20) und Messer (18) treffen sicher – mit 15 km/h kleine Schritte, die alte Grenze +3 lag genau an der Reichweite
           const ging = this.zombieGehen(z, w + iv.dw, W.zombieTempoJagen * lahm * dt, dt, info);
           if (direkt && !ging) { if ((info.klemmT = (info.klemmT ?? 0) + dt) > 0.5) { info.klemmT = 0; info.umwegT = Math.max(2, 210 / W.zombieTempoJagen); } } else if (direkt) info.klemmT = 0;   // Umweg ~210 px (früher 2 s bei 105 px/s)
         }

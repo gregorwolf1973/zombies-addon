@@ -3627,12 +3627,15 @@ class Ort extends Phaser.Scene {
     }
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {
-      this.stoehnZeit = 1 + Math.random() * 2;
+      // drinnen sind Innenraum-Pixel kleiner (reich ≈ 0,35): Abstände auf Außenmaß umrechnen, sonst klingt jeder Zombie im Haus „ganz nah“;
+      // drinnen außerdem seltener (Gregor 23.11.: dauerndes Grunzen in Gebäuden)
+      const rm = this.aktEbene ? (this.wv(this.aktEbene)?.reich || 1) : 1, lx = this.lokal.x, ly = this.lokal.y;
+      this.stoehnZeit = this.aktEbene ? 3 + Math.random() * 4 : 1 + Math.random() * 2;
       // nur die nächsten ~6 Zombies kommen als Einzellaut in Frage; die Zahl in Hörweite steuert das Horden-Grollen
       const nahe = [];
       for (const z of zombieKarte().values()) {
         if ((z.ebene ?? '') !== this.aktEbene) continue;
-        const d = Math.hypot(z.x - this.lokal.x, z.y - this.lokal.y);
+        const d = Math.hypot(z.x - lx, z.y - ly) / rm;
         if (d < 700) nahe.push({ z, d });
       }
       nahe.sort((p, q) => p.d - q.d);
@@ -3641,10 +3644,10 @@ class Ort extends Phaser.Scene {
       if (rest.length) wahl.push(rest[Math.floor(Math.random() * rest.length)]);
       // jagende Zombies klingen eher (aufgeregter), bis zu zwei Laute je Runde
       const jagende = wahl.filter(q => q.z.jagt);
-      for (let k = 0; k < (wahl.length > 3 && Math.random() < 0.5 ? 2 : 1) && wahl.length; k++) {
+      for (let k = 0; k < (!this.aktEbene && wahl.length > 3 && Math.random() < 0.5 ? 2 : 1) && wahl.length; k++) {
         const quelle = jagende.length && Math.random() < 0.5 ? jagende : wahl;
         const z = quelle[Math.floor(Math.random() * quelle.length)].z;
-        ton.stoehnen(z.x, z.y, z.kriecht ? 0.35 : 0.55, z.kriecht);
+        ton.stoehnen(lx + (z.x - lx) / rm, ly + (z.y - ly) / rm, z.kriecht ? 0.35 : 0.55, z.kriecht);
       }
     }
   }

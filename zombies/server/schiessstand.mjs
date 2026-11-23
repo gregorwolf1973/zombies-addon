@@ -6,7 +6,7 @@
 // Bundeswehr-Standorts, Leopard (Turm, MG, Hauptkanone); Vorgabe: keins.
 import { zaehle, fuegeHinzu } from '../client/stapel.mjs';
 import { aussehenMigriert } from '../client/figurbild.mjs';
-import { SpielRaum, Zustand, Spieler, sauberName } from './raum.mjs';
+import { SpielRaum, Zustand, Spieler, sauberName, eingabeKompakt } from './raum.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
 import { Fahrzeug } from './verkehr.mjs';
@@ -61,6 +61,9 @@ export class SchiessstandRaum extends SpielRaum {
     };
 
     this.onMessage('eingabe', (client, m) => this.eingabeEmpfangen(client, m));
+    // kompakte Eingabe (Client ≥ 0.78 sendet nur noch 'e') und Blickrichtung der Drehzone – fehlten hier bis 0.84.1: Figur stand still
+    this.onMessage('e', (client, a) => { const m = eingabeKompakt(a); if (m) this.eingabeEmpfangen(client, m); });
+    this.onMessage('blick', (client, a) => this.blickEmpfangen(client, a));
     this.onMessage('sicht', (client, m) => {
       const w = Number(m?.w), h = Number(m?.h);
       if (Number.isFinite(w) && Number.isFinite(h)) client.sicht = { w: Math.max(200, Math.min(2600, w)), h: Math.max(150, Math.min(2600, h)) };
