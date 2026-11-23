@@ -3,6 +3,7 @@ import { kartenNr } from './levelkatalog.mjs';
 import { fzPx } from './masse.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
@@ -947,6 +948,9 @@ class Ort extends Phaser.Scene {
     // dritter Bogen: 18 weitere Zombies (mit Google Gemini erzeugt, tools/gemini_zombies_schneiden.py)
     this.load.spritesheet('figuren3', 'grafik/figuren3.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('figurenliste3', 'grafik/figuren3.json');
+    // neue Zombie-Figuren (Mixamo von oben, tools/mixamo): je Figur ein Atlas, Rahmen in zombies_neu.json; Rückfall = alte Bögen (Backend-Schalter)
+    this.load.json('zombieneu', 'grafik/zombies_neu.json');
+    for (const f of ZF_FIGUREN) this.load.image('zf_' + f, 'grafik/zombies_' + f + '.webp');
     // Helden (Gemini): Körper mit roten Haaren/blauer Jacke zum Umfärben + Stiefel als eigene Ebene
     this.load.spritesheet('helden160', 'grafik/helden160.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('heldenliste', 'grafik/helden160.json');
@@ -1349,6 +1353,7 @@ class Ort extends Phaser.Scene {
     this.figurListe = this.cache.json.get('figurenliste')?.bilder ?? {};
     this.figurListe2 = this.cache.json.get('figurenliste2')?.bilder ?? {};
     this.figurListe3 = this.cache.json.get('figurenliste3')?.bilder ?? {};
+    this.zfNamen = this.zombieAtlasEinrichten();
     this.heldenListe = this.cache.json.get('heldenliste')?.bilder ?? {};
     this.buergerListe = this.cache.json.get('buergerliste')?.bilder ?? {};
     this.stuecke = new Map();
@@ -1804,6 +1809,30 @@ class Ort extends Phaser.Scene {
     box.add([ring, fuesse, bild, name, hp, tun, sprechen]);
     return { box, bild, fuesse, koerper: bild, name, hp, tun, sprechen, farbe, n, x: p.x, y: p.y, altX: p.x, altY: p.y };
   }
+
+  // Rahmen der Zombie-Atlanten anlegen; liefert Namenslisten zfNamen[figur][clip][0..15] (vorab gebaut: keine Zeichenketten je Frame) oder null, wenn die Bilder fehlen
+  zombieAtlasEinrichten() {
+    const j = this.cache.json.get('zombieneu');
+    if (!j?.bilder) return null;
+    const namen = {};
+    for (const f of ZF_FIGUREN) {
+      if (!this.textures.exists('zf_' + f)) return null;
+      const tex = this.textures.get('zf_' + f); namen[f] = {};
+      for (const c of ZF_CLIPS) {
+        namen[f][c] = [];
+        for (let i = 0; i < ZF_BILDER; i++) {
+          const n = zfName(f, c, i), r = j.bilder[n];
+          if (!r) return null;
+          if (!tex.has(n)) tex.add(n, 0, r[0], r[1], r[2], r[3]);
+          namen[f][c].push(n);
+        }
+      }
+    }
+    return namen;
+  }
+
+  // neue Zombie-Figuren aktiv: Backend-Schalter (state.optionen Bit 256, Vorgabe an) und Bilder geladen
+  zombieNeu() { return !!this.zfNamen && !!((raum.state?.optionen ?? 0) & 256); }
 
   neuerZombie(z) {
     const box = this.add.container(z.x, z.y).setDepth(3);
@@ -2544,6 +2573,7 @@ class Ort extends Phaser.Scene {
     const zf = zg();   // Menschengröße × Gesamtgröße × Zombiegröße
     const RAND = 150, rx0 = cam.x - RAND, rx1 = cam.right + RAND, ry0 = cam.y - RAND, ry1 = cam.bottom + RAND;   // Ausschnitt + Rand: nur dort wird gezeichnet
     let gesamtZ = 0, sichtbarZ = 0;
+    const zfNeu = this.zombieNeu();
     const eigen = this.lokal && Number.isFinite(this.lokal.x) ? this.lokal : null;   // vorhergesagte Position des eigenen Helden
     for (const [id, z] of zombieKarte()) {
       let f = this.zombies.get(id);
@@ -2565,6 +2595,24 @@ class Ort extends Phaser.Scene {
       f.box.setVisible(zeigen);
       const bildNr = laufBild(f, f.x - vx, f.y - vy, dt, (z.kriecht ? 18 : 30) / f.zs, this.feinInnen() ? INNEN_TEMPO : 1, this.feinInnen() ? INNEN_FIGUR : 1);
       const typ = ZOMBIE_TYPEN[(z.variante ?? 0) % ZOMBIE_TYPEN.length];
+      if (zfNeu) {
+        // Mixamo-Zombie: Figur nach Typ, Clip nach Zustand (zombiefiguren.mjs), ein Sprite je Zombie; Box dreht in Blickrichtung (Figur blickt nach +x)
+        let nah = false;
+        if (z.jagt && !z.kriecht) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < (W.spielerRadius + W.zombieRadius + 16) * (this.feinInnen() ? INNEN_REICH : 1)) { nah = true; break; }
+        const fig = zfFigur(z.variante), geht = bildNr >= 0;
+        let clip = zfClip({ kriecht: z.kriecht, jagt: z.jagt, geht, nah });
+        if (clip === 'attack') clip = zfAngriff(this.time.now, f.zh);
+        const i = zfBild(clip, { lauf: f.lauf ?? 0, zs: f.zs, zeitMs: this.time.now, versatz: f.zv * 7, ...(z.kriecht && (z.haengt || !geht) ? { lauf: z.haengt ? this.time.now / 12 : 0 } : {}) });
+        const key = 'zf_' + fig;
+        if (f.bild.texture.key !== key) f.bild.setTexture(key);
+        f.bild.setFrame(this.zfNamen[fig][clip][i]).setRotation(0).setScale(ZOMBIE_GROESSE * ZF_GROESSE * zf);
+        f.bild.setTint(this.schattenTon(f, f.x, f.y, z.jagt ? 0xffd2c8 : 0xffffff));
+        if ((s.optionen & 1) && zeigen && !this.aktEbene && !z.kriecht && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
+          this.kegel.fillStyle(z.jagt ? 0xff5252 : 0xfff59d, z.jagt ? 0.18 : 0.13);
+          this.kegel.slice(f.x, f.y, sk.gehen, f.r - sk.winkel / 2, f.r + sk.winkel / 2, false).fillPath();
+        } else if ((s.optionen & 1) && zeigen && !this.aktEbene && z.kriecht) this.kegel.lineStyle(1, 0xff8a65, 0.35).strokeCircle(f.x, f.y, 110);
+        continue;
+      }
       const neu = !z.kriecht && (typ === 'z6' || typ === 'z7');
       const gem = !z.kriecht && GEMINI_TYPEN.has(typ);
       const tex = gem ? 'figuren3' : neu ? 'figuren2' : 'figuren';
@@ -2612,13 +2660,25 @@ class Ort extends Phaser.Scene {
         // passend zum Zombietyp; Dirndl, Feuerwehr und Lederhose gibt es in zwei Fassungen
         const typ = ZOMBIE_TYPEN[(l.variante ?? 0) % ZOMBIE_TYPEN.length], zweite = this.figurListe['leiche_' + typ + '2'] && (Math.round(l.x) + Math.round(l.y)) % 2;
         // beide neuen Arten mit den bisherigen Leichenbildern (die Sterbebilder von z7 gefielen nicht)
+        if (zfNeu) {
+          // Mixamo: sterbender Zombie (dying einmal, danach letztes Bild liegen); beim ersten Durchgang schon vorhandene Tote liegen gleich
+          const fig = zfFigur(l.variante);
+          o = this.add.image(l.x, l.y, 'zf_' + fig, this.zfNamen[fig].dying[0]).setScale(ZOMBIE_GROESSE * ZF_GROESSE).setDepth(1.6).setRotation(l.richtung);
+          o.gf = ZF_GROESSE; o.zf = { fig, t0: this.time.now, liegt: !this.leichenGesehen || !!l.fest || !!l.deko };
+          this.leichen.set(id, o);
+        } else {
         const tot3 = this.figurListe3['leiche_' + typ];   // Gemini-Totenbild (figuren3), Kopf nach links wie die alten Leichen
         const altName = 'leiche_' + (typ === 'z6' ? 'hemd' : typ === 'z7' ? 'tarn' : GEMINI_TYPEN.has(typ) ? GEMINI_LEICHEN[ZOMBIE_TYPEN.indexOf(typ) % GEMINI_LEICHEN.length] : typ) + (zweite ? '2' : '');
         o = tot3 ? this.add.image(l.x, l.y, 'figuren3', tot3[0]).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung)
           : this.add.image(l.x, l.y, 'figuren', this.figurBild(altName)).setScale(ZOMBIE_GROESSE).setDepth(1.6).setRotation(l.richtung);
         o.gf = tot3 ? groesse('figuren3', 'leiche_' + typ) : groesse('figuren', altName);   // Größenausgleich (groessen.mjs)
         this.leichen.set(id, o);
+        }
       }
+      if (o.zf && !o.zf.liegt) {
+        const sp = this.time.now - o.zf.t0, i = zfBild('dying', { seit: sp });
+        o.setFrame(this.zfNamen[o.zf.fig].dying[i]); if (sp >= ZF_DAUER.dying) o.zf.liegt = true;
+      } else if (o.zf && !o.zf.fertig) { o.setFrame(this.zfNamen[o.zf.fig].dying[ZF_BILDER - 1]); o.zf.fertig = true; }
       if (l.x < rx0 || l.x > rx1 || l.y < ry0 || l.y > ry1) { if (o.visible) o.setVisible(false); continue; }
       o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * zg());   // Leichen folgen der Zombiegröße
       o.setVisible((l.ebene ?? '') === this.aktEbene);
@@ -2626,6 +2686,7 @@ class Ort extends Phaser.Scene {
       o.setAlpha((l.rest === 0 && !l.deko ? 0.5 : 1) * Math.max(0, ausblenden));   // deko: Tote am Flugfeld, voll sichtbar
     }
     for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.destroy(); this.leichen.delete(id); }
+    this.leichenGesehen = true;
     // Bewohner: gehen umher, fliehen, verschwinden in Häusern und im Bus; Gebissene werden grünlich
     for (const [id, m] of s.menschen ?? []) {
       let o = this.menschenObj.get(id);

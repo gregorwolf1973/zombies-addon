@@ -904,6 +904,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
   <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
+  <label class="tn-schalter"><input type="checkbox" id="tnZFNeu"> Neue Zombie-Figuren (flüssig animiert: Gehen, Rennen, Stehen, Angriff, Kriechen, Sterben); aus = die alten Bilder</label>
   <p class="tn-leise" id="zsHinweis">Wie weit und wie breit Zombies sehen: Gehen/Schleichen = ab welcher Entfernung sie einen Spieler im Sichtkegel bemerken; Verfolgen = bis wohin sie ein bemerktes Ziel noch sehen; Aufgeben = darüber verlieren sie es. Nacht skaliert Entdecken und Verfolgen mit der Dunkelheit (100 % = wie am Tag). Nebel wirkt zusätzlich. Grundwerte = bisheriges Verhalten (21 / 12 m, 75°, 34 / 64 m, 100 %).</p>
   <label for="zsGehen">Sichtweite beim Gehen/Rennen (Entdecken)</label>
   <div class="tn-zeile"><input type="range" id="zsGehen" min="3" max="80" step="1"><span id="zsGehenWert">21 m</span></div>
@@ -1275,6 +1276,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnNebelZombie', nb.zombie === undefined ? 50 : nb.zombie, function (v) { return v + ' %'; });
     if (document.activeElement !== $('tnBlaulicht')) $('tnBlaulicht').value = e.blaulicht || 'selten';
     if (document.activeElement !== $('tnKegel')) $('tnKegel').checked = !!e.sichtkegel;
+    if (document.activeElement !== $('tnZFNeu')) $('tnZFNeu').checked = e.zombieFigurenNeu !== false;
     feld('zsGehen', (e.zombieSicht || {}).gehen === undefined ? 21 : e.zombieSicht.gehen, function (v) { return v + ' m'; });
     feld('zsSchleichen', (e.zombieSicht || {}).schleichen === undefined ? 12 : e.zombieSicht.schleichen, function (v) { return v + ' m'; });
     feld('zsKegel', (e.zombieSicht || {}).kegel === undefined ? 75 : e.zombieSicht.kegel, function (v) { return v + ' °'; });
@@ -1404,6 +1406,9 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   });
   $('tnKegel').addEventListener('change', function () {
     anfrage('verwaltung/api', { sichtkegel: $('tnKegel').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
+  });
+  $('tnZFNeu').addEventListener('change', function () {
+    anfrage('verwaltung/api', { zombieFigurenNeu: $('tnZFNeu').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
   $('tnInnen').addEventListener('change', function () {
     anfrage('verwaltung/api', { innenMassstab: $('tnInnen').checked }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
@@ -3667,7 +3672,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   // Zombies: Tempo, Leben, Überraschung, Sichtkegel; Zombietypen und Größen eingeklappt
   var zk = ausKarte(karteVon('titelZombies'), '🧟 Zombies');
   if (zk) {
-    zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel');
+    zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel'); schalter(zk.inhalt, 'tnZFNeu');
     ['tnTZombieJagen', 'tnTZombieWandern', 'tnTHeldGehen', 'tnTHeldSchleichen'].forEach(function (id) { zeile(zk.inhalt, id); }); zeile(zk.inhalt, 'tnBaumTempo'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
     var zs = unter('👁 Zombie-Sicht'); rein(zs.inhalt, $('zsHinweis')); ['zsGehen', 'zsSchleichen', 'zsKegel', 'zsVerfolgen', 'zsAufgeben', 'zsNacht'].forEach(function (id) { zeile(zs.inhalt, id); }); zk.inhalt.appendChild(zs);
     var typen = unter('Zombietypen (mindestens einer bleibt an)');

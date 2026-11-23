@@ -181,7 +181,7 @@ export const Zustand = schema({
   feuer: t.map(Feuer),
   verbrannt: t.map('boolean'),  // 'haus:nr', 'auto:bID', 'bus:ID', 'fz:ID'
   platt: t.map('int32'),        // Szene „Stau auf der B11“: von Panzern plattgefahrene geparkte Autos, Behälter-Id → Schub (client/b11_platt.mjs)
-  optionen: t.uint8(),          // Schalter für die Clients (Bits): 1 = Sichtkegel der Zombies anzeigen, 2 = maßstäbliche Innenräume (Einstellung/ZOMBIES_INNEN1M; der Client baut sie genauso, client/innen_fein.mjs)
+  optionen: t.uint16(),         // Schalter für die Clients (Bits): 256 = neue Zombie-Figuren (Mixamo, Einstellung zombieFigurenNeu), 1 = Sichtkegel der Zombies anzeigen, 2 = maßstäbliche Innenräume (Einstellung/ZOMBIES_INNEN1M; der Client baut sie genauso, client/innen_fein.mjs)
   tuerFrei: t.uint8(), tuerRaetsel: t.uint8(), tuerSchluessel: t.uint8(),   // Anteile der Schlossarten verschlossener Zimmertüren in % (Einstellung, der Client berechnet damit schlossArt)
   stuetzpunkt: t.string(),      // Bundeswehr-Stützpunkt: '' = keiner, 'steht', 'gefallen' oder 'aus' (server/stuetzpunkt.mjs)
   bwTurm: t.number(),           // Drehwinkel des Puma-Turms (Bogenmaß), der Turm dreht sich zum Ziel
@@ -1218,11 +1218,11 @@ export class SpielRaum extends Room {
     if (bt !== this.baumTempoSend) { this.baumTempoSend = bt; try { this.broadcast('baumTempo', bt); } catch { /* noch kein Raum */ } }
   }
 
-  // Bits: 1 Sichtkegel, 2 maßstäbliche Innenräume, 4–128 Tempo drinnen in 2-%-Schritten (Vorgabe 35 % → 17)
+  // Bits: 1 Sichtkegel, 2 maßstäbliche Innenräume, 4–128 Tempo drinnen in 2-%-Schritten (Vorgabe 35 % → 17), 256 neue Zombie-Figuren
   optionenSetzen() {
     const tempo = Math.max(5, Math.min(50, Math.round((SpielRaum.einstellungen?.innenTempo ?? 35) / 2)));
     setzeInnenTempo(tempo * 2 / 100);
-    this.state.optionen = (SpielRaum.einstellungen?.sichtkegel ? 1 : 0) | (INNEN_FEIN ? 2 : 0) | (tempo << 2);
+    this.state.optionen = (SpielRaum.einstellungen?.sichtkegel ? 1 : 0) | (INNEN_FEIN ? 2 : 0) | (tempo << 2) | (SpielRaum.einstellungen?.zombieFigurenNeu !== false ? 256 : 0);
   }
 
   // „Maßstäbliche Innenräume“: Einstellung aus der Verwaltung oder Umgebungsvariable ZOMBIES_INNEN1M=1
