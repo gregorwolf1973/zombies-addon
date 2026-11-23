@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { FBXLoader } from './lib/examples/jsm/loaders/FBXLoader.js';
 const out = document.getElementById('out');
 const q = new URLSearchParams(location.search);
-const N = +(q.get('n') || 16), PX = +(q.get('px') || 80), FELD = +(q.get('feld') || 4), NEIG = 0;   // immer exakt senkrecht von oben (Gregor)
+const LICHT = +(q.get('licht') || 1), N = +(q.get('n') || 16), PX = +(q.get('px') || 80), FELD = +(q.get('feld') || 4), NEIG = 0;   // immer exakt senkrecht von oben (Gregor)
 try {
   const g = await new FBXLoader().loadAsync('fbx/' + q.get('datei'));
   const clip = g.animations[0];
@@ -51,8 +51,8 @@ try {
   const cam = new THREE.OrthographicCamera(-h, h, h, -h, 0.1, 1000);
   const hoch = 20;
   cam.position.set(cx + Math.sin(NEIG) * hoch, y0 + Math.cos(NEIG) * hoch, cz); cam.up.set(0, 0, -1); cam.lookAt(cx, y0 + 1, cz);
-  sz.add(new THREE.HemisphereLight(0xfff4e0, 0x6a6a58, 1.6));
-  const sonne = new THREE.DirectionalLight(0xfff0d8, 2.4); sonne.position.set(cx - 6, y0 + 12, cz - 8); sonne.target.position.set(cx, y0, cz); sz.add(sonne, sonne.target);
+  sz.add(new THREE.HemisphereLight(0xfff4e0, 0x8a8a78, 1.6 * LICHT));
+  const sonne = new THREE.DirectionalLight(0xfff0d8, 2.4 * (LICHT > 1 ? 0.7 : 1)); sonne.position.set(cx - 6, y0 + 12, cz - 8); sonne.target.position.set(cx, y0, cz); sz.add(sonne, sonne.target);
   const strip = document.createElement('canvas'); strip.width = W * N; strip.height = W; const sc = strip.getContext('2d');
   const MAL = (q.get('malen') || '').split(',');
   for (let i = 0; i <= (EINMAL ? N - 1 : N); i++) {   // Bild N = Bild 0 der nächsten Schleife (Nahtprüfung)
