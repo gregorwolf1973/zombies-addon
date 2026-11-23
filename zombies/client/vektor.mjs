@@ -589,13 +589,35 @@ function dichtL(l, v) {
 // (Länge TAPER, Ableitung 0 an beiden Enden), statt in einer Stufe zu springen. Alle Randebenen (Asphalt, Bordstein, Gehweg, Saum, Ausfransungen) nutzen
 // dieselbe Verschiebung d.tap[j] (px, nach außen), weil wandern() sie auf jeden seitlichen Versatz addiert.
 const TAPER = 20 * 8;
+const WEGBREITE = { track: 8 };   // sichtbare Wegbreite (px) von Feldwegen, sonst 6 (Pfade, Fußwege)
+// Feld- oder Fußweg (keine Fahrstraße), der an Knoten k beginnt oder endet
+function wegAnEnde(v, k, l) {
+  if (!v.wegEnden) { v.wegEnden = new Map(); for (const m of v.linien) if (!(AUTO.has(m.t) || m.t === 'service') && m.t !== 'pedestrian') for (const e of [0, 1]) { const q = knotenSchluessel(m.pts[e ? m.pts.length - 1 : 0]); (v.wegEnden.get(q) ?? v.wegEnden.set(q, []).get(q)).push(m); } }
+  return (v.wegEnden.get(k) ?? []).find(m => m !== l);
+}
 function verjuengung(l, v, d) {
   if (!(AUTO.has(l.t) || l.t === 'service')) return null;
   if (!v.enden) { v.enden = new Map(); for (const m of v.linien) if (AUTO.has(m.t) || m.t === 'service') for (const e of [0, 1]) { const k = knotenSchluessel(m.pts[e ? m.pts.length - 1 : 0]); (v.enden.get(k) ?? v.enden.set(k, []).get(k)).push(m); } }
   const fb = fahrbahn(l), S = d.s[d.n - 1]; let tap = null;
   for (const ende of [0, 1]) {
     const k = knotenSchluessel(l.pts[ende ? l.pts.length - 1 : 0]);
-    if ((v.knoten.get(k) ?? 0) !== 2) continue;
+    const kn = v.knoten.get(k) ?? 0;
+    if (AUTO.has(l.t) && kn <= 1) {   // freies Ende (Sackgasse in der Wiese): Asphalt läuft abgerundet aus, kein rechtwinkliger Abschluss
+      const L = Math.min(fb * 0.8, S / 2), hw = fb / 2, min = Math.min(2, hw);
+      tap ??= new Float32Array(d.n); d.frei ??= [false, false]; d.frei[ende] = true;
+      for (let j = 0; j < d.n; j++) { const dist = ende ? S - d.s[j] : d.s[j]; if (dist < L) { const u = dist / L; tap[j] += Math.min(0, Math.max(hw * Math.sqrt(Math.max(0, 2 * u - u * u)), min) - hw); } }
+      continue;
+    }
+    if (AUTO.has(l.t) && kn === 2) {   // geht am Ende ein Feld- oder Fußweg weiter: Asphalt verjüngt sich über ~10 m auf die Wegbreite, ohne Absatz
+      const nbw = wegAnEnde(v, k, l);
+      if (nbw) {
+        const dv = (WEGBREITE[nbw.t] ?? 6) - fb, L = Math.min(10 * 8, S / 2); if (dv >= -1) continue;
+        tap ??= new Float32Array(d.n); d.frei ??= [false, false]; d.frei[ende] = true;
+        for (let j = 0; j < d.n; j++) { const dist = ende ? S - d.s[j] : d.s[j]; if (dist < L) { const w = 1 - dist / L; tap[j] += dv / 2 * w * w * (3 - 2 * w); } }
+        continue;
+      }
+    }
+    if (kn !== 2) continue;
     const nb = (v.enden.get(k) ?? []).find(m => m !== l); if (!nb) continue;
     const dv = (fahrbahn(nb) - fb) / 4;           // halbe Breitenänderung je Seite, Ziel = Mittelwert beider Breiten
     if (Math.abs(dv) < 0.5) continue;
@@ -634,13 +656,14 @@ function teilAusschnitt(l, t, d) {
   if (j1 <= j0) return t._d = null;
   const sl = a => a.slice(j0, j1 + 1), n = j1 - j0 + 1;
   // Endet das Teilstück mitten auf der Linie (Bebauung hört auf), läuft der Gehweg über ~6 m unter den Fahrbahnrand aus statt abrupt zu enden
-  let tap = d.tap ? sl(d.tap) : null;
-  for (const [vorn, wo] of [[t.i0 > 0, 0], [t.i1 < l.pts.length - 1, 1]]) {
+  let tap = d.tap ? sl(d.tap) : null, tapIn = tap ? tap.slice() : null;   // tapIn: Innenkante ohne zusätzlichen Auslauf an freien Enden (sonst kreuzen sich Innen- und Außenkante)
+  for (const [vorn, wo] of [[t.i0 > 0 || !!d.frei?.[0], 0], [t.i1 < l.pts.length - 1 || !!d.frei?.[1], 1]]) {
     if (!vorn) continue;
-    tap ??= new Float32Array(n);
-    for (let j = 0; j < n; j++) { const dist = wo ? d.s[j1] - d.s[j0 + j] : d.s[j0 + j] - d.s[j0]; if (dist < GEHWEG_AUS) { const w = 1 - dist / GEHWEG_AUS; tap[j] -= (GEHWEG + 1) * w * w * (3 - 2 * w); } }
+    tap ??= new Float32Array(n); tapIn ??= new Float32Array(n);
+    const frei = !!d.frei?.[wo];
+    for (let j = 0; j < n; j++) { const dist = wo ? d.s[j1] - d.s[j0 + j] : d.s[j0 + j] - d.s[j0]; if (dist < GEHWEG_AUS) { const w = 1 - dist / GEHWEG_AUS, a = (GEHWEG + 1) * w * w * (3 - 2 * w); tap[j] -= a; if (!frei) tapIn[j] -= a; } }
   }
-  return t._d = { n, x: sl(d.x), y: sl(d.y), s: sl(d.s), mx: sl(d.mx), my: sl(d.my), f: sl(d.f), tap };
+  return t._d = { n, x: sl(d.x), y: sl(d.y), s: sl(d.s), mx: sl(d.mx), my: sl(d.my), f: sl(d.f), tap, tapIn, frei: d.frei };
 }
 // Teilstück der dichten Linie zwischen den Bogenlängen s0 und s1
 function pfadAb(d, s0, s1) {
@@ -795,7 +818,7 @@ export function zeichneStrassen(ctx, welt, rect) {
   // Gehweg-Außenkante schwankt ±0,25 m, die Innenkante liegt unter der Fahrbahn (verdeckt)
   const gehStreifen = (l, d, fb, seite, breite) => {
     const sd = seedKante(l, seite) + 4, comp = [[2.0, sd, WL], [0.6, sd + 50, 33], beule(l, seite)];
-    const innen = wandern(d, seite * (fb / 2 - 3), []), aussen = wandern(d, seite * (fb / 2 + breite), comp);
+    const innen = wandern(d.tapIn ? { ...d, tap: d.tapIn } : d, seite * (fb / 2 - 3), []), aussen = wandern(d, seite * (fb / 2 + breite), comp);
     const aussen2 = wandern(d, seite * (fb / 2 + breite + 1.2), comp);
     bandPfad(ctx, innen, aussen2); ctx.fillStyle = 'rgba(88,86,80,.55)'; ctx.fill();
     bandPfad(ctx, innen, aussen); ctx.fillStyle = 'rgba(168,166,160,.9)'; ctx.fill();
@@ -872,11 +895,11 @@ export function zeichneStrassen(ctx, welt, rect) {
     const re = wandern(d, -fb / 2, [[amp, seedKante(l, -1), WL], ...extra(seedKante(l, -1)), beule(l, -1)]);
     bandPfad(ctx, re, li); ctx.fillStyle = m.asphalt; ctx.fill();
     // Enden ohne Anschluss (Sackgasse) rund abschließen
-    for (const p of [l.pts[0], l.pts[l.pts.length - 1]]) if ((v.knoten.get(knotenSchluessel(p)) ?? 0) <= 1) { ctx.beginPath(); ctx.arc(p[0], p[1], fb / 2, 0, Math.PI * 2); ctx.fillStyle = m.asphalt; ctx.fill(); }
+    [l.pts[0], l.pts[l.pts.length - 1]].forEach((p, e) => { if ((v.knoten.get(knotenSchluessel(p)) ?? 0) <= 1) { ctx.beginPath(); ctx.arc(p[0], p[1], d.tap && d.frei?.[e] ? Math.min(2, fb / 2) : fb / 2, 0, Math.PI * 2); ctx.fillStyle = m.asphalt; ctx.fill(); } });
   }
   // Fahrspur-Verschleiß: Rollspuren etwas heller und glatter, der Mittelstreifen dazwischen dunkler (Öl); nur auf breiten Straßen
   for (const l of fahr) {
-    const fb = fahrbahn(l); if (fb < 30) continue;
+    const fb = fahrbahn(l); if (fb < 30 || dichtL(l, v).frei) continue;   // Linien mit auslaufendem Ende: Rollspuren würden über den schmalen Rand ragen
     pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = fb * 0.72; ctx.stroke();
     pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = fb * 0.2; ctx.stroke();
   }
