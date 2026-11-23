@@ -1,0 +1,128 @@
+<!doctype html><html><body style="margin:0;background:#0000">
+<pre id="out">LAEUFT</pre>
+<script type="importmap">{"imports":{"three":"./lib/three.module.js"}}</script>
+<script type="module">
+// Helden (Mixamo-Figur + Clip-FBX + CC0-Waffe in der rechten Hand) -> Draufsicht-Streifen. Auftragsliste: helden_jobs.json
+// Parameter: fig=jennifer|swatguy, nur=<Auftragsnamen,komma>, gross=2, n=16, px=80, feld=4, ansicht=oben|seite|vorn (Debug), waffeopt=<json> (überschreibt Waffenwerte), ohnewaffe=1
+import * as THREE from 'three';
+import { FBXLoader } from './lib/examples/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from './lib/examples/jsm/loaders/GLTFLoader.js';
+const out = document.getElementById('out');
+const q = new URLSearchParams(location.search);
+const N = +(q.get('n') || 16), PX = +(q.get('px') || 80), GROSS = +(q.get('gross') || 2);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const ergebnis = [];
+try {
+  const cfg = await (await fetch('helden_jobs.json')).json();
+  const F = cfg.figuren[q.get('fig')];
+  const ueber = q.get('waffeopt') ? JSON.parse(q.get('waffeopt')) : {};
+  // --- Figur
+  const g = await new FBXLoader().loadAsync('fbx/' + F.skin);
+  const texte = []; g.traverse(o => { if (o.isMesh) { const ms = [].concat(o.material); ms.forEach(m => { if (m.specular) { m.specular.set(0x1a1a1a); m.shininess = 8; } for (const k of ['map', 'normalMap', 'specularMap']) if (m[k]) texte.push(m[k]); }); } });
+  for (let i = 0; i < 200 && !texte.every(t => t.image && (t.image.width || t.image.naturalWidth)); i++) await sleep(100);
+  texte.forEach(t => { t.needsUpdate = true; });
+  g.animations = [];
+  const bone = re => { let b; g.traverse(o => { if (o.isBone && !b && re.test(o.name)) b = o; }); return b; };
+  const bL = bone(/LeftUpLeg$/i), bR = bone(/RightUpLeg$/i), hand = bone(/RightHand$/i), handL = bone(/LeftHand$/i), fore = bone(/RightForeArm$/i), kn = bone(/RightHandMiddle1$/i);
+  if (!bL || !bR || !hand || !handL || !fore || !kn) throw new Error('Knochen fehlen');
+  // Höhe roh (Kopfhöhe) -> Skalierung; hoehe normiert auf 1,9 m wie bei den Zombies nur wenn ?hoehe=
+  const HOEHE = +(q.get('hoehe') || 0);
+  const SK = 0.01 * GROSS * (HOEHE ? 190 / HOEHE : 1);
+  g.scale.setScalar(SK);
+  const sz = new THREE.Scene(); sz.add(g);
+  // --- Waffen laden (GLB, auf Länge normiert: lange Achse -> x, mittlere -> y; Schläger prozedural)
+  const waffen = {};
+  const gl = new GLTFLoader();
+  async function waffe(name) {
+    if (waffen[name]) return waffen[name];
+    const w = Object.assign({}, cfg.waffen[name], ueber[name] || {});
+    let m;
+    if (w.datei === '@bat') {
+      const pr = [[0, 0.016], [0.05, 0.014], [0.2, 0.016], [0.45, 0.022], [0.7, 0.03], [0.82, 0.034], [0.85, 0.0]].map(([x, r]) => new THREE.Vector2(r, x));
+      const geo = new THREE.LatheGeometry(pr, 20); geo.rotateZ(-Math.PI / 2);   // Achse y -> +x
+      m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xb98a55, roughness: 0.7 })); const grp = new THREE.Group(); grp.add(m); m = grp;
+    } else { m = (await gl.loadAsync('fbx/' + w.datei)).scene; }
+    // Mittelachsen bestimmen
+    m.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(m); const sz3 = bb.getSize(new THREE.Vector3());
+    const ax = [0, 1, 2].sort((a, b) => sz3.getComponent(b) - sz3.getComponent(a));   // ax[0] lang, ax[1] mittel, ax[2] kurz
+    const e = k => { const v = new THREE.Vector3(); v.setComponent(k, 1); return v; };
+    const X = e(ax[0]).multiplyScalar(w.sx), Y = e(ax[1]).multiplyScalar(w.sy), Z = new THREE.Vector3().crossVectors(X, Y);
+    // Matrix: Modell -> kanonisch (Zeilen = neue Achsen)
+    const P = new THREE.Matrix4().set(X.x, X.y, X.z, 0, Y.x, Y.y, Y.z, 0, Z.x, Z.y, Z.z, 0, 0, 0, 0, 1);
+    const inner = new THREE.Group(); inner.add(m); inner.matrixAutoUpdate = false; inner.matrix.copy(P); inner.updateMatrixWorld(true);
+    const bb2 = new THREE.Box3().setFromObject(inner); const L = bb2.max.x - bb2.min.x;
+    const f = w.laenge / L; const wrap = new THREE.Group(); wrap.add(inner);
+    // Griffpunkt: griff * Länge vom hinteren Ende, mittlere Höhe minus 'hoch' (Höhe, an der die Hand greift: von oben gemessen)
+    const gx = bb2.min.x + w.griff * L, gy = bb2.max.y - w.hoch / f, gz = (bb2.min.z + bb2.max.z) / 2;
+    inner.position.set(-gx * f, -gy * f, -gz * f); inner.scale.setScalar(f); inner.matrixAutoUpdate = true; inner.matrix.identity();
+    inner.matrixAutoUpdate = false; const M2 = new THREE.Matrix4().compose(new THREE.Vector3(-gx * f, -gy * f, -gz * f), new THREE.Quaternion(), new THREE.Vector3(f, f, f)).multiply(P); inner.matrix.copy(M2);
+    wrap.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+    return waffen[name] = { w, obj: wrap, info: { name, groesse_roh: sz3.toArray().map(v => +v.toFixed(4)), achsen: ax, L: +L.toFixed(4), faktor: +f.toFixed(4) } };
+  }
+  // --- Clip laden (Texturen ignorieren, spart Zeit)
+  const TL = THREE.TextureLoader.prototype.load;
+  async function clipLaden(pfad) {
+    THREE.TextureLoader.prototype.load = function () { return new THREE.Texture(); };
+    try { const c = await new FBXLoader().loadAsync('fbx/' + pfad); return c.animations[0]; } finally { THREE.TextureLoader.prototype.load = TL; }
+  }
+  const mixer = new THREE.AnimationMixer(g);
+  const vec = o => o.getWorldPosition(new THREE.Vector3());
+  const box = () => { g.updateMatrixWorld(true); const b = new THREE.Box3(); g.traverse(o => { if (o.isSkinnedMesh) { o.frustumCulled = false; o.skeleton.update(); b.union(new THREE.Box3().setFromObject(o, true)); } }); return b; };
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setClearColor(0x000000, 0); r.outputColorSpace = THREE.SRGBColorSpace;
+  sz.add(new THREE.HemisphereLight(0xfff4e0, 0x8a8a78, 1.6));
+  const sonne = new THREE.DirectionalLight(0xfff0d8, 2.4); sz.add(sonne, sonne.target);
+  const nur = (q.get('nur') || '').split(',').filter(Boolean);
+  for (const job of cfg.auftraege) {
+    if (nur.length && !nur.includes(job.name)) continue;
+    const t0 = performance.now();
+    const clip = await clipLaden((F.ersatz && F.ersatz[job.name] || job.clip).replace('{o}', F.o));
+    const pre = bL.name.match(/^mixamorig\d*/)[0]; for (const t of clip.tracks) t.name = t.name.replace(/^mixamorig\d*/, pre);   // Rigs mit anderem Präfix (mixamorig1) bedienen
+    for (const t of clip.tracks) if (/Hips\.position$/.test(t.name)) { const v = t.values; const x0 = v[0], z0 = v[2]; for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; } }
+    mixer.stopAllAction(); mixer.uncacheRoot(g); const act = mixer.clipAction(clip); act.play();
+    const EINMAL = !!job.einmal, dauer = clip.duration, TZ = i => EINMAL ? dauer * Math.min(i, N - 1) / (N - 1) : dauer * i / N;
+    // Blickrichtung: Standard Hüfte (Schleifen über 16 Phasen, sonst Bild 0); richtung = 'lr' | 'fa' (Ziel-/Schlagrichtung aus den Armen bei Zeit rr) für bewaffnete Haltungen
+    let fx = 0, fz = 0; g.rotation.y = 0; const nref = job.schleife ? 16 : 1;
+    if (job.richtung) {
+      mixer.setTime((job.rr !== undefined ? job.rr : (job.ref || 0)) * dauer); g.updateMatrixWorld(true);
+      const dd = job.richtung === 'lr' ? vec(handL).sub(vec(hand)) : vec(hand).sub(vec(fore)); fx = dd.x; fz = dd.z;
+    } else for (let i = 0; i < nref; i++) { mixer.setTime(dauer * i / 16); g.updateMatrixWorld(true); const a = vec(bL), b = vec(bR); fx += b.z - a.z; fz += -(b.x - a.x); }
+    const gier = Math.atan2(fx, fz); g.rotation.y = Math.PI / 2 - gier + (job.dreh || 0) * Math.PI / 180;
+    // Waffe in die Hand
+    let holder = null, winfo = null;
+    if (job.waffe && !q.get('ohnewaffe')) {
+      const W = await waffe(job.waffe); const w = Object.assign({}, W.w, job.waffeopt || {}); winfo = W.info;
+      const tref = (job.ref || 0) * dauer; mixer.setTime(tref); g.updateMatrixWorld(true);
+      const pR = vec(hand), pL = vec(handL), pF = vec(fore), pK = vec(kn);
+      let d;
+      if (w.modus === 'lr') d = pL.clone().sub(pR); else if (w.modus === 'fa') d = pR.clone().sub(pF); else d = new THREE.Vector3(...w.vec);
+      d.normalize();
+      // Zusatzdrehung: yaw um y, pitch um die waagerechte Querachse
+      d.applyAxisAngle(new THREE.Vector3(0, 1, 0), (w.yaw || 0) * Math.PI / 180);
+      const quer = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), d).normalize(); d.applyAxisAngle(quer, -(w.pitch || 0) * Math.PI / 180);
+      let up = new THREE.Vector3(0, 1, 0); up.sub(d.clone().multiplyScalar(up.dot(d))).normalize();
+      if (w.hochvec) { up = new THREE.Vector3(...w.hochvec); up.sub(d.clone().multiplyScalar(up.dot(d))).normalize(); }
+      const Zb = new THREE.Vector3().crossVectors(d, up);
+      const Q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(d, up, Zb));
+      const target = pK.clone().add(new THREE.Vector3(...(w.versatz || [0, 0, 0])).applyQuaternion(Q).multiplyScalar(SK * 100));
+      const S = SK * 100;   // Waffen wie die Figur übergroß
+      const Mw = new THREE.Matrix4().compose(target, Q, new THREE.Vector3(S, S, S));
+      holder = new THREE.Group(); holder.matrixAutoUpdate = false; holder.matrix.copy(hand.matrixWorld.clone().invert().multiply(Mw)); holder.add(W.obj); hand.add(holder);
+    }
+    // Kamera
+    const FELD = +(job.feld || q.get('feld') || 4), Wpx = Math.round(FELD * PX), h = FELD / 2;
+    r.setSize(Wpx, Wpx);
+    mixer.setTime(0); const b0 = box(); const cx = (b0.min.x + b0.max.x) / 2 + (job.vx !== undefined ? job.vx : -0.25), cz = (b0.min.z + b0.max.z) / 2, y0 = b0.min.y;
+    const cam = new THREE.OrthographicCamera(-h, h, h, -h, 0.1, 1000); const ans = q.get('ansicht') || 'oben';
+    if (ans === 'oben') { cam.position.set(cx, y0 + 20, cz); cam.up.set(0, 0, -1); cam.lookAt(cx, y0 + 1, cz); }
+    else if (ans === 'seite') { cam.position.set(cx, y0 + 1.1 * GROSS, cz + 20); cam.up.set(0, 1, 0); cam.lookAt(cx, y0 + 1.1 * GROSS, cz); }
+    else { cam.position.set(cx + 20, y0 + 1.1 * GROSS, cz); cam.up.set(0, 1, 0); cam.lookAt(cx, y0 + 1.1 * GROSS, cz); }
+    sonne.position.set(cx - 6, y0 + 12, cz - 8); sonne.target.position.set(cx, y0, cz);
+    const strip = document.createElement('canvas'); strip.width = Wpx * N; strip.height = Wpx; const sc = strip.getContext('2d');
+    for (let i = 0; i < N; i++) { mixer.setTime(TZ(i)); g.updateMatrixWorld(true); r.render(sz, cam); sc.drawImage(r.domElement, i * Wpx, 0); }
+    if (holder) hand.remove(holder);
+    ergebnis.push('JOB ' + JSON.stringify({ name: job.name, einmal: job.einmal ? 1 : 0, W: Wpx, N, dauer, gier: gier * 180 / Math.PI, sek: +((performance.now() - t0) / 1000).toFixed(1), waffe: winfo }) + '\n' + strip.toDataURL('image/png'));
+  }
+  out.textContent = 'FERTIG\n' + ergebnis.join('\n');
+} catch (e) { out.textContent = 'FEHLER ' + (e && e.stack || e) + '\n' + ergebnis.join('\n'); }
+</script></body></html>

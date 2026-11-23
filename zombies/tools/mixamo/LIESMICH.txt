@@ -7,3 +7,8 @@ Mixamo-FBX -> Draufsicht-Laufschleifen (Prototyp, nur exakt senkrechte Draufsich
 4. Altes Sprite zombie_hemd als alt0..5.png (160er Felder 18..23 aus client/grafik/figuren.png) in den Ordner legen, dann
    PYTHONPATH=<pil> python3 anschauen.py <ordner>  -> mixamo_proto.gif, _phasen.png, _kreis.gif
 Chrome und Server danach per PID beenden.
+Helden (Prototyp): helden_jobs.json (Auftragsliste, Waffenwerte) + held.html (rendert eine Figur: fig=jennifer|swatguy, optional nur=<Aufträge>, ansicht=seite zum Prüfen der Waffenlage)
+   + lib/examples/jsm/{loaders/GLTFLoader.js,utils/BufferGeometryUtils.js} (three@0.160.0). Waffen siehe WAFFEN_QUELLEN.txt (fbx/waffen/*.glb). Pakete vorher in fbx/<fig>/{pistole,gewehr}_pak entpacken.
+   Ablauf: CDP_PORT=9444 WARTE=900 node cdp.mjs 'http://127.0.0.1:8828/held.html?fig=jennifer' o/jennifer.txt ; python3 held_streifen.py o/jennifer.txt o jennifer 192 ;
+           python3 held_proto.py <o> <zombie-streifen> helden_proto.html   (Farbstil C, Szene mit Zombies)
+   Jennifers stehen.fbx ist laut Dauer ein Lauf-Clip: held.html nimmt dafür den Leerlauf von swatguy (Präfix mixamorig1 -> mixamorig wird umbenannt).
