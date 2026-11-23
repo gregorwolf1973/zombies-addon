@@ -583,7 +583,9 @@ function autoVariante(b) {
 // nicht im gedrehten Fahrzeugsystem. Versatz einer ca. 1 m hohen Karosserie in Pixeln; Deckkraft ~40 % stärker als früher.
 export const FZ_SCHATTEN = { dx: SCHATTEN_JE_M.dx * 1.0, dy: SCHATTEN_JE_M.dy * 1.0, alpha: 0.42 };
 // Fahrzeughöhe in Metern (Schattenversatz = Höhe × Versatz je Meter); Autos und alles Übrige ca. 1 m
-export const FZ_HOEHE = { leopard: 2.4, puma: 3.6, boxer: 3.0 };
+// Schattenversatz in „Metern Höhe“: der Schatten ist nur die verschobene Silhouette (keine Verbindung zum Fahrzeug) – bei echter Höhe
+// (Puma 3,6 m) löst er sich sichtbar ab (Gregor 23.11.), daher nur wenig mehr als bei Autos
+export const FZ_HOEHE = { leopard: 1.25, puma: 1.4, boxer: 1.3 };
 export const fzSchattenVersatz = (hoehe = 1) => ({ dx: SCHATTEN_JE_M.dx * hoehe, dy: SCHATTEN_JE_M.dy * hoehe });
 // Weltversatz (dx, dy) in das Koordinatensystem umrechnen, das um den Winkel ang gedreht und mit (kx, ky) skaliert ist
 function weltVersatz(ang, kx = 1, ky = 1, f = 1) {
