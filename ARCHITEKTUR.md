@@ -117,8 +117,12 @@ Wichtige Dateien:
 
 ## Karten-Werkzeugkette
 
-- Kartenbau: `tools/osm_karte.py`, `hausumringe.py`, `luftbild.py`, `nebengebaeude.py`, `kulisse.py`, `amtlich.py` (Reihenfolge und Befehle in
-  `zombies/client/karten/LEVELORTE.md`). `osm_karte.py` verwirft Luftbild-/amtliche Felder, daher danach `amtlich.py` erneut laufen lassen.
+- Kartenbau: **`tools/karte_bauen.sh <karte>`** (= `tools/karte_bauen.py`) führt alle Schritte in der richtigen Reihenfolge aus:
+  laden (`bayern_laden.py`) → `hausumringe.py` → `osm_karte.py` → `luftbild.py` → `nebengebaeude.py` → `kulisse.py` → `a0…a8` (Auswertung der 20-cm-Rasterdaten) → `boden.py` → `amtlich.py`
+  (Optionen `--nur`, `--von`, `--bis`, `--neu-anlegen`, `--ohne-laden`). Gebiet, Fenster und Ordner je Karte stehen in `tools/karten_gebiete.json` (Beschreibung: `tools/gebiet.py`);
+  die Werkzeuge lesen die Karte aus der Umgebungsvariable `KARTE`. Rohdaten unter `tools/luftbild/cache/bayern/<karte>/` (gitignored), Einzelwerkzeuge siehe `zombies/client/karten/LEVELORTE.md`.
+  `osm_karte.py` verwirft Luftbild-/amtliche Felder, daher danach `amtlich.py` erneut laufen lassen (die Gesamtkette tut das).
+  Level-Orte prüfen: `node tools/level_orte_pruefen.mjs <karte>`.
 - Nach jeder Kartenänderung `WELT_VERSION` erhöhen und den Fingerabdruck prüfen. Quellen: OpenStreetMap (ODbL), Bayern Open Data (CC BY 4.0) – Hinweise erhalten.
 
 ## Tests

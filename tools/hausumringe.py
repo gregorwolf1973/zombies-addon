@@ -206,8 +206,16 @@ def reihenhaeuser(ringe, mpk):
     return [r for i, r in enumerate(ringe) if i not in benutzt] + neu, gz, gh, fehl
 
 def main():
-    name = sys.argv[1]; quelle = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else STANDARD
-    karte = json.loads((KARTEN / f"{name}.json").read_text()); mpk = karte["meterProKachel"]
+    name = sys.argv[1]
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent)); import gebiet
+    g = gebiet.Gebiet(name) if name in gebiet.alle() else None       # Kartenbeschreibung: tools/karten_gebiete.json
+    args = [a for a in sys.argv[2:] if not a.startswith("--")]
+    quelle = pathlib.Path(args[0]) if args else (g.wurzel / g.haus_auszug if g else STANDARD)
+    if (KARTEN / f"{name}.json").exists(): karte = json.loads((KARTEN / f"{name}.json").read_text())
+    else:   # neue Karte: Größe wie osm_karte.py aus der bbox
+        sued, west, nord, ost = g.bbox; mpk_ = g.meterProKachel
+        karte = {"bbox": g.bbox, "meterProKachel": mpk_, "breite": math.ceil((ost - west) * 111320 * math.cos(math.radians((sued + nord) / 2)) / mpk_), "hoehe": math.ceil((nord - sued) * 110540 / mpk_)}
+    mpk = karte["meterProKachel"]
     B, H = karte["breite"], karte["hoehe"]; zu = umkehrung(karte)
     roh = json.loads(quelle.read_text()); m2k = mpk * mpk
     ringe = []; stat = {"roh": len(roh), "ausserhalb": 0, "zu_klein": 0, "entartet": 0}

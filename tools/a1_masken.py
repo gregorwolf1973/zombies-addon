@@ -1,7 +1,6 @@
 from lb_common import *
 import time;t=time.time()
-bbox=(683600,5304800,685400,5306900)
-tn=read_shp(B+'tn/shp/Nutzung',bbox);print(len(tn),round(time.time()-t))
+tn=read_shp(TNSHP,BBOX);print(len(tn),round(time.time()-t))
 names=sorted({a['nutzart'] for _,_,a in tn});print(names)
 code={n:i+1 for i,n in enumerate(names)}
 json.dump(code,open(NPY+'tn_codes.json','w'),ensure_ascii=False)
@@ -13,7 +12,7 @@ for bb,rings,a in tn:
         d.polygon(pts,fill=(code[a['nutzart']] if area(r)<0 else 0))  # CW=aussen (negative Fläche)
 tnr=np.array(img);np.save(NPY+'tn.npy',tnr)
 # Wohn-/Gemischt-Grundstuecke separat
-hs=json.load(open(B+'hausumringe/hausumringe_gebiet.json'))
+hs=json.load(open(HAUS_JSON))
 img=Image.new('L',(W,H),0);d=ImageDraw.Draw(img)
 for o in hs:
     for r in o['ringe']:
