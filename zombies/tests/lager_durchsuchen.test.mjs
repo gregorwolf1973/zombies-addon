@@ -52,7 +52,7 @@ for (const karte of ['geretsried', 'geretsried2']) {
 
 // Fehler: zwei Munitionskisten stehen ~20 px nebeneinander; war die nähere für den Spieler leer, suchte der Server sie weiter durch,
 // während der Client (blendet leere aus) die zweite anbot – „das Durchsuchen hängt“.
-test('Lager: leere Munitionskiste wird übersprungen, die danebenstehende wird durchsucht', async () => {
+test('Lager: leere Munitionskiste bleibt durchsuchbar (nächste Lieferung per Meldung), wird nicht übersprungen', async () => {
   const port = BASIS + 3 + 10000;
   const server = await starte({ port, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' });
   try {
@@ -62,6 +62,7 @@ test('Lager: leere Munitionskiste wird übersprungen, die danebenstehende wird d
     raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear(); raum.welle.schritt = () => {};
     const p = raum.state.spieler.get(c.sessionId), x = raum.extra.get(c.sessionId);
     x.pause = 1e6; p.ebene = ''; p.rucksack.length = 0; p.plaetze = 8;
+    SpielRaum.einstellungen.bundeswehr = { ...SpielRaum.einstellungen.bundeswehr, kistenMunChance: 0, kistenVerbandChance: 0, kistenGranateChance: 0 };
     const kisten = raum.welt.behaelter.filter(q => q.art === 'bw_kiste');
     const a = kisten.find(q => kisten.some(r => r !== q && Math.hypot(r.x - q.x, r.y - q.y) < 30));
     const b = kisten.find(r => r !== a && Math.hypot(r.x - a.x, r.y - a.y) < 30);
@@ -73,6 +74,6 @@ test('Lager: leere Munitionskiste wird übersprungen, die danebenstehende wird d
     for (let i = 0; i < 6; i++) raum.durchsucht(cl, p, a);   // a leer machen (bis alles genommen oder Rucksack voll)
     p.rucksack.length = 0;
     assert.equal(raum.inhalte.get(a.id + '@' + x.spielerId).length, 0);
-    assert.equal(raum.kontext(p, x)?.behaelter?.id, b.id, 'Server bietet weiter die leere Kiste an');
+    assert.equal(raum.kontext(p, x)?.behaelter?.id, a.id, 'leere Kiste bleibt die nächste durchsuchbare');
   } finally { await server.gracefullyShutdown(false); setzeKartengroesse(64, 48); }
 });

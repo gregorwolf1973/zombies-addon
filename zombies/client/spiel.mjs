@@ -1196,11 +1196,11 @@ class Ort extends Phaser.Scene {
     startwahlStart(raum);   // Startwahl vor Level 1 (5 Punkte + Gegenstand)
     { const fk = document.getElementById('fkknopf'); if (fk) $('leiste').prepend(fk); }   // Symbolleiste über der Eckkarte
     raum.onMessage('gefunden', m => {
-      if (m.kiste && m.rest === 0) (this.leereKisten ??= new Set()).add(m.kiste);   // Munitionskiste: für mich leer
+      // Munitionskisten bleiben immer sichtbar und durchsuchbar (kein Ausgrauen mehr); ist nichts drin, sagt der Server wann die nächste Lieferung kommt
       if (m.dinge.length) ton.aufheben(); else if (m.rest || !ton.ereignis('truheLeer')) ton.suchen();
       if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? `🧰 ${m.schuss ?? 12} Schuss` : d === 'pfeil' ? '➶ 6 Pfeile' : dingText(d)).join(', '));
       else if (m.rest) meldung('Rucksack voll – der Rest bleibt hier');
-      else meldung('Nichts Brauchbares gefunden');
+      else meldung(m.text || 'Nichts Brauchbares gefunden');
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
     });
     raum.onMessage('kistenFall', m => { if ((this.aktEbene ?? '') === '') kisteFaellt(this, m); });   // A400M: Munitionskiste fällt aus dem Heck
@@ -1793,7 +1793,7 @@ class Ort extends Phaser.Scene {
       gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.18)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
       c.fillStyle = gr; c.fillRect(0, 0, 96, 96); t.refresh();
     }
-    const ring = ich ? this.add.image(0, 0, 'eigenschein').setDisplaySize(64, 64).setAlpha(0.22).setBlendMode(Phaser.BlendModes.ADD)
+    const ring = ich ? this.add.image(0, 0, 'eigenschein').setDisplaySize(64, 64).setAlpha(0.1).setTint(0xd6e4ff).setBlendMode(Phaser.BlendModes.ADD)
       : this.add.ellipse(0, 0, 34, 34).setVisible(false);
     const bild = this.add.image(0, 0, this.menschTextur(p.aussehen), 0).setScale(MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg());
     const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE * mg()).setVisible(false);
@@ -2282,7 +2282,7 @@ class Ort extends Phaser.Scene {
     this.fensterLichtZeichnen(d, a, m, 1 - helligkeit(uhr));
     const lx = this.lokal.x - a.X, ly = this.lokal.y - a.Y;
     const lk = w.kachel ? 0.3 : 1;   // maßstäblich: Lichtkreis um die Figur im Maßstab des Raums (Radius ~2 m statt ~12 m)
-    this.lichtPinsel.setScale((lampe ? 0.42 : 0.36) * lk).setAlpha(lampe ? 1 : 0.8);
+    this.lichtPinsel.setScale((lampe ? 0.42 : 0.26) * lk).setAlpha(lampe ? 1 : 0.5);   // ohne Lampe kleiner und dunkler (früher 0,36 / 0,8)
     d.erase(this.lichtPinsel, lx, ly);
     if (lampe) {
       this.lampeKegel(d, lx, ly, this.lampenRichtung(ich), true);
@@ -2449,7 +2449,7 @@ class Ort extends Phaser.Scene {
     const fz = this.flug?.zentrum();
     const lx = (fz ? fz.x : this.lokal.x) - ox, ly = (fz ? fz.y : this.lokal.y) - oy;   // Kameraflug: Schein um die Kamera
     // Ring um den Spieler: ohne Taschenlampe wie früher (Bildschirmgröße), mit Lampe nur ein schwacher Schein (~2 m)
-    if (ich.lampe > 0 && !fz) P.setScale(0.125).setAlpha(0.3); else P.setScale(0.6 * AUSSEN_ZOOM_KORREKTUR).setAlpha(0.8);
+    if (ich.lampe > 0 && !fz) P.setScale(0.125).setAlpha(0.3); else P.setScale(0.4 * AUSSEN_ZOOM_KORREKTUR).setAlpha(0.45);   // ohne Lampe nur ein dunkler, kleiner Schein (früher 0,6 / 0,8)
     rt.erase(P, lx, ly);
     if (ich.lampe > 0 && !fz) this.lampeKegel(rt, lx, ly, this.lampenRichtung(ich), false);
   }

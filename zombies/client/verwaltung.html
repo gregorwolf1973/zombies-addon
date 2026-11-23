@@ -1154,10 +1154,20 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="tnVsVerband" min="0" max="10" step="1"><span id="tnVsVerbandWert">3</span></div>
   <label for="tnVsSpritze">Versorgung: Spritzen je Spieler</label>
   <div class="tn-zeile"><input type="range" id="tnVsSpritze" min="0" max="5" step="1"><span id="tnVsSpritzeWert">1</span></div>
+  <label for="tnKiMun">Munitionskisten: Chance auf Munition je Kiste/Spieler/Tag</label>
+  <div class="tn-zeile"><input type="range" id="tnKiMun" min="0" max="100" step="5"><span id="tnKiMunWert">50 %</span></div>
+  <label for="tnKiMunMin">Munitionskisten: Munition mindestens</label>
+  <div class="tn-zeile"><input type="range" id="tnKiMunMin" min="0" max="50" step="1"><span id="tnKiMunMinWert">5 Schuss</span></div>
+  <label for="tnKiMunMax">Munitionskisten: Munition höchstens</label>
+  <div class="tn-zeile"><input type="range" id="tnKiMunMax" min="0" max="100" step="1"><span id="tnKiMunMaxWert">15 Schuss</span></div>
+  <label for="tnKiVerband">Munitionskisten: Chance auf Verbandszeug</label>
+  <div class="tn-zeile"><input type="range" id="tnKiVerband" min="0" max="100" step="5"><span id="tnKiVerbandWert">15 %</span></div>
+  <label for="tnKiGranate">Munitionskisten: Chance auf Handgranate</label>
+  <div class="tn-zeile"><input type="range" id="tnKiGranate" min="0" max="100" step="5"><span id="tnKiGranateWert">5 %</span></div>
   <p class="tn-leise">Der Turm dreht gleichmäßig (ca. 40 °/s) und feuert erst, wenn das Rohr auf dem Ziel steht. Kanone: Reichweite 15–60 m, Explosion 5 m Radius.</p>
   <p class="tn-leise" id="bwInfoLeo"></p>
   <p class="tn-leise" id="bwInfoMo"></p>
-  <label for="tnHundAblenk">Begleiter-Hund: Wahrscheinlichkeit, dass ein Zombie in 8 m Umkreis ihn statt des Spielers jagt (4–8 s)</label>
+  <label for="tnHundAblenk">Begleiter-Hund: Wahrscheinlichkeit, dass ein Zombie in 25 m Umkreis ihn statt des Spielers jagt (8–14 s)</label>
   <div class="tn-zeile"><input type="range" id="tnHundAblenk" min="0" max="100" step="5"><span id="tnHundAblenkWert">40 %</span></div>
   <label for="tnHundStreuner">Streuner-Hunde: Anzahl auf der Karte (automatisch = 1 je 0,5 km², mindestens 1)</label>
   <div class="tn-zeile"><input type="range" id="tnHundStreuner" min="-1" max="20" step="1"><span id="tnHundStreunerWert">automatisch</span></div>
@@ -1297,7 +1307,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnHundStreuner', (e.hund || {}).streuner === undefined ? -1 : e.hund.streuner, streunerText);
-    feld('tnHundAblenk', (e.hund || {}).ablenkung === undefined ? 40 : e.hund.ablenkung, function (v) { return v + ' %'; });
+    feld('tnHundAblenk', (e.hund || {}).ablenkung === undefined ? 70 : e.hund.ablenkung, function (v) { return v + ' %'; });
     feld('tnBeuteMoebel', (e.beute || {}).moebel === undefined ? 30 : e.beute.moebel, function (v) { return v + ' %'; });
     feld('tnLeoReich', bwe.leopardReichweite === undefined ? 29 : bwe.leopardReichweite, function (v) { return v + ' m'; });
     feld('tnLeoPause', bwe.leopardPause === undefined ? 0.4 : bwe.leopardPause, function (v) { return String(v).replace('.', ',') + ' s'; });
@@ -1318,6 +1328,11 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnVsMun', bwe.versorgungMunition === undefined ? 50 : bwe.versorgungMunition, function (v) { return v + ' Schuss'; });
     feld('tnVsVerband', bwe.versorgungVerband === undefined ? 3 : bwe.versorgungVerband, function (v) { return v + ' Stück'; });
     feld('tnVsSpritze', bwe.versorgungSpritze === undefined ? 1 : bwe.versorgungSpritze, function (v) { return v + ' Stück'; });
+    feld('tnKiMun', bwe.kistenMunChance === undefined ? 50 : bwe.kistenMunChance, function (v) { return v + ' %'; });
+    feld('tnKiMunMin', bwe.kistenMunMin === undefined ? 5 : bwe.kistenMunMin, function (v) { return v + ' Schuss'; });
+    feld('tnKiMunMax', bwe.kistenMunMax === undefined ? 15 : bwe.kistenMunMax, function (v) { return v + ' Schuss'; });
+    feld('tnKiVerband', bwe.kistenVerbandChance === undefined ? 15 : bwe.kistenVerbandChance, function (v) { return v + ' %'; });
+    feld('tnKiGranate', bwe.kistenGranateChance === undefined ? 5 : bwe.kistenGranateChance, function (v) { return v + ' %'; });
     feld('tnMgMunition', bwe.mgMunition === undefined ? 400 : bwe.mgMunition, function (v) { return v ? String(v) : 'unbegrenzt'; });
     feld('tnPumaMunition', bwe.pumaMunition === undefined ? 200 : bwe.pumaMunition, function (v) { return v ? String(v) : 'unbegrenzt'; });
     feld('tnBwTage', bwe.falltage === undefined ? 3 : bwe.falltage, function (v) { return v ? v + (v === 1 ? ' Tag' : ' Tage') : 'nie'; });
@@ -1453,6 +1468,11 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnVsMun', function (v) { return v + ' Schuss'; }, function (v) { return { bundeswehr: { versorgungMunition: v } }; });
   regler('tnVsVerband', function (v) { return v + ' Stück'; }, function (v) { return { bundeswehr: { versorgungVerband: v } }; });
   regler('tnVsSpritze', function (v) { return v + ' Stück'; }, function (v) { return { bundeswehr: { versorgungSpritze: v } }; });
+  regler('tnKiMun', function (v) { return v + ' %'; }, function (v) { return { bundeswehr: { kistenMunChance: v } }; });
+  regler('tnKiMunMin', function (v) { return v + ' Schuss'; }, function (v) { return { bundeswehr: { kistenMunMin: v } }; });
+  regler('tnKiMunMax', function (v) { return v + ' Schuss'; }, function (v) { return { bundeswehr: { kistenMunMax: v } }; });
+  regler('tnKiVerband', function (v) { return v + ' %'; }, function (v) { return { bundeswehr: { kistenVerbandChance: v } }; });
+  regler('tnKiGranate', function (v) { return v + ' %'; }, function (v) { return { bundeswehr: { kistenGranateChance: v } }; });
   $('tnLeoKanone').addEventListener('change', function () {
     anfrage('verwaltung/api', { bundeswehr: { leopardKanone: $('tnLeoKanone').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
   });
@@ -3701,7 +3721,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     schalter(bw.inhalt, 'tnBwAktiv');
     schalter(bw.inhalt, 'tnPolAktiv'); zeile(bw.inhalt, 'tnPolAnzahl'); zeile(bw.inhalt, 'tnPolMunition');
     zeile(bw.inhalt, 'tnBwTage'); zeile(bw.inhalt, 'tnPumaPause'); zeile(bw.inhalt, 'tnMgMunition'); zeile(bw.inhalt, 'tnPumaMunition'); rein(bw.inhalt, $('bwInfoPuma'));
-    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden', 'tnLeoKanonePause', 'tnLeoKanoneMin', 'tnBoxHordeSek', 'tnBoxHordeMin', 'tnBoxHordeMax', 'tnBoxPause', 'tnBoxReich', 'tnBoxTempo', 'tnPumaTempo', 'tnLeoTempo', 'tnVsTage', 'tnVsMun', 'tnVsVerband', 'tnVsSpritze'].forEach(function (id) { zeile(bw.inhalt, id); });
+    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden', 'tnLeoKanonePause', 'tnLeoKanoneMin', 'tnBoxHordeSek', 'tnBoxHordeMin', 'tnBoxHordeMax', 'tnBoxPause', 'tnBoxReich', 'tnBoxTempo', 'tnPumaTempo', 'tnLeoTempo', 'tnVsTage', 'tnVsMun', 'tnVsVerband', 'tnVsSpritze', 'tnKiMun', 'tnKiMunMin', 'tnKiMunMax', 'tnKiVerband', 'tnKiGranate'].forEach(function (id) { zeile(bw.inhalt, id); });
     schalter(bw.inhalt, 'tnLeoUeberroll'); schalter(bw.inhalt, 'tnLeoKanone'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
     gruppe(bw);
     var hg = unter('🐕 Begleiter-Hund'); zeile(hg.inhalt, 'tnHundAblenk'); zeile(hg.inhalt, 'tnHundStreuner'); gruppe(hg);
@@ -3724,7 +3744,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
-    tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo', tnPumaTempo: 'bundeswehr.pumaTempo', tnLeoTempo: 'bundeswehr.leopardTempo', tnVsTage: 'bundeswehr.versorgungTage', tnVsMun: 'bundeswehr.versorgungMunition', tnVsVerband: 'bundeswehr.versorgungVerband', tnVsSpritze: 'bundeswehr.versorgungSpritze',
+    tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo', tnPumaTempo: 'bundeswehr.pumaTempo', tnLeoTempo: 'bundeswehr.leopardTempo', tnVsTage: 'bundeswehr.versorgungTage', tnVsMun: 'bundeswehr.versorgungMunition', tnVsVerband: 'bundeswehr.versorgungVerband', tnVsSpritze: 'bundeswehr.versorgungSpritze', tnKiMun: 'bundeswehr.kistenMunChance', tnKiMunMin: 'bundeswehr.kistenMunMin', tnKiMunMax: 'bundeswehr.kistenMunMax', tnKiVerband: 'bundeswehr.kistenVerbandChance', tnKiGranate: 'bundeswehr.kistenGranateChance',
     tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
@@ -3799,7 +3819,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var FMT_FAKTOR = { modus: 'decimal', an: function (v) { return '×' + (Number(v) / 10).toFixed(1).replace('.', ','); },
     ein: function (t) { var x = parseFloat(String(t).replace(/[×x\s]/gi, '').replace(',', '.')); return isFinite(x) ? Math.round(x * 10) : null; } };
   // Werte mit echten Grenzen (Server: fest()): [von, bis]; null = Min bzw. Max des Schiebers (Wahrscheinlichkeiten/Lautstärken in %, Winkel, Zeitpunkte)
-  var FESTE = { ueberraschung: null, tnBiss: null, tnUnfallExpl: null, spStock: null, spDrin: null, spFunk: null, tuFrei: null, tuRaetsel: null, tuSchluessel: null, tnHundAblenk: null,
+  var FESTE = { ueberraschung: null, tnBiss: null, tnUnfallExpl: null, spStock: null, spDrin: null, spFunk: null, tuFrei: null, tuRaetsel: null, tuSchluessel: null, tnHundAblenk: null, tnKiMun: null, tnKiVerband: null, tnKiGranate: null,
     tnMgLeben: null, tnMgNot: null, muLaut: null, rsLaut: null, tnNebelMorgen: null, tnNebelAbend: null, tnNebelZombie: null, tnNachtDunkel: null,
     tnBissSpGeretsried: null, tnBissSpIsarauen: null, tnBissSpKoenigsdorf: null, tnBissSpKochel: null, tnBissSpAndermatt: null, agStunde: null, tnTagAb: null, tnNachtAb: null, zsKegel: [null, 360] };
   var FORMATE = { tnTagAb: FMT_UHR, tnNachtAb: FMT_UHR, agStunde: FMT_STUNDE, tnNacht: FMT_FAKTOR, tnAutos: FMT_FAKTOR };

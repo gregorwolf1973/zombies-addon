@@ -346,6 +346,11 @@ export function bereinige(e = {}, alt = {}) {
       versorgungVerband: Math.round(zahl(bw.versorgungVerband, 0, 10, 3)),     // … Verbandszeug
       versorgungSpritze: Math.round(zahl(bw.versorgungSpritze, 0, 5, 1)),      // … Spritzen
       versorgungWaffe: typeof bw.versorgungWaffe === 'boolean' ? bw.versorgungWaffe : true,   // … eine zufällige Schusswaffe (Pistole, Jagdgewehr, Schrotflinte)
+      kistenMunChance: Math.round(fest(bw.kistenMunChance, 0, 100, 50)),        // Munitionskisten: Zufallsbeute je Kiste/Spieler/Spieltag – Chance auf Munition (%)
+      kistenMunMin: Math.round(zahl(bw.kistenMunMin, 0, 50, 5)),                // … mindestens so viele Schuss (empfohlen 0–50)
+      kistenMunMax: Math.round(zahl(bw.kistenMunMax, 0, 100, 15)),              // … höchstens so viele Schuss (empfohlen 0–100)
+      kistenVerbandChance: Math.round(fest(bw.kistenVerbandChance, 0, 100, 15)), // … Chance auf ein Verbandszeug (%)
+      kistenGranateChance: Math.round(fest(bw.kistenGranateChance, 0, 100, 5)),  // … Chance auf eine Handgranate (%)
       leopardReichweite: Math.round(zahl(bw.leopardReichweite, 5, 80, 29)),   // Evakuierungspanzer Leopard 2A7: Reichweite des MG in Metern
       leopardPause: Math.round(zahl(bw.leopardPause, 0.1, 5, 0.4) * 10) / 10, // … Sekunden zwischen zwei Schüssen
       leopardSchaden: Math.round(zahl(bw.leopardSchaden, 1, 500, 100)),       // … Schaden je Treffer
@@ -370,7 +375,7 @@ export function bereinige(e = {}, alt = {}) {
     hund: {
       ablenkung: Math.round(fest(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)),
       streuner: Math.round(zahl(e.hund?.streuner ?? a.hund?.streuner, -1, 20, HUND.streuner, { max: 200 })),   // Streuner-Hunde: -1 = automatisch (1 je 0,5 km²), 0 = keine, 1–20 fest
-    },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
+    },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 25 m ihn statt des Spielers jagt
     funde,
     beute: { moebel: Math.round(fest(e.beute?.moebel ?? a.beute?.moebel, 0, 100, MOEBEL_ANTEIL)) },   // Prozent: echte Grenze 0–100   // % der Möbel/Behälter, die überhaupt etwas enthalten
     toene,
@@ -397,7 +402,7 @@ export function grundwerte() {
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
-    bundeswehr: { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60, pumaTempo: 60, leopardTempo: 60, mgMunition: 400, pumaMunition: 200 },
+    bundeswehr: { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, kistenMunChance: 50, kistenMunMin: 5, kistenMunMax: 15, kistenVerbandChance: 15, kistenGranateChance: 5, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60, pumaTempo: 60, leopardTempo: 60, mgMunition: 400, pumaMunition: 200 },
     polizei: { aktiv: true, anzahl: 3, munition: 30 },
     nebel: { ...NEBEL_VORGABE },
     zombieSicht: { ...SICHT_VORGABE },

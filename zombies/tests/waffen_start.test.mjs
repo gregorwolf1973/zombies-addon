@@ -1,3 +1,4 @@
+import { SpielRaum } from '../server/raum.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { matchMaker } from '@colyseus/core';
@@ -86,9 +87,12 @@ test('Bundeswehr-Kiste: nie Zufalls-MG, nur die Versorgung (Pistole/Jagdgewehr/S
     const p = raum.state.spieler.get(a.sessionId);
     p.waffe = ''; p.munition = 0;
     raum.rnd = () => 0.05;
+    const bwAlt = SpielRaum.einstellungen.bundeswehr;
+    SpielRaum.einstellungen.bundeswehr = { ...bwAlt, kistenMunChance: 0, kistenVerbandChance: 0, kistenGranateChance: 0 };   // Zufallsbeute aus: nur die Versorgung
     raum.durchsucht({ sessionId: a.sessionId, send() {} }, p, { id: 'kistetest', art: 'bw_kiste' });
     assert.ok(['pistole', 'gewehr', 'schrotflinte'].includes(p.waffe), 'Waffe: ' + p.waffe);
     assert.equal(p.munition, 50);
+    SpielRaum.einstellungen.bundeswehr = bwAlt;
   } finally { await a.leave(); }
 });
 

@@ -11,6 +11,7 @@ import { EREIGNISSE, TON_STANDARD } from '../server/einstellungen.mjs';
 import { setzeKartengroesse, frei, KACHEL } from '../client/welt.mjs';
 import { hundRichtung, hundBild, hundSkala, SCHULTER_PX } from '../client/hund.mjs';
 import { freierPort } from './hilfe.mjs';
+import { ABLENK_ALT, ABLENK_NEU } from '../server/hund.mjs';
 
 const PORT = await freierPort();
 let server;
@@ -138,7 +139,7 @@ test('Hund folgt in 1,5–3 m Abstand, wartet im Stand, springt bei > 30 m hinte
   await a.c.leave();
 });
 
-test('Ablenkung: Zombie in 8 m jagt den Hund (nicht bei Ziel < 3 m), erreicht ihn ohne Wirkung, verliert das Interesse', async () => {
+test('Ablenkung: Zombie in 25 m jagt den Hund (nicht bei Ziel < 3 m), erreicht ihn ohne Wirkung, verliert das Interesse', async () => {
   const a = await beitreten('Ablenk');
   const raum = a.raum;
   ruhig(raum);
@@ -175,18 +176,18 @@ test('Ablenkung: Zombie in 8 m jagt den Hund (nicht bei Ziel < 3 m), erreicht ih
     const bellen = []; const alt2 = raum.broadcast.bind(raum);
     raum.broadcast = (art, m, ...r) => { if (art === 'hundBellen') bellen.push(m); return alt2(art, m, ...r); };
     tick(raum, 10);   // 0,5 s: Prüfung
-    assert.ok(zi.hundBis > raum.hunde.t + 3 && zi.hundBis <= raum.hunde.t + 8.1, 'jagt den Hund für 4–8 s');
+    assert.ok(zi.hundBis > raum.hunde.t + 7 && zi.hundBis <= raum.hunde.t + 14.1, 'jagt den Hund für 8–14 s');
     assert.equal(zi.ziel, null, 'Spieler nicht mehr das Ziel');
     assert.equal(bellen.length, 1, 'kurzes Bellen bei Ablenkung');
     let winselte = false, minAbstand = 1e9;
-    for (let i = 0; i < 240 && zi.hundBis; i++) {
+    for (let i = 0; i < 400 && zi.hundBis; i++) {
       raum.hunde.schritt(0.05); raum.zombieSchritt(z2, z, 0.05);
       minAbstand = Math.min(minAbstand, abstand(h, z)); if (h.winselt) winselte = true;
     }
     assert.ok(winselte || minAbstand < 60, 'der Zombie kam an den Hund heran');
     assert.equal(raum.state.hunde.size, 1, 'der Hund bleibt unversehrt');
     assert.ok(!(zi.hundBis > 0), 'Zombie hat das Interesse verloren');
-    assert.equal(zi.ziel, null);
+    assert.ok(zi.ziel === null || zi.ziel === a.sid, 'danach wieder frei bzw. beim Spieler');
     raum.broadcast = alt2;
   } finally { SpielRaum.einstellungen.hund = alt; }
   await a.c.leave();
@@ -280,4 +281,44 @@ test('Speichern und Laden: der Hund bleibt beim Spieler (Wiedereinstieg, Levelwe
   tick(raum, 10);
   assert.equal(raum.state.hunde.get(s).besitzer, '');
   await a2.c.leave(); await b.c.leave();
+});
+
+// Messung: Anteil der Zombies im Umkreis (5–22 m, Ziel = ferner Spieler), die der Hund nach 3 s / 6 s auf sich gezogen hat
+test('Ablenkung messen: neue Werte lenken deutlich mehr Zombies ab als die alten (Vorgabe 40 % / 8 m)', async () => {
+  const a = await beitreten('Messung');
+  const raum = a.raum;
+  ruhig(raum);
+  const p = raum.state.spieler.get(a.sid), x = raum.extra.get(a.sid);
+  p.ebene = ''; p.verbunden = true;
+  const o = freiNahe(raum, p.x, p.y); p.x = o.x; p.y = o.y;
+  const id = raum.hunde.neuer(p.x + 15, p.y, '', a.sid); x.hund = true;
+  const h = raum.state.hunde.get(id);
+  const alt = SpielRaum.einstellungen.hund, altW = raum.hunde.ablenkWerte;
+  const messe = (werte, proz) => {
+    SpielRaum.einstellungen.hund = { ablenkung: proz };
+    raum.hunde.ablenkWerte = werte;
+    raum.state.zombies.clear(); raum.zombieInfo.clear();
+    h.x = p.x + 15; h.y = p.y;
+    const ids = [];
+    for (let i = 0; i < 40; i++) {
+      const d = (5 + (i % 8) * 2.4) * 8, w = i * 2.4;
+      const q = freiNahe(raum, h.x + Math.cos(w) * d, h.y + Math.sin(w) * d);
+      const zid = raum.setzeZombie(q.x, q.y); const zz = raum.state.zombies.get(zid);
+      zz.x = q.x; zz.y = q.y;
+      if (abstand(zz, h) > 24 * 8) { raum.state.zombies.delete(zid); raum.zombieInfo.delete(zid); continue; }
+      const zi = raum.zombieInfo.get(zid); zi.ziel = a.sid; zi.schlaeft = false; ids.push(zid);
+    }
+    const anteil = () => ids.filter(z => raum.zombieInfo.get(z).hundBis > raum.hunde.t).length / ids.length;
+    tick(raum, 60); const nach3 = anteil();
+    tick(raum, 60); const nach6 = anteil();
+    return { nach3, nach6, n: ids.length };
+  };
+  try {
+    const vorher = messe(ABLENK_ALT, 40), nachher = messe(ABLENK_NEU, 70);
+    console.log('Hund-Ablenkung vorher', JSON.stringify(vorher), 'nachher', JSON.stringify(nachher));
+    assert.ok(vorher.n >= 20 && nachher.n >= 20, 'genug Zombies platziert');
+    assert.ok(nachher.nach6 >= 0.6, 'nachher: mindestens 60 % nach 6 s abgelenkt');
+    assert.ok(nachher.nach6 > vorher.nach6 * 2, 'mehr als doppelt so viele wie vorher');
+  } finally { SpielRaum.einstellungen.hund = alt; raum.hunde.ablenkWerte = altW; }
+  await a.c.leave();
 });
