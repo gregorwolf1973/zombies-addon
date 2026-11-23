@@ -4,6 +4,9 @@
 import { ZF_GROESSE } from './zombiefiguren.mjs';
 export const FIG_PX_JE_M = 40;
 export const HF_GROESSE = ZF_GROESSE;
+// Alte Sprites (Schulterbreite 25,7 px bei Maßstab 0,42) auf die Schulterbreite der Mixamo-Helden (~12 px) bringen: Ziel 12 / 25,7
+export const SCHULTER_ALT_PX = 25.7, SCHULTER_NEU_PX = 12;
+export const ALT_FAKTOR = SCHULTER_NEU_PX / SCHULTER_ALT_PX;
 export const HF_FIGUREN = ['held', 'heldin'];
 export const HF_GRUPPEN = ['ohne', 'pistole', 'gewehr', 'schrot', 'messer', 'schlaeger'];
 // Waffe (welt.mjs WAFFEN, Schlüssel p.waffe bzw. aktiveWaffe) → Gruppe. Unbekannte Waffen, Faust, Handgranate: ohne Waffe in der Hand.

@@ -4,7 +4,7 @@ import { fzPx } from './masse.mjs';
 import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from './fzkollision.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
-import { HF_FIGUREN, HF_GROESSE, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung } from './heldenfiguren.mjs';
+import { HF_FIGUREN, HF_GROESSE, ALT_FAKTOR, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung } from './heldenfiguren.mjs';
 import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
@@ -909,7 +909,12 @@ const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 // ---------- Szene ----------
 const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
-const MENSCH_GROESSE = 0.42, ZOMBIE_GROESSE = 0.42, BOGEN2_GROESSE = 0.476;   // figuren2: 160er Felder
+// Gemeinsamer Maßstab aller Menschen- und Zombiefiguren: die Mixamo-Figuren (Helden, Zombies) haben 40 Atlas-px je Meter (heldenfiguren.mjs FIG_PX_JE_M).
+// Die alten Bilder (Menschen, Soldaten, Bewohner, alte Zombies) sind auf eine Schulterbreite von 25,7 px normiert (groessen.mjs), die Mixamo-Helden haben ~12 px
+// (Heldin 10, Held 12; Messung stehen) → ALT_K bringt die alten Sprites auf dieselbe Größe (Rückfall-Schalter eingeschlossen).
+const ALT_K = ALT_FAKTOR;
+const MENSCH_GROESSE = 0.42 * ALT_K, ZOMBIE_GROESSE = 0.42 * ALT_K, BOGEN2_GROESSE = 0.476 * ALT_K;   // figuren2: 160er Felder
+const ZF_G = ZF_GROESSE / ALT_K, HF_G = HF_GROESSE / ALT_K;   // Mixamo-Atlanten: Faktor relativ zu ZOMBIE_GROESSE (ergibt wieder 0,42 · ZF_GROESSE)
 // Größen: ALLE Menschen (Spieler m/w/s/Held/Heldin, Bots, Bewohner, Soldaten, Ärzte, Verwundete) sind bei 100 % gleich
 // breit (Schulterbreite, Ausgleich je Bild in groessen.mjs). Menschengröße × Gesamtgröße = mg(); Zombies zusätzlich × Zombiegröße,
 // Leichen folgen der Zombiegröße. Kollisionsradien bleiben unberührt.
@@ -927,7 +932,7 @@ let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
 const innenFigur = () => (szeneRef?.feinInnen() ? INNEN_FIGUR : 1);
 const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100) * innenFigur();
 const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
-const VERWUNDET_GROESSE = 0.42 * 1.26;
+const VERWUNDET_GROESSE = 0.42 * 1.26 * ALT_K;
 const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // z6/z7 aus figuren2 (Riley Gombart), ab 'kaminkehrer' aus figuren3 (Gemini)
 const GEMINI_TYPEN = new Set(ZOMBIE_TYPEN.slice(7));
@@ -2641,7 +2646,7 @@ class Ort extends Phaser.Scene {
         const i = zfBild(clip, { lauf: f.lauf ?? 0, zs: f.zs, zeitMs: this.time.now, versatz: f.zv * 7, ...(z.kriecht && (z.haengt || !geht) ? { lauf: z.haengt ? this.time.now / 12 : 0 } : {}) });
         const key = 'zf_' + fig;
         if (f.bild.texture.key !== key) f.bild.setTexture(key);
-        f.bild.setFrame(this.zfNamen[fig][clip][i]).setRotation(0).setScale(ZOMBIE_GROESSE * ZF_GROESSE * zf);
+        f.bild.setFrame(this.zfNamen[fig][clip][i]).setRotation(0).setScale(ZOMBIE_GROESSE * ZF_G * zf);
         f.bild.setTint(this.schattenTon(f, f.x, f.y, z.jagt ? 0xffd2c8 : 0xffffff));
         if ((s.optionen & 1) && zeigen && !this.aktEbene && !z.kriecht && (cam.contains(f.x, f.y) || Phaser.Math.Distance.Between(f.x, f.y, cam.centerX, cam.centerY) < cam.width)) {
           this.kegel.fillStyle(z.jagt ? 0xff5252 : 0xfff59d, z.jagt ? 0.18 : 0.13);
@@ -2699,8 +2704,8 @@ class Ort extends Phaser.Scene {
         if (zfNeu) {
           // Mixamo: sterbender Zombie (dying einmal, danach letztes Bild liegen); beim ersten Durchgang schon vorhandene Tote liegen gleich
           const fig = zfFigur(l.variante);
-          o = this.add.image(l.x, l.y, 'zf_' + fig, this.zfNamen[fig].dying[0]).setScale(ZOMBIE_GROESSE * ZF_GROESSE).setDepth(1.6).setRotation(l.richtung);
-          o.gf = ZF_GROESSE; o.zf = { fig, t0: this.time.now, liegt: !this.leichenGesehen || !!l.fest || !!l.deko };
+          o = this.add.image(l.x, l.y, 'zf_' + fig, this.zfNamen[fig].dying[0]).setScale(ZOMBIE_GROESSE * ZF_G).setDepth(1.6).setRotation(l.richtung);
+          o.gf = ZF_G; o.zf = { fig, t0: this.time.now, liegt: !this.leichenGesehen || !!l.fest || !!l.deko };
           this.leichen.set(id, o);
         } else {
         const tot3 = this.figurListe3['leiche_' + typ];   // Gemini-Totenbild (figuren3), Kopf nach links wie die alten Leichen
@@ -3232,7 +3237,7 @@ class Ort extends Phaser.Scene {
     const wipp = geht && !hn ? Math.sin(f.lauf / 7) : 0;
     f.bild.setRotation(hn ? (hfRot ?? (p.unten ? lr : kr)) : p.unten ? 0 : kr + wipp * 0.07);
     const gg0 = aussehenLesen(p.aussehen).g === 'f' ? 'w' : 'm';
-    const s0 = hn ? ZOMBIE_GROESSE * HF_GROESSE * mg() : p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg() : survivor ? BOGEN2_GROESSE * mg()
+    const s0 = hn ? ZOMBIE_GROESSE * HF_G * mg() : p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg() : survivor ? BOGEN2_GROESSE * mg()
       : held ? ZOMBIE_GROESSE * groesse('helden160', `held_${gg0}_leer`) * mg()
       : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg();
     // Klettern über ein stehendes Auto (20 % Tempo): Figur leicht größer und angehoben, wippt; Taumeln nach einem Fahrzeugstoß: Figur schwankt
