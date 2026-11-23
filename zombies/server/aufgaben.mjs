@@ -13,7 +13,7 @@ import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplat
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
 import { weltVorbereiten } from './weltcache.mjs';
-import { gesuchteDinge, fundorteListe, missionsOrt } from './fundorte.mjs';
+import { gesuchteDinge, fundorteListe, missionsOrt, aufgabenFundePlan, aufgabenBedarf } from './fundorte.mjs';
 
 // Missionsgegenstand für die Clients (Karte): exakte Position (x, y), Radius des animierten Auffindkreises, abgegeben, Ortsbeschreibung
 export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), getragen: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
@@ -213,6 +213,7 @@ export class Aufgaben {
       s.funk = !!g.funk;
     } else this.ziehen();
     if (this.mission.length && !s.aufgaben.has('mission')) this.neu('mission', false);   // älterer Spielstand ohne Mission
+    this.fundePlanen(g?.funde);
     this.abholMeldung = s.funk && [...s.aufgaben.values()].every(x => !x.pflicht || x.erledigt);   // beim Laden nicht erneut melden
     this.aktualisieren(false);
     if (s.funk) s.busAnkunft = this.einst().stunde * 60;
@@ -244,6 +245,7 @@ export class Aufgaben {
       ids: [...s.aufgaben.keys()], erledigt: Object.fromEntries([...s.aufgaben].filter(([, a]) => a.erledigt).map(([id]) => [id, true])),
       basis: this.basis, funk: s.funk, funkSafe: this.funkSafe, medizin: this.medizin,
       mission: { abgegeben: [...this.abgegeben], hinweise: { ...this.hinweise }, landefeuer: this.landefeuer },
+      funde: this.fundePlan ?? [],
     };
   }
 
@@ -323,6 +325,22 @@ export class Aufgaben {
   }
 
   missionFertig() { return !this.raum.state.aufgaben.has('mission') || this.mission.every(m => this.abgegeben.has(m.id)); }
+
+  // Aufgaben-Funde: gebrauchte Dinge der offenen Aufgaben fest in passende Behälter legen (gespeichert; ohne Spielstand neu geplant)
+  fundePlanen(gespeichert = null) {
+    const s = this.raum.state, welt = this.raum.welt;
+    this.fundePlan = [];
+    if (!this.an() || !welt?.haeuser) return;
+    if (Array.isArray(gespeichert)) { this.fundePlan = gespeichert.filter(e => e && DINGE[e.ding] && typeof e.behaelter === 'string').map(e => ({ ding: e.ding, behaelter: e.behaelter })); return; }
+    this.fundePlan = aufgabenFundePlan(s.seed, s.level, welt, aufgabenBedarf(s, Math.max(2, this.spielerZahl()), vorrat));
+  }
+
+  // Dinge, die beim ersten Befüllen dieses Behälters garantiert dazukommen (nur für noch offene Aufgaben)
+  aufgabenFunde(behaelterId) {
+    if (!this.an() || !this.fundePlan?.length) return [];
+    const offen = new Set(gesuchteDinge(this.raum.state, this.medizin));
+    return this.fundePlan.filter(e => e.behaelter === behaelterId && offen.has(e.ding)).map(e => e.ding);
+  }
 
   // Gegenstände, die beim ersten Durchsuchen dieses Behälters dazugelegt werden
   missionsFunde(behaelterId) {

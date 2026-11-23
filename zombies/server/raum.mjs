@@ -2327,6 +2327,7 @@ export class SpielRaum extends Room {
     // Kofferraum: Munition nur mit eigener Wahrscheinlichkeit; Bundeswehr-Container: Granatwerfer mit eigener Wahrscheinlichkeit
     if (art === 'auto' && this.rnd() < AUTO_MUNITION && (f.munition ?? 10) > 0) funde.push('munition');
     if (art === 'bw_container' && this.rnd() < GRANATWERFER_CHANCE) funde.push('granatwerfer');
+    funde.push(...(this.aufgaben?.aufgabenFunde(b.id) ?? []));   // Aufgaben-Funde (Spritze, Vorräte, Lampen, Bretter): garantiert, auch in leeren Möbeln
     funde.push(...(this.aufgaben?.missionsFunde(b.id) ?? []));   // Missionsgegenstand dieses Behälters
     this.setzeInhalt(b.id, funde);
   }

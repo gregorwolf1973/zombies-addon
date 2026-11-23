@@ -11,7 +11,7 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { BEUTE, LEICHE_SELTEN, LEICHE_OFT, MOEBEL_ANTEIL, MOEBEL_ARTEN, KACHEL } from '../client/welt.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
-import { gesuchteDinge, fundorteListe } from '../server/fundorte.mjs';
+import { gesuchteDinge, fundorteListe, behaelterPosition } from '../server/fundorte.mjs';
 import { freierPort } from './hilfe.mjs';
 
 const PORT = await freierPort();
@@ -165,3 +165,51 @@ test('Karte: Ring folgt dem Missionsgegenstand (getragen = weg, am Boden = dort)
     raum.broadcast = alt;
   } finally { await c.leave(); await bis(() => !SpielRaum.aktiv, 3000); }
 });
+
+test('Aufgaben-Funde: fest in passende Behälter gelegt (Bedarf + Reserve), garantiert auch in leeren Möbeln, Punkt weg nach Entnahme, wird gespeichert', async () => {
+  await frisch();
+  const { c, raum, p, client } = await beitreten();
+  try {
+    const ag = raum.aufgaben, s = raum.state;
+    for (const id of ['medizin', 'vorraete', 'lampen', 'bretter']) { if (!s.aufgaben.has(id)) ag.neu(id, false); s.aufgaben.get(id).erledigt = false; }
+    ag.fundePlanen();
+    const plan = ag.fundePlan, je = d => plan.filter(e => e.ding === d);
+    assert.equal(je('spritze').length, 2, 'Spritze: Bedarf 1 + Reserve');
+    assert.ok(je('wasser').length >= 3 && je('essen').length >= 3 && je('taschenlampe').length >= 2 && je('bretter').length >= 2, JSON.stringify(plan));
+    assert.equal(new Set(plan.map(e => e.behaelter)).size, plan.length, 'Behälter doppelt belegt');
+    // passende Behälterarten (soweit Häuser dafür da sind): Spritze bevorzugt Apotheke/Sanitätsraum
+    const art = id => raum.wv(/^h\d+eg/.exec(id)[0]).behaelter.find(b => b.id === id)?.art;
+    for (const e of plan) assert.ok(art(e.behaelter), 'Behälter existiert nicht: ' + e.behaelter);
+    const apo = raum.welt.haeuser.some(h => h.betretbar && !h.safe && h.art && ['pharmacy', 'chemist'].includes(h.art));
+    if (apo) assert.ok(je('spritze').some(e => ['laden_apotheke', 'erstehilfe', 'sanikiste'].includes(art(e.behaelter))), 'Spritze nicht in passendem Behälter');
+    // deterministisch und ohne die übrige Zufallsfolge zu verschieben
+    const r0 = raum.rnd;
+    assert.deepEqual(aufgabenFundePlanGleich(raum), plan);
+    assert.equal(raum.rnd, r0);
+    // garantiert beim Befüllen, auch bei 0 % Möbelanteil
+    SpielRaum.einstellungen.beute = { moebel: 0 };
+    const e0 = plan[0];
+    raum.befuelle({ id: e0.behaelter, art: 'schrank', x: 0, y: 0 });
+    assert.ok(raum.inhalte.get(e0.behaelter).includes(e0.ding), 'Aufgaben-Fund fehlt im leeren Möbel');
+    SpielRaum.einstellungen.beute = { moebel: MOEBEL_ANTEIL };
+    // Punkte: ungeöffnete Behälter zeigen den Punkt, geöffnete mit Inhalt auch, nach Entnahme nicht mehr
+    let liste = fundorteListe(raum, gesuchteDinge(s, ag.medizin));
+    const ist = e => behaelterPosition(raum, e.behaelter);
+    const hat = e => { const [x, y] = ist(e); return liste.some(([px, py, d]) => d === e.ding && Math.abs(px - x) < 9 && Math.abs(py - y) < 9); };
+    assert.ok(plan.slice(1).every(hat), 'Punkt fehlt an eingeplantem Behälter');
+    assert.ok(hat(e0), 'Punkt fehlt am geöffneten Behälter mit Inhalt');
+    raum.inhalte.set(e0.behaelter, raum.inhalte.get(e0.behaelter).filter(d => d !== e0.ding));
+    liste = fundorteListe(raum, gesuchteDinge(s, ag.medizin));
+    assert.ok(!hat(e0), 'Punkt bleibt nach Entnahme');
+    // Aufgabe erledigt: Punkte dieser Aufgabe weg
+    s.aufgaben.get('medizin').erledigt = true;
+    assert.ok(!fundorteListe(raum, gesuchteDinge(s, ag.medizin)).some(([, , d]) => d === 'spritze'));
+    // Speichern/Laden
+    const gespeichert = JSON.parse(JSON.stringify(ag.speichern()));
+    assert.deepEqual(gespeichert.funde, plan);
+    ag.fundePlan = [];
+    ag.fundePlanen(gespeichert.funde);
+    assert.deepEqual(ag.fundePlan, plan);
+  } finally { SpielRaum.einstellungen.beute = { moebel: MOEBEL_ANTEIL }; await c.leave(); await bis(() => !SpielRaum.aktiv, 3000); }
+});
+function aufgabenFundePlanGleich(raum) { const alt = raum.aufgaben.fundePlan; raum.aufgaben.fundePlanen(); const neu = raum.aufgaben.fundePlan; raum.aufgaben.fundePlan = alt; return neu; }
