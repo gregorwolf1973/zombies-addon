@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.87.0 – 23.11.2026
+
+- Neue Helden (Zwischenstand): Heldin Jennifer und Held mit echten Bewegungen von oben – ohne Waffe, Pistole, Gewehr, Schrotflinte, Messer, Schläger, Tod. Beim Schießen mit Gewehr dreht der Körper, bis der Lauf zum Ziel zeigt; Mündungsfeuer und Leuchtspur starten an der Mündung. Waffen in echter Größe (+10 %). Alte Heldenbilder per Backend-Schalter.
+- Alle Figuren (Helden, Soldaten, Bewohner, Polizisten, Zombies) haben jetzt dieselbe Größe.
+- Backend: Zombietypen zeigen die neuen Zombie-Figuren mit Häkchen und Anteil; die alten Typen nur noch, wenn die alten Bilder eingeschaltet sind.
+- Backend: Eine abgelaufene Anmeldung (z. B. nach einem Add-on-Neustart) wird erkannt, die Seite lädt sich neu statt „Laden fehlgeschlagen“ zu melden.
+
 ## 0.86.1 – 23.11.2026
 
 - Behoben: Das Laden hing (z. B. bei 30 %), sobald die eigene Figur auf einem parkenden Auto stand – Fehler im neuen Klettern.
