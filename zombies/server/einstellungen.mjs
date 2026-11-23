@@ -9,6 +9,7 @@ import { LEVEL_VORGABE, LEVEL_GRENZEN, LEVEL_SICHER } from './schwierigkeit.mjs'
 import { NEBEL_VORGABE, bereinigeNebel } from './nebel.mjs';
 import { SICHT_VORGABE, bereinigeSicht } from '../client/zombiesicht.mjs';
 import { zfFigurenEinst } from '../client/zombiefiguren.mjs';
+import { hfFigurenEinst } from '../client/heldenfiguren.mjs';
 import { zahl, fest } from '../client/zahl.mjs';
 import { LEVEL_KATALOG, bereinigeFolge, folgeVorgabe } from '../client/levelkatalog.mjs';
 
@@ -229,6 +230,7 @@ export function bereinige(e = {}, alt = {}) {
   const typen = Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, typeof z.typen?.[k] === 'boolean' ? z.typen[k] : (typeof a.zombies?.typen?.[k] === 'boolean' ? a.zombies.typen[k] : true)]));
   if (!Object.values(typen).some(Boolean)) typen[ZOMBIE_TYPEN[0]] = true;
   const figuren = zfFigurenEinst(Object.fromEntries(Object.keys(zfFigurenEinst()).map(id => [id, { ...a.zombies?.figuren?.[id], ...(e.zombies?.figuren?.[id] ?? {}) }])));   // Teiländerungen je Figur
+  const heldenFiguren = hfFigurenEinst(Object.fromEntries(Object.keys(hfFigurenEinst()).map(id => [id, { ...a.helden?.figuren?.[id], ...(e.helden?.figuren?.[id] ?? {}) }])));   // Helden-Figuren (client/heldenfiguren.mjs): Teiländerungen je Figur, mindestens eine bleibt an
   const funde = { ...a.funde };
   for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10, { max: 1000 }));
   const toene = {};
@@ -313,6 +315,7 @@ export function bereinige(e = {}, alt = {}) {
       figuren: figuren,                                  // neue Zombie-Figuren (client/zombiefiguren.mjs): { id: { an, anteil % } }, nur mit zombieFigurenNeu
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
+    helden: { figuren: heldenFiguren },   // wählbare Helden der Startwahl (nur mit heldenFigurenNeu; Bots bekommen zufällige aktive Helden)
     zombieSicht: bereinigeSicht(e.zombieSicht, a.zombieSicht),   // Zombie-Sicht: Meter/Grad/% (client/zombiesicht.mjs)
     nebel: bereinigeNebel(e.nebel, a.nebel),   // Nebel als Wetterlage (server/nebel.mjs)
     sprache: {
@@ -403,7 +406,7 @@ export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
 export function grundwerte() {
   return {
     superuserHash: '', zugangscode: '', karte: 'level1', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, fahrzeugStoss: 15, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, zombieFigurenNeu: true, heldenFigurenNeu: true, innenMassstab: false, innenTempo: 35, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
-    zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, figuren: zfFigurenEinst(), typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
+    helden: { figuren: hfFigurenEinst() }, zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, figuren: zfFigurenEinst(), typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },

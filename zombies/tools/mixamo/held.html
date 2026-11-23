@@ -2,8 +2,11 @@
 <pre id="out">LAEUFT</pre>
 <script type="importmap">{"imports":{"three":"./lib/three.module.js"}}</script>
 <script type="module">
-// Helden (Mixamo-Figur + Clip-FBX + CC0-Waffe in der rechten Hand) -> Draufsicht-Streifen. Auftragsliste: helden_jobs.json
-// Parameter: fig=jennifer|swatguy, nur=<Auftragsnamen,komma>, gross=2, n=16, px=80, feld=4, ansicht=oben|seite|vorn (Debug), waffeopt=<json> (überschreibt Waffenwerte), ohnewaffe=1
+// Helden (Mixamo-Figur + Clip-FBX) -> Draufsicht-Streifen OHNE Waffe. Die Waffen (CC0-Modelle bzw. aus Grundformen) werden nicht eingebrannt, sondern je Bild als Pose
+// [x, y, Winkel, Längenfaktor] aus der Handlage berechnet (Ausgabe 'pos' je Auftrag) und im Spiel als eigene Sprites überlagert (Atlas helden_waffen.webp, Modus waffen=1).
+// Auftragsliste: helden_jobs.json (je Auftrag 'waffen' = Liste der Waffen, deren Pose mitgeschrieben wird).
+// Parameter: fig=<Figur aus helden_jobs.json>, nur=<Auftragsnamen,komma>, gross=2, n=16, px=80, feld=3.2, ansicht=oben|seite|vorn (Debug), waffeopt=<json> (überschreibt Waffenwerte),
+//   mitwaffe=<name> (Debug: Waffe im Streifen mitrendern), info=1 (nur Maße/Knochen ausgeben), waffen=1 (Waffen-Sprite-Streifen + Prüfansichten statt Figuren)
 import * as THREE from 'three';
 import { FBXLoader } from './lib/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from './lib/examples/jsm/loaders/GLTFLoader.js';
@@ -13,71 +16,114 @@ const N0 = +(q.get('n') || 16), PX = +(q.get('px') || 80), GROSS = +(q.get('gros
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const ergebnis = [];
 try {
-  const cfg = await (await fetch('helden_jobs.json')).json();
-  const F = cfg.figuren[q.get('fig')];
+  const cfg = await (await fetch('helden_jobs.json', { cache: 'no-store' })).json();
   const ueber = q.get('waffeopt') ? JSON.parse(q.get('waffeopt')) : {};
+  const waffen = {};
+  const gl = new GLTFLoader();
+  // --- Waffen: GLB oder Grundformen (Einheitslänge 1: x = hinten→Mündung, y = oben), auf Länge normiert: lange Achse -> x, mittlere -> y
+  const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.55, metalness: 0.3 }, o));
+  const kasten = (g, b, h, t, x, y, z, m) => { const k = new THREE.Mesh(new THREE.BoxGeometry(b, h, t), m); k.position.set(x, y, z); g.add(k); return k; };
+  const walze = (g, r1, r2, l, x, y, z, m) => { const k = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, l, 20), m); k.rotation.z = -Math.PI / 2; k.position.set(x, y, z); g.add(k); return k; };
+  function proz(name) {
+    const g = new THREE.Group(), dunkel = mat(0x2b2e33), grau = mat(0x4a4f57), holz = mat(0x6b4a2b, { metalness: 0.05, roughness: 0.8 });
+    if (name === '@bat') {
+      const pr = [[0, 0.016], [0.05, 0.014], [0.2, 0.016], [0.45, 0.022], [0.7, 0.03], [0.82, 0.034], [0.85, 0.0]].map(([x, r]) => new THREE.Vector2(r, x));
+      const geo = new THREE.LatheGeometry(pr, 20); geo.rotateZ(-Math.PI / 2);
+      g.add(new THREE.Mesh(geo, mat(0xb98a55, { metalness: 0.02, roughness: 0.7 })));
+    } else if (name === '@mg') {   // leichtes Maschinengewehr (MG3-artig): Schaft, Gehäuse, Mantel, Lauf, Gurtkasten, Tragegriff, Zweibein
+      kasten(g, 0.2, 0.065, 0.045, 0.1, 0.0, 0, holz); kasten(g, 0.08, 0.05, 0.04, 0.2, -0.045, 0, dunkel);
+      kasten(g, 0.4, 0.08, 0.062, 0.42, 0.01, 0, dunkel); walze(g, 0.03, 0.03, 0.3, 0.76, 0.012, 0, grau); walze(g, 0.012, 0.012, 0.16, 0.93, 0.012, 0, dunkel); walze(g, 0.02, 0.02, 0.04, 0.985, 0.012, 0, dunkel);
+      kasten(g, 0.12, 0.11, 0.07, 0.42, -0.09, 0, mat(0x55603a)); kasten(g, 0.14, 0.018, 0.02, 0.5, 0.062, 0, dunkel); kasten(g, 0.03, 0.03, 0.03, 0.58, 0.05, 0, dunkel);
+      for (const z of [-0.05, 0.05]) { const b = kasten(g, 0.012, 0.1, 0.012, 0.82, -0.045, z, grau); b.rotation.x = z > 0 ? 0.35 : -0.35; }
+    } else if (name === '@lampe') {   // Taschenlampe: Gehäuse, Kopf mit Linse
+      walze(g, 0.06, 0.06, 0.62, 0.31, 0, 0, mat(0x24272b, { metalness: 0.5 })); walze(g, 0.1, 0.085, 0.28, 0.82, 0, 0, mat(0x2f3338, { metalness: 0.6 }));
+      walze(g, 0.082, 0.082, 0.02, 0.965, 0, 0, new THREE.MeshStandardMaterial({ color: 0xfff2b0, emissive: 0xffe58a, emissiveIntensity: 1.2 })); walze(g, 0.064, 0.064, 0.08, 0.05, 0, 0, mat(0xc9a227));
+    } else if (name === '@granate') {
+      const k = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), mat(0x4d5a2e)); k.scale.set(1, 1.1, 1); k.position.set(0.5, 0, 0); g.add(k); kasten(g, 0.2, 0.14, 0.12, 0.88, 0.04, 0, grau);
+    } else throw new Error('Unbekannte Grundform ' + name);
+    return g;
+  }
+  async function waffe(name) {
+    if (waffen[name]) return waffen[name];
+    const w = Object.assign({}, cfg.waffen[name], ueber[name] || {});
+    let m;
+    if (w.datei.startsWith('@')) { const grp = new THREE.Group(); grp.add(proz(w.datei)); m = grp; }
+    else { m = (await gl.loadAsync('fbx/' + w.datei)).scene; }
+    if (w.metall) m.traverse(o => { if (o.isMesh) { o.material = [].concat(o.material).map(mt => { const c = mt.clone(); if (c.color) c.color.lerp(new THREE.Color(0x8a9098), 0.45); if (c.emissive) c.emissive.set(0x24262a); if ('metalness' in c) { c.metalness = 0.5; c.roughness = 0.35; } return c; }); if (o.material.length === 1) o.material = o.material[0]; } });   // dunkles Metall, aber vor schwarzer Kleidung sichtbar (Kontrast statt Größe)
+    if (w.glanz) m.traverse(o => { if (o.isMesh) o.material = new THREE.MeshPhongMaterial({ color: 0xe4e8ee, specular: 0xffffff, shininess: 90, emissive: 0x2a2e34 }); });
+    m.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(m); const sz3 = bb.getSize(new THREE.Vector3());
+    const ax = w.achsen || [0, 1, 2].sort((a, b) => sz3.getComponent(b) - sz3.getComponent(a));   // ax[0] lang, ax[1] mittel, ax[2] kurz (Vorgabe: nach Größe, überschreibbar)
+    const e = k => { const v = new THREE.Vector3(); v.setComponent(k, 1); return v; };
+    const X = e(ax[0]).multiplyScalar(w.sx), Y = e(ax[1]).multiplyScalar(w.sy), Z = new THREE.Vector3().crossVectors(X, Y);
+    const P = new THREE.Matrix4().set(X.x, X.y, X.z, 0, Y.x, Y.y, Y.z, 0, Z.x, Z.y, Z.z, 0, 0, 0, 0, 1);
+    const inner = new THREE.Group(); inner.add(m); inner.matrixAutoUpdate = false; inner.matrix.copy(P); inner.updateMatrixWorld(true);
+    const bb2 = new THREE.Box3().setFromObject(inner); const L = bb2.max.x - bb2.min.x;
+    const f = w.laenge / L; const wrap = new THREE.Group(); wrap.add(inner);
+    // Griffpunkt: griff * Länge vom hinteren Ende, Höhe 'hoch' unter der Oberkante
+    const gx = bb2.min.x + w.griff * L, gy = bb2.max.y - w.hoch / f, gz = (bb2.min.z + bb2.max.z) / 2;
+    inner.matrixAutoUpdate = false; inner.matrix.copy(new THREE.Matrix4().compose(new THREE.Vector3(-gx * f, -gy * f, -gz * f), new THREE.Quaternion(), new THREE.Vector3(f, f, f)).multiply(P));
+    wrap.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+    return waffen[name] = { w, obj: wrap, info: { name, groesse_roh: sz3.toArray().map(v => +v.toFixed(4)), achsen: ax, L: +L.toFixed(4), faktor: +f.toFixed(4), hoehe_modell: +((bb2.max.y - bb2.min.y) * f).toFixed(3), breite_modell: +((bb2.max.z - bb2.min.z) * f).toFixed(3) } };
+  }
+  const sz = new THREE.Scene();
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setClearColor(0x000000, 0); r.outputColorSpace = THREE.SRGBColorSpace;
+  sz.add(new THREE.HemisphereLight(0xfff4e0, 0x8a8a78, 1.6));
+  const sonne = new THREE.DirectionalLight(0xfff0d8, 2.4); sz.add(sonne, sonne.target);
+  const S = GROSS;   // Waffen wie die Figur übergroß (Weltmaß = Meter × GROSS)
+
+  if (q.get('waffen')) {
+    // ===== Waffen-Sprites: je Waffe ein Streifenbild von oben (Mitte der Waffe im Bild, +x = Mündung), dazu Seitenansicht zur Prüfung
+    const namen = (q.get('nur') || Object.keys(cfg.waffen).join(',')).split(',').filter(Boolean), CW = 360, CH = 120;
+    const sheet = document.createElement('canvas'); sheet.width = CW; sheet.height = CH * namen.length; const sc = sheet.getContext('2d');
+    const seite = document.createElement('canvas'); seite.width = CW; seite.height = CH * namen.length; const sc2 = seite.getContext('2d');
+    r.setSize(CW, CH); const infos = [];
+    for (let i = 0; i < namen.length; i++) {
+      const W = await waffe(namen[i]); const holder = new THREE.Group(); holder.scale.setScalar(S); holder.add(W.obj); sz.add(holder);
+      const mx = (0.5 - W.w.griff) * W.w.laenge * S;   // Waffenmitte in x (Griff = Ursprung)
+      const cam = new THREE.OrthographicCamera(-CW / PX / 2, CW / PX / 2, CH / PX / 2, -CH / PX / 2, 0.1, 100);
+      cam.position.set(mx, 20, 0); cam.up.set(0, 0, -1); cam.lookAt(mx, 0, 0); sonne.position.set(mx - 6, 12, -8); sonne.target.position.set(mx, 0, 0);
+      r.render(sz, cam); sc.drawImage(r.domElement, 0, i * CH);
+      cam.position.set(mx, 0, 20); cam.up.set(0, 1, 0); cam.lookAt(mx, 0, 0); r.render(sz, cam); sc2.drawImage(r.domElement, 0, i * CH);
+      sz.remove(holder); infos.push(Object.assign({ name: namen[i], laenge: W.w.laenge, griff: W.w.griff }, W.info));
+    }
+    out.textContent = 'FERTIG\nWAFFEN ' + JSON.stringify({ CW, CH, PX, S, infos }) + '\n' + sheet.toDataURL('image/png') + '\n' + seite.toDataURL('image/png');
+  } else {
+  const F = cfg.figuren[q.get('fig')];
   // --- Figur
   const g = await new FBXLoader().loadAsync('fbx/' + F.skin);
   const texte = []; g.traverse(o => { if (o.isMesh) { const ms = [].concat(o.material); ms.forEach(m => { if (m.specular) { m.specular.set(0x1a1a1a); m.shininess = 8; } for (const k of ['map', 'normalMap', 'specularMap']) if (m[k]) texte.push(m[k]); }); } });
   for (let i = 0; i < 200 && !texte.every(t => t.image && (t.image.width || t.image.naturalWidth)); i++) await sleep(100);
   texte.forEach(t => { t.needsUpdate = true; });
   g.animations = [];
+  for (const n of F.ausblenden || []) { const l = []; g.traverse(o => { if (o.name === n) l.push(o); }); l.forEach(o => o.parent.remove(o)); }   // fest eingebaute Waffen der Figur (Brute: Streitaxt) entfernen
   const bone = re => { let b; g.traverse(o => { if (o.isBone && !b && re.test(o.name)) b = o; }); return b; };
-  const bL = bone(/LeftUpLeg$/i), bR = bone(/RightUpLeg$/i), hand = bone(/RightHand$/i), handL = bone(/LeftHand$/i), fore = bone(/RightForeArm$/i), kn = bone(/RightHandMiddle1$/i);
-  if (!bL || !bR || !hand || !handL || !fore || !kn) throw new Error('Knochen fehlen');
-  // Höhe roh (Kopfhöhe) -> Skalierung; hoehe normiert auf 1,9 m wie bei den Zombies nur wenn ?hoehe=
-  const HOEHE = +(q.get('hoehe') || 0);
-  const SK = 0.01 * GROSS * (HOEHE ? 190 / HOEHE : 1);
+  const bL = bone(/LeftUpLeg$/i), bR = bone(/RightUpLeg$/i), hand = bone(/RightHand$/i), handL = bone(/LeftHand$/i), fore = bone(/RightForeArm$/i), foreL = bone(/LeftForeArm$/i), kn = bone(/RightHandMiddle1$/i), armL = bone(/LeftArm$/i), armR = bone(/RightArm$/i), knL = bone(/LeftHandMiddle1$/i);
+  if (!armL || !armR || !bL || !bR || !hand || !handL || !fore || !foreL || !kn || !knL) throw new Error('Knochen fehlen');
+  const vec = o => o.getWorldPosition(new THREE.Vector3());
+  // Höhe roh (Meter bei Maßstab 0,01 in der Bindepose) -> Skalierung auf Zielhöhe (cm, Standard 180)
+  g.scale.setScalar(0.01); g.updateMatrixWorld(true);
+  const bb0 = new THREE.Box3(); g.traverse(o => { if (o.isSkinnedMesh) { o.frustumCulled = false; o.skeleton.update(); bb0.union(new THREE.Box3().setFromObject(o, true)); } });
+  const rohHoehe = bb0.max.y - bb0.min.y, ZIEL = (F.hoehe || 180) / 100;
+  if (q.get('info')) { out.textContent = 'FERTIG\nINFO ' + JSON.stringify({ fig: q.get('fig'), rohHoehe: +rohHoehe.toFixed(3), breite: +(bb0.max.x - bb0.min.x).toFixed(3), tiefe: +(bb0.max.z - bb0.min.z).toFixed(3), knochen0: bL.name, ziel: ZIEL, meshes: (() => { const l = []; g.traverse(o => { if (o.isMesh) { const b = new THREE.Box3().setFromObject(o, true), z = b.getSize(new THREE.Vector3()); l.push([o.name, +z.x.toFixed(2), +z.y.toFixed(2), +z.z.toFixed(2)]); } }); return l; })() }) + '\n'; throw 'info'; }
+  const SK = 0.01 * GROSS * (ZIEL / rohHoehe);
   g.scale.setScalar(SK);
-  const sz = new THREE.Scene(); sz.add(g);
-  // --- Waffen laden (GLB, auf Länge normiert: lange Achse -> x, mittlere -> y; Schläger prozedural)
-  const waffen = {};
-  const gl = new GLTFLoader();
-  async function waffe(name) {
-    if (waffen[name]) return waffen[name];
-    const w = Object.assign({}, cfg.waffen[name], ueber[name] || {});
-    let m;
-    if (w.datei === '@bat') {
-      const pr = [[0, 0.016], [0.05, 0.014], [0.2, 0.016], [0.45, 0.022], [0.7, 0.03], [0.82, 0.034], [0.85, 0.0]].map(([x, r]) => new THREE.Vector2(r, x));
-      const geo = new THREE.LatheGeometry(pr, 20); geo.rotateZ(-Math.PI / 2);   // Achse y -> +x
-      m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xb98a55, roughness: 0.7 })); const grp = new THREE.Group(); grp.add(m); m = grp;
-    } else { m = (await gl.loadAsync('fbx/' + w.datei)).scene; }
-    if (w.metall) m.traverse(o => { if (o.isMesh) { o.material = [].concat(o.material).map(mt => { const c = mt.clone(); if (c.color) c.color.lerp(new THREE.Color(0x8a9098), 0.45); if (c.emissive) c.emissive.set(0x24262a); if ('metalness' in c) { c.metalness = 0.5; c.roughness = 0.35; } return c; }); if (o.material.length === 1) o.material = o.material[0]; } });   // dunkles Metall, aber vor schwarzer Kleidung sichtbar (Kontrast statt Größe)
-    if (w.glanz) m.traverse(o => { if (o.isMesh) o.material = new THREE.MeshPhongMaterial({ color: 0xe4e8ee, specular: 0xffffff, shininess: 90, emissive: 0x2a2e34 }); });
-    // Mittelachsen bestimmen
-    m.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(m); const sz3 = bb.getSize(new THREE.Vector3());
-    const ax = [0, 1, 2].sort((a, b) => sz3.getComponent(b) - sz3.getComponent(a));   // ax[0] lang, ax[1] mittel, ax[2] kurz
-    const e = k => { const v = new THREE.Vector3(); v.setComponent(k, 1); return v; };
-    const X = e(ax[0]).multiplyScalar(w.sx), Y = e(ax[1]).multiplyScalar(w.sy), Z = new THREE.Vector3().crossVectors(X, Y);
-    // Matrix: Modell -> kanonisch (Zeilen = neue Achsen)
-    const P = new THREE.Matrix4().set(X.x, X.y, X.z, 0, Y.x, Y.y, Y.z, 0, Z.x, Z.y, Z.z, 0, 0, 0, 0, 1);
-    const inner = new THREE.Group(); inner.add(m); inner.matrixAutoUpdate = false; inner.matrix.copy(P); inner.updateMatrixWorld(true);
-    const bb2 = new THREE.Box3().setFromObject(inner); const L = bb2.max.x - bb2.min.x;
-    const f = w.laenge / L; const wrap = new THREE.Group(); wrap.add(inner);
-    // Griffpunkt: griff * Länge vom hinteren Ende, mittlere Höhe minus 'hoch' (Höhe, an der die Hand greift: von oben gemessen)
-    const gx = bb2.min.x + w.griff * L, gy = bb2.max.y - w.hoch / f, gz = (bb2.min.z + bb2.max.z) / 2;
-    inner.position.set(-gx * f, -gy * f, -gz * f); inner.scale.setScalar(f); inner.matrixAutoUpdate = true; inner.matrix.identity();
-    inner.matrixAutoUpdate = false; const M2 = new THREE.Matrix4().compose(new THREE.Vector3(-gx * f, -gy * f, -gz * f), new THREE.Quaternion(), new THREE.Vector3(f, f, f)).multiply(P); inner.matrix.copy(M2);
-    wrap.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
-    return waffen[name] = { w, obj: wrap, info: { name, groesse_roh: sz3.toArray().map(v => +v.toFixed(4)), achsen: ax, L: +L.toFixed(4), faktor: +f.toFixed(4) } };
-  }
+  sz.add(g);
   // --- Clip laden (Texturen ignorieren, spart Zeit)
   const TL = THREE.TextureLoader.prototype.load;
   async function clipLaden(pfad) {
     THREE.TextureLoader.prototype.load = function () { return new THREE.Texture(); };
-    try { const c = await new FBXLoader().loadAsync('fbx/' + pfad); return c.animations[0]; } finally { THREE.TextureLoader.prototype.load = TL; }
+    try { const c = await new FBXLoader().loadAsync('fbx/' + pfad); return [...c.animations].sort((x, y) => y.duration - x.duration)[0]; }   // manche Dateien (Remy) tragen zusätzlich eine leere Animation: die längste nehmen
+     finally { THREE.TextureLoader.prototype.load = TL; }
   }
   const mixer = new THREE.AnimationMixer(g);
-  const vec = o => o.getWorldPosition(new THREE.Vector3());
   const box = () => { g.updateMatrixWorld(true); const b = new THREE.Box3(); g.traverse(o => { if (o.isSkinnedMesh) { o.frustumCulled = false; o.skeleton.update(); b.union(new THREE.Box3().setFromObject(o, true)); } }); return b; };
-  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-  r.setPixelRatio(1); r.setClearColor(0x000000, 0); r.outputColorSpace = THREE.SRGBColorSpace;
-  sz.add(new THREE.HemisphereLight(0xfff4e0, 0x8a8a78, 1.6));
-  const sonne = new THREE.DirectionalLight(0xfff0d8, 2.4); sz.add(sonne, sonne.target);
   const nur = (q.get('nur') || '').split(',').filter(Boolean);
-  for (const job of cfg.auftraege) {
+  const jobopt = q.get('jobopt') ? JSON.parse(q.get('jobopt')) : {};   // Debug: Auftragswerte überschreiben, z. B. {"faust_schlagen":{"richtung":"sch","rr":0.4}}
+  for (const job0 of cfg.auftraege) {
+    const job = Object.assign({}, job0, jobopt[job0.name] || {});
     if (nur.length && !nur.includes(job.name)) continue;
-    const t0 = performance.now(); const N = job.n || N0;
+    const t0 = performance.now(); const N = +q.get('nn') || job.n || N0;
     const clip = await clipLaden((F.ersatz && F.ersatz[job.name] || job.clip).replace('{o}', F.o));
     const pre = bL.name.match(/^mixamorig\d*/)[0]; for (const t of clip.tracks) t.name = t.name.replace(/^mixamorig\d*/, pre);   // Rigs mit anderem Präfix (mixamorig1) bedienen
     let wegM = 0; for (const t of clip.tracks) if (/Hips\.position$/.test(t.name)) { const v = t.values, n = v.length - 3; wegM = Math.hypot(v[n] - v[0], v[n + 2] - v[2]) * SK; }   // Hüftweg über den Clip (m, mit Übergröße) = Weg je Schrittzyklus
@@ -89,19 +135,20 @@ try {
     let fx = 0, fz = 0; g.rotation.y = 0; const nref = job.schleife ? 16 : 1;
     if (job.richtung) {
       mixer.setTime((job.rr !== undefined ? job.rr : (job.ref || 0)) * dauer); g.updateMatrixWorld(true);
-      const dd = job.richtung === 'lr' ? vec(handL).sub(vec(hand)) : vec(hand).sub(vec(fore)); fx = dd.x; fz = dd.z;
+      if (job.richtung === 'sch') { const a = vec(armL), b = vec(armR); fx = b.z - a.z; fz = -(b.x - a.x); }   // Schultern: Blick senkrecht zur Schulterlinie
+      else { const dd = job.richtung === 'lr' ? vec(handL).sub(vec(hand)) : vec(hand).sub(vec(fore)); fx = dd.x; fz = dd.z; }
     } else for (let i = 0; i < nref; i++) { mixer.setTime(dauer * i / 16); g.updateMatrixWorld(true); const a = vec(bL), b = vec(bR); fx += b.z - a.z; fz += -(b.x - a.x); }
     const gier = Math.atan2(fx, fz); g.rotation.y = Math.PI / 2 - gier + (job.dreh || 0) * Math.PI / 180;
-    // Waffe in die Hand
-    let holder = null, winfo = null;
-    if (job.waffe && !q.get('ohnewaffe')) {
-      const W = await waffe(job.waffe); const w = Object.assign({}, W.w, job.waffeopt || {}); winfo = W.info;
+    // Waffen an die Hand hängen (unsichtbar, nur für die Poseberechnung; Debug mitwaffe = sichtbar)
+    const halter = [];
+    for (const wn of (job.waffen || [])) {
+      const W = await waffe(wn); const w = Object.assign({}, W.w, job.waffeopt && job.waffeopt[wn] || {});
+      const links = w.hand === 'L', hb = links ? handL : hand, fb = links ? foreL : fore, kb = links ? knL : kn;
       const tref = (job.ref || 0) * dauer; mixer.setTime(tref); g.updateMatrixWorld(true);
-      const pR = vec(hand), pL = vec(handL), pF = vec(fore), pK = vec(kn);
+      const pR = vec(hand), pL = vec(handL), pF = vec(fb), pK = vec(kb), pH = vec(hb);
       let d;
-      if (w.modus === 'lr') d = pL.clone().sub(pR); else if (w.modus === 'fa') d = pR.clone().sub(pF); else d = new THREE.Vector3(...w.vec);
+      if (w.modus === 'lr') d = pL.clone().sub(pR); else if (w.modus === 'fa') d = pH.clone().sub(pF); else d = new THREE.Vector3(...w.vec);
       d.normalize();
-      // Zusatzdrehung: yaw um y, pitch um die waagerechte Querachse
       d.applyAxisAngle(new THREE.Vector3(0, 1, 0), (w.yaw || 0) * Math.PI / 180);
       const quer = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), d).normalize(); d.applyAxisAngle(quer, -(w.pitch || 0) * Math.PI / 180);
       let up = new THREE.Vector3(0, 1, 0); up.sub(d.clone().multiplyScalar(up.dot(d))).normalize();
@@ -109,28 +156,37 @@ try {
       const Zb = new THREE.Vector3().crossVectors(d, up);
       const Q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(d, up, Zb));
       const target = pK.clone().add(new THREE.Vector3(...(w.versatz || [0, 0, 0])).applyQuaternion(Q).multiplyScalar(SK * 100));
-      const S = SK * 100;   // Waffen wie die Figur übergroß
-      const Mw = new THREE.Matrix4().compose(target, Q, new THREE.Vector3(S, S, S));
-      holder = new THREE.Group(); holder.matrixAutoUpdate = false; holder.matrix.copy(hand.matrixWorld.clone().invert().multiply(Mw)); holder.add(W.obj); hand.add(holder);
+      const Sw = SK * 100;
+      const Mw = new THREE.Matrix4().compose(target, Q, new THREE.Vector3(Sw, Sw, Sw));
+      const holder = new THREE.Group(); holder.matrixAutoUpdate = false; holder.matrix.copy(hb.matrixWorld.clone().invert().multiply(Mw)); holder.add(W.obj); hb.add(holder);
+      holder.visible = q.get('mitwaffe') === wn || (job.sichtbar || []).includes(wn);
+      halter.push({ wn, holder, W, hb });
     }
     // Kamera
-    const FELD = +(job.feld || q.get('feld') || 4), Wpx = Math.round(FELD * PX), h = FELD / 2;
+    const PXJ = job.px || PX, FELD = +(job.feld || q.get('feld') || F.feld || 3.2), Wpx = Math.round(FELD * PXJ), h = FELD / 2;   // PXJ: Vorschau höher aufgelöst
     r.setSize(Wpx, Wpx);
-    mixer.setTime(0); const b0 = box(); const cx = (b0.min.x + b0.max.x) / 2 + (job.vx !== undefined ? job.vx : -0.25), cz = (b0.min.z + b0.max.z) / 2, y0 = b0.min.y;
+    mixer.setTime(0); const b0 = box(); const cx = (b0.min.x + b0.max.x) / 2 + (job.vx !== undefined ? job.vx : 0), cz = (b0.min.z + b0.max.z) / 2, y0 = b0.min.y;
     const cam = new THREE.OrthographicCamera(-h, h, h, -h, 0.1, 1000); const ans = q.get('ansicht') || 'oben';
     if (ans === 'oben') { cam.position.set(cx, y0 + 20, cz); cam.up.set(0, 0, -1); cam.lookAt(cx, y0 + 1, cz); }
     else if (ans === 'seite') { cam.position.set(cx, y0 + 1.1 * GROSS, cz + 20); cam.up.set(0, 1, 0); cam.lookAt(cx, y0 + 1.1 * GROSS, cz); }
     else { cam.position.set(cx + 20, y0 + 1.1 * GROSS, cz); cam.up.set(0, 1, 0); cam.lookAt(cx, y0 + 1.1 * GROSS, cz); }
     sonne.position.set(cx - 6, y0 + 12, cz - 8); sonne.target.position.set(cx, y0, cz);
     const strip = document.createElement('canvas'); strip.width = Wpx * N; strip.height = Wpx; const sc = strip.getContext('2d');
-    const mund = [];
+    const pos = {}; for (const hh of halter) pos[hh.wn] = [];
     for (let i = 0; i < N; i++) {
       mixer.setTime(TZ(i)); g.updateMatrixWorld(true); r.render(sz, cam); sc.drawImage(r.domElement, i * Wpx, 0);
-      if (holder && job.mund) { const w = waffen[job.waffe].w; const tip = new THREE.Vector3((1 - w.griff) * w.laenge, 0, 0); waffen[job.waffe].obj.localToWorld(tip); const gr = waffen[job.waffe].obj.localToWorld(new THREE.Vector3()); mund.push([+((tip.x - cx) * PX).toFixed(1), +((tip.z - cz) * PX).toFixed(1), +Math.atan2(tip.z - gr.z, tip.x - gr.x).toFixed(3)]); }   // Mündung in Bildpunkten ab Bildmitte (x nach vorn, y nach unten)
+      for (const hh of halter) {
+        hh.holder.updateWorldMatrix(true, true);
+        const o = hh.W.obj, p0 = o.localToWorld(new THREE.Vector3()), p1 = o.localToWorld(new THREE.Vector3(1, 0, 0)), pu = o.localToWorld(new THREE.Vector3(0, 1, 0));
+        const dv = p1.clone().sub(p0), len = dv.length(), uv = pu.clone().sub(p0);
+        // Pose in Bildpunkten ab Bildmitte (x nach vorn, y nach unten): Griffpunkt, Winkel der Waffenachse, Längenfaktor (Neigung verkürzt), Oberseite zeigt nach oben (+1) / unten (-1)
+        pos[hh.wn].push([+((p0.x - cx) * PXJ).toFixed(1), +((p0.z - cz) * PXJ).toFixed(1), +Math.atan2(dv.z, dv.x).toFixed(3), +(Math.hypot(dv.x, dv.z) / len).toFixed(3), +(uv.y / len).toFixed(2)]);
+      }
     }
-    if (holder) hand.remove(holder);
-    ergebnis.push('JOB ' + JSON.stringify({ name: job.name, einmal: job.einmal ? 1 : 0, W: Wpx, N, dauer, gier: gier * 180 / Math.PI, sek: +((performance.now() - t0) / 1000).toFixed(1), waffe: winfo, weg: +wegM.toFixed(3), mund }) + '\n' + strip.toDataURL('image/png'));
+    for (const hh of halter) hh.hb.remove(hh.holder);
+    ergebnis.push('JOB ' + JSON.stringify({ name: job.name, einmal: job.einmal ? 1 : 0, W: Wpx, N, dauer, gier: gier * 180 / Math.PI, sek: +((performance.now() - t0) / 1000).toFixed(1), weg: +wegM.toFixed(3), pos, hoehe: +(ZIEL * 100).toFixed(0) }) + '\n' + strip.toDataURL('image/png'));
   }
   out.textContent = 'FERTIG\n' + ergebnis.join('\n');
-} catch (e) { out.textContent = 'FEHLER ' + (e && e.stack || e) + '\n' + ergebnis.join('\n'); }
+  }
+} catch (e) { if (e !== 'info') out.textContent = 'FEHLER ' + (e && e.stack || e) + '\n' + ergebnis.join('\n'); }
 </script></body></html>

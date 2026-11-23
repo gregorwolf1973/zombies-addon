@@ -7,7 +7,7 @@
 // Zusätzlich kann der Spieler Boxer, Puma oder Leopard selbst fahren (E zum Einsteigen/Aussteigen, Gehen-Taste lenkt, der Turm schießt von selbst;
 // server/fahrbar.mjs): ein Fahrzeug je Spieler, nie eine Horde.
 import { zaehle, fuegeHinzu } from '../client/stapel.mjs';
-import { aussehenMigriert } from '../client/figurbild.mjs';
+import { aussehenMigriert, AUSSEHEN_MUSTER } from '../client/figurbild.mjs';
 import { SpielRaum, Zustand, Spieler, sauberName, eingabeKompakt } from './raum.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
@@ -24,7 +24,7 @@ export const SS_WAFFEN = ['pistole', 'mp', 'gewehr', 'schrotflinte', 'mg', 'scha
 export const SS_FAHRZEUGE = ['', 'puma', 'leopard'];   // Auswahl: keins, Puma, Leopard 2A7
 export const SS_FZ_LEOPARD = { x: SS_START.x - 140, y: SS_START.y - 10, richtung: Math.PI / 2 };   // Standplätze vor dem Lager (freie Wiese)
 export const SS_GRANATE = 'handgranate';   // Statistikname der Handgranate (Wurfgegenstand, keine Waffe in der Hand)
-const AUSSEHEN = /^[mwshf],[0-5],[0-7]$/;
+const AUSSEHEN = AUSSEHEN_MUSTER;
 const ZOMBIE_MAX = 120;      // so viele Zombies gleichzeitig (Warteschlange eingerechnet)
 const SPAWN_TAKT = 0.2, SPAWN_JE_TAKT = 3;   // Zombies kommen gestaffelt aus dem Süden
 const STAT_TAKT = 0.4;

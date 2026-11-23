@@ -1,4 +1,5 @@
 // Rucksack, Durchsuchen, Safe Rooms, Barrikade und Speichern
+import { aussehenGueltig } from '../client/figurbild.mjs';
 import { zaehle, hat } from '../client/stapel.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -590,7 +591,7 @@ test('Figur: gewähltes Aussehen kommt an, wird gespeichert, Unsinn wird ersetzt
   await c.leave(); await warte(200);
   c = await new Client(URL_).joinOrCreate('zombies', { name: 'Böse', spielerId: neueId(), aussehen: '<script>' });
   raum = matchMaker.getLocalRoomById(c.roomId);
-  assert.match(raum.state.spieler.get(c.sessionId).aussehen, /^[hfs],[0-5],[0-7]$/);
+  assert.ok(aussehenGueltig(raum.state.spieler.get(c.sessionId).aussehen) && !/^[mw]/.test(raum.state.spieler.get(c.sessionId).aussehen), 'Unsinn wird durch ein gültiges Aussehen ersetzt');
   await c.leave();
 });
 

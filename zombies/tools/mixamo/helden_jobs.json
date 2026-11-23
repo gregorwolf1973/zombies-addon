@@ -1,5 +1,10 @@
 {
  "figuren": {
+  "swatguy": {
+   "o": "swatguy",
+   "skin": "swatguy/pistole_pak/Ch15_nonPBR.fbx",
+   "hoehe": 180
+  },
   "jennifer": {
    "o": "jennifer",
    "skin": "jennifer/pistole_pak/Ch47_nonPBR.fbx",
@@ -7,11 +12,41 @@
     "stehen": "swatguy/stehen.fbx",
     "messer_stehen": "swatguy/stehen.fbx",
     "schlaeger_stehen": "swatguy/stehen.fbx"
-   }
+   },
+   "hoehe": 180
   },
-  "swatguy": {
-   "o": "swatguy",
-   "skin": "swatguy/pistole_pak/Ch15_nonPBR.fbx"
+  "remy": {
+   "o": "remy",
+   "skin": "remy/pistole_pak/Remy.fbx",
+   "hoehe": 180
+  },
+  "alex": {
+   "o": "alex",
+   "skin": "alex/pistole_pak/Ch18_nonPBR.fbx",
+   "hoehe": 180
+  },
+  "brute": {
+   "o": "brute",
+   "skin": "brute/pistole_pak/Brute.fbx",
+   "hoehe": 195,
+   "ausblenden": [
+    "BattleAxe_GEO"
+   ]
+  },
+  "swat": {
+   "o": "swat",
+   "skin": "swat/pistole_pak/Swat.fbx",
+   "hoehe": 180
+  },
+  "jody": {
+   "o": "jody",
+   "skin": "jody/pistole_pak/Ch37_nonPBR.fbx",
+   "hoehe": 180
+  },
+  "roth": {
+   "o": "roth",
+   "skin": "roth/pistole_pak/Ch13_nonPBR.fbx",
+   "hoehe": 180
   }
  },
  "waffen": {
@@ -37,19 +72,11 @@
    "modus": "lr",
    "yaw": 0,
    "pitch": 0,
-   "metall": 1
-  },
-  "schrot": {
-   "datei": "waffen/schrot.glb",
-   "laenge": 1.1,
-   "sx": 1,
-   "sy": 1,
-   "griff": 0.4,
-   "hoch": 0.04,
-   "modus": "lr",
-   "yaw": 0,
-   "pitch": 0,
-   "metall": 1
+   "metall": 1,
+   "lampe": [
+    0.38,
+    0.03
+   ]
   },
   "messer": {
    "datei": "waffen/messer.glb",
@@ -78,190 +105,376 @@
    ],
    "yaw": 0,
    "pitch": 0
+  },
+  "schrotflinte": {
+   "datei": "waffen/schrot.glb",
+   "laenge": 1.1,
+   "sx": 1,
+   "sy": 1,
+   "griff": 0.4,
+   "hoch": 0.04,
+   "modus": "lr",
+   "yaw": 0,
+   "pitch": 0,
+   "metall": 1,
+   "lampe": [
+    0.4,
+    0.03
+   ]
+  },
+  "mp": {
+   "datei": "waffen/mp.glb",
+   "laenge": 0.66,
+   "sx": 1,
+   "sy": 1,
+   "griff": 0.4,
+   "hoch": 0.04,
+   "modus": "lr",
+   "yaw": 0,
+   "pitch": 0,
+   "metall": 1,
+   "lampe": [
+    0.2,
+    0.03
+   ]
+  },
+  "mg": {
+   "datei": "@mg",
+   "laenge": 1.3,
+   "sx": 1,
+   "sy": 1,
+   "griff": 0.35,
+   "hoch": 0.04,
+   "modus": "lr",
+   "yaw": 0,
+   "pitch": 0,
+   "metall": 0,
+   "lampe": [
+    0.5,
+    0.0
+   ]
+  },
+  "scharfschuetze": {
+   "datei": "waffen/scharfschuetze.glb",
+   "laenge": 1.3,
+   "sx": 1,
+   "sy": 1,
+   "griff": 0.4,
+   "hoch": 0.04,
+   "modus": "lr",
+   "yaw": 0,
+   "pitch": 0,
+   "metall": 1,
+   "lampe": [
+    0.35,
+    0.03
+   ]
+  },
+  "granatwerfer": {
+   "datei": "waffen/granatwerfer.glb",
+   "laenge": 0.77,
+   "sx": 1,
+   "sy": 1,
+   "griff": 0.4,
+   "hoch": 0.04,
+   "modus": "lr",
+   "yaw": 0,
+   "pitch": 0,
+   "metall": 1,
+   "lampe": [
+    0.25,
+    0.0
+   ]
+  },
+  "armbrust": {
+   "datei": "waffen/armbrust.glb",
+   "laenge": 0.94,
+   "sx": -1,
+   "sy": 1,
+   "griff": 0.4,
+   "hoch": 0.04,
+   "modus": "lr",
+   "yaw": 0,
+   "pitch": 0,
+   "metall": 1,
+   "achsen": [
+    2,
+    1,
+    0
+   ],
+   "lampe": [
+    0.3,
+    0.0
+   ]
+  },
+  "brechstange": {
+   "datei": "waffen/brechstange.glb",
+   "laenge": 0.83,
+   "sx": -1,
+   "sy": 1,
+   "griff": 0.1,
+   "hoch": 0.0,
+   "modus": "vec",
+   "vec": [
+    0.55,
+    0.85,
+    0
+   ],
+   "yaw": 0,
+   "pitch": 0,
+   "metall": 1,
+   "achsen": [
+    2,
+    1,
+    0
+   ]
+  },
+  "sense": {
+   "datei": "waffen/sense.glb",
+   "laenge": 1.65,
+   "sx": 1,
+   "sy": 1,
+   "griff": 0.42,
+   "hoch": 0.0,
+   "modus": "vec",
+   "vec": [
+    0.55,
+    0.85,
+    0
+   ],
+   "yaw": 0,
+   "pitch": 0,
+   "achsen": [
+    1,
+    2,
+    0
+   ]
+  },
+  "lampe_l": {
+   "datei": "@lampe",
+   "laenge": 0.28,
+   "sx": 1,
+   "sy": 1,
+   "griff": 0.4,
+   "hoch": 0.0,
+   "modus": "fa",
+   "hand": "L",
+   "yaw": 0,
+   "pitch": 0
   }
  },
  "auftraege": [
   {
    "name": "stehen",
    "clip": "{o}/stehen.fbx",
+   "n": 12,
    "schleife": 1,
-   "n": 12
+   "waffen": [
+    "messer",
+    "schlaeger",
+    "brechstange",
+    "sense",
+    "lampe_l"
+   ]
   },
   {
    "name": "gehen",
    "clip": "{o}/gehen.fbx",
-   "schleife": 1
+   "schleife": 1,
+   "waffen": [
+    "messer",
+    "schlaeger",
+    "brechstange",
+    "sense",
+    "lampe_l"
+   ]
   },
   {
    "name": "rennen",
    "clip": "{o}/rennen.fbx",
-   "schleife": 1
+   "schleife": 1,
+   "waffen": [
+    "messer",
+    "schlaeger",
+    "brechstange",
+    "sense",
+    "lampe_l"
+   ]
   },
   {
    "name": "pistole_stehen",
-   "richtung": "fa",
    "clip": "{o}/pistole_pak/pistol idle.fbx",
+   "n": 12,
    "schleife": 1,
-   "waffe": "pistole",
-   "n": 12
+   "richtung": "fa",
+   "waffen": [
+    "pistole",
+    "lampe_l"
+   ]
   },
   {
    "name": "pistole_gehen",
-   "richtung": "fa",
    "clip": "{o}/pistole_pak/pistol walk.fbx",
    "schleife": 1,
-   "waffe": "pistole"
+   "richtung": "fa",
+   "waffen": [
+    "pistole",
+    "lampe_l"
+   ]
   },
   {
    "name": "pistole_rennen",
-   "richtung": "fa",
    "clip": "{o}/pistole_pak/pistol run.fbx",
    "schleife": 1,
-   "waffe": "pistole"
-  },
-  {
-   "name": "pistole_schiessen",
    "richtung": "fa",
-   "clip": "{o}/pistole_schiessen.fbx",
-   "schleife": 0,
-   "waffe": "pistole",
-   "n": 8,
-   "mund": 1,
-   "anteil": 0.45,
-   "einmal": 1,
-   "ref": 0.3,
-   "rr": 0.3,
-   "von": 0.25
+   "waffen": [
+    "pistole",
+    "lampe_l"
+   ]
   },
   {
    "name": "gewehr_stehen",
    "clip": "{o}/gewehr_pak/idle.fbx",
+   "n": 12,
    "schleife": 1,
-   "waffe": "gewehr",
-   "n": 12
+   "waffen": [
+    "gewehr",
+    "mp",
+    "mg",
+    "scharfschuetze",
+    "granatwerfer",
+    "armbrust",
+    "schrotflinte"
+   ],
+   "richtung": "lr"
   },
   {
    "name": "gewehr_gehen",
    "clip": "{o}/gewehr_pak/walk forward.fbx",
    "schleife": 1,
-   "waffe": "gewehr"
+   "waffen": [
+    "gewehr",
+    "mp",
+    "mg",
+    "scharfschuetze",
+    "granatwerfer",
+    "armbrust",
+    "schrotflinte"
+   ],
+   "richtung": "lr"
   },
   {
    "name": "gewehr_rennen",
    "clip": "{o}/gewehr_pak/run forward.fbx",
    "schleife": 1,
-   "waffe": "gewehr"
+   "waffen": [
+    "gewehr",
+    "mp",
+    "mg",
+    "scharfschuetze",
+    "granatwerfer",
+    "armbrust",
+    "schrotflinte"
+   ],
+   "richtung": "lr"
   },
   {
    "name": "gewehr_schiessen",
    "clip": "{o}/gewehr_schiessen.fbx",
-   "schleife": 0,
-   "waffe": "gewehr",
    "n": 8,
-   "mund": 1,
-   "einmal": 1
-  },
-  {
-   "name": "schrot_stehen",
-   "clip": "{o}/gewehr_pak/idle.fbx",
-   "schleife": 1,
-   "waffe": "schrot",
-   "n": 12
-  },
-  {
-   "name": "schrot_gehen",
-   "clip": "{o}/gewehr_pak/walk forward.fbx",
-   "schleife": 1,
-   "waffe": "schrot"
-  },
-  {
-   "name": "schrot_rennen",
-   "clip": "{o}/gewehr_pak/run forward.fbx",
-   "schleife": 1,
-   "waffe": "schrot"
-  },
-  {
-   "name": "schrot_schiessen",
-   "clip": "{o}/gewehr_schiessen.fbx",
    "schleife": 0,
-   "waffe": "schrot",
-   "n": 8,
-   "mund": 1,
-   "einmal": 1
-  },
-  {
-   "name": "messer_stehen",
-   "richtung": "fa",
-   "clip": "{o}/stehen.fbx",
-   "schleife": 1,
-   "waffe": "messer",
-   "n": 12
-  },
-  {
-   "name": "messer_gehen",
-   "clip": "{o}/gehen.fbx",
-   "schleife": 1,
-   "waffe": "messer"
-  },
-  {
-   "name": "messer_rennen",
-   "clip": "{o}/rennen.fbx",
-   "schleife": 1,
-   "waffe": "messer"
+   "einmal": 1,
+   "waffen": [
+    "gewehr",
+    "mp",
+    "mg",
+    "scharfschuetze",
+    "granatwerfer",
+    "armbrust",
+    "schrotflinte"
+   ],
+   "richtung": "lr"
   },
   {
    "name": "messer_stechen",
+   "clip": "{o}/stechen.fbx",
+   "n": 12,
+   "schleife": 0,
    "richtung": "fa",
    "rr": 0.5,
-   "clip": "{o}/stechen.fbx",
-   "schleife": 0,
-   "waffe": "messer",
-   "n": 12,
-   "einmal": 1
-  },
-  {
-   "name": "schlaeger_stehen",
-   "clip": "{o}/stehen.fbx",
-   "schleife": 1,
-   "waffe": "schlaeger",
-   "n": 12
-  },
-  {
-   "name": "schlaeger_gehen",
-   "clip": "{o}/gehen.fbx",
-   "schleife": 1,
-   "waffe": "schlaeger"
-  },
-  {
-   "name": "schlaeger_rennen",
-   "clip": "{o}/rennen.fbx",
-   "schleife": 1,
-   "waffe": "schlaeger"
+   "einmal": 1,
+   "waffen": [
+    "messer",
+    "lampe_l"
+   ]
   },
   {
    "name": "schlaeger_schlagen",
    "clip": "{o}/schlagen.fbx",
-   "schleife": 0,
-   "waffe": "schlaeger",
    "n": 12,
-   "einmal": 1
+   "schleife": 0,
+   "einmal": 1,
+   "waffen": [
+    "schlaeger",
+    "brechstange",
+    "sense",
+    "lampe_l"
+   ],
+   "richtung": "sch",
+   "rr": 0.35
   },
   {
    "name": "faust_schlagen",
-   "clip": "{o}/schlagen.fbx",
-   "schleife": 0,
+   "clip": "{o}/faust.fbx",
    "n": 12,
-   "einmal": 1
+   "schleife": 0,
+   "einmal": 1,
+   "waffen": [
+    "lampe_l"
+   ],
+   "richtung": "sch",
+   "rr": 0.3
+  },
+  {
+   "name": "werfen",
+   "clip": "{o}/werfen.fbx",
+   "n": 12,
+   "schleife": 0,
+   "einmal": 1,
+   "waffen": [
+    "lampe_l"
+   ],
+   "richtung": "sch",
+   "rr": 0,
+   "von": 0.12,
+   "anteil": 0.5,
+   "feld": 3.6
   },
   {
    "name": "tod",
    "clip": "{o}/gewehr_pak/death from the front.fbx",
+   "n": 12,
    "schleife": 0,
    "einmal": 1,
-   "feld": 5,
+   "feld": 4.4,
    "vx": 0,
-   "dreh": 180,
-   "n": 12
+   "dreh": 180
+  },
+  {
+   "name": "_vorschau",
+   "clip": "{o}/pistole_pak/pistol idle.fbx",
+   "n": 1,
+   "waffen": [
+    "pistole"
+   ],
+   "sichtbar": [
+    "pistole"
+   ],
+   "schleife": 1,
+   "richtung": "fa",
+   "feld": 2.2,
+   "px": 160,
+   "vx": -0.1
   }
  ]
 }

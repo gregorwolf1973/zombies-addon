@@ -971,6 +971,11 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     <p class="tn-leise">Häkchen = Figur kommt vor; der Anteil bestimmt, wie oft sie unter den aktiven Figuren gewählt wird. Soldaten im Lager und verwandelte Polizisten behalten immer ihre Figur.</p>
     <div id="zfListe"></div>
   </div>
+  <div id="hfBlock" hidden>
+    <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px">Helden-Figuren (mindestens eine bleibt an)</div>
+    <p class="tn-leise">Häkchen = Held ist in der Startwahl wählbar und kommt bei Bots vor. Wer einen abgeschalteten Helden gespeichert hatte, bekommt beim nächsten Beitritt einen aktiven. Gilt nur mit „Neue Helden-Figuren“.</p>
+    <div id="hfListe"></div>
+  </div>
   <div class="tn-leise" style="font-weight:600;color:var(--text);margin-top:6px" id="ztTitel">Zombietypen (mindestens einer bleibt an)</div>
   <label class="tn-schalter"><input type="checkbox" id="zt_tarn"> Tarnjacke</label>
   <label class="tn-schalter"><input type="checkbox" id="zt_dirndl"> Dirndl</label>
@@ -1271,6 +1276,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnBissSpKochel', bsl.kochel === undefined ? 16 : bsl.kochel, bsf);
     feld('tnBissSpAndermatt', bsl.andermatt === undefined ? 18 : bsl.andermatt, bsf);
     if (window.zfZeige) window.zfZeige(e);
+    if (window.hfZeige) window.hfZeige(e);
     var typenE = (e.zombies && e.zombies.typen) || {};
     ZTYPEN.forEach(function (k) { if (document.activeElement !== $('zt_' + k)) $('zt_' + k).checked = typenE[k] !== false; });
     var wfE = e.waffen || {};
@@ -1568,6 +1574,43 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     import('./zombiefiguren.mjs').then(function (m) { ZF.liste = m.ZF_LISTE; zfBauen(); if (ZF.zuletzt) zfZeige(ZF.zuletzt); })
       .then(function () { return fetch('grafik/zombies_neu.json').then(function (r) { return r.json(); }); })
       .then(function (j) { ZF.atlas = j; zfVorschau(); }).catch(function () {});
+  }
+  // Helden-Figuren (Liste aus heldenfiguren.mjs, dieselbe wie im Server und in der Startwahl): Zeile je Held mit Häkchen und Vorschaubild (Kachel aus helden_vorschau.webp)
+  var HF = { liste: null, bild: null, kachel: 160, zuletzt: null, laden: false };
+  window.hfZeige = function hfZeige(e) {
+    HF.zuletzt = e; window.hfLetzte = e;
+    var neu = e.heldenFigurenNeu !== false, blk = $('hfBlock');
+    if (blk) blk.hidden = !neu;
+    if (!HF.liste) { hfLaden(); return; }
+    var fe = (e.helden && e.helden.figuren) || {};
+    HF.liste.forEach(function (f) { var cb = $('hf_' + f.id); if (cb && document.activeElement !== cb) cb.checked = (fe[f.id] || { an: true }).an !== false; });
+  };
+  function hfBauen() {
+    var box = $('hfListe');
+    if (!box || box.firstChild) return;
+    HF.liste.forEach(function (f) {
+      var z = document.createElement('div'); z.className = 'zf-zeile';
+      z.innerHTML = '<label class="tn-schalter"><input type="checkbox" id="hf_' + f.id + '"> <canvas class="zt-vorschau" id="hfv_' + f.id + '" width="48" height="48"></canvas> <span class="zf-name"></span></label>';
+      z.querySelector('.zf-name').textContent = f.name + ' (' + f.id + ', Kennbuchstabe ' + f.g + ')';
+      box.appendChild(z);
+      $('hf_' + f.id).addEventListener('change', function () {
+        var t = {}; t[f.id] = { an: $('hf_' + f.id).checked };
+        anfrage('verwaltung/api', { helden: { figuren: t } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (er) { status('Fehler: ' + er.message, true); });
+      });
+    });
+    hfVorschau();
+  }
+  function hfVorschau() {
+    if (!HF.liste || !HF.bild || !HF.bild.naturalWidth) return;
+    HF.liste.forEach(function (f, i) {
+      var cv = $('hfv_' + f.id); if (!cv) return;
+      var g = cv.getContext('2d'); g.clearRect(0, 0, 48, 48); g.drawImage(HF.bild, i * HF.kachel, 0, HF.kachel, HF.kachel, 0, 0, 48, 48);
+    });
+  }
+  function hfLaden() {
+    if (HF.laden) return; HF.laden = true;
+    import('./heldenfiguren.mjs').then(function (m) { HF.liste = m.HF_LISTE; hfBauen(); if (HF.zuletzt) hfZeige(HF.zuletzt); })
+      .then(function () { HF.bild = new Image(); HF.bild.onload = hfVorschau; HF.bild.src = 'grafik/helden_vorschau.webp'; }).catch(function () {});
   }
   ZTYPEN.forEach(function (k) {
     $('zt_' + k).addEventListener('change', function () {
@@ -3773,6 +3816,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     ['tnTZombieJagen', 'tnTZombieWandern', 'tnTHeldGehen', 'tnTHeldSchleichen'].forEach(function (id) { zeile(zk.inhalt, id); }); zeile(zk.inhalt, 'tnBaumTempo'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
     var zs = unter('👁 Zombie-Sicht'); rein(zs.inhalt, $('zsHinweis')); ['zsGehen', 'zsSchleichen', 'zsKegel', 'zsVerfolgen', 'zsAufgeben', 'zsNacht'].forEach(function (id) { zeile(zs.inhalt, id); }); zk.inhalt.appendChild(zs);
     var zfb = $('zfBlock'); if (zfb) { zk.inhalt.appendChild(zfb); rein(zfb, $('zfListe')); }   // 'zfListe' bleibt im Block
+    var hfb = $('hfBlock'); if (hfb) { zk.inhalt.appendChild(hfb); rein(hfb, $('hfListe')); }
     var typen = unter('Alte Zombiebilder (nur ohne neue Figuren; mindestens ein Typ bleibt an)'); typen.id = 'ztAlt';
     (window.ZTYPEN || []).forEach(function (k) { schalter(typen.inhalt, 'zt_' + k); });
     var ztt = $('ztTitel'); if (ztt) ztt.remove();
@@ -3781,6 +3825,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     if (gr) { var groessen = unter('Größen'); var t = $('grTitel'); if (t) t.remove(); groessen.inhalt.appendChild(gr); zk.inhalt.appendChild(groessen); }
     gruppe(zk);
     if (window.zfZeige && window.zfLetzte) window.zfZeige(window.zfLetzte);
+    if (window.hfZeige && window.hfLetzte) window.hfZeige(window.hfLetzte);
   }
   // Horden und Angriffstrupps
   gruppe(ausKarte(karteVon('titelHorden'), '🧟 Horden und Angriffstrupps'));

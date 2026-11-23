@@ -4,5 +4,13 @@ gewehr.glb   Assault Rifle, Quaternius     https://poly.pizza/m/Bgvuu4CUMV   CC0
 schrot.glb   Shotgun, Quaternius           https://poly.pizza/m/8Z4HaN1NyS   CC0 1.0
 messer.glb   Kabar (Kampfmesser), Pichuliru https://poly.pizza/m/bAaO335d6A  CC0 1.0
 schlaeger    Baseballschläger: auf poly.pizza kein CC0-Modell gefunden -> in held.html als Drehkörper (LatheGeometry) selbst erzeugt, keine fremde Quelle.
-Weitere CC0-Treffer der Suche (nicht verwendet): Submachine Gun 7ehatxr7FY, Shotgun Sawed Off 29FXKu7G91, Scifi Assault Rifle JqdHbURERk (alle Quaternius).
+Weitere CC0-Treffer der Suche (nicht verwendet): Shotgun Sawed Off 29FXKu7G91, Scifi Assault Rifle JqdHbURERk (alle Quaternius).
+mp.glb            Submachine Gun, Quaternius            https://poly.pizza/m/7ehatxr7FY   CC0 1.0
+scharfschuetze.glb Sniper Rifle, Quaternius             https://poly.pizza/m/TKaBjAEofL   CC0 1.0
+granatwerfer.glb  Grenade Launcher, Quaternius         https://poly.pizza/m/ZKvWhvu4tV   CC0 1.0
+armbrust.glb      Crossbow, CreativeTrio                https://poly.pizza/m/kHb0kA11oD   CC0 1.0
+brechstange.glb   Crowbar, CreativeTrio                 https://poly.pizza/m/MkTjC7C7bN   CC0 1.0
+sense.glb         Scythe, Quaternius                    https://poly.pizza/m/yE9TKCewO8   CC0 1.0
+(Lizenz jeweils auf der Modellseite geprüft, 23.11.2026; Modellgrößen werden in helden_jobs.json auf echte Länge + 10 % gebracht: MP 0,66, MG 1,3, Scharfschütze 1,3, Granatwerfer 0,77, Armbrust 0,94, Brechstange 0,83, Sense 1,65, Taschenlampe 0,28 m.)
+MG und Taschenlampe: kein CC0-Modell gefunden (LMG-Treffer nur CC-BY) -> in held.html aus Grundformen (Quader/Zylinder) selbst gebaut, keine fremde Quelle. Ebenso Baseballschläger (Drehkörper).
 Mixamo-Figuren/Animationen (Adobe-Lizenz): nur gerenderte Bilder ins Repo, nie FBX.

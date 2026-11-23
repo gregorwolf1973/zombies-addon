@@ -20,6 +20,7 @@ import { clientAuslieferung, auslieferungsVersion } from './statisch.mjs';
 import { Diagnose, DIAG_MAX_BYTES } from './diagnose.mjs';
 import { EinstellungsDatei, oeffentlich, ohneGeheimnisse, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, TON_STANDARD, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
+import { hfAktive } from '../client/heldenfiguren.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -347,6 +348,7 @@ export async function starte({
     extern: String(optionen.externe_adresse ?? '').trim(),   // https-Adresse, unter der das Mikrofon geht
     diagnose: datei.werte.diagnose !== false,   // Client schickt Fehler/Kennzahlen nur, wenn an
     zombieSicht: datei.werte.zombieSicht,   // Client: Sichtkegel-Anzeige
+    helden: { neu: datei.werte.heldenFigurenNeu !== false, aktive: hfAktive(datei.werte.helden?.figuren) },   // Startwahl: neue Mixamo-Helden an/aus und welche wählbar sind (Kennbuchstaben)
     toene: datei.werte.toene,
     toeneHorde: datei.werte.toeneHorde,   // Hordengeräusch: Schwellen und Hörweite (client/hordenlogik.mjs)
     musik: datei.werte.musik,             // Musik: laut (%), blende (s)

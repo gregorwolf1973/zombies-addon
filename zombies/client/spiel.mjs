@@ -4,7 +4,7 @@ import { fzPx } from './masse.mjs';
 import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from './fzkollision.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
-import { HF_FIGUREN, HF_GROESSE, ALT_FAKTOR, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung } from './heldenfiguren.mjs';
+import { HF_LISTE, HF_GROESSE, ALT_FAKTOR, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
 import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
@@ -212,7 +212,10 @@ function autostartMerken() { try { sessionStorage.setItem('zob_autostart', '1');
 function frischLaden(wiederBeitreten) { if (wiederBeitreten) autostartMerken(); location.reload(); }
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && await veraltet()) frischLaden(!!window.szene); });
 let zombieSichtEinst = null;   // Backend „Zombie-Sicht“ (Kegel-Anzeige), aus /info und 'tonEinst'
-fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); zombieSichtEinst = i.zombieSicht; }).catch(() => {});
+// Startwahl mit den neuen Helden (Näheres bei heldenwahlEinrichten)
+const heldenwahl = { neu: false, aktive: [], bild: new Image(), kachel: 160 };
+heldenwahl.bild.onload = () => { heldenwahlKacheln(); vorschauZeichnen(); };
+fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); zombieSichtEinst = i.zombieSicht; heldenwahlEinrichten(i.helden); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 tutorialKnopf(() => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });   // „🎯 Schießstand / Tutorial“ unter „Mitspielen“
 
@@ -281,7 +284,54 @@ figurVorlage.bild.onload = () => vorschauZeichnen();
 figurVorlage.bild2.src = ASSETS + 'grafik/figuren2.webp';
 fetch(ASSETS + 'grafik/figuren2.json').then(r => r.json()).then(j => { figurVorlage.liste2 = j; vorschauZeichnen(); }).catch(() => {});
 figurVorlage.bild2.onload = () => vorschauZeichnen();
+// Startwahl mit den neuen Mixamo-Helden: Kacheln aus grafik/helden_vorschau.webp (Reihenfolge = HF_LISTE); helden = { neu, aktive } aus /info (aktive = Kennbuchstaben der im Backend gewählten Helden)
+function heldenwahlEinrichten(h) {
+  heldenwahl.neu = !!h?.neu && Array.isArray(h.aktive) && h.aktive.length > 0;
+  heldenwahl.aktive = heldenwahl.neu ? h.aktive.filter(g => HF_LISTE.some(f => f.g === g)) : [];
+  if (heldenwahl.neu && !heldenwahl.bild.src) heldenwahl.bild.src = ASSETS + 'grafik/helden_vorschau.webp';
+  document.querySelector('.figurknoepfe')?.classList.toggle('neuehelden', heldenwahl.neu);
+  $('heldenwahl').hidden = !heldenwahl.neu;
+  if (heldenwahl.neu) {
+    // gemerkte Wahl gilt nur, wenn der Held noch aktiv ist (oder Survivor); sonst der erste aktive
+    if (meinAussehen.g !== 's' && !heldenwahl.aktive.includes(meinAussehen.g)) meinAussehen.g = heldenwahl.aktive[0] ?? 'h';
+  } else if (istHeld(meinAussehen.g) && meinAussehen.g !== 'h' && meinAussehen.g !== 'f') meinAussehen.g = 'h';   // alte Heldenbilder kennen nur Held/Heldin
+  heldenwahlKacheln();
+  figurWahlMarkieren();
+  vorschauZeichnen();
+}
+function heldenwahlKacheln() {
+  const box = $('heldentafeln'); if (!box) return;
+  box.textContent = '';
+  if (!heldenwahl.neu) return;
+  const n = HF_LISTE.length, k = 48;
+  for (const f of HF_LISTE) {
+    if (!heldenwahl.aktive.includes(f.g)) continue;
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.g = f.g; b.title = f.name; b.setAttribute('aria-label', f.name);
+    b.style.backgroundImage = `url(${heldenwahl.bild.src || ''})`; b.style.backgroundSize = `${n * k}px ${k}px`; b.style.backgroundPosition = `${-HF_LISTE.indexOf(f) * k}px 0`;
+    b.onclick = () => { meinAussehen.g = f.g; figurWahlMarkieren(true); };
+    box.appendChild(b);
+  }
+  const sv = document.createElement('button'); sv.type = 'button'; sv.dataset.g = 's'; sv.title = 'Survivor'; sv.setAttribute('aria-label', 'Survivor'); sv.textContent = 'Surv.';
+  sv.onclick = () => { meinAussehen.g = 's'; figurWahlMarkieren(true); };
+  box.appendChild(sv);
+  figurWahlMarkieren();
+}
+function figurWahlMarkieren(speichern = false) {
+  document.querySelectorAll('#heldentafeln button').forEach(b => b.classList.toggle('an', b.dataset.g === meinAussehen.g));
+  const nm = $('heldenname'); if (nm) nm.textContent = meinAussehen.g === 's' ? 'Survivor' : (HF_LISTE.find(f => f.g === meinAussehen.g)?.name ?? '');
+  if (speichern) { aussehenAngefasst = true; try { localStorage.setItem('zob_aussehen', aussehenText(meinAussehen)); } catch {} }
+  document.querySelectorAll('.geschlecht button').forEach(b => b.classList.toggle('an', b.dataset.g === meinAussehen.g));
+  if (speichern) vorschauZeichnen();
+}
 function vorschauZeichnen() {
+  if (heldenwahl.neu && istHeld(meinAussehen.g)) {
+    // neue Helden: Kachel aus dem Vorschaubogen (Blick nach oben, Pistole in der Hand)
+    if (!heldenwahl.bild.complete || !heldenwahl.bild.naturalWidth) return;
+    const c = $('figurvorschau'), ctx = c.getContext('2d'), i = Math.max(0, HF_LISTE.findIndex(f => f.g === meinAussehen.g)), K = heldenwahl.kachel;
+    ctx.clearRect(0, 0, c.width, c.height); document.querySelector('.figurknoepfe')?.classList.remove('fest');
+    ctx.drawImage(heldenwahl.bild, i * K, 0, K, K, 0, 0, c.width, c.height);
+    return;
+  }
   const l = figurVorlage.liste;
   if (!l || !figurVorlage.bild.complete) return;
   const c = $('figurvorschau'), ctx = c.getContext('2d');
@@ -316,7 +366,7 @@ function vorschauZeichnen() {
 }
 function figurWahlAufbauen() {
   const markieren = (speichern = true) => {
-    document.querySelectorAll('.geschlecht button').forEach(b => b.classList.toggle('an', b.dataset.g === meinAussehen.g));
+    figurWahlMarkieren(false);
     [...$('haarwahl').children].forEach((b, i) => b.classList.toggle('an', i === meinAussehen.haar));
     [...$('kleidwahl').children].forEach((b, i) => b.classList.toggle('an', i === meinAussehen.kleid));
     if (speichern) { aussehenAngefasst = true; try { localStorage.setItem('zob_aussehen', aussehenText(meinAussehen)); } catch {} }   // nur nach echter Wahl, nicht beim Aufbau
@@ -966,7 +1016,7 @@ class Ort extends Phaser.Scene {
     for (const f of ZF_FIGUREN) this.load.image('zf_' + f, 'grafik/zombies_' + f + '.webp');
     // neue Helden-Figuren (Mixamo von oben, tools/mixamo/helden_atlas_bauen.py): je Figur ein Atlas, Clips in helden_neu.json; Rückfall = Heldenbilder von Gemini (Backend-Schalter)
     this.load.json('heldenneu', 'grafik/helden_neu.json');
-    for (const f of HF_FIGUREN) this.load.image('hf_' + f, 'grafik/helden_' + f + '.webp');
+    this.load.image('hf_waffen', 'grafik/helden_waffen.webp');   // Waffen und Taschenlampe als eigene Sprites; die Körper-Atlanten der Helden werden bei Bedarf nachgeladen (hfLaden)
     // Helden (Gemini): Körper mit roten Haaren/blauer Jacke zum Umfärben + Stiefel als eigene Ebene
     this.load.spritesheet('helden160', 'grafik/helden160.webp', { frameWidth: 160, frameHeight: 160 });
     this.load.json('heldenliste', 'grafik/helden160.json');
@@ -1144,8 +1194,9 @@ class Ort extends Phaser.Scene {
       const fs = eigen ?? naechsteFigur(m.x1, m.y1); if (fs) { fs.schussBis = this.time.now + 150; fs.zielW = Math.atan2(m.y2 - m.y1, m.x2 - m.x1); fs.zielBis = this.time.now + 300; }   // Körper dreht nur kurz zum Ziel
       if (eigen) m = { ...m, x1: this.lokal.x, y1: this.lokal.y };   // Mündung an der gezeichneten Figur
       // Mixamo-Held: Mündung des Schussclips (Versatz je Waffengruppe aus dem Render) statt fester 16 px vor der Figur
-      const hm = fs?.hf && this.hfClips ? this.hfClips[fs.hf.gruppe + '_schiessen']?.mund?.[fs.hf.fig]?.[0] : null;
-      if (hm && typeof fs.zielW === 'number') { const o = hfMuendung(hm, fs.zielW, fs.bild.scaleX); m = { ...m, mx: m.x1 + o.x, my: m.y1 + o.y }; }
+      // (Pose des ersten Schussbildes: Gewehr-Gruppe hat einen eigenen Schussclip, die Pistole bleibt im Laufbild)
+      const hl = fs?.hf, hp = hl?.sprite && this.hfPos ? (hl.gruppe === 'gewehr' ? this.hfPos[hl.fig]?.gewehr_schiessen?.[hl.sprite]?.[0] : fs.hfPose) : null;
+      if (hp && typeof fs.zielW === 'number') { const o = hfMuendung(hp, this.hfWaffen[hl.sprite], fs.zielW, fs.bild.scaleX); m = { ...m, mx: m.x1 + o.x, my: m.y1 + o.y }; }
       this.schuss(m);
       fetzenBeiSchuss(this, zombieKarte().values(), m);
       // Schrot kommt als mehrere Linien – nur ein Knall
@@ -1169,7 +1220,11 @@ class Ort extends Phaser.Scene {
     polizeiRegistrieren(this, raum, { skala: () => BOGEN2_GROESSE * 0.95 * groesse('figuren2', 'polizist') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'polizist') * mg() });   // Polizisten an den Straßensperren
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
-    raum.onMessage('granate', m => this.granateFliegt(m));
+    raum.onMessage('granate', m => {
+      const fw = m.wer ? this.figuren?.get(m.wer) : null;   // Wurf-Clip des Werfers (Mixamo-Helden), Körper dreht zum Ziel
+      if (fw && typeof m.x1 === 'number') { fw.wurfBis = this.time.now + HF_WURF_MS; fw.zielW = Math.atan2(m.y2 - m.y1, m.x2 - m.x1); fw.zielBis = this.time.now + HF_WURF_MS; }
+      this.granateFliegt(m);
+    });
     raum.onMessage('nachladen', m => { if ((m.ebene ?? '') === this.aktEbene) ton.nachladen(m.x, m.y); });
     this.radioAnz = new RadioAnzeige(this);
     raum.onMessage('radio', m => this.radioAnz.setze(m));
@@ -1826,8 +1881,10 @@ class Ort extends Phaser.Scene {
     const hp = this.add.rectangle(-12, -18, 24, 3, 0x66bb6a).setOrigin(0, 0.5);
     const tun = this.add.text(16, -16, '', { fontSize: '13px' }).setOrigin(0.5);
     const sprechen = this.add.text(-18, -16, '🔊', { fontSize: '11px' }).setOrigin(0.5).setVisible(false);   // spricht gerade (Sprachübertragung)
-    box.add([ring, fuesse, bild, name, hp, tun, sprechen]);
-    return { box, bild, fuesse, koerper: bild, name, hp, tun, sprechen, farbe, n, x: p.x, y: p.y, altX: p.x, altY: p.y };
+    // Waffe und Taschenlampe der Mixamo-Helden: eigene Sprites über dem Körper (Lage je Bild aus helden_neu.json, siehe figurDarstellen)
+    const waffe = this.add.image(0, 0, 'hf_waffen').setVisible(false), lampe = this.add.image(0, 0, 'hf_waffen').setVisible(false);
+    box.add([ring, fuesse, bild, waffe, lampe, name, hp, tun, sprechen]);
+    return { box, bild, fuesse, waffe, lampe, koerper: bild, name, hp, tun, sprechen, farbe, n, x: p.x, y: p.y, altX: p.x, altY: p.y };
   }
 
   // Rahmen der Zombie-Atlanten anlegen; liefert Namenslisten zfNamen[figur][clip][0..15] (vorab gebaut: keine Zeichenketten je Frame) oder null, wenn die Bilder fehlen
@@ -1851,21 +1908,31 @@ class Ort extends Phaser.Scene {
     return namen;
   }
 
-  // Rahmen der Helden-Atlanten anlegen (Zeile je Clip, Bilder nebeneinander); liefert hfNamen[figur][clip][i] oder null, wenn die Bilder fehlen
+  // Helden-Daten einrichten (Clips, Waffenposen, Waffen-Sprites); die Körper-Atlanten (je Held ~0,4 MB, ~17 MB Grafikspeicher) lädt hfLaden erst, wenn ein Held im Spiel auftaucht.
+  // Liefert das (zunächst leere) Namensverzeichnis hfNamen[heldId][clip][i] oder null, wenn die Daten fehlen
   heldenAtlasEinrichten() {
     const j = this.cache.json.get('heldenneu');
-    if (!j?.clips) return null;
-    this.hfClips = j.clips;
-    const namen = {};
-    for (const f of HF_FIGUREN) {
-      if (!this.textures.exists('hf_' + f)) return null;
-      const tex = this.textures.get('hf_' + f); namen[f] = {};
-      for (const [c, k] of Object.entries(j.clips)) {
-        namen[f][c] = [];
-        for (let i = 0; i < k.n; i++) { const n = hfName(c, i); if (!tex.has(n)) tex.add(n, 0, i * k.feld, k.y, k.feld, k.feld); namen[f][c].push(n); }
+    if (!j?.clips || !j.pos || !j.waffen || !this.textures.exists('hf_waffen')) return null;
+    this.hfClips = j.clips; this.hfPos = j.pos; this.hfWaffen = j.waffen;
+    const wt = this.textures.get('hf_waffen');
+    for (const [n, m] of Object.entries(j.waffen)) if (!wt.has(n)) wt.add(n, 0, 0, m.y, m.w, m.h);
+    return {};
+  }
+  // Atlas eines Helden nachladen (einmal je Held); bis er da ist, zeichnet figurDarstellen den alten Heldenbogen
+  hfLaden(id) {
+    if (this.hfNamen[id] || this.hfLadet?.has(id) || !this.hfClips) return;
+    (this.hfLadet ??= new Set()).add(id);
+    const key = 'hf_' + id;
+    this.load.once('filecomplete-image-' + key, () => {
+      const tex = this.textures.get(key), namen = {};
+      for (const [c, k] of Object.entries(this.hfClips)) {
+        namen[c] = [];
+        for (let i = 0; i < k.n; i++) { const n = hfName(c, i); if (!tex.has(n)) tex.add(n, 0, i * k.feld, k.y, k.feld, k.feld); namen[c].push(n); }
       }
-    }
-    return namen;
+      this.hfNamen[id] = namen;
+    });
+    this.load.image(key, 'grafik/helden_' + id + '.webp');
+    if (!this.load.isLoading()) this.load.start();
   }
 
   // neue Helden-Figuren aktiv: Backend-Schalter (state.optionen Bit 512, Vorgabe an) und Bilder geladen
@@ -3177,30 +3244,42 @@ class Ort extends Phaser.Scene {
     // Haltung nach Ausrüstung: Pistole, Nahkampf/Lampe in der Hand, sonst ohne
     let textur, bild = 0;
     const survivor = !p.unten && !zombie && String(p.aussehen ?? '').startsWith('s');
-    const hn = !zombie && istHeld(String(p.aussehen ?? '')[0]) && this.heldNeu();   // Mixamo-Held/Heldin (heldenfiguren.mjs), auch liegend
+    const hid = !zombie ? hfFigurVon(String(p.aussehen ?? '')[0]) : null;   // Mixamo-Held (Id) – null: kein Held bzw. Zombie
+    if (hid && this.heldNeu() && !this.hfNamen[hid]) this.hfLaden(hid);
+    const hn = !!hid && this.heldNeu() && !!this.hfNamen[hid];   // Mixamo-Held (heldenfiguren.mjs), auch liegend; bis der Atlas geladen ist, der alte Heldenbogen
     const held = !hn && !p.unten && !zombie && istHeld(String(p.aussehen ?? '')[0]);
     const tempo = weg / Math.max(dt, 0.001) / tfa;
     // Laufrichtung: Füße und (außer kurz beim Schuss/Schlag) Körper zeigen immer in Laufrichtung; der eigene Held nimmt sie sofort aus der Eingabe
     let lr = p.richtung;
     if (f === this.figuren.get(meineId) && this.eingabe) lr = this.eigeneBlickRichtung(p);   // Laufen: Eingabe; Stand: Drehzone/letzte Richtung
     const kr = !p.unten && f.zielBis > this.time.now && typeof f.zielW === 'number' ? f.zielW : lr;
-    let hfRot = null;
+    let hfRot = null, hfWaffeLage = null;   // hfWaffeLage: { sprite, pose, lampe } für die Overlays
     if (hn) {
-      // Clip nach Zustand: Sterben/Liegen, Schuss, Stechen/Schlagen (nur Messer/Schläger-Gruppe), Rennen, Gehen, Stehen; Phase beim Gehen nach Weg (langsamer = Schleichen)
-      const a = aussehenLesen(p.aussehen), fig = a.g === 'f' ? 'heldin' : 'held', gr = hfGruppe(aktiveWaffe(p)[0]), jetzt = this.time.now;
+      // Clip nach Zustand: Sterben/Liegen, Schuss, Wurf, Stechen/Schlagen/Faust, Rennen, Gehen, Stehen; Phase beim Gehen nach Weg (langsamer = Schleichen)
+      const w0 = aktiveWaffe(p)[0], gr = hfGruppe(w0), jetzt = this.time.now, sprite = hfWaffeSprite(w0);
       if (!p.unten) f.hfTod = undefined; else if (f.hfTod === undefined) f.hfTod = f.hfGesehen ? jetzt : -1e9;   // schon beim ersten Sehen unten: liegt gleich
       f.hfGesehen = true;
-      const seitSchuss = f.schussBis > 0 ? jetzt - (f.schussBis - 150) : 1e9, seitSchlag = f.schlagBis > 0 ? jetzt - (f.schlagBis - 400) : 1e9;
-      let art = 'stehen', ms = 1000;
+      const seitSchuss = f.schussBis > 0 ? jetzt - (f.schussBis - 150) : 1e9, seitSchlag = f.schlagBis > 0 ? jetzt - (f.schlagBis - 400) : 1e9, seitWurf = f.wurfBis > 0 ? jetzt - (f.wurfBis - HF_WURF_MS) : 1e9;
+      const lauf = geht ? (tempo > W.tempoGehen * 1.25 ? 'rennen' : 'gehen') : 'stehen';
+      let art = lauf, ms = 1000, schuss = false;
       if (p.unten) { art = 'tod'; ms = HF_TOD_MS; }
-      else if (seitSchuss >= 0 && seitSchuss < HF_SCHUSS_MS && (gr === 'pistole' || gr === 'gewehr' || gr === 'schrot')) { art = 'schiessen'; ms = HF_SCHUSS_MS; }
+      else if (seitWurf >= 0 && seitWurf < HF_WURF_MS) { art = 'werfen'; ms = HF_WURF_MS; }
+      else if (seitSchuss >= 0 && seitSchuss < HF_SCHUSS_MS && gr === 'gewehr') { art = 'schiessen'; ms = HF_SCHUSS_MS; schuss = true; }
+      else if (seitSchuss >= 0 && seitSchuss < HF_SCHUSS_MS && gr === 'pistole') schuss = true;   // Pistole: Laufbild der Pistolenhaltung, die Waffe schlägt zurück (kein eigener Schussclip: der Mixamo-Schuss steht seitlich)
       else if (seitSchlag >= 0 && seitSchlag < HF_NAHKAMPF_MS) { art = 'nahkampf'; ms = HF_NAHKAMPF_MS; }
-      else if (geht) art = tempo > W.tempoGehen * 1.25 ? 'rennen' : 'gehen';
       const cn = hfClip(gr, art), k = this.hfClips[cn];
-      const i = hfBild(k, { lauf: f.lauf, zeitMs: jetzt + f.n * 997, seit: art === 'tod' ? jetzt - f.hfTod : art === 'schiessen' ? seitSchuss : seitSchlag, ms });
-      textur = 'hf_' + fig; bild = this.hfNamen[fig][cn][i];
-      f.hf = { fig, gruppe: gr };
-      if (art === 'schiessen' && typeof f.zielW === 'number') hfRot = hfMuendung(k.mund[fig][i], f.zielW, 1).rot;   // Körper dreht, bis die Waffe zum Ziel zeigt
+      const i = hfBild(k, { lauf: f.lauf, zeitMs: jetzt + f.n * 997, seit: art === 'tod' ? jetzt - f.hfTod : art === 'schiessen' ? seitSchuss : art === 'werfen' ? seitWurf : seitSchlag, ms });
+      textur = 'hf_' + hid; bild = this.hfNamen[hid][cn][i];
+      // Waffe/Lampe dieses Bildes (nur wenn der Clip sie kennt: Faustschlag, Wurf, Tod zeigen keine Waffe)
+      const P = this.hfPos[hid]?.[cn];
+      let wp = sprite && P?.[sprite]?.[i] || null, lp = null;
+      if (wp && schuss && gr === 'pistole') { const kick = 5 * Math.max(0, 1 - seitSchuss / 130); wp = [wp[0] - Math.cos(wp[2]) * kick, wp[1] - Math.sin(wp[2]) * kick, wp[2], wp[3]]; }   // Rückstoß
+      if (p.lampe > 0 && !p.unten) lp = gr === 'gewehr' && wp ? hfLampeAmLauf(wp, this.hfWaffen[sprite]) : P?.lampe_l?.[i] || null;
+      hfWaffeLage = { sprite, pose: wp, lampe: lp };
+      f.hfPose = wp;
+      f.hf = { fig: hid, gruppe: gr, sprite };
+      if (schuss && wp && typeof f.zielW === 'number') hfRot = hfMuendung(wp, this.hfWaffen[sprite], f.zielW, 1).rot;   // Körper dreht, bis die Waffe zum Ziel zeigt
+      else if (art === 'werfen' && typeof f.zielW === 'number') hfRot = f.zielW;   // Wurf in Zielrichtung (Clip: Wurfrichtung = nach vorn)
     }
     else if (p.unten) textur = 'liegend-' + f.n;
     else if (zombie) { textur = 'figuren'; bild = this.figurBild('zombie_hemd', geht ? Math.floor(f.lauf / 11) : 0); }
@@ -3251,6 +3330,13 @@ class Ort extends Phaser.Scene {
     if (f === this.figuren.get(meineId) && aufAutoJa && jetzt - (this.kletterTon ?? 0) > 380) { this.kletterTon = jetzt; ton.schritt(false); }   // Klettern: Schrittgeräusch (kein eigener Ton nötig)
     const tonung = this.schattenTon(f, f.x, f.y);   // Spieler/Bots: im Schatten dunkler (Körper und Füße) – nicht „ton“ nennen, das überdeckt das Ton-Modul (0.86.0: Absturz beim Klettern)
     f.bild.setTint(tonung); f.fuesse.setTint(tonung);
+    // Waffe und Taschenlampe der Mixamo-Helden: eigene Sprites an der berechneten Hand-/Waffenlage dieses Bildes (nur sichtbar, wenn der Clip sie kennt; Lampe nur bei p.lampe > 0)
+    for (const [img, name, pose] of [[f.waffe, hfWaffeLage?.sprite, hfWaffeLage?.pose], [f.lampe, 'lampe_l', hfWaffeLage?.lampe]]) {
+      if (!hn || !pose || !name) { if (img.visible) img.setVisible(false); continue; }
+      const m = this.hfWaffen[name], L = hfLage(pose, f.bild.rotation, f.bild.scaleX);
+      if (img.frame.name !== name) img.setFrame(name).setOrigin(m.ox / m.w, m.oy / m.h);
+      img.setVisible(true).setPosition(L.x, L.y + f.bild.y).setRotation(L.rot).setScale(L.sx, L.sy).setTint(tonung);
+    }
     // Name, Lebensbalken und Symbole: drinnen auf Bildschirmgröße wie draußen zurückrechnen, Abstände zur (halb so großen) Figur
     const k = this.uiMass(), fp = this.feinInnen() ? INNEN_FIGUR : 1;
     f.name.setScale(k).setY(-28 * fp);

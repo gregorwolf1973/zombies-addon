@@ -9,11 +9,15 @@ Mixamo-FBX -> Draufsicht-Laufschleifen (Prototyp, nur exakt senkrechte Draufsich
 Chrome und Server danach per PID beenden.
 5. Atlas fürs Spiel: sh alle.sh <ordner> (alle Figuren x Clips), dann PYTHONPATH=<pil> python3 atlas_bauen.py <ordner> ../../client/grafik
    -> client/grafik/zombies_<figur>.webp (3200x1200, Stil C: Gamma 0,72, ohne Kontur) + zombies_neu.json; Logik client/zombiefiguren.mjs, Einbau client/spiel.mjs (Backend-Schalter zombieFigurenNeu, state.optionen Bit 256).
-Helden (Prototyp): helden_jobs.json (Auftragsliste, Waffenwerte) + held.html (rendert eine Figur: fig=jennifer|swatguy, optional nur=<Aufträge>, ansicht=seite zum Prüfen der Waffenlage)
-   + lib/examples/jsm/{loaders/GLTFLoader.js,utils/BufferGeometryUtils.js} (three@0.160.0). Waffen siehe WAFFEN_QUELLEN.txt (fbx/waffen/*.glb). Pakete vorher in fbx/<fig>/{pistole,gewehr}_pak entpacken.
-   Ablauf: CDP_PORT=9444 WARTE=900 node cdp.mjs 'http://127.0.0.1:8828/held.html?fig=jennifer' o/jennifer.txt ; python3 held_streifen.py o/jennifer.txt o jennifer 192 ;
-           python3 held_proto.py <o> <zombie-streifen> helden_proto.html   (Farbstil C, Szene mit Zombies)
-   Jennifers stehen.fbx ist laut Dauer ein Lauf-Clip: held.html nimmt dafür den Leerlauf von swatguy (Präfix mixamorig1 -> mixamorig wird umbenannt).
-6. Helden fürs Spiel: Streifen je Figur wie oben (held_streifen.py <o> <ordner> <fig> 160 0, je fig=jennifer|swatguy), dann
-   PYTHONPATH=<pil> python3 helden_atlas_bauen.py <ordner> ../../client/grafik -> helden_held.webp / helden_heldin.webp (2560x4040) + helden_neu.json (Clips, Weg je Zyklus, Mündung je Schussbild).
-   Waffenlängen in helden_jobs.json = echte Länge (Render doppelt so groß); Logik client/heldenfiguren.mjs, Einbau client/spiel.mjs (figurDarstellen, schuss), Schalter heldenFigurenNeu (Bit 512).
+Helden (acht Figuren: swatguy, jennifer, remy, alex, brute, swat, jody, roth; Liste client/heldenfiguren.mjs HF_LISTE): Körper OHNE Waffe + Waffen als eigene Sprites.
+   Daten je Figur in fbx/<figur>/{pistole,gewehr}_paket.zip + pistole_schiessen, gewehr_schiessen, stechen, schlagen, gehen, rennen, stehen, werfen, faust (.fbx).
+   Pakete vorher entpacken: unzip -o <figur>/pistole_paket.zip -d <figur>/pistole_pak ; unzip -o <figur>/gewehr_paket.zip -d <figur>/gewehr_pak (Haut + Clips idle/walk/run/death).
+   Auftragsliste, Figuren (Haut, Zielhöhe 180 cm, Brute 195 cm, ausblenden = fest eingebaute Waffe) und Waffenwerte: helden_jobs.json; Renderer held.html (?fig=<figur>, ?waffen=1 = Waffen-Sprites, ?info=1 = Maße, ?jobopt=<json> = Auftragswerte probeweise ändern).
+   Lib: lib/ (three@0.160.0 wie oben) plus lib/examples/jsm/{loaders/GLTFLoader.js,utils/BufferGeometryUtils.js). Waffenmodelle: WAFFEN_QUELLEN.txt (fbx/waffen/*.glb, MG und Taschenlampe aus Grundformen in held.html).
+   Ablauf (Server auf 8830 im mixamo-Ordner, je Port ein eigener Headless-Chrome, danach alles per PID beenden):
+     sh helden_alle.sh <o> 9450,9451,9452,9453      (alle Figuren + Waffen-Sprites, ~40 s; held_streifen.py läuft darin)
+     PYTHONPATH=<pil> python3 helden_atlas_bauen.py <o> ../../client/grafik <o>/waffen.txt
+        -> helden_<figur>.webp (je 2112 x 1984, nur Körper, Gamma 0,72 / Stil C), helden_waffen.webp, helden_vorschau.webp (Startwahl), helden_neu.json (Clips, Weg je Zyklus, Waffenposen je Bild, Waffen-Sprites, Lampenplatz).
+   Waffen/Lampe: je Bild als Pose [x, y, Winkel, Längenfaktor] aus der Handlage (Holder an der Hand-Bone, Pose aus dem Weltmatrix) – im Spiel (spiel.mjs figurDarstellen) als Sprite über dem Körper; Taschenlampe: einhändig in der linken Hand (Pose 'lampe_l'),
+   zweihändig am Lauf (waffen[w].lampe). Pistole: kein eigener Schussclip (Mixamo-Schuss steht seitlich), Pistolenhaltung + Rückstoß der Waffe.
+   Logik client/heldenfiguren.mjs, Einbau client/spiel.mjs (figurDarstellen, hfLaden lädt Atlanten erst bei Bedarf, Startwahl heldenwahlEinrichten), Schalter heldenFigurenNeu (Bit 512), Liste im Backend helden.figuren.

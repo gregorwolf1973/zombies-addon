@@ -23,11 +23,12 @@
     <div id="figurwahl">
       <canvas id="figurvorschau" width="160" height="160" aria-label="Vorschau deiner Figur"></canvas>
       <div class="figurknoepfe">
+        <div id="heldenwahl" hidden><div id="heldentafeln" class="heldentafeln" role="group" aria-label="Held wählen"></div><div id="heldenname" class="farbtitel"></div></div>
         <div class="geschlecht" role="group" aria-label="Mann oder Frau">
           <button type="button" data-g="h">Held</button><button type="button" data-g="f">Heldin</button><button type="button" data-g="s">Survivor</button>
         </div>
-        <div class="farbtitel">Haare</div><div id="haarwahl" class="farben" role="group" aria-label="Haarfarbe"></div>
-        <div class="farbtitel">Kleidung</div><div id="kleidwahl" class="farben" role="group" aria-label="Kleidungsfarbe"></div>
+        <div class="farbtitel farbwahl">Haare</div><div id="haarwahl" class="farben" role="group" aria-label="Haarfarbe"></div>
+        <div class="farbtitel farbwahl">Kleidung</div><div id="kleidwahl" class="farben" role="group" aria-label="Kleidungsfarbe"></div>
       </div>
     </div>
     <div id="codeblock" hidden>

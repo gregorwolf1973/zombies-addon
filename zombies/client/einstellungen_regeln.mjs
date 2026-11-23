@@ -1,7 +1,8 @@
 // Spieler-Einstellungen, die der Server je Spieler-ID merkt (Client und Server nutzen dieselben Regeln).
 // Schlüssel = Name im localStorage des Browsers, Wert = erlaubte Form (alles Text, nichts anderes kommt durch).
+import { AUSSEHEN_MUSTER } from './figurbild.mjs';
 export const EINSTELLUNG_MUSTER = {
-  zob_aussehen: /^[mwshf],[0-5],[0-7]$/,          // Figur: Geschlecht/Held, Haar, Kleidung
+  zob_aussehen: AUSSEHEN_MUSTER,          // Figur: Geschlecht/Held, Haar, Kleidung
   zob_liste: /^[01]$/,                            // Spielerliste zu/auf
   zob_kartealpha: /^(0\.35|0\.6|1)$/,             // Transparenz der Eckkarte
   zob_zoom: /^\d(\.\d{1,2})?$/,                   // Zoomstufe

@@ -1,6 +1,8 @@
 // Spielerfiguren umfärben: Die Vorlage (grafik/figuren.png) hat rote Haare und blaue Kleidung.
 // Diese beiden Farben werden durch die gewählten ersetzt; Schattierung und Umriss bleiben erhalten.
 
+import { HF_BUCHSTABEN } from './heldenfiguren.mjs';
+
 export const HAARFARBEN = [
   { name: 'Schwarz', rgb: [40, 34, 32] }, { name: 'Braun', rgb: [110, 66, 34] }, { name: 'Blond', rgb: [226, 186, 102] },
   { name: 'Rot', rgb: [196, 62, 34] }, { name: 'Grau', rgb: [160, 160, 156] }, { name: 'Lila', rgb: [140, 70, 170] },
@@ -12,14 +14,17 @@ export const KLEIDFARBEN = [
 ];
 export const WAFFEN_BILD = ['hand', 'pistole', 'schlaeger', 'messer'];
 
+// Kennbuchstaben im aussehen-String 'g,Haar,Kleid': s = Survivor, m/w = alte Mann/Frau (werden zu h/f migriert), dazu die Helden aus client/heldenfiguren.mjs (h = Held, f = Heldin, r a b t j o = neue Helden)
+export const AUSSEHEN_MUSTER = new RegExp(`^[mws${HF_BUCHSTABEN}],[0-5],[0-7]$`);
+export const aussehenGueltig = text => AUSSEHEN_MUSTER.test(String(text ?? ''));
 export function aussehenLesen(text) {
-  const m = /^([mwshf]),([0-5]),([0-7])$/.exec(String(text ?? ''));
+  const m = new RegExp(`^([mws${HF_BUCHSTABEN}]),([0-5]),([0-7])$`).exec(String(text ?? ''));
   return m ? { g: m[1], haar: Number(m[2]), kleid: Number(m[3]) } : { g: 'h', haar: 1, kleid: 0 };
 }
 // Mann/Frau gibt es in der Figurwahl nicht mehr: gespeichertes m → h (Held), w → f (Heldin); alles andere unverändert
 export const aussehenMigriert = text => typeof text === 'string' ? text.replace(/^m,/, 'h,').replace(/^w,/, 'f,') : text;
-// h/f = Held/Heldin (Gemini-Bogen grafik/helden160)
-export const istHeld = g => g === 'h' || g === 'f';
+// Held: h/f = Held/Heldin (Gemini-Bogen grafik/helden160 als Rückfall), alle Kennbuchstaben der Helden-Liste = Mixamo-Helden
+export const istHeld = g => typeof g === 'string' && g.length === 1 && HF_BUCHSTABEN.includes(g);
 export const aussehenText = a => `${a.g},${a.haar},${a.kleid}`;
 
 // Farbton (0–360) und Sättigung (0–1) eines Pixels

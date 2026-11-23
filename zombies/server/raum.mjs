@@ -26,7 +26,8 @@ import { imLager } from '../client/stuetzpunkt.mjs';
 import { nachSeq } from '../client/netzpuffer.mjs';
 import { zfWaehle, zfVariante } from '../client/zombiefiguren.mjs';
 import { waehleZiel, schussGuete, ersterBaum } from './baumschuss.mjs';
-import { aussehenMigriert } from '../client/figurbild.mjs';
+import { aussehenMigriert, AUSSEHEN_MUSTER } from '../client/figurbild.mjs';
+import { hfZufall, hfAktive, hfFigurenEinst, HF_LISTE } from '../client/heldenfiguren.mjs';
 import { Granaten } from './granaten.mjs';
 import { Radios } from './radio.mjs';
 import { fahrzeugHatRadio } from '../client/ton_regeln.mjs';
@@ -249,7 +250,7 @@ const FERN_TAKT = 4;
 const AFK_SEKUNDEN = 60;    // so lange ohne Eingabe, dann übernimmt die Bot-Steuerung die Figur
 const RASTER = 96;          // Zellgröße des Zombie-Rasters (px), je Takt neu befüllt
 const WEGEFELD_TIEFE = 60;  // Wegefeld nur so viele Kacheln weit um die Spieler (2000 px) berechnen
-const AUSSEHEN = /^[mwshf],[0-5],[0-7]$/;   // m/w = eigene Figur mit Farben, s = Survivor (feste Figur), h/f = Held/Heldin (Gemini, mit Farben)
+const AUSSEHEN = AUSSEHEN_MUSTER;   // m/w = alte Figur (wird h/f), s = Survivor (feste Figur), sonst Kennbuchstabe eines Helden aus der Helden-Liste (client/heldenfiguren.mjs, Haar/Kleid nur beim Rückfall auf die alten Heldenbilder)
 export const TOR_RAETSEL = 3;
 const TOR_ABSTAND = 70;
 
@@ -714,6 +715,7 @@ export class SpielRaum extends Room {
       this.extra.delete(sid);
       alt.name = name; alt.verbunden = true; alt.su = !!auth?.su;
       if (optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
+      alt.aussehen = this.heldPruefen(alt.aussehen);   // im Backend abgeschalteter Held → aktiver
       this.state.spieler.set(client.sessionId, alt);
       this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, warte: null, guthaben: 0, afkBot: null, letzteEingabe: Date.now(), superuser: !!auth?.su, suUnsterblich: !!auth?.su && x.suUnsterblich }); alt.afk = false;
       this.hunde?.besitzerWechsel(sid, client.sessionId);
@@ -733,6 +735,7 @@ export class SpielRaum extends Room {
     const gewaehlt = vorschau && optionen.aussehenGewaehlt !== false;   // false: Spieler hat in der Anmeldung nichts gewählt, nur die Vorschau
     const gemerkt = aussehenMigriert(this.speicher?.ladeEinstellungen(spielerId)?.zob_aussehen);   // von einem anderen Gerät
     p.aussehen = gewaehlt ? optionen.aussehen : AUSSEHEN.test(String(gemerkt ?? '')) ? gemerkt : vorschau ? optionen.aussehen : this.zufallsAussehen();
+    p.aussehen = this.heldPruefen(p.aussehen);
     p.verbunden = true; p.unten = false; p.afk = false; p.hilfe = 0; p.richtung = 0;
     p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0; p.spricht = false;
     const extra = { superuser: !!auth?.su, spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null, letzteEingabe: Date.now() };
@@ -748,6 +751,7 @@ export class SpielRaum extends Room {
       p.handgranaten = Math.max(0, Math.min(HANDGRANATEN_MAX, Number(gespeichert.handgranaten) || 0));
       p.besiegt = Math.max(0, Math.min(65535, Number(gespeichert.besiegt) || 0));
       if (!gewaehlt && !AUSSEHEN.test(String(gemerkt ?? '')) && AUSSEHEN.test(aussehenMigriert(gespeichert.aussehen))) p.aussehen = aussehenMigriert(gespeichert.aussehen);
+      p.aussehen = this.heldPruefen(p.aussehen);
       p.infektion = Math.max(0, Math.min(INFEKTION_DAUER, Number(gespeichert.infektion) || 0));
       p.kleidung = Math.max(0, Math.min(100, Number(gespeichert.kleidung) || 0));
       p.lampe = Math.max(0, Math.min(LAMPE_DAUER, Number(gespeichert.lampe) || 0));
@@ -1060,7 +1064,23 @@ export class SpielRaum extends Room {
 
   zufallsAussehen() {
     const r = this.rnd();
-    return `${r < 0.2 ? 's' : r < 0.6 ? 'h' : 'f'},${Math.floor(this.rnd() * 6)},${Math.floor(this.rnd() * 8)}`;
+    return `${r < 0.2 ? 's' : this.heldZufall()},${Math.floor(this.rnd() * 6)},${Math.floor(this.rnd() * 8)}`;
+  }
+
+  // zufälliger aktiver Held (Backend „Helden-Figuren“); ohne die neuen Figuren (Rückfall auf die alten Heldenbilder) nur Held/Heldin
+  heldZufall() {
+    const einst = SpielRaum.einstellungen;
+    if (einst.heldenFigurenNeu === false) return this.rnd() < 0.5 ? 'h' : 'f';
+    return hfZufall(einst.helden?.figuren, this.rnd());
+  }
+
+  // Wahl eines Spielers prüfen: ein im Backend abgeschalteter Held (oder ein neuer Held beim Rückfall auf die alten Bilder) wird durch einen aktiven ersetzt, Haar/Kleidung bleiben
+  heldPruefen(aussehen) {
+    const m = /^([^,]),(.*)$/.exec(String(aussehen ?? ''));
+    if (!m || m[1] === 's' || !HF_LISTE.some(f => f.g === m[1])) return aussehen;
+    const einst = SpielRaum.einstellungen;
+    const erlaubt = einst.heldenFigurenNeu === false ? ['h', 'f'] : hfAktive(einst.helden?.figuren);
+    return erlaubt.includes(m[1]) ? aussehen : `${this.heldZufall()},${m[2]}`;
   }
 
   freieFarbe() {
