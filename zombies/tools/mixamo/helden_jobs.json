@@ -4,11 +4,11 @@
   "swatguy": {"o": "swatguy", "skin": "swatguy/pistole_pak/Ch15_nonPBR.fbx"}
  },
  "waffen": {
-  "pistole": {"datei": "waffen/pistole.glb", "laenge": 0.2, "sx": 1, "sy": 1, "griff": 0.3, "hoch": 0.03, "modus": "fa", "yaw": 0, "pitch": 0},
-  "gewehr": {"datei": "waffen/gewehr.glb", "laenge": 0.9, "sx": 1, "sy": 1, "griff": 0.4, "hoch": 0.04, "modus": "lr", "yaw": 0, "pitch": 0},
-  "schrot": {"datei": "waffen/schrot.glb", "laenge": 1.0, "sx": 1, "sy": 1, "griff": 0.4, "hoch": 0.04, "modus": "lr", "yaw": 0, "pitch": 0},
-  "messer": {"datei": "waffen/messer.glb", "laenge": 0.3, "sx": 1, "sy": 1, "griff": 0.15, "hoch": 0.0, "modus": "fa", "yaw": 0, "pitch": 0},
-  "schlaeger": {"datei": "@bat", "laenge": 0.85, "sx": 1, "sy": 1, "griff": 0.1, "hoch": 0.0, "modus": "vec", "vec": [0.55, 0.85, 0], "yaw": 0, "pitch": 0}
+  "pistole": {"datei": "waffen/pistole.glb", "laenge": 0.34, "sx": 1, "sy": 1, "griff": 0.3, "hoch": 0.03, "modus": "fa", "yaw": 0, "pitch": 0},
+  "gewehr": {"datei": "waffen/gewehr.glb", "laenge": 1.13, "sx": 1, "sy": 1, "griff": 0.4, "hoch": 0.04, "modus": "lr", "yaw": 0, "pitch": 0},
+  "schrot": {"datei": "waffen/schrot.glb", "laenge": 1.25, "sx": 1, "sy": 1, "griff": 0.4, "hoch": 0.04, "modus": "lr", "yaw": 0, "pitch": 0},
+  "messer": {"datei": "waffen/messer.glb", "laenge": 0.5, "glanz": 1, "sx": 1, "sy": 1, "griff": 0.15, "hoch": 0.0, "modus": "fa", "yaw": 0, "pitch": 0},
+  "schlaeger": {"datei": "@bat", "laenge": 1.06, "sx": 1, "sy": 1, "griff": 0.1, "hoch": 0.0, "modus": "vec", "vec": [0.55, 0.85, 0], "yaw": 0, "pitch": 0}
  },
  "auftraege": [
   {"name": "stehen", "clip": "{o}/stehen.fbx", "schleife": 1},
@@ -16,10 +16,10 @@
   {"name": "rennen", "clip": "{o}/rennen.fbx", "schleife": 1},
   {"name": "pistole_gehen", "richtung": "fa", "clip": "{o}/pistole_pak/pistol walk.fbx", "schleife": 1, "waffe": "pistole"},
   {"name": "pistole_schiessen", "richtung": "fa", "clip": "{o}/pistole_schiessen.fbx", "schleife": 0, "waffe": "pistole"},
-  {"name": "gewehr_gehen", "richtung": "lr", "clip": "{o}/gewehr_pak/walk forward.fbx", "schleife": 1, "waffe": "gewehr"},
-  {"name": "gewehr_schiessen", "richtung": "lr", "clip": "{o}/gewehr_schiessen.fbx", "schleife": 0, "waffe": "gewehr"},
-  {"name": "gewehr_zielen", "richtung": "lr", "clip": "{o}/gewehr_pak/idle aiming.fbx", "schleife": 1, "waffe": "gewehr"},
-  {"name": "schrot_gehen", "richtung": "lr", "clip": "{o}/gewehr_pak/walk forward.fbx", "schleife": 1, "waffe": "schrot"},
+  {"name": "gewehr_gehen", "clip": "{o}/gewehr_pak/walk forward.fbx", "schleife": 1, "waffe": "gewehr"},
+  {"name": "gewehr_schiessen", "clip": "{o}/gewehr_schiessen.fbx", "schleife": 0, "waffe": "gewehr"},
+  {"name": "gewehr_zielen", "clip": "{o}/gewehr_pak/idle aiming.fbx", "schleife": 1, "waffe": "gewehr"},
+  {"name": "schrot_gehen", "clip": "{o}/gewehr_pak/walk forward.fbx", "schleife": 1, "waffe": "schrot"},
   {"name": "messer_stechen", "richtung": "fa", "rr": 0.5, "clip": "{o}/stechen.fbx", "schleife": 0, "waffe": "messer"},
   {"name": "schlaeger_schlagen", "clip": "{o}/schlagen.fbx", "schleife": 0, "waffe": "schlaeger"},
   {"name": "tod", "clip": "{o}/gewehr_pak/death from the front.fbx", "schleife": 0, "einmal": 1, "feld": 5, "vx": 0, "dreh": 180}

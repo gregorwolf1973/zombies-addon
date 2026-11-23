@@ -42,6 +42,7 @@ try {
       const geo = new THREE.LatheGeometry(pr, 20); geo.rotateZ(-Math.PI / 2);   // Achse y -> +x
       m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xb98a55, roughness: 0.7 })); const grp = new THREE.Group(); grp.add(m); m = grp;
     } else { m = (await gl.loadAsync('fbx/' + w.datei)).scene; }
+    if (w.glanz) m.traverse(o => { if (o.isMesh) o.material = new THREE.MeshPhongMaterial({ color: 0xe4e8ee, specular: 0xffffff, shininess: 90, emissive: 0x2a2e34 }); });
     // Mittelachsen bestimmen
     m.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(m); const sz3 = bb.getSize(new THREE.Vector3());
     const ax = [0, 1, 2].sort((a, b) => sz3.getComponent(b) - sz3.getComponent(a));   // ax[0] lang, ax[1] mittel, ax[2] kurz
