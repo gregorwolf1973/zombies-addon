@@ -56,3 +56,26 @@ test('Atlas: JSON passt zu den Bildern, Kantenlänge ≤ 4096, alle Rahmen im At
   }
   assert.equal(Object.keys(j.bilder).length, ZF_FIGUREN.length * ZF_CLIPS.length * ZF_BILDER);
 });
+
+import { ZF_LISTE, ZF_VARIANTE_AB, zfVariante, zfFigurenEinst, zfWaehle } from '../client/zombiefiguren.mjs';
+
+test('Figurenliste: Atlas für jede Figur vorhanden, Variante 100+Index bildet direkt auf die Figur ab', () => {
+  const j = JSON.parse(fs.readFileSync(new URL('zombies_neu.json', dir), 'utf8'));
+  ZF_LISTE.forEach((f, i) => {
+    assert.ok(j.atlas[f.id], f.id); assert.ok(j.bilder[f.id + '_walk_00'], f.id);
+    assert.equal(zfFigur(ZF_VARIANTE_AB + i), f.id); assert.equal(zfVariante(f.id), ZF_VARIANTE_AB + i);
+  });
+  assert.equal(zfFigur(ZF_VARIANTE_AB + 99), ZF_LISTE[0].id, 'ungültig fällt auf erste Figur');
+});
+
+test('Auswahl: nur aktive Figuren, Anteile wirken, mindestens eine bleibt an', () => {
+  const e = zfFigurenEinst({ warzombie: { an: false }, copzombie: { an: true, anteil: 75 }, zombiegirl: { an: true, anteil: 25 }, yaku: { an: false }, romero: { an: false } });
+  const n = {}; for (let i = 0; i < 1000; i++) { const f = zfWaehle(e, i / 1000); n[f] = (n[f] ?? 0) + 1; }
+  assert.deepEqual(Object.keys(n).sort(), ['copzombie', 'zombiegirl']);
+  assert.equal(n.copzombie, 750); assert.equal(n.zombiegirl, 250);
+  const alle = zfFigurenEinst({ warzombie: { an: false }, copzombie: { an: false }, zombiegirl: { an: false }, yaku: { an: false }, romero: { an: false } });
+  assert.equal(Object.values(alle).filter(q => q.an).length, 1);
+  const nullen = Object.fromEntries(ZF_LISTE.map(f => [f.id, { an: true, anteil: 0 }]));
+  assert.ok(ZF_LISTE.some(f => f.id === zfWaehle(nullen, 0.5)), 'Anteil 0 überall = gleich verteilt');
+  assert.equal(zfWaehle(e, 1), 'zombiegirl'); assert.equal(zfWaehle(e, -1), 'copzombie');
+});
