@@ -24,6 +24,7 @@ Wichtige Dateien:
 - `zielwahl.mjs`, `botplan.mjs`, `bots.mjs` – Bots und Zielwahl; `menschen.mjs` (Bewohner), `hund.mjs`, `verkehr.mjs`, `unfall.mjs`, `feuer.mjs`.
 - `waffenplaetze.mjs`, `munition*.mjs`, `granaten.mjs`, `baumschuss.mjs`, `ueberrollen.mjs`, `faehigkeiten.mjs` – Kampf und Ausrüstung.
 - `stuetzpunkt.mjs`, `szene_b11*.mjs`, `leopard.mjs`, `flugplatz.mjs`, `haengend.mjs` – Lager und Sonderszenen.
+- `fahrbar.mjs` – fahrbare Fahrzeuge Boxer/Puma/Leopard (Liste `raum.fahrbare` + `raum.boxer`; Spielerfeld `imBoxer` = „sitzt in einem fahrbaren Fahrzeug“); `boxer.mjs` = echter Boxer am Flugfeld mit Horde; Superuser-Menü und Schießstand stellen Fahrzeuge ohne Horde auf. Client: `fahrbar.mjs` (Maße), `fahrbardarstellung.mjs`.
 - `speicher.mjs` (Spielstand), `superuser.mjs` (Testmenü, Zugangscode-Hash), `radio.mjs`, `raetsel.mjs`/`spielfragen.txt`, `nebel.mjs`.
 
 ### Schema und Sichtfilter

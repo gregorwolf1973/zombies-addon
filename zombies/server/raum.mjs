@@ -16,6 +16,7 @@ import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { Versorgung } from './versorgung.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
 import { Boxer } from './boxer.mjs';
+import { Fahrbare } from './fahrbar.mjs';
 import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
 import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
@@ -562,6 +563,7 @@ export class SpielRaum extends Room {
     this.stuetzpunkt.start(stand, !!passt);
     this.versorgung = new Versorgung(this); this.versorgung.start(stand, !!passt);   // Bundeswehr-Versorgung über die Munitionskisten
     this.boxer = new Boxer(this); this.boxer.start();   // Radpanzer Boxer am Flugfeld (nur Königsdorf), siehe server/boxer.mjs
+    this.fahrbare = new Fahrbare(this);   // fahrbare Fahrzeuge neben dem Boxer (Superuser, Schießstand), siehe server/fahrbar.mjs
     haengendStart(this);   // hängende Zombies im S-Draht (Lager, Flugfeld) und Tote am Flugfeld Königsdorf
     this.granaten = new Granaten(this);
     this.radios = new Radios(this);
@@ -604,7 +606,7 @@ export class SpielRaum extends Room {
     this.hordeDebug = new Set();   // Superuser mit eingeschalteter Horden-Anzeige (☰-Menü oder ?debug) bekommen 'hordeInfo'
     this.hordeAus = new Set();     // Superuser, die die Anzeige ausgeschaltet haben (auch wenn die Einstellung sie für alle einschaltet)
     this.onMessage('hordeDebug', (client, m) => { if (m?.an) this.hordeDebug.add(client.sessionId); else this.hordeDebug.delete(client.sessionId); });
-    this.onMessage('aussteigen', client => { if (this.boxer?.sitzt(client.sessionId)) this.boxer.aussteigen(client.sessionId); else this.aufgaben?.aussteigen(client.sessionId); });   // aus dem Evakuierungsfahrzeug aussteigen (Knopf/Taste)
+    this.onMessage('aussteigen', client => { if (this.fahrbare?.von(client.sessionId)) this.fahrbare.aussteigen(client.sessionId); else this.aufgaben?.aussteigen(client.sessionId); });   // aus dem Evakuierungsfahrzeug aussteigen (Knopf/Taste)
     this.onMessage('aktion', client => this.starteAktion(client));
     this.onMessage('aktion2', client => this.starteAktion(client, true));
     this.onMessage('durchsuche_alle', (client, m) => this.starteAlle(client, !!m?.weiter));
@@ -2076,9 +2078,9 @@ export class SpielRaum extends Room {
   starteAktion(client, zweit = false) {
     const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
     if (!p || !x || p.aktion || p.kamera) return;   // Kameraflug: keine Aktionen
-    if (p.imBoxer) return void this.boxer?.aussteigen(client.sessionId);   // im Boxer: die Aktionstaste steigt aus
+    if (p.imBoxer) return void this.fahrbare?.aussteigen(client.sessionId);   // in einem fahrbaren Fahrzeug (Boxer, Puma, Leopard): die Aktionstaste steigt aus
     if (p.anBord) return void this.aufgaben?.aussteigen(client.sessionId);   // an Bord: die Aktionstaste steigt aus
-    if (!zweit && this.boxer?.einsteigen(client.sessionId)) return;   // am Boxer: einsteigen (hat Vorrang, der Client zeigt dann „Einsteigen“)
+    if (!zweit && this.fahrbare?.einsteigen(client.sessionId)) return;   // am Boxer (oder Superuser-Fahrzeug): einsteigen (hat Vorrang, der Client zeigt dann „Einsteigen“)
     // zweite Taste: die andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
     const k = zweit ? (p.unten || p.zombie > 0 || this.state.phase !== 'spiel' ? null : this.tuerKontext(p, 'zweit')) : this.kontext(p, x);
     if (!k) return;
@@ -2846,7 +2848,7 @@ export class SpielRaum extends Room {
     this.messen('verkehr', t0); t0 = performance.now();
     this.brand?.schritt(dt);
     this.aufgaben?.schritt(dt);
-    this.boxer?.schritt(dt);
+    this.fahrbare?.schritt(dt);   // Boxer und weitere fahrbare Fahrzeuge
     this.messen('feuer', t0); t0 = performance.now();
     this.stuetzpunkt?.schritt(dt);
     this.granaten?.schritt(dt);
@@ -2903,7 +2905,7 @@ export class SpielRaum extends Room {
     const safe = safeRoomVon(this.welt, p);
     p.sicher = safe ? safe.id : this.imLagerSafe(p) ? 'lager' : '';
     if (safe) { x.letzterSafe = safe.id; if (!x.bot) this.teamSafe = safe.id; }   // Team-Safe: zuletzt von einem echten Spieler betreten
-    if (p.imBoxer) { this.eingabeSchritte(p, x, dt); this.boxer?.fahrerEingabe(id, x.eingabe); return; }   // im Boxer: die Eingabe lenkt ihn (nur der Fahrer), die Figur bleibt sitzen
+    if (p.imBoxer) { this.eingabeSchritte(p, x, dt); this.fahrbare?.fahrerEingabe(id, x.eingabe); return; }   // im Fahrzeug: die Eingabe lenkt ihn (nur der Fahrer), die Figur bleibt sitzen
     if (p.unten || p.anBord || p.kamera) { this.eingabeVerwerfen(p, x); return; }   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
     if (x.sprungT > 0) { x.sprungT -= dt; this.eingabeVerwerfen(p, x); this.waffeSchritt(id, p, x, dt, welt, false); return; }   // Zaunsprung läuft: keine Bewegung, Client und Server bleiben einig
     const schritte = this.eingabeSchritte(p, x, dt);

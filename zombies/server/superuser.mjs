@@ -2,12 +2,13 @@
 // Das Passwort steht NIRGENDS im Code: es wird nur als scrypt-Hash in den Einstellungen gespeichert
 // (Verwaltung → „Superuser-Passwort“, einstellungen.json → superuserHash). Ohne Hash gibt es keinen Superuser.
 import crypto from 'node:crypto';
-import { KACHEL, BREITE, HOEHE, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX, WAFFEN } from '../client/welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, HANDGRANATEN_MAX, WAFFEN, DINGE } from '../client/welt.mjs';
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { Nebel } from './nebel.mjs';
 import { KARTEN_NAMEN } from './aufgaben.mjs';
 import { aktiveFolge, karteAufloesen } from '../client/levelkatalog.mjs';
+import { FAHRBAR, FAHRBAR_ARTEN } from '../client/fahrbar.mjs';
 
 // ---------- Hash ----------
 export const SU_MAX_LAENGE = 200;
@@ -44,7 +45,7 @@ export function anmelden(hash, passwort, schluessel) {
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel', 'unfall', 'kamera', 'kamerapos', 'status'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel', 'unfall', 'kamera', 'kamerapos', 'status', 'waffe', 'fahrzeug', 'fahrzeug_weg'];
 
 // Kameraposition: Zahl innerhalb der Karte, sonst Rückfallwert
 const kameraZahl = (v, rueck, max) => Number.isFinite(Number(v)) ? Math.max(0, Math.min(max, Number(v))) : rueck;
@@ -88,6 +89,18 @@ export function auffuellen(raum, p, x) {
   if (!p.faust && p.waffe && x.mag[p.wplatz]) p.magazin = x.mag[p.wplatz].n;
   p.nachladen = 0; x.nRest = 0;
   WP.abgleich(p, x, einst);
+}
+
+// Waffen, die der Superuser direkt wählen kann (alle aus WAFFEN außer der bloßen Faust, die es als eigenen Knopf gibt)
+export const SU_WAFFEN = Object.keys(WAFFEN).filter(n => n !== 'faust');
+// Waffe in die Hand (ersetzt die Waffe im aktiven Platz) und alle Vorräte voll; das Magazin füllt abgleich() passend zur Waffe
+export function waffeSetzen(raum, p, x, name) {
+  if (!SU_WAFFEN.includes(name)) return false;
+  p.munition = MUNITION_MAX; p.pfeile = PFEILE_MAX; p.granaten = GRANATEN_MAX; p.handgranaten = HANDGRANATEN_MAX;
+  p.faust = false; p.waffe = name; p.nachladen = 0; x.nRest = 0; p.aktion = ''; p.fortschritt = 0;
+  x.mag ??= [null, null]; x.mag[p.wplatz ?? 0] = null;
+  WP.abgleich(p, x, raum.einstellungen?.() ?? {});
+  return true;
 }
 
 function lagerPlatz(raum) {
@@ -218,6 +231,22 @@ export function befehl(raum, client, m) {
       return raum.verkehr?.unfaelle?.ausloesen({ x: p.x, y: p.y }, { erzeugen: true, nah: true })
         ? '💥 Ein Auto verunglückt in deiner Nähe' : 'Kein Platz für einen Unfall gefunden (keine Straße in der Nähe)';
     }
+    case 'waffe': {
+      const name = String(m.name ?? '');
+      if (!waffeSetzen(raum, p, x, name)) return 'Unbekannte Waffe';
+      return `🔫 ${DINGE[name]?.name ?? name} in der Hand, Munition voll`;
+    }
+    case 'fahrzeug': {
+      const art = String(m.art ?? '');
+      if (!FAHRBAR_ARTEN.includes(art) || art === 'bus') return 'Unbekanntes Fahrzeug';
+      if (p.ebene) return 'Geh erst nach draußen, dann kannst du ein Fahrzeug setzen';
+      if (p.anBord || p.unten || p.kamera) return 'Steig erst aus, dann kannst du ein Fahrzeug setzen';
+      const fb = raum.fahrbare?.setzen(client.sessionId, art, p);
+      if (!fb) return 'Kein Platz für das Fahrzeug – such eine freie Fläche';
+      return `🛡️ ${FAHRBAR[art].name} steht neben dir (E zum Einsteigen, lenken wie beim Gehen, der Turm schießt von selbst)`;
+    }
+    case 'fahrzeug_weg':
+      return raum.fahrbare?.entfernen(client.sessionId) ? 'Fahrzeug entfernt' : 'Du hast gerade kein Fahrzeug gesetzt';
     case 'auffuellen':
       auffuellen(raum, p, x);
       return '🎒 Alles aufgefüllt';

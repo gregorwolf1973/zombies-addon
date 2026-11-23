@@ -4,6 +4,8 @@
 // Reichweite, Magazin, Zombie-Leben …), damit die Auswertung die echten Werte zeigt. Spieler: unsterblich, kein Hunger/Durst,
 // unbegrenzter Vorrat (Magazin und Nachladen wie im Spiel). Ein Fahrzeug am Lager (Auswahl vor dem Start) feuert auf die Zombies: Puma des
 // Bundeswehr-Standorts, Leopard (Turm, MG, Hauptkanone); Vorgabe: keins.
+// Zusätzlich kann der Spieler Boxer, Puma oder Leopard selbst fahren (E zum Einsteigen/Aussteigen, Gehen-Taste lenkt, der Turm schießt von selbst;
+// server/fahrbar.mjs): ein Fahrzeug je Spieler, nie eine Horde.
 import { zaehle, fuegeHinzu } from '../client/stapel.mjs';
 import { aussehenMigriert } from '../client/figurbild.mjs';
 import { SpielRaum, Zustand, Spieler, sauberName, eingabeKompakt } from './raum.mjs';
@@ -11,6 +13,8 @@ import { Stuetzpunkt } from './stuetzpunkt.mjs';
 import { Granaten } from './granaten.mjs';
 import { Fahrzeug } from './verkehr.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
+import { Fahrbare } from './fahrbar.mjs';
+import { FAHRBAR_ARTEN } from '../client/fahrbar.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { WAFFEN, GRANATE, WERTE as W, RUCKSACK_PLAETZE, MUNITION_MAX, PFEILE_MAX, GRANATEN_MAX, aktiveWaffe, frei, zufall, KACHEL } from '../client/welt.mjs';
@@ -46,6 +50,7 @@ export class SchiessstandRaum extends SpielRaum {
     this.stadt = null; this.verkehr = null; this.brand = null; this.welle = null; this.aufgaben = null; this.radios = null;
     this.granaten = new Granaten(this);
     this.fahrzeug = ''; this.leopard = new Leopard(this, 'Leopard');
+    this.boxer = null; this.fahrbare = new Fahrbare(this);   // selbst fahrbare Fahrzeuge (je Spieler eins)
     this.warteschlange = 0; this.spawnT = 0; this.statT = 0; this.statSchmutzig = true;
     this.stuetzpunkt = new SchiessstandBasis(this);
     this.stuetzpunkt.start(null, false);
@@ -82,6 +87,10 @@ export class SchiessstandRaum extends SpielRaum {
     this.onMessage('ss_zombies', (client, m) => this.zombiesStarten(Number(m?.n)));
     this.onMessage('ss_panzer', (client, m) => this.fahrzeugWaehlen(m?.an ? 'puma' : ''));   // alter Schalter: an = Puma
     this.onMessage('ss_fahrzeug', (client, m) => this.fahrzeugWaehlen(String(m?.art ?? '')));
+    this.onMessage('ss_fahrbar', (client, m) => this.fahrbarWaehlen(client.sessionId, String(m?.art ?? '')));   // '' = Fahrzeug entfernen
+    // Einsteigen/Aussteigen: nur die fahrbaren Fahrzeuge (die übrige Aktionslogik des Spiels gibt es hier nicht)
+    this.onMessage('aktion', client => { const sid = client.sessionId; if (this.fahrbare.von(sid)) this.fahrbare.aussteigen(sid); else this.fahrbare.einsteigen(sid); });
+    this.onMessage('aussteigen', client => { this.fahrbare.aussteigen(client.sessionId); });
     this.onMessage('ss_reset', () => this.zuruecksetzen());
     this.onMessage('ss_stat', client => this.statSenden(client));
     this.onMessage('ping', (client, m) => client.send('pong', m));
@@ -110,6 +119,7 @@ export class SchiessstandRaum extends SpielRaum {
 
   onDrop() { /* kein Wiedereinstieg: der Raum geht mit dem Spieler */ }
   onLeave(client) {
+    this.fahrbare.entfernen(client.sessionId);
     this.state.spieler.delete(client.sessionId); this.extra.delete(client.sessionId);
   }
   onDispose() { /* nichts speichern, SpielRaum.aktiv bleibt die Hauptwelt */ }
@@ -149,6 +159,17 @@ export class SchiessstandRaum extends SpielRaum {
     this.statSchmutzig = true;
   }
 
+  // selbst fahrbares Fahrzeug (boxer, puma, leopard) neben den Spieler stellen; '' oder dieselbe Art noch einmal = entfernen
+  fahrbarWaehlen(sid, art) {
+    const p = this.state.spieler.get(sid);
+    if (!p) return;
+    const alt = this.fahrbare.vonBesitzer(sid);
+    if (!art || art === alt?.art) { this.fahrbare.entfernen(sid); this.statSchmutzig = true; return; }
+    if (!FAHRBAR_ARTEN.includes(art) || p.anBord) return;
+    this.fahrbare.setzen(sid, art, p);
+    this.statSchmutzig = true;
+  }
+
   fahrzeugSchritt(dt) {
     const s = this.state, bw = this.einst().bundeswehr ?? {};
     if (this.fahrzeug === 'leopard') {
@@ -184,6 +205,7 @@ export class SchiessstandRaum extends SpielRaum {
   zuruecksetzen() {
     this.state.zombies.clear(); this.zombieInfo.clear(); this.state.leichen.clear(); this.leichenInhalt.clear(); this.state.boden.clear();
     this.warteschlange = 0; this.granaten.liste.length = 0; this.leopard.kuehlK = 3;
+    for (const b of [...this.fahrbare.liste]) this.fahrbare.entfernen(b.besitzer);   // selbst gefahrene Fahrzeuge weg, Spieler steigen aus
     this.state.besiegt = 0;
     for (const [sid, p] of this.state.spieler) {
       const x = this.extra.get(sid);
@@ -222,7 +244,7 @@ export class SchiessstandRaum extends SpielRaum {
         if (tot && this.stat[k.waffe]) this.stat[k.waffe].kills++;
         this.statSchmutzig = true;
       }
-    } else if (tot && von && [this.stuetzpunkt.schuetze, this.leopard?.schuetze].includes(von)) { this.panzerKills++; this.statSchmutzig = true; }
+    } else if (tot && von && [this.stuetzpunkt.schuetze, this.leopard?.schuetze, ...this.fahrbare.schuetzen()].includes(von)) { this.panzerKills++; this.statSchmutzig = true; }
   }
 
   // jeder Schuss/Schlag des Spielers: Waffe merken, danach prüfen, ob geschossen wurde und ob er getroffen hat
@@ -263,7 +285,7 @@ export class SchiessstandRaum extends SpielRaum {
       stat: this.stat, werte: this.werte(), zombieLeben: e.zombieLeben ?? 100,
       zombies: this.state.zombies.size, warten: this.warteschlange, panzer: this.fahrzeug === 'puma', fahrzeug: this.fahrzeug, panzerKills: this.panzerKills,
     };
-    for (const c of clients) c.send('ss_stat', daten);
+    for (const c of clients) c.send('ss_stat', { ...daten, fahrbar: this.fahrbare.vonBesitzer(c.sessionId)?.art ?? '' });
     this.statSchmutzig = false;
   }
 
@@ -301,6 +323,7 @@ export class SchiessstandRaum extends SpielRaum {
     for (const p of s.spieler.values()) { p.hp = 100; p.unten = false; p.infektion = 0; }   // Bisse in diesem Takt zählen nicht
     this.stuetzpunkt.schritt(dt);
     this.fahrzeugSchritt(dt);
+    this.fahrbare.schritt(dt);
     this.granaten.schritt(dt);
     this.leichenAltern(dt);
     this.statT -= dt;
