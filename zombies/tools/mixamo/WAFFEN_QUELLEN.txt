@@ -1,0 +1,8 @@
+Waffenmodelle für die Helden-Renderings (lokal in fbx/waffen/, gitignored; alle Lizenz CC0 1.0 laut Modellseite, geprüft 23.11.2026)
+pistole.glb  Pistol, Quaternius            https://poly.pizza/m/1vBdqOfUNd   CC0 1.0
+gewehr.glb   Assault Rifle, Quaternius     https://poly.pizza/m/Bgvuu4CUMV   CC0 1.0
+schrot.glb   Shotgun, Quaternius           https://poly.pizza/m/8Z4HaN1NyS   CC0 1.0
+messer.glb   Kabar (Kampfmesser), Pichuliru https://poly.pizza/m/bAaO335d6A  CC0 1.0
+schlaeger    Baseballschläger: auf poly.pizza kein CC0-Modell gefunden -> in held.html als Drehkörper (LatheGeometry) selbst erzeugt, keine fremde Quelle.
+Weitere CC0-Treffer der Suche (nicht verwendet): Submachine Gun 7ehatxr7FY, Shotgun Sawed Off 29FXKu7G91, Scifi Assault Rifle JqdHbURERk (alle Quaternius).
+Mixamo-Figuren/Animationen (Adobe-Lizenz): nur gerenderte Bilder ins Repo, nie FBX.
