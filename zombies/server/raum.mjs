@@ -1478,8 +1478,7 @@ export class SpielRaum extends Room {
       if (d >= bd) continue;
       const zustand = this.state.behaelter.get(b.id);
       if (zustand && zustand.rest === 0) continue;
-      // Munitionskiste, die für DIESEN Spieler schon leer ist (der Client blendet sie aus): die danebenstehende nächste nehmen
-      if (b.art === 'bw_kiste' && x && this.inhalte.get(b.id + '@' + (x.spielerId ?? x.sid ?? ''))?.length === 0 && !this.versorgung?.bereit(x.spielerId)) continue;   // leer, und kein Versorgungspaket wartet
+      // Munitionskisten bleiben immer sichtbar und durchsuchbar (auch wenn für diesen Spieler nichts drin ist: Meldung mit nächster Lieferung)
       if (b.art !== 'bus' && !sichtfrei(welt, p.x, p.y, b.x, b.y) && !p.ebene) continue;
       bd = d; best = b;
     }
@@ -2327,10 +2326,15 @@ export class SpielRaum extends Room {
         this.inhalte.set(schluessel, [...(this.inhalte.get(schluessel) ?? []), ...paket.dinge]);
         if (paket.munition > 0) { this.munitionNehmen(p, paket.munition); extraGenommen = ['munition']; }
       } else if (!this.inhalte.has(schluessel)) this.inhalte.set(schluessel, []);
+      // kleine Zufallsbeute, einmal je Spieltag, Kiste und Spieler
+      const zb = this.versorgung?.zufallsBeute(schluessel) ?? { munition: 0, dinge: [] };
+      let schuss = paket?.munition > 0 ? paket.munition : 0;
+      if (zb.munition > 0) { this.munitionNehmen(p, zb.munition); extraGenommen = ['munition']; schuss += zb.munition; }
+      if (zb.dinge.length) this.inhalte.set(schluessel, [...this.inhalte.get(schluessel), ...zb.dinge]);
       const inhalt = this.inhalte.get(schluessel);
       const genommen = [...extraGenommen, ...this.einpacken(p, inhalt)];
       this.aufgaben?.gefunden(b, genommen);
-      return client?.send('gefunden', { dinge: genommen, rest: inhalt.length, kiste: b.id });
+      return client?.send('gefunden', { dinge: genommen, rest: inhalt.length, kiste: b.id, schuss: schuss || undefined, text: !genommen.length && !inhalt.length ? (this.versorgung?.leerText() ?? undefined) : undefined });
     }
     // ausgebrannt: nichts mehr zu holen
     if ((b.art === 'auto' || b.art === 'bus') && this.state.verbrannt.has((b.art === 'auto' ? 'auto:' : 'bus:') + b.id)) this.setzeInhalt(b.id, []);

@@ -24,7 +24,10 @@ async function bis(bedingung, ms = 3000) {
   return bedingung();
 }
 const neueId = () => crypto.randomBytes(16).toString('hex');
-before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); });
+before(async () => { server = await starte({ port: PORT, optionen: { karte: 'geretsried' }, leise: true, datenbank: ':memory:' }); zufallAus(); });
+// Zufallsbeute der Kisten abschalten, damit die Versorgungstests exakte Mengen prüfen können
+const KEIN_ZUFALL = { kistenMunChance: 0, kistenVerbandChance: 0, kistenGranateChance: 0 };
+function zufallAus() { SpielRaum.einstellungen.bundeswehr = { ...SpielRaum.einstellungen.bundeswehr, ...KEIN_ZUFALL }; }
 after(async () => { await server.gracefullyShutdown(false); setzeKartengroesse(64, 48); });
 
 async function beitreten(name = 'Sepp', spielerId = neueId()) {
@@ -56,6 +59,7 @@ function kisteDurchsuchen(raum, c, p) {
 
 test('Einstellungen: Versorgung unter bundeswehr mit Vorgaben und Grenzen; Munitionstausch beim Soldaten nur noch 30', () => {
   const b = bereinige({}).bundeswehr;
+  assert.deepEqual([b.kistenMunChance, b.kistenMunMin, b.kistenMunMax, b.kistenVerbandChance, b.kistenGranateChance], [50, 5, 15, 15, 5]);
   assert.deepEqual([b.versorgungTage, b.versorgungMunition, b.versorgungVerband, b.versorgungSpritze, b.versorgungWaffe], [2, 50, 3, 1, true]);
   const k = bereinige({ bundeswehr: { versorgungTage: 0, versorgungMunition: 99999, versorgungWaffe: 'ja' } }).bundeswehr;
   assert.equal(k.versorgungTage, 1); assert.equal(k.versorgungMunition, 99999);   // seit 0.85 Werte frei (nur empfohlen) assert.equal(k.versorgungWaffe, true);
@@ -95,7 +99,7 @@ test('Versorgung: neuer Spieler holt sofort sein Paket, danach alle 2 Spieltage 
   // Abstand per Einstellung
   const e = SpielRaum.einstellungen, eAlt = e.bundeswehr;
   try {
-    e.bundeswehr = { versorgungTage: 1, versorgungMunition: 20, versorgungVerband: 0, versorgungSpritze: 0, versorgungWaffe: false };
+    e.bundeswehr = { versorgungTage: 1, versorgungMunition: 20, versorgungVerband: 0, versorgungSpritze: 0, versorgungWaffe: false, ...KEIN_ZUFALL };
     raum.state.tag = 6; assert.equal(v.tagWechsel(), true);
     p.munition = 0; p.rucksack.splice(0, p.rucksack.length); v.offen.set(spielerId, 1);
     kisteDurchsuchen(raum, c, p);
@@ -156,4 +160,59 @@ test('Client: Faust-Feld ersetzt die Textzeile „Waffe“; Antippen sendet faus
   assert.ok(!/Unbewaffnet – stoßen/.test(js), 'alte dritte Waffenanzeige noch da');
   assert.ok(/raum\.onMessage\('funkAnsage', \(\) => \{ ton\.ereignis\('funkAnsage'\)/.test(js));
   assert.ok(/id="granatenfeld"/.test(fs.readFileSync(new URL('../client/index.html', import.meta.url), 'utf8')), 'Granatenfeld bleibt');
+});
+
+test('Kisten: immer durchsuchbar, bei „leer“ Meldung mit nächster Lieferung, bei gefallener Bundeswehr anderer Text', async () => {
+  await frisch(); zufallAus();
+  const { c, raum, p } = await beitreten('Leer');
+  kisteDurchsuchen(raum, c, p);   // Erstpaket
+  const e = kisteDurchsuchen(raum, c, p).antwort.at(-1)[1];
+  assert.equal(e.rest, 0);
+  assert.match(e.text, /^Leer – nächste Lieferung am Tag 3, ca. \d\d:\d\d/);
+  // Aktionswahl überspringt die leere Kiste nicht mehr
+  const x = raum.extra.get(c.sessionId);
+  const b = raum.welt.behaelter.find(q => q.art === 'bw_kiste');
+  p.x = b.x; p.y = b.y; p.ebene = '';
+  const wahl = raum.kontext(p, x);
+  assert.equal(wahl?.art, 'durchsuchen'); assert.equal(wahl.behaelter.art, 'bw_kiste');
+  raum.state.stuetzpunkt = 'gefallen';
+  assert.equal(kisteDurchsuchen(raum, c, p).antwort.at(-1)[1].text, 'Keine Lieferungen mehr – die Bundeswehr hat das Lager aufgegeben');
+  await beenden(c);
+});
+
+test('Kisten: Zufallsbeute einmal je Spieltag, Einstellungen wirken, Stand überlebt den Neustart', async () => {
+  await frisch(); zufallAus();
+  const id = neueId();
+  let { c, raum, p } = await beitreten('Beute', id);
+  kisteDurchsuchen(raum, c, p);   // Erstpaket (ohne Zufall)
+  const alt = SpielRaum.einstellungen.bundeswehr;
+  try {
+    SpielRaum.einstellungen.bundeswehr = { ...alt, kistenMunChance: 100, kistenMunMin: 7, kistenMunMax: 7, kistenVerbandChance: 100, kistenGranateChance: 100 };
+    // Tag 1 wurde oben schon gewürfelt (ohne Treffer): heute nichts mehr
+    p.munition = 0;
+    assert.equal(kisteDurchsuchen(raum, c, p).antwort.at(-1)[1].dinge.length, 0, 'am selben Tag nicht neu gewürfelt');
+    raum.state.tag = 2;   // neuer Spieltag (Versorgung noch nicht fällig)
+    p.munition = 0; p.rucksack.splice(0, p.rucksack.length);
+    const a = kisteDurchsuchen(raum, c, p).antwort.at(-1)[1];
+    assert.equal(p.munition, 7); assert.equal(a.schuss, 7);
+    const dinge = flach(p.rucksack);
+    assert.ok(dinge.includes('verband') && dinge.includes('granate'), 'Verband und Granate: ' + dinge);
+    // zweites Durchsuchen am Tag 2: nichts mehr; nach Neustart ebenfalls
+    p.munition = 0;
+    kisteDurchsuchen(raum, c, p); assert.equal(p.munition, 0);
+    raum.speichereWelt();
+    assert.equal(SpielRaum.speicher.ladeWelt().versorgung.beute[[...raum.versorgung.beuteTag.keys()][0]], 2);
+    await beenden(c);
+    ({ c, raum, p } = await beitreten('Beute', id));
+    raum.state.tag = 2; p.munition = 0;
+    kisteDurchsuchen(raum, c, p);
+    assert.equal(p.munition, 0, 'nach Neustart am selben Tag kein Neu-Würfeln');
+    raum.state.tag = 3; p.munition = 0;
+    kisteDurchsuchen(raum, c, p);
+    assert.ok(p.munition >= 7, 'neuer Tag: neu gewürfelt');
+  } finally { SpielRaum.einstellungen.bundeswehr = alt; }
+  // Bereinigung
+  const k = bereinige({ bundeswehr: { kistenMunChance: 500, kistenVerbandChance: -5 } }).bundeswehr;
+  assert.equal(k.kistenMunChance, 100); assert.equal(k.kistenVerbandChance, 0);
+  await beenden(c);
 });
