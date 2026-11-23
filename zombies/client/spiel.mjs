@@ -3197,8 +3197,8 @@ class Ort extends Phaser.Scene {
     f.bild.setY(aufAutoJa ? -3 + Math.sin(jetzt / 70) * 1.2 : 0); f.fuesse.setY(f.bild.y);
     if (taumelt) f.bild.setRotation(f.bild.rotation + Math.sin(perf / 45) * 0.35 * Math.min(1, (f.taumelBis - perf) / 300));
     if (f === this.figuren.get(meineId) && aufAutoJa && jetzt - (this.kletterTon ?? 0) > 380) { this.kletterTon = jetzt; ton.schritt(false); }   // Klettern: Schrittgeräusch (kein eigener Ton nötig)
-    const ton = this.schattenTon(f, f.x, f.y);   // Spieler/Bots: im Schatten dunkler (Körper und Füße)
-    f.bild.setTint(ton); f.fuesse.setTint(ton);
+    const tonung = this.schattenTon(f, f.x, f.y);   // Spieler/Bots: im Schatten dunkler (Körper und Füße) – nicht „ton“ nennen, das überdeckt das Ton-Modul (0.86.0: Absturz beim Klettern)
+    f.bild.setTint(tonung); f.fuesse.setTint(tonung);
     // Name, Lebensbalken und Symbole: drinnen auf Bildschirmgröße wie draußen zurückrechnen, Abstände zur (halb so großen) Figur
     const k = this.uiMass(), fp = this.feinInnen() ? INNEN_FIGUR : 1;
     f.name.setScale(k).setY(-28 * fp);

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.86.1 – 23.11.2026
+
+- Behoben: Das Laden hing (z. B. bei 30 %), sobald die eigene Figur auf einem parkenden Auto stand – Fehler im neuen Klettern.
+
 ## 0.86.0 – 23.11.2026
 
 - Neue Zombies: fünf Figuren (Soldat, Polizist, Frau, Bürger, abgemagerter Zombie) mit echten Bewegungen von oben – schlurfen, rennen, angreifen, beißen, kriechen, sterben. Alte Zombie-Bilder per Backend-Schalter weiter verfügbar.
