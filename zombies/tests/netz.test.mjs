@@ -186,3 +186,25 @@ test('nachSeq rechnet mit Überlauf', () => {
   assert.equal(nachSeq(1, 65535), true);
   assert.equal(nachSeq(65535, 1), false);
 });
+
+test('Eingabe-Rückstand: nach AFK verworfen, allgemein höchstens ~2 s (kein Zeitversatz bei Treffern)', async () => {
+  const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Rueck' });
+  a.onMessage('*', () => {});
+  try {
+    const raum = matchMaker.getLocalRoomById(a.roomId);
+    assert.ok(await bis(() => raum.state.spieler.get(a.sessionId)));
+    const p = raum.state.spieler.get(a.sessionId), x = raum.extra.get(a.sessionId);
+    // AFK-Bot übernimmt: Stand-Stücke laufen auf, bei der Rückkehr wird verworfen
+    x.afkBot = { nr: 0, afk: true, plan: { rolle: 'begleiter', auftrag: null, pause: 0 } }; p.afk = true;
+    for (let n = 1; n <= 60; n++) a.send('eingabe', { dx: 0, dy: 0, s: false, n, d: 0.25 });
+    await warte(300);
+    assert.ok((x.warte?.length ?? 0) > 20, 'Stücke sollten während AFK liegen bleiben: ' + x.warte?.length);
+    a.send('eingabe', { dx: 1, dy: 0, s: false, n: 61, d: 0.05 });   // bewegt → ruehrt → AFK vorbei
+    assert.ok(await bis(() => !x.afkBot && p.seq >= 60), 'AFK-Rückstand nicht verworfen, seq ' + p.seq);
+    // allgemein: 6 s Schwall auf einmal → nach kurzer Zeit höchstens ~2 s offen
+    for (let n = 62; n <= 181; n++) a.send('eingabe', { dx: 0, dy: 0, s: false, n, d: 0.05 });
+    await warte(400);
+    let rest = 0; for (const w of x.warte ?? []) rest += w.d;
+    assert.ok(rest <= 2.05, `Rückstand ${rest.toFixed(2)} s`);
+  } finally { await a.leave(); }
+});

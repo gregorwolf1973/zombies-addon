@@ -199,6 +199,7 @@ const PATCH = 100; // ms → 10 Zustands-Updates pro Sekunde an die Clients (der
 const SICHT_MIN_ZOMBIE = 720, SICHT_MIN_RADIO = 480;   // mindestens so weit (halbe Kantenlänge, px) um den Spieler: Stöhnen/Horde und Autoradios hören alle gleich weit, egal wie groß der Bildschirm ist
 const SICHT_RAND = 260, SICHT_LOESEN = 220;   // Pixel um den Bildausschnitt: dort werden Zombies schon geschickt; erst so viel weiter wieder entfernt
 const SICHT_VORGABE = { w: 1100, h: 700 }, SICHT_MAX = 2600, SICHT_MAX_FLUG = 6000;   // halbe Ausschnittgröße in Pixeln, bis der Client seine meldet
+const EINGABE_RUECKSTAND_MAX = 2;   // Sekunden: mehr unabgearbeitete Bewegung wird verworfen (sonst schlägt die Server-Figur Sekunden später noch am alten Ort zu)
 const EINGABE_GUTHABEN_MAX = 1.5;   // Sekunden Bewegung, die der Server nach einem Netz-Hänger nachholt
 const ZWEI_PI = Math.PI * 2;
 
@@ -413,7 +414,11 @@ export class SpielRaum extends Room {
   eingabeSchritte(p, x, dt) {
     if (x.bot || !x.warte) return [[x.eingabe, dt]];
     const schritte = [];
-    x.guthaben = Math.min(EINGABE_GUTHABEN_MAX, (x.guthaben ?? 0) + dt);
+    // Rückstand abbauen statt halten: ab 0,3 s noch nicht abgearbeiteter Bewegung doppelt so schnell abarbeiten,
+    // über EINGABE_RUECKSTAND_MAX die ältesten Stücke verwerfen (quittiert; der Client korrigiert seine Vorhersage)
+    let offen = 0; for (const w of x.warte) offen += w.d;
+    while (offen > EINGABE_RUECKSTAND_MAX && x.warte.length > 1) { const w = x.warte.shift(); offen -= w.d; p.seq = w.n; }
+    x.guthaben = Math.min(EINGABE_GUTHABEN_MAX, (x.guthaben ?? 0) + dt * (offen > 0.3 ? 2 : 1));
     while (x.warte.length && x.guthaben > 1e-4) {
       const w = x.warte[0], nimm = Math.min(w.d, x.guthaben);
       if (nimm > 0) schritte.push([w, nimm]);
@@ -701,7 +706,7 @@ export class SpielRaum extends Room {
       alt.name = name; alt.verbunden = true; alt.su = !!auth?.su;
       if (optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
       this.state.spieler.set(client.sessionId, alt);
-      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, afkBot: null, letzteEingabe: Date.now(), superuser: !!auth?.su, suUnsterblich: !!auth?.su && x.suUnsterblich }); alt.afk = false;
+      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, warte: null, guthaben: 0, afkBot: null, letzteEingabe: Date.now(), superuser: !!auth?.su, suUnsterblich: !!auth?.su && x.suUnsterblich }); alt.afk = false;
       this.hunde?.besitzerWechsel(sid, client.sessionId);
       this.suAnmeldung(client, alt, auth);
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
@@ -988,6 +993,7 @@ export class SpielRaum extends Room {
     if (x.afkBot) {
       x.afkBot = null; x.eingabe = { dx: 0, dy: 0, s: false };
       const p = this.state.spieler.get(sid);
+      if (p) this.eingabeVerwerfen(p, x);   // während der Bot steuerte, lief die Warteschlange voll (Stand-Stücke): sonst hängt der Server danach bis 4 s hinterher
       if (p) { p.afk = false; this.broadcast('meldung', { text: `${p.name} ist wieder da` }); }
     }
   }
@@ -3721,11 +3727,12 @@ export class SpielRaum extends Room {
     const s = this.state;
     const safe = this.teamSafeWaehlen();
     let n = 0;
-    for (const [, p] of s.spieler) {
+    for (const [sid, p] of s.spieler) {
       this.sterbeHaufen(p);   // Ausrüstung bleibt am Sterbeort liegen (1 Spieltag)
       const pos = this.safePlatz(safe, n++);
       p.x = pos.x; p.y = pos.y; p.ebene = pos.ebene;
       p.hp = 100; p.durst = 100; p.hunger = 100; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0; p.zombie = 0;
+      const xp = this.extra.get(sid); if (xp) this.eingabeVerwerfen(p, xp);   // in der Phase „erwischt“ wurde nicht abgearbeitet
     }
     // Zombies rund um die Safe Rooms vertreiben
     for (const [id, z] of s.zombies) {

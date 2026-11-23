@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.84.3 – 23.11.2026
+
+- Behoben: Zeitversatz von mehreren Sekunden – nach einer Pause (AFK-Bot übernahm), nach dem Erwischtwerden oder nach Netzaussetzern hing die Figur auf dem Server bis zu 4 s hinter der angezeigten her; sie schlug dann noch am alten Ort zu, während man längst weitergelaufen war. Der Rückstand wird jetzt verworfen bzw. zügig aufgeholt (höchstens 2 s).
+
 ## 0.84.2 – 23.11.2026
 
 - Behoben: Am Schießstand konnte man seit 0.78.0 nicht mehr laufen.
