@@ -33,6 +33,9 @@ export class Finale {
     s.finaleRest = Math.ceil(this.rest);
   }
 
+  // alle im Bunker: Countdown endet sofort (beim nächsten Schritt)
+  sofort() { this.rest = 0.001; this.raum.state.finaleRest = 1; for (const t of ANSAGEN) this.gemeldet.add(t); }
+
   // Testbefehl: Countdown neu setzen
   setzen(sek) {
     if (!this.aktiv()) return false;

@@ -151,6 +151,15 @@ test('Bunker: alle im Bunker und Aufgaben erledigt → Countdown springt auf 10 
   assert.ok(await bis(() => s.evakPhase === 'sieg', 3000), 'kein Sieg: ' + s.evakPhase);
 }));
 
+test('Bunker (Vorgabe alleBordSek = 0): alle drin und Aufgaben erledigt → Tor schließt sofort, Sieg', mitArt('bunker', async ({ c, raum, p, s, ag, meldungen }) => {
+  assert.equal(new ag.constructor(raum).alleBordSek, 0, 'Vorgabe nicht 0'); ag.alleBordSek = 0;
+  assert.ok(s.finaleRest > 60);
+  ag.fahrtGelingt = () => true;
+  p.ebene = ''; p.x = s.evakX; p.y = s.evakY;
+  assert.ok(await bis(() => s.evakPhase === 'sieg', 4000), 'kein sofortiger Sieg: ' + s.evakPhase + ' ' + s.finaleRest);
+  assert.ok(await bis(() => meldungen.some(m => m.includes('Alle im Bunker – Tor schließt!')), 5000), meldungen.join(' | '));
+}));
+
 // ---------- Levelwechsel auf die neuen Karten: Evakuierungsart je Karte, nie Panzer/Bus ----------
 const warteRaum = async () => { assert.ok(await bis(() => !SpielRaum.aktiv, 5000), 'alter Raum lebt noch'); };
 async function levelWechselNach(ag, raum, ziel) {

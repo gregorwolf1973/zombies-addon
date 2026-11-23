@@ -114,7 +114,7 @@ export class Aufgaben {
     this.medizin = false;      // Spritze aus der Apotheke gefunden
     this.busId = null;
     this.busRest = 0;          // ECHTE Sekunden bis zur Abfahrt (ab dem Halt)
-    this.alleBordSek = 10;     // sind alle echten Spieler an Bord und die Aufgaben geschafft, läuft die Wartezeit auf höchstens so viele Sekunden herunter
+    this.alleBordSek = 0;      // sind alle echten Spieler an Bord und die Aufgaben geschafft, läuft die Wartezeit auf höchstens so viele Sekunden herunter (0 = sofort)
     this.alleBordGemeldet = false; this.alleDa = false;
     this.busHeute = false;     // der Bus war in diesem Zeitfenster schon da
     this.ankGemeldet = false;
@@ -481,15 +481,15 @@ export class Aufgaben {
     const bunker = this.heli?.art === 'bunker', fin = this.raum.finale;
     if (bunker) {   // Bunker: der Atomschlag-Countdown springt auf 10 s (server/finale.mjs), danach Sieg
       if (!fin?.aktiv() || fin.rest <= this.alleBordSek) return;
-      fin.setzen(this.alleBordSek);
+      if (this.alleBordSek > 0) fin.setzen(this.alleBordSek); else fin.sofort();
     } else {
       if (this.busRest <= this.alleBordSek) return;
       this.busRest = this.alleBordSek; this.busAbSetzen();
     }
     if (this.alleBordGemeldet) return;
     this.alleBordGemeldet = true;
-    const n = Math.max(1, Math.round(this.alleBordSek));
-    this.raum.broadcast('meldung', { text: bunker ? `☢️ Alle im Bunker – Tor schließt in ${n} s` : `${this.fz().zeichen} Alle an Bord – Abfahrt in ${n} s`, lang: true });
+    const n = Math.round(this.alleBordSek);
+    this.raum.broadcast('meldung', { text: bunker ? (n > 0 ? `☢️ Alle im Bunker – Tor schließt in ${n} s` : '☢️ Alle im Bunker – Tor schließt!') : (n > 0 ? `${this.fz().zeichen} Alle an Bord – Abfahrt in ${n} s` : `${this.fz().zeichen} Alle an Bord – Abfahrt!`), lang: true });
   }
 
   // Bus (Gewehre aus den Fenstern) und Panzer (Turm-MG) schießen vom Erscheinen bis zur Abfahrt auf Zombies in der Nähe;
