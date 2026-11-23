@@ -25,6 +25,7 @@ Wichtige Dateien:
 - `waffenplaetze.mjs`, `munition*.mjs`, `granaten.mjs`, `baumschuss.mjs`, `ueberrollen.mjs`, `faehigkeiten.mjs` – Kampf und Ausrüstung.
 - `stuetzpunkt.mjs`, `szene_b11*.mjs`, `leopard.mjs`, `flugplatz.mjs`, `haengend.mjs` – Lager und Sonderszenen.
 - `a400m_kisten.mjs` – Königsdorf: Munitionskisten fallen während der Landerolle aus dem A400M (je Echtspieler 2, fester Inhalt, Bodengegenstände `a400m_kiste_a/b`, Nachricht `kistenFall`, Fundorte, Spielstand über `aufgaben.speichern`).
+- `fahrbar.mjs` – fahrbare Fahrzeuge Boxer/Puma/Leopard (Liste `raum.fahrbare` + `raum.boxer`; Spielerfeld `imBoxer` = „sitzt in einem fahrbaren Fahrzeug“); `boxer.mjs` = echter Boxer am Flugfeld mit Horde; Superuser-Menü und Schießstand stellen Fahrzeuge ohne Horde auf. Client: `fahrbar.mjs` (Maße), `fahrbardarstellung.mjs`.
 - `speicher.mjs` (Spielstand), `superuser.mjs` (Testmenü, Zugangscode-Hash), `radio.mjs`, `raetsel.mjs`/`spielfragen.txt`, `nebel.mjs`.
 
 ### Schema und Sichtfilter

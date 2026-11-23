@@ -425,6 +425,8 @@ body.tastatur #chat { top: var(--vvtop, 0px); }
 #sumenue button.umschalter:not(.an) { background: #ffffff10; color: #ccc; }
 #sumenue .zeile { display: flex; gap: 4px; }
 #sumenue .zeile button { text-align: center; }
+#sumenue .raster { display: grid; grid-template-columns: 1fr 1fr; gap: 0 4px; }
+#sumenue .raster button { font-size: 13px; padding: 6px 8px; }
 #sumenue #suzu { width: auto; margin: 0; padding: 6px 12px; font-size: 18px; }
 #sumenue .titel { margin: 8px 0 2px; font-size: 12px; opacity: .7; }
 

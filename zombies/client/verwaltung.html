@@ -1142,6 +1142,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="tnBoxReich" min="5" max="120" step="1"><span id="tnBoxReichWert">40 m</span></div>
   <label for="tnBoxTempo">Boxer: Höchsttempo beim Fahren</label>
   <div class="tn-zeile"><input type="range" id="tnBoxTempo" min="10" max="120" step="5"><span id="tnBoxTempoWert">60 km/h</span></div>
+  <label for="tnPumaTempo">Puma (Testmenü/Schießstand): Höchsttempo beim Fahren</label>
+  <div class="tn-zeile"><input type="range" id="tnPumaTempo" min="10" max="120" step="5"><span id="tnPumaTempoWert">60 km/h</span></div>
+  <label for="tnLeoTempo">Leopard (Testmenü/Schießstand): Höchsttempo beim Fahren</label>
+  <div class="tn-zeile"><input type="range" id="tnLeoTempo" min="10" max="120" step="5"><span id="tnLeoTempoWert">60 km/h</span></div>
   <label for="tnVsTage">Versorgung: alle … Spieltage</label>
   <div class="tn-zeile"><input type="range" id="tnVsTage" min="1" max="14" step="1"><span id="tnVsTageWert">2</span></div>
   <label for="tnVsMun">Versorgung: Schuss je Spieler</label>
@@ -1308,6 +1312,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnBoxPause', bwe.boxerSchussPause === undefined ? 0.25 : bwe.boxerSchussPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnBoxReich', bwe.boxerReichweite === undefined ? 40 : bwe.boxerReichweite, function (v) { return v + ' m'; });
     feld('tnBoxTempo', bwe.boxerTempo === undefined ? 60 : bwe.boxerTempo, function (v) { return v + ' km/h'; });
+    feld('tnPumaTempo', bwe.pumaTempo === undefined ? 60 : bwe.pumaTempo, function (v) { return v + ' km/h'; });
+    feld('tnLeoTempo', bwe.leopardTempo === undefined ? 60 : bwe.leopardTempo, function (v) { return v + ' km/h'; });
     feld('tnVsTage', bwe.versorgungTage === undefined ? 2 : bwe.versorgungTage, function (v) { return v + ' Tage'; });
     feld('tnVsMun', bwe.versorgungMunition === undefined ? 50 : bwe.versorgungMunition, function (v) { return v + ' Schuss'; });
     feld('tnVsVerband', bwe.versorgungVerband === undefined ? 3 : bwe.versorgungVerband, function (v) { return v + ' Stück'; });
@@ -1441,6 +1447,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnBoxPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { boxerSchussPause: v } }; });
   regler('tnBoxReich', function (v) { return v + ' m'; }, function (v) { return { bundeswehr: { boxerReichweite: v } }; });
   regler('tnBoxTempo', function (v) { return v + ' km/h'; }, function (v) { return { bundeswehr: { boxerTempo: v } }; });
+  regler('tnPumaTempo', function (v) { return v + ' km/h'; }, function (v) { return { bundeswehr: { pumaTempo: v } }; });
+  regler('tnLeoTempo', function (v) { return v + ' km/h'; }, function (v) { return { bundeswehr: { leopardTempo: v } }; });
   regler('tnVsTage', function (v) { return v + ' Tage'; }, function (v) { return { bundeswehr: { versorgungTage: v } }; });
   regler('tnVsMun', function (v) { return v + ' Schuss'; }, function (v) { return { bundeswehr: { versorgungMunition: v } }; });
   regler('tnVsVerband', function (v) { return v + ' Stück'; }, function (v) { return { bundeswehr: { versorgungVerband: v } }; });
@@ -3693,7 +3701,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     schalter(bw.inhalt, 'tnBwAktiv');
     schalter(bw.inhalt, 'tnPolAktiv'); zeile(bw.inhalt, 'tnPolAnzahl'); zeile(bw.inhalt, 'tnPolMunition');
     zeile(bw.inhalt, 'tnBwTage'); zeile(bw.inhalt, 'tnPumaPause'); zeile(bw.inhalt, 'tnMgMunition'); zeile(bw.inhalt, 'tnPumaMunition'); rein(bw.inhalt, $('bwInfoPuma'));
-    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden', 'tnLeoKanonePause', 'tnLeoKanoneMin', 'tnBoxHordeSek', 'tnBoxHordeMin', 'tnBoxHordeMax', 'tnBoxPause', 'tnBoxReich', 'tnBoxTempo', 'tnVsTage', 'tnVsMun', 'tnVsVerband', 'tnVsSpritze'].forEach(function (id) { zeile(bw.inhalt, id); });
+    ['tnLeoReich', 'tnLeoPause', 'tnLeoSchaden', 'tnLeoKanonePause', 'tnLeoKanoneMin', 'tnBoxHordeSek', 'tnBoxHordeMin', 'tnBoxHordeMax', 'tnBoxPause', 'tnBoxReich', 'tnBoxTempo', 'tnPumaTempo', 'tnLeoTempo', 'tnVsTage', 'tnVsMun', 'tnVsVerband', 'tnVsSpritze'].forEach(function (id) { zeile(bw.inhalt, id); });
     schalter(bw.inhalt, 'tnLeoUeberroll'); schalter(bw.inhalt, 'tnLeoKanone'); rein(bw.inhalt, $('bwInfoLeo')); rein(bw.inhalt, $('bwInfoMg')); rein(bw.inhalt, $('tnBwStatus'));
     gruppe(bw);
     var hg = unter('🐕 Begleiter-Hund'); zeile(hg.inhalt, 'tnHundAblenk'); zeile(hg.inhalt, 'tnHundStreuner'); gruppe(hg);
@@ -3716,7 +3724,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
-    tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo', tnVsTage: 'bundeswehr.versorgungTage', tnVsMun: 'bundeswehr.versorgungMunition', tnVsVerband: 'bundeswehr.versorgungVerband', tnVsSpritze: 'bundeswehr.versorgungSpritze',
+    tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo', tnPumaTempo: 'bundeswehr.pumaTempo', tnLeoTempo: 'bundeswehr.leopardTempo', tnVsTage: 'bundeswehr.versorgungTage', tnVsMun: 'bundeswehr.versorgungMunition', tnVsVerband: 'bundeswehr.versorgungVerband', tnVsSpritze: 'bundeswehr.versorgungSpritze',
     tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',

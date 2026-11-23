@@ -101,6 +101,8 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
       <div class="ss-reihe">${[5, 20, 50].map(n => `<button class="ss-b" type="button" data-z="${n}">🧟 ${n} starten</button>`).join('')}</div>
       <div class="ss-titel">Fahrzeug am Lager</div>
       <div class="ss-reihe" id="ss-fahrzeuge">${[['', '🚫 Keins'], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard']].map(([a, t]) => `<button class="ss-b" type="button" data-f="${a}">${t}</button>`).join('')}</div>
+      <div class="ss-titel">Selbst fahren (E: ein-/aussteigen)</div>
+      <div class="ss-reihe" id="ss-fahrbar">${[['boxer', '🛡 Boxer'], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard']].map(([a, t]) => `<button class="ss-b" type="button" data-fb="${a}" title="Fahrzeug neben dir aufstellen (nochmal drücken: entfernen)">${t}</button>`).join('')}</div>
       <div class="ss-reihe" style="margin-top:4px"><button class="ss-b" type="button" id="ss-reset">↺ Zurücksetzen</button></div>
       <div id="ss-info"></div>
       <div class="ss-titel">Auswertung je Waffe</div>
@@ -117,6 +119,7 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
   $('ss-wurf').onclick = () => raum.send('wurf');
   let daten = null;
   box.querySelectorAll('[data-f]').forEach(b => { b.onclick = () => raum.send('ss_fahrzeug', { art: b.dataset.f }); });
+  box.querySelectorAll('[data-fb]').forEach(b => { b.onclick = () => raum.send('ss_fahrbar', { art: b.dataset.fb }); });
   $('ss-reset').onclick = () => raum.send('ss_reset');
   $('ss-ende').onclick = async () => {
     ctx.abmelden?.();
@@ -131,6 +134,7 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
     box.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('aktiv', b.dataset.w === aktiv));
     if (!daten) return;
     box.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('an', b.dataset.f === (daten.fahrzeug ?? (daten.panzer ? 'puma' : ''))));
+    box.querySelectorAll('[data-fb]').forEach(b => b.classList.toggle('an', b.dataset.fb === (daten.fahrbar ?? '')));
     $('ss-info').textContent = `🧟 ${daten.zombies}${daten.warten ? ` (+${daten.warten} kommen noch)` : ''} Zombies auf dem Platz`;
     const zeilen = ZEILEN.filter(n => daten.stat[n]?.schuesse > 0 || n === aktiv);
     $('ss-tab').innerHTML = zeilen.map(n => {
