@@ -21,7 +21,6 @@ tests/luftbild.test.mjs
 tests/magazin.test.mjs
 tests/mischpult.test.mjs
 tests/muendungslicht.test.mjs
-tests/munitionsglueck.test.mjs
 tests/musiklogik.test.mjs
 tests/nahkampf_luecken.test.mjs
 tests/nebel.test.mjs

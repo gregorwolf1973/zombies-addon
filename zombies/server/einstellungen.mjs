@@ -2,13 +2,14 @@
 // Gespeichert in /data/einstellungen.json; beim allerersten Start dienen die Add-on-Optionen als Startwerte.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DINGE, WAFFEN } from '../client/welt.mjs';
+import { DINGE, WAFFEN, MOEBEL_ANTEIL } from '../client/welt.mjs';
 import { HUND } from './hund.mjs';
-import { MUNITIONSGLUECK } from './munitionsglueck.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
-import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
+import { LEVEL_VORGABE, LEVEL_GRENZEN, LEVEL_SICHER } from './schwierigkeit.mjs';
 import { NEBEL_VORGABE, bereinigeNebel } from './nebel.mjs';
 import { SICHT_VORGABE, bereinigeSicht } from '../client/zombiesicht.mjs';
+import { zahl, fest } from '../client/zahl.mjs';
+import { LEVEL_KATALOG, bereinigeFolge, folgeVorgabe } from '../client/levelkatalog.mjs';
 
 // Vorlage: im Backend eingestellte Werte, die als Vorgabe übernommen wurden (Stand 22.11.2026) – überschreibt die Grundwerte unten.
 // Arrays werden ganz ersetzt. Neu erzeugen: aktuelle /data/einstellungen.json gegen die Grundwerte vergleichen (ohne Hash, Zugangscode, Test).
@@ -19,8 +20,9 @@ function mischen(a, b) {
 }
 
 // 'level1' = Zufallswahl für Level 1: bei jedem Start/Levelwechsel auf Level 1 wird Geretsried oder Geretsried 2 gewürfelt (server/aufgaben.mjs, level1Karte)
-export const KARTEN = ['level1', 'geretsried', 'geretsried2', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt', 'dorf'];
-export const LEVEL_WELTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
+// Kartenliste kommt aus dem Katalog (client/levelkatalog.mjs): neue Level-Karte = Eintrag dort, sie erscheint hier und in der Level-Reihenfolge
+export const KARTEN = ['level1', ...LEVEL_KATALOG.flatMap(k => k.karten), 'dorf'];
+export const LEVEL_WELTEN = LEVEL_KATALOG.map(k => k.id);
 export const BISS_LEVEL_VORGABE = { geretsried: 12, isarauen: 12, koenigsdorf: 14, kochel: 16, andermatt: 18 };   // Ansteckung der Spieler in % je Sekunde Biss, steigend   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
 export const EVAK_ARTEN = ['bus', 'panzer', 'flugzeug', 'absturz', 'heli', 'bunker'];   // Evakuierungsarten (server/aufgaben.mjs); '' in den Einstellungen = je Karte
 export const SCHWIERIGKEITEN = ['leicht', 'normal', 'schwer'];
@@ -37,6 +39,7 @@ export const MUSIK_VORGABE = { laut: 35, blende: 3 };
 export const RADIO_STREAM_VORGABE = { an: false, url: 'https://stream.antenne.de/antenne', name: 'Antenne Bayern', laut: 60, vorlauf: 30, durchsage: 4 };   // durchsage: alle … Minuten Eilmeldung (0 = aus)   // vorlauf: s stumm ab Spielbeginn (Senderwerbung am Anfang)   // Musik-Lautstärke in %, Überblendzeit in Sekunden
 // Vorbelegung (nur wenn die Dateien im Tonordner liegen und dem Ereignis noch nichts zugeordnet ist, siehe server/index.mjs)
 export const TON_STANDARD = {
+  funkAnsage: { dateien: ['funk_abholung.mp3'], laut: 100 },   // Sprachansage nach dem Funkspruch (Datei legt Gregor selbst in den Tonordner)
   horde: { dateien: ['zombie-horde-growls-and-snarls-7c0b158d.mp3', 'alice_soundz-zombie-sound-224167.mp3'], laut: 80 },
   hordeAkzent: { dateien: ['freesound_community-zombie-horde-87204.mp3'], laut: 80 },
   musikLevel5: { dateien: ['franzian-deo-apocalypse-469581.mp3'], laut: 100 },
@@ -63,7 +66,7 @@ export function bereinigeToeneNamen(neu, alt = {}) {
 
 // Hintergrundmusik im Spiel: je Situation eine Dateiliste (nach Ende das nächste Stück, abwechselnd); Auswahl siehe client/musiklogik.mjs
 export const MUSIK_EREIGNISSE = [
-  ...[1, 2, 3, 4, 5].map(n => ({ id: 'musikLevel' + n, name: `Level ${n} – Hauptlied`, beschreibung: n === 1 ? 'Hauptlied in Level 1 (beide Geretsried-Karten)' : `Hauptlied in Level ${n}`, art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 })),
+  ...[1, 2, 3, 4, 5].map(n => ({ id: 'musikLevel' + n, name: `Level ${n} – Hauptlied`, beschreibung: (n === 1 ? 'Hauptlied in Level 1 (beide Geretsried-Karten)' : `Hauptlied in Level ${n}`) + ' – gehört zur Karte und wandert mit, wenn die Level-Reihenfolge geändert wird', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 })),
   { id: 'musikLager', name: 'Im Bundeswehr-Lager', beschreibung: 'Solange du im Bundeswehr-Lager bist', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
   { id: 'musikHorde', name: 'Kampf gegen Horde', beschreibung: 'Solange das Hordengeräusch läuft (bleibt danach noch 10 s)', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
   { id: 'musikSafe', name: 'Im Safehouse', beschreibung: 'Solange du in einem Safe Room bist', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
@@ -102,6 +105,7 @@ export const EREIGNISSE = [
   ...[1, 2, 3, 4, 5].map(n => ({ id: 'durchsageLevel' + n, name: `Radio-Durchsage Level ${n}`, beschreibung: 'Nachrichtensprecher im Live-Radio (Zombie-Eilmeldung mit Ortsname); unterbricht den Sender, kommt aus dem Autoradio', art: 'einmal', gruppe: 'musik', kategorien: ['musik'], lautVorgabe: 100 })),
   { id: 'autoradio', name: 'Autoradio', beschreibung: 'Läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
   { id: 'startmusik', name: 'Startmusik', beschreibung: 'Auf der Startseite (nach dem ersten Antippen), blendet beim Spielbeginn aus', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
+  { id: 'funkAnsage', name: 'Funk-Ansage Abholung', beschreibung: 'Sprachansage nach dem Funkspruch: „Alles klar, sichern Sie die notwendigen Gegenstände und halten Sie sich bereit, wir holen Sie da raus.“ (ohne Uhrzeit; ohne Datei bleibt es still)', art: 'einmal', gruppe: 'bundeswehr', kategorien: ['bundeswehr'] },
   { id: 'soldatRuf', name: 'Soldat ruft', beschreibung: 'Soldaten im Bundeswehr-Lager rufen „Halt, sofort stehen bleiben!“, wenn sich jemand nähert oder Zombies den Zaun erreichen (aus Richtung des Soldaten)', art: 'einmal', gruppe: 'bundeswehr', kategorien: ['bundeswehr', 'soldat'] },
   { id: 'funk', name: 'Funkgerät', beschreibung: 'Kurzer Klick bei wichtigen Meldungen', art: 'einmal', gruppe: 'spieler', kategorien: ['spieler', 'bundeswehr'] },
   { id: 'wasser', name: 'Wasser', beschreibung: 'Rauschen in der Nähe von Bach und Fluss', art: 'schleife', gruppe: 'umgebung', kategorien: ['umgebung'] },
@@ -149,10 +153,7 @@ export function tonKategorien(dateiname) {
   return treffer.length ? treffer : ['sonstiges'];
 }
 
-const zahl = (v, min, max, vorgabe) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : vorgabe;
-};
+// zahl(wert, von, bis, vorgabe, opt): „von–bis“ ist nur die empfohlene Spanne, siehe client/zahl.mjs (fest() = echte Grenzen)
 
 // Alte Einstellungen (vor der Level-Tabelle) übernehmen: globale Zombiedichte/-häuser/Hordengröße skalieren die Level-Vorgaben,
 // Min/Max-Paare (Trupp, Zielwechsel) werden zu ihrem Mittelwert, welle = 0 (keine Wellen) schaltet die Horden aus.
@@ -194,13 +195,13 @@ export function bereinigeRadioStream(r = {}) {
     an: r.an === true,
     url: /^https:\/\/[^\s"'<>]{4,300}$/.test(url) ? url : RADIO_STREAM_VORGABE.url,
     name: String(r.name ?? RADIO_STREAM_VORGABE.name).trim().slice(0, 40) || RADIO_STREAM_VORGABE.name,
-    laut: Math.round(zahl(r.laut, 0, 100, RADIO_STREAM_VORGABE.laut)),
+    laut: Math.round(fest(r.laut, 0, 100, RADIO_STREAM_VORGABE.laut)),
     vorlauf: Math.round(zahl(r.vorlauf, 0, 120, RADIO_STREAM_VORGABE.vorlauf)),
     durchsage: Math.round(zahl(r.durchsage, 0, 30, RADIO_STREAM_VORGABE.durchsage)),
   };
 }
 export function bereinigeMusik(m = {}) {
-  return { laut: Math.round(zahl(m.laut, 0, 100, MUSIK_VORGABE.laut)), blende: Math.round(zahl(m.blende, 1, 10, MUSIK_VORGABE.blende) * 2) / 2 };
+  return { laut: Math.round(fest(m.laut, 0, 100, MUSIK_VORGABE.laut)), blende: Math.round(zahl(m.blende, 1, 10, MUSIK_VORGABE.blende) * 2) / 2 };
 }
 
 // Tabelle „Zombies je Level“: fehlende oder ungültige Werte kommen aus der bisherigen Tabelle bzw. der Vorgabe
@@ -208,7 +209,7 @@ function bereinigeLevel(neu, alt) {
   return LEVEL_VORGABE.map((v, i) => Object.fromEntries(Object.entries(v).map(([k, vorgabe]) => {
     const [lo, hi] = LEVEL_GRENZEN[k];
     const roh = neu?.[i]?.[k] ?? alt?.[i]?.[k];
-    const n = zahl(roh, lo, hi, vorgabe);
+    const n = zahl(roh, lo, hi, vorgabe, { max: LEVEL_SICHER[k] });
     return [k, k === 'pause' ? Math.round(n * 2) / 2 : Math.round(n)];
   })));
 }
@@ -222,20 +223,19 @@ export function bereinige(e = {}, alt = {}) {
   const sp = { ...a.sprache, ...(e.sprache ?? {}) };
   const ag = { ...a.aufgaben, ...(e.aufgaben ?? {}) };
   const bw = { ...a.bundeswehr, ...(e.bundeswehr ?? {}) };
-  const mgl = { ...a.munitionsglueck, ...(e.munitionsglueck ?? {}) }, MG = MUNITIONSGLUECK;
   const fk = { ...a.faehigkeiten, ...(e.faehigkeiten ?? {}) };
   const tu = { ...a.tueren, ...(e.tueren ?? {}) };
   const typen = Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, typeof z.typen?.[k] === 'boolean' ? z.typen[k] : (typeof a.zombies?.typen?.[k] === 'boolean' ? a.zombies.typen[k] : true)]));
   if (!Object.values(typen).some(Boolean)) typen[ZOMBIE_TYPEN[0]] = true;
   const funde = { ...a.funde };
-  for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10));
+  for (const [k, v] of Object.entries(e.funde ?? {})) if (DINGE[k]) funde[k] = Math.round(zahl(v, 0, 50, 10, { max: 1000 }));
   const toene = {};
   for (const ev of EREIGNISSE) {
     const lv = ev.lautVorgabe ?? 80, alt = a.toene?.[ev.id] ?? { dateien: [], laut: lv }, neu = e.toene?.[ev.id] ?? {};
     const dateien = Array.isArray(neu.dateien) ? neu.dateien : alt.dateien;
     toene[ev.id] = {
       dateien: [...new Set((dateien ?? []).map(String).filter(d => TON_DATEI.test(d)))].slice(0, 12),
-      laut: Math.round(zahl(neu.laut ?? alt.laut, 0, ev.lautMax ?? 100, lv)),
+      laut: Math.round(fest(neu.laut ?? alt.laut, 0, ev.lautMax ?? 100, lv)),
     };
   }
   // Superuser-Testzugang: nur der scrypt-Hash wird gespeichert; ein Klartext-Passwort (superuserPasswort) wird sofort gehasht,
@@ -247,30 +247,32 @@ export function bereinige(e = {}, alt = {}) {
     superuserHash: suHash,
     zugangscode: String(e.zugangscode ?? a.zugangscode ?? '').trim().slice(0, 40),
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
-    bots: Math.round(zahl(e.bots ?? a.bots, 0, 9, 2)),
+    levelFolge: bereinigeFolge(e.levelFolge, a.levelFolge),   // Reihenfolge und Schalter der Level [{ karte, aktiv }]; Schwierigkeit/Tabellen hängen an der Position, Karten-Besonderheiten an der Karte
+    bots: Math.round(zahl(e.bots ?? a.bots, 0, 9, 2, { max: 30 })),
     frischerStart: typeof e.frischerStart === 'boolean' ? e.frischerStart : !!a.frischerStart,
-    autos: Math.round(zahl(e.autos ?? a.autos, 0, 50, 10)),            // geparkte Autos, 10 = normal (gilt für neue Welten)
+    autos: Math.round(zahl(e.autos ?? a.autos, 0, 50, 10, { max: 250 })),            // geparkte Autos, 10 = normal (gilt für neue Welten)
     tagMinuten: Math.round(zahl(e.tagMinuten ?? a.tagMinuten, 10, 240, 48)),   // so viele echte Minuten dauert ein Spieltag
-    tagAb: Math.round(zahl(e.tagAb ?? a.tagAb, 240, 660, 420) / 15) * 15,      // ab dieser Uhrzeit (Minuten) ganz hell, 2 h Dämmerung davor
-    nachtAb: Math.round(zahl(e.nachtAb ?? a.nachtAb, 1080, 1439, 1290) / 15) * 15,   // ab dieser Uhrzeit ganz dunkel
-    nachtDunkel: Math.round(zahl(e.nachtDunkel ?? a.nachtDunkel, 30, 100, 92)),       // Nachtdunkelheit in % (100 = fast schwarz)
+    tagAb: Math.round(fest(e.tagAb ?? a.tagAb, 240, 660, 420) / 15) * 15,      // ab dieser Uhrzeit (Minuten) ganz hell, 2 h Dämmerung davor
+    nachtAb: Math.round(fest(e.nachtAb ?? a.nachtAb, 1080, 1439, 1290) / 15) * 15,   // ab dieser Uhrzeit ganz dunkel
+    nachtDunkel: Math.round(fest(e.nachtDunkel ?? a.nachtDunkel, 30, 100, 92)),       // Nachtdunkelheit in % (100 = fast schwarz)
     menschenGroesse: Math.round(zahl(e.menschenGroesse ?? a.menschenGroesse, 50, 200, 100)),   // Darstellungsgröße ALLER Menschen in % (100 = alle gleich breit, Schulterbreite)
     zombieGroesse: Math.round(zahl(e.zombieGroesse ?? a.zombieGroesse, 50, 200, 100)),   // Zombiegröße im Verhältnis zu den Menschen in % (100 = gleich breit; Leichen folgen automatisch)
     groesseGesamt: Math.round(zahl(e.groesseGesamt ?? a.groesseGesamt, 50, 150, 70)),   // Gesamtgröße in % (Menschen, Zombies, Leichen, Füße), multipliziert mit den Einzelwerten
     baumTempo: Math.round(zahl(e.baumTempo ?? a.baumTempo, 5, 100, 25)),   // Tempo unter Bäumen in % des normalen Tempos (Menschen, Zombies, Spieler, Bots; 25 = 75 % langsamer)
     zombieLeben: Math.round(zahl(e.zombieLeben ?? a.zombieLeben, 20, 500, 100)),         // Lebenspunkte eines Zombies (100 = normal)
-    menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50)),         // Bewohner zu Beginn einer Welt
+    menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50, { max: 2000 })),         // Bewohner zu Beginn einer Welt
     verwandlung: Math.round(zahl(e.verwandlung ?? a.verwandlung, 1, 240, 30)),   // Menschen: Spielminuten vom Biss bis zur Verwandlung in einen Zombie
-    bissSpieler: Math.round(zahl(e.bissSpieler ?? a.bissSpieler, 0, 100, 12)),   // Spieler: Ansteckungschance in % je Sekunde Biss (alter globaler Wert, Vorgabe für die Level)
+    bissSpieler: Math.round(fest(e.bissSpieler ?? a.bissSpieler, 0, 100, 12)),   // Spieler: Ansteckungschance in % je Sekunde Biss (alter globaler Wert, Vorgabe für die Level)
     // Spieler: Ansteckungschance je Level (Karte); fehlt ein Wert, gilt der alte globale Wert
-    bissSpielerLevel: Object.fromEntries(LEVEL_WELTEN.map(k => [k, Math.round(zahl(e.bissSpielerLevel?.[k] ?? alt.bissSpielerLevel?.[k] ?? (BISS_LEVEL_VORGABE[k] > 12 ? BISS_LEVEL_VORGABE[k] : (e.bissSpieler ?? alt.bissSpieler)), 0, 100, BISS_LEVEL_VORGABE[k] ?? 12))])),
-    biss: Math.round(zahl(e.biss ?? a.biss, 0, 100, 100)),                   // Stadtbewohner: Chance in % je Bissversuch (einmal pro Sekunde bei Berührung)
+    bissSpielerLevel: Object.fromEntries(LEVEL_WELTEN.map(k => [k, Math.round(fest(e.bissSpielerLevel?.[k] ?? alt.bissSpielerLevel?.[k] ?? (BISS_LEVEL_VORGABE[k] > 12 ? BISS_LEVEL_VORGABE[k] : (e.bissSpieler ?? alt.bissSpieler)), 0, 100, BISS_LEVEL_VORGABE[k] ?? 12))])),
+    biss: Math.round(fest(e.biss ?? a.biss, 0, 100, 100)),                   // Stadtbewohner: Chance in % je Bissversuch (einmal pro Sekunde bei Berührung)
     feuer: zahl(e.feuer ?? a.feuer, 0, 30, 1),                                 // Minuten zwischen zwei Bränden (0 = keine)
     feuerPhase: Math.round(zahl(e.feuerPhase ?? a.feuerPhase, 0, 240, 20)),  // so lange (Spielminuten ab Weltbeginn) brennt es immer wieder
-    verkehr: Math.round(zahl(e.verkehr ?? a.verkehr, 0, 30, 30)),            // Obergrenze fahrender Autos am Anfang (die Anzahl richtet sich nach der Straßenlänge, server/verkehr.mjs verkehrAnzahl)
+    verkehr: Math.round(zahl(e.verkehr ?? a.verkehr, 0, 200, 30, { max: 1000 })),            // Obergrenze fahrender Autos am Anfang (Anzahl = Straßenlänge / verkehrDichte, server/verkehr.mjs verkehrAnzahl)
+    verkehrDichte: Math.round(zahl(e.verkehrDichte ?? a.verkehrDichte, 300, 3000, 2000, { min: 10 })),   // Meter befahrbare Straße je fahrendem Auto (empfohlen 300–3000); Anzahl = Netzlänge / Dichte, höchstens `verkehr`
     verkehrPhase: Math.round(zahl(e.verkehrPhase ?? a.verkehrPhase, 0, 240, 25)),
     unfall: Math.round(zahl(e.unfall ?? a.unfall, 0, 600, 10)),                // Verkehrsunfall durchschnittlich alle … Spielminuten (0 = keine Unfälle, siehe server/unfall.mjs)
-    unfallExplosion: Math.round(zahl(e.unfallExplosion ?? a.unfallExplosion, 0, 100, 50)),   // % der Unfallautos, die nach dem Brennen explodieren
+    unfallExplosion: Math.round(fest(e.unfallExplosion ?? a.unfallExplosion, 0, 100, 50)),   // % der Unfallautos, die nach dem Brennen explodieren
     unfallSchaden: Math.round(zahl(e.unfallSchaden ?? a.unfallSchaden, 0, 100, 30)),         // Lebenspunkte Schaden für Spieler in der Explosion (in der Mitte, am Rand halb)
     blaulicht: ['aus', 'selten', 'normal'].includes(e.blaulicht) ? e.blaulicht : (['aus', 'selten', 'normal'].includes(a.blaulicht) ? a.blaulicht : 'selten'),   // Polizei/Feuerwehr-Durchfahrten
     schwierigkeit: SCHWIERIGKEITEN.includes(e.schwierigkeit) ? e.schwierigkeit : SCHWIERIGKEITEN.includes(a.schwierigkeit) ? a.schwierigkeit : 'normal',   // Regler leicht/normal/schwer (×0,75/1/1,3, siehe schwierigkeit.mjs)
@@ -287,7 +289,7 @@ export function bereinige(e = {}, alt = {}) {
       schaden: Math.round(zahl(e.waffen?.[w]?.schaden ?? a.waffen?.[w]?.schaden, 1, 500, v.schaden)),
       pause: Math.round(zahl(e.waffen?.[w]?.pause ?? a.waffen?.[w]?.pause, 0.05, 5, v.pause) * 100) / 100,
       ...(v.magazin ? {
-        magazin: Math.round(zahl(e.waffen?.[w]?.magazin ?? a.waffen?.[w]?.magazin, 1, 150, v.magazin)),   // Schuss je Magazin
+        magazin: Math.round(zahl(e.waffen?.[w]?.magazin ?? a.waffen?.[w]?.magazin, 1, 150, v.magazin, { max: 10000 })),   // Schuss je Magazin
         nachlade: Math.round(zahl(e.waffen?.[w]?.nachlade ?? a.waffen?.[w]?.nachlade, 0.5, 10, v.nachlade) * 10) / 10,   // Sekunden zum Nachladen
       } : {}),
     }])),
@@ -298,11 +300,11 @@ export function bereinige(e = {}, alt = {}) {
       nacht: Math.round(zahl(z.nacht, 10, 30, 15)),      // nachts so viel mehr draußen (15 = ×1,5)
       hordeZiel: Math.round(zahl(z.hordeZiel, 0.5, 30, 3.5) * 2) / 2,   // Horde wechselt ihr Ziel etwa alle … echte Minuten (±40 % Streuung im Code)
       hordeZieleZeigen: typeof z.hordeZieleZeigen === 'boolean' ? z.hordeZieleZeigen : false,   // Prüfwerkzeug: Ziel der Horde für Superuser anzeigen
-      hordeTrupp: Math.round(zahl(z.hordeTrupp, 1, 300, 10)),   // Angriffstrupp je Ziel: Größe in Zombies (±30 % Streuung im Code, wächst mit der Horde)
+      hordeTrupp: Math.round(zahl(z.hordeTrupp, 1, 300, 10, { max: 2000 })),   // Angriffstrupp je Ziel: Größe in Zombies (±30 % Streuung im Code, wächst mit der Horde)
       hordeReichweite: Math.round(zahl(z.hordeReichweite, 5, 60, 18)), // so nah (Meter) an Spielern/Bots/Soldaten/Menschen löst sich ein Trupp
-      lagerWelle: Math.round(zahl(z.lagerWelle, 0, 400, 200)),   // Zombies der Welle, wenn alle Menschen im Bundeswehr-Lager sind (0 = aus)
+      lagerWelle: Math.round(zahl(z.lagerWelle, 0, 400, 200, { max: 5000 })),   // Zombies der Welle, wenn alle Menschen im Bundeswehr-Lager sind (0 = aus)
       lagerWellePause: Math.round(zahl(z.lagerWellePause, 1, 120, 10)),   // höchstens alle … Minuten eine Lager-Welle
-      ueberraschung: Math.round(zahl(z.ueberraschung, 0, 100, 3)),   // % Chance, dass beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto ein Zombie herausspringt
+      ueberraschung: Math.round(fest(z.ueberraschung, 0, 100, 3)),   // % Chance, dass beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto ein Zombie herausspringt
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
     },
     zombieSicht: bereinigeSicht(e.zombieSicht, a.zombieSicht),   // Zombie-Sicht: Meter/Grad/% (client/zombiesicht.mjs)
@@ -310,22 +312,22 @@ export function bereinige(e = {}, alt = {}) {
     sprache: {
       an: typeof sp.an === 'boolean' ? sp.an : true,                          // Sprachübertragung zwischen Mitspielern
       hoerweite: Math.round(zahl(sp.hoerweite, 10, 100, 40)),                 // Meter, ab hier ist man draußen nicht mehr zu hören
-      stockwerk: Math.round(zahl(sp.stockwerk, 0, 100, 35)),                  // % Lautstärke in einem anderen Stockwerk desselben Hauses
-      drinnenDraussen: Math.round(zahl(sp.drinnenDraussen, 0, 50, 10)),       // % Lautstärke zwischen drinnen und draußen (an der Tür)
-      funk: Math.round(zahl(sp.funk, 0, 100, 70)),                            // % Lautstärke über Funkgeräte
+      stockwerk: Math.round(fest(sp.stockwerk, 0, 100, 35)),                  // % Lautstärke in einem anderen Stockwerk desselben Hauses
+      drinnenDraussen: Math.round(fest(sp.drinnenDraussen, 0, 50, 10)),       // % Lautstärke zwischen drinnen und draußen (an der Tür)
+      funk: Math.round(fest(sp.funk, 0, 100, 70)),                            // % Lautstärke über Funkgeräte
       redenLockt: typeof sp.redenLockt === 'boolean' ? sp.redenLockt : false, // Reden lockt Zombies an
     },
     aufgaben: {
       an: typeof ag.an === 'boolean' ? ag.an : true,                          // gemeinsame Aufgaben und Evakuierungsbus
-      stunde: Math.round(zahl(ag.stunde, 6, 23, 18)),                         // Uhrzeit (Spieluhr), zu der der Bus am Ortsausgang ankommt
+      stunde: Math.round(fest(ag.stunde, 6, 23, 18)),                         // Uhrzeit (Spieluhr), zu der der Bus am Ortsausgang ankommt
       wartezeit: Math.round(zahl(ag.wartezeit, 10, 180, 60)),                 // Spielminuten: Ankunftsfenster, in dem der Bus noch erscheint
       wartenEchtMin: Math.round(zahl(ag.wartenEchtMin, 1, 60, 10)),           // echte Minuten, die der Bus ab dem Halt höchstens wartet
-      anzahl: Math.round(zahl(ag.anzahl, 3, 6, 4)),                           // Aufgaben je Level
+      anzahl: Math.round(zahl(ag.anzahl, 3, 6, 4, { min: 1, max: 50 })),                           // Aufgaben je Level
       finaleMinuten: Math.round(zahl(ag.finaleMinuten, 10, 90, 30)),          // Andermatt: echte Minuten bis zum Atomschlag (server/finale.mjs)
       evakArt: EVAK_ARTEN.includes(ag.evakArt) ? ag.evakArt : '',             // Test: Evakuierungsart für die aktuelle Karte erzwingen ('' = aus, je Karte: Bus / Leopard / A400M)
     },
     tueren: (() => {                                                          // Anteile verschlossener Zimmertüren in %: frei / nur Rätsel / nur Schlüssel
-      const r = { frei: Math.round(zahl(tu.frei, 0, 100, 50)), raetsel: Math.round(zahl(tu.raetsel, 0, 100, 25)), schluessel: Math.round(zahl(tu.schluessel, 0, 100, 25)) };
+      const r = { frei: Math.round(fest(tu.frei, 0, 100, 50)), raetsel: Math.round(fest(tu.raetsel, 0, 100, 25)), schluessel: Math.round(fest(tu.schluessel, 0, 100, 25)) };
       if (r.frei + r.raetsel + r.schluessel <= 0) r.frei = 100;
       return r;
     })(),
@@ -339,6 +341,11 @@ export function bereinige(e = {}, alt = {}) {
       mgMunition: Math.round(zahl(bw.mgMunition, 0, 5000, 400)),             // Munition je MG-Nest (0 = unbegrenzt); leer: Soldaten holen Nachschub
       pumaMunition: Math.round(zahl(bw.pumaMunition, 0, 2000, 200)),         // Munition des Puma (0 = unbegrenzt)
       falltage: Math.round(zahl(bw.falltage, 0, 30, 3)),                      // fällt nach so vielen Spieltagen seit Weltbeginn (0 = nie)
+      versorgungTage: Math.round(zahl(bw.versorgungTage, 1, 30, 2)),          // Versorgung über die Munitionskisten: alle so viele Spieltage (je Echtspieler, solange das Lager steht)
+      versorgungMunition: Math.round(zahl(bw.versorgungMunition, 0, 500, 50)), // … Schuss Munition
+      versorgungVerband: Math.round(zahl(bw.versorgungVerband, 0, 10, 3)),     // … Verbandszeug
+      versorgungSpritze: Math.round(zahl(bw.versorgungSpritze, 0, 5, 1)),      // … Spritzen
+      versorgungWaffe: typeof bw.versorgungWaffe === 'boolean' ? bw.versorgungWaffe : true,   // … eine zufällige Schusswaffe (Pistole, Jagdgewehr, Schrotflinte)
       leopardReichweite: Math.round(zahl(bw.leopardReichweite, 5, 80, 29)),   // Evakuierungspanzer Leopard 2A7: Reichweite des MG in Metern
       leopardPause: Math.round(zahl(bw.leopardPause, 0.1, 5, 0.4) * 10) / 10, // … Sekunden zwischen zwei Schüssen
       leopardSchaden: Math.round(zahl(bw.leopardSchaden, 1, 500, 100)),       // … Schaden je Treffer
@@ -347,29 +354,23 @@ export function bereinige(e = {}, alt = {}) {
       leopardKanonePause: Math.round(zahl(bw.leopardKanonePause, 3, 120, 8)),                           // … Sekunden zwischen zwei Kanonenschüssen
       leopardKanoneMin: Math.round(zahl(bw.leopardKanoneMin, 3, 50, 10)),                               // … so viele Zombies müssen auf einem Fleck (6 m Durchmesser) stehen
       boxerHordeSek: Math.round(zahl(bw.boxerHordeSek, 10, 3600, 120)),                                  // Radpanzer Boxer (Königsdorf): alle … Sekunden eine Horde, solange jemand drinsitzt
-      boxerHordeMin: Math.round(zahl(bw.boxerHordeMin, 1, 500, 20)),                                     // … mindestens so viele Zombies je Horde
-      boxerHordeMax: Math.max(Math.round(zahl(bw.boxerHordeMin, 1, 500, 20)), Math.round(zahl(bw.boxerHordeMax, 1, 500, 50))),   // … höchstens so viele (nie weniger als das Minimum)
+      boxerHordeMin: Math.round(zahl(bw.boxerHordeMin, 1, 500, 20, { max: 2000 })),                                     // … mindestens so viele Zombies je Horde
+      boxerHordeMax: Math.max(Math.round(zahl(bw.boxerHordeMin, 1, 500, 20, { max: 2000 })), Math.round(zahl(bw.boxerHordeMax, 1, 500, 50, { max: 2000 }))),   // … höchstens so viele (nie weniger als das Minimum)
       boxerSchussPause: Math.round(zahl(bw.boxerSchussPause, 0.05, 5, 0.25) * 100) / 100,               // … Sekunden zwischen zwei Schüssen des Turms (Dauerfeuer)
       boxerReichweite: Math.round(zahl(bw.boxerReichweite, 5, 120, 40)),                                 // … Reichweite des Turms in Metern
+      boxerTempo: Math.round(zahl(bw.boxerTempo, 10, 120, 60)),                                          // … Höchsttempo beim Fahren in km/h
     },
     polizei: {
       aktiv: typeof e.polizei?.aktiv === 'boolean' ? e.polizei.aktiv : (typeof a.polizei?.aktiv === 'boolean' ? a.polizei.aktiv : true),   // Polizisten und Streifenwagen an den Straßensperren
-      anzahl: Math.round(zahl(e.polizei?.anzahl ?? a.polizei?.anzahl, 1, 6, 3)),                // Polizisten je Sperre
+      anzahl: Math.round(zahl(e.polizei?.anzahl ?? a.polizei?.anzahl, 1, 6, 3, { max: 50 })),                // Polizisten je Sperre
       munition: Math.round(zahl(e.polizei?.munition ?? a.polizei?.munition, 0, 200, 30)),       // Schuss je Polizist (0 = unbegrenzt)
     },
     hund: {
-      ablenkung: Math.round(zahl(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)),
-      streuner: Math.round(zahl(e.hund?.streuner ?? a.hund?.streuner, -1, 20, HUND.streuner)),   // Streuner-Hunde: -1 = automatisch (1 je 0,5 km²), 0 = keine, 1–20 fest
+      ablenkung: Math.round(fest(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)),
+      streuner: Math.round(zahl(e.hund?.streuner ?? a.hund?.streuner, -1, 20, HUND.streuner, { max: 200 })),   // Streuner-Hunde: -1 = automatisch (1 je 0,5 km²), 0 = keine, 1–20 fest
     },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
     funde,
-    munitionsglueck: {                                                        // Munitionsglück (server/munitionsglueck.mjs), alles in %
-      schritt: Math.round(zahl(mgl.schritt, 0, 100, MG.schritt)),
-      max: Math.round(zahl(mgl.max, 100, 500, MG.max)),
-      lebenUnter: Math.round(zahl(mgl.lebenUnter, 0, 100, MG.lebenUnter)),
-      lebenFaktor: Math.round(zahl(mgl.lebenFaktor, 100, 300, MG.lebenFaktor)),
-      notUnter: Math.round(zahl(mgl.notUnter, 0, 100, MG.notUnter)),
-      notFaktor: Math.round(zahl(mgl.notFaktor, 100, 300, MG.notFaktor)),
-    },
+    beute: { moebel: Math.round(fest(e.beute?.moebel ?? a.beute?.moebel, 0, 100, MOEBEL_ANTEIL)) },   // Prozent: echte Grenze 0–100   // % der Möbel/Behälter, die überhaupt etwas enthalten
     toene,
     toeneNamen: bereinigeToeneNamen(e.toeneNamen, a.toeneNamen),
     toeneHorde: bereinigeHordeTon({ ...a.toeneHorde, ...(e.toeneHorde ?? {}) }),
@@ -388,20 +389,20 @@ export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
 
 export function grundwerte() {
   return {
-    superuserHash: '', zugangscode: '', karte: 'level1', bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, innenMassstab: false, innenTempo: 35, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', karte: 'level1', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, innenMassstab: false, innenTempo: 35, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
-    bundeswehr: { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, mgMunition: 400, pumaMunition: 200 },
+    bundeswehr: { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60, mgMunition: 400, pumaMunition: 200 },
     polizei: { aktiv: true, anzahl: 3, munition: 30 },
     nebel: { ...NEBEL_VORGABE },
     zombieSicht: { ...SICHT_VORGABE },
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     hund: { ...HUND },
-    munitionsglueck: { ...MUNITIONSGLUECK },
+    beute: { moebel: MOEBEL_ANTEIL },
     toene: {},
     toeneNamen: {},
     toeneHorde: { ...HORDE_TON_VORGABE },

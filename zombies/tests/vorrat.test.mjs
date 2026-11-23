@@ -359,7 +359,7 @@ test('Leichen: bleiben liegen, Beute durchsuchbar, altern weg, höchstens 30', a
     for (let i = 0; i < 4000; i++) {
       raum.neueLeiche({ x: 0, y: 0, richtung: 0 });
       const inhalt = raum.leichenInhalt.get([...raum.state.leichen.keys()].at(-1));
-      if (['pistole', 'munition', 'messer'].includes(inhalt[0])) selten++; else if (inhalt.length) oft++;
+      if (['pistole', 'messer', 'schrotflinte'].includes(inhalt[0])) selten++; else if (inhalt.some(d => d !== 'munition')) oft++;   // Munition hat eine eigene Chance (15 %, 5–12 Schuss) und zählt hier nicht mit
     }
     assert.ok(selten > 120 && selten < 290, `selten: ${selten}`);
     assert.ok(oft > 1900 && oft < 2500, `oft: ${oft}`);

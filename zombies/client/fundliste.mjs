@@ -32,7 +32,7 @@ export function fundZeigen(raum, m, lok, meldung) {
     const r = document.createElement('div'); r.className = 'aufh-reihe';
     e.dinge.forEach((d, i) => {
       const b = document.createElement('button');
-      b.className = 'aufh-knopf'; b.innerHTML = `<span class="z">${dingIcon(d, 28)}</span><span class="t">${sicher(DINGE[d]?.name ?? d)}</span>`;
+      b.className = 'aufh-knopf'; b.innerHTML = `<span class="z">${dingIcon(d, 28)}</span><span class="t">${sicher(DINGE[d]?.name ?? d)}${e.mengen?.[d] ? ' (' + e.mengen[d] + ')' : ''}</span>`;
       b.onclick = ev => { ev.stopPropagation(); raum.send('fund_nimm', { id: e.id, i }); };
       r.append(b);
     });

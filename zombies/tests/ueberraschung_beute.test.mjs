@@ -85,8 +85,8 @@ test('Belohnungsspind hinter Rätsel-Tür: viel mehr Waffen als normale Schränk
 test('Küche: Herd und Spüle liefern oft ein Messer (je Küche 50–85 %)', async () => {
   await frisch();
   const { c, raum, p } = await beitreten('Koch');
-  const einst = SpielRaum.einstellungen, alt = einst.ueberraschung;
-  einst.ueberraschung = 0;
+  const einst = SpielRaum.einstellungen, alt = einst.ueberraschung, altMoebel = einst.beute;
+  einst.ueberraschung = 0; einst.beute = { moebel: 100 };   // alle Möbel gefüllt (der Möbelanteil hat einen eigenen Test in beute_funde.test.mjs)
   let kuechen = 0, treffer = 0, versuche = 0;
   for (const w of ebenen(raum)) for (const r of w.raeume.filter(r => r.typ === 'kueche')) {
     const bs = w.behaelter.filter(b => (b.art === 'herd' || b.art === 'spuele') && Math.floor(b.x / KACHEL) >= r.x && Math.floor(b.x / KACHEL) < r.x + r.b && Math.floor(b.y / KACHEL) >= r.y && Math.floor(b.y / KACHEL) < r.y + r.h);
@@ -98,7 +98,7 @@ test('Küche: Herd und Spüle liefern oft ein Messer (je Küche 50–85 %)', asy
   assert.ok(kuechen >= 3, 'zu wenige Küchen mit Herd und Spüle: ' + kuechen);
   const q = treffer / versuche;
   assert.ok(q > 0.5 && q < 0.85, 'Messerquote je Küche: ' + q);
-  einst.ueberraschung = alt;
+  einst.ueberraschung = alt; einst.beute = altMoebel;
   await c.leave();
 });
 

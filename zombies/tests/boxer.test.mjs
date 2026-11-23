@@ -13,7 +13,7 @@ import { SpielRaum } from '../server/raum.mjs';
 import { boxerStandort, boxerFrei, EINST_VORGABE, BOXER_PLAETZE } from '../server/boxer.mjs';
 import { bereinige } from '../server/einstellungen.mjs';
 import { BOXER, boxerNah } from '../client/boxer.mjs';
-import { KACHEL, setzeKartengroesse, frei } from '../client/welt.mjs';
+import { KACHEL, setzeKartengroesse, frei, kmhZuPx } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 
 const PORT = 28300 + Math.floor(Math.random() * 100);
@@ -50,11 +50,11 @@ test('Boxer-Standort: Karten ohne Piste haben keinen Boxer', () => {
   assert.equal(boxerStandort({}), null);
 });
 
-test('Einstellungen: boxer* mit Grenzen, Maximum nie unter dem Minimum', () => {
+test('Einstellungen: boxer* nur technisch begrenzt, Maximum nie unter dem Minimum', () => {
   const b = bereinige({}).bundeswehr;
   for (const [k, v] of Object.entries(EINST_VORGABE)) assert.equal(b[k], v, k);
-  const k = bereinige({ bundeswehr: { boxerHordeSek: 1, boxerHordeMin: 0, boxerHordeMax: 9999, boxerSchussPause: 0, boxerReichweite: 9999 } }).bundeswehr;
-  assert.deepEqual([k.boxerHordeSek, k.boxerHordeMin, k.boxerHordeMax, k.boxerSchussPause, k.boxerReichweite], [10, 1, 500, 0.05, 120]);
+  const k = bereinige({ bundeswehr: { boxerHordeSek: 1, boxerHordeMin: 0, boxerHordeMax: 9999, boxerSchussPause: 0, boxerReichweite: 9999, boxerTempo: 999 } }).bundeswehr;
+  assert.deepEqual([k.boxerHordeSek, k.boxerHordeMin, k.boxerHordeMax, k.boxerSchussPause, k.boxerReichweite, k.boxerTempo], [1, 1, 2000, 0.05, 9999, 999]);   // seit 0.85: Werte frei, nur Sicherheitsgrenzen
   const m = bereinige({ bundeswehr: { boxerHordeMin: 80, boxerHordeMax: 30 } }).bundeswehr;
   assert.ok(m.boxerHordeMax >= m.boxerHordeMin, 'Maximum unter Minimum');
 });
@@ -144,7 +144,7 @@ test('Einsteigen mit Aktionstaste: Fahrer zuerst, nächster Insasse übernimmt, 
   assert.equal(BOXER_PLAETZE, 4);
 }));
 
-test('Fahren: Eingabe lenkt, Boxer beschleunigt auf ca. 10 m/s, dreht begrenzt, bremst ohne Eingabe und bleibt vor einem Hindernis stehen', mitRaum(async ({ raum, f, a, w, boxer }) => {
+test('Fahren: Eingabe lenkt, Boxer beschleunigt auf ca. 60 km/h, dreht begrenzt, bremst ohne Eingabe und bleibt vor einem Hindernis stehen', mitRaum(async ({ raum, f, a, w, boxer }) => {
   a.c.send('aktion');
   assert.ok(await bis(() => a.p.imBoxer));
   const x = raum.extra.get(a.sid);
@@ -153,7 +153,7 @@ test('Fahren: Eingabe lenkt, Boxer beschleunigt auf ca. 10 m/s, dreht begrenzt, 
   assert.ok(await bis(() => f.x > x0 + 60, 5000), 'fährt nicht');
   assert.ok(Math.abs(f.y - y0) < 2 && Math.abs(f.richtung) < 0.01, 'weicht von der Richtung ab');
   assert.ok(Math.hypot(a.p.x - f.x, a.p.y - f.y) < 1, 'Insasse folgt nicht');
-  assert.ok(boxer.v <= 80.5, 'schneller als 10 m/s: ' + boxer.v);
+  assert.ok(boxer.v <= kmhZuPx(60) + 0.5, 'schneller als 60 km/h: ' + boxer.v);
   // Lenken: nach unten drehen (begrenzte Rate)
   const t0 = Date.now(), r0 = f.richtung;
   x.eingabe = { dx: 0, dy: 1, s: false };
@@ -164,6 +164,34 @@ test('Fahren: Eingabe lenkt, Boxer beschleunigt auf ca. 10 m/s, dreht begrenzt, 
   x.eingabe = { dx: 0, dy: 0, s: false };
   assert.ok(await bis(() => Math.abs(boxer.v) < 0.01, 4000), 'bremst nicht');
 }));
+
+test('Boxer fährt mit Vollgas ca. 60 km/h und schlüpft bei vollem Tempo nicht durch Hindernisse', mitRaum(async ({ raum, a, boxer }) => {
+  const fr = boxer.fahrwerk();
+  assert.ok(Math.abs(fr.vmax - kmhZuPx(60)) < 0.01, 'Vorgabe nicht 60 km/h');
+  assert.ok(fr.vmax * 0.05 / fr.schrittPx >= 3 && fr.schrittPx <= 2, 'Teilschritte zu grob');
+  const w = finde(raum, 0, 400, 1100);   // freie Strecke ≥ 400 px mit Hindernis dahinter
+  const f = boxer.aufstellen(w.x, w.y, 0);
+  a.p.x = f.x; a.p.y = f.y + BOXER.breite / 2 + 12;
+  a.c.send('aktion');
+  assert.ok(await bis(() => a.p.imBoxer));
+  raum.extra.get(a.sid).eingabe = { dx: 1, dy: 0, s: false };
+  let vmax = 0; const t0 = Date.now();
+  while (Date.now() - t0 < 15000 && !(boxer.v === 0 && f.x > w.x + 40)) { vmax = Math.max(vmax, boxer.v); await warte(10); }
+  assert.ok(vmax > kmhZuPx(60) * 0.97 && vmax <= kmhZuPx(60) + 0.5, 'Höchsttempo ' + vmax + ' statt ' + kmhZuPx(60));
+  assert.ok(boxerFrei(raum.wv(''), f.x, f.y, f.richtung), 'steht im Hindernis');
+  await warte(500);
+  assert.ok(f.x < w.x + w.weg + 1, 'durch das Hindernis gefahren: ' + (f.x - w.x) + ' > ' + w.weg);
+}));
+
+test('Einstellung bundeswehr.boxerTempo begrenzt das Höchsttempo', mitRaum(async ({ raum, a, boxer }) => {
+  assert.ok(Math.abs(boxer.fahrwerk().vmax - kmhZuPx(30)) < 0.01, 'boxerTempo wirkt nicht');
+  a.c.send('aktion');
+  assert.ok(await bis(() => a.p.imBoxer));
+  raum.extra.get(a.sid).eingabe = { dx: 1, dy: 0, s: false };
+  let vmax = 0; const t0 = Date.now();
+  while (Date.now() - t0 < 3500) { vmax = Math.max(vmax, boxer.v); await warte(10); }
+  assert.ok(vmax > kmhZuPx(30) * 0.9 && vmax <= kmhZuPx(30) + 0.5, 'Tempo ' + vmax);
+}, { bundeswehr: { boxerTempo: 30 } }));
 
 test('Fahren: vor einem Hindernis bleibt der Boxer stehen (nie in Häusern oder Wasser)', mitRaum(async ({ raum, a, boxer }) => {
   // Boxer an eine Stelle setzen, vor der ein Hindernis liegt

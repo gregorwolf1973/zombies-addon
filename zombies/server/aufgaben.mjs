@@ -5,7 +5,7 @@
 import { flach, hat, indexVon, zaehle as zaehleStapel } from '../client/stapel.mjs';
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei, kachelVon, reichVon } from '../client/welt.mjs';
-import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
+import { LEOPARD, A400M, evakArtFuer, imFussabdruck, ABSTURZ, absturzDauer, absturzStrecke } from '../client/evak.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
 import { ueberrolleZombies } from './ueberrollen.mjs';
 import { querfeldPlan } from './querfeld.mjs';
@@ -13,9 +13,11 @@ import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplat
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
 import { weltVorbereiten } from './weltcache.mjs';
+import { gesuchteDinge, fundorteListe, missionsOrt, aufgabenFundePlan, aufgabenBedarf } from './fundorte.mjs';
+import { LEVEL_KATALOG, levelSchluessel as katalogSchluessel, aktiveFolge, naechsterEintrag, karteAufloesen, katalogEintrag } from '../client/levelkatalog.mjs';
 
 // Missionsgegenstand für die Clients (Karte): exakte Position (x, y), Radius des animierten Auffindkreises, abgegeben, Ortsbeschreibung
-export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
+export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), getragen: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
 
 export const Aufgabe = schema({
   id: t.string(),
@@ -27,17 +29,19 @@ export const Aufgabe = schema({
   pflicht: t.boolean(),
 }, 'Aufgabe');
 
-// Reihenfolge der Karten von Level zu Level (jede andere Karte beginnt wieder bei der ersten)
-export const LEVEL_KARTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
-// Level 1 hat zwei Karten; die Wahl fällt per Zufall (50/50), außer das Backend legt eine fest
-export const LEVEL1_KARTEN = ['geretsried', 'geretsried2'];
+// Standard-Reihenfolge der Karten von Level zu Level (Katalog client/levelkatalog.mjs); die eingestellte Reihenfolge (Einstellung levelFolge,
+// Verwaltung) steht in raum.constructor.einstellungen.levelFolge, Level 1 = erstes aktives Level
+export const LEVEL_KARTEN = LEVEL_KATALOG.map(k => k.id);
+// Der Katalogeintrag 'geretsried' hat zwei Karten; die Wahl fällt per Zufall (50/50), außer das Backend legt eine fest
+export const LEVEL1_KARTEN = katalogEintrag('geretsried').karten;
 export const level1Karte = (zufall = Math.random) => LEVEL1_KARTEN[zufall() < 0.5 ? 0 : 1];
-// Spielstand-Schlüssel je Level (Tabellen je Karte): beide Level-1-Karten teilen sich die Werte von 'geretsried'
-export const levelSchluessel = karte => karte === 'geretsried2' ? 'geretsried' : karte;
+// Schlüssel je Level (Tabellen je Karte): beide Geretsried-Karten teilen sich die Werte von 'geretsried'
+export const levelSchluessel = katalogSchluessel;
 export const KARTEN_NAMEN = { geretsried: 'Geretsried (Level 1)', geretsried2: 'Geretsried 2 (Level 1)', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };
 
 export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
 const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
+const PANZER_TEMPO = 100;   // px/s des Evakuierungsfahrzeugs (TEMPO in verkehr.mjs: Vorgabe 100)
 const WARNUNG_MIN = 30;     // so viele Spielminuten vor der Ankunft kommt die Funkmeldung
 const WARTE_RADIUS = 800;   // 100 m um den Abholpunkt: stehen dort alle Lebenden, läuft die Uhr schneller (warteRaffer)
 
@@ -103,7 +107,7 @@ export const hhmm = min => {
 const EVAK_REICHWEITE = 230, EVAK_PAUSE = 0.4, EVAK_TREFFER = 0.8;   // Bus/Panzer: Reichweite (px), Schussfolge (s), Trefferchance
 const HELI_ANFLUG = 30, HELI_NEU = 60, HELI_ABSTAND = 90;            // Hubschrauber: Anflugzeit, Wartezeit bis zum nächsten Anflug (echte Sekunden), Einstiegsradius (px)
 const ROLLEN_TEMPO = 190;                                            // A400M: Aufsetzgeschwindigkeit der Landerolle (px/s), bremst bis zum Stand
-const ABSTURZ_DAUER = 14;   // Königsdorf: so viele Sekunden dauert der Landeanflug bis zum Absturz
+// Königsdorf: Landeanflug, Aufsetzen und Ausrollen auf der Piste (Maße und Dauer in client/evak.mjs: ABSTURZ), danach Triebwerksbrand
 const UEBERROLLEN_PAUSE = 0.1;                                       // Leopard: so oft (s) wird der Fußabdruck auf Zombies geprüft
 
 export class Aufgaben {
@@ -114,7 +118,7 @@ export class Aufgaben {
     this.medizin = false;      // Spritze aus der Apotheke gefunden
     this.busId = null;
     this.busRest = 0;          // ECHTE Sekunden bis zur Abfahrt (ab dem Halt)
-    this.alleBordSek = 10;     // sind alle echten Spieler an Bord und die Aufgaben geschafft, läuft die Wartezeit auf höchstens so viele Sekunden herunter
+    this.alleBordSek = 0;      // sind alle echten Spieler an Bord und die Aufgaben geschafft, läuft die Wartezeit auf höchstens so viele Sekunden herunter (0 = sofort)
     this.alleBordGemeldet = false; this.alleDa = false;
     this.busHeute = false;     // der Bus war in diesem Zeitfenster schon da
     this.ankGemeldet = false;
@@ -212,6 +216,7 @@ export class Aufgaben {
       s.funk = !!g.funk;
     } else this.ziehen();
     if (this.mission.length && !s.aufgaben.has('mission')) this.neu('mission', false);   // älterer Spielstand ohne Mission
+    this.fundePlanen(g?.funde);
     this.abholMeldung = s.funk && [...s.aufgaben.values()].every(x => !x.pflicht || x.erledigt);   // beim Laden nicht erneut melden
     this.aktualisieren(false);
     if (s.funk) s.busAnkunft = this.einst().stunde * 60;
@@ -243,6 +248,7 @@ export class Aufgaben {
       ids: [...s.aufgaben.keys()], erledigt: Object.fromEntries([...s.aufgaben].filter(([, a]) => a.erledigt).map(([id]) => [id, true])),
       basis: this.basis, funk: s.funk, funkSafe: this.funkSafe, medizin: this.medizin,
       mission: { abgegeben: [...this.abgegeben], hinweise: { ...this.hinweise }, landefeuer: this.landefeuer },
+      funde: this.fundePlan ?? [],
     };
   }
 
@@ -292,7 +298,7 @@ export class Aufgaben {
     for (let i = 0; i < h; i++) kreisSchrumpfen(m);
     this.hinweise[m.id] = h;
     const q = new Mission(); q.id = m.id; q.ding = m.ding; q.nummer = m.nummer ?? 0; q.von = m.von ?? 0;
-    q.x = Math.round(m.x); q.y = Math.round(m.y); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.id); q.ort = m.ort ?? ''; q.behaelter = m.behaelter ?? '';
+    q.x = Math.round(m.x); q.y = Math.round(m.y); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.id); q.getragen = false; q.ort = m.ort ?? ''; q.behaelter = m.behaelter ?? '';
     s.missionen?.set(m.id, q);
   }
 
@@ -322,6 +328,22 @@ export class Aufgaben {
   }
 
   missionFertig() { return !this.raum.state.aufgaben.has('mission') || this.mission.every(m => this.abgegeben.has(m.id)); }
+
+  // Aufgaben-Funde: gebrauchte Dinge der offenen Aufgaben fest in passende Behälter legen (gespeichert; ohne Spielstand neu geplant)
+  fundePlanen(gespeichert = null) {
+    const s = this.raum.state, welt = this.raum.welt;
+    this.fundePlan = [];
+    if (!this.an() || !welt?.haeuser) return;
+    if (Array.isArray(gespeichert)) { this.fundePlan = gespeichert.filter(e => e && DINGE[e.ding] && typeof e.behaelter === 'string').map(e => ({ ding: e.ding, behaelter: e.behaelter })); return; }
+    this.fundePlan = aufgabenFundePlan(s.seed, s.level, welt, aufgabenBedarf(s, Math.max(2, this.spielerZahl()), vorrat));
+  }
+
+  // Dinge, die beim ersten Befüllen dieses Behälters garantiert dazukommen (nur für noch offene Aufgaben)
+  aufgabenFunde(behaelterId) {
+    if (!this.an() || !this.fundePlan?.length) return [];
+    const offen = new Set(gesuchteDinge(this.raum.state, this.medizin));
+    return this.fundePlan.filter(e => e.behaelter === behaelterId && offen.has(e.ding)).map(e => e.ding);
+  }
 
   // Gegenstände, die beim ersten Durchsuchen dieses Behälters dazugelegt werden
   missionsFunde(behaelterId) {
@@ -382,6 +404,29 @@ export class Aufgaben {
   }
 
   erledigtZahl() { return [...this.raum.state.aufgaben.values()].filter(a => a.erledigt).length; }
+  // Karte: Missionsgegenstände folgen ihrem Fundort (getragen = kein Ring; am Boden = Ring dort; sonst am Plan-Ort) und eine
+  // kompakte Liste gesuchter Dinge in geöffneten Behältern (nur bei Änderung, sonst alle 10 s) an alle Clients
+  orteSync() {
+    const s = this.raum.state;
+    for (const m of this.mission) {
+      const q = s.missionen.get(m.id);
+      if (!q || q.abgegeben) continue;
+      const o = missionsOrt(this.raum, m.ding);
+      const x = Math.round(o && !o.getragen ? o.x : m.x), y = Math.round(o && !o.getragen ? o.y : m.y), g = !!o?.getragen;
+      if (q.x !== x) q.x = x;
+      if (q.y !== y) q.y = y;
+      if (q.getragen !== g) q.getragen = g;
+    }
+    this.orteSek = (this.orteSek ?? 0) + 0.5;
+    if (this.orteSek < 1) return;
+    this.orteSek = 0;
+    const liste = this.an() ? fundorteListe(this.raum, gesuchteDinge(s, this.medizin)) : [];
+    const j = JSON.stringify(liste);
+    if (j === this.orteJson && (this.orteNeu = (this.orteNeu ?? 0) + 1) < 10) return;
+    this.orteJson = j; this.orteNeu = 0;
+    this.raum.broadcast('fundorte', { l: liste });
+  }
+
   noetig() { return Math.max(1, this.raum.state.aufgaben.size - 1); }   // „3 von 4“
 
   // Haken aus raum.mjs: ein Fund aus einem Behälter (Spritze aus der Apotheke)
@@ -400,6 +445,8 @@ export class Aufgaben {
     this.aktualisieren(false);
     const a = s.aufgaben.get('funk'); if (a) { a.erledigt = true; a.fortschritt = a.ziel; this.raum.xpAlle?.('aufgabe'); }
     this.raum.broadcast('meldung', { text: `📻 ${p.name} hat den Funkspruch abgesetzt – ${this.fz().der} kommt um ${hhmm(s.busAnkunft)} zum Ortsausgang!`, lang: true });
+    // Sprachansage (ohne Uhrzeit) an ALLE: Der Funkspruch betrifft die ganze Gruppe, und nur der Absender hat das Funkgerät – die anderen müssen sich ebenfalls bereithalten
+    this.raum.broadcast('funkAnsage', {});
     this.aktualisieren();
   }
 
@@ -428,7 +475,7 @@ export class Aufgaben {
     if (s.busDa) { this.evakFeuer(dt); if (this.flug) this.flugRollen(dt); }
     if (!s.aufgaben.size) { this.basis = s.besiegt; this.ziehen(); }   // zur Laufzeit eingeschaltet
     this.takt -= dt;
-    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); }
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); this.orteSync(); }
     if (!this.abholMeldung && s.funk && [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt)) {
       this.abholMeldung = true;
       const art = this.fz().art;
@@ -442,10 +489,12 @@ export class Aufgaben {
       if (!s.funk || !this.missionFertig()) return;   // der Bus kommt erst, wenn alle Missionsgegenstände abgegeben sind
       const seit = (s.uhr - A + 1440) % 1440;          // Minuten seit der Ankunftszeit
       const bis = (A - s.uhr + 1440) % 1440;           // Minuten bis zur Ankunftszeit
-      if (seit < wartezeit) {
+      const frueh = this.evakArt() === 'panzer' ? this.panzerVorlauf() : 0;   // Panzer: rollt schon vor der Ankunftszeit los (lange Anfahrt)
+      const vorlauf = frueh > 0 && bis > 0 && bis <= frueh;
+      if (seit < wartezeit || (vorlauf && !this.busHeute)) {
         if (!this.busHeute) this.ankunft(wartezeit - seit);
       } else {
-        this.busHeute = false;                          // Zeitfenster vorbei: morgen kommt ein neuer Bus
+        if (!vorlauf) this.busHeute = false;            // Zeitfenster vorbei: morgen kommt ein neuer Bus
         if (bis > 0 && bis <= WARNUNG_MIN && !this.ankGemeldet) {
           this.ankGemeldet = true;
           this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} kommt um ${hhmm(A)} zum Ortsausgang!`, lang: true });
@@ -481,15 +530,15 @@ export class Aufgaben {
     const bunker = this.heli?.art === 'bunker', fin = this.raum.finale;
     if (bunker) {   // Bunker: der Atomschlag-Countdown springt auf 10 s (server/finale.mjs), danach Sieg
       if (!fin?.aktiv() || fin.rest <= this.alleBordSek) return;
-      fin.setzen(this.alleBordSek);
+      if (this.alleBordSek > 0) fin.setzen(this.alleBordSek); else fin.sofort();
     } else {
       if (this.busRest <= this.alleBordSek) return;
       this.busRest = this.alleBordSek; this.busAbSetzen();
     }
     if (this.alleBordGemeldet) return;
     this.alleBordGemeldet = true;
-    const n = Math.max(1, Math.round(this.alleBordSek));
-    this.raum.broadcast('meldung', { text: bunker ? `☢️ Alle im Bunker – Tor schließt in ${n} s` : `${this.fz().zeichen} Alle an Bord – Abfahrt in ${n} s`, lang: true });
+    const n = Math.round(this.alleBordSek);
+    this.raum.broadcast('meldung', { text: bunker ? (n > 0 ? `☢️ Alle im Bunker – Tor schließt in ${n} s` : '☢️ Alle im Bunker – Tor schließt!') : (n > 0 ? `${this.fz().zeichen} Alle an Bord – Abfahrt in ${n} s` : `${this.fz().zeichen} Alle an Bord – Abfahrt!`), lang: true });
   }
 
   // Bus (Gewehre aus den Fenstern) und Panzer (Turm-MG) schießen vom Erscheinen bis zur Abfahrt auf Zombies in der Nähe;
@@ -579,6 +628,25 @@ export class Aufgaben {
     return an ? Math.max(1, Number(this.einst().warteRaffer) || 6) : 1;
   }
 
+  // Panzer-Anfahrt: Dauer in Spielminuten (Weglänge / Tempo, mit Zuschlag für Kreuzungen und Bremsen vor Fußgängern), damit er zur angekündigten Zeit steht
+  panzerVorlauf() {
+    const v = this.raum.verkehr, plan = this.panzerPlan();
+    if (!v || !plan) return 0;
+    const sek = v.panzerLaenge(plan) / PANZER_TEMPO * 1.1 + 5;
+    return sek * 1440 / ((this.raum.einstellungen?.().tagMinuten || 48) * 60);
+  }
+
+  // Hinweis „Panzer im Anmarsch“ mit Richtung (vom Abholort aus gesehen) und Entfernung
+  panzerAnmarsch(plan) {
+    const s = this.raum.state, v = this.raum.verkehr, f = s.fahrzeuge.get(this.busId);
+    const z = s.evakX > 0 ? { x: s.evakX, y: s.evakY } : plan.ziel;
+    const dx = (f?.x ?? plan.start.x) - z.x, dy = (f?.y ?? plan.start.y) - z.y;
+    const m = Math.round(Math.hypot(dx, dy) / 8 / 10) * 10, weg = Math.round(v.panzerLaenge(plan) / 8 / 10) * 10;
+    const w = Math.abs(dx) > Math.abs(dy) * 2.4 ? (dx > 0 ? 'Osten' : 'Westen') : Math.abs(dy) > Math.abs(dx) * 2.4 ? (dy > 0 ? 'Süden' : 'Norden')
+      : (dy > 0 ? 'Süd' : 'Nord') + (dx > 0 ? 'osten' : 'westen');
+    this.raum.broadcast('meldung', { text: `${this.fz().zeichen} Panzer im Anmarsch aus ${w}: ${m} m Luftlinie (${weg} m Fahrt), er trifft um ${hhmm(s.busAnkunft)} an der Abholstelle ein!`, lang: true });
+  }
+
   // Bus erscheint am Ortsausgang (auf der nächsten Straße, sonst dahinter im Ort) und wartet
   ankunft(rest) {
     const s = this.raum.state, w = this.raum.welt, tor = w.tor, v = this.raum.verkehr;
@@ -591,7 +659,7 @@ export class Aufgaben {
         this.busId = v.evakuierungPanzer(plan);
         this.busHeute = true; this.busRest = 0; s.busDa = true; this.busAbSetzen(); this.busGemeldet = false;
         s.busSteht = false;
-        this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} rollt querfeldein zur Abholstelle!`, lang: true });
+        this.panzerAnmarsch(plan);
         return;
       }
     }
@@ -835,30 +903,34 @@ export class Aufgaben {
     return { drinnen, draussen, sieg };
   }
 
-  // ---------- Königsdorf ('absturz'): der A400M kommt zur Evakuierung und stürzt im Landeanflug ab ----------
-  // Ablauf: Anflug (ABSTURZ_DAUER s, Client animiert) → Absturz mit Rauch und Brand, Wrack bleibt als Kulisse → sobald die Fahrt gelingt
-  // (Missionsteile erledigt), kommt der NH90 (Anflug, Landung, Einsteigen/Abflug wie bei der A400M-Evakuierung).
+  // ---------- Königsdorf ('absturz'): der A400M landet auf der Landebahn und fängt erst im Stand Feuer ----------
+  // Ablauf: Anflug auf die Pistenachse → Aufsetzen am Pistenanfang → Ausrollen mit eigenem Bremsweg (Spieler auf der Piste werden zur Seite gestoßen)
+  // → Stillstand, Triebwerksbrand, Wrack bleibt als Kulisse an der Stillstandsposition → sobald die Fahrt gelingt (Missionsteile erledigt),
+  // kommt der NH90 (Anflug, Landung, Einsteigen/Abflug wie bei der A400M-Evakuierung).
   absturzStart() {
     const s = this.raum.state, p = absturzPlan(this.raum.welt, s.seed);
     if (!p) return;   // kann nicht vorkommen (absturzPlan liefert immer einen Plan), aber nie in eine andere Evakuierungsart ausweichen
     this.busHeute = true;
-    this.crash = { rest: ABSTURZ_DAUER, phase: 'anflug' };
-    s.evakArt = 'absturz'; s.evakPhase = 'absturz'; s.evakRest = ABSTURZ_DAUER;
+    const dauer = absturzDauer();
+    this.crash = { rest: dauer, dauer, phase: 'anflug', plan: p };   // rest = verbleibende Sekunden bis zum Stand
+    s.evakArt = 'absturz'; s.evakPhase = 'absturz'; s.evakRest = Math.ceil(dauer);
     s.evakAX = Math.round(p.x); s.evakAY = Math.round(p.y); s.evakW = p.w;
     s.evakX = Math.round(p.heli.x); s.evakY = Math.round(p.heli.y);
-    this.raum.broadcast('meldung', { text: '✈️ Ein A400M kommt im Landeanflug über die Berge …', lang: true });
+    this.raum.broadcast('meldung', { text: '✈️ Ein A400M kommt im Landeanflug auf die Landebahn …', lang: true });
   }
 
   absturzSchritt(dt) {
     const s = this.raum.state, c = this.crash;
     if (this.wechselLaeuft) return;
     this.takt -= dt;
-    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); }
-    if (c.phase === 'anflug') {
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.orteSync(); }
+    if (c.phase === 'anflug' || c.phase === 'rollen') {
       c.rest -= dt; s.evakRest = Math.max(0, Math.ceil(c.rest));
-      if (c.rest > 0) return;
+      const t = c.dauer - c.rest;
+      if (c.phase === 'anflug' && t >= ABSTURZ.anflug) c.phase = 'rollen';
+      if (c.rest > 0) { if (c.phase === 'rollen') this.absturzRollen(t); return; }
       c.phase = 'wrack'; s.evakPhase = 'wrack'; s.evakRest = 0;
-      this.raum.broadcast('meldung', { text: '💥 Der A400M stürzt ab! Keine Rettung aus der Luft – ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
+      this.raum.broadcast('meldung', { text: '🔥 Der A400M ist gelandet – und ein Triebwerk fängt Feuer! Weg vom Flugzeug, ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
       return;
     }
     if (!this.fahrtGelingt()) return;
@@ -866,6 +938,23 @@ export class Aufgaben {
     this.crash = null; this.heli = { phase: 'anflug', rest: HELI_ANFLUG, art: 'absturz' };
     s.evakPhase = 'heliAnflug'; s.evakRest = HELI_ANFLUG;
     this.raum.broadcast('meldung', { text: `🚁 Funkkontakt steht – ein NH90 landet in ${HELI_ANFLUG} s auf dem markierten Platz`, lang: true });
+  }
+
+  // Während der Landerolle: wer im Rumpf-Fußabdruck steht, wird quer zur Piste zur Seite gestoßen (kein Schaden; die Maschine rollt unbeirrt)
+  absturzRollen(t) {
+    const s = this.raum.state, p = this.crash.plan, d = absturzStrecke(t), vor = absturzStrecke(t + 0.1);
+    const tempo = (d - vor) / 0.1;
+    if (tempo < 8) return;
+    const w = p.w, cs = Math.cos(w), sn = Math.sin(w);
+    const fz = { x: p.x - cs * d, y: p.y - sn * d, richtung: w };
+    const hl = A400M.laenge / 2, hb = ABSTURZ.rumpfHalbBreite;
+    for (const [sid, pl] of s.spieler) {
+      if (pl.ebene || pl.anBord || !imFussabdruck(fz, pl.x, pl.y, hl, hb)) continue;
+      const quer = -(pl.x - fz.x) * sn + (pl.y - fz.y) * cs, seite = quer >= 0 ? 1 : -1, weite = hb + 26 - Math.abs(quer);
+      const q = this.platzNeben(pl.x - sn * seite * weite, pl.y + cs * seite * weite);
+      pl.x = q.x; pl.y = q.y;
+      if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, '✈️ Der A400M rollt über die Piste – du wirst zur Seite gestoßen!');
+    }
   }
 
   // Hubschrauber: Anflug → gelandet und wartet (Einsteigen wie beim Bus) → Abflug und Levelwechsel; ohne alle fliegt er ab und kommt später wieder
@@ -881,7 +970,7 @@ export class Aufgaben {
       return;
     }
     this.takt -= dt;
-    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); }   // Aufgaben/Missionen laufen auch beim wartenden Hubschrauber weiter
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); this.orteSync(); }   // Aufgaben/Missionen laufen auch beim wartenden Hubschrauber weiter
     const alleDa = this.mitfahrer();
     if (!this.heli) return;   // mitfahrer() hat abgebrochen
     if (h.phase === 'bunker') { this.bordRaffen(this.alleDa); return; }   // Bunkertor: nur hineingehen, kein Abflug – das Ende kommt mit dem Countdown (bunkerEnde)
@@ -948,10 +1037,9 @@ export class Aufgaben {
   levelVorplanen() {
     try {
       const r = this.raum, s = r.state;
-      let karte = this.naechsteKarte();
-      if (karte === 'geretsried') karte = r.constructor.level1Wahl || level1Karte();
+      const karte = this.aufloesen(this.naechsteKarte());
       const seed = Math.floor(Math.random() * 2 ** 31);
-      const autos = Math.max(0, Math.min(50, Math.round((r.constructor.einstellungen?.autoFaktor ?? 1) * 10)));   // wie SpielRaum.onCreate für neue Level
+      const autos = Math.max(0, Math.min(250, Math.round((r.constructor.einstellungen?.autoFaktor ?? 1) * 10)));   // wie SpielRaum.onCreate für neue Level
       this.plan = { von: s.karte, karte, seed, autos };
       const k = r.constructor.karteVon?.(karte);
       if (k?.kacheln) weltVorbereiten(k, seed, autos / 10);
@@ -959,10 +1047,19 @@ export class Aufgaben {
     } catch (e) { this.plan = null; console.error('Level vorplanen:', e.message); }
   }
 
+  // Katalog-id des nächsten Levels nach der eingestellten Reihenfolge (nur aktive Level; nach dem letzten wieder das erste)
   naechsteKarte() {
-    const i = LEVEL_KARTEN.indexOf(levelSchluessel(this.raum.state.karte || 'dorf'));
-    return LEVEL_KARTEN[(i + 1) % LEVEL_KARTEN.length];
+    return naechsterEintrag(this.raum.constructor.einstellungen?.levelFolge, this.raum.state.karte || 'dorf');
   }
+
+  // Levelnummer (Position unter den aktiven Leveln, ab 1) eines Katalogeintrags; 0 = abgeschaltet/unbekannt
+  levelNr(id) { return aktiveFolge(this.raum.constructor.einstellungen?.levelFolge).indexOf(id) + 1; }
+
+  // erstes aktives Level der Reihenfolge (Level 1)
+  erstesLevel() { return naechsterEintrag(this.raum.constructor.einstellungen?.levelFolge, ''); }
+
+  // konkrete Karte eines Levels: mehrere Karten (Geretsried) = feste Wahl aus dem Backend (level1Wahl), sonst Zufall
+  aufloesen(id) { return karteAufloesen(id, this.raum.constructor.level1Wahl, Math.random); }
 
   // neue Karte einstellen und die Welt mit neuem Level neu starten; Rucksack und Werte der Spieler bleiben
   // ziel (optional): { karte, level, frisch } – Testbefehl und Finale; frisch = ganz neue Runde (Level 1, Fähigkeiten und Startwahl von vorn)
@@ -971,7 +1068,7 @@ export class Aufgaben {
     const plan = !ziel && this.plan?.von === s.karte ? this.plan : null;   // in erfolg() vorgeplant (Karte + Seed, Welt ist schon im Bau)
     this.plan = null;
     let karte = ziel?.karte ?? plan?.karte ?? this.naechsteKarte();
-    if (!plan && karte === 'geretsried' && !ziel?.fest) karte = r.constructor.level1Wahl || level1Karte();   // Level 1: feste Wahl aus dem Backend, sonst Zufall
+    if (!plan && !ziel?.fest) karte = this.aufloesen(karte);   // Karte mit mehreren Varianten (Geretsried): feste Wahl aus dem Backend, sonst Zufall
     r.constructor.kartenWechsel?.(karte);
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.folgenId = null;

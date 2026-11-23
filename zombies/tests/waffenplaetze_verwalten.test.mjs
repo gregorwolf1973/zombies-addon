@@ -189,10 +189,10 @@ test('Granatwerfer: Auto-Schuss mit Reichweite aus der Einstellung (60 m Vorgabe
     assert.equal(f.werfer, true);
     assert.ok(f.flug <= strecke / GRANATE.tempo / 3, `Flug ${f.flug} s für ${Math.round(strecke)} px`);
     assert.ok(raum.state.zombies.has(id) || true);
-    // Bereich der Verwaltung bis 100 m
+    // empfohlener Bereich der Verwaltung bis 100 m, eintippbar darüber
     const { bereinige } = await import('../server/einstellungen.mjs');
-    assert.equal(bereinige({ reichweite: { granatwerfer: 400 } }).reichweite.granatwerfer, 100);
-    assert.equal(bereinige({ reichweite: { pistole: 400 } }).reichweite.pistole, 80);
+    assert.equal(bereinige({ reichweite: { granatwerfer: 400 } }).reichweite.granatwerfer, 400);
+    assert.equal(bereinige({ reichweite: { pistole: 400 } }).reichweite.pistole, 400);
   } finally { raum.constructor.einstellungen = vorher; await c.leave(); }
 });
 

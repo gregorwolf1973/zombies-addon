@@ -1,7 +1,7 @@
 // Flugplan für die A400M-Evakuierung: eine lange freie Fläche zum Landen (aus dem feinen Raster) und ein Hubschrauber-Landeplatz
 // in einiger Entfernung, zu Fuß erreichbar. Deterministisch aus dem Seed; das Ergebnis hängt an der Welt (`welt._flugplan`).
 import { BREITE, HOEHE, KACHEL, frei, findeWeg, zufall } from '../client/welt.mjs';
-import { A400M } from '../client/evak.mjs';
+import { A400M, ABSTURZ } from '../client/evak.mjs';
 
 const SCHRITT = 128;        // Rasterweite der Suche (Pixel)
 const HELI_RAD = 70;        // freier Platz für den Hubschrauber (Radius)
@@ -76,19 +76,23 @@ export function bunkerPlan(welt, seed = welt.seed ?? 1) {
   return welt._bunkerplan = { tor: { x: st.x + 300, y: st.y } };
 }
 
-// Absturzstelle des A400M (Königsdorf): auf der Anflugachse der Landebahn weit vor dem Aufsetzpunkt, im Kartenrandbereich
+// Landung des A400M in Königsdorf (Art 'absturz'): auf der Achse der Landebahn aufsetzen, ausrollen, danach Triebwerksbrand.
+// x/y = Rumpfmitte im Stillstand (Wrackposition, state.evakAX/AY), w = Pistenrichtung, aufsetz = Rumpfmitte beim Aufsetzen, heli = NH90-Platz.
 export function absturzPlan(welt, seed = welt.seed ?? 1) {
   if (welt._absturzplan !== undefined) return welt._absturzplan;
   const W = BREITE * KACHEL, H = HOEHE * KACHEL, hp = heliPlan(welt, seed);
   const rnd = zufall((seed ^ 0x41425354) >>> 0);
-  // Anflugachse: festgelegte Landebahn der Karte (welt.landebahn = {x, y, w}), sonst die gefundene freie Fläche, sonst beliebig – der Absturz braucht keine Landung
+  // Pistenanfang und -richtung: festgelegte Landebahn der Karte (welt.landebahn = {x, y, w}), sonst die gefundene freie Fläche, sonst beliebig
   const fp = welt.landebahn ? null : (welt.fein ? flugplanBerechnen(welt, seed) : null);
   const w = welt.landebahn ? welt.landebahn.w : fp ? fp.w : rnd() * Math.PI * 2;
-  const ax = welt.landebahn ? welt.landebahn.x : fp ? fp.start.x : hp.heli.x, ay = welt.landebahn ? welt.landebahn.y : fp ? fp.start.y : hp.heli.y;
-  const c = Math.cos(w), s = Math.sin(w), d = 700;
   const klemme = (v, m) => Math.max(160, Math.min(m - 160, v));
-  const x = klemme(ax - c * d, W), y = klemme(ay - s * d, H);
-  return welt._absturzplan = { x, y, w: Math.atan2(ay - y, ax - x) || w, heli: hp.heli };
+  let ax = welt.landebahn ? welt.landebahn.x : fp ? fp.start.x - Math.cos(fp.w) * ABSTURZ.aufsetz : hp.heli.x;
+  let ay = welt.landebahn ? welt.landebahn.y : fp ? fp.start.y - Math.sin(fp.w) * ABSTURZ.aufsetz : hp.heli.y;
+  if (!welt.landebahn) { ax = klemme(ax, W); ay = klemme(ay, H); }
+  const c = Math.cos(w), s = Math.sin(w), bis = ABSTURZ.aufsetz + ABSTURZ.rollweg;
+  return welt._absturzplan = {
+    x: ax + c * bis, y: ay + s * bis, w, aufsetz: { x: ax + c * ABSTURZ.aufsetz, y: ay + s * ABSTURZ.aufsetz }, heli: hp.heli,
+  };
 }
 
 function hubschrauberPlatz(welt, rampe, rnd) {

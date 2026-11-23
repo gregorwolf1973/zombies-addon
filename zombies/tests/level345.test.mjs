@@ -37,8 +37,8 @@ test('Karten registriert, Reihenfolge 1→2→3→4→5, Namen, Einstellungen', 
   for (const k of LEVEL_WELTEN) assert.ok(e.bissSpielerLevel[k] > 0, 'Biss ' + k);
   assert.ok(e.bissSpielerLevel.andermatt > e.bissSpielerLevel.geretsried, 'Biss steigt');
   assert.equal(e.aufgaben.finaleMinuten, 30);
-  assert.equal(bereinige({ aufgaben: { finaleMinuten: 5 } }).aufgaben.finaleMinuten, 10);
-  assert.equal(bereinige({ aufgaben: { finaleMinuten: 500 } }).aufgaben.finaleMinuten, 90);
+  assert.equal(bereinige({ aufgaben: { finaleMinuten: 5 } }).aufgaben.finaleMinuten, 5);   // nur empfohlen 10–90
+  assert.equal(bereinige({ aufgaben: { finaleMinuten: 500 } }).aufgaben.finaleMinuten, 500);
   assert.ok(SU_BEFEHLE.includes('level') && SU_BEFEHLE.includes('countdown'));
 });
 

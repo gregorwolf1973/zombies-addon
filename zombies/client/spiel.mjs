@@ -1,4 +1,5 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
+import { kartenNr } from './levelkatalog.mjs';
 import { fzPx } from './masse.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
@@ -12,7 +13,7 @@ import { laternen, tuerPose, zeichneSafeEingang } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt, aussehenMigriert } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
-import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, FZ_SCHATTEN, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
+import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, FZ_SCHATTEN, FZ_HOEHE, fzSchattenVersatz, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
@@ -1174,6 +1175,8 @@ class Ort extends Phaser.Scene {
     raum.onMessage('weg', m => { this.puff(m.x, m.y); if (istEigen(m, meineId)) ton.zombieWeg(null, null); else if (hoertEbene(m)) ton.zombieWeg(m.x, m.y); });   // eigener Kill immer hörbar
     raum.onMessage('entdeckt', m => { if (hoertEbene(m)) ton.entdeckt(m.x, m.y); });
     raum.onMessage('tonEinst', m => { if (m?.zombieSicht) zombieSichtEinst = m.zombieSicht; if (m?.toene) ton.toeneZuordnen(m.toene); ton.toneEinstellungen(m); });   // Backend hat Musik/Radio/Horde geändert
+    raum.onMessage('funkAnsage', () => { ton.ereignis('funkAnsage'); });   // Sprachansage nach dem Funkspruch (ohne zugeordnete Datei bleibt es still)
+    raum.onMessage('versorgung', () => { this.leereKisten?.clear(); });   // neue Bundeswehr-Versorgung: Munitionskisten wieder sichtbar
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
     raum.onMessage('weltFalsch', m => {
@@ -1187,11 +1190,12 @@ class Ort extends Phaser.Scene {
     raum.onMessage('gefunden', m => {
       if (m.kiste && m.rest === 0) (this.leereKisten ??= new Set()).add(m.kiste);   // Munitionskiste: für mich leer
       if (m.dinge.length) ton.aufheben(); else if (m.rest || !ton.ereignis('truheLeer')) ton.suchen();
-      if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : d === 'pfeil' ? '➶ 6 Pfeile' : dingText(d)).join(', '));
+      if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? `🧰 ${m.schuss ?? 12} Schuss` : d === 'pfeil' ? '➶ 6 Pfeile' : dingText(d)).join(', '));
       else if (m.rest) meldung('Rucksack voll – der Rest bleibt hier');
       else meldung('Nichts Brauchbares gefunden');
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
     });
+    raum.onMessage('fundorte', m => { this.fundorte = Array.isArray(m?.l) ? m.l : []; });   // gesuchte Dinge in geöffneten Behältern (Karte)
     raum.onMessage('fundliste', m => fundZeigen(raum, m, this.lokal, meldung));
     raum.onMessage('alle_sperre', m => { this.alleSperreBis = Date.now() + (m.sek ?? 30) * 1000; });
     raum.onMessage('pong', () => {});
@@ -1587,7 +1591,9 @@ class Ort extends Phaser.Scene {
     // offene Missionsgegenstände: exakte Position vom Server (Mitte = Gegenstand), mit Gegenstandsbild, falls vorhanden
     const dTex = this.textures.exists('dinge') ? this.textures.get('dinge') : null;
     const dBild = ding => { const n = ding === 'handgranate' ? 'granate' : ding; if (!dTex || !hatDingBild(ding) || !dTex.has(n)) return null; const f = dTex.get(n); return { img: f.source.image, sx: f.cutX, sy: f.cutY, s: f.cutWidth }; };
-    this.uebersicht.kreise = [...(raum.state.missionen?.values() ?? [])].filter(q => !q.abgegeben).map(q => ({
+    this.uebersicht.fundpunkte = (this.fundorte ?? []).map(([x, y, d]) => ({ x: x / KACHEL, y: y / KACHEL, symbol: DINGE[d]?.zeichen ?? '❓', name: DINGE[d]?.name ?? d }));
+    // getragene Missionsgegenstände haben keinen Ring mehr; liegt er wieder irgendwo, folgt der Ring dem Fundort (Server: orteSync)
+    this.uebersicht.kreise = [...(raum.state.missionen?.values() ?? [])].filter(q => !q.abgegeben && !q.getragen).map(q => ({
       x: q.x / KACHEL, y: q.y / KACHEL, r: q.r / KACHEL, symbol: DINGE[q.ding]?.zeichen ?? '❓', bild: dBild(q.ding), name: (DINGE[q.ding]?.name ?? q.ding) + (q.nummer && q.von > 1 ? ` ${q.nummer}/${q.von}` : ''),
     }));
     this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });
@@ -2655,7 +2661,8 @@ class Ort extends Phaser.Scene {
       o.x += (f.x - o.x) * glatt; o.y += (f.y - o.y) * glatt;
       o.r = Phaser.Math.Angle.RotateTo(o.r, fzRichtung(f), dt * 6);
       o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
-      o.sch?.setPosition(o.x + FZ_SCHATTEN.dx, o.y + FZ_SCHATTEN.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible);
+      const shv = fzSchattenVersatz(f.art === 'boxer' ? FZ_HOEHE.boxer : f.art === 'evakuierung' && evakArtVon(raum.state) === 'panzer' ? FZ_HOEHE.leopard : 1);
+      o.sch?.setPosition(o.x + shv.dx, o.y + shv.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible);
       o.licht.clear();
       // dicht vorbeifahrende Autos und Busse rauschen vorbei; jedes dritte Auto hat das Radio an
       if ((f.art === 'auto' || f.art === 'bus' || f.art === 'laster') && this.lokal && !this.aktEbene) {
@@ -2804,7 +2811,7 @@ class Ort extends Phaser.Scene {
       const m = this.pumaMasse(pumaT.laenge), tb = this.textures.get('puma-turm').getSourceImage(), k = PUMA_SKALA * m.f;
       o.pumaVersatz = { x: PUMA_BILD.turmX * k, y: PUMA_BILD.turmY * k };
       o.pumaMuendung = PUMA_BILD.muendung * k;
-      o.wanneSchatten = this.add.image(pumaT.x + FZ_SCHATTEN.dx, pumaT.y + FZ_SCHATTEN.dy, this.fahrzeugSchattenTextur('puma-wanne')).setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(4.9).setAlpha(FZ_SCHATTEN.alpha);
+      o.wanneSchatten = this.add.image(pumaT.x + fzSchattenVersatz(FZ_HOEHE.puma).dx, pumaT.y + fzSchattenVersatz(FZ_HOEHE.puma).dy, this.fahrzeugSchattenTextur('puma-wanne')).setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(4.9).setAlpha(FZ_SCHATTEN.alpha);
       o.wanne = this.add.image(pumaT.x, pumaT.y, 'puma-wanne').setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(5);
       o.turm = this.add.image(0, 0, 'puma-turm').setOrigin((PUMA_BILD.turmMx + m.R) / tb.width, (PUMA_BILD.turmMy + m.R) / tb.height)
         .setRotation(pumaT.turm.winkel).setScale(PUMA_SKALA * m.skala).setDepth(5.1);
@@ -2863,7 +2870,7 @@ class Ort extends Phaser.Scene {
       let dw = st.bwW - o.wanne.rotation; dw = Math.atan2(Math.sin(dw), Math.cos(dw));
       o.wanne.setRotation(o.wanne.rotation + dw * k);
       this.pumaTurmSetzen();
-      o.wanneSchatten?.setPosition(o.wanne.x + FZ_SCHATTEN.dx, o.wanne.y + FZ_SCHATTEN.dy).setRotation(o.wanne.rotation);
+      o.wanneSchatten?.setPosition(o.wanne.x + fzSchattenVersatz(FZ_HOEHE.puma).dx, o.wanne.y + fzSchattenVersatz(FZ_HOEHE.puma).dy).setRotation(o.wanne.rotation);
       // Kettenrasseln (Ereignis „Panzer fährt“), nur solange er sich bewegt, draußen und in Hörweite
       const faehrt = o.letztX !== undefined && Math.hypot(st.bwX - o.letztX, st.bwY - o.letztY) > 0.05;
       o.letztX = st.bwX; o.letztY = st.bwY;
@@ -3626,7 +3633,7 @@ class Ort extends Phaser.Scene {
       this.tonTakt = 1;
       ton.hordeLage(zombieKarte().values(), { x: this.lokal.x, y: this.lokal.y, ebene: this.aktEbene ?? '' });
       const st = raum.state, tot = (ich.zombie ?? 0) > 0 || ich.hp <= 0;
-      ton.musikLage({ level: st.level || 1, lager: ich.sicher === 'lager' && !tot, safe: !!ich.sicher && ich.sicher !== 'lager' && !tot, finale: (st.finaleRest || 0) > 0 });
+      ton.musikLage({ level: kartenNr(st.karte, st.level || 1),   /* Musik und Radio-Durchsage „Level n“ gehören zur Karte, nicht zur Position */ lager: ich.sicher === 'lager' && !tot, safe: !!ich.sicher && ich.sicher !== 'lager' && !tot, finale: (st.finaleRest || 0) > 0 });
     }
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {
@@ -3661,17 +3668,9 @@ class Ort extends Phaser.Scene {
       balkenSetzen('hp', ich.hp);
       balkenSetzen('durst', ich.durst);
       balkenSetzen('hunger', ich.hunger);
-      const wf = WAFFEN[ich.waffe], d = DINGE[ich.waffe];
-      const pfeile = ich.pfeile && !wf?.pfeil ? ` · ${dingIcon('pfeil', 18, '➶')} ${ich.pfeile} Pfeile` : '';
-      let waffe;
-      if (!wf) waffe = `${dingIcon('faust', 16, '✊')} Unbewaffnet – stoßen${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
-      else if (wf.fern) {
-        // „🔫 Pistole 12/15 · 48“: Magazin/Max · Vorrat (Pfeile bzw. Granaten beim Armbrust/Granatwerfer)
-        const vorrat = vorratVon(ich, wf), leer = !(ich.magazin > 0) && vorrat <= 0;
-        waffe = `${dingIcon(ich.waffe, 16)} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ` · <b style="color:#ffb300">🔄 Nachladen … ${Math.round(Math.min(1, ich.nachladen) * 100)} %</b>` : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
-      } else waffe = `${dingIcon(ich.waffe, 16)} ${d.name}${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
-      htmlSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
-        + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
+      // Die frühere Textzeile „Waffe in der Hand“ (dritte Waffenanzeige) ist weg: Waffen zeigen nur noch die Waffenfelder (Platz 1, Platz 2, Faust).
+      // Übrig bleiben Kleidung und Taschenlampe.
+      htmlSetzen('waffe', [ich.kleidung > 0 ? `🧥 ${Math.ceil(ich.kleidung)} %` : '', ich.lampe > 0 ? `🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''].filter(Boolean).join(' · '));
       this.waffenplaetzeZeigen(ich);   // Waffenfelder (Antippen wechselt, Doppeltippen lädt nach, Taste R lädt auch nach)
       this.granatenfeldZeigen(ich);
       textSetzen('besiegt', `besiegt ${ich.besiegt} / ${Math.max(s.besiegt, ich.besiegt)}`); $('besiegt').title = 'besiegt: von dir / gesamt';
@@ -3770,7 +3769,7 @@ class Ort extends Phaser.Scene {
   }
 
   // Waffenfelder (zwei Plätze, im HUD oben links unter den Mitspielern): großes Waffensymbol, nur das Magazin „3/15“ (Nahwaffe: nichts).
-  // Antippen wechselt, Doppeltippen lädt nach, gedrückt halten bzw. Rechtsklick öffnet das Menü; Taste F wechselt, R lädt nach, X = Faust.
+  // Antippen wechselt, Doppeltippen lädt nach, gedrückt halten bzw. Rechtsklick öffnet das Menü; Taste F wechselt, R lädt nach, X = Faust (eigenes drittes Feld „Faust“ rechts daneben).
   // Ohne Waffe in der Hand (leer oder Faust) kämpft die Figur mit der Faust.
   waffenplaetzeZeigen(ich) {
     const leiste = $('waffenplaetze');
@@ -3812,6 +3811,17 @@ class Ort extends Phaser.Scene {
         };
         leiste.appendChild(b);
       });
+      // drittes Feld „Faust“: nichts in der Hand (nützlich, um das automatische Schießen abzustellen); Antippen schaltet zwischen Faust und Waffe (wie Taste X)
+      const fb = document.createElement('button');
+      fb.type = 'button'; fb.id = 'faustfeld';
+      fb.className = 'faust' + (ich.faust ? ' aktiv' : '');
+      fb.innerHTML = `<span class="zz">${dingIcon('faust', 40, '✊')}</span>`;
+      fb.title = 'Faust: Waffe wegstecken, nicht schießen (Taste X; nochmal = Waffe zurück)';
+      fb.setAttribute('aria-label', fb.title);
+      fb.setAttribute('aria-pressed', ich.faust ? 'true' : 'false');
+      fb.addEventListener('pointerdown', e => e.stopPropagation());   // nicht zum Laufstick/Spielfeld durchreichen
+      fb.onclick = e => { e.stopPropagation(); raum.send('faust'); };
+      leiste.appendChild(fb);
     }
     const lad = ich.faust ? null : leiste.children[akt]?.querySelector('.lad');   // Nachladefortschritt (ohne Neuaufbau)
     if (lad) lad.style.width = ich.nachladen > 0 ? `${Math.round(Math.min(1, ich.nachladen) * 100)}%` : '0';

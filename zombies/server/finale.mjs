@@ -33,6 +33,9 @@ export class Finale {
     s.finaleRest = Math.ceil(this.rest);
   }
 
+  // alle im Bunker: Countdown endet sofort (beim nächsten Schritt)
+  sofort() { this.rest = 0.001; this.raum.state.finaleRest = 1; for (const t of ANSAGEN) this.gemeldet.add(t); }
+
   // Testbefehl: Countdown neu setzen
   setzen(sek) {
     if (!this.aktiv()) return false;
@@ -100,8 +103,9 @@ export class Finale {
   neustart(sieg) {
     this.fertig = true;
     const a = this.raum.aufgaben;
-    // Sieg: frische Runde in Level 1 (wie „Welt neu starten“); Niederlage: Level 5 noch einmal mit neuer Welt
-    a.levelWechsel(sieg ? { karte: 'geretsried', level: 1, frisch: true } : { karte: 'andermatt', level: 5 });
+    // Sieg: frische Runde in Level 1 = erstes aktives Level der eingestellten Reihenfolge (wie „Welt neu starten“);
+    // Niederlage: dieselbe Karte (Andermatt) noch einmal mit neuer Welt, Levelnummer (Position) bleibt
+    a.levelWechsel(sieg ? { karte: a.erstesLevel(), level: 1, frisch: true } : { karte: 'andermatt', level: a.levelNr('andermatt') || this.raum.state.level || 5 });
   }
 }
 

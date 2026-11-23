@@ -112,7 +112,7 @@ for (const name of ['geretsried', 'geretsried2', 'isarauen']) {
       const b = w.behaelter.find(q => q.id === id);
       assert.ok(!ids.has(id)); ids.add(id);
       assert.ok(['bw_kiste', 'bw_container', 'sanikiste'].includes(b.art));
-      assert.ok(BEUTE[b.art]?.some(Boolean), 'keine Beute für ' + b.art);
+      if (b.art !== 'bw_kiste') assert.ok(BEUTE[b.art]?.some(Boolean), 'keine Beute für ' + b.art);   // Munitionskiste: Versorgung statt Beute
       assert.ok(BEHAELTER_NAME[b.art], 'kein Name für ' + b.art);
     }
     assert.equal(new Set(w.behaelter.map(b => b.id)).size, w.behaelter.length, 'doppelte Behälter-Kennung');

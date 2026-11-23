@@ -22,7 +22,10 @@ export const LEVEL_VORGABE = [
   { grund: 14, jeSpieler: 8,  horde: 25, dauer: 15, pause: 2, gleichzeitig: 2, haeuser: 14 },
   { grund: 16, jeSpieler: 10, horde: 30, dauer: 15, pause: 1, gleichzeitig: 2, haeuser: 16 },
 ];
+// Empfohlene Spanne (die Verwaltung zeigt sie an) – eingebbar ist mehr, siehe LEVEL_SICHER
 export const LEVEL_GRENZEN = { grund: [0, 200], jeSpieler: [0, 100], horde: [0, 200], dauer: [1, 60], pause: [0.5, 60], gleichzeitig: [0, 5], haeuser: [0, 50] };
+// technische Obergrenzen (Server/Speicher): Zombies draußen/Horde/Häuser und Horden gleichzeitig; Zeiten bleiben bei der allgemeinen Sicherheitsgrenze
+export const LEVEL_SICHER = { grund: 5000, jeSpieler: 1000, horde: 2000, dauer: 1e5, pause: 1e5, gleichzeitig: 50, haeuser: 1000 };
 
 // Reglerfaktoren für die gewählte Schwierigkeit
 export const REGLER = { leicht: 0.75, normal: 1, schwer: 1.3 };

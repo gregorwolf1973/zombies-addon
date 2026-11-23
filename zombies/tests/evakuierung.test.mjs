@@ -58,7 +58,7 @@ test('Einstellungen: Evakuierungsart und Leopard-MG werden bereinigt, Vorgabe au
   assert.equal(evakArtFuer('isarauen'), 'panzer');
   assert.equal(evakArtFuer('geretsried'), 'bus');
   const b = bereinige({ bundeswehr: { leopardReichweite: 1, leopardPause: 99, leopardSchaden: 9999, leopardUeberrollen: 'ja' } }).bundeswehr;
-  assert.deepEqual([b.leopardReichweite, b.leopardPause, b.leopardSchaden, b.leopardUeberrollen], [5, 5, 500, true]);
+  assert.deepEqual([b.leopardReichweite, b.leopardPause, b.leopardSchaden, b.leopardUeberrollen], [1, 99, 9999, true]);
   assert.equal(bereinige({ bundeswehr: { leopardUeberrollen: false } }).bundeswehr.leopardUeberrollen, false);
   assert.equal(bereinige({ aufgaben: { evakArt: 'panzer' } }).aufgaben.evakArt, 'panzer');
 });
@@ -288,6 +288,45 @@ test('Leopard (Isarauen) fährt querfeldein zum Abholpunkt, wartet dort und fäh
     v.evakuierungAb(id);
     for (let i = 0; i < 8000 && raum.state.fahrzeuge.has(id); i++) v.schritt(0.1);
     assert.equal(raum.state.fahrzeuge.has(id), false, 'Panzer fährt nicht wieder hinaus');
+  } finally { await beenden(a.c); }
+}));
+
+test('Leopard (Isarauen): Anfahrt von weit weg über die Straße vom Kartenrand, dann querfeldein, und er steht zur angekündigten Zeit am Abholpunkt', mitArt('panzer', async () => {
+  await frisch();
+  const a = await beitreten('Anmarsch');
+  const { raum, p } = a;
+  try {
+    const s = raum.state, ag = raum.aufgaben, v = raum.verkehr;
+    const rate = 1440 / ((raum.einstellungen?.().tagMinuten || 48) * 60);   // Spielminuten je Sekunde
+    const vorlauf = ag.panzerVorlauf();
+    assert.ok(vorlauf > 20, 'Vorlauf zu kurz: ' + vorlauf);
+    const meldungen = [];
+    raum.broadcast = (typ, m) => { if (typ === 'meldung') meldungen.push(m.text); };
+    nurFunk(raum);
+    ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
+    s.uhr = 18 * 60 - vorlauf + 1;   // knapp nach dem spätesten Abfahrtszeitpunkt am Kartenrand
+    assert.ok(await bis(() => busVon(raum), 4000), 'Panzer rollt nicht rechtzeitig los');
+    const [id, f] = busVon(raum), inf = v.info.get(id);
+    const ziel = inf.querfeld.ziel;
+    assert.ok(inf.feldWeg && inf.feldVon > 1, 'kein gemischter Weg (Straße + Feld)');
+    assert.ok(!inf.angekommen);
+    const start = { x: f.x, y: f.y }, abstand = Math.hypot(start.x - ziel.x, start.y - ziel.y);
+    const rand = Math.min(start.x, start.y, 8960 - start.x, 6656 - start.y);
+    assert.ok(abstand > 8000 || rand < 160, 'Start nicht weit weg: ' + abstand + ' / Rand ' + rand);
+    assert.ok(meldungen.some(t => /Panzer im Anmarsch aus (Norden|Süden|Osten|Westen|Nord|Süd)/.test(t) && /m Luftlinie/.test(t)), 'kein Hinweis „Panzer im Anmarsch“: ' + meldungen.join(' | '));
+    // im Zeitraffer fahren; die Spieluhr läuft mit (v.schritt allein bewegt sie nicht)
+    stehendeMenschenWeg(raum);
+    const t0 = s.uhr;
+    let strasse = false, feld = false;
+    for (let i = 0; i < 20000 && !inf.angekommen; i++) {
+      v.schritt(0.1); s.uhr += 0.1 * rate;
+      if (v.imFeld(inf)) feld = true; else strasse = true;
+    }
+    assert.ok(inf.angekommen, 'Panzer kommt nicht an');
+    assert.ok(strasse && feld, 'Weg nicht gemischt');
+    assert.ok(Math.hypot(f.x - ziel.x, f.y - ziel.y) < 20, 'steht nicht am Abholpunkt');
+    assert.ok(s.uhr <= 18 * 60 + 3, 'zu spät: ' + (s.uhr - 18 * 60) + ' Spielminuten');
+    assert.ok(s.uhr >= 18 * 60 - 0.35 * vorlauf, 'viel zu früh: ' + (18 * 60 - s.uhr) + ' Spielminuten (Vorlauf ' + vorlauf + ', Fahrt ' + (s.uhr - t0) + ')');
   } finally { await beenden(a.c); }
 }));
 

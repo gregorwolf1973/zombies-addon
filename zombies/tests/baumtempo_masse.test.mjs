@@ -73,10 +73,10 @@ test('baumFaktor echte Kronen: 1 Krone 100 %, 2 überlappende 50 %, ab 3 baumTem
   assert.ok(max < 0.05, 'Waldrand springt: ' + max);
 });
 
-test('Einstellung baumTempo: Vorgabe 25, begrenzt auf 5–100', () => {
+test('Einstellung baumTempo: Vorgabe 25, empfohlen 5–100, frei eingebbar (ab 1)', () => {
   assert.equal(vorgaben().baumTempo, 25);
-  assert.equal(bereinige({ baumTempo: 1 }, {}).baumTempo, 5);
-  assert.equal(bereinige({ baumTempo: 500 }, {}).baumTempo, 100);
+  assert.equal(bereinige({ baumTempo: 1 }, {}).baumTempo, 1);
+  assert.equal(bereinige({ baumTempo: 500 }, {}).baumTempo, 500);
   assert.equal(bereinige({ baumTempo: 40 }, {}).baumTempo, 40);
 });
 

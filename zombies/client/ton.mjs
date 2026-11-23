@@ -162,7 +162,7 @@ function probe(id, x, y, extra = 1, lautId = id) {
   const z = ort(x, y, laut);
   if (!z) return true;   // zu weit weg: still, aber auch kein Ersatzton
   const v = z.gain.value, zombie = ZOMBIE_IDS.has(id);
-  const buf = bereit[Math.floor(Math.random() * bereit.length)], rate = 0.94 + Math.random() * 0.12;
+  const buf = bereit[Math.floor(Math.random() * bereit.length)], rate = id === 'funkAnsage' ? 1 : 0.94 + Math.random() * 0.12;   // Sprachansage nie in der Tonhöhe verstellen
   const kurz = SCHUSS_IDS.has(id);
   const quelle = kurz ? id + ':' + (x == null ? 'ich' : Math.round(x / 400) + ',' + Math.round(y / 400)) : null;
   if (!stimmePlatz(zombie, v, quelle, PRIO_IDS.has(id))) { try { z.disconnect(); } catch { /* egal */ } return true; }

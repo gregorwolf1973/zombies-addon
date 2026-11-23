@@ -35,10 +35,10 @@ const gerade = (welt, a, b, rad) => {
   return true;
 };
 
-function suche(welt, ziel, rad) {
+function suche(welt, ziel, rad, maxKosten = MAX_KOSTEN) {
   const W = Math.ceil(BREITE * KACHEL / ZELLE), H = Math.ceil(HOEHE * KACHEL / ZELLE);
   const zx = Math.min(W - 1, Math.max(0, Math.round(ziel.x / ZELLE))), zy = Math.min(H - 1, Math.max(0, Math.round(ziel.y / ZELLE)));
-  const kosten = new Float32Array(W * H).fill(Infinity), eltern = new Int32Array(W * H).fill(-1), erlaubt = new Int8Array(W * H);   // 0 unbekannt, 1 frei, 2 gesperrt
+  const kosten = new Float64Array(W * H).fill(Infinity), eltern = new Int32Array(W * H).fill(-1), erlaubt = new Int8Array(W * H);   // 0 unbekannt, 1 frei, 2 gesperrt
   const ok = (cx, cy) => { const i = cy * W + cx; if (!erlaubt[i]) erlaubt[i] = frei(welt, cx * ZELLE, cy * ZELLE, rad) ? 1 : 2; return erlaubt[i] === 1; };
   const h = new Haufen(), start = zy * W + zx;
   kosten[start] = 0; h.push(0, start);
@@ -54,12 +54,59 @@ function suche(welt, ziel, rad) {
       if (nx < 0 || ny < 0 || nx >= W || ny >= H || !ok(nx, ny)) continue;
       if (dx && dy && !(ok(cx + dx, cy) && ok(cx, cy + dy))) continue;   // nicht diagonal durch Ecken
       const nk = k + (dx && dy ? 1.414 : 1) * ZELLE;
-      if (nk > MAX_KOSTEN) continue;
+      if (nk > maxKosten) continue;
       const j = ny * W + nx;
       if (nk < kosten[j]) { kosten[j] = nk; eltern[j] = i; h.push(nk, j); }
     }
   }
   return { W, H, kosten, eltern, gesehen };
+}
+
+
+// Weg von Zelle i zum Ziel (die Eltern zeigen zum Ziel), dann Sichtlinien-Glättung
+function wegAus(welt, eltern, W, i0, ziel, rad, vorn = null) {
+  const roh = vorn ? [vorn] : [];
+  for (let i = i0; i >= 0; i = eltern[i]) roh.push({ x: (i % W) * ZELLE, y: ((i / W) | 0) * ZELLE });
+  roh[roh.length - 1] = { x: ziel.x, y: ziel.y };
+  const weg = [roh[0]];
+  for (let a = 0; a < roh.length - 1;) {
+    let b = roh.length - 1;
+    while (b > a + 1 && !gerade(welt, roh[a], roh[b], rad)) b--;
+    weg.push(roh[b]); a = b;
+  }
+  return weg;
+}
+
+// Erweiterte Suche (bis ANFAHRT_KOSTEN) für die gemischte Anfahrt Straße → Feld, einmal je Plan
+const ANFAHRT_KOSTEN = 20000;
+function weite(welt, plan) {
+  if (!plan) return null;
+  if (plan._weite === undefined) Object.defineProperty(plan, '_weite', { value: suche(welt, plan.ziel, plan.rad, ANFAHRT_KOSTEN), enumerable: false, writable: true });
+  return plan._weite;
+}
+
+// Letztes Stück querfeldein von einem Punkt (z. B. Straßenknoten) zum Ziel des Plans; null, wenn dort kein Feldweg für die Wanne hinführt.
+// Verwendet die Suche des Plans (Kostenfeld vom Ziel aus).
+export function querfeldVon(welt, plan, punkt) {
+  const s = weite(welt, plan);
+  if (!s || !frei(welt, punkt.x, punkt.y, plan.rad)) return null;
+  const { W, H, kosten, eltern } = s;
+  const cx = Math.round(punkt.x / ZELLE), cy = Math.round(punkt.y / ZELLE);
+  if (cx < 0 || cy < 0 || cx >= W || cy >= H) return null;
+  const i = cy * W + cx;
+  if (!Number.isFinite(kosten[i])) return null;
+  const c0 = { x: cx * ZELLE, y: cy * ZELLE };
+  if (!gerade(welt, punkt, c0, plan.rad)) return null;
+  return wegAus(welt, eltern, W, i, plan.ziel, plan.rad, { x: punkt.x, y: punkt.y });
+}
+
+// Kostenwert (Weglänge vom Ziel, Pixel) an einem Punkt, Infinity außerhalb der Suche
+export function querfeldKosten(plan, punkt, welt) {
+  const s = weite(welt, plan);
+  if (!s) return Infinity;
+  const cx = Math.round(punkt.x / ZELLE), cy = Math.round(punkt.y / ZELLE);
+  if (cx < 0 || cy < 0 || cx >= s.W || cy >= s.H) return Infinity;
+  return s.kosten[cy * s.W + cx];
 }
 
 // Plan für ein Ziel (Pixel). ziel wird bei Bedarf auf die nächste befahrbare Stelle verschoben. null, wenn keine Fläche gefunden wird.
@@ -81,18 +128,11 @@ export function querfeldPlan(welt, wunsch) {
     }
     if (best < 0) for (const i of gesehen) if (best < 0 || kosten[i] > kosten[best]) best = i;   // kleine Fläche: der weiteste Punkt
     if (best < 0 || kosten[best] < 150) continue;
-    // Weg vom Einfahrtspunkt zum Ziel (die Eltern zeigen zum Ziel), dann Sichtlinien-Glättung
-    const roh = [];
-    for (let i = best; i >= 0; i = eltern[i]) roh.push({ x: (i % W) * ZELLE, y: ((i / W) | 0) * ZELLE });
-    roh[roh.length - 1] = { x: ziel.x, y: ziel.y };
-    const weg = [roh[0]];
-    for (let a = 0; a < roh.length - 1;) {
-      let b = roh.length - 1;
-      while (b > a + 1 && !gerade(welt, roh[a], roh[b], rad)) b--;
-      weg.push(roh[b]); a = b;
-    }
+    const weg = wegAus(welt, eltern, W, best, ziel, rad);
     const verschoben = Math.hypot(ziel.x - wunsch.x, ziel.y - wunsch.y) > 24;
-    return welt._querfeld = { ziel, start: weg[0], weg, rueck: [...weg].reverse(), verschoben, rad };
+    const plan = { ziel, start: weg[0], weg, rueck: [...weg].reverse(), verschoben, rad };
+    Object.defineProperty(plan, '_suche', { value: s, enumerable: false });   // für querfeldVon (Straße → Feld)
+    return welt._querfeld = plan;
   }
   return welt._querfeld = null;
 }

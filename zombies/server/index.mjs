@@ -12,7 +12,8 @@ import { Encoder } from '@colyseus/schema';
 // Große Horden (bis 1000 Zombies): Zustandspuffer gleich groß genug anlegen, statt bei jedem Wachsen zu warnen
 Encoder.BUFFER_SIZE = 256 * 1024;
 import { SpielRaum } from './raum.mjs';
-import { LEVEL1_KARTEN, level1Karte } from './aufgaben.mjs';
+import { LEVEL1_KARTEN } from './aufgaben.mjs';
+import { LEVEL_KATALOG, aktiveFolge, eintragVon, karteAufloesen } from '../client/levelkatalog.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
 import { clientAuslieferung, auslieferungsVersion } from './statisch.mjs';
@@ -86,14 +87,14 @@ export async function starte({
   level1Merken(datei.werte.karte);
   SpielRaum.kartenWechsel = karte => {
     const zufall = !SpielRaum.level1Wahl;
-    if (zufall && LEVEL1_KARTEN.includes(karte)) { level1Gewuerfelt = karte; anwenden(datei.aendern({ karte: 'level1', aufgaben: { evakArt: '' } })); }   // Zufallswahl bleibt gespeichert
+    if (zufall && eintragVon(karte)?.id === aktiveFolge(datei.werte.levelFolge)[0]) { level1Gewuerfelt = karte; anwenden(datei.aendern({ karte: 'level1', aufgaben: { evakArt: '' } })); }   // Zufallswahl bleibt gespeichert
     else anwenden(datei.aendern({ karte, aufgaben: { evakArt: '' } }));
   };
   SpielRaum.karteVon = ladeKarte;   // für das Vorbauen der nächsten Welt (weltcache.mjs)
   SpielRaum.testSetzen = test => { anwenden(datei.aendern({ test })); return datei.werte.test; };   // Testmenü (Superuser): wie die Verwaltung speichern und für alle Räume übernehmen
   let geladeneKarte = null;
   const anwenden = w => {
-    if (w.karte === 'level1' && !level1Gewuerfelt) level1Gewuerfelt = level1Karte();
+    if (w.karte === 'level1' && !level1Gewuerfelt) level1Gewuerfelt = karteAufloesen(aktiveFolge(w.levelFolge)[0], SpielRaum.level1Wahl);   // Level 1 = erstes aktives Level der Reihenfolge
     const wahl = w.karte === 'level1' ? level1Gewuerfelt : w.karte;
     if (!geladeneKarte || geladeneKarte.wahl !== wahl) geladeneKarte = { wahl, karte: ladeKarte(wahl) };
     SpielRaum.einstellungen = {
@@ -121,6 +122,8 @@ export async function starte({
       reichweite: w.reichweite,
       funde: w.funde,                               // je Gegenstand: 10 = normal, 0 = nie, 20 = doppelt
       bots: w.bots,
+      verkehrDichte: w.verkehrDichte,               // Meter Straße je fahrendem Auto (Anzahl = Netzlänge / Dichte, höchstens `verkehr`)
+      levelFolge: w.levelFolge,                     // Reihenfolge/Schalter der Level [{ karte, aktiv }] (client/levelkatalog.mjs)
       karte: geladeneKarte.karte,                   // gilt für die nächste Welt
       frischerStart: w.frischerStart,
       sprache: {                                    // Sprachübertragung (Werte für den Client: Meter bzw. 0..1)
@@ -134,7 +137,6 @@ export async function starte({
       polizei: w.polizei,                           // { aktiv, anzahl, munition }
       ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,
-      munitionsglueck: w.munitionsglueck,           // { schritt, max, lebenUnter, lebenFaktor, notUnter, notFaktor } in %
       hund: w.hund,                                 // { ablenkung } in %
       unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),
     };
@@ -211,7 +213,7 @@ export async function starte({
     const raum = SpielRaum.aktiv;
     return {
       einstellungen: oeffentlich(datei.werte), vorgaben: oeffentlich(vorgaben()),   // vorgaben: Werte für „↺“ (Vorgabe) auf der Verwaltungsseite
-      karten: KARTEN, zeitraffer: ZEITRAFFER,
+      karten: KARTEN, levelKatalog: LEVEL_KATALOG, zeitraffer: ZEITRAFFER,
       dinge: Object.entries(DINGE).filter(([, d]) => !d.intern).map(([id, d]) => ({ id, name: d.name, zeichen: d.zeichen })),
       laufendeKarte: raum ? (raum.state.karte || 'dorf') : null,
       spieler: raum ? [...raum.state.spieler.entries()].map(([sid, p]) => ({
@@ -264,8 +266,9 @@ export async function starte({
     res.set('Content-Disposition', 'attachment; filename="zombies-einstellungen.json"').type('application/json').send(JSON.stringify(ohneGeheimnisse(datei.werte), null, 2));
   });
   app.post('/verwaltung/api', nurIngress, express.json({ limit: '20kb' }), (req, res) => {
-    const vorher = datei.werte.karte;
+    const vorher = datei.werte.karte, ersteVorher = aktiveFolge(datei.werte.levelFolge)[0];
     const neu = datei.aendern(req.body ?? {});
+    if (aktiveFolge(neu.levelFolge)[0] !== ersteVorher) level1Gewuerfelt = null;   // anderes erstes Level: Karte von Level 1 neu bestimmen
     if (neu.karte !== vorher) { level1Merken(neu.karte); level1Gewuerfelt = null; }   // Backend-Wahl geändert: Zufall neu würfeln bzw. feste Karte
     anwenden(neu);
     // Ton-Einstellungen sofort an laufende Spiele (sonst erst nach Neuladen der Seite)

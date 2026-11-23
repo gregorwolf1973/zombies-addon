@@ -324,6 +324,13 @@ export class Uebersicht {
         c.strokeText(k.name, x, y + sym + 10 * dpr); c.fillStyle = '#ffe082'; c.fillText(k.name, x, y + sym + 10 * dpr);
       }
     }
+    // Gesuchte Dinge (offene Aufgaben) in bereits geöffneten Behältern bzw. am Boden: gelber Punkt genau am Fundort, auf der großen Karte mit Symbol
+    for (const f of this.fundpunkte ?? []) {
+      const [x, y] = pos(f.x, f.y);
+      if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+      c.beginPath(); c.arc(x, y, (this.gross ? 5.5 : 4) * dpr, 0, Math.PI * 2); c.fillStyle = '#ffd600'; c.fill(); c.lineWidth = 1.6 * dpr; c.strokeStyle = '#fff'; c.stroke();
+      if (this.gross) { c.font = `${Math.round(11 * dpr)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText(f.symbol, x, y - 11 * dpr); }
+    }
     // Zielorte der offenen Aufgaben: orangefarbene Raute mit Symbol; auf der großen Karte mit Namen, in der Ecke nur als Punkt
     for (const z of this.ziele ?? []) {
       const [x, y] = pos(z.x, z.y);
