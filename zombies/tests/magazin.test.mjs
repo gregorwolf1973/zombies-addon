@@ -44,7 +44,8 @@ test('Werte: jede Fernwaffe hat Magazin und Nachladezeit, Granatwerfer ist eine 
   assert.ok(WAFFEN.armbrust.nachlade < 4);
   assert.equal(WAFFEN.granatwerfer.reichweite, 480);
   assert.ok(DINGE.granatwerfer.waffe && DINGE.granate40.name === 'Granate (40 mm)');
-  for (const art of ['bw_kiste', 'bw_container']) assert.ok(BEUTE[art].includes('granate40'), art);
+  assert.ok(BEUTE.bw_container.includes('granate40'));   // Munitionskisten: seit der Versorgung kein Zufallsinhalt mehr (tests/versorgung.test.mjs)
+  assert.deepEqual(BEUTE.bw_kiste, []);
   assert.ok(!BEUTE.bw_container.includes('granatwerfer'), 'Granatwerfer kommt aus eigener Prüfung (GRANATWERFER_CHANCE), nicht aus der Tabelle');
   assert.ok(!BEUTE.bw_kiste.includes('granatwerfer') || true);
   // leeres Magazin, aber Vorrat: Waffe bleibt aktiv (lädt nach); beides leer: Faust

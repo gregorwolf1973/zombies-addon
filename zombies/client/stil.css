@@ -92,6 +92,9 @@ button:disabled { opacity: .6; }
 #waffenplaetze button .lad { position: absolute; left: 0; bottom: 0; height: 4px; width: 0; background: #ff9800; }
 #waffenplaetze button.aktiv { border-color: #ffd54f; background: #ffd54f66; }
 #waffenplaetze button.leer { opacity: .6; }
+#waffenplaetze button.faust { width: calc(var(--wf) * .86); height: calc(var(--wf) * .86); }
+#waffenplaetze button.faust .zz { font-size: 26px; }
+#waffenplaetze button.faust .ding-icon { transform: scale(.85); }
 #waffenplaetze button.rot { border-color: #e53935; background: #e5393580; }
 #waffenplaetze button.rot .mag { color: #ffcdd2; }
 /* Granatenfeld: kleiner, feste Stelle neben den Waffenfeldern, bleibt unsichtbar-reserviert ohne Granaten */

@@ -497,13 +497,14 @@ test('Maschinenpistole und Maschinengewehr: hohe Feuerrate, Reichweiten einstell
 test('Bundeswehr-Beute: Granate/MP/MG nur in bw_kiste, bw_container und (MP/MG) Polizeiwache; Bots ordnen MP/MG über das Gewehr', () => {
   for (const [art, liste] of Object.entries(BEUTE)) {
     const neu = liste.filter(d => ['granate', 'mp', 'mg'].includes(d));
-    if (art === 'bw_kiste' || art === 'bw_container') assert.ok(neu.length > 0, art);
+    if (art === 'bw_container') assert.ok(neu.length > 0, art);
+    else if (art === 'bw_kiste') assert.equal(neu.length, 0, 'Munitionskiste: Zufallsbeute ersetzt durch Versorgung');
     else if (art === 'laden_polizei') assert.ok(neu.includes('mp') && neu.includes('mg'), 'Polizeiwache: MP und MG selten');
     else assert.equal(neu.length, 0, 'neue Bundeswehr-Waffen dürfen nicht in ' + art + ' liegen');
   }
   const zahl = (liste, d) => liste.filter(q => q === d).length;
-  assert.ok(zahl(BEUTE.bw_kiste, 'granate') > zahl(BEUTE.bw_kiste, 'mp') && zahl(BEUTE.bw_container, 'granate') > zahl(BEUTE.bw_container, 'mg'), 'Granaten häufiger als MP/MG');
-  assert.ok(BEUTE.bw_kiste.includes('munition') && BEUTE.bw_container.includes('munition'));
+  assert.ok(zahl(BEUTE.bw_container, 'granate') > zahl(BEUTE.bw_container, 'mg'), 'Granaten häufiger als MP/MG');
+  assert.ok(BEUTE.bw_container.includes('munition'));
   assert.ok(!BEUTE.bw_kiste.includes('mg'), 'MG nur im Container');
   for (const d of ['granate', 'mp', 'mg']) assert.ok(![...LEICHE_SELTEN, ...LEICHE_OFT].includes(d), 'Leichen tragen ' + d);
   assert.ok(WAFFEN_RANG.indexOf('mp') > WAFFEN_RANG.indexOf('gewehr') && WAFFEN_RANG.indexOf('mg') > WAFFEN_RANG.indexOf('mp'));
@@ -513,14 +514,14 @@ test('Bundeswehr-Beute: Granate/MP/MG nur in bw_kiste, bw_container und (MP/MG) 
 
 test('Einstellungen: Bundeswehr (aktiv, Falltage) und Reichweiten von MP/MG werden bereinigt', () => {
   const v = bereinige({});
-  assert.deepEqual(v.bundeswehr, { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, mgMunition: 400, pumaMunition: 200 });
+  assert.deepEqual(v.bundeswehr, { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, mgMunition: 400, pumaMunition: 200 });
   assert.equal(v.reichweite.mp, 30); assert.equal(v.reichweite.mg, 45);
   const e = bereinige({ bundeswehr: { aktiv: 'ja', falltage: 99 }, reichweite: { mp: 500, mg: 1 } });
   assert.equal(e.bundeswehr.aktiv, true); assert.equal(e.bundeswehr.falltage, 30);
   assert.equal(e.reichweite.mp, 80); assert.equal(e.reichweite.mg, 5);
   assert.equal(bereinige({ bundeswehr: { aktiv: false, falltage: 0 } }).bundeswehr.aktiv, false);
   assert.equal(bereinige({ bundeswehr: { falltage: -4 } }, e).bundeswehr.falltage, 0);
-  assert.deepEqual(SpielRaum.einstellungen.bundeswehr, { aktiv: true, falltage: 3, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, mgMunition: 400, pumaMunition: 200 });
+  assert.deepEqual(SpielRaum.einstellungen.bundeswehr, { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, mgMunition: 400, pumaMunition: 200 });
 });
 
 test('Handel: Preise, Bezahlung mit dem, was man am meisten hat', () => {
@@ -530,7 +531,7 @@ test('Handel: Preise, Bezahlung mit dem, was man am meisten hat', () => {
   assert.equal(bezahlung(['essen', 'wasser'], HANDEL.soldat.angebote[0].kostet), null, 'Granate nur für 2 Konserven');
   assert.deepEqual(bezahlung(['essen', 'essen', 'wasser'], HANDEL.soldat.angebote[0].kostet), ['essen', 'essen']);
   assert.equal(bezahlung(['essen', 'wasser', 'verband'], HANDEL.soldat.angebote[1].kostet).length, 3);
-  assert.equal(HANDEL.soldat.angebote[1].menge, 100);
+  assert.equal(HANDEL.soldat.angebote[1].menge, 30);
 });
 
 test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, Munitionsgrenze', async () => {
@@ -578,14 +579,14 @@ test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, M
   assert.equal(r.ok, true); assert.deepEqual(hat(), ['granate', 'granate']);
   r = await sende('soldat', 'granate');
   assert.equal(r.ok, false, 'ohne Konserven keine Granate'); assert.deepEqual(hat(), ['granate', 'granate']);
-  // 100 Schuss für 3 beliebige Dinge; Obergrenze
+  // 30 Schuss für 3 beliebige Dinge; Obergrenze
   rucksack('wasser', 'bretter', 'verband', 'essen');
   p.munition = 10;
   r = await sende('soldat', 'munition');
   assert.equal(r.ok, true, r.text);
-  assert.equal(p.munition, 110); assert.equal(p.rucksack.length, 1);
+  assert.equal(p.munition, 40); assert.equal(p.rucksack.length, 1);
   rucksack('wasser', 'wasser', 'wasser');
-  p.munition = 100;
+  p.munition = 140;
   r = await sende('soldat', 'munition');
   assert.equal(p.munition, MUNITION_MAX, 'auf die Obergrenze gekappt'); assert.equal(r.ok, true);
   rucksack('wasser', 'wasser', 'wasser');

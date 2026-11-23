@@ -13,6 +13,7 @@ import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben, Mission, levelSchluessel } from './aufgaben.mjs';
 import { schwierigkeit, LEVEL_VORGABE } from './schwierigkeit.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
+import { Versorgung } from './versorgung.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
 import { Boxer } from './boxer.mjs';
 import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
@@ -559,6 +560,7 @@ export class SpielRaum extends Room {
     this.tageszeitenUebernehmen();   // Nachtlänge hängt vom Level ab
     this.stuetzpunkt = new Stuetzpunkt(this);
     this.stuetzpunkt.start(stand, !!passt);
+    this.versorgung = new Versorgung(this); this.versorgung.start(stand, !!passt);   // Bundeswehr-Versorgung über die Munitionskisten
     this.boxer = new Boxer(this); this.boxer.start();   // Radpanzer Boxer am Flugfeld (nur Königsdorf), siehe server/boxer.mjs
     haengendStart(this);   // hängende Zombies im S-Draht (Lager, Flugfeld) und Tote am Flugfeld Königsdorf
     this.granaten = new Granaten(this);
@@ -778,6 +780,7 @@ export class SpielRaum extends Room {
     p.su = !!auth?.su;
     this.state.spieler.set(client.sessionId, p);
     this.extra.set(client.sessionId, extra);
+    this.versorgung?.anmelden(spielerId);
     this.hunde?.beitritt(client.sessionId, p, extra, gespeichert);
     this.suAnmeldung(client, p, auth);
     this.speichereSpieler(client.sessionId);
@@ -1413,7 +1416,7 @@ export class SpielRaum extends Room {
       torGeloest: this.state.torGeloest, level: this.state.level, aufgaben: this.aufgaben?.speichern() ?? null, gestellt: [...this.gestellt].slice(-500),
       tueren: Object.fromEntries([...this.state.tueren.entries()].map(([k, t]) => [k, [t.offen, t.verschlossen, Math.round(t.barrikade), Math.round(t.hp), t.kaputt]])),
       verbrannt: [...this.state.verbrannt.keys()].filter(k => !k.startsWith('fz:')),
-      chat: this.chatVerlauf, stuetzpunkt: this.stuetzpunkt?.speichern() ?? '', stuetzpunktMuni: this.stuetzpunkt?.muniSpeichern() ?? null,
+      chat: this.chatVerlauf, stuetzpunkt: this.stuetzpunkt?.speichern() ?? '', stuetzpunktMuni: this.stuetzpunkt?.muniSpeichern() ?? null, versorgung: this.versorgung?.speichern() ?? null,
     });
   }
 
@@ -1470,7 +1473,7 @@ export class SpielRaum extends Room {
       const zustand = this.state.behaelter.get(b.id);
       if (zustand && zustand.rest === 0) continue;
       // Munitionskiste, die für DIESEN Spieler schon leer ist (der Client blendet sie aus): die danebenstehende nächste nehmen
-      if (b.art === 'bw_kiste' && x && this.inhalte.get(b.id + '@' + (x.spielerId ?? x.sid ?? ''))?.length === 0) continue;
+      if (b.art === 'bw_kiste' && x && this.inhalte.get(b.id + '@' + (x.spielerId ?? x.sid ?? ''))?.length === 0 && !this.versorgung?.bereit(x.spielerId)) continue;   // leer, und kein Versorgungspaket wartet
       if (b.art !== 'bus' && !sichtfrei(welt, p.x, p.y, b.x, b.y) && !p.ebene) continue;
       bd = d; best = b;
     }
@@ -2278,17 +2281,14 @@ export class SpielRaum extends Room {
     // Munitionskisten der Bundeswehr: für jeden Mitspieler ein eigener Inhalt (nie leer), der Haufen für die anderen bleibt unberührt
     if (b.art === 'bw_kiste') {
       const schluessel = b.id + '@' + (this.extra.get(client?.sessionId)?.spielerId ?? client?.sessionId ?? 'x');
-      // je Mitspieler: 100 Schuss (sofort), 1 Schusswaffe und 1 Taschenlampe
+      // Versorgung (server/versorgung.mjs): ein bereitliegendes Paket (Munition sofort, Waffe/Verband/Spritze in die Kiste); sonst nur Reste
       let extraGenommen = [];
-      if (!this.inhalte.has(schluessel)) {
-        const waffen = ['pistole', 'gewehr', 'schrotflinte', 'mp'];
-        // selten (je Kiste und Mitspieler) ein Maschinengewehr oder Scharfschützengewehr statt der üblichen Waffe
-        const sel = this.rnd();
-        const waffe = sel < 0.25 ? 'mg' : sel < 0.33 ? 'scharfschuetze' : waffen[Math.floor(this.rnd() * waffen.length)];
-        this.inhalte.set(schluessel, [waffe, 'taschenlampe']);
-        this.munitionNehmen(p, 100);
-        extraGenommen = ['munition'];
-      }
+      const spielerId = this.extra.get(client?.sessionId)?.spielerId ?? '';
+      const paket = this.versorgung?.abholen(spielerId);
+      if (paket) {
+        this.inhalte.set(schluessel, [...(this.inhalte.get(schluessel) ?? []), ...paket.dinge]);
+        if (paket.munition > 0) { this.munitionNehmen(p, paket.munition); extraGenommen = ['munition']; }
+      } else if (!this.inhalte.has(schluessel)) this.inhalte.set(schluessel, []);
       const inhalt = this.inhalte.get(schluessel);
       const genommen = [...extraGenommen, ...this.einpacken(p, inhalt)];
       this.aufgaben?.gefunden(b, genommen);
@@ -2780,7 +2780,7 @@ export class SpielRaum extends Room {
     s.zeit += dt * zr;
     const tagVorher = s.tag;
     s.tag = Math.floor(s.zeit / ((SpielRaum.einstellungen.tagMinuten || 48) * 60)) + 1;
-    if (s.tag !== tagVorher) this.tageszeitenUebernehmen();   // Schwierigkeit steigt je Spieltag (Nachtlänge)
+    if (s.tag !== tagVorher) { this.tageszeitenUebernehmen(); this.versorgung?.tagWechsel(); }   // Schwierigkeit steigt je Spieltag (Nachtlänge)
     // Tageszeit: ein Spieltag dauert tagMinuten echte Minuten
     const vorher = istNacht(s.uhr);
     const raffer = this.aufgaben?.warteRaffer?.() ?? 1;   // Warten am Abholpunkt: nur die Uhr läuft schneller

@@ -79,15 +79,16 @@ test('Armbrust: leiser Schuss, Pfeil verbraucht, Pfeil liegt danach am Boden und
   } finally { await a.leave(); }
 });
 
-test('Bundeswehr-Kiste liefert selten ein Maschinengewehr', async () => {
+test('Bundeswehr-Kiste: nie Zufalls-MG, nur die Versorgung (Pistole/Jagdgewehr/Schrotflinte)', async () => {
   const a = await new Client(URL_).joinOrCreate('zombies', { name: 'Kiste' });
   try {
     const raum = matchMaker.getLocalRoomById(a.roomId);
     const p = raum.state.spieler.get(a.sessionId);
-    p.waffe = '';
+    p.waffe = ''; p.munition = 0;
     raum.rnd = () => 0.05;
     raum.durchsucht({ sessionId: a.sessionId, send() {} }, p, { id: 'kistetest', art: 'bw_kiste' });
-    assert.equal(p.waffe, 'mg');
+    assert.ok(['pistole', 'gewehr', 'schrotflinte'].includes(p.waffe), 'Waffe: ' + p.waffe);
+    assert.equal(p.munition, 50);
   } finally { await a.leave(); }
 });
 
@@ -98,8 +99,7 @@ test('Maschinengewehr aus der Kiste: kommt sofort in die Hand (Pistole in den Ru
     const p = raum.state.spieler.get(a.sessionId), x = raum.extra.get(a.sessionId);
     raum.state.zombies.clear(); raum.zombieInfo.clear(); raum.zombieFaktor = 0;
     p.waffe = 'pistole'; p.munition = 0; p.rucksack.splice(0, p.rucksack.length);
-    raum.rnd = () => 0.2;   // unter 25 %: MG
-    raum.durchsucht({ sessionId: a.sessionId, send() {} }, p, { id: 'kistetest2', art: 'bw_kiste' });
+    raum.munitionNehmen(p, 100); raum.einpacken(p, ['mg']);   // MG als Fund (z. B. Bundeswehr-Container)
     assert.equal(p.waffe, 'mg', 'MG nicht in der Hand');
     assert.ok(p.rucksack.includes('pistole'), 'Pistole nicht im Rucksack');
     assert.ok(p.munition >= 100, 'keine Munition');
