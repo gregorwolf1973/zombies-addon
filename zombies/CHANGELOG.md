@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.88.0 – 24.11.2026
+
+- Acht wählbare Helden in der Startwahl: Einsatzkraft, Rote Jacke, Blondschopf, Schwarzer Anzug, Muskelmann, SWAT-Polizist, Rosa Pulli, Weißes Hemd (plus der alte Survivor). Im Backend per Häkchen festlegen, welche wählbar sind; Bots bekommen zufällig einen aktiven Helden.
+- Eigene 3D-Waffenmodelle für MP, MG, Scharfschützengewehr, Granatwerfer, Armbrust, Brechstange und Sense, in echter Größe (+10 %).
+- Taschenlampe sichtbar, wenn sie an ist: bei einhändigen Waffen in der linken Hand, bei Gewehren am Lauf.
+- Werfen und Faustschlag mit eigener Bewegung für alle Helden; Pistolenhaltung beim Schießen verbessert.
+
 ## 0.87.0 – 23.11.2026
 
 - Neue Helden (Zwischenstand): Heldin Jennifer und Held mit echten Bewegungen von oben – ohne Waffe, Pistole, Gewehr, Schrotflinte, Messer, Schläger, Tod. Beim Schießen mit Gewehr dreht der Körper, bis der Lauf zum Ziel zeigt; Mündungsfeuer und Leuchtspur starten an der Mündung. Waffen in echter Größe (+10 %). Alte Heldenbilder per Backend-Schalter.
