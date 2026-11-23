@@ -9,7 +9,7 @@ await new Promise(r => ws.onopen = r);
 const rufe = (method, params = {}) => new Promise(r => { const i = ++id; warte.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 await rufe('Page.navigate', { url });
 let text = '';
-for (let i = 0; i < 240; i++) {
+for (let i = 0; i < 600; i++) {
   await new Promise(r => setTimeout(r, 500));
   const m = await rufe('Runtime.evaluate', { expression: "document.getElementById('out')?.textContent || ''", returnByValue: true });
   text = m.result?.result?.value || '';
