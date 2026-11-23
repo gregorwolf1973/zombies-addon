@@ -38,9 +38,9 @@ test('Einstellungen: Blaulicht und Level-Tabelle werden bereinigt', () => {
   assert.deepEqual(v.zombies.level[4], { grund: 16, jeSpieler: 10, horde: 30, dauer: 15, pause: 1, gleichzeitig: 2, haeuser: 16 });
   assert.equal(bereinige({ blaulicht: 'quatsch' }).blaulicht, 'selten');
   assert.equal(bereinige({ blaulicht: 'aus' }).blaulicht, 'aus');
-  // Teilwerte ändern nur das Genannte, alles wird geklammert
+  // Teilwerte ändern nur das Genannte, nur technisch begrenzt (Sicherheitsgrenze)
   const l = bereinige({ zombies: { level: [{ pause: 0.1, horde: 5000, grund: 'viel' }, { gleichzeitig: 0, dauer: 7.4 }] } }).zombies.level;
-  assert.equal(l[0].pause, 0.5); assert.equal(l[0].horde, 200); assert.equal(l[0].grund, 8); assert.equal(l[0].jeSpieler, 5);
+  assert.equal(l[0].pause, 0.5); assert.equal(l[0].horde, 2000); assert.equal(l[0].grund, 8); assert.equal(l[0].jeSpieler, 5);
   assert.equal(l[1].gleichzeitig, 0); assert.equal(l[1].dauer, 7); assert.equal(l[1].haeuser, 11);
   // frühere Werte der Tabelle bleiben bei späteren Teiländerungen erhalten
   const alt = bereinige({ zombies: { level: [{ grund: 20 }] } });
@@ -398,9 +398,9 @@ test('Einstellungen: Hordenziel, Trupp und Reichweite werden bereinigt', () => {
   const v = vorgaben().zombies;
   assert.equal(v.hordeZiel, 3.5); assert.equal(v.hordeTrupp, 10); assert.equal(v.hordeReichweite, 18);
   const z = bereinige({ zombies: { hordeZiel: 99, hordeTrupp: 5000, hordeReichweite: 999 } }).zombies;
-  assert.equal(z.hordeZiel, 30); assert.equal(z.hordeTrupp, 300); assert.equal(z.hordeReichweite, 60);
+  assert.equal(z.hordeZiel, 99); assert.equal(z.hordeTrupp, 2000); assert.equal(z.hordeReichweite, 999);
   assert.equal(bereinige({ zombies: { hordeZiel: 0, hordeTrupp: 0 } }).zombies.hordeZiel, 0.5);
-  assert.equal(bereinige({ zombies: { hordeReichweite: 1 } }).zombies.hordeReichweite, 5);
+  assert.equal(bereinige({ zombies: { hordeReichweite: 1 } }).zombies.hordeReichweite, 1);
 });
 
 test('Horde: Zielwechsel nach Ablauf der Zeit (hordeZiel ±40 %)', async () => {

@@ -116,7 +116,7 @@ test('Einstellungen: leopardKanone (an), leopardKanonePause (8), leopardKanoneMi
   const v = bereinige({}).bundeswehr;
   assert.deepEqual([v.leopardKanone, v.leopardKanonePause, v.leopardKanoneMin], [true, 8, 10]);
   const b = bereinige({ bundeswehr: { leopardKanone: 'ja', leopardKanonePause: 0, leopardKanoneMin: 999 } }).bundeswehr;
-  assert.deepEqual([b.leopardKanone, b.leopardKanonePause, b.leopardKanoneMin], [true, 3, 50]);
+  assert.deepEqual([b.leopardKanone, b.leopardKanonePause, b.leopardKanoneMin], [true, 1, 999]);
   assert.equal(bereinige({ bundeswehr: { leopardKanone: false } }).bundeswehr.leopardKanone, false);
 });
 

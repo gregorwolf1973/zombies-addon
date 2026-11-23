@@ -471,7 +471,7 @@ export class SpielRaum extends Room {
     if (karte?.kacheln) {
       setzeKartengroesse(karte.breite, karte.hoehe);
       const passtStand = stand && (stand.karte ?? '') === karte.name && stand.seed === this.state.seed;
-      this.state.autos = Math.max(0, Math.min(50, Math.round(passtStand && Number.isFinite(stand.autos) ? stand.autos : (SpielRaum.einstellungen.autoFaktor ?? 1) * 10)));
+      this.state.autos = Math.max(0, Math.min(250, Math.round(passtStand && Number.isFinite(stand.autos) ? stand.autos : (SpielRaum.einstellungen.autoFaktor ?? 1) * 10)));
       this.welt = await weltBeschaffen(karte, this.state.seed, this.state.autos / 10); this.weltFp = weltFingerabdruck(this.welt); levelorteSetzen(this.welt, karte.name);   // sofort, bevor Spielstand/Spiel die Welt verändern
       this.state.karte = karte.name;
     } else {
@@ -549,7 +549,7 @@ export class SpielRaum extends Room {
     this.stadt = new Stadtleben(this);
     this.stadt.start(this.welt.karte ? (SpielRaum.einstellungen.menschen ?? 50) : 0);
     this.verkehr = new Verkehr(this);
-    if (this.welt.karte) this.verkehr.start(this.stadt.haltestellen, SpielRaum.einstellungen.verkehr ?? 30);
+    if (this.welt.karte) this.verkehr.start(this.stadt.haltestellen, SpielRaum.einstellungen.verkehr ?? 30, SpielRaum.einstellungen.verkehrDichte);
     this.brand = new Brandstifter(this);
     this.welle = new Zombiewelle(this);
     this.aufgaben = new Aufgaben(this);

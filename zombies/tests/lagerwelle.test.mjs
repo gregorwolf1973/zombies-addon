@@ -25,10 +25,10 @@ const lagerZombies = w => w.horden.filter(h => h.lager).reduce((a, h) => a + h.i
 const laufen = (w, s) => { for (let i = 0; i < s; i++) w.schritt(1); };
 const leeren = (raum, w) => { w.horden = []; w.lagerPlan = null; raum.state.zombies.clear(); raum.zombieInfo.clear(); };
 
-test('Einstellungen: lagerWelle und lagerWellePause werden geklammert, Vorgabe 200 / 10', () => {
+test('Einstellungen: lagerWelle (Sicherheitsgrenze 5000) und lagerWellePause, Vorgabe 200 / 10', () => {
   const v = vorgaben().zombies;
   assert.equal(v.lagerWelle, 200); assert.equal(v.lagerWellePause, 10);
-  assert.equal(bereinige({ zombies: { lagerWelle: 9999, lagerWellePause: 0 } }).zombies.lagerWelle, 400);
+  assert.equal(bereinige({ zombies: { lagerWelle: 9999, lagerWellePause: 0 } }).zombies.lagerWelle, 5000);
   assert.equal(bereinige({ zombies: { lagerWelle: 9999, lagerWellePause: 0 } }).zombies.lagerWellePause, 1);
   assert.equal(bereinige({ zombies: { lagerWelle: 0 } }).zombies.lagerWelle, 0);
 });

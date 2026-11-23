@@ -33,7 +33,7 @@ test('Verwaltung: ändern gilt sofort und wird gespeichert', async () => {
   assert.equal(r.status, 200);
   const d = await r.json();
   assert.equal(d.einstellungen.zombies.level[0].grund, 20); assert.equal(d.einstellungen.zombies.level[0].jeSpieler, 5);
-  assert.equal(d.einstellungen.zombies.tempo, 150, 'Tempo begrenzt');
+  assert.equal(d.einstellungen.zombies.tempo, 999, 'Tempo nicht mehr gedeckelt (empfohlen 50–150)');
   assert.equal(d.einstellungen.funde.wasser, 0);
   assert.ok(!('gibtsnicht' in d.einstellungen.funde));
   assert.equal(SpielRaum.einstellungen.zombiesLevel[0].grund, 20); assert.equal(SpielRaum.einstellungen.zombiesLevel[0].horde, 7);
@@ -52,19 +52,20 @@ test('Einstellungen bereinigen: Unsinn wird zu gültigen Werten', () => {
   assert.equal(e.test.zeitraffer, 1); assert.deepEqual(e.test.unsterblich, []);
 });
 
-test('Einstellungen bereinigen: Menschen- und Zombiegröße (50–200 %, Vorgabe 100), alte Helden-/Soldaten-/Leichenwerte entfallen', () => {
+test('Einstellungen bereinigen: Menschen- und Zombiegröße (empfohlen 50–200 %, Vorgabe 100, frei eingebbar), alte Helden-/Soldaten-/Leichenwerte entfallen', () => {
   assert.equal(bereinige({}).menschenGroesse, 100); assert.equal(bereinige({}).zombieGroesse, 100);
   const e = bereinige({ menschenGroesse: 10, zombieGroesse: 500, leichenGroesse: 10, heldenGroesse: 90, soldatenGroesse: 90 });
-  assert.equal(e.menschenGroesse, 50); assert.equal(e.zombieGroesse, 200);
+  assert.equal(e.menschenGroesse, 10); assert.equal(e.zombieGroesse, 500);
   for (const k of ['leichenGroesse', 'heldenGroesse', 'soldatenGroesse']) assert.equal(k in e, false);
 });
 
-test('Einstellungen bereinigen: Gesamtgröße (50–150 %, Vorgabe 70) und Zombie-Leben (20–500, Vorgabe 100)', () => {
+test('Einstellungen bereinigen: Gesamtgröße (empfohlen 50–150 %, Vorgabe 70) und Zombie-Leben (empfohlen 20–500, Vorgabe 100), frei eingebbar', () => {
   assert.equal(bereinige({}).groesseGesamt, 70); assert.equal(bereinige({}).zombieLeben, 100);
   const e = bereinige({ groesseGesamt: 10, zombieLeben: 9999 });
-  assert.equal(e.groesseGesamt, 50); assert.equal(e.zombieLeben, 500);
-  assert.equal(bereinige({ groesseGesamt: 400, zombieLeben: 1 }).groesseGesamt, 150);
-  assert.equal(bereinige({ zombieLeben: 1 }).zombieLeben, 20);
+  assert.equal(e.groesseGesamt, 10); assert.equal(e.zombieLeben, 9999);
+  assert.equal(bereinige({ groesseGesamt: 400, zombieLeben: 1 }).groesseGesamt, 400);
+  assert.equal(bereinige({ zombieLeben: 1 }).zombieLeben, 1);
+  assert.equal(bereinige({ zombieLeben: -5 }).zombieLeben, 1, 'technische Untergrenze');
   assert.equal(bereinige({ zombieLeben: 250 }, bereinige({ groesseGesamt: 80 })).groesseGesamt, 80);
 });
 
@@ -91,11 +92,11 @@ test('Sprache: Einstellungen werden bereinigt, gespeichert und an den Raum über
   assert.deepEqual(v.sprache, { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false });
   const e = bereinige({ sprache: { an: 'ja', hoerweite: 500, stockwerk: -5, drinnenDraussen: 99, funk: 'laut', redenLockt: true } });
   assert.equal(e.sprache.an, true, 'kein Wahrheitswert → Vorgabe');
-  assert.equal(e.sprache.hoerweite, 100); assert.equal(e.sprache.stockwerk, 0);
+  assert.equal(e.sprache.hoerweite, 500); assert.equal(e.sprache.stockwerk, 0);
   assert.equal(e.sprache.drinnenDraussen, 50); assert.equal(e.sprache.funk, 70); assert.equal(e.sprache.redenLockt, true);
-  assert.equal(bereinige({ sprache: { hoerweite: 3 } }).sprache.hoerweite, 10);
+  assert.equal(bereinige({ sprache: { hoerweite: 3 } }).sprache.hoerweite, 3);
   // Teiländerung lässt die übrigen Werte stehen
-  assert.equal(bereinige({ sprache: { funk: 20 } }, e).sprache.hoerweite, 100);
+  assert.equal(bereinige({ sprache: { funk: 20 } }, e).sprache.hoerweite, 500);
 
   process.env.ZOMBIES_VERWALTUNG_LOKAL = '1';
   const r = await fetch(`http://127.0.0.1:${PORT}/verwaltung/api`, { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -145,10 +146,10 @@ test('Hordengeräusch- und Musik-Einstellungen: Vorgaben und Klammern', async ()
   assert.deepEqual(v.musik, { laut: 35, blende: 3 });
   assert.deepEqual(vorgaben().toeneHorde, v.toeneHorde);
   const k = bereinige({ toeneHorde: { ab: 999, aus: -4, hoerweite: 5, voll: 'x' }, musik: { laut: 500, blende: 0.1 } });
-  assert.deepEqual(k.toeneHorde, { ab: 100, nurHorde: 20, voll: 40, aus: 0, hoerweite: 10 });
+  assert.deepEqual(k.toeneHorde, { ab: 999, nurHorde: 20, voll: 40, aus: 0, hoerweite: 5 });
   assert.deepEqual(k.musik, { laut: 100, blende: 1 });
   // Werte bleiben bei Teil-Änderungen erhalten
-  assert.equal(bereinige({ toeneHorde: { ab: 12 } }, k).toeneHorde.hoerweite, 10);
+  assert.equal(bereinige({ toeneHorde: { ab: 12 } }, k).toeneHorde.hoerweite, 5);
   for (const id of ['horde', 'hordeAkzent', 'musikLevel1', 'musikLevel5', 'musikLager', 'musikHorde', 'musikSafe', 'musikFinale']) assert.ok(EREIGNISSE.some(e => e.id === id), id);
   assert.equal(v.toene.musikLevel1.laut, 100);
   assert.deepEqual(v.toene.horde.dateien, []);

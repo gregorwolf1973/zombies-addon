@@ -6,7 +6,8 @@ import { KACHEL, BREITE, HOEHE, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, G
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { Nebel } from './nebel.mjs';
-import { LEVEL_KARTEN, KARTEN_NAMEN, level1Karte } from './aufgaben.mjs';
+import { KARTEN_NAMEN } from './aufgaben.mjs';
+import { aktiveFolge, karteAufloesen } from '../client/levelkatalog.mjs';
 
 // ---------- Hash ----------
 export const SU_MAX_LAENGE = 200;
@@ -261,8 +262,9 @@ export function befehl(raum, client, m) {
     }
     case 'level': {
       const n = Math.round(Number(m.level));
-      if (!(n >= 1 && n <= LEVEL_KARTEN.length)) return 'Unbekanntes Level';
-      const a = raum.aufgaben, karte = n === 1 ? level1Karte() : LEVEL_KARTEN[n - 1];   // Level 1: zufällig Geretsried oder Geretsried 2
+      const folge = aktiveFolge(raum.constructor.einstellungen?.levelFolge);   // Level n = n-tes aktives Level der eingestellten Reihenfolge
+      if (!(n >= 1 && n <= folge.length)) return 'Unbekanntes Level';
+      const a = raum.aufgaben, karte = karteAufloesen(folge[n - 1], raum.constructor.level1Wahl);   // Geretsried: feste Wahl oder zufällig Geretsried/Geretsried 2
       if (a.wechselLaeuft) return 'Ein Levelwechsel läuft schon';
       a.wechselLaeuft = true;
       raum.broadcast('meldung', { text: `🧪 Testsprung: Level ${n} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });

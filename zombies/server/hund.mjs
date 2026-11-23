@@ -58,7 +58,7 @@ export class Hunde {
 
   get streunerEinstellung() {
     const a = Number(this.raum.constructor.einstellungen?.hund?.streuner);
-    return Number.isFinite(a) ? Math.max(-1, Math.min(20, Math.round(a))) : HUND.streuner;
+    return Number.isFinite(a) ? Math.max(-1, Math.min(200, Math.round(a))) : HUND.streuner;
   }
 
   // Anzahl Streuner: Einstellung (-1 = automatisch: 1 je 0,5 km² Kartenfläche, mindestens 1; 0 = keine; sonst fest)

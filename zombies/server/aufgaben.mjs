@@ -13,6 +13,7 @@ import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplat
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
 import { weltVorbereiten } from './weltcache.mjs';
+import { LEVEL_KATALOG, levelSchluessel as katalogSchluessel, aktiveFolge, naechsterEintrag, karteAufloesen, katalogEintrag } from '../client/levelkatalog.mjs';
 
 // Missionsgegenstand für die Clients (Karte): exakte Position (x, y), Radius des animierten Auffindkreises, abgegeben, Ortsbeschreibung
 export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
@@ -27,13 +28,14 @@ export const Aufgabe = schema({
   pflicht: t.boolean(),
 }, 'Aufgabe');
 
-// Reihenfolge der Karten von Level zu Level (jede andere Karte beginnt wieder bei der ersten)
-export const LEVEL_KARTEN = ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt'];
-// Level 1 hat zwei Karten; die Wahl fällt per Zufall (50/50), außer das Backend legt eine fest
-export const LEVEL1_KARTEN = ['geretsried', 'geretsried2'];
+// Standard-Reihenfolge der Karten von Level zu Level (Katalog client/levelkatalog.mjs); die eingestellte Reihenfolge (Einstellung levelFolge,
+// Verwaltung) steht in raum.constructor.einstellungen.levelFolge, Level 1 = erstes aktives Level
+export const LEVEL_KARTEN = LEVEL_KATALOG.map(k => k.id);
+// Der Katalogeintrag 'geretsried' hat zwei Karten; die Wahl fällt per Zufall (50/50), außer das Backend legt eine fest
+export const LEVEL1_KARTEN = katalogEintrag('geretsried').karten;
 export const level1Karte = (zufall = Math.random) => LEVEL1_KARTEN[zufall() < 0.5 ? 0 : 1];
-// Spielstand-Schlüssel je Level (Tabellen je Karte): beide Level-1-Karten teilen sich die Werte von 'geretsried'
-export const levelSchluessel = karte => karte === 'geretsried2' ? 'geretsried' : karte;
+// Schlüssel je Level (Tabellen je Karte): beide Geretsried-Karten teilen sich die Werte von 'geretsried'
+export const levelSchluessel = katalogSchluessel;
 export const KARTEN_NAMEN = { geretsried: 'Geretsried (Level 1)', geretsried2: 'Geretsried 2 (Level 1)', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };
 
 export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
@@ -948,10 +950,9 @@ export class Aufgaben {
   levelVorplanen() {
     try {
       const r = this.raum, s = r.state;
-      let karte = this.naechsteKarte();
-      if (karte === 'geretsried') karte = r.constructor.level1Wahl || level1Karte();
+      const karte = this.aufloesen(this.naechsteKarte());
       const seed = Math.floor(Math.random() * 2 ** 31);
-      const autos = Math.max(0, Math.min(50, Math.round((r.constructor.einstellungen?.autoFaktor ?? 1) * 10)));   // wie SpielRaum.onCreate für neue Level
+      const autos = Math.max(0, Math.min(250, Math.round((r.constructor.einstellungen?.autoFaktor ?? 1) * 10)));   // wie SpielRaum.onCreate für neue Level
       this.plan = { von: s.karte, karte, seed, autos };
       const k = r.constructor.karteVon?.(karte);
       if (k?.kacheln) weltVorbereiten(k, seed, autos / 10);
@@ -959,10 +960,19 @@ export class Aufgaben {
     } catch (e) { this.plan = null; console.error('Level vorplanen:', e.message); }
   }
 
+  // Katalog-id des nächsten Levels nach der eingestellten Reihenfolge (nur aktive Level; nach dem letzten wieder das erste)
   naechsteKarte() {
-    const i = LEVEL_KARTEN.indexOf(levelSchluessel(this.raum.state.karte || 'dorf'));
-    return LEVEL_KARTEN[(i + 1) % LEVEL_KARTEN.length];
+    return naechsterEintrag(this.raum.constructor.einstellungen?.levelFolge, this.raum.state.karte || 'dorf');
   }
+
+  // Levelnummer (Position unter den aktiven Leveln, ab 1) eines Katalogeintrags; 0 = abgeschaltet/unbekannt
+  levelNr(id) { return aktiveFolge(this.raum.constructor.einstellungen?.levelFolge).indexOf(id) + 1; }
+
+  // erstes aktives Level der Reihenfolge (Level 1)
+  erstesLevel() { return naechsterEintrag(this.raum.constructor.einstellungen?.levelFolge, ''); }
+
+  // konkrete Karte eines Levels: mehrere Karten (Geretsried) = feste Wahl aus dem Backend (level1Wahl), sonst Zufall
+  aufloesen(id) { return karteAufloesen(id, this.raum.constructor.level1Wahl, Math.random); }
 
   // neue Karte einstellen und die Welt mit neuem Level neu starten; Rucksack und Werte der Spieler bleiben
   // ziel (optional): { karte, level, frisch } – Testbefehl und Finale; frisch = ganz neue Runde (Level 1, Fähigkeiten und Startwahl von vorn)
@@ -971,7 +981,7 @@ export class Aufgaben {
     const plan = !ziel && this.plan?.von === s.karte ? this.plan : null;   // in erfolg() vorgeplant (Karte + Seed, Welt ist schon im Bau)
     this.plan = null;
     let karte = ziel?.karte ?? plan?.karte ?? this.naechsteKarte();
-    if (!plan && karte === 'geretsried' && !ziel?.fest) karte = r.constructor.level1Wahl || level1Karte();   // Level 1: feste Wahl aus dem Backend, sonst Zufall
+    if (!plan && !ziel?.fest) karte = this.aufloesen(karte);   // Karte mit mehreren Varianten (Geretsried): feste Wahl aus dem Backend, sonst Zufall
     r.constructor.kartenWechsel?.(karte);
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.folgenId = null;

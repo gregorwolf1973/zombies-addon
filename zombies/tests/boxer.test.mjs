@@ -50,11 +50,11 @@ test('Boxer-Standort: Karten ohne Piste haben keinen Boxer', () => {
   assert.equal(boxerStandort({}), null);
 });
 
-test('Einstellungen: boxer* mit Grenzen, Maximum nie unter dem Minimum', () => {
+test('Einstellungen: boxer* nur technisch begrenzt, Maximum nie unter dem Minimum', () => {
   const b = bereinige({}).bundeswehr;
   for (const [k, v] of Object.entries(EINST_VORGABE)) assert.equal(b[k], v, k);
   const k = bereinige({ bundeswehr: { boxerHordeSek: 1, boxerHordeMin: 0, boxerHordeMax: 9999, boxerSchussPause: 0, boxerReichweite: 9999 } }).bundeswehr;
-  assert.deepEqual([k.boxerHordeSek, k.boxerHordeMin, k.boxerHordeMax, k.boxerSchussPause, k.boxerReichweite], [10, 1, 500, 0.05, 120]);
+  assert.deepEqual([k.boxerHordeSek, k.boxerHordeMin, k.boxerHordeMax, k.boxerSchussPause, k.boxerReichweite], [1, 1, 2000, 0.05, 9999]);
   const m = bereinige({ bundeswehr: { boxerHordeMin: 80, boxerHordeMax: 30 } }).bundeswehr;
   assert.ok(m.boxerHordeMax >= m.boxerHordeMin, 'Maximum unter Minimum');
 });

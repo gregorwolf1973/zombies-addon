@@ -58,7 +58,7 @@ test('Einstellungen: Evakuierungsart und Leopard-MG werden bereinigt, Vorgabe au
   assert.equal(evakArtFuer('isarauen'), 'panzer');
   assert.equal(evakArtFuer('geretsried'), 'bus');
   const b = bereinige({ bundeswehr: { leopardReichweite: 1, leopardPause: 99, leopardSchaden: 9999, leopardUeberrollen: 'ja' } }).bundeswehr;
-  assert.deepEqual([b.leopardReichweite, b.leopardPause, b.leopardSchaden, b.leopardUeberrollen], [5, 5, 500, true]);
+  assert.deepEqual([b.leopardReichweite, b.leopardPause, b.leopardSchaden, b.leopardUeberrollen], [1, 99, 9999, true]);
   assert.equal(bereinige({ bundeswehr: { leopardUeberrollen: false } }).bundeswehr.leopardUeberrollen, false);
   assert.equal(bereinige({ aufgaben: { evakArt: 'panzer' } }).aufgaben.evakArt, 'panzer');
 });

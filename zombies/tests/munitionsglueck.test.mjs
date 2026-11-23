@@ -55,7 +55,7 @@ test('Einstellungen: Vorgabe, Grenzen, alte Dateien ohne Abschnitt', async () =>
   const { bereinige, vorgaben } = await import('../server/einstellungen.mjs');
   assert.deepEqual(vorgaben().munitionsglueck, { schritt: 20, max: 300, lebenUnter: 30, lebenFaktor: 150, notUnter: 25, notFaktor: 130 });
   const k = bereinige({ munitionsglueck: { schritt: 999, max: 1, lebenUnter: -3, lebenFaktor: 'x', notFaktor: 5000 } });
-  assert.deepEqual(k.munitionsglueck, { schritt: 100, max: 100, lebenUnter: 0, lebenFaktor: 150, notUnter: 25, notFaktor: 300 });
+  assert.deepEqual(k.munitionsglueck, { schritt: 999, max: 1, lebenUnter: 0, lebenFaktor: 150, notUnter: 25, notFaktor: 5000 });
   assert.deepEqual(bereinige({ sprache: { an: true } }).munitionsglueck, vorgaben().munitionsglueck);
 });
 

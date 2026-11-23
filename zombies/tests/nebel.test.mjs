@@ -100,7 +100,7 @@ test('Einstellungen: Vorgabe, Grenzen, Zusammenführen', () => {
   assert.deepEqual(vorgaben().nebel, { an: true, morgen: 35, abend: 35, sicht: 20, zombie: 50 });
   assert.deepEqual(bereinige({}).nebel, NEBEL_VORGABE);
   const b = bereinige({ nebel: { morgen: 500, abend: -3, sicht: 1, zombie: 'x', an: false } }).nebel;
-  assert.deepEqual(b, { an: false, morgen: 100, abend: 0, sicht: 5, zombie: 50 });
+  assert.deepEqual(b, { an: false, morgen: 100, abend: 0, sicht: 1, zombie: 50 });
   const neu = bereinige({ nebel: { sicht: 30 } }, bereinige({ nebel: { morgen: 60 } }));
   assert.equal(neu.nebel.morgen, 60); assert.equal(neu.nebel.sicht, 30);
   assert.deepEqual(bereinigeNebel(undefined), NEBEL_VORGABE);

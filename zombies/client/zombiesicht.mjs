@@ -1,17 +1,19 @@
 // Zombie-Sicht (Backend-Einstellung zombieSicht): Meter/Grad/% -> Pixel/Bogenmaß; Server UND Client nutzen es.
 // Grundwerte entsprechen exakt dem früheren festen Verhalten (W.sichtWeite 170 px usw.).
 import { WERTE as W, helligkeit } from './welt.mjs';
+import { zahl } from './zahl.mjs';
 
 export const SICHT_VORGABE = { gehen: 21, schleichen: 12, kegel: 75, verfolgen: 34, aufgeben: 64, nacht: 100 };
 const PX = { gehen: W.sichtWeite, schleichen: W.sichtWeiteSchleichen, verfolgen: W.sichtWeite * 1.6, aufgeben: W.sichtWeite * 3 };   // Pixel der Grundwerte (exakt wie früher)
 
 export function bereinigeSicht(e, alt) {
-  const z = (v, min, max, vor) => { const n = Number(v); return Number.isFinite(n) ? Math.round(Math.max(min, Math.min(max, n))) : vor; };
+  // Meter und % ohne Obergrenze (nur Sicherheitsgrenze 5 km), der Sichtkegel ist ein Winkel (bis 360°)
+  const z = (v, min, max, vor, o = { max: 5000 }) => Math.round(zahl(v, min, max, vor, o));
   const a = { ...SICHT_VORGABE, ...(alt ?? {}) }, s = e ?? {};
   return {
     gehen: z(s.gehen ?? a.gehen, 3, 80, SICHT_VORGABE.gehen),
     schleichen: z(s.schleichen ?? a.schleichen, 2, 60, SICHT_VORGABE.schleichen),
-    kegel: z(s.kegel ?? a.kegel, 20, 180, SICHT_VORGABE.kegel),
+    kegel: z(s.kegel ?? a.kegel, 20, 180, SICHT_VORGABE.kegel, { min: 1, max: 360 }),
     verfolgen: z(s.verfolgen ?? a.verfolgen, 5, 150, SICHT_VORGABE.verfolgen),
     aufgeben: z(s.aufgeben ?? a.aufgeben, 10, 250, SICHT_VORGABE.aufgeben),
     nacht: z(s.nacht ?? a.nacht, 10, 200, SICHT_VORGABE.nacht),
