@@ -107,14 +107,25 @@ test('Retten: Ansprechen, folgen, im Safe Room gerettet → Zähler, Erfahrung, 
   try {
     const st = raum.stadt, s = raum.state;
     const sid = c.sessionId, p = s.spieler.get(sid);
-    const [mid, m] = [...s.menschen.entries()].find(([id, q]) => q.sichtbar && !q.infiziert && st.info.get(id).gruppe);
+    // Mensch + Zielpunkt 300 px entfernt, dazwischen eine freie, gerade Strecke (sonst läuft er je nach Seed erst um ein Hindernis)
+    let mid, m, ziel;
+    for (const [id, q] of s.menschen) {
+      if (!q.sichtbar || q.infiziert || q.ebene) continue;
+      for (let k = 0; k < 16 && !ziel; k++) {
+        const a = k * Math.PI / 8; let ok = true;
+        for (let d = 0; d <= 300 && ok; d += 10) ok = frei(raum.welt, q.x + Math.cos(a) * d, q.y + Math.sin(a) * d, 9);
+        if (ok && sichtfrei(raum.welt, q.x, q.y, q.x + Math.cos(a) * 300, q.y + Math.sin(a) * 300)) ziel = { x: q.x + Math.cos(a) * 300, y: q.y + Math.sin(a) * 300 };
+      }
+      if (ziel) { mid = id; m = q; break; }
+    }
+    assert.ok(ziel, 'kein Mensch mit freier Strecke');
     p.ebene = ''; p.x = m.x + 2; p.y = m.y;
     assert.equal(st.ansprechbar(p), mid);
     assert.equal(raum.kontext(p)?.art, 'ansprechen');
     assert.ok(st.ansprechen(sid, p, mid));
     assert.ok(m.folgt && !m.versteckt && st.info.get(mid).folgt === sid);
     // folgt auf Abstand, wenn der Spieler weggeht
-    p.x += 300;
+    p.x = ziel.x; p.y = ziel.y;
     const d0 = Math.hypot(m.x - p.x, m.y - p.y);
     for (let i = 0; i < 100; i++) st.schritt(0.05);
     assert.ok(Math.hypot(m.x - p.x, m.y - p.y) < d0 - 60, 'folgt nicht ' + JSON.stringify([m.x, m.y, p.x, p.y, m.flieht, m.sichtbar, m.ebene, st.info.get(mid).modus, st.info.get(mid).folgt]));
