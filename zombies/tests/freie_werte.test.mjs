@@ -54,10 +54,10 @@ test('Anzahlen mit Sicherheitsgrenze (Server/Speicher) und feste Prozentwerte', 
   assert.deepEqual([e.zombies.hordeTrupp, e.zombies.lagerWelle, e.polizei.anzahl, e.hund.streuner, e.bundeswehr.boxerHordeMin, e.bundeswehr.boxerHordeMax], [2000, 5000, 50, 200, 2000, 2000]);
   // Wahrscheinlichkeiten/Lautstärken in %, Uhrzeiten: weiter echte Grenzen
   const f = bereinige({ biss: 500, bissSpieler: 500, unfallExplosion: 500, tagAb: 9999, nachtAb: 5, nachtDunkel: 500, zombies: { ueberraschung: 500 }, hund: { ablenkung: 500 }, sprache: { funk: 500, stockwerk: 500 },
-    aufgaben: { stunde: 99 }, nebel: { morgen: 500, zombie: 500 }, musik: { laut: 500 }, munitionsglueck: { lebenUnter: 500, notUnter: 500 }, zombieSicht: { kegel: 900 }, bissSpielerLevel: { kochel: 500 } });
+    aufgaben: { stunde: 99 }, nebel: { morgen: 500, zombie: 500 }, musik: { laut: 500 }, zombieSicht: { kegel: 900 }, bissSpielerLevel: { kochel: 500 } });
   assert.deepEqual([f.biss, f.bissSpieler, f.unfallExplosion, f.tagAb, f.nachtAb, f.nachtDunkel], [100, 100, 100, 660, 1080, 100]);
   assert.deepEqual([f.zombies.ueberraschung, f.hund.ablenkung, f.sprache.funk, f.sprache.stockwerk, f.aufgaben.stunde, f.nebel.morgen, f.nebel.zombie, f.musik.laut], [100, 100, 100, 100, 23, 100, 100, 100]);
-  assert.deepEqual([f.munitionsglueck.lebenUnter, f.munitionsglueck.notUnter, f.zombieSicht.kegel, f.bissSpielerLevel.kochel], [100, 100, 360, 100]);
+  assert.deepEqual([f.zombieSicht.kegel, f.bissSpielerLevel.kochel], [360, 100]);   // Munitionsglück gibt es seit 0.85 nicht mehr
 });
 
 test('Negatives bleibt technisch unmöglich, Streuner -1 = automatisch', () => {

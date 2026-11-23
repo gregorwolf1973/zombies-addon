@@ -58,7 +58,7 @@ test('Einstellungen: Versorgung unter bundeswehr mit Vorgaben und Grenzen; Munit
   const b = bereinige({}).bundeswehr;
   assert.deepEqual([b.versorgungTage, b.versorgungMunition, b.versorgungVerband, b.versorgungSpritze, b.versorgungWaffe], [2, 50, 3, 1, true]);
   const k = bereinige({ bundeswehr: { versorgungTage: 0, versorgungMunition: 99999, versorgungWaffe: 'ja' } }).bundeswehr;
-  assert.equal(k.versorgungTage, 1); assert.equal(k.versorgungMunition, 500); assert.equal(k.versorgungWaffe, true);
+  assert.equal(k.versorgungTage, 1); assert.equal(k.versorgungMunition, 99999);   // seit 0.85 Werte frei (nur empfohlen) assert.equal(k.versorgungWaffe, true);
   assert.equal(bereinige({ bundeswehr: { versorgungWaffe: false } }).bundeswehr.versorgungWaffe, false);
   assert.equal(HANDEL.soldat.angebote.find(a => a.id === 'munition').menge, 30);
   for (const w of VERSORGUNG_WAFFEN) assert.ok(WAFFEN[w]?.fern, w + ' ist eine Feuerwaffe');
