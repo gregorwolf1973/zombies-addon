@@ -312,7 +312,7 @@ test('Leopard (Isarauen): Anfahrt von weit weg über die Straße vom Kartenrand,
     assert.ok(!inf.angekommen);
     const start = { x: f.x, y: f.y }, abstand = Math.hypot(start.x - ziel.x, start.y - ziel.y);
     const rand = Math.min(start.x, start.y, 8960 - start.x, 6656 - start.y);
-    assert.ok(abstand > 8000 || rand < 160, 'Start nicht weit weg: ' + abstand + ' / Rand ' + rand);
+    assert.ok(abstand > 8000 || rand < 600, 'Start nicht weit weg: ' + abstand + ' / Rand ' + rand);   // Start = Rand-Knoten des Straßennetzes, liegt je nach Zufall 17–60 m vom Kartenrand
     assert.ok(meldungen.some(t => /Panzer im Anmarsch aus (Norden|Süden|Osten|Westen|Nord|Süd)/.test(t) && /m Luftlinie/.test(t)), 'kein Hinweis „Panzer im Anmarsch“: ' + meldungen.join(' | '));
     // im Zeitraffer fahren; die Spieluhr läuft mit (v.schritt allein bewegt sie nicht)
     stehendeMenschenWeg(raum);
