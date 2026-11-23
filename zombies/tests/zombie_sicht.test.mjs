@@ -21,7 +21,7 @@ test('Grundwerte entsprechen exakt dem alten festen Verhalten', () => {
 test('Validierung: Grenzen, Standard, Teilangaben verschmelzen', () => {
   assert.deepEqual(bereinige({}).zombieSicht, SICHT_VORGABE);
   const e = bereinige({ zombieSicht: { gehen: 999, schleichen: 'x', kegel: 1, nacht: 50 } });
-  assert.equal(e.zombieSicht.gehen, 80); assert.equal(e.zombieSicht.schleichen, 12); assert.equal(e.zombieSicht.kegel, 20); assert.equal(e.zombieSicht.nacht, 50);
+  assert.equal(e.zombieSicht.gehen, 999); assert.equal(e.zombieSicht.schleichen, 12); assert.equal(e.zombieSicht.kegel, 1); assert.equal(e.zombieSicht.nacht, 50);
   assert.equal(bereinige({ zombieSicht: { gehen: 15 } }, e).zombieSicht.nacht, 50, 'alte Werte bleiben');
 });
 

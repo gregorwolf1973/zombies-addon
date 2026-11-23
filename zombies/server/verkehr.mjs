@@ -92,11 +92,13 @@ export function strassenGraph(welt) {
   return welt._graph;
 }
 
-// Anzahl normaler Autos am Anfang: nach befahrbarer Netzlänge (ein Auto je METER_JE_AUTO m), mindestens 3, höchstens die Einstellung `verkehr`
+// Anzahl normaler Autos am Anfang: nach befahrbarer Netzlänge (ein Auto je `dichte` Meter Straße, Vorgabe METER_JE_AUTO; Einstellung verkehrDichte),
+// mindestens 3, höchstens die Einstellung `verkehr` (ohne feste Obergrenze: Dichte klein + `verkehr` groß = viele Autos auf großen Karten)
 export const METER_JE_AUTO = 2000, MIN_AUTOS = 3, HAUPT_START_ANTEIL = 0.5, VERKEHR_REST = 1 / 3;
-export function verkehrAnzahl(netzMeter, obergrenze) {
+export function verkehrAnzahl(netzMeter, obergrenze, dichte = METER_JE_AUTO) {
   const max = Math.max(0, Math.floor(obergrenze ?? 0));
-  return Math.min(max, Math.max(MIN_AUTOS, Math.round(netzMeter / METER_JE_AUTO)));
+  const je = Number.isFinite(Number(dichte)) && Number(dichte) > 0 ? Number(dichte) : METER_JE_AUTO;
+  return Math.min(max, Math.max(MIN_AUTOS, Math.round(netzMeter / je)));
 }
 
 export function naechsterKnoten(graph, x, y, nurHaupt = false) {
@@ -199,7 +201,7 @@ export class Verkehr {
   }
 
   // Linienbus über alle Haltestellen, am Anfang Verkehr
-  start(haltestellen, autos) {
+  start(haltestellen, autos, dichte = METER_JE_AUTO) {
     if (!this.graph.knoten.length) return;
     const r = this.raum.rnd;
     if (haltestellen.length >= 2) {
@@ -210,7 +212,7 @@ export class Verkehr {
       const id = this.neu('bus', reihe[0].knoten, { linie: reihe, stopp: 0, halt: 6, mitfahrer: new Map() });
       this.busId = id;
     }
-    const anzahl = verkehrAnzahl(this.graph.netzMeter, autos);
+    const anzahl = verkehrAnzahl(this.graph.netzMeter, autos, dichte);
     this.sollAutos = anzahl;
     for (let i = 0; i < anzahl; i++) {
       // Startknoten mit Abstand zu den anderen Fahrzeugen (sonst stehen mehrere übereinander am selben Knoten)

@@ -417,6 +417,7 @@
 .ez > .sf-zeile { flex: 0 0 auto; display: flex !important; align-items: center; gap: 6px; margin: 0 !important; }
 .sf-zeile > span.sf-einheit { min-width: 0 !important; width: auto; text-align: left !important; font-size: .8rem; font-weight: 400; color: var(--text-soft); white-space: nowrap; }
 .sf-weg { display: none !important; }
+.sf-empf { font-size: .72rem; font-weight: 400; color: var(--text-soft); white-space: nowrap; }
 .sf { display: inline-flex; align-items: center; gap: 4px; }
 .sf button { margin: 0; min-width: 44px; min-height: 44px; padding: 0 8px; font-size: 1.1rem; line-height: 1; }
 .sf button.sf-vorgabe { min-width: 34px; font-size: 1rem; color: var(--text-soft); }
@@ -780,10 +781,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     </div>
 
     <div class="feld">
-      <span class="label" id="botsLabel">Bots</span>
+      <span class="label" id="botsLabel">Bots <small class="sf-empf">empfohlen: 0–9</small></span>
       <div class="bots-feld">
         <button type="button" class="klein" id="botsMinus" aria-label="Ein Bot weniger">−</button>
-        <input type="number" id="botsAnzahl" min="0" max="9" step="1" aria-labelledby="botsLabel">
+        <input type="number" id="botsAnzahl" min="0" max="9" step="1" aria-labelledby="botsLabel" title="empfohlen: 0–9 (höchstens 30)">
         <button type="button" class="klein" id="botsPlus" aria-label="Ein Bot mehr">+</button>
       </div>
     </div>
@@ -887,8 +888,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="tnFeuer" min="0" max="10" step="0.5"><span id="tnFeuerWert">1 min</span></div>
   <label for="tnFeuerPhase">… während der ersten</label>
   <div class="tn-zeile"><input type="range" id="tnFeuerPhase" min="0" max="120" step="5"><span id="tnFeuerPhaseWert">20 min</span></div>
-  <label for="tnVerkehr">Fahrende Autos am Anfang (Obergrenze; Anzahl nach Straßenlänge)</label>
-  <div class="tn-zeile"><input type="range" id="tnVerkehr" min="0" max="30" step="1"><span id="tnVerkehrWert">30</span></div>
+  <label for="tnVerkehr">Fahrende Autos am Anfang: höchstens so viele (Anzahl = Straßenlänge ÷ Dichte; auf großen Karten mit kleiner Dichte bis 200 und mehr)</label>
+  <div class="tn-zeile"><input type="range" id="tnVerkehr" min="0" max="200" step="1"><span id="tnVerkehrWert">30</span></div>
+  <label for="tnVerkehrDichte">Dichte der fahrenden Autos: Meter Straße je Auto (kleiner = mehr Autos)</label>
+  <div class="tn-zeile"><input type="range" id="tnVerkehrDichte" min="300" max="3000" step="50"><span id="tnVerkehrDichteWert">2000 m</span></div>
   <label for="tnVerkehrPhase">… während der ersten</label>
   <div class="tn-zeile"><input type="range" id="tnVerkehrPhase" min="0" max="120" step="5"><span id="tnVerkehrPhaseWert">25 min</span></div>
   <label for="tnUnfall">Autounfall: etwa alle … Spielminuten (0 = keine Unfälle)</label>
@@ -1247,6 +1250,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnFeuer', e.feuer === undefined ? 1 : e.feuer, function (v) { return v ? String(v).replace('.', ',') + ' min' : 'aus'; });
     feld('tnFeuerPhase', e.feuerPhase === undefined ? 20 : e.feuerPhase, function (v) { return v + ' min'; });
     feld('tnVerkehr', e.verkehr === undefined ? 30 : e.verkehr, function (v) { return String(v); });
+    feld('tnVerkehrDichte', e.verkehrDichte === undefined ? 2000 : e.verkehrDichte, function (v) { return v + ' m'; });
     feld('tnVerkehrPhase', e.verkehrPhase === undefined ? 25 : e.verkehrPhase, function (v) { return v + ' min'; });
     feld('tnUnfall', e.unfall === undefined ? 10 : e.unfall, function (v) { return v ? v + ' min' : 'aus'; });
     feld('tnUnfallExpl', e.unfallExplosion === undefined ? 50 : e.unfallExplosion, function (v) { return v + ' %'; });
@@ -1356,6 +1360,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnFeuer', function (v) { return Number(v) ? String(v).replace('.', ',') + ' min' : 'aus'; }, function (v) { return { feuer: v }; });
   regler('tnFeuerPhase', function (v) { return v + ' min'; }, function (v) { return { feuerPhase: v }; });
   regler('tnVerkehr', function (v) { return String(v); }, function (v) { return { verkehr: v }; });
+  regler('tnVerkehrDichte', function (v) { return v + ' m'; }, function (v) { return { verkehrDichte: v }; });
   regler('tnVerkehrPhase', function (v) { return v + ' min'; }, function (v) { return { verkehrPhase: v }; });
   regler('tnUnfall', function (v) { return Number(v) ? v + ' min' : 'aus'; }, function (v) { return { unfall: v }; });
   regler('tnUnfallExpl', function (v) { return v + ' %'; }, function (v) { return { unfallExplosion: v }; });
@@ -2936,13 +2941,15 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
 
   function karteName(s) {
     if (!s) return "";
-    if (s === "level1") return "Level 1 (Zufall: Geretsried oder Geretsried 2)";
+    if (s === "level1") return "Level 1 (erstes Level der Reihenfolge; Geretsried: Zufall 1 oder 2)";
     if (s === "geretsried") return "Geretsried (Level 1)";
     if (s === "geretsried2") return "Geretsried 2 (Level 1)";
     if (s === "isarauen") return "Isarauen (Level 2)";
     if (s === "koenigsdorf") return "Flugplatz Königsdorf (Level 3)";
     if (s === "kochel") return "Kochel am See (Level 4)";
     if (s === "andermatt") return "Andermatt (Level 5, Finale)";
+    var kn = (window.zKatalog || {})[s];   // neue Karten aus dem Katalog (client/levelkatalog.mjs) tragen ihren Namen selbst
+    if (kn) return kn;
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
@@ -3240,6 +3247,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var e = d.einstellungen || {};
     var sel = $("karteAuswahl");
     var karten = Array.isArray(d.karten) ? d.karten : [];
+    window.zKatalog = {}; (d.levelKatalog || []).forEach(function (k) { window.zKatalog[k.id] = k.name; (k.karten || []).forEach(function (m) { if (!window.zKatalog[m]) window.zKatalog[m] = k.name.replace(/ \(.*\)$/, "") + " (" + m + ")"; }); });
     var aktuelleAuswahl = sel.value;
     sel.textContent = "";
     karten.forEach(function (k) {
@@ -3393,7 +3401,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     function setzeBots() {
       var v = parseInt(botsFeld.value, 10);
       if (isNaN(v)) v = 0;
-      v = Math.max(0, Math.min(9, v));
+      v = Math.max(0, Math.min(30, v));   // empfohlen 0–9, technische Grenze 30
       botsFeld.value = v;
       sendenTeil("bots", null, v);
     }
@@ -3406,7 +3414,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     $("botsPlus").addEventListener("click", function () {
       clearTimeout(zeitGeber["bots"]);
       var v = parseInt(botsFeld.value, 10); if (isNaN(v)) v = 0;
-      botsFeld.value = Math.min(9, v + 1);
+      botsFeld.value = Math.min(30, v + 1);
       setzeBots();
     });
     botsFeld.addEventListener("input", function () {
@@ -3603,6 +3611,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   hinein(spiel);
 
   // ---------- Zombies je Level (Tabelle + Vorschau, siehe unten) ----------
+  var folgeKarte = karte('Level-Reihenfolge', 'folgeKarte');
+  hinein(folgeKarte);
   var levelKarte = karte('Zombies je Level', 'levelKarte');
   hinein(levelKarte);
   var nachtBox = el('div'); zeile(nachtBox, 'tnNacht');   // Nachtfaktor gehört zur Menge draußen (Platz in der Karte: nach der Tabelle)
@@ -3654,7 +3664,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     gruppe(ausbruch);
     var stadt = unter('🚗 Autos, Verkehr, Feuer');
     zeile(stadt.inhalt, 'tnAutos'); rein(stadt.inhalt, $('tnAutosHinweis'));
-    ['tnVerkehr', 'tnVerkehrPhase', 'tnUnfall', 'tnUnfallExpl', 'tnUnfallSchaden', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt.inhalt, id); });
+    ['tnVerkehr', 'tnVerkehrDichte', 'tnVerkehrPhase', 'tnUnfall', 'tnUnfallExpl', 'tnUnfallSchaden', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt.inhalt, id); });
     gruppe(stadt);
     var wk = unter('🔫 Waffen: Schaden, Schussfolge, Magazin'); rein(wk.inhalt, $('wfHinweis'));
     Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk.inhalt, 'wfS_' + k); zeile(wk.inhalt, 'wfP_' + k); rein(wk.inhalt, $('wfInfo_' + k)); if (window.WFMAG[k]) { zeile(wk.inhalt, 'wfM_' + k); zeile(wk.inhalt, 'wfN_' + k); } });
@@ -3688,7 +3698,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', lagerWelle: 'zombies.lagerWelle', lagerWellePause: 'zombies.lagerWellePause', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
     tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnNebelMorgen: 'nebel.morgen', tnNebelAbend: 'nebel.abend', tnNebelSicht: 'nebel.sicht', tnNebelZombie: 'nebel.zombie', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
-    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
+    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo',
     tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',
@@ -3722,6 +3732,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var zt = fmt ? fmt.an : zahlText;
     num.setAttribute('aria-label', opt.name || 'Wert');
     box.append(minus, num, plus, zur);
+    if (opt.empf) { var emp = el('span', 'sf-empf', opt.empf); emp.title = 'Eintippen geht auch außerhalb dieser Spanne'; box.appendChild(emp); }
     var timer = null;
     function zeigen() {
       var v = opt.lies();
@@ -3763,6 +3774,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     ein: function (t) { var r = FMT_UHR.ein(t); return r === null ? null : Math.round(r / 60); } };
   var FMT_FAKTOR = { modus: 'decimal', an: function (v) { return '×' + (Number(v) / 10).toFixed(1).replace('.', ','); },
     ein: function (t) { var x = parseFloat(String(t).replace(/[×x\s]/gi, '').replace(',', '.')); return isFinite(x) ? Math.round(x * 10) : null; } };
+  // Werte mit echten Grenzen (Server: fest()): [von, bis]; null = Min bzw. Max des Schiebers (Wahrscheinlichkeiten/Lautstärken in %, Winkel, Zeitpunkte)
+  var FESTE = { ueberraschung: null, tnBiss: null, tnUnfallExpl: null, spStock: null, spDrin: null, spFunk: null, tuFrei: null, tuRaetsel: null, tuSchluessel: null, tnHundAblenk: null,
+    tnMgLeben: null, tnMgNot: null, muLaut: null, rsLaut: null, tnNebelMorgen: null, tnNebelAbend: null, tnNebelZombie: null, tnNachtDunkel: null,
+    tnBissSpGeretsried: null, tnBissSpIsarauen: null, tnBissSpKoenigsdorf: null, tnBissSpKochel: null, tnBissSpAndermatt: null, agStunde: null, tnTagAb: null, tnNachtAb: null, zsKegel: [null, 360] };
   var FORMATE = { tnTagAb: FMT_UHR, tnNachtAb: FMT_UHR, agStunde: FMT_STUNDE, tnNacht: FMT_FAKTOR, tnAutos: FMT_FAKTOR };
 
   // Schieber → Zeile mit Zahlenfeld (Schieber bleibt unsichtbar als Modell, Programmzugriffe auf .value werden gespiegelt)
@@ -3772,15 +3787,29 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var span = r.nextElementSibling && r.nextElementSibling.tagName === 'SPAN' ? r.nextElementSibling : null;
     var label = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
     var name = label ? label.textContent.replace(/\s+/g, ' ').trim().slice(0, 80) : r.id;
+    // Min/Max/Schritt des Schiebers sind nur die EMPFOHLENE Spanne: Eintippen geht auch darüber und darunter (der Server prüft nur technische Grenzen).
+    // Echte Grenzen (Prozent-Wahrscheinlichkeit, Uhrzeit …) stehen in FESTE; dort bleibt es bei Min/Max des Schiebers.
+    var empfMin = Number(r.min), empfMax = Number(r.max), schritt = Number(r.step) || 1;
+    var fixiert = Object.prototype.hasOwnProperty.call(FESTE, r.id) || /^(mp|laut)-/.test(r.id);   // Lautstärken der Geräusche: echte Grenzen
+    var gr = FESTE[r.id] || [null, null], lo = gr[0] === null ? empfMin : gr[0], hi = gr[1] === null ? empfMax : gr[1];
+    var empfText = FORMATE[r.id] ? '' : (fixiert ? 'erlaubt: ' : 'empfohlen: ') + zahlText(lo) + '–' + zahlText(hi);
+    r.step = 'any';
+    function weiten(v) {
+      v = Number(v);
+      if (!isFinite(v)) return;
+      if (fixiert) { r.min = String(lo); r.max = String(hi); return; }
+      if (v > Number(r.max)) r.max = String(v);
+      if (v < Number(r.min)) r.min = String(v);
+    }
     var b = baustein({
-      name: name, step: Number(r.step) || 1, fmt: FORMATE[r.id],
+      name: name, step: schritt, fmt: FORMATE[r.id], empf: empfText,
       lies: function () { return Number(ORIG.get.call(r)); },
-      schreibe: function (v) { ORIG.set.call(r, v); return Number(ORIG.get.call(r)); },
+      schreibe: function (v) { weiten(v); ORIG.set.call(r, v); return Number(ORIG.get.call(r)); },
       live: function () { r.dispatchEvent(new Event('input', { bubbles: true })); },
       fertig: function () { r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); },
       vorgabe: function () { return vorgabeFuer(r.id); },
     });
-    Object.defineProperty(r, 'value', { configurable: true, get: function () { return ORIG.get.call(r); }, set: function (v) { ORIG.set.call(r, v); b.zeigen(); } });
+    Object.defineProperty(r, 'value', { configurable: true, get: function () { return ORIG.get.call(r); }, set: function (v) { weiten(v); ORIG.set.call(r, v); b.zeigen(); } });
     r.classList.add('sf-weg');
     r.insertAdjacentElement('afterend', b.box);
     if (span) { span.classList.add('sf-einheit'); b.box.insertAdjacentElement('afterend', span); }
@@ -3815,9 +3844,11 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     { k: 'haeuser', t: 'Zombies in Häusern (10 = ein Zombie je Platz)', step: 1 },
   ];
   var GRENZEN = { grund: [0, 200], jeSpieler: [0, 100], horde: [0, 200], dauer: [1, 60], pause: [0.5, 60], gleichzeitig: [0, 5], haeuser: [0, 50] };
+  var lvKoepfe = [];
   var lv = null, lvZellen = [], lvTimer = null, lvStatus = el('p', 'lv-status');
   lvStatus.setAttribute('aria-live', 'polite');
-  var klammer = function (k, v) { var g = GRENZEN[k]; v = Math.max(g[0], Math.min(g[1], v)); return k === 'pause' ? Math.round(v * 2) / 2 : Math.round(v); };
+  // GRENZEN = empfohlene Spanne (Anzeige); nach oben ist alles erlaubt (der Server begrenzt nur technisch, LEVEL_SICHER in server/schwierigkeit.mjs), nach unten die Untergrenze
+  var klammer = function (k, v) { var g = GRENZEN[k]; v = isFinite(v) ? Math.max(g[0], v) : g[0]; return k === 'pause' ? Math.round(v * 2) / 2 : Math.round(v); };
 
   function lvSpeichern() {
     clearTimeout(lvTimer);
@@ -3839,12 +3870,13 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var sc = el('div', 'lv-scroll'), tab = el('table', 'lv-tabelle');
     var th = el('thead'), tr = el('tr');
     tr.appendChild(el('th', '', 'Einstellung'));
-    NAMEN.forEach(function (n) { tr.appendChild(el('th', '', 'Level ' + n)); });
+    NAMEN.forEach(function (n) { var kopfTh = el('th', '', 'Level ' + n); lvKoepfe.push(kopfTh); tr.appendChild(kopfTh); });
     tr.appendChild(el('th', '', 'Vorgabe'));
     th.appendChild(tr); tab.appendChild(th);
     var tb = el('tbody');
     FELDER.forEach(function (f) {
       var z = el('tr'), kopfz = el('th', '', f.t); kopfz.scope = 'row'; z.appendChild(kopfz);
+      var gr = GRENZEN[f.k]; kopfz.appendChild(el('small', 'sf-empf', ' empfohlen: ' + gr[0] + '–' + gr[1])); kopfz.lastChild.style.display = 'block';
       NAMEN.forEach(function (n, i) {
         var td = el('td');
         var b = baustein({
@@ -3906,6 +3938,57 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   document.addEventListener('change', function (e) { if (e.target && (e.target.id === 'schwierigkeit' || e.target.id === 'tnNacht')) vorschau(); });
   document.addEventListener('input', function (e) { if (e.target && e.target.id === 'tnNacht') vorschau(); });
 
+  // ---------- Level-Reihenfolge: Karten verschieben, je Level an/aus ----------
+  // Position (nur aktive Level zählen) = Levelnummer: Schwierigkeit und die Tabelle „Zombies je Level“ hängen an ihr; Karten-Besonderheiten
+  // (Biss je Karte, Aufgaben, Evakuierungsart, Musik, Radio-Durchsage) bleiben bei der Karte. Neue Karten kommen über den Katalog (client/levelkatalog.mjs).
+  var folge = null, katalog = [], folgeListe = el('ol', 'fo-liste'), folgeStatus = el('p', 'lv-status'), folgeBusy = false, folgeTimer = null;
+  folgeStatus.setAttribute('aria-live', 'polite');
+  var katName = function (id) { var k = katalog.filter(function (x) { return x.id === id; })[0]; return k ? k.name : id; };
+  function namenSetzen() {
+    var aktive = (folge || []).filter(function (x) { return x.aktiv; });
+    NAMEN = [0, 1, 2, 3, 4].map(function (i) { return (i + 1) + ' · ' + (aktive[i] ? katName(aktive[i].karte).replace(/ \(.*\)$/, '') : '–'); });
+    lvKoepfe.forEach(function (th, i) { th.textContent = 'Level ' + NAMEN[i]; });
+    vorschau();
+  }
+  function folgeSpeichern() {
+    folgeBusy = true; clearTimeout(folgeTimer);
+    fetch('verwaltung/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ levelFolge: folge }) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { folgeBusy = false; folgeNeu(d); folgeStatus.textContent = '✓ Gespeichert – gilt ab dem nächsten Levelwechsel bzw. nach „Welt neu starten“'; folgeTimer = setTimeout(function () { folgeStatus.textContent = ''; }, 4000); })
+      .catch(function (e) { folgeBusy = false; folgeStatus.textContent = 'Fehler: ' + e.message; });
+  }
+  function folgeZeigen() {
+    folgeListe.textContent = '';
+    var nr = 0, aktiveN = (folge || []).filter(function (x) { return x.aktiv; }).length;
+    (folge || []).forEach(function (x, i) {
+      var li = el('li', 'fo-zeile' + (x.aktiv ? '' : ' fo-aus'));
+      var pos = el('span', 'fo-pos', x.aktiv ? 'Level ' + (++nr) : 'aus');
+      var name = el('span', 'fo-name', katName(x.karte));
+      var hoch = el('button', '', '▲'), runter = el('button', '', '▼');
+      hoch.type = runter.type = 'button';
+      hoch.setAttribute('aria-label', katName(x.karte) + ' nach oben'); runter.setAttribute('aria-label', katName(x.karte) + ' nach unten');
+      hoch.disabled = i === 0; runter.disabled = i === folge.length - 1;
+      hoch.addEventListener('click', function () { folge.splice(i - 1, 0, folge.splice(i, 1)[0]); folgeZeigen(); namenSetzen(); folgeSpeichern(); });
+      runter.addEventListener('click', function () { folge.splice(i + 1, 0, folge.splice(i, 1)[0]); folgeZeigen(); namenSetzen(); folgeSpeichern(); });
+      var an = el('label', 'fo-an'), cb = el('input'); cb.type = 'checkbox'; cb.checked = x.aktiv; cb.disabled = x.aktiv && aktiveN <= 1;
+      cb.addEventListener('change', function () { x.aktiv = cb.checked; folgeZeigen(); namenSetzen(); folgeSpeichern(); });
+      an.append(cb, document.createTextNode(' aktiv'));
+      li.append(pos, name, hoch, runter, an);
+      folgeListe.appendChild(li);
+    });
+  }
+  function folgeNeu(d) {
+    if (d.levelKatalog) katalog = d.levelKatalog;
+    var f = d.einstellungen && d.einstellungen.levelFolge;
+    if (f && !folgeBusy) { folge = JSON.parse(JSON.stringify(f)); folgeZeigen(); namenSetzen(); }
+  }
+  folgeKarte.appendChild(el('p', 'hinweis', 'Reihenfolge der Level (Karten) von oben nach unten; abgeschaltete Level werden übersprungen. Level 1 ist das erste aktive Level, nach dem letzten geht es wieder von vorn los. Schwierigkeit und die Tabelle „Zombies je Level“ gehören zur Position, alles andere (Biss, Aufgaben, Evakuierung, Musik, Radio-Durchsage) bleibt bei der Karte. Gilt ab dem nächsten Levelwechsel bzw. nach „Welt neu starten“.'));
+  folgeKarte.appendChild(folgeListe); folgeKarte.appendChild(folgeStatus);
+  var folgeCss = el('style'); folgeCss.textContent = '.fo-liste{list-style:none;margin:8px 0;padding:0}.fo-zeile{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 0;border-bottom:1px solid var(--border)}.fo-zeile.fo-aus .fo-name{opacity:.5;text-decoration:line-through}.fo-pos{min-width:4.5em;font-weight:600}.fo-name{flex:1 1 12em}.fo-zeile button{min-width:44px;min-height:44px;margin:0}.fo-an{display:inline-flex;align-items:center;gap:4px;min-height:44px}';
+  document.head.appendChild(folgeCss);
+  setInterval(function () { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(folgeNeu).catch(function () { /* nächster Versuch */ }); }, 5000);
+  document.addEventListener('z:rueckgaengig', function (e) { if (e.detail) folgeNeu(e.detail); });
+
   lvBauen();
   document.addEventListener('z:rueckgaengig', function (e) {   // Rückgängig: Tabelle auf den wiederhergestellten Stand
     var neu = e.detail && e.detail.einstellungen && e.detail.einstellungen.zombies && e.detail.einstellungen.zombies.level;
@@ -3915,6 +3998,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   // Daten holen: Vorgaben (für ↺) und die Tabelle
   fetch('verwaltung/api').then(function (r) { return r.json(); }).then(function (d) {
     VORGABEN = d.vorgaben || null;
+    folgeNeu(d);
     var z = d.einstellungen && d.einstellungen.zombies;
     lv = z && z.level ? z.level : (VORGABEN ? JSON.parse(JSON.stringify(VORGABEN.zombies.level)) : null);
     aktualisierer.forEach(function (f) { f(); });

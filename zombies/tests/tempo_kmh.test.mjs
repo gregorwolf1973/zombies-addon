@@ -22,5 +22,5 @@ test('tempoWerteSetzen übernimmt Einstellungen und fängt Unsinn ab', () => {
 test('Einstellungen: Vorgabe und Grenzen', () => {
   const v = vorgaben();
   assert.deepEqual([v.tempoHeldGehen, v.tempoHeldSchleichen, v.tempoZombieJagen, v.tempoZombieWandern], [20, 9, 15, 4]);
-  assert.equal(bereinige({ tempoHeldGehen: 999 }, v).tempoHeldGehen, 60);
+  assert.equal(bereinige({ tempoHeldGehen: 999 }, v).tempoHeldGehen, 999);
 });

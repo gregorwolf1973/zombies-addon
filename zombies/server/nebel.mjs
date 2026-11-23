@@ -8,7 +8,7 @@ export const MORGEN_VOR_TAG = 90;         // Würfeln: so viele Spielminuten vor
 export const ABEND_VOR_NACHT = 150;       // … und so viele vor „Nacht ab“ (Abenddämmerung)
 export const NEBEL_SPRUNG = 60;           // größere Uhrsprünge (Testbefehl „Zeit“) würfeln und zählen nicht
 
-const zahl = (v, lo, hi, vorgabe) => { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : vorgabe; };
+import { zahl, fest } from '../client/zahl.mjs';
 const tag = m => ((m % 1440) + 1440) % 1440;
 
 // aus beliebiger Eingabe gültige Nebel-Einstellungen machen
@@ -16,10 +16,10 @@ export function bereinigeNebel(e = {}, a = NEBEL_VORGABE) {
   const x = { ...NEBEL_VORGABE, ...a, ...(e && typeof e === 'object' ? e : {}) };
   return {
     an: typeof x.an === 'boolean' ? x.an : NEBEL_VORGABE.an,
-    morgen: Math.round(zahl(x.morgen, 0, 100, NEBEL_VORGABE.morgen)),
-    abend: Math.round(zahl(x.abend, 0, 100, NEBEL_VORGABE.abend)),
+    morgen: Math.round(fest(x.morgen, 0, 100, NEBEL_VORGABE.morgen)),
+    abend: Math.round(fest(x.abend, 0, 100, NEBEL_VORGABE.abend)),
     sicht: Math.round(zahl(x.sicht, 5, 100, NEBEL_VORGABE.sicht)),
-    zombie: Math.round(zahl(x.zombie, 10, 100, NEBEL_VORGABE.zombie)),
+    zombie: Math.round(fest(x.zombie, 10, 100, NEBEL_VORGABE.zombie)),
   };
 }
 
@@ -37,7 +37,7 @@ export function nebelDichte(vergangen, dauer) {
 }
 
 // Faktor für die Sicht der Zombies: 1 ohne Nebel, bei voller Dichte zombieProzent/100
-export const zombieSichtFaktor = (dichte, zombieProzent = NEBEL_VORGABE.zombie) => 1 - Math.max(0, Math.min(1, dichte || 0)) * (1 - zahl(zombieProzent, 10, 100, 50) / 100);
+export const zombieSichtFaktor = (dichte, zombieProzent = NEBEL_VORGABE.zombie) => 1 - Math.max(0, Math.min(1, dichte || 0)) * (1 - fest(zombieProzent, 10, 100, 50) / 100);
 
 // liegt `marke` (Minute am Tag) im Schritt von `vorher` nach `jetzt` (über Mitternacht gerechnet)?
 export function kreuzt(vorher, jetzt, marke) {

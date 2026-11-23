@@ -1,4 +1,5 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
+import { kartenNr } from './levelkatalog.mjs';
 import { fzPx } from './masse.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
@@ -3632,7 +3633,7 @@ class Ort extends Phaser.Scene {
       this.tonTakt = 1;
       ton.hordeLage(zombieKarte().values(), { x: this.lokal.x, y: this.lokal.y, ebene: this.aktEbene ?? '' });
       const st = raum.state, tot = (ich.zombie ?? 0) > 0 || ich.hp <= 0;
-      ton.musikLage({ level: st.level || 1, lager: ich.sicher === 'lager' && !tot, safe: !!ich.sicher && ich.sicher !== 'lager' && !tot, finale: (st.finaleRest || 0) > 0 });
+      ton.musikLage({ level: kartenNr(st.karte, st.level || 1),   /* Musik und Radio-Durchsage „Level n“ gehören zur Karte, nicht zur Position */ lager: ich.sicher === 'lager' && !tot, safe: !!ich.sicher && ich.sicher !== 'lager' && !tot, finale: (st.finaleRest || 0) > 0 });
     }
     this.stoehnZeit = (this.stoehnZeit ?? 2) - dt;
     if (this.stoehnZeit <= 0) {
