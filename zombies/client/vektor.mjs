@@ -3,6 +3,7 @@
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { KACHEL, BREITE, T } from './welt.mjs';
 import { ausbeulung } from './strassenrand.mjs';
+import { zeichneStrassenende, zustandBerechnen, zeichneZustand, zeichneEckenstaub } from './strassenzustand.mjs';
 import { kulDaecher, zeichneEchtesDach } from './kulisse.mjs';
 
 const K = KACHEL;
@@ -602,21 +603,7 @@ function verjuengung(l, v, d) {
   for (const ende of [0, 1]) {
     const k = knotenSchluessel(l.pts[ende ? l.pts.length - 1 : 0]);
     const kn = v.knoten.get(k) ?? 0;
-    if (AUTO.has(l.t) && kn <= 1) {   // freies Ende (Sackgasse in der Wiese): Asphalt läuft abgerundet aus, kein rechtwinkliger Abschluss
-      const L = Math.min(fb * 0.8, S / 2), hw = fb / 2, min = Math.min(2, hw);
-      tap ??= new Float32Array(d.n); d.frei ??= [false, false]; d.frei[ende] = true;
-      for (let j = 0; j < d.n; j++) { const dist = ende ? S - d.s[j] : d.s[j]; if (dist < L) { const u = dist / L; tap[j] += Math.min(0, Math.max(hw * Math.sqrt(Math.max(0, 2 * u - u * u)), min) - hw); } }
-      continue;
-    }
-    if (AUTO.has(l.t) && kn === 2) {   // geht am Ende ein Feld- oder Fußweg weiter: Asphalt verjüngt sich über ~10 m auf die Wegbreite, ohne Absatz
-      const nbw = wegAnEnde(v, k, l);
-      if (nbw) {
-        const dv = (WEGBREITE[nbw.t] ?? 6) - fb, L = Math.min(10 * 8, S / 2); if (dv >= -1) continue;
-        tap ??= new Float32Array(d.n); d.frei ??= [false, false]; d.frei[ende] = true;
-        for (let j = 0; j < d.n; j++) { const dist = ende ? S - d.s[j] : d.s[j]; if (dist < L) { const w = 1 - dist / L; tap[j] += dv / 2 * w * w * (3 - 2 * w); } }
-        continue;
-      }
-    }
+    // freie Enden und Übergänge zum Feld-/Fußweg: Fahrbahn endet gerade (Abbruchkante siehe strassenzustand.mjs), keine Verjüngung
     if (kn !== 2) continue;
     const nb = (v.enden.get(k) ?? []).find(m => m !== l); if (!nb) continue;
     const dv = (fahrbahn(nb) - fb) / 4;           // halbe Breitenänderung je Seite, Ziel = Mittelwert beider Breiten
@@ -656,14 +643,13 @@ function teilAusschnitt(l, t, d) {
   if (j1 <= j0) return t._d = null;
   const sl = a => a.slice(j0, j1 + 1), n = j1 - j0 + 1;
   // Endet das Teilstück mitten auf der Linie (Bebauung hört auf), läuft der Gehweg über ~6 m unter den Fahrbahnrand aus statt abrupt zu enden
-  let tap = d.tap ? sl(d.tap) : null, tapIn = tap ? tap.slice() : null;   // tapIn: Innenkante ohne zusätzlichen Auslauf an freien Enden (sonst kreuzen sich Innen- und Außenkante)
-  for (const [vorn, wo] of [[t.i0 > 0 || !!d.frei?.[0], 0], [t.i1 < l.pts.length - 1 || !!d.frei?.[1], 1]]) {
+  let tap = d.tap ? sl(d.tap) : null, tapIn = tap ? tap.slice() : null;
+  for (const [vorn, wo] of [[t.i0 > 0, 0], [t.i1 < l.pts.length - 1, 1]]) {
     if (!vorn) continue;
     tap ??= new Float32Array(n); tapIn ??= new Float32Array(n);
-    const frei = !!d.frei?.[wo];
-    for (let j = 0; j < n; j++) { const dist = wo ? d.s[j1] - d.s[j0 + j] : d.s[j0 + j] - d.s[j0]; if (dist < GEHWEG_AUS) { const w = 1 - dist / GEHWEG_AUS, a = (GEHWEG + 1) * w * w * (3 - 2 * w); tap[j] -= a; if (!frei) tapIn[j] -= a; } }
+    for (let j = 0; j < n; j++) { const dist = wo ? d.s[j1] - d.s[j0 + j] : d.s[j0 + j] - d.s[j0]; if (dist < GEHWEG_AUS) { const w = 1 - dist / GEHWEG_AUS, a = (GEHWEG + 1) * w * w * (3 - 2 * w); tap[j] -= a; tapIn[j] -= a; } }
   }
-  return t._d = { n, x: sl(d.x), y: sl(d.y), s: sl(d.s), mx: sl(d.mx), my: sl(d.my), f: sl(d.f), tap, tapIn, frei: d.frei };
+  return t._d = { n, x: sl(d.x), y: sl(d.y), s: sl(d.s), mx: sl(d.mx), my: sl(d.my), f: sl(d.f), tap, tapIn };
 }
 // Teilstück der dichten Linie zwischen den Bogenlängen s0 und s1
 function pfadAb(d, s0, s1) {
@@ -766,6 +752,25 @@ function eckPfad(ctx, e) {
   ctx.beginPath(); ctx.moveTo(e.Px, e.Py); ctx.lineTo(e.Tax, e.Tay);
   ctx.arc(e.Cx, e.Cy, e.r, e.aT, e.aB, e.acw);
   ctx.closePath();
+}
+
+// Enden der Fahrbahnen ohne Anschluss (oder mit anschließendem Feld-/Fußweg): Ort, Richtung nach außen, Breite, Wegbreite
+function abbruchEnden(v) {
+  if (v._abbruch) return v._abbruch;
+  const out = [];
+  for (const l of v.linien) {
+    if (!(AUTO.has(l.t) || l.t === 'service') || l.pts.length < 2) continue;
+    const d = dichtL(l, v), fb = fahrbahn(l);
+    for (const ende of [0, 1]) {
+      const p = l.pts[ende ? l.pts.length - 1 : 0], k = knotenSchluessel(p), kn = v.knoten.get(k) ?? 0;
+      let weg = 0;
+      if (kn === 2 && AUTO.has(l.t)) { const nbw = wegAnEnde(v, k, l); if (!nbw) continue; weg = WEGBREITE[nbw.t] ?? 6; } else if (kn > 1) continue;
+      const j = ende ? d.n - 1 : 0, i2 = ende ? Math.max(0, j - 3) : Math.min(d.n - 1, 3);
+      let tx = d.x[j] - d.x[i2], ty = d.y[j] - d.y[i2]; const n = Math.hypot(tx, ty); if (n < 1e-6) continue; tx /= n; ty /= n;
+      out.push({ x: d.x[j], y: d.y[j], tx, ty, hw: fb / 2, kerb: !!l.kerb, weg, seed: l.id * 31 + ende * 7 + 5, service: l.t === 'service' });
+    }
+  }
+  return v._abbruch = out;
 }
 
 export function zeichneStrassen(ctx, welt, rect) {
@@ -894,12 +899,12 @@ export function zeichneStrassen(ctx, welt, rect) {
     const li = wandern(d, fb / 2, [[amp, seedKante(l, 1), WL], ...extra(seedKante(l, 1)), beule(l, 1)]);
     const re = wandern(d, -fb / 2, [[amp, seedKante(l, -1), WL], ...extra(seedKante(l, -1)), beule(l, -1)]);
     bandPfad(ctx, re, li); ctx.fillStyle = m.asphalt; ctx.fill();
-    // Enden ohne Anschluss (Sackgasse) rund abschließen
-    [l.pts[0], l.pts[l.pts.length - 1]].forEach((p, e) => { if ((v.knoten.get(knotenSchluessel(p)) ?? 0) <= 1) { ctx.beginPath(); ctx.arc(p[0], p[1], d.tap && d.frei?.[e] ? Math.min(2, fb / 2) : fb / 2, 0, Math.PI * 2); ctx.fillStyle = m.asphalt; ctx.fill(); } });
   }
+  // Flicken, Schlaglöcher, Staub und Reifenspuren (deterministisch je Linie, einmal berechnet)
+  for (const l of fahr) { const d = dichtL(l, v), fb = fahrbahn(l); if (fb >= 16) zeichneZustand(ctx, zustandBerechnen(l, d, fb, l.kerb), r); }
   // Fahrspur-Verschleiß: Rollspuren etwas heller und glatter, der Mittelstreifen dazwischen dunkler (Öl); nur auf breiten Straßen
   for (const l of fahr) {
-    const fb = fahrbahn(l); if (fb < 30 || dichtL(l, v).frei) continue;   // Linien mit auslaufendem Ende: Rollspuren würden über den schmalen Rand ragen
+    const fb = fahrbahn(l); if (fb < 30) continue;
     pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = fb * 0.72; ctx.stroke();
     pfad(ctx, l.pts); ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = fb * 0.2; ctx.stroke();
   }
@@ -926,6 +931,7 @@ export function zeichneStrassen(ctx, welt, rect) {
     eckPfad(ctx, e); ctx.fillStyle = m.asphalt; ctx.fill();
     if (e.kerb) { ctx.lineCap = 'butt'; ctx.beginPath(); ctx.arc(e.Cx, e.Cy, e.r - 1.6, e.aT, e.aB, e.acw); ctx.strokeStyle = 'rgba(38,32,22,.13)'; ctx.lineWidth = 3.2; ctx.stroke(); ctx.lineCap = 'round'; }
   }
+  for (const e of v.ecken) if (e.gruppe === 'fahr' && schneidet(e.box, r)) zeichneEckenstaub(ctx, e, Math.round(e.Cx * 3 + e.Cy * 7));
   // Ausfransungen am weichen Rand (kleine Asphaltzungen, Erdkrümel)
   for (const l of fahr) {
     if (l.kerb) continue;
@@ -973,6 +979,8 @@ export function zeichneStrassen(ctx, welt, rect) {
       }
     }
   }
+  // 6. Straßenenden: gerade Abbruchkante, Schotter (über Mittellinie und Randlinien gezeichnet)
+  for (const e of abbruchEnden(v)) if (e.x + 100 >= r.x0 && e.x - 100 <= r.x1 && e.y + 100 >= r.y0 && e.y - 100 <= r.y1) zeichneStrassenende(ctx, e);
   ctx.lineCap = 'round';
   ctx.restore();
 }
@@ -1271,4 +1279,4 @@ function strassenNamen(ctx, v, r) {
   ctx.restore();
 }
 // nur für Tests: Randverschiebung der Straßenseiten
-export const _randTest = { vorbereiten, dichtL, wandern, beule, teilAusschnitt, fahrbahn, seedKante };
+export const _randTest = { abbruchEnden, vorbereiten, dichtL, wandern, beule, teilAusschnitt, fahrbahn, seedKante };

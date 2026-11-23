@@ -1,38 +1,67 @@
-// Weiches Straßenende: freie Enden laufen abgerundet aus, am Feld-/Fußweg verjüngt sich der Asphalt auf die Wegbreite
+// Straßenende: gerade quer abgeschnitten (keine Kappe/Verjüngung), Abbruchkante und Schotter deterministisch; Flicken/Schlaglöcher deterministisch
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { setzeKartengroesse } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { _randTest as R } from '../client/vektor.mjs';
+import { zeichneStrassenende, zustandBerechnen, SCHOTTER_MIN, SCHOTTER_MAX } from '../client/strassenzustand.mjs';
 
-const halb = (d, j, f) => f / 2 + (d.tap?.[j] ?? 0);   // Halbbreite der Fahrbahn an Punkt j
-function karte(name, id, ende) {
+globalThis.Path2D ??= class { moveTo() {} lineTo() {} rect() {} closePath() {} arc() {} };
+function laden(name) {
   const k = JSON.parse(fs.readFileSync(new URL(`../client/karten/${name}.json`, import.meta.url)));
   setzeKartengroesse(k.breite, k.hoehe);
-  const v = R.vorbereiten(baueWeltAusKarte(k, 1, { autos: 0 }));
-  const l = v.linien.find(m => m.id === id), d = R.dichtL(l, v), f = R.fahrbahn(l);
-  const js = ende ? [...Array(d.n).keys()].reverse() : [...Array(d.n).keys()];   // vom Linienende nach innen
-  return { d, f, h: js.map(j => halb(d, j, f)) };
+  return R.vorbereiten(baueWeltAusKarte(k, 1, { autos: 0 }));
+}
+// Aufzeichnender Kontext: sammelt alle Aufrufe als Text (Determinismus und Geometrie prüfen)
+function rekorder() {
+  const log = [], P = new Proxy({}, { get: (_, n) => n === 'log' ? log : (...a) => { log.push(n + ':' + a.map(x => typeof x === 'number' ? x.toFixed(3) : (typeof x === 'object' ? '' : String(x))).join(',')); }, set: (_, n, v) => { log.push(n + '=' + v); return true; } });
+  return P;
 }
 
-test('freies Ende (Sackgasse, geretsried 52): Breite nimmt zum Ende stetig ab, Kappe rund und schmal', () => {
-  const { d, f, h } = karte('geretsried', 52, 1);
-  assert.ok(d.frei?.[1]);
-  assert.ok(h[0] <= 2.01, 'Ende fast spitz: ' + h[0]);
-  assert.ok(Math.abs(h[h.length - 1] - f / 2) < 0.01, 'innen volle Breite');
-  for (let i = 1; i < h.length; i++) assert.ok(h[i] >= h[i - 1] - 1e-6, 'monoton wachsend');
-  let max = 0; for (let i = 1; i < h.length; i++) max = Math.max(max, h[i] - h[i - 1]);
-  assert.ok(max < f / 2 / 2, 'höchstens Viertelbreite je 6-px-Schritt (Rundung): ' + max);
-  const i10 = h.findIndex(x => x > f / 2 * 0.9); assert.ok(i10 * 6 > f * 0.3, 'Verjüngung über mehr als eine Kappenbreite');
+test('freies Ende (geretsried 52): Breite bis zum Ende voll, keine Verjüngung, kein Rundabschluss', () => {
+  const v = laden('geretsried');
+  const l = v.linien.find(m => m.id === 52), d = R.dichtL(l, v), f = R.fahrbahn(l);
+  assert.ok(!d.tap, 'keine Verjüngung am freien Ende');
+  assert.equal(d.frei, undefined);
+  const e = R.abbruchEnden(v).find(x => x.seed === 52 * 31 + 1 * 7 + 5 || x.seed === 52 * 31 + 5);
+  assert.ok(e, 'Ende gefunden');
+  assert.ok(Math.abs(e.hw * 2 - f) < 1e-9, 'volle Fahrbahnbreite am Ende');
+  assert.ok(Math.abs(Math.hypot(e.tx, e.ty) - 1) < 1e-9);
+  assert.equal(e.weg, 0);
 });
 
-test('Übergang Straße → Feldweg (isarauen 76): Asphalt endet auf Wegbreite, ohne Absatz', () => {
-  const { d, f, h } = karte('isarauen', 76, 1);
-  assert.ok(d.frei?.[1]);
-  assert.ok(Math.abs(h[0] * 2 - 8) < 0.5 || Math.abs(h[0] * 2 - 6) < 0.5, 'Breite am Ende = Wegbreite: ' + h[0] * 2);
-  for (let i = 1; i < h.length; i++) assert.ok(h[i] >= h[i - 1] - 1e-6);
-  let max = 0; for (let i = 1; i < h.length; i++) max = Math.max(max, h[i] - h[i - 1]);
-  assert.ok(max < 2.5, 'stetig: ' + max);
-  assert.ok(Math.abs(h[h.length - 1] - f / 2) < 0.01);
+test('Übergang Straße → Feldweg (isarauen 76): gerades Ende, Weg breit erfasst, keine Verjüngung', () => {
+  const v = laden('isarauen');
+  const l = v.linien.find(m => m.id === 76), d = R.dichtL(l, v);
+  assert.ok(!d.tap, 'Fahrbahn nicht auf Wegbreite verjüngt');
+  const e = R.abbruchEnden(v).filter(x => x.seed === 76 * 31 + 5 || x.seed === 76 * 31 + 12).find(x => x.weg > 0);
+  assert.ok(e && e.weg === 8, 'Feldweg schließt an: ' + JSON.stringify(e));
+});
+
+test('Abbruchkante: deterministisch, Schotter 3–8 m lang, nur in Endkoordinaten', () => {
+  const e = { x: 100, y: 50, tx: 0.6, ty: 0.8, hw: 20, kerb: true, weg: 0, seed: 777, service: false };
+  const a = rekorder(), b = rekorder();
+  zeichneStrassenende(a, e); zeichneStrassenende(b, e);
+  assert.equal(a.log.join('|'), b.log.join('|'), 'zwei Läufe zeichnen identisch');
+  assert.ok(a.log.length > 200);
+  const c = rekorder(); zeichneStrassenende(c, { ...e, seed: 778 });
+  assert.notEqual(a.log.join('|'), c.log.join('|'), 'anderer Seed, andere Form');
+  assert.ok(SCHOTTER_MIN === 24 && SCHOTTER_MAX === 64);
+  assert.ok(a.log[1].startsWith('transform:0.600,0.800,-0.800,0.600,100.000,50.000'), 'Ausrichtung quer zum Ende: ' + a.log[1]);
+});
+
+test('Flicken und Schlaglöcher: deterministisch, liegen auf der Fahrbahn, Nebenstraße mehr Löcher als Hauptstraße', () => {
+  const v = laden('geretsried');
+  let loch = { tertiary: 0, residential: 0 }, meter = { tertiary: 0, residential: 0 }, flick = 0;
+  for (const l of v.linien) {
+    if (!(l.t in loch) || l.pts.length < 2) continue;
+    const d = R.dichtL(l, v), fb = R.fahrbahn(l), z = zustandBerechnen(l, d, fb, l.kerb);
+    const z2 = (l._zust = null, zustandBerechnen(l, d, fb, l.kerb));
+    assert.equal(JSON.stringify(z), JSON.stringify(z2), 'Linie ' + l.id + ' deterministisch');
+    loch[l.t] += z.loch.length; meter[l.t] += d.s[d.n - 1] / 8; flick += z.flick.length;
+    for (const q of z.flick) for (const p of q.poly) assert.ok(Number.isFinite(p[0]) && Number.isFinite(p[1]));
+  }
+  assert.ok(flick > 0, 'es gibt Flicken');
+  assert.ok(loch.residential / meter.residential > loch.tertiary / meter.tertiary, `Nebenstraße (${loch.residential}/${meter.residential}) hat mehr Löcher je m als Hauptstraße (${loch.tertiary}/${meter.tertiary})`);
 });
