@@ -356,6 +356,7 @@ export function bereinige(e = {}, alt = {}) {
       boxerHordeMax: Math.max(Math.round(zahl(bw.boxerHordeMin, 1, 500, 20)), Math.round(zahl(bw.boxerHordeMax, 1, 500, 50))),   // … höchstens so viele (nie weniger als das Minimum)
       boxerSchussPause: Math.round(zahl(bw.boxerSchussPause, 0.05, 5, 0.25) * 100) / 100,               // … Sekunden zwischen zwei Schüssen des Turms (Dauerfeuer)
       boxerReichweite: Math.round(zahl(bw.boxerReichweite, 5, 120, 40)),                                 // … Reichweite des Turms in Metern
+      boxerTempo: Math.round(zahl(bw.boxerTempo, 10, 120, 60)),                                          // … Höchsttempo beim Fahren in km/h
     },
     polizei: {
       aktiv: typeof e.polizei?.aktiv === 'boolean' ? e.polizei.aktiv : (typeof a.polizei?.aktiv === 'boolean' ? a.polizei.aktiv : true),   // Polizisten und Streifenwagen an den Straßensperren
@@ -392,7 +393,7 @@ export function grundwerte() {
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
-    bundeswehr: { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, mgMunition: 400, pumaMunition: 200 },
+    bundeswehr: { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60, mgMunition: 400, pumaMunition: 200 },
     polizei: { aktiv: true, anzahl: 3, munition: 30 },
     nebel: { ...NEBEL_VORGABE },
     zombieSicht: { ...SICHT_VORGABE },

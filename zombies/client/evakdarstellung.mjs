@@ -40,10 +40,10 @@ export function evakFahrzeug(scene, o, f, s, dt, lokal, aktEbene, skalaSoldat = 
   if (!panzer && o.turm) { o.turm.destroy(); o.turm = null; for (const q of [o.kdt, o.lader]) q?.destroy(); o.kdt = o.lader = null; }
   if (!flug && o.tank) { o.tank.destroy(); o.tank = null; }
   if (!flug && o.props) { for (const p of o.props) p.destroy(); o.props = null; }
-  if (!panzer && !flug) { o.bild.setScale(1); if (o.kette) { ton.sireneStoppen(o.kette); o.kette = null; } return false; }
+  if (!panzer && !flug) { o.bild.setScale(1); o.sch?.setScale(1); if (o.kette) { ton.sireneStoppen(o.kette); o.kette = null; } return false; }
   o.licht.clear();
   if (panzer) {
-    o.bild.setScale(LEOPARD.skala);
+    o.bild.setScale(LEOPARD.skala); o.sch?.setScale(LEOPARD.skala);   // Schatten ist die Silhouette derselben Textur: gleich skalieren
     if (!o.turm) {
       o.turm = scene.add.image(LEOPARD.turmX, LEOPARD.turmY, 'leopard-turm').setOrigin(LEOPARD.turmOx, LEOPARD.turmOy).setScale(LEOPARD.skala);
       o.box.addAt(o.turm, 1); o.turmW = Number.isFinite(f.turm) ? f.turm : o.r;

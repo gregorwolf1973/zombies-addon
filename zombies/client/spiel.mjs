@@ -12,7 +12,7 @@ import { laternen, tuerPose, zeichneSafeEingang } from './vektor.mjs';
 import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenText, umgefaerbt, aussehenMigriert } from './figurbild.mjs';
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
-import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, FZ_SCHATTEN, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
+import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, FZ_SCHATTEN, FZ_HOEHE, fzSchattenVersatz, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
@@ -2660,7 +2660,8 @@ class Ort extends Phaser.Scene {
       o.x += (f.x - o.x) * glatt; o.y += (f.y - o.y) * glatt;
       o.r = Phaser.Math.Angle.RotateTo(o.r, fzRichtung(f), dt * 6);
       o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
-      o.sch?.setPosition(o.x + FZ_SCHATTEN.dx, o.y + FZ_SCHATTEN.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible);
+      const shv = fzSchattenVersatz(f.art === 'boxer' ? FZ_HOEHE.boxer : f.art === 'evakuierung' && evakArtVon(raum.state) === 'panzer' ? FZ_HOEHE.leopard : 1);
+      o.sch?.setPosition(o.x + shv.dx, o.y + shv.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible);
       o.licht.clear();
       // dicht vorbeifahrende Autos und Busse rauschen vorbei; jedes dritte Auto hat das Radio an
       if ((f.art === 'auto' || f.art === 'bus' || f.art === 'laster') && this.lokal && !this.aktEbene) {
@@ -2809,7 +2810,7 @@ class Ort extends Phaser.Scene {
       const m = this.pumaMasse(pumaT.laenge), tb = this.textures.get('puma-turm').getSourceImage(), k = PUMA_SKALA * m.f;
       o.pumaVersatz = { x: PUMA_BILD.turmX * k, y: PUMA_BILD.turmY * k };
       o.pumaMuendung = PUMA_BILD.muendung * k;
-      o.wanneSchatten = this.add.image(pumaT.x + FZ_SCHATTEN.dx, pumaT.y + FZ_SCHATTEN.dy, this.fahrzeugSchattenTextur('puma-wanne')).setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(4.9).setAlpha(FZ_SCHATTEN.alpha);
+      o.wanneSchatten = this.add.image(pumaT.x + fzSchattenVersatz(FZ_HOEHE.puma).dx, pumaT.y + fzSchattenVersatz(FZ_HOEHE.puma).dy, this.fahrzeugSchattenTextur('puma-wanne')).setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(4.9).setAlpha(FZ_SCHATTEN.alpha);
       o.wanne = this.add.image(pumaT.x, pumaT.y, 'puma-wanne').setRotation(pumaT.winkel).setScale(PUMA_SKALA * m.skala).setDepth(5);
       o.turm = this.add.image(0, 0, 'puma-turm').setOrigin((PUMA_BILD.turmMx + m.R) / tb.width, (PUMA_BILD.turmMy + m.R) / tb.height)
         .setRotation(pumaT.turm.winkel).setScale(PUMA_SKALA * m.skala).setDepth(5.1);
@@ -2868,7 +2869,7 @@ class Ort extends Phaser.Scene {
       let dw = st.bwW - o.wanne.rotation; dw = Math.atan2(Math.sin(dw), Math.cos(dw));
       o.wanne.setRotation(o.wanne.rotation + dw * k);
       this.pumaTurmSetzen();
-      o.wanneSchatten?.setPosition(o.wanne.x + FZ_SCHATTEN.dx, o.wanne.y + FZ_SCHATTEN.dy).setRotation(o.wanne.rotation);
+      o.wanneSchatten?.setPosition(o.wanne.x + fzSchattenVersatz(FZ_HOEHE.puma).dx, o.wanne.y + fzSchattenVersatz(FZ_HOEHE.puma).dy).setRotation(o.wanne.rotation);
       // Kettenrasseln (Ereignis „Panzer fährt“), nur solange er sich bewegt, draußen und in Hörweite
       const faehrt = o.letztX !== undefined && Math.hypot(st.bwX - o.letztX, st.bwY - o.letztY) > 0.05;
       o.letztX = st.bwX; o.letztY = st.bwY;

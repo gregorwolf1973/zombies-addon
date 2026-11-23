@@ -2,7 +2,7 @@
 // (Eingabe wie beim Gehen), der Turm schießt automatisch Dauerfeuer auf den nächsten Zombie, die Insassen sind unsichtbar und vor Zombies
 // sicher, der Boxer selbst hat keine Lebenspunkte. Solange jemand drin sitzt, kommt in festen Abständen eine Horde von vorn auf ihn zu.
 // Server ist maßgeblich (Fahren, Kollision, Schießen); der Client zeichnet nur (client/boxerdarstellung.mjs).
-import { KACHEL, frei } from '../client/welt.mjs';
+import { KACHEL, frei, kmhZuPx } from '../client/welt.mjs';
 import { BOXER, boxerNah } from '../client/boxer.mjs';
 import { Fahrzeug } from './verkehr.mjs';
 import { turmDrehen, winkelDiff } from './leopard.mjs';
@@ -12,19 +12,25 @@ import { WELLE_MAX } from './welle.mjs';
 export const BOXER_PLAETZE = 4;
 export const BOXER_ID = 'boxer1';
 const PX = 8;                                    // Pixel je Meter
-export const VMAX = 10 * PX;                     // 10 m/s
-export const BESCHLEUNIGUNG = 3.5 * PX;          // px/s²
-export const BREMSE = 8.5 * PX;                  // px/s² (ohne Eingabe)
-export const DREHRATE = 1.3;                     // rad/s bei Fahrt
-export const DREHRATE_STAND = 0.6;               // rad/s im Stand
-const RUECKWAERTS = 0.35;                        // Rückwärtsgang: Anteil von VMAX
+// Fahrwerk (je Fahrzeugart parametrierbar, z. B. später für den fahrbaren Puma): Höchsttempo kommt aus der Einstellung bundeswehr.boxerTempo (km/h)
+export const BOXER_FAHRWERK = {
+  tempoKmh: 60,                                  // Vorgabe, wenn die Einstellung fehlt
+  beschleunigung: 7 * PX,                        // px/s² (60 km/h in ~2,4 s)
+  bremse: 14 * PX,                               // px/s² (ohne Eingabe)
+  drehrate: 1.3,                                 // rad/s bei Fahrt
+  drehrateStand: 0.6,                            // rad/s im Stand
+  rueckwaerts: 0.35,                             // Rückwärtsgang: Anteil des Höchsttempos
+  schrittPx: 2,                                  // Teilschritt der Kollisionsprüfung (px): bei 60 km/h (133 px/s) nie durch Zäune/Wände
+};
+export const VMAX = kmhZuPx(BOXER_FAHRWERK.tempoKmh);
+export const DREHRATE = BOXER_FAHRWERK.drehrate, DREHRATE_STAND = BOXER_FAHRWERK.drehrateStand;
 const TURM_TEMPO = 2.5;                          // rad/s
 const ZIEL_TOLERANZ = 10 * Math.PI / 180;
 const SCHADEN = 400;
 const HORDE_VORNE = [80, 100];                   // Meter vor dem Boxer
 const GLOBAL_MAX = 900;                          // so viele Zombies insgesamt höchstens, wenn eine Boxer-Horde erscheint
 const FELD_TAKT = 2.5;                           // Sekunden: Ziel der Horde (Wegefeld) nachführen
-export const EINST_VORGABE = { boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40 };
+export const EINST_VORGABE = { boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60 };
 
 // Punkte der Wanne (Längs u, quer v) für die Kollisionsprüfung
 const PUNKTE = [];
@@ -77,6 +83,13 @@ export class Boxer {
     this.von = { name: 'Boxer', x: 0, y: 0, besiegt: 0 };
     this.letzteEingabe = { dx: 0, dy: 0 };
     this.drehBlock = false;
+  }
+
+  // Fahrwerkswerte dieses Fahrzeugs (Unterklassen/andere Fahrzeugarten überschreiben `fahrwerkBasis`)
+  get fahrwerkBasis() { return BOXER_FAHRWERK; }
+  fahrwerk() {
+    const b = this.fahrwerkBasis, kmh = Number(this.einst().boxerTempo);
+    return { ...b, vmax: kmhZuPx(Number.isFinite(kmh) && kmh > 0 ? kmh : b.tempoKmh) };
   }
 
   einst() { return { ...EINST_VORGABE, ...(this.raum.einstellungen?.()?.bundeswehr ?? {}) }; }
@@ -187,27 +200,27 @@ export class Boxer {
 
   // Lenken wie bei der Figur: Eingabe {dx, dy} gibt die Wunschrichtung; der Boxer dreht mit begrenzter Rate dorthin und fährt vorwärts
   fahren(e, dt) {
-    const f = this.f, welt = this.raum.welt;
+    const f = this.f, welt = this.raum.welt, fw = this.fahrwerk(), VM = fw.vmax;
     const len = Math.min(1, Math.hypot(e.dx, e.dy));
     let soll = 0;
     if (len > 0.1) {
       const ziel = Math.atan2(e.dy, e.dx), d = winkelDiff(f.richtung, ziel), c = Math.cos(d);
-      const rate = DREHRATE_STAND + (DREHRATE - DREHRATE_STAND) * Math.min(1, Math.abs(this.v) / (VMAX * 0.3));
+      const rate = fw.drehrateStand + (fw.drehrate - fw.drehrateStand) * Math.min(1, Math.abs(this.v) / (VM * 0.3));
       const schritt = Math.max(-rate * dt, Math.min(rate * dt, d));
       const w = f.richtung + schritt;
       this.drehBlock = false;
       if (Math.abs(schritt) > 1e-6) {
         if (boxerFrei(welt, f.x, f.y, w)) f.richtung = w; else this.drehBlock = true;
       }
-      soll = c > 0 ? VMAX * len * c * c : 0;   // quer zur Wunschrichtung: langsam, entgegengesetzt: Stand
-      if (this.drehBlock && c < 0.2) soll = -VMAX * RUECKWAERTS * len;   // festgefahren: rückwärts freisetzen
+      soll = c > 0 ? VM * len * c * c : 0;   // quer zur Wunschrichtung: langsam, entgegengesetzt: Stand
+      if (this.drehBlock && c < 0.2) soll = -VM * fw.rueckwaerts * len;   // festgefahren: rückwärts freisetzen
     }
     // Beschleunigen / Bremsen
-    if (soll > this.v) this.v = Math.min(soll, this.v + BESCHLEUNIGUNG * dt);
-    else this.v = Math.max(soll, this.v - (this.v > 0 ? BREMSE : BESCHLEUNIGUNG) * dt);
+    if (soll > this.v) this.v = Math.min(soll, this.v + fw.beschleunigung * dt);
+    else this.v = Math.max(soll, this.v - (this.v > 0 ? fw.bremse : fw.beschleunigung) * dt);
     if (Math.abs(this.v) < 0.5 && soll === 0) this.v = 0;
-    // Vorrücken in Teilschritten; Hindernis: stehen bleiben
-    const weg = this.v * dt, n = Math.max(1, Math.ceil(Math.abs(weg) / 3));
+    // Vorrücken in kleinen Teilschritten; Hindernis: stehen bleiben
+    const weg = this.v * dt, n = Math.max(1, Math.ceil(Math.abs(weg) / fw.schrittPx));
     for (let i = 0; i < n; i++) {
       const nx = f.x + Math.cos(f.richtung) * weg / n, ny = f.y + Math.sin(f.richtung) * weg / n;
       if (!boxerFrei(welt, nx, ny, f.richtung)) { this.v = 0; break; }
