@@ -13,9 +13,10 @@ import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplat
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
 import { weltVorbereiten } from './weltcache.mjs';
+import { gesuchteDinge, fundorteListe, missionsOrt } from './fundorte.mjs';
 
 // Missionsgegenstand für die Clients (Karte): exakte Position (x, y), Radius des animierten Auffindkreises, abgegeben, Ortsbeschreibung
-export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
+export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), getragen: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
 
 export const Aufgabe = schema({
   id: t.string(),
@@ -292,7 +293,7 @@ export class Aufgaben {
     for (let i = 0; i < h; i++) kreisSchrumpfen(m);
     this.hinweise[m.id] = h;
     const q = new Mission(); q.id = m.id; q.ding = m.ding; q.nummer = m.nummer ?? 0; q.von = m.von ?? 0;
-    q.x = Math.round(m.x); q.y = Math.round(m.y); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.id); q.ort = m.ort ?? ''; q.behaelter = m.behaelter ?? '';
+    q.x = Math.round(m.x); q.y = Math.round(m.y); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.id); q.getragen = false; q.ort = m.ort ?? ''; q.behaelter = m.behaelter ?? '';
     s.missionen?.set(m.id, q);
   }
 
@@ -382,6 +383,29 @@ export class Aufgaben {
   }
 
   erledigtZahl() { return [...this.raum.state.aufgaben.values()].filter(a => a.erledigt).length; }
+  // Karte: Missionsgegenstände folgen ihrem Fundort (getragen = kein Ring; am Boden = Ring dort; sonst am Plan-Ort) und eine
+  // kompakte Liste gesuchter Dinge in geöffneten Behältern (nur bei Änderung, sonst alle 10 s) an alle Clients
+  orteSync() {
+    const s = this.raum.state;
+    for (const m of this.mission) {
+      const q = s.missionen.get(m.id);
+      if (!q || q.abgegeben) continue;
+      const o = missionsOrt(this.raum, m.ding);
+      const x = Math.round(o && !o.getragen ? o.x : m.x), y = Math.round(o && !o.getragen ? o.y : m.y), g = !!o?.getragen;
+      if (q.x !== x) q.x = x;
+      if (q.y !== y) q.y = y;
+      if (q.getragen !== g) q.getragen = g;
+    }
+    this.orteSek = (this.orteSek ?? 0) + 0.5;
+    if (this.orteSek < 1) return;
+    this.orteSek = 0;
+    const liste = this.an() ? fundorteListe(this.raum, gesuchteDinge(s, this.medizin)) : [];
+    const j = JSON.stringify(liste);
+    if (j === this.orteJson && (this.orteNeu = (this.orteNeu ?? 0) + 1) < 10) return;
+    this.orteJson = j; this.orteNeu = 0;
+    this.raum.broadcast('fundorte', { l: liste });
+  }
+
   noetig() { return Math.max(1, this.raum.state.aufgaben.size - 1); }   // „3 von 4“
 
   // Haken aus raum.mjs: ein Fund aus einem Behälter (Spritze aus der Apotheke)
@@ -428,7 +452,7 @@ export class Aufgaben {
     if (s.busDa) { this.evakFeuer(dt); if (this.flug) this.flugRollen(dt); }
     if (!s.aufgaben.size) { this.basis = s.besiegt; this.ziehen(); }   // zur Laufzeit eingeschaltet
     this.takt -= dt;
-    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); }
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); this.orteSync(); }
     if (!this.abholMeldung && s.funk && [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt)) {
       this.abholMeldung = true;
       const art = this.fz().art;
@@ -853,7 +877,7 @@ export class Aufgaben {
     const s = this.raum.state, c = this.crash;
     if (this.wechselLaeuft) return;
     this.takt -= dt;
-    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); }
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.orteSync(); }
     if (c.phase === 'anflug') {
       c.rest -= dt; s.evakRest = Math.max(0, Math.ceil(c.rest));
       if (c.rest > 0) return;
@@ -881,7 +905,7 @@ export class Aufgaben {
       return;
     }
     this.takt -= dt;
-    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); }   // Aufgaben/Missionen laufen auch beim wartenden Hubschrauber weiter
+    if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.evakSync(); this.orteSync(); }   // Aufgaben/Missionen laufen auch beim wartenden Hubschrauber weiter
     const alleDa = this.mitfahrer();
     if (!this.heli) return;   // mitfahrer() hat abgebrochen
     if (h.phase === 'bunker') { this.bordRaffen(this.alleDa); return; }   // Bunkertor: nur hineingehen, kein Abflug – das Ende kommt mit dem Countdown (bunkerEnde)

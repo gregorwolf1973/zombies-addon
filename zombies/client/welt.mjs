@@ -470,7 +470,15 @@ export const DINGE = {
 export const BODEN_DAUER = 180;      // weggeworfene Gegenstände bleiben 3 Minuten liegen
 export const TAUSCH_ABSTAND = 34;    // so nah muss man sich sein (berühren), um zu tauschen
 // Beute bei toten Zombies: selten (etwa jeder 20.) eine Waffe, sonst oft Alltagszeug
-export const LEICHE_SELTEN = ['pistole', 'munition', 'messer', 'schrotflinte'];
+export const LEICHE_SELTEN = ['pistole', 'messer', 'schrotflinte'];
+export const LEICHE_MUNITION = 0.15;           // Chance auf Munition bei einem toten Zombie (zusätzlich zur Tabelle)
+export const LEICHE_MUNITION_MIN = 5, LEICHE_MUNITION_MAX = 12;   // Schuss je Leiche (je Leiche fest gewürfelt)
+export const AUTO_MUNITION = 0.15;             // Chance, dass ein Kofferraum Munition enthält (eigene Prüfung, nicht in BEUTE.auto)
+export const GRANATWERFER_CHANCE = 0.30;       // Chance, dass ein Bundeswehr-Container einen Granatwerfer enthält (eigene Prüfung)
+// Möbel/Behälter in Wohnungen und großen Gebäuden: nur dieser Anteil (in %, Backend-Einstellung beute.moebel) enthält überhaupt etwas.
+// Nicht dabei: Läden, Autos, Bus, Leichen, Bundeswehr-Kisten, Vorrats-/Sanitätskisten, Rätsel-Belohnung (Missionsgegenstände kommen immer dazu).
+export const MOEBEL_ANTEIL = 30;
+export const MOEBEL_ARTEN = new Set(['schrank', 'spind', 'kuehlschrank', 'herd', 'spuele', 'bad', 'muelltonne', 'container', 'aktenschrank', 'werkbank', 'werkzeugschrank', 'ausstellungsschrank', 'hochregal', 'kartonstapel']);
 export const LEICHE_OFT = ['kleidung', 'seil', 'taschenlampe', 'schokoriegel'];
 export const LEICHE_DAUER = 180;      // Sekunden, die eine Leiche liegen bleibt
 export const LEICHEN_MAX = 30;
@@ -493,7 +501,7 @@ export const BEUTE = {
   // Belohnung für Rätsel-Türen: Schrank/Spind im Raum dahinter, viel Waffen, Munition und Medizin
   spind_belohnung: ['pistole', 'gewehr', 'gewehr', 'schrotflinte', 'armbrust', 'munition', 'munition', 'munitionskiste', 'pfeil', 'verband', 'verband', 'spritze', null],
   // Kofferraum geht nur mit Brechstange auf – darum liegt drin keine, dafür etwas mehr Gutes
-  auto: ['wasser', 'verband', 'munition', 'munition', 'munitionskiste', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', 'funkgeraet', null],
+  auto: ['wasser', 'verband', 'bretter', 'essen', 'spritze', 'tasche', 'taschenlampe', 'schrotflinte', 'funkgeraet', null],
   laden_lebensmittel: ['essen', 'essen', 'essen', 'wasser', 'wasser', 'wasser', 'schokoriegel', 'schokoriegel', null],
   laden_apotheke: ['verband', 'verband', 'verband', 'spritze', 'spritze', 'kleidung', null, null],
   laden_kaufhaus: ['tasche', 'tasche', 'trekking', 'trekking', 'taschenlampe', 'taschenlampe', 'seil', 'kleidung', 'kleidung', 'messer', 'brechstange', 'funkgeraet', 'wasser', 'wasser', 'armbrust', 'pfeil', 'pfeil', 'radio', null],
@@ -513,7 +521,7 @@ export const BEUTE = {
   // Bundeswehr-Stützpunkt (Teil 2 ergänzt hier die neuen Waffen)
   // Handgranaten häufiger, Maschinenpistole und Maschinengewehr selten (nur hier zu finden)
   bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', 'pfeil', 'granate40', null],   // MG/Scharfschütze der Kiste: raum.mjs (durchsucht), nicht hier
-  bw_container: ['munition', 'munition', 'munitionskiste', 'munitionskiste', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', 'granatwerfer', 'granate40', 'granate40', null],
+  bw_container: ['munition', 'munition', 'munitionskiste', 'munitionskiste', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', 'granate40', 'granate40', null],
   // Polizeiwache (OSM amenity=police): Pistolen, Schrot, selten Maschinenpistole, Maschinengewehr, Scharfschützengewehr
   laden_polizei: ['munition', 'munition', 'munitionskiste', 'verband', 'taschenlampe', 'pistole', 'pistole', 'schrotflinte', 'mp', 'mg', 'mg', 'scharfschuetze', 'funkgeraet', null],
   sanikiste: ['verband', 'verband', 'verband', 'spritze', 'spritze', null],

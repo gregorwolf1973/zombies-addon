@@ -37,7 +37,7 @@ export class SchiessstandRaum extends SpielRaum {
     this.welt = baueSchiessstandWelt();
     this.weltFp = 'schiessstand';
     this.rnd = zufall(0x5c1e55 + Date.now() % 100000);
-    this.inhalte = new Map(); this.leichenInhalt = new Map(); this.naechsteLeichenId = 1; this.naechsteBodenId = 1;
+    this.inhalte = new Map(); this.leichenInhalt = new Map(); this.leichenMunition = new Map(); this.naechsteLeichenId = 1; this.naechsteBodenId = 1;
     this.ebenen = new Map(); this.felder = new Map(); this.gespeicherteTueren = {};
     this.chatVerlauf = []; this.naechsteChatId = 1; this.chatZeiten = new Map();
     this.fkVon = new WeakMap(); this.tausche = new Map(); this.offeneRaetsel = new Map(); this.gestellt = new Set();

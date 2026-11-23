@@ -2,9 +2,8 @@
 // Gespeichert in /data/einstellungen.json; beim allerersten Start dienen die Add-on-Optionen als Startwerte.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DINGE, WAFFEN } from '../client/welt.mjs';
+import { DINGE, WAFFEN, MOEBEL_ANTEIL } from '../client/welt.mjs';
 import { HUND } from './hund.mjs';
-import { MUNITIONSGLUECK } from './munitionsglueck.mjs';
 import { hashe, hashGueltig } from './superuser.mjs';
 import { LEVEL_VORGABE, LEVEL_GRENZEN } from './schwierigkeit.mjs';
 import { NEBEL_VORGABE, bereinigeNebel } from './nebel.mjs';
@@ -222,7 +221,6 @@ export function bereinige(e = {}, alt = {}) {
   const sp = { ...a.sprache, ...(e.sprache ?? {}) };
   const ag = { ...a.aufgaben, ...(e.aufgaben ?? {}) };
   const bw = { ...a.bundeswehr, ...(e.bundeswehr ?? {}) };
-  const mgl = { ...a.munitionsglueck, ...(e.munitionsglueck ?? {}) }, MG = MUNITIONSGLUECK;
   const fk = { ...a.faehigkeiten, ...(e.faehigkeiten ?? {}) };
   const tu = { ...a.tueren, ...(e.tueren ?? {}) };
   const typen = Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, typeof z.typen?.[k] === 'boolean' ? z.typen[k] : (typeof a.zombies?.typen?.[k] === 'boolean' ? a.zombies.typen[k] : true)]));
@@ -362,14 +360,7 @@ export function bereinige(e = {}, alt = {}) {
       streuner: Math.round(zahl(e.hund?.streuner ?? a.hund?.streuner, -1, 20, HUND.streuner)),   // Streuner-Hunde: -1 = automatisch (1 je 0,5 km²), 0 = keine, 1–20 fest
     },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
     funde,
-    munitionsglueck: {                                                        // Munitionsglück (server/munitionsglueck.mjs), alles in %
-      schritt: Math.round(zahl(mgl.schritt, 0, 100, MG.schritt)),
-      max: Math.round(zahl(mgl.max, 100, 500, MG.max)),
-      lebenUnter: Math.round(zahl(mgl.lebenUnter, 0, 100, MG.lebenUnter)),
-      lebenFaktor: Math.round(zahl(mgl.lebenFaktor, 100, 300, MG.lebenFaktor)),
-      notUnter: Math.round(zahl(mgl.notUnter, 0, 100, MG.notUnter)),
-      notFaktor: Math.round(zahl(mgl.notFaktor, 100, 300, MG.notFaktor)),
-    },
+    beute: { moebel: Math.round(zahl(e.beute?.moebel ?? a.beute?.moebel, 0, 100, MOEBEL_ANTEIL)) },   // % der Möbel/Behälter, die überhaupt etwas enthalten
     toene,
     toeneNamen: bereinigeToeneNamen(e.toeneNamen, a.toeneNamen),
     toeneHorde: bereinigeHordeTon({ ...a.toeneHorde, ...(e.toeneHorde ?? {}) }),
@@ -401,7 +392,7 @@ export function grundwerte() {
     sprache: { an: true, hoerweite: 40, stockwerk: 35, drinnenDraussen: 10, funk: 70, redenLockt: false },
     test: { zeitraffer: 1, unsterblich: [] },
     hund: { ...HUND },
-    munitionsglueck: { ...MUNITIONSGLUECK },
+    beute: { moebel: MOEBEL_ANTEIL },
     toene: {},
     toeneNamen: {},
     toeneHorde: { ...HORDE_TON_VORGABE },

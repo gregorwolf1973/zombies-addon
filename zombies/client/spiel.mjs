@@ -1187,11 +1187,12 @@ class Ort extends Phaser.Scene {
     raum.onMessage('gefunden', m => {
       if (m.kiste && m.rest === 0) (this.leereKisten ??= new Set()).add(m.kiste);   // Munitionskiste: für mich leer
       if (m.dinge.length) ton.aufheben(); else if (m.rest || !ton.ereignis('truheLeer')) ton.suchen();
-      if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? '🧰 12 Schuss' : d === 'pfeil' ? '➶ 6 Pfeile' : dingText(d)).join(', '));
+      if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? `🧰 ${m.schuss ?? 12} Schuss` : d === 'pfeil' ? '➶ 6 Pfeile' : dingText(d)).join(', '));
       else if (m.rest) meldung('Rucksack voll – der Rest bleibt hier');
       else meldung('Nichts Brauchbares gefunden');
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
     });
+    raum.onMessage('fundorte', m => { this.fundorte = Array.isArray(m?.l) ? m.l : []; });   // gesuchte Dinge in geöffneten Behältern (Karte)
     raum.onMessage('fundliste', m => fundZeigen(raum, m, this.lokal, meldung));
     raum.onMessage('alle_sperre', m => { this.alleSperreBis = Date.now() + (m.sek ?? 30) * 1000; });
     raum.onMessage('pong', () => {});
@@ -1587,7 +1588,9 @@ class Ort extends Phaser.Scene {
     // offene Missionsgegenstände: exakte Position vom Server (Mitte = Gegenstand), mit Gegenstandsbild, falls vorhanden
     const dTex = this.textures.exists('dinge') ? this.textures.get('dinge') : null;
     const dBild = ding => { const n = ding === 'handgranate' ? 'granate' : ding; if (!dTex || !hatDingBild(ding) || !dTex.has(n)) return null; const f = dTex.get(n); return { img: f.source.image, sx: f.cutX, sy: f.cutY, s: f.cutWidth }; };
-    this.uebersicht.kreise = [...(raum.state.missionen?.values() ?? [])].filter(q => !q.abgegeben).map(q => ({
+    this.uebersicht.fundpunkte = (this.fundorte ?? []).map(([x, y, d]) => ({ x: x / KACHEL, y: y / KACHEL, symbol: DINGE[d]?.zeichen ?? '❓', name: DINGE[d]?.name ?? d }));
+    // getragene Missionsgegenstände haben keinen Ring mehr; liegt er wieder irgendwo, folgt der Ring dem Fundort (Server: orteSync)
+    this.uebersicht.kreise = [...(raum.state.missionen?.values() ?? [])].filter(q => !q.abgegeben && !q.getragen).map(q => ({
       x: q.x / KACHEL, y: q.y / KACHEL, r: q.r / KACHEL, symbol: DINGE[q.ding]?.zeichen ?? '❓', bild: dBild(q.ding), name: (DINGE[q.ding]?.name ?? q.ding) + (q.nummer && q.von > 1 ? ` ${q.nummer}/${q.von}` : ''),
     }));
     this.uebersicht.zeichne(spieler, e => { const m = EBENE_MUSTER.exec(e); return m ? this.welt.haeuser[Number(m[1])] : null; });

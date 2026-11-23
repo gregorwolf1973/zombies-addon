@@ -134,7 +134,6 @@ export async function starte({
       polizei: w.polizei,                           // { aktiv, anzahl, munition }
       ice: iceServer(optionen),
       zeitraffer: w.test.zeitraffer,
-      munitionsglueck: w.munitionsglueck,           // { schritt, max, lebenUnter, lebenFaktor, notUnter, notFaktor } in %
       hund: w.hund,                                 // { ablenkung } in %
       unsterblich: new Set(w.test.unsterblich.map(n => n.toLowerCase())),
     };

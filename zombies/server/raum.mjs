@@ -13,7 +13,6 @@ import { Zombiewelle } from './welle.mjs';
 import { Aufgabe, Aufgaben, Mission, levelSchluessel } from './aufgaben.mjs';
 import { schwierigkeit, LEVEL_VORGABE } from './schwierigkeit.mjs';
 import { Stuetzpunkt } from './stuetzpunkt.mjs';
-import { mitMunitionsglueck, munitionsDinge, naechsteSerie } from './munitionsglueck.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
 import { Boxer } from './boxer.mjs';
 import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
@@ -46,7 +45,7 @@ import {
   KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, INNEN_FEIN, setzeInnenFein, setzeInnenTempo, setzeTageszeiten,
   WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
-  BLOCKIERT, ziehe, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
+  BLOCKIERT, ziehe, LEICHE_MUNITION, LEICHE_MUNITION_MIN, LEICHE_MUNITION_MAX, AUTO_MUNITION, GRANATWERFER_CHANCE, MOEBEL_ANTEIL, MOEBEL_ARTEN, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
 
 export const Spieler = schema({
   name: t.string(),
@@ -492,6 +491,7 @@ export class SpielRaum extends Room {
 
     this.inhalte = new Map();     // Behälter-Id → verbliebene Gegenstände
     this.leichenInhalt = new Map(); // Leichen-Id → Gegenstände
+    this.leichenMunition = new Map(); // Leichen-Id → Schuss, falls die Leiche Munition trägt (5–12)
     this.naechsteLeichenId = 1;
     this.naechsteBodenId = 1;
     this.ebenen = new Map();      // Ebene → Innenraum-Karte (wird beim ersten Betreten gebaut)
@@ -744,7 +744,6 @@ export class SpielRaum extends Room {
       p.lampe = Math.max(0, Math.min(LAMPE_DAUER, Number(gespeichert.lampe) || 0));
       p.plaetze = [8, 12, 16].includes(Number(gespeichert.plaetze)) ? Number(gespeichert.plaetze) : RUCKSACK_PLAETZE;
       extra.fk = FK.normiere(gespeichert.fk);
-      extra.munSerie = Math.max(0, Math.min(50, Number(gespeichert.munSerie) || 0));
       WP.lade(p, extra, gespeichert);
       extra.startOffen = this.state.level === 1 && !!gespeichert.startOffen;   // Startwahl noch nicht getroffen
       p.plaetze += FK.wirkung.rucksack(extra.fk);
@@ -1233,7 +1232,7 @@ export class SpielRaum extends Room {
     setzeInnenFein(an); this.optionenSetzen();
     this.weltFp = weltFingerabdruck(this.welt);
     for (const [id, z] of [...s.zombies]) if (z.ebene) { s.zombies.delete(id); this.zombieInfo.delete(id); }
-    for (const [id, l] of [...s.leichen]) if (l.ebene) { s.leichen.delete(id); this.leichenInhalt?.delete(id); }
+    for (const [id, l] of [...s.leichen]) if (l.ebene) { s.leichen.delete(id); this.leichenInhalt?.delete(id); this.leichenMunition?.delete(id); }
     for (const [id, b] of [...s.boden]) if (b.ebene) s.boden.delete(id);
     for (const k of [...s.tueren.keys()]) if (imInnen(k)) s.tueren.delete(k);
     for (const k of [...s.behaelter.keys()]) if (imInnen(k)) s.behaelter.delete(k);
@@ -1399,7 +1398,7 @@ export class SpielRaum extends Room {
     if (!p || !x || x.bot || !this.speicher || (this.nichtSpeichern && !trotzdem)) return;
     this.speicher.speichereSpieler(x.spielerId, p.name, {
       x: p.x, y: p.y, hp: p.unten ? 25 : p.hp, durst: p.durst, hunger: p.hunger,
-      waffe: p.waffe, munition: p.munition, pfeile: p.pfeile, granaten: p.granaten, handgranaten: p.handgranaten, ...WP.speicherDaten(p, x), rucksack: [...p.rucksack], plaetze: p.plaetze - this.fkRucksack(p), besiegt: p.besiegt, fk: x.fk, munSerie: x.munSerie ?? 0,
+      waffe: p.waffe, munition: p.munition, pfeile: p.pfeile, granaten: p.granaten, handgranaten: p.handgranaten, ...WP.speicherDaten(p, x), rucksack: [...p.rucksack], plaetze: p.plaetze - this.fkRucksack(p), besiegt: p.besiegt, fk: x.fk,
       startOffen: !!x.startOffen, hund: !!x.hund, aussehen: p.aussehen, letzterSafe: x.letzterSafe, lager: p.sicher === 'lager' && p.zombie <= 0, draussen: !p.sicher || p.zombie > 0, infektion: p.zombie > 0 ? 0 : p.infektion, kleidung: p.kleidung, lampe: p.lampe,
     });
   }
@@ -2239,7 +2238,7 @@ export class SpielRaum extends Room {
     if (!x) return;
     const w = this.wv(p.ebene);
     x.fundIds = (x.fundIds ?? []).filter(id => (this.fundInhalt(id)?.length ?? 0) > 0);
-    const eintraege = x.fundIds.map(id => ({ id, art: this.state.leichen.has(id) ? 'leiche' : w.behaelter.find(q => q.id === id)?.art ?? '', dinge: [...this.fundInhalt(id)] }));
+    const eintraege = x.fundIds.map(id => ({ id, art: this.state.leichen.has(id) ? 'leiche' : w.behaelter.find(q => q.id === id)?.art ?? '', dinge: [...this.fundInhalt(id)], ...(this.state.leichen.has(id) && this.leichenMunition.has(id) && this.fundInhalt(id).includes('munition') ? { mengen: { munition: this.leichenMunition.get(id) } } : {}) }));
     client.send('fundliste', { eintraege, neu: !nur });
   }
 
@@ -2251,23 +2250,26 @@ export class SpielRaum extends Room {
     const ort = id => this.state.leichen.get(id) ?? w.behaelter.find(q => q.id === id);
     const ids = m?.alle ? [...x.fundIds] : x.fundIds.includes(m?.id) ? [m.id] : [];
     const genommenAlle = [];
+    let schussLeiche;
     for (const id of ids) {
       const o = ort(id), inhalt = this.fundInhalt(id);
       if (!o || !inhalt || (o.ebene ?? p.ebene ?? '') !== (p.ebene ?? '') || Math.hypot(o.x - p.x, o.y - p.y) > nimmWeite(w)) continue;
       const genommen = [];
-      if (m?.alle) genommen.push(...this.einpacken(p, inhalt));
+      const menge = this.state.leichen.has(id) ? this.leichenMunition.get(id) : undefined;
+      if (m?.alle) genommen.push(...this.einpacken(p, inhalt, menge));
       else {
         const i = Number(m.i);
         if (!Number.isInteger(i) || i < 0 || i >= inhalt.length) continue;
         const tmp = [inhalt[i]];
-        genommen.push(...this.einpacken(p, tmp));
+        genommen.push(...this.einpacken(p, tmp, menge));
         if (genommen.length) inhalt.splice(i, 1);
       }
       if (this.state.leichen.has(id)) this.state.leichen.get(id).rest = inhalt.length;
       else { this.setzeInhalt(id, inhalt); this.aufgaben?.gefunden(o, genommen); }
+      if (menge && genommen.includes('munition')) schussLeiche = menge;
       genommenAlle.push(...genommen);
     }
-    client.send('gefunden', { dinge: genommenAlle, rest: x.fundIds.reduce((n, id) => n + (this.fundInhalt(id)?.length ?? 0), 0) });
+    client.send('gefunden', { dinge: genommenAlle, schuss: schussLeiche, rest: x.fundIds.reduce((n, id) => n + (this.fundInhalt(id)?.length ?? 0), 0) });
     this.fundSenden(client, p, true);
   }
 
@@ -2305,23 +2307,26 @@ export class SpielRaum extends Room {
   }
 
   // Inhalt eines Behälters auswürfeln (einmalig, danach liegt er in this.inhalte)
-  // Mit Spieler p (und seinen extra-Daten x): Munitionsglück (server/munitionsglueck.mjs) hebt dessen Munitionsgewicht nach Pechserie/Lage
   befuelle(b, p = null, x = null) {
     if (this.inhalte.has(b.id)) return;
     let art = b.art;
     // Belohnung: Schrank/Spind in einem Raum hinter einer Tür mit Rätsel-Schloss
     if ((art === 'schrank' || art === 'spind') && b.tuer && this.tuerArt(`${b.id.slice(0, b.id.lastIndexOf(':'))}:${b.tuer[0]},${b.tuer[1]}`) === 'raetsel') art = 'spind_belohnung';
-    const tabelle = BEUTE[art] ?? [];
+    let tabelle = BEUTE[art] ?? [];
     const funde = [];
     const n = Math.min(5, 1 + (this.rnd() < 0.45 ? 1 : 0) + Math.round(((b.teile ?? 1) - 1) * 0.6));   // langes Regal aus mehreren Modulen: mehr Beute
-    let faktoren = this.fundFaktoren(b);
-    const glueck = p && x && !x.bot ? SpielRaum.einstellungen.munitionsglueck : null;
-    if (glueck) faktoren = mitMunitionsglueck(faktoren, p, x.munSerie, glueck);
-    for (let i = 0; i < n; i++) {
+    const faktoren = this.fundFaktoren(b), f = SpielRaum.einstellungen.funde ?? {};
+    // Möbel: nur ein Teil (Einstellung beute.moebel, Vorgabe 30 %) enthält überhaupt etwas; dort mindestens ein Gegenstand
+    const moebel = MOEBEL_ARTEN.has(art);
+    const gefuellt = !moebel || this.rnd() * 100 < (SpielRaum.einstellungen.beute?.moebel ?? MOEBEL_ANTEIL);
+    if (moebel) tabelle = tabelle.filter(Boolean);
+    for (let i = 0; i < n && gefuellt; i++) {
       const d = ziehe(tabelle, faktoren, this.rnd, BEUTE_BONUS[art]);
       if (d) funde.push(d);
     }
-    if (glueck) { const mun = munitionsDinge(p); x.munSerie = naechsteSerie(x.munSerie, funde.some(d => mun.includes(d))); }
+    // Kofferraum: Munition nur mit eigener Wahrscheinlichkeit; Bundeswehr-Container: Granatwerfer mit eigener Wahrscheinlichkeit
+    if (art === 'auto' && this.rnd() < AUTO_MUNITION && (f.munition ?? 10) > 0) funde.push('munition');
+    if (art === 'bw_container' && this.rnd() < GRANATWERFER_CHANCE) funde.push('granatwerfer');
     funde.push(...(this.aufgaben?.missionsFunde(b.id) ?? []));   // Missionsgegenstand dieses Behälters
     this.setzeInhalt(b.id, funde);
   }
@@ -2353,11 +2358,11 @@ export class SpielRaum extends Room {
   }
 
   // Gegenstände in den Rucksack (Munition direkt zur Pistole); Rest bleibt liegen
-  einpacken(p, inhalt) {
+  einpacken(p, inhalt, munMenge = MUNITION_PRO_FUND) {
     const genommen = [];
     for (let i = 0; i < inhalt.length;) {
       const d = inhalt[i];
-      if (d === 'munition') { this.munitionNehmen(p, MUNITION_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
+      if (d === 'munition') { this.munitionNehmen(p, munMenge); genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'pfeil') { p.pfeile = Math.min(PFEILE_MAX, p.pfeile + PFEILE_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
       if (d === 'granate40') { p.granaten = Math.min(GRANATEN_MAX, (p.granaten ?? 0) + GRANATEN_PRO_FUND); genommen.push(d); inhalt.splice(i, 1); continue; }
       // in die Hand bzw. anziehen, wenn frei – das braucht keinen Rucksackplatz
@@ -2379,9 +2384,9 @@ export class SpielRaum extends Room {
     if (!l) return;
     const inhalt = this.leichenInhalt.get(id) ?? [];
     if (nimm) {
-      const genommen = this.einpacken(p, inhalt);
+      const genommen = this.einpacken(p, inhalt, this.leichenMunition.get(id));
       l.rest = inhalt.length;
-      client?.send('gefunden', { dinge: genommen, rest: inhalt.length });
+      client?.send('gefunden', { dinge: genommen, rest: inhalt.length, schuss: this.leichenMunition.get(id) });
     }
     // draußen selten ein Zettel mit einem Hinweis auf einen Missionsgegenstand (Suchkreis wird halbiert)
     if (!l.fest && !l.ebene && !this.zettelBei?.has(id)) {
@@ -2426,6 +2431,11 @@ export class SpielRaum extends Room {
     let r = this.rnd() * Math.max(1, summe);
     for (const [d, g] of anteile) { r -= g; if (r < 0) { inhalt.push(d); break; } }
     const id = 'l' + (this.naechsteLeichenId++);
+    // Munition: eigene Chance (zusätzlich), Menge je Leiche fest gewürfelt; die Fundhäufigkeit „munition“ 0 schaltet sie ab
+    if (this.rnd() < LEICHE_MUNITION && (f.munition ?? 10) > 0) {
+      inhalt.push('munition');
+      this.leichenMunition.set(id, LEICHE_MUNITION_MIN + Math.floor(this.rnd() * (LEICHE_MUNITION_MAX - LEICHE_MUNITION_MIN + 1)));
+    }
     const l = new Leiche();
     l.x = z.x; l.y = z.y; l.richtung = z.richtung; l.rest = inhalt.length; l.alter = 0; l.blass = 0; l.variante = z.variante ?? 0; l.ebene = z.ebene ?? ''; l.fest = fest;
     this.state.leichen.set(id, l);
@@ -2433,7 +2443,7 @@ export class SpielRaum extends Room {
     if (fest) return id;
     // höchstens LEICHEN_MAX (ohne die festen Toten in Wohnungen): die älteste verschwindet
     const lose = [...this.state.leichen].filter(([, q]) => !q.fest);
-    if (lose.length > LEICHEN_MAX) { this.state.leichen.delete(lose[0][0]); this.leichenInhalt.delete(lose[0][0]); }
+    if (lose.length > LEICHEN_MAX) { this.state.leichen.delete(lose[0][0]); this.leichenInhalt.delete(lose[0][0]); this.leichenMunition.delete(lose[0][0]); }
     return id;
   }
 
@@ -2441,7 +2451,7 @@ export class SpielRaum extends Room {
     for (const [id, l] of this.state.leichen) {
       if (l.fest) continue;
       l.alter = (l.alter ?? 0) + dt;
-      if (l.alter > LEICHE_DAUER) { this.state.leichen.delete(id); this.leichenInhalt.delete(id); continue; }
+      if (l.alter > LEICHE_DAUER) { this.state.leichen.delete(id); this.leichenInhalt.delete(id); this.leichenMunition.delete(id); continue; }
       const b = blassStufe(LEICHE_DAUER - l.alter);
       if (l.blass !== b) l.blass = b;
     }

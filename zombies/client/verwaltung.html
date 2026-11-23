@@ -1146,19 +1146,9 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="tnHundStreuner" min="-1" max="20" step="1"><span id="tnHundStreunerWert">automatisch</span></div>
   <p class="tn-leise">Gilt für neue Welten. Mindestens ein Streuner streunt 100–300 m vom Startpunkt; die anderen verteilen sich zufällig (mindestens 40 m vom Start). Ein Streuner, der einen Spieler auf 15 m mit freier Sicht sieht, läuft zu ihm und schließt sich bei 2 m an (jeder Spieler höchstens einen). Streuner bellen alle 20–40 s, hörbar auf etwa 35 m.</p>
   <p class="tn-leise" id="bwInfoMg"></p>
-  <label for="tnMgSchritt">Munitionsglück: Zuschlag je Durchsuchung ohne Munition (multiplikativ)</label>
-  <div class="tn-zeile"><input type="range" id="tnMgSchritt" min="0" max="100" step="5"><span id="tnMgSchrittWert">20 %</span></div>
-  <label for="tnMgMax">Munitionsglück: höchster Faktor (100 % = normal, 300 % = ×3)</label>
-  <div class="tn-zeile"><input type="range" id="tnMgMax" min="100" max="500" step="10"><span id="tnMgMaxWert">300 %</span></div>
-  <label for="tnMgLeben">Munitionsglück: Leben unter … % gibt Zusatzfaktor</label>
-  <div class="tn-zeile"><input type="range" id="tnMgLeben" min="0" max="100" step="5"><span id="tnMgLebenWert">30 %</span></div>
-  <label for="tnMgLebenF">Munitionsglück: Zusatzfaktor bei wenig Leben (150 % = ×1,5)</label>
-  <div class="tn-zeile"><input type="range" id="tnMgLebenF" min="100" max="300" step="5"><span id="tnMgLebenFWert">150 %</span></div>
-  <label for="tnMgNot">Munitionsglück: Durst oder Hunger unter … % gibt Zusatzfaktor</label>
-  <div class="tn-zeile"><input type="range" id="tnMgNot" min="0" max="100" step="5"><span id="tnMgNotWert">25 %</span></div>
-  <label for="tnMgNotF">Munitionsglück: Zusatzfaktor bei Durst/Hunger (130 % = ×1,3)</label>
-  <div class="tn-zeile"><input type="range" id="tnMgNotF" min="100" max="300" step="5"><span id="tnMgNotFWert">130 %</span></div>
-  <p class="tn-leise">Munitionsglück: Wer beim Durchsuchen (Kiste, Kofferraum, Schrank) keine Munition findet, bekommt beim nächsten Mal mehr Munitionsgewicht in der Fundtabelle; ein Munitionsfund setzt es zurück. Gilt je Spieler und wird mit ihm gespeichert.</p>
+  <label for="tnBeuteMoebel">Möbel mit Inhalt: Anteil aller Möbel/Behälter in Wohnungen (Schränke, Spinde, Küche, Bad, Müll …)</label>
+  <div class="tn-zeile"><input type="range" id="tnBeuteMoebel" min="0" max="100" step="5"><span id="tnBeuteMoebelWert">30 %</span></div>
+  <p class="tn-leise">Nur dieser Anteil enthält überhaupt etwas (dann mindestens ein Gegenstand). Läden, Autos, Bus, Bundeswehr-Kisten, Leichen und Missionsgegenstände sind ausgenommen.</p>
   <label class="tn-schalter"><input type="checkbox" id="tnBwAktiv"> Stützpunkt aktiv (schießt, handelt, kann fallen)</label>
   <label for="tnBwTage">Stützpunkt fällt nach …</label>
   <div class="tn-zeile"><input type="range" id="tnBwTage" min="0" max="14" step="1"><span id="tnBwTageWert">3 Tage</span></div>
@@ -1290,13 +1280,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnHundStreuner', (e.hund || {}).streuner === undefined ? -1 : e.hund.streuner, streunerText);
     feld('tnHundAblenk', (e.hund || {}).ablenkung === undefined ? 40 : e.hund.ablenkung, function (v) { return v + ' %'; });
-    var mg = e.munitionsglueck || {};
-    feld('tnMgSchritt', mg.schritt === undefined ? 20 : mg.schritt, function (v) { return v + ' %'; });
-    feld('tnMgMax', mg.max === undefined ? 300 : mg.max, function (v) { return v + ' %'; });
-    feld('tnMgLeben', mg.lebenUnter === undefined ? 30 : mg.lebenUnter, function (v) { return v + ' %'; });
-    feld('tnMgLebenF', mg.lebenFaktor === undefined ? 150 : mg.lebenFaktor, function (v) { return v + ' %'; });
-    feld('tnMgNot', mg.notUnter === undefined ? 25 : mg.notUnter, function (v) { return v + ' %'; });
-    feld('tnMgNotF', mg.notFaktor === undefined ? 130 : mg.notFaktor, function (v) { return v + ' %'; });
+    feld('tnBeuteMoebel', (e.beute || {}).moebel === undefined ? 30 : e.beute.moebel, function (v) { return v + ' %'; });
     feld('tnLeoReich', bwe.leopardReichweite === undefined ? 29 : bwe.leopardReichweite, function (v) { return v + ' m'; });
     feld('tnLeoPause', bwe.leopardPause === undefined ? 0.4 : bwe.leopardPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnLeoSchaden', bwe.leopardSchaden === undefined ? 100 : bwe.leopardSchaden, function (v) { return String(v); });
@@ -1423,12 +1407,6 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnBissSpKochel', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { kochel: v } }; });
   regler('tnBissSpAndermatt', function (v) { return v ? v + ' %' : 'nie'; }, function (v) { return { bissSpielerLevel: { andermatt: v } }; });
   regler('tnPumaPause', function (v) { return String(v).replace('.', ',') + ' s'; }, function (v) { return { bundeswehr: { pumaPause: v } }; });
-  regler('tnMgSchritt', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { schritt: v } }; });
-  regler('tnMgMax', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { max: v } }; });
-  regler('tnMgLeben', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { lebenUnter: v } }; });
-  regler('tnMgLebenF', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { lebenFaktor: v } }; });
-  regler('tnMgNot', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { notUnter: v } }; });
-  regler('tnMgNotF', function (v) { return v + ' %'; }, function (v) { return { munitionsglueck: { notFaktor: v } }; });
   function streunerText(v) { v = Number(v); return v < 0 ? 'automatisch' : v === 0 ? 'keine' : String(v); }
   regler('tnHundStreuner', streunerText, function (v) { return { hund: { streuner: v } }; });
   regler('tnHundAblenk', function (v) { return v + ' %'; }, function (v) { return { hund: { ablenkung: v } }; });
@@ -1453,6 +1431,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   });
   regler('tnPolAnzahl', function (v) { return String(v); }, function (v) { return { polizei: { anzahl: v } }; });
   regler('tnPolMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { polizei: { munition: v } }; });
+  regler('tnBeuteMoebel', function (v) { return v + ' %'; }, function (v) { return { beute: { moebel: v } }; });
   regler('tnMgMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { bundeswehr: { mgMunition: v } }; });
   regler('tnPumaMunition', function (v) { return v ? String(v) : 'unbegrenzt'; }, function (v) { return { bundeswehr: { pumaMunition: v } }; });
   ZTYPEN.forEach(function (k) {
@@ -3690,7 +3669,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var hg = unter('🐕 Begleiter-Hund'); zeile(hg.inhalt, 'tnHundAblenk'); zeile(hg.inhalt, 'tnHundStreuner'); gruppe(hg);
   }
   var fundeGr = ausKarte(karteVon('titelFunde'), '🎒 Fundhäufigkeit');
-  if (tn) ['tnMgSchritt', 'tnMgMax', 'tnMgLeben', 'tnMgLebenF', 'tnMgNot', 'tnMgNotF'].forEach(function (id) { zeile(fundeGr.inhalt, id); });
+  if (tn) ['tnBeuteMoebel'].forEach(function (id) { zeile(fundeGr.inhalt, id); });
   gruppe(fundeGr);
   gruppe(ausKarte($('spracheKarte'), '🎙 Sprache'));
   gruppe(ausKarte($('fkKarte'), '⭐ Fähigkeiten'));
@@ -3707,8 +3686,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
-    tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite',
-    tnMgSchritt: 'munitionsglueck.schritt', tnMgMax: 'munitionsglueck.max', tnMgLeben: 'munitionsglueck.lebenUnter', tnMgLebenF: 'munitionsglueck.lebenFaktor', tnMgNot: 'munitionsglueck.notUnter', tnMgNotF: 'munitionsglueck.notFaktor',
+    tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite',
     tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
@@ -4155,7 +4133,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   // ---------- Ausrüstung ----------
   var wk = unter('Waffen'); rein('ausruestung', wk);
   titel(unter('Automatische Schussreichweite'), '🎯 Reichweiten (automatisches Schießen)'); rein('ausruestung', unter('Reichweiten'));
-  var funde = unter('Fundhäufigkeit'); titel(funde, '🎒 Funde und Munitionsglück'); rein('ausruestung', funde);
+  var funde = unter('Fundhäufigkeit'); titel(funde, '🎒 Funde'); rein('ausruestung', funde);
   rein('ausruestung', $('fkKarte'));
   rein('ausruestung', unter('Begleiter-Hund'));
 
