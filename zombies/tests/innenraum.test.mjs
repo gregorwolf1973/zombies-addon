@@ -290,7 +290,13 @@ test('Anschleichen: von hinten schleichend unbemerkt, erster Schlag mit Überras
     raum.zombieInfo.get(zid).wechsel = 99;
     p.x = ort.x; p.y = ort.y;
     // der Zombie bleibt stehen und schaut weg, solange er nichts bemerkt (hier wird nur das Bemerken geprüft)
-    const halten = setInterval(() => { if (!raum.zombieInfo.get(zid)?.ziel) { z.x = ort.x + 80; z.y = ort.y; z.richtung = 0; } }, 20);
+    // Der Spieler bleibt stehen, sobald der Zombie in Messerreichweite ist: ein weiterer Schritt (Angriffspause)
+    // würde sonst unter 8 px „ganz nah“ auslösen und den Zombie vor dem ersten Schlag aufwecken (Zufallsfehler).
+    let gestoppt = false;
+    const halten = setInterval(() => {
+      if (!raum.zombieInfo.get(zid)?.ziel) { z.x = ort.x + 80; z.y = ort.y; z.richtung = 0; }
+      if (!gestoppt && Math.hypot(z.x - p.x, z.y - p.y) < 17) { gestoppt = true; c.send('eingabe', { dx: 0, dy: 0 }); }
+    }, 20);
     c.send('eingabe', { dx: 0.4, dy: 0, s: true });     // schleichen
     try { assert.ok(await bis(() => z.hp < 100 || !raum.state.zombies.has(zid), 6000), 'kein Schlag'); } finally { clearInterval(halten); }
     // Messer von hinten: 30 × 4 = tödlich
