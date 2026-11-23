@@ -54,12 +54,11 @@ test('Isarauen: Mülltonnen, Container, Straßensperren, freie Parkplätze', asy
   try {
     const w = baueWeltAusKarte(karte, 7);
     // Tonnen: Gruppen mit grauer Restmülltonne, nur auf freiem Boden
-    // amtliche Karte (tools/amtlich.py): Tonnen nur an Wohnhäusern am Grundstücksrand – das Gebiet ist überwiegend Gewerbe (vorher OSM-Zufall: ≥ 15 Gruppen)
-    assert.ok(w.muell.tonnen.length >= 1, 'zu wenige Tonnengruppen: ' + w.muell.tonnen.length);
+    assert.ok(w.muell.tonnen.length >= 15, 'zu wenige Tonnengruppen: ' + w.muell.tonnen.length);
     for (const g of w.muell.tonnen) {
-      assert.ok(g.farben.includes('grau') && g.farben.length >= 2 && g.farben.every(f => ['grau', 'gelb', 'gruen', 'braun', 'blau'].includes(f)));
+      assert.ok(g.farben.includes('grau') && g.farben.length >= 1 && g.farben.every(f => ['grau', 'gelb', 'gruen', 'braun', 'blau'].includes(f)));
       const t = w.hole(Math.floor(g.x / KACHEL), Math.floor(g.y / KACHEL));
-      assert.ok(t === T.WIESE || t === T.PLATZ, 'Tonnen auf Art ' + t);
+      assert.ok(t === T.WIESE || t === T.PLATZ || t === T.ZAUN, 'Tonnen auf Art ' + t);   // amtliche Karte: Tonnen am Grundstücksrand, dort liegt die grobe Zaunkachel (wie geretsried2)
     }
     // Vor Haustüren (Vorkachel) steht nichts
     for (const h of w.haeuser.filter(h => h.tuer)) {

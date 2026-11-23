@@ -1,0 +1,15 @@
+{
+ "kachel": 32,
+ "px": 512,
+ "nx": 14,
+ "ny": 12,
+ "breite": 430,
+ "hoehe": 374,
+ "meterProPixel": 0.25,
+ "quelle": "\u00a9 Bayerische Vermessungsverwaltung, Digitales Orthophoto und 3D-Geb\u00e4udemodell LoD2 (CC BY 4.0)",
+ "format": "webp",
+ "foto": true,
+ "daecher": true,
+ "boden": true,
+ "bodenQuelle": "\u00a9 Bayerische Vermessungsverwaltung, ALKIS Tats\u00e4chliche Nutzung und Digitales Orthophoto (nur als Klassifizierung ausgewertet; gezeichneter Boden) (CC BY 4.0)"
+}

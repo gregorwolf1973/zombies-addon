@@ -58,6 +58,12 @@ def main():
             cmd = ["tools/osm_karte.py", s, w, n, o, g.meterProKachel, f"zombies/client/karten/{name}.json", f"--hausumringe=tools/osm/hausumringe_{name}.json"]
             if fluss: cmd.append(f"--fluss={fluss}")
             lauf(env, *cmd)
+            alt = KARTEN / f"{name}_alt.json"   # von Hand ergänzte Felder (z. B. piste in Königsdorf) aus der alten Karte übernehmen
+            if getattr(g, "uebernehmen", None) and alt.exists():
+                neu = json.loads(pfad.read_text()); ak = json.loads(alt.read_text())
+                for f in g.uebernehmen:
+                    if f in ak: neu[f] = ak[f]; print("übernommen aus", alt.name + ":", f)
+                pfad.write_text(json.dumps(neu, ensure_ascii=False))
         elif st == "luftbild": lauf(env, "tools/luftbild.py", name)
         elif st == "neben": lauf(env, "tools/nebengebaeude.py", name)
         elif st == "kulisse": lauf(env, "tools/kulisse.py", name, "alle")

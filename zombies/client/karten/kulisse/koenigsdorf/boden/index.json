@@ -1,0 +1,13 @@
+{
+ "kachel": 32,
+ "px": 512,
+ "nx": 14,
+ "ny": 12,
+ "breite": 430,
+ "hoehe": 374,
+ "meterProPixel": 0.25,
+ "quelle": "© Bayerische Vermessungsverwaltung, ALKIS Tatsächliche Nutzung und Digitales Orthophoto (nur als Klassifizierung ausgewertet; gezeichneter Boden) (CC BY 4.0)",
+ "format": "webp",
+ "foto": true,
+ "gezeichnet": true
+}

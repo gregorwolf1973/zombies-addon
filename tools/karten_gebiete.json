@@ -126,7 +126,11 @@
   "hausumringe_zip": "hausumringe/091_Oberbayern_Hausumringe.zip",
   "haus_auszug": "hausumringe/hausumringe_gebiet.json",
   "baeume_auszug": "einzelbaeume/baeume_gebiet_125046.json",
-  "blatt": "125046"
+  "blatt": "125046",
+  "uebernehmen": [
+   "piste"
+  ],
+  "hinweis": "piste (Landebahn, Rollweg) ist von Hand in der Karten-JSON gepflegt und wird aus koenigsdorf_alt.json übernommen"
  },
  "kochel": {
   "bbox": [
@@ -168,6 +172,6 @@
   "hausumringe_zip": "hausumringe/091_Oberbayern_Hausumringe.zip",
   "haus_auszug": "hausumringe/hausumringe_gebiet.json",
   "baeume_auszug": "einzelbaeume/baeume_gebiet_125046.json",
-  "blatt": null
+  "blatt": "124041"
  }
 }

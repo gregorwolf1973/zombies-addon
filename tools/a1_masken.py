@@ -1,7 +1,9 @@
 from lb_common import *
 import time;t=time.time()
 tn=read_shp(TNSHP,BBOX);print(len(tn),round(time.time()-t))
-names=sorted({a['nutzart'] for _,_,a in tn});print(names)
+# feste Codes 1..15 (wie geretsried2; amtlich.py rechnet mit ihnen), weitere Nutzungsarten dieser Karte (Friedhof, Flugverkehr, Moor …) danach
+FEST=['Bahnverkehr','Fließgewässer','Fläche besonderer funktionaler Prägung','Fläche gemischter Nutzung','Gehölz','Industrie- und Gewerbefläche','Landwirtschaft','Platz','Sport-, Freizeit- und Erholungsfläche','Stehendes Gewässer','Straßenverkehr','Unland/Vegetationslose Fläche','Wald','Weg','Wohnbaufläche']
+names=FEST+sorted({a['nutzart'] for _,_,a in tn}-set(FEST));print(names)
 code={n:i+1 for i,n in enumerate(names)}
 json.dump(code,open(NPY+'tn_codes.json','w'),ensure_ascii=False)
 img=Image.new('L',(W,H),0);d=ImageDraw.Draw(img)

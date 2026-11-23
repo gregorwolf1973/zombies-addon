@@ -32,6 +32,7 @@ SAETTIGUNG, HELLIGKEIT = 0.85, 0.88
 QUALITAET = 68
 RAND = 16               # Rand beim Rechnen (Median), wird abgeschnitten
 SP = 32                 # Spielpixel je Kachel
+FLACHDACH_DM, FLACHDACH_FARBE = 80, "#8c8f92"   # Ersatzdach für Gebäude ohne LoD2-Dach
 # Autos im Luftbild erkennen (--autos): belegte Stellplätze (kulisse_plaetze.mjs) → autosLuftbild in der Karten-JSON, Foto-Autos dort abgeschwächt.
 # Aus, solange die Erkennung ungenau ist (Stellplätze des Spiels liegen nicht genau auf den echten Plätzen): dann werden Autos auf Parkplätzen und
 # Fahrbahnen im Foto verwischt (Median) und das Spiel zeichnet die eigenen Autos.
@@ -320,6 +321,16 @@ def daecher(name, karte, K):
         stat[art] += 1; belegt.add(treffer)
         erg.append({"k": [geb[treffer][0], geb[treffer][1]], "h": b["h"], "t": b["t"], "f": b["f"]})
     print("Zuordnung:", stat, f"(Schwerpunkt im Umriss: {stat['schwerpunkt'] / max(1, len(roh)) * 100:.1f} %, mit Rückfällen {(len(roh) - stat['ohne']) / max(1, len(roh)) * 100:.1f} % von {len(roh)} LoD2-Gebäuden)")
+    # Gebäude ohne LoD2-Dach (Neubauten, z. B. Einkaufszentren): schlichtes graues Flachdach (Höhe 8 m) statt weißer Fläche
+    ohne_dach = 0; aenderung = False
+    for i, (gx, gy, u) in enumerate(geb):
+        if i in belegt: continue
+        erg.append({"k": [gx, gy], "h": FLACHDACH_DM, "t": FLACHDACH_DM, "f": [{"p": [round(c * SP) for c in u], "n": 0, "a": -1, "e": FLACHDACH_DM}]}); ohne_dach += 1
+        for g in karte["gebaeude"]:
+            if g.get("umriss") and g["x"] == gx and g["y"] == gy and (g.get("dach") != FLACHDACH_FARBE or g.get("dachart") != "flach"):
+                g["dach"] = FLACHDACH_FARBE; g["dachart"] = "flach"; g.pop("first", None); g.pop("dachhell", None); aenderung = True
+    if aenderung: (KARTEN / f"{name}.json").write_text(json.dumps(karte, ensure_ascii=False))
+    print(f"Gebäude ohne LoD2-Dach: {ohne_dach} bekommen ein graues Flachdach")
     ziel = KARTEN / "kulisse" / name; ziel.mkdir(parents=True, exist_ok=True)
     (ziel / "daecher.json").write_text(json.dumps({"einheit": "Spielpixel (32 je Kachel); h, t, e in Dezimetern; n, a in Grad", "g": erg}, separators=(",", ":")))
     index_schreiben(ziel, {"quelle": QUELLE, "daecher": True})

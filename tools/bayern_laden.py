@@ -115,11 +115,15 @@ def teil_baeume(g):
     gpkg = g.wurzel / "einzelbaeume" / f"{g.blatt}_baeume.gpkg"
     holen(f"https://geodaten.bayern.de/odd/m/8/baeume3d/data/{g.blatt}_baeume.gpkg", gpkg)
     c = sqlite3.connect(f"file:{gpkg}?mode=ro", uri=True); x0, y0, x1, y1 = g.tn_bbox
-    q = ("select b.fid,b.geom,b.dgmhoehe,b.baumhoehe from rtree_Baumstandorte_geom r join Baumstandorte b on b.fid=r.id "
-         "where r.maxx>=? and r.minx<=? and r.maxy>=? and r.miny<=? order by b.fid")
+    tabellen = {r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+    if "Baumstandorte" in tabellen: namen = ["Baumstandorte"]      # Blatt 125046: eine Tabelle
+    else: namen = [f"{n}_trees" for n in range(int(y0 // 1000), int(y1 // 1000) + 1) if f"{n}_trees" in tabellen]   # z. B. Blatt 124041: eine Tabelle je km-Reihe (Nordwert)
     erg = []
-    for fid, geom, d, h in c.execute(q, (x0, x1, y0, y1)):
-        x, y = struct.unpack("<2d", geom[13:29]); erg.append([fid, round(x, 1), round(y, 1), d, h])
+    for t in namen:
+        q = (f"select b.fid,b.geom,b.dgmhoehe,b.baumhoehe from rtree_{t}_geom r join '{t}' b on b.fid=r.id "
+             "where r.maxx>=? and r.minx<=? and r.maxy>=? and r.miny<=? order by b.fid")
+        for fid, geom, d, h in c.execute(q, (x0, x1, y0, y1)):
+            x, y = struct.unpack("<2d", geom[13:29]); erg.append([fid, round(x, 1), round(y, 1), d, h])
     erg.sort(key=lambda e: -e[2])   # wie der erste Auszug (von Nord nach Süd)
     ziel.parent.mkdir(parents=True, exist_ok=True); ziel.write_text(json.dumps(erg, separators=(",", ":")))
     print(f"  Bäume im Auszug: {len(erg)}")
@@ -132,7 +136,11 @@ def teil_osm(g):
     s, w, n, o = g.bbox
     q = f'[out:json][timeout:60];node["highway"="crossing"]({s},{w},{n},{o});out body;'
     req = urllib.request.Request(os.environ.get("OVERPASS_URL", "https://overpass-api.de/api/interpreter"), data=urllib.parse.urlencode({"data": q}).encode(), headers={"User-Agent": UA})
-    el = json.loads(urllib.request.urlopen(req, timeout=120).read())["elements"]
+    for versuch in range(4):
+        try: el = json.loads(urllib.request.urlopen(req, timeout=120).read())["elements"]; break
+        except Exception as e:
+            if versuch == 3: raise
+            print("  Overpass Wiederholung", e, file=sys.stderr, flush=True); time.sleep(10 + 20 * versuch)
     erg = []
     for e in el:
         t = e.get("tags", {}); typ = t.get("crossing") or ("zebra" if t.get("crossing_ref") == "zebra" else "unmarked")
