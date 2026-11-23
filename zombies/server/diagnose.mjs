@@ -31,7 +31,7 @@ export function bereinige(roh) {
       art: 'kpi', fps: zahl(k.fps, 0, 1000), ping: zahl(k.ping, 0, 1e5, 0), kbs: zahl(k.kbs, 0, 1e6),
       zoom: zahl(k.zoom, 0, 100, 2), bild: text(k.bild, 16), dev: text(k.dev, 60), karte: text(k.karte, 32),
       drinnen: k.drinnen === true || k.drinnen === 1, ton: text(k.ton, 20), stumm: zahl(k.stumm, 0, 1e6, 0), verdraengt: zahl(k.verdraengt, 0, 1e6, 0),
-      zombies: zahl(k.zombies, 0, 1e5, 0),
+      zombies: zahl(k.zombies, 0, 1e5, 0), verz: zahl(k.verz, 0, 1e5, 0), offen: zahl(k.offen, 0, 1e4, 0), offenMax: zahl(k.offenMax, 0, 1e4, 0),
     });
   }
   for (const t of (Array.isArray(roh.ton) ? roh.ton : []).slice(0, 5)) {

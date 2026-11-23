@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.84.2 – 23.11.2026
+
+- Behoben: Am Schießstand konnte man seit 0.78.0 nicht mehr laufen.
+- Behoben: Seit dem langsameren Tempo blieben jagende Zombies knapp außer Reichweite stehen – sie bissen kaum noch, und das Messer traf nur, wenn man selbst auf sie zuging. Zombies kommen jetzt bis zur Berührung heran.
+- In Gebäuden stöhnen Zombies seltener und klingen so laut, wie sie wirklich entfernt sind (vorher wirkte drinnen jeder Zombie „ganz nah“).
+- Straßen: Wo eine Straße schmaler oder breiter wird, läuft die Breite jetzt weich aus statt in einer Stufe; Gehwege folgen den Ausbeulungen des Fahrbahnrands.
+- Diagnose: Anzeigeverzögerung und Rückstand der Eingaben werden mitprotokolliert (Suche nach dem Zeitversatz bei Treffern).
+
 ## 0.84.1 – 23.11.2026
 
 - Behoben: Das Laden blieb bei 85 % („Generiere Welt … zeichne Karte“) hängen, sobald ein ausgebranntes Autowrack in der Nähe war (Fehler in der neuen Wrack-Animation).

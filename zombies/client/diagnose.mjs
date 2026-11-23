@@ -84,6 +84,7 @@ export class Sammler {
       kbs: Math.round(this.bytes / 1024 / sek * 10) / 10,
       zoom: ctx.zoom ?? null, bild: ctx.bild ?? '', dev: this.geraet, karte: ctx.karte ?? '', drinnen: !!ctx.drinnen,
       ton: ctx.ton ?? '', stumm: this.stumm, verdraengt: this.verdraengt, zombies: ctx.zombies ?? null,
+      verz: ctx.verz ?? null, offen: ctx.offen ?? null, offenMax: ctx.offenMax ?? null,
     };
     this.frames = 0; this.bytes = 0; this.seit = t; this.stumm = 0; this.verdraengt = 0;
     return this.abschicken({ kpi: k }) && k;

@@ -421,6 +421,9 @@ export class SpielRaum extends Room {
       x.eingabe = { dx: w.dx, dy: w.dy, s: w.s };
       if (w.d <= 1e-4) { x.warte.shift(); p.seq = w.n; }
     }
+    // Diagnose: wie weit hängt die Abarbeitung der Eingaben hinterher (Sekunden noch nicht abgearbeiteter Bewegung)?
+    let rest = 0; for (const w of x.warte) rest += w.d;
+    if (rest > 0.5 && Date.now() - (x.rueckstandLog ?? 0) > 5000) { x.rueckstandLog = Date.now(); console.log(`[diag] Eingabe-Rückstand ${p.name}: ${rest.toFixed(2)} s (${x.warte.length} Stücke, Guthaben ${(x.guthaben ?? 0).toFixed(2)})`); }
     return schritte;
   }
 

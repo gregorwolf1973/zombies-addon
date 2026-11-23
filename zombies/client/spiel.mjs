@@ -138,7 +138,9 @@ ton.diagnoseHaken((art, d) => {
 });
 function diagKontext() {
   const sz = chatSzene, ich = sz?.lokal;
-  return { zoom: sz?.zoomWahl ? Math.round(sz.zoomWahl * 100) / 100 : null, bild: `${window.innerWidth}x${window.innerHeight}`, karte: raum?.state?.karte || '', drinnen: !!sz?.aktEbene, ton: ton.kontextZustand(), zombies: sz?.zombies?.size ?? null };
+  const offenMax = sz?.offenMax ?? null; if (sz) sz.offenMax = 0;   // Spitze je Bericht
+  return { zoom: sz?.zoomWahl ? Math.round(sz.zoomWahl * 100) / 100 : null, bild: `${window.innerWidth}x${window.innerHeight}`, karte: raum?.state?.karte || '', drinnen: !!sz?.aktEbene, ton: ton.kontextZustand(), zombies: sz?.zombies?.size ?? null,
+    verz: sz?.puffer?.verz != null ? Math.round(sz.puffer.verz) : null, offen: sz?.offen?.length ?? null, offenMax };   // Anzeigeverzögerung (ms), unbestätigte Eingabestücke (jetzt / Spitze seit letztem Bericht)
 }
 function diagStarten(r) {
   diagSitzung = r.sessionId;
@@ -3204,6 +3206,7 @@ class Ort extends Phaser.Scene {
       raum.send('e', feld);
       this.offen.push(stueck);
       if (this.offen.length > 120) this.offen.shift();
+      if (this.offen.length > (this.offenMax ?? 0)) this.offenMax = this.offen.length;
       this.gesendet = { dx, dy, s, f, t: jetzt };
     }
     // Drehzone: Blickrichtung im Stand melden (Mitspieler sehen Figur und Lampenkegel), höchstens alle 100 ms
