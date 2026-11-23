@@ -23,7 +23,7 @@ export function wrackAnimieren(scene, o, id, f, dt, lokal, aktEbene) {
     if (o.russ) { o.russ.destroy(); o.russ = null; }
     return;
   }
-  const [l, b] = fzPx('auto');
+  const [l, b] = fzPx('pkw') ?? [36, 16];   // Wracks sind ausgebrannte Pkw ('auto' gibt es in FZ_M nicht – Absturz in 0.84.0)
   o.muster ??= wrackMuster(id, l, b);
   const nah = !aktEbene && lokal && Math.hypot(o.x - lokal.x, o.y - lokal.y) < WRACK_NAEHE;
   // Rußfleck am Boden (einmal gezeichnet, neu bei Verschieben)

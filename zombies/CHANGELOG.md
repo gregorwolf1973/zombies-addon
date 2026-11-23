@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.84.1 – 23.11.2026
+
+- Behoben: Das Laden blieb bei 85 % („Generiere Welt … zeichne Karte“) hängen, sobald ein ausgebranntes Autowrack in der Nähe war (Fehler in der neuen Wrack-Animation).
+
 ## 0.84.0 – 22.11.2026
 
 - Neu: Laufstick mit Drehzone – in den ersten 2 mm Fingerweg drehen sich Figur und Taschenlampe nur in die Zugrichtung, danach läuft man los (Android vibriert kurz an der Grenze). Die Lampe bleibt nach dem Loslassen in der gewählten Richtung, Mitspieler sehen die Drehung.
