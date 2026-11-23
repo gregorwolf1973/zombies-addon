@@ -94,8 +94,8 @@ function vorbereiten(welt) {
     for (let i = 0; i + 1 < l.pts.length; i++) {
       const [ax, ay] = l.pts[i], [bx, by] = l.pts[i + 1];
       if (!bebaut((ax + bx) / 2, (ay + by) / 2)) { teil = null; continue; }
-      if (!teil) { teil = [l.pts[i]]; l.gehTeile.push(teil); }
-      teil.push(l.pts[i + 1]);
+      if (!teil) { teil = [l.pts[i]]; teil.i0 = i; l.gehTeile.push(teil); }
+      teil.push(l.pts[i + 1]); teil.i1 = i + 1;
     }
   }
   // Bordstein nur an Straßen mit Gehweg; sonst weicher Rand Asphalt → Wiese/Erde
@@ -579,13 +579,37 @@ function weichLinie(pts, knoten) {
   }
   return p;
 }
-function dichtL(l, v) { return l._d ?? (l._d = dichten(AUTO.has(l.t) || l.t === 'service' || l.t === 'pedestrian' ? l.pts : weichLinie(l.pts, v.knoten), v.knoten)); }
+function dichtL(l, v) {
+  if (l._d) return l._d;
+  const d = l._d = dichten(AUTO.has(l.t) || l.t === 'service' || l.t === 'pedestrian' ? l.pts : weichLinie(l.pts, v.knoten), v.knoten);
+  d.tap = verjuengung(l, v, d);
+  return d;
+}
+// Springt die Fahrbahnbreite an einem Anschlusspunkt zweier Linien (z. B. 3 Spuren → 2 Spuren), läuft die Breite beidseitig weich auf den Mittelwert zu
+// (Länge TAPER, Ableitung 0 an beiden Enden), statt in einer Stufe zu springen. Alle Randebenen (Asphalt, Bordstein, Gehweg, Saum, Ausfransungen) nutzen
+// dieselbe Verschiebung d.tap[j] (px, nach außen), weil wandern() sie auf jeden seitlichen Versatz addiert.
+const TAPER = 20 * 8;
+function verjuengung(l, v, d) {
+  if (!(AUTO.has(l.t) || l.t === 'service')) return null;
+  if (!v.enden) { v.enden = new Map(); for (const m of v.linien) if (AUTO.has(m.t) || m.t === 'service') for (const e of [0, 1]) { const k = knotenSchluessel(m.pts[e ? m.pts.length - 1 : 0]); (v.enden.get(k) ?? v.enden.set(k, []).get(k)).push(m); } }
+  const fb = fahrbahn(l), S = d.s[d.n - 1]; let tap = null;
+  for (const ende of [0, 1]) {
+    const k = knotenSchluessel(l.pts[ende ? l.pts.length - 1 : 0]);
+    if ((v.knoten.get(k) ?? 0) !== 2) continue;
+    const nb = (v.enden.get(k) ?? []).find(m => m !== l); if (!nb) continue;
+    const dv = (fahrbahn(nb) - fb) / 4;           // halbe Breitenänderung je Seite, Ziel = Mittelwert beider Breiten
+    if (Math.abs(dv) < 0.5) continue;
+    const L = Math.min(TAPER, S / 2); tap ??= new Float32Array(d.n);
+    for (let j = 0; j < d.n; j++) { const dist = ende ? S - d.s[j] : d.s[j]; if (dist < L) { const w = 1 - dist / L; tap[j] += dv * w * w * (3 - 2 * w); } }
+  }
+  return tap;
+}
 // seitlich um o versetzte, weich schwankende Linie: comps = [[Amplitude px, Seed, Wellenlänge px], …]
 function wandern(d, o, comps) {
   const out = new Array(d.n);
   for (let j = 0; j < d.n; j++) {
     let off = o, r = 0; for (const c of comps) r += typeof c === 'function' ? c(d.s[j]) : c[0] * rausch(d.s[j], c[2], c[1]);
-    off += r * d.f[j];
+    off += r * d.f[j]; if (d.tap && o) off += o > 0 ? d.tap[j] : -d.tap[j];
     out[j] = [d.x[j] + d.mx[j] * off, d.y[j] + d.my[j] * off];
   }
   return out;
@@ -593,8 +617,30 @@ function wandern(d, o, comps) {
 // ein einzelner Punkt j der versetzten Linie
 function wandern1(d, j, o, comps) {
   let r = 0; for (const c of comps) r += typeof c === 'function' ? c(d.s[j]) : c[0] * rausch(d.s[j], c[2], c[1]);
-  const off = o + r * d.f[j];
+  const off = o + r * d.f[j] + (d.tap && o ? (o > 0 ? d.tap[j] : -d.tap[j]) : 0);
   return [d.x[j] + d.mx[j] * off, d.y[j] + d.my[j] * off];
+}
+// Ausschnitt der dichten Elternlinie für ein Gehweg-Teilstück (Eckpunkte i0…i1 von l.pts); Bogenlänge s bleibt die der Elternlinie
+const GEHWEG_AUS = 6 * 8;
+function teilAusschnitt(l, t, d) {
+  if (t._d) return t._d;
+  if (t.i0 === undefined) return t._d = d;
+  let sv0 = 0, sv1 = 0;
+  for (let i = 1; i <= t.i1; i++) { sv1 += Math.hypot(l.pts[i][0] - l.pts[i - 1][0], l.pts[i][1] - l.pts[i - 1][1]); if (i === t.i0) sv0 = sv1; }
+  if (t.i0 === 0) sv0 = 0;
+  let j0 = 0, j1 = d.n - 1;
+  while (j0 < d.n && d.s[j0] < sv0 - 0.05) j0++;
+  while (j1 > j0 && d.s[j1] > sv1 + 0.05) j1--;
+  if (j1 <= j0) return t._d = null;
+  const sl = a => a.slice(j0, j1 + 1), n = j1 - j0 + 1;
+  // Endet das Teilstück mitten auf der Linie (Bebauung hört auf), läuft der Gehweg über ~6 m unter den Fahrbahnrand aus statt abrupt zu enden
+  let tap = d.tap ? sl(d.tap) : null;
+  for (const [vorn, wo] of [[t.i0 > 0, 0], [t.i1 < l.pts.length - 1, 1]]) {
+    if (!vorn) continue;
+    tap ??= new Float32Array(n);
+    for (let j = 0; j < n; j++) { const dist = wo ? d.s[j1] - d.s[j0 + j] : d.s[j0 + j] - d.s[j0]; if (dist < GEHWEG_AUS) { const w = 1 - dist / GEHWEG_AUS; tap[j] -= (GEHWEG + 1) * w * w * (3 - 2 * w); } }
+  }
+  return t._d = { n, x: sl(d.x), y: sl(d.y), s: sl(d.s), mx: sl(d.mx), my: sl(d.my), f: sl(d.f), tap };
 }
 // Teilstück der dichten Linie zwischen den Bogenlängen s0 und s1
 function pfadAb(d, s0, s1) {
@@ -747,8 +793,8 @@ export function zeichneStrassen(ctx, welt, rect) {
   // Nur auf freiem Gelände (Straße, Platz, ungezäunte Wiese): nicht über Häusern, Gärten, Zäunen und Wasser.
   const gehwege = hier.filter(l => AUTO.has(l.t));
   // Gehweg-Außenkante schwankt ±0,25 m, die Innenkante liegt unter der Fahrbahn (verdeckt)
-  const gehStreifen = (l, d, fb, seite, breite, mitBeule = true) => {
-    const sd = seedKante(l, seite) + 4, comp = [[2.0, sd, WL], [0.6, sd + 50, 33], ...(mitBeule ? [beule(l, seite)] : [])];
+  const gehStreifen = (l, d, fb, seite, breite) => {
+    const sd = seedKante(l, seite) + 4, comp = [[2.0, sd, WL], [0.6, sd + 50, 33], beule(l, seite)];
     const innen = wandern(d, seite * (fb / 2 - 3), []), aussen = wandern(d, seite * (fb / 2 + breite), comp);
     const aussen2 = wandern(d, seite * (fb / 2 + breite + 1.2), comp);
     bandPfad(ctx, innen, aussen2); ctx.fillStyle = 'rgba(88,86,80,.55)'; ctx.fill();
@@ -767,10 +813,10 @@ export function zeichneStrassen(ctx, welt, rect) {
     gehwegClip(ctx, welt, r);
     for (const l of gehwege) {
       if (l.gl !== undefined || l.gr !== undefined) continue;
-      const fb = fahrbahn(l);
+      const fb = fahrbahn(l), dl = dichtL(l, v);
       for (const t of l.gehTeile ?? []) {
-        const d = t._d ?? (t._d = dichten(t, v.knoten));
-        for (const seite of [1, -1]) gehStreifen(l, d, fb, seite, GEHWEG, false);   // Teilstücke haben eigene Bogenlänge: ohne Beule
+        const d = teilAusschnitt(l, t, dl);   // Teilstück der dichten Elternlinie: gleiche Bogenlänge, Ausblendung und Verjüngung wie Asphalt und Bordstein
+        if (d) for (const seite of [1, -1]) gehStreifen(l, d, fb, seite, GEHWEG);
       }
     }
     ctx.restore();
@@ -1201,3 +1247,5 @@ function strassenNamen(ctx, v, r) {
   }
   ctx.restore();
 }
+// nur für Tests: Randverschiebung der Straßenseiten
+export const _randTest = { vorbereiten, dichtL, wandern, beule, teilAusschnitt, fahrbahn, seedKante };
