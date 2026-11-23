@@ -1174,6 +1174,8 @@ class Ort extends Phaser.Scene {
     raum.onMessage('weg', m => { this.puff(m.x, m.y); if (istEigen(m, meineId)) ton.zombieWeg(null, null); else if (hoertEbene(m)) ton.zombieWeg(m.x, m.y); });   // eigener Kill immer hörbar
     raum.onMessage('entdeckt', m => { if (hoertEbene(m)) ton.entdeckt(m.x, m.y); });
     raum.onMessage('tonEinst', m => { if (m?.zombieSicht) zombieSichtEinst = m.zombieSicht; if (m?.toene) ton.toeneZuordnen(m.toene); ton.toneEinstellungen(m); });   // Backend hat Musik/Radio/Horde geändert
+    raum.onMessage('funkAnsage', () => { ton.ereignis('funkAnsage'); });   // Sprachansage nach dem Funkspruch (ohne zugeordnete Datei bleibt es still)
+    raum.onMessage('versorgung', () => { this.leereKisten?.clear(); });   // neue Bundeswehr-Versorgung: Munitionskisten wieder sichtbar
     raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
     raum.onMessage('weltFalsch', m => {
@@ -3661,17 +3663,9 @@ class Ort extends Phaser.Scene {
       balkenSetzen('hp', ich.hp);
       balkenSetzen('durst', ich.durst);
       balkenSetzen('hunger', ich.hunger);
-      const wf = WAFFEN[ich.waffe], d = DINGE[ich.waffe];
-      const pfeile = ich.pfeile && !wf?.pfeil ? ` · ${dingIcon('pfeil', 18, '➶')} ${ich.pfeile} Pfeile` : '';
-      let waffe;
-      if (!wf) waffe = `${dingIcon('faust', 16, '✊')} Unbewaffnet – stoßen${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
-      else if (wf.fern) {
-        // „🔫 Pistole 12/15 · 48“: Magazin/Max · Vorrat (Pfeile bzw. Granaten beim Armbrust/Granatwerfer)
-        const vorrat = vorratVon(ich, wf), leer = !(ich.magazin > 0) && vorrat <= 0;
-        waffe = `${dingIcon(ich.waffe, 16)} ${d.name} ${ich.magazin ?? 0}/${ich.magmax || wf.magazin} · ${vorrat}${ich.nachladen > 0 ? ` · <b style="color:#ffb300">🔄 Nachladen … ${Math.round(Math.min(1, ich.nachladen) * 100)} %</b>` : leer ? ' – leer, stoßen' : ''}${wf.pfeil || wf.granate ? '' : pfeile}`;
-      } else waffe = `${dingIcon(ich.waffe, 16)} ${d.name}${ich.munition ? ` · ${dingIcon('munition', 18)} ${ich.munition} Schuss` : ''}${pfeile}`;
-      htmlSetzen('waffe', waffe + (ich.kleidung > 0 ? ` · 🧥 ${Math.ceil(ich.kleidung)} %` : '')
-        + (ich.lampe > 0 ? ` · 🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''));
+      // Die frühere Textzeile „Waffe in der Hand“ (dritte Waffenanzeige) ist weg: Waffen zeigen nur noch die Waffenfelder (Platz 1, Platz 2, Faust).
+      // Übrig bleiben Kleidung und Taschenlampe.
+      htmlSetzen('waffe', [ich.kleidung > 0 ? `🧥 ${Math.ceil(ich.kleidung)} %` : '', ich.lampe > 0 ? `🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''].filter(Boolean).join(' · '));
       this.waffenplaetzeZeigen(ich);   // Waffenfelder (Antippen wechselt, Doppeltippen lädt nach, Taste R lädt auch nach)
       this.granatenfeldZeigen(ich);
       textSetzen('besiegt', `besiegt ${ich.besiegt} / ${Math.max(s.besiegt, ich.besiegt)}`); $('besiegt').title = 'besiegt: von dir / gesamt';
@@ -3770,7 +3764,7 @@ class Ort extends Phaser.Scene {
   }
 
   // Waffenfelder (zwei Plätze, im HUD oben links unter den Mitspielern): großes Waffensymbol, nur das Magazin „3/15“ (Nahwaffe: nichts).
-  // Antippen wechselt, Doppeltippen lädt nach, gedrückt halten bzw. Rechtsklick öffnet das Menü; Taste F wechselt, R lädt nach, X = Faust.
+  // Antippen wechselt, Doppeltippen lädt nach, gedrückt halten bzw. Rechtsklick öffnet das Menü; Taste F wechselt, R lädt nach, X = Faust (eigenes drittes Feld „Faust“ rechts daneben).
   // Ohne Waffe in der Hand (leer oder Faust) kämpft die Figur mit der Faust.
   waffenplaetzeZeigen(ich) {
     const leiste = $('waffenplaetze');
@@ -3812,6 +3806,17 @@ class Ort extends Phaser.Scene {
         };
         leiste.appendChild(b);
       });
+      // drittes Feld „Faust“: nichts in der Hand (nützlich, um das automatische Schießen abzustellen); Antippen schaltet zwischen Faust und Waffe (wie Taste X)
+      const fb = document.createElement('button');
+      fb.type = 'button'; fb.id = 'faustfeld';
+      fb.className = 'faust' + (ich.faust ? ' aktiv' : '');
+      fb.innerHTML = `<span class="zz">${dingIcon('faust', 40, '✊')}</span>`;
+      fb.title = 'Faust: Waffe wegstecken, nicht schießen (Taste X; nochmal = Waffe zurück)';
+      fb.setAttribute('aria-label', fb.title);
+      fb.setAttribute('aria-pressed', ich.faust ? 'true' : 'false');
+      fb.addEventListener('pointerdown', e => e.stopPropagation());   // nicht zum Laufstick/Spielfeld durchreichen
+      fb.onclick = e => { e.stopPropagation(); raum.send('faust'); };
+      leiste.appendChild(fb);
     }
     const lad = ich.faust ? null : leiste.children[akt]?.querySelector('.lad');   // Nachladefortschritt (ohne Neuaufbau)
     if (lad) lad.style.width = ich.nachladen > 0 ? `${Math.round(Math.min(1, ich.nachladen) * 100)}%` : '0';

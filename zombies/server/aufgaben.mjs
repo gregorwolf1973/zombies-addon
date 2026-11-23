@@ -400,6 +400,8 @@ export class Aufgaben {
     this.aktualisieren(false);
     const a = s.aufgaben.get('funk'); if (a) { a.erledigt = true; a.fortschritt = a.ziel; this.raum.xpAlle?.('aufgabe'); }
     this.raum.broadcast('meldung', { text: `📻 ${p.name} hat den Funkspruch abgesetzt – ${this.fz().der} kommt um ${hhmm(s.busAnkunft)} zum Ortsausgang!`, lang: true });
+    // Sprachansage (ohne Uhrzeit) an ALLE: Der Funkspruch betrifft die ganze Gruppe, und nur der Absender hat das Funkgerät – die anderen müssen sich ebenfalls bereithalten
+    this.raum.broadcast('funkAnsage', {});
     this.aktualisieren();
   }
 

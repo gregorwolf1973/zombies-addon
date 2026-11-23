@@ -512,7 +512,7 @@ export const BEUTE = {
   erstehilfe: ['verband', 'verband', 'verband', 'spritze', null],
   // Bundeswehr-Stützpunkt (Teil 2 ergänzt hier die neuen Waffen)
   // Handgranaten häufiger, Maschinenpistole und Maschinengewehr selten (nur hier zu finden)
-  bw_kiste: ['munition', 'munition', 'munition', 'verband', 'essen', 'wasser', 'taschenlampe', 'granate', 'granate', 'mp', 'pfeil', 'granate40', null],   // MG/Scharfschütze der Kiste: raum.mjs (durchsucht), nicht hier
+  bw_kiste: [],   // Munitionskisten: kein Zufallsinhalt mehr – Bundeswehr-Versorgung je Spieler alle 2 Tage (server/versorgung.mjs, raum.mjs durchsucht)
   bw_container: ['munition', 'munition', 'munitionskiste', 'munitionskiste', 'verband', 'verband', 'spritze', 'essen', 'essen', 'wasser', 'wasser', 'taschenlampe', 'granate', 'granate', 'granate', 'mp', 'mg', 'mg', 'scharfschuetze', 'pfeil', 'granatwerfer', 'granate40', 'granate40', null],
   // Polizeiwache (OSM amenity=police): Pistolen, Schrot, selten Maschinenpistole, Maschinengewehr, Scharfschützengewehr
   laden_polizei: ['munition', 'munition', 'munitionskiste', 'verband', 'taschenlampe', 'pistole', 'pistole', 'schrotflinte', 'mp', 'mg', 'mg', 'scharfschuetze', 'funkgeraet', null],
@@ -548,7 +548,7 @@ export const HANDEL = {
     name: 'Soldat', zeichen: '🎖',
     angebote: [
       { id: 'granate', gibt: 'granate', menge: 1, kostet: { anzahl: 2, aus: ['essen'] } },
-      { id: 'munition', gibt: 'munition', menge: 100, kostet: { anzahl: 3, aus: ['essen', 'wasser', 'verband'] } },
+      { id: 'munition', gibt: 'munition', menge: 30, kostet: { anzahl: 3, aus: ['essen', 'wasser', 'verband'] } },
     ],
   },
 };

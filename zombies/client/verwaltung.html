@@ -2626,7 +2626,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     ['Zombies', ['zombies'], ['kriecher', 'stoehnen', 'entdeckt', 'horde', 'hordeAkzent', 'zombieTod', 'zombielandTag', 'zombielandNacht', 'nachteinbruch'], ['menschGebissen', 'hilferufe']],
     ['Menschen', [], ['menschGebissen', 'hilferufe', 'durstMann', 'durstFrau', 'chatKlingel']],
     ['Fahrzeuge & Radio', ['fahrzeuge'], ['autoradio', 'radio', 'autoVorbei', 'sirene', 'krankenwagen', 'krach', 'blech', 'aufprall'], ['panzerFaehrt']],
-    ['Bundeswehr & Lager', ['bundeswehr'], ['soldatRuf', 'funk', 'panzerFaehrt']],
+    ['Bundeswehr & Lager', ['bundeswehr'], ['soldatRuf', 'funk', 'funkAnsage', 'panzerFaehrt']],
     ['Haus & Türen', ['tueren'], ['truheLeer']],
     ['Umgebung', ['umgebung', 'tiere'], ['stadt', 'wasser', 'feuer', 'hundBellen', 'nachteinbruch']],
     ['Musik (je Level, Lager, Horde, Finale)', ['spielmusik'], ['startmusik']],
@@ -2636,7 +2636,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     // feste Zuordnung je id; sonst nach Gruppe der Ereignisliste
     var ausnahmen = { menschGebissen: 'Menschen', hilferufe: 'Menschen', durstMann: 'Menschen', durstFrau: 'Menschen', chatKlingel: 'Menschen', truheLeer: 'Haus & Türen',
       autoradio: 'Fahrzeuge & Radio', radio: 'Fahrzeuge & Radio', autoVorbei: 'Fahrzeuge & Radio', sirene: 'Fahrzeuge & Radio', krankenwagen: 'Fahrzeuge & Radio',
-      panzerFaehrt: 'Bundeswehr & Lager', funk: 'Bundeswehr & Lager', soldatRuf: 'Bundeswehr & Lager', startmusik: 'Musik (je Level, Lager, Horde, Finale)',
+      panzerFaehrt: 'Bundeswehr & Lager', funk: 'Bundeswehr & Lager', funkAnsage: 'Bundeswehr & Lager', soldatRuf: 'Bundeswehr & Lager', startmusik: 'Musik (je Level, Lager, Horde, Finale)',
       stadt: 'Umgebung', wasser: 'Umgebung', feuer: 'Umgebung', hundBellen: 'Umgebung', nachteinbruch: 'Umgebung' };
     if (ausnahmen[ev.id]) return ausnahmen[ev.id];
     if (/^durchsageLevel/.test(ev.id)) return 'Durchsagen';
