@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.84.4 – 23.11.2026
+
+- Das eingestellte Zombietempo (Jagen und Wandern) ist jetzt das Höchsttempo: normale Zombies laufen 60–85 % davon, Läufer 85–100 %. Bisher waren Läufer bis zu 60 % schneller als eingestellt und holten auch eine schnellere Heldin ein. Das Backend zeigt die Spanne neben dem Wert an.
+
 ## 0.84.3 – 23.11.2026
 
 - Behoben: Zeitversatz von mehreren Sekunden – nach einer Pause (AFK-Bot übernahm), nach dem Erwischtwerden oder nach Netzaussetzern hing die Figur auf dem Server bis zu 4 s hinter der angezeigten her; sie schlug dann noch am alten Ort zu, während man längst weitergelaufen war. Der Rückstand wird jetzt verworfen bzw. zügig aufgeholt (höchstens 2 s).

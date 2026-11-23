@@ -58,12 +58,12 @@ test('Einstellungen: alte Werte (dichte, haeuser, welle*, Min/Max-Paare) werden 
   assert.equal(bereinige({ zombies: { dichte: 20, level: [{ grund: 9 }] } }).zombies.level[0].grund, 9);
 });
 
-test('Zombies bekommen verschiedene feste Tempofaktoren zwischen 0,75 und 1,25', async () => {
+test('Zombies bekommen verschiedene feste Tempofaktoren zwischen 0,6 und 1,0 (eingestelltes Tempo = Höchsttempo)', async () => {
   const { c, raum } = await beitreten('Tempo');
   try {
     const ids = Array.from({ length: 40 }, (_, i) => raum.setzeZombie(100 + i * 5, 100, ''));
     const t = ids.map(id => raum.zombieInfo.get(id).tempo);
-    assert.ok(t.every(x => x >= 0.75 && x <= 1.25), 'außerhalb 0,75–1,25');
+    assert.ok(t.every(x => x >= 0.6 && x <= 1.0), 'außerhalb 0,6–1,0');
     assert.ok(new Set(t.map(x => x.toFixed(3))).size > 20, 'zu wenig verschieden');
     // wirkt beim Gehen: schneller Zombie kommt weiter als langsamer
     const a = raum.setzeZombie(300, 300, ''), b = raum.setzeZombie(300, 600, '');
@@ -123,7 +123,7 @@ test('Zombiewelle: Meldung, Gruppe außerhalb des Bildes, zieht zur Gegenseite, 
     p.unten = true;
     const x0 = mx, y0 = zs.reduce((a, z) => a + z.y, 0) / zs.length;
     const j = raum.state.zombies.size;
-    for (let i = 0; i < 1600 && raum.welle.aktiv && raum.welle.aktiv.ziele < 2; i++) {
+    for (let i = 0; i < 2300 && raum.welle.aktiv && raum.welle.aktiv.ziele < 2; i++) {   // 115 s (seit 0.84.4 Tempofaktor im Mittel 0,72 statt 1,0)
       raum.welle.schritt(0.05);
       for (const [id, z] of raum.state.zombies) raum.zombieSchritt(id, z, 0.05);
     }
@@ -533,8 +533,10 @@ test('Horde: zieht zügig und zusammenhängend – Mitte legt in 60 s Spielzeit 
       if (i % 20 === 19 && raum.welle.aktiv) {   // jede Sekunde: Mitte, Anteil der Stehenden
         const m = raum.welle.aktiv.mitte;
         weg += Math.hypot(m.x - letzte.x, m.y - letzte.y); letzte = { ...m };
+        // „steht“: weniger als 40 % des langsamsten Marschtempos je Sekunde (früher fest 20 px bei 89 px/s; seit 0.84.4 Höchsttempo-Faktoren 0,6–1,0)
+        const stehGrenze = Math.min(20, W.zombieTempoJagen * 0.85 * 0.6 * 0.4);
         let st = 0, n = 0;
-        for (const id of raum.welle.aktiv.ids) { const z = raum.state.zombies.get(id); if (!z) continue; n++; if (z._x0 !== undefined && Math.hypot(z.x - z._x0, z.y - z._y0) < 20) st++; z._x0 = z.x; z._y0 = z.y; }
+        for (const id of raum.welle.aktiv.ids) { const z = raum.state.zombies.get(id); if (!z) continue; n++; if (z._x0 !== undefined && Math.hypot(z.x - z._x0, z.y - z._y0) < stehGrenze) st++; z._x0 = z.x; z._y0 = z.y; }
         if (n && i > 100) { steht += st / n; messungen++; }
       }
     }

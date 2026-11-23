@@ -925,10 +925,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="tnTHeldGehen" min="2" max="60" step="0.5"><span id="tnTHeldGehenWert">20 km/h</span></div>
   <label for="tnTHeldSchleichen">Held schleicht (km/h)</label>
   <div class="tn-zeile"><input type="range" id="tnTHeldSchleichen" min="1" max="40" step="0.5"><span id="tnTHeldSchleichenWert">9 km/h</span></div>
-  <label for="tnTZombieJagen">Zombie jagt (km/h)</label>
+  <label for="tnTZombieJagen">Zombie jagt – Höchsttempo (km/h)</label>
   <span class="hilfe">Auch Hordenmarsch und Hund-Verfolgung orientieren sich daran; verwandelte Spieler sind 15 % schneller. Der Prozent-Faktor „Tempo“ der Zombies wirkt zusätzlich.</span>
   <div class="tn-zeile"><input type="range" id="tnTZombieJagen" min="1" max="60" step="0.5"><span id="tnTZombieJagenWert">15 km/h</span></div>
-  <label for="tnTZombieWandern">Zombie wandert (km/h)</label>
+  <label for="tnTZombieWandern">Zombie wandert – Höchsttempo (km/h)</label>
   <div class="tn-zeile"><input type="range" id="tnTZombieWandern" min="1" max="30" step="0.5"><span id="tnTZombieWandernWert">4 km/h</span></div>
   <label for="tnBaumTempo">Tempo unter Bäumen (%)</label>
   <span class="hilfe">Menschen, Zombies, Spieler und Bots laufen auf Baumkacheln nur mit diesem Anteil ihres Tempos (Vorgabe 25 % = 75 % langsamer; 100 = kein Unterschied). Fahrzeuge und der Hund sind nicht betroffen.</span>
@@ -1228,7 +1228,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnGGroesse', e.groesseGesamt === undefined ? 70 : e.groesseGesamt, function (v) { return v + ' %'; });
     feld('tnTHeldGehen', e.tempoHeldGehen === undefined ? 20 : e.tempoHeldGehen, function (v) { return v + ' km/h'; });
     feld('tnTHeldSchleichen', e.tempoHeldSchleichen === undefined ? 9 : e.tempoHeldSchleichen, function (v) { return v + ' km/h'; });
-    feld('tnTZombieJagen', e.tempoZombieJagen === undefined ? 15 : e.tempoZombieJagen, function (v) { return v + ' km/h'; });
+    feld('tnTZombieJagen', e.tempoZombieJagen === undefined ? 15 : e.tempoZombieJagen, function (v) { return v + ' km/h (normal ' + Math.round(v * 0.6) + '–' + Math.round(v * 0.85) + ', Läufer bis ' + v + ')'; });
     feld('tnTZombieWandern', e.tempoZombieWandern === undefined ? 4 : e.tempoZombieWandern, function (v) { return v + ' km/h'; });
     feld('tnBaumTempo', e.baumTempo === undefined ? 25 : e.baumTempo, function (v) { return v + ' %'; });
     feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
@@ -1403,7 +1403,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnMGroesse', function (v) { return v + ' %'; }, function (v) { return { menschenGroesse: v }; });
   regler('tnTHeldGehen', function (v) { return v + ' km/h'; }, function (v) { return { tempoHeldGehen: v }; });
   regler('tnTHeldSchleichen', function (v) { return v + ' km/h'; }, function (v) { return { tempoHeldSchleichen: v }; });
-  regler('tnTZombieJagen', function (v) { return v + ' km/h'; }, function (v) { return { tempoZombieJagen: v }; });
+  regler('tnTZombieJagen', function (v) { return v + ' km/h (normal ' + Math.round(v * 0.6) + '–' + Math.round(v * 0.85) + ', Läufer bis ' + v + ')'; }, function (v) { return { tempoZombieJagen: v }; });
   regler('tnTZombieWandern', function (v) { return v + ' km/h'; }, function (v) { return { tempoZombieWandern: v }; });
   regler('tnBaumTempo', function (v) { return v + ' %'; }, function (v) { return { baumTempo: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });

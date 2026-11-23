@@ -1572,8 +1572,9 @@ export class SpielRaum extends Room {
     const id = 'z' + (this.naechsteZombieId++);
     const schnell = this.schwierigkeit().schnell;   // Anteil schneller Zombies („Läufer“) steigt mit Level und Spieltagen
     this.state.zombies.set(id, z);
-    // tempo: fester Tempofaktor 0,75–1,25, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen)
-    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: schnell > 0 && this.rnd() < schnell ? 1.3 + this.rnd() * 0.3 : 0.75 + this.rnd() * 0.5 });
+    // tempo: fester Tempofaktor, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen). Seit 0.84.4 ist das
+    // eingestellte Zombietempo das HÖCHSTtempo: normale 60–85 %, Läufer 85–100 % (vorher 0,75–1,25 bzw. Läufer 1,3–1,6 – schneller als eingestellt)
+    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: schnell > 0 && this.rnd() < schnell ? 0.85 + this.rnd() * 0.15 : 0.6 + this.rnd() * 0.25 });
     return id;
   }
 
@@ -3569,7 +3570,7 @@ export class SpielRaum extends Room {
     const eifrig = z.jagt || weg > W.zombieTempoWandern * dt * 1.5;   // jagt oder folgt einem Geräusch (nicht nur Umherirren)
     weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
     weg *= tempoVon(this.wv(z.ebene));                  // drinnen im Feinraster: Tempo im Maßstab des Raums
-    if (info && !z.kriecht) weg *= info.tempo ?? 1;     // eigener Tempofaktor des Zombies (0,75–1,25)
+    if (info && !z.kriecht) weg *= info.tempo ?? 1;     // eigener Tempofaktor des Zombies (0,6–1,0: eingestelltes Tempo = Höchsttempo)
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
     // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)
