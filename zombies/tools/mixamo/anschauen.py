@@ -41,7 +41,7 @@ beschr(ph, 'heute: zombie_hemd (6 Bilder)', (4, 4 * F + 3))
 ph.save(D + 'mixamo_proto_phasen.png')
 
 # --- Vergleichs-GIF
-SPALTEN = [('Walk (neu)', walk, 90), ('Run (neu)', run, 50), ('heute zombie_hemd', alt, 120)]
+SPALTEN = [('Warzombie Walk', walk, 90), ('Warzombie Run', run, 50), ('heute zombie_hemd', alt, 120)]
 BIG = 4 * 80   # 4x der Spielbild-Pixel? hier: Bild 320 px
 dauer = 0.9 * 1000; frames = []; MS = 30   # 30 ms Raster
 nframes = 48
