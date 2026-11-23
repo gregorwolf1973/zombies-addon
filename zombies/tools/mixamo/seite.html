@@ -1,0 +1,65 @@
+<!doctype html><html><body style="margin:0;background:#0000">
+<pre id="out">LAEUFT</pre>
+<script type="importmap">{"imports":{"three":"./lib/three.module.js"}}</script>
+<script type="module">
+// Mixamo-FBX -> Draufsicht-Schleife (Streifen aus N Bildern). Parameter: datei, n=16, px=80 (Bildpunkte je Meter), feld=4 (m je Bild),
+// nur=info (Maße), stehen=1 (Root Motion entfernen), dreh=0 (Zusatzdrehung Grad)
+import * as THREE from 'three';
+import { FBXLoader } from './lib/examples/jsm/loaders/FBXLoader.js';
+const out = document.getElementById('out');
+const q = new URLSearchParams(location.search);
+const LICHT = +(q.get('licht') || 1), N = +(q.get('n') || 16), PX = +(q.get('px') || 80), FELD = +(q.get('feld') || 4), NEIG = 0;   // immer exakt senkrecht von oben (Gregor)
+try {
+  const g = await new FBXLoader().loadAsync('fbx/' + q.get('datei'));
+  const clip = g.animations[0];
+  // eingebettete Texturen laden asynchron: warten, bis alle Bilder da sind; Glanz gering halten
+  const texte = []; g.traverse(o => { if (o.isMesh) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => { if (m.specular) { m.specular.set(0x1a1a1a); m.shininess = 8; } for (const k of ['map', 'normalMap', 'specularMap']) if (m[k]) texte.push(m[k]); }); } });
+  for (let i = 0; i < 100 && !texte.every(t => t.image && (t.image.width || t.image.naturalWidth)); i++) await new Promise(r => setTimeout(r, 100));
+  texte.forEach(t => { t.needsUpdate = true; });
+  // Root Motion der Hüfte in der Ebene entfernen (Meter statt cm: FBX-Einheit cm -> 0.01)
+  const SK = 0.01 * +(q.get('gross') || 2.2) * (+(q.get('hoehe') || 0) ? 190 / +q.get('hoehe') : 1);   // hoehe = Figurhöhe roh (cm) -> auf 1,9 m normieren   // cm -> m, dazu Spielübergröße (Figuren im Spiel sind ~2,2x lebensgroß)
+  if (q.get('stehen') !== '0') for (const t of clip.tracks) if (/Hips\.position$/.test(t.name)) { const v = t.values; const x0 = v[0], z0 = v[2]; for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; } }
+  g.scale.setScalar(SK);
+  // Zombiefarben statt rotem Mannequin (Haut graugrün, Gelenke dunkel); ?farbe=0 lässt das Original
+  if (q.get('farbe') === '1') g.traverse(o => { if (o.isSkinnedMesh) o.material.color.set(/Joints/.test(o.name) ? 0x3a3f33 : 0x9aa68a); });
+  const mixer = new THREE.AnimationMixer(g); const act = mixer.clipAction(clip); if (q.get('einmal') === '1') { act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true; } act.play();
+  const sz = new THREE.Scene(); sz.add(g);
+  // Blickrichtung je Clip messen: mittlere Richtung linke->rechte Hüfte über die Schleife, vorn = oben x (R-L); dann Figur so drehen, dass vorn = +x
+  let bL, bR; g.traverse(o => { if (o.isBone) { if (/LeftUpLeg$/i.test(o.name)) bL = bL || o; if (/RightUpLeg$/i.test(o.name)) bR = bR || o; } });
+  if (!bL || !bR) throw new Error('Hüftknochen fehlen: ' + (() => { const n = []; g.traverse(o => { if (o.isBone) n.push(o.name); }); return n.slice(0, 40).join(','); })());
+  const EINMAL = q.get('einmal') === '1', TZ = i => EINMAL ? clip.duration * Math.min(i, N - 1) / (N - 1) : clip.duration * i / N;
+  let fx = 0, fz = 0; g.rotation.y = 0;
+  for (let i = 0; i < (EINMAL ? 1 : 16); i++) { mixer.setTime(clip.duration * i / 16); g.updateMatrixWorld(true); const a = bL.getWorldPosition(new THREE.Vector3()), b = bR.getWorldPosition(new THREE.Vector3()); const dx = b.x - a.x, dz = b.z - a.z; fx += dz * 1 - 0; fz += -dx; }   // up x (R-L) = (dz, 0, -dx)
+  const gier = Math.atan2(fx, fz); window.__gier = gier * 180 / Math.PI;
+  g.rotation.y = Math.PI / 2 - gier + (+(q.get('dreh') || 0)) * Math.PI / 180;
+  const dauer = clip.duration;
+  const box = () => { g.updateMatrixWorld(true); const b = new THREE.Box3(); g.traverse(o => { if ((o.isMesh || o.isSkinnedMesh)) { o.frustumCulled = false; if (o.isSkinnedMesh) { o.skeleton.update(); b.union(new THREE.Box3().setFromObject(o, true)); } else b.expandByObject(o); } }); return b; };
+  if (q.get('nur') === 'info') {
+    const info = ['DAUER ' + dauer.toFixed(3) + ' s, Spuren ' + clip.tracks.length];
+    let mn = new THREE.Vector3(1e9, 1e9, 1e9), mx = new THREE.Vector3(-1e9, -1e9, -1e9);
+    for (let i = 0; i < N; i++) { mixer.setTime(TZ(i)); const b = box(); mn.min(b.min); mx.max(b.max); }
+    info.push('BOX ' + [mn, mx].map(v => [v.x, v.y, v.z].map(n => n.toFixed(2)).join(',')).join(' .. '));
+    g.traverse(o => { if (o.isSkinnedMesh) { const ms = [].concat(o.material); info.push('MESH ' + o.name + ' Materialien ' + ms.length + ' ' + ms.map(m => m.type + (m.map ? ' map ' + m.map.image?.width : ' ohne map')).join('|')); }; });
+    out.textContent = info.join('\n'); throw 0;
+  }
+  const W = Math.round(FELD * PX);
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(W, W); r.setClearColor(0x000000, 0); r.outputColorSpace = THREE.SRGBColorSpace;
+  // feste Bildmitte: Hüftlage bei t=0 in der Ebene
+  mixer.setTime(0); const b0 = box(); const cx = (b0.min.x + b0.max.x) / 2 + (+(q.get('vx') || -0.25)), cz = (b0.min.z + b0.max.z) / 2, y0 = b0.min.y;
+  const h = FELD / 2;
+  const cam = new THREE.OrthographicCamera(-h, h, h, -h, 0.1, 1000);
+  const hoch = 20;
+  cam.position.set(cx + Math.sin(NEIG) * hoch, y0 + Math.cos(NEIG) * hoch, cz); cam.up.set(0, 0, -1); cam.lookAt(cx, y0 + 1, cz);
+  sz.add(new THREE.HemisphereLight(0xfff4e0, 0x8a8a78, 1.6 * LICHT));
+  const sonne = new THREE.DirectionalLight(0xfff0d8, 2.4 * (LICHT > 1 ? 0.7 : 1)); sonne.position.set(cx - 6, y0 + 12, cz - 8); sonne.target.position.set(cx, y0, cz); sz.add(sonne, sonne.target);
+  const strip = document.createElement('canvas'); strip.width = W * N; strip.height = W; const sc = strip.getContext('2d');
+  const MAL = (q.get('malen') || '').split(',');
+  for (let i = 0; i <= (EINMAL ? N - 1 : N); i++) {   // Bild N = Bild 0 der nächsten Schleife (Nahtprüfung)
+    mixer.setTime(TZ(i)); g.updateMatrixWorld(true); r.render(sz, cam);
+    if (i < N) sc.drawImage(r.domElement, i * W, 0);
+    else { const c2 = document.createElement('canvas'); c2.width = W; c2.height = W; c2.getContext('2d').drawImage(r.domElement, 0, 0); window.__letztes = c2.toDataURL('image/png'); }
+  }
+  out.textContent = 'BILD ' + JSON.stringify({ W, N, dauer, gier: window.__gier }) + '\n' + strip.toDataURL('image/png') + '\n' + window.__letztes;
+} catch (e) { if (e !== 0) out.textContent = 'FEHLER ' + (e && e.stack || e); }
+</script></body></html>

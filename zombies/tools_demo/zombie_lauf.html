@@ -1,0 +1,139 @@
+<!doctype html><meta charset="utf-8"><title>Zombie Lauf-Demo (Draufsicht)</title>
+<body style="margin:0;background:#222;color:#ddd;font:14px sans-serif">
+<canvas id="c" width="900" height="460"></canvas>
+<script>
+// Eigenständige Demo: ein Zombie von oben, rein prozedural. Einheit = Spielpixel (8 px = 1 m), Blick nach +x.
+const TEMPI = {
+  schlurf: { v: 8.9,  schritt: 4.6,  armSchw: 2.2, schulter: 0.16, huefte: 0.07, pendel: 0.7, vor: 8.5, name: 'schlurfend ~4 km/h' },
+  jagd:    { v: 33.3, schritt: 11.5, armSchw: 4.6, schulter: 0.30, huefte: 0.12, pendel: 1.1, vor: 10.5, name: 'jagend ~15 km/h' }
+};
+const HAUT = '#9fae9c', HAUT_D = '#7d8c7b', HEMD = '#c9b69a', HEMD_D = '#8d7660', BLUT = '#7a3a33', HAAR = '#4a3a30', SCHUH = '#3a2f2a', KONT = '#17120f';
+
+function ell(g, x, y, rx, ry, rot, fill) {
+  g.beginPath(); g.ellipse(x, y, rx, ry, rot || 0, 0, 7); g.fillStyle = fill; g.fill();
+  g.lineWidth = 0.75; g.strokeStyle = KONT; g.stroke();
+}
+// Lokale Achsen: x = vorwärts, y = rechts. g ist schon auf Position+Blickrichtung transformiert.
+function zeichneZombie(g, tempo, t) {
+  const T = TEMPI[tempo];
+  const freq = T.v / (2 * T.schritt);            // volle Zyklen/s (zwei Schritte je Zyklus)
+  const ph = 2 * Math.PI * freq * t;
+  const s = Math.sin(ph), c = Math.cos(ph);
+  const fuss = T.schritt * 0.5;                  // Fuß-Hub vor/zurück
+  // Pendeln des ganzen Körpers (seitlich 1x je Zyklus, leichtes Wippen 2x)
+  g.translate(Math.sin(ph - 0.3) * 0.35 * T.pendel * 0.5, Math.sin(ph) * 0.0);
+  g.translate(0, Math.sin(ph) * T.pendel * 0.45);
+  // Füße: links vor, wenn s>0. Beim Vorschwingen (Ableitung) größer = angehoben
+  for (const seite of [-1, 1]) {
+    const p = seite < 0 ? ph : ph + Math.PI;
+    const x = Math.sin(p) * fuss, lift = Math.max(0, Math.cos(p));   // Schwungphase = Fuß vorwärts unterwegs
+    const y = seite * 5.0;
+    g.save(); g.translate(x, y); g.rotate(seite * 0.08 * Math.sin(p));
+    g.globalAlpha = 0.25; ell(g, 0.8, 0.8, 4.4, 2.5, 0, '#000'); g.globalAlpha = 1; // Schatten
+    const sc = 1 + 0.12 * lift;
+    ell(g, 0.6 * sc, 0, 4.4 * sc, 2.6 * sc, 0, SCHUH);
+    g.restore();
+  }
+  // Hüfte (dunkle Hose) dreht leicht gegen Schultern
+  const yawS = Math.sin(ph) * T.schulter;       // Schultern
+  const yawH = -yawS * (T.huefte / T.schulter) * 1.0;
+  g.save(); g.rotate(yawH); ell(g, -1.2, 0, 4.2, 6.3, 0, '#5b5a52'); g.restore();
+  // Oberkörper + Arme drehen mit Schultern
+  g.save(); g.rotate(yawS);
+  // Arme: gegengleich zu den Beinen. Zombie: nach vorn gestreckt, rechter Arm höher/gestreckter, linker hängt mehr
+  const arm = (seite) => {
+    const p = seite < 0 ? ph + Math.PI : ph;            // linker Arm gegenläufig zum linken Fuß
+    const sw = Math.sin(p) * T.armSchw;
+    const gestreckt = seite > 0 ? 1.0 : 0.72;           // Asymmetrie
+    const sx = 0.5, sy = seite * 7.6;                    // Schulterpunkt
+    const ex = sx + 4.2 * gestreckt + sw * 0.5, ey = sy + seite * (1.8 - 0.4 * gestreckt);   // Ellbogen
+    const hx = T.vor * gestreckt + sw - (seite < 0 ? 1.5 : 0), hy = seite * (5.0 + 0.8 * Math.cos(p));  // Hand
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.strokeStyle = KONT; g.lineWidth = 3.6; g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.lineTo(hx, hy); g.stroke();
+    g.strokeStyle = HAUT; g.lineWidth = 2.5; g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.lineTo(hx, hy); g.stroke();
+    g.strokeStyle = HEMD; g.lineWidth = 3.0; g.beginPath(); g.moveTo(sx - 0.5, sy); g.lineTo(sx + (ex - sx) * 0.6, sy + (ey - sy) * 0.6); g.stroke(); // Ärmel
+    // Hand mit Fingerandeutung
+    ell(g, hx + 1.0, hy, 2.6, 2.1, seite * 0.3, HAUT);
+    g.strokeStyle = KONT; g.lineWidth = 0.7;
+    for (let k = -1; k <= 1; k++) { g.beginPath(); g.moveTo(hx + 2.3, hy + k * 0.9); g.lineTo(hx + 3.6, hy + k * 1.5 + seite * 0.3); g.stroke(); }
+  };
+  arm(-1); arm(1);
+  // Torso (Hemd) mit Fetzen
+  ell(g, 0, 0, 4.4, 8.6, 0, HEMD);
+  g.save(); g.beginPath(); g.ellipse(0, 0, 4.4, 8.6, 0, 0, 7); g.clip();
+  g.fillStyle = HEMD_D; g.fillRect(-6, -9, 4, 18);
+  g.fillStyle = BLUT; g.globalAlpha = 0.55; g.beginPath(); g.ellipse(-1.5, 3.8, 2.2, 1.4, 0.4, 0, 7); g.fill(); g.beginPath(); g.ellipse(1.4, -4.8, 1.3, 1.9, 0, 0, 7); g.fill(); g.globalAlpha = 1;
+  g.restore();
+  g.restore();
+  // Kopf: bleibt in Laufrichtung (nur ganz leichte Gegenbewegung), Haarschopf hinten
+  g.save(); g.rotate(-yawS * 0.85 + Math.sin(ph * 2) * 0.015);
+  ell(g, -2.4, 0.6, 4.0, 3.9, 0, HAAR);
+  ell(g, 0.6, 0, 5.7, 5.5, 0, HAUT);
+  g.globalAlpha = 0.35; ell(g, 1.8, -1.6, 2.0, 1.4, 0.5, BLUT); g.globalAlpha = 1;
+  g.restore();
+}
+
+function hintergrund(g, w, h, off) {
+  g.fillStyle = '#5b7248'; g.fillRect(0, 0, w, h);
+  let r = 7; const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 160; i++) { g.fillStyle = rnd() < .5 ? '#52693f' : '#66804f'; g.fillRect(rnd() * w, rnd() * h, 2, 2); }
+}
+
+// Achter (Lemniskate) nach Bogenlänge, Radius a (Spielpixel)
+function achter(tempo, t, a) {
+  const v = TEMPI[tempo].v;
+  const pt = u => { const d = 1 + Math.sin(u) ** 2; return [a * Math.cos(u) / d, a * Math.sin(u) * Math.cos(u) / d]; };
+  // Bogenlänge numerisch (einmal je a)
+  if (!achter.tab || achter.a !== a) { achter.a = a; achter.tab = []; let L = 0, p = pt(0); for (let i = 0; i <= 2000; i++) { const u = i / 2000 * 2 * Math.PI, q = pt(u); L += Math.hypot(q[0] - p[0], q[1] - p[1]); achter.tab.push(L); p = q; } achter.L = L; }
+  const s = (v * t) % achter.L; let i = achter.tab.findIndex(x => x >= s); if (i < 1) i = 1;
+  const u = (i - 1 + (s - achter.tab[i - 1]) / (achter.tab[i] - achter.tab[i - 1])) / 2000 * 2 * Math.PI;
+  const p = pt(u), q = pt(u + 0.002);
+  return { x: p[0], y: p[1], r: Math.atan2(q[1] - p[1], q[0] - p[0]) };
+}
+
+function szene(g, tempo, t, ox, oy, w, h, S, a) {
+  g.save(); g.beginPath(); g.rect(ox, oy, w, h); g.clip(); g.translate(ox, oy);
+  hintergrund(g, w, h);
+  g.translate(w / 2, h / 2); g.scale(S, S);
+  const p = achter(tempo, t, a);
+  g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.lineWidth = 1.1 / S * S; zeichneZombie(g, tempo, t); g.restore();
+  g.restore();
+}
+
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+function bild(t) {
+  g.fillStyle = '#222'; g.fillRect(0, 0, cv.width, cv.height);
+  const R = 18;  // Achter-Radius in Spielpixeln
+  szene(g, 'schlurf', t, 10, 30, 430, 340, 6, R * 1.0);
+  szene(g, 'jagd', t + 0.0, 460, 30, 430, 340, 6, R * 1.0);
+  g.fillStyle = '#eee'; g.font = '16px sans-serif';
+  g.fillText('schlurfend ~4 km/h (6x)', 14, 22); g.fillText('jagend ~15 km/h (6x)', 464, 22);
+  // Originalgröße (1x) und 2x wie im Spiel
+  for (const [tempo, x0] of [['schlurf', 10], ['jagd', 460]]) {
+    szene(g, tempo, t, x0, 380, 90, 70, 1, 18 * 0.9 > 0 ? 18 * 0.9 : 1);
+    szene(g, tempo, t, x0 + 100, 380, 130, 70, 1.9, 8);
+    g.fillStyle = '#ccc'; g.font = '12px sans-serif'; g.fillText('Zoom 1,0 / 1,9 (Spielgröße)', x0 + 240, 420);
+  }
+}
+function phasen() {
+  const cs = document.createElement('canvas'); cs.width = 8 * 120; cs.height = 2 * 130 + 10; const q = cs.getContext('2d');
+  q.fillStyle = '#222'; q.fillRect(0, 0, cs.width, cs.height);
+  ['schlurf', 'jagd'].forEach((tempo, row) => {
+    const T = TEMPI[tempo], per = 2 * T.schritt / T.v;
+    for (let i = 0; i < 8; i++) {
+      q.save(); q.translate(i * 120, row * 135); q.beginPath(); q.rect(0, 0, 118, 128); q.clip();
+      q.fillStyle = '#5b7248'; q.fillRect(0, 0, 118, 128); q.translate(59, 64); q.scale(3.9, 3.9);
+      zeichneZombie(q, tempo, per * i / 8); q.restore();
+      q.fillStyle = '#fff'; q.font = '11px sans-serif'; q.fillText((tempo === 'jagd' ? 'jagd ' : 'schlurf ') + (i * 45) + '°', i * 120 + 4, row * 135 + 122);
+    }
+  });
+  return cs.toDataURL('image/png');
+}
+const q = new URLSearchParams(location.search);
+if (q.get('dump')) {
+  const n = 90, out = document.createElement('pre'); out.id = 'out';
+  const arr = [];
+  for (let i = 0; i < n; i++) { bild(i / 25); arr.push(cv.toDataURL('image/png')); }
+  out.textContent = JSON.stringify({ frames: arr, phasen: phasen() }); document.body.appendChild(out);
+} else { let t0 = performance.now(); (function f() { bild((performance.now() - t0) / 1000); requestAnimationFrame(f); })(); }
+</script>

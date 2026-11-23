@@ -1,0 +1,9 @@
+Mixamo-FBX -> Draufsicht-Laufschleifen (Prototyp, nur exakt senkrechte Draufsicht). FBX liegen in fbx/ (gitignored, nie committen/hochladen).
+0. lib/ (gitignored): three.module.js + examples/jsm/{loaders/FBXLoader.js,libs/fflate.module.js,curves/NURBSCurve.js,curves/NURBSUtils.js} aus three@0.160.0 (cdn.jsdelivr.net/npm/three@0.160.0/...)
+1. python3 -m http.server 8818 --bind 127.0.0.1   (hier)
+2. google-chrome --headless=new --enable-unsafe-swiftshader --use-angle=swiftshader --remote-debugging-port=9333 --user-data-dir=<scratch> about:blank
+3. EXTRA="&gross=2.5" PYTHONPATH=<pil> sh pruefe.sh <ordner>     -> walk/run/running_streifen.png (16 Bilder à 160 px, 4 m je Bild)
+   (Einzeln: node cdp.mjs 'http://127.0.0.1:8818/seite.html?datei=Zombie%20Walk.fbx&nur=info' x.txt = Maße)
+4. Altes Sprite zombie_hemd als alt0..5.png (160er Felder 18..23 aus client/grafik/figuren.png) in den Ordner legen, dann
+   PYTHONPATH=<pil> python3 anschauen.py <ordner>  -> mixamo_proto.gif, _phasen.png, _kreis.gif
+Chrome und Server danach per PID beenden.
