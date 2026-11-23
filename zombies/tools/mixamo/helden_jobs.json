@@ -20,6 +20,7 @@
   {"name": "gewehr_schiessen", "clip": "{o}/gewehr_schiessen.fbx", "schleife": 0, "waffe": "gewehr"},
   {"name": "gewehr_zielen", "clip": "{o}/gewehr_pak/idle aiming.fbx", "schleife": 1, "waffe": "gewehr"},
   {"name": "schrot_gehen", "clip": "{o}/gewehr_pak/walk forward.fbx", "schleife": 1, "waffe": "schrot"},
+  {"name": "schrot_schiessen", "clip": "{o}/gewehr_schiessen.fbx", "schleife": 0, "waffe": "schrot"},
   {"name": "messer_stechen", "richtung": "fa", "rr": 0.5, "clip": "{o}/stechen.fbx", "schleife": 0, "waffe": "messer"},
   {"name": "schlaeger_schlagen", "clip": "{o}/schlagen.fbx", "schleife": 0, "waffe": "schlaeger"},
   {"name": "tod", "clip": "{o}/gewehr_pak/death from the front.fbx", "schleife": 0, "einmal": 1, "feld": 5, "vx": 0, "dreh": 180}

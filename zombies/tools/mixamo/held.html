@@ -119,10 +119,18 @@ try {
     else if (ans === 'seite') { cam.position.set(cx, y0 + 1.1 * GROSS, cz + 20); cam.up.set(0, 1, 0); cam.lookAt(cx, y0 + 1.1 * GROSS, cz); }
     else { cam.position.set(cx + 20, y0 + 1.1 * GROSS, cz); cam.up.set(0, 1, 0); cam.lookAt(cx, y0 + 1.1 * GROSS, cz); }
     sonne.position.set(cx - 6, y0 + 12, cz - 8); sonne.target.position.set(cx, y0, cz);
+    const hoehe_m = +(b0.max.y - b0.min.y).toFixed(3); const muend = [];
     const strip = document.createElement('canvas'); strip.width = Wpx * N; strip.height = Wpx; const sc = strip.getContext('2d');
-    for (let i = 0; i < N; i++) { mixer.setTime(TZ(i)); g.updateMatrixWorld(true); r.render(sz, cam); sc.drawImage(r.domElement, i * Wpx, 0); }
+    for (let i = 0; i < N; i++) {
+      mixer.setTime(TZ(i)); g.updateMatrixWorld(true); r.render(sz, cam); sc.drawImage(r.domElement, i * Wpx, 0);
+      if (holder && winfo) {   // Mündung (Weltposition des Laufendes) und Laufrichtung; Meter relativ zur Bildmitte, y nach unten (Bildschirm), Winkel in Grad (0 = +x/rechts, positiv = nach unten)
+        const w = Object.assign({}, cfg.waffen[job.waffe], ueber[job.waffe] || {}, job.waffeopt || {}), WO = waffen[job.waffe].obj; WO.updateWorldMatrix(true, false);
+        const pm = WO.localToWorld(new THREE.Vector3((1 - w.griff) * w.laenge, w.hoch, 0)), pr = WO.localToWorld(new THREE.Vector3(-w.griff * w.laenge, w.hoch, 0));
+        muend.push({ x: +(pm.x - cx).toFixed(3), y: +(pm.z - cz).toFixed(3), h: +pm.y.toFixed(3), a: +(Math.atan2(pm.z - pr.z, pm.x - pr.x) * 180 / Math.PI).toFixed(1) });
+      }
+    }
     if (holder) hand.remove(holder);
-    ergebnis.push('JOB ' + JSON.stringify({ name: job.name, einmal: job.einmal ? 1 : 0, W: Wpx, N, dauer, gier: gier * 180 / Math.PI, sek: +((performance.now() - t0) / 1000).toFixed(1), waffe: winfo }) + '\n' + strip.toDataURL('image/png'));
+    ergebnis.push('JOB ' + JSON.stringify({ name: job.name, einmal: job.einmal ? 1 : 0, hoehe_m, muendung: muend, feld_m: FELD, W: Wpx, N, dauer, gier: gier * 180 / Math.PI, sek: +((performance.now() - t0) / 1000).toFixed(1), waffe: winfo }) + '\n' + strip.toDataURL('image/png'));
   }
   out.textContent = 'FERTIG\n' + ergebnis.join('\n');
 } catch (e) { out.textContent = 'FEHLER ' + (e && e.stack || e) + '\n' + ergebnis.join('\n'); }
