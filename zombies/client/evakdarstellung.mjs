@@ -1,6 +1,6 @@
 // Darstellung der Evakuierungsarten (Phaser): Leopard 2A7 mit drehendem Turm und Lader-MG (Level 2), A400M mit drehenden Propellern
 // und der Hubschrauber (Evakuierung per Flugzeug). Logik und Zahlen kommen vom Server (server/aufgaben.mjs, client/evak.mjs).
-import { LEOPARD, A400M, HELI, TANKLASTER, evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke } from './evak.mjs';
+import { LEOPARD, A400M, HELI, heliStand, TANKLASTER, evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke } from './evak.mjs';
 import { fetzen } from './effekte.mjs';
 import * as ton from './ton.mjs';
 import { kettenSpur } from './ketten.mjs';
@@ -179,12 +179,13 @@ export function heliAktualisieren(scene, s, dt, aktEbene) {
   const ph = s.evakPhase, aktiv = (ph === 'heliAnflug' && s.evakRest <= 9) || ph === 'heli' || ph === 'abflug';
   let h = scene.heliObj;
   if (!aktiv || !(s.evakX > 0)) { if (h) { h.box.destroy(); scene.heliObj = null; } return; }
+  const st = heliStand(scene.welt, s.evakX, s.evakY);   // landet 20 m neben dem Landelicht (evakX/evakY)
   if (!h) {
-    const anflug = (Math.round(s.evakX) * 0.0137 + Math.round(s.evakY) * 0.0071) % TAU;      // Anflugrichtung: fest je Landeplatz
+    const anflug = (Math.round(st.x) * 0.0137 + Math.round(st.y) * 0.0071) % TAU;      // Anflugrichtung: fest je Landeplatz
     const echt = scene.textures.exists('nh90-rumpf') && scene.textures.exists('nh90-rotor');   // NH90-Bilder, sonst die gezeichnete Ersatzfigur
     const koerper = echt ? scene.add.image(HELI.rumpfX, HELI.rumpfY, 'nh90-rumpf').setScale(HELI.skala) : heliKoerper(scene);
     const rotor = scene.add.graphics(), blatt = echt ? scene.add.image(0, 0, 'nh90-rotor').setScale(HELI.skala) : null;
-    h = scene.heliObj = { box: scene.add.container(s.evakX, s.evakY, blatt ? [koerper, rotor, blatt] : [koerper, rotor]).setDepth(7), rotor, blatt, wink: 0, anflug, t: 0, phase: ph, ab: 0 };
+    h = scene.heliObj = { box: scene.add.container(st.x, st.y, blatt ? [koerper, rotor, blatt] : [koerper, rotor]).setDepth(7), rotor, blatt, wink: 0, anflug, t: 0, phase: ph, ab: 0 };
   }
   if (h.phase !== ph) { h.phase = ph; h.ab = 0; }
   h.wink += dt * (ph === 'heliAnflug' && s.evakRest > 3 ? 26 : 30);
@@ -194,12 +195,12 @@ export function heliAktualisieren(scene, s, dt, aktEbene) {
   if (ph === 'heliAnflug') { const k = Math.max(0, Math.min(1, s.evakRest / 9)); abstand = k * k * 900; hoehe = k; }
   else if (ph === 'abflug') { h.ab += dt; const k = Math.min(1, h.ab / 4); abstand = -k * k * 700; hoehe = k; }
   const dx = Math.cos(h.anflug), dy = Math.sin(h.anflug);
-  h.box.setPosition(s.evakX + dx * abstand, s.evakY + dy * abstand).setRotation(richtung).setScale(1 + hoehe * 0.35).setDepth(hoehe > 0.05 ? 7 : 4.5);
+  h.box.setPosition(st.x + dx * abstand, st.y + dy * abstand).setRotation(richtung).setScale(1 + hoehe * 0.35).setDepth(hoehe > 0.05 ? 7 : 4.5);
   h.box.setVisible(aktEbene === '');
   // Abwind: ein Staubring unter dem gelandeten Hubschrauber
   if (ph === 'heli' && Math.random() < dt * 6) {
     const a = Math.random() * TAU, r = 45 + Math.random() * 25;
-    const staub = scene.add.circle(s.evakX + Math.cos(a) * r, s.evakY + Math.sin(a) * r, 5, 0xbcaaa4, 0.35).setDepth(4.4);
+    const staub = scene.add.circle(st.x + Math.cos(a) * r, st.y + Math.sin(a) * r, 5, 0xbcaaa4, 0.35).setDepth(4.4);
     scene.tweens.add({ targets: staub, x: staub.x + Math.cos(a) * 60, y: staub.y + Math.sin(a) * 60, alpha: 0, scale: 3, duration: 900, onComplete: () => staub.destroy() });
   }
 }

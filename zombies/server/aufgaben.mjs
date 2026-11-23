@@ -5,7 +5,7 @@
 import { flach, hat, indexVon, zaehle as zaehleStapel } from '../client/stapel.mjs';
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei, kachelVon, reichVon } from '../client/welt.mjs';
-import { LEOPARD, A400M, evakArtFuer, imFussabdruck, ABSTURZ, absturzDauer, absturzStrecke } from '../client/evak.mjs';
+import { LEOPARD, A400M, heliStand, evakArtFuer, imFussabdruck, ABSTURZ, absturzDauer, absturzStrecke } from '../client/evak.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
 import { ueberrolleZombies } from './ueberrollen.mjs';
 import { querfeldPlan } from './querfeld.mjs';
@@ -996,7 +996,7 @@ export class Aufgaben {
   // Punkt, an dem man einsteigt: Bus/Panzer = Fahrzeugmitte, A400M = Heckrampe, Hubschrauber = Landeplatz (Einstellung evakX/evakY)
   einstiegsPunkt() {
     const s = this.raum.state;
-    if (this.heli) return { x: s.evakX, y: s.evakY };
+    if (this.heli) return this.heli.art === 'bunker' ? { x: s.evakX, y: s.evakY } : heliStand(this.raum.welt, s.evakX, s.evakY);   // NH90 steht 20 m neben dem Landelicht
     const f = s.fahrzeuge.get(this.busId);
     if (!f) return null;
     return this.fz().art === 'flugzeug' ? { x: s.evakX, y: s.evakY } : f;

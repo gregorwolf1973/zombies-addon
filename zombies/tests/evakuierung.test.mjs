@@ -12,7 +12,7 @@ import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, setzeKartengroesse, frei, findeWeg } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
-import { LEOPARD, A400M, imFussabdruck, evakArtFuer } from '../client/evak.mjs';
+import { LEOPARD, A400M, imFussabdruck, evakArtFuer, heliStand } from '../client/evak.mjs';
 import { flugplanBerechnen } from '../server/flugplatz.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
 import { freierPort } from './hilfe.mjs';
@@ -233,7 +233,13 @@ test('A400M: landet, einsteigen, Triebwerk fällt aus, alle raus, zu Fuß zum Hu
     await warte(300);
     assert.equal(gewechselt, false, 'Abflug ohne den Spieler');
     // 5. zu Fuß hin: Abholung, Meldung, Levelwechsel
-    a.p.x = plan.heli.x + 20; a.p.y = plan.heli.y;
+    {
+      // am Landelicht selbst steigt niemand ein: der Hubschrauber steht 20 m (160 px) daneben, auf freier Fläche
+      const st = heliStand(raum.welt, s.evakX, s.evakY), d = Math.hypot(st.x - s.evakX, st.y - s.evakY);
+      assert.ok(Math.abs(d - 160) <= 40 && frei(raum.welt, st.x, st.y, 8), 'Standort nicht 20 m neben dem Landelicht: ' + d);
+      assert.equal(a.p.anBord, false, 'am Landelicht schon eingestiegen');
+      a.p.x = st.x + 20; a.p.y = st.y;
+    }
     assert.ok(await bis(() => s.evakPhase === 'abflug', 3000), 'kein Abflug');
     assert.equal(a.p.anBord, true, 'nicht im Hubschrauber');
     assert.ok(await bis(() => meldungen.some(m => m.includes('Geschafft')), 1000));

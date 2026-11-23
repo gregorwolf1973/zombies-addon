@@ -9,7 +9,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke, A400M } from '../client/evak.mjs';
+import { heliStand, evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke, A400M } from '../client/evak.mjs';
 import { bereinige } from '../server/einstellungen.mjs';
 import { freierPort } from './hilfe.mjs';
 
@@ -78,7 +78,7 @@ test('Königsdorf: A400M landet auf der Piste und fängt erst im Stand Feuer (Wr
   ag.heli.rest = 0.1;
   assert.ok(await bis(() => s.evakPhase === 'heli', 3000), 'NH90 landet nicht');
   let gewechselt = false; ag.levelWechsel = () => { gewechselt = true; }; ag.wechselVerzoegerung = 100;
-  p.ebene = ''; p.x = s.evakX; p.y = s.evakY;
+  p.ebene = ''; { const q = heliStand(raum.welt, s.evakX, s.evakY); p.x = q.x; p.y = q.y; }
   assert.ok(await bis(() => s.evakPhase === 'abflug', 4000), 'kein Abflug');
   assert.ok(p.anBord, 'nicht an Bord');
   assert.ok(await bis(() => gewechselt, 3000), 'kein Levelwechsel');
@@ -151,7 +151,7 @@ test('Kochel: NH90 steht von Anfang an, Einsteigen jederzeit mit Aussteigen, Abf
   assert.equal(s.evakPhase, 'heli', 'Hubschrauber steht nicht von Anfang an');
   assert.ok(s.busDa && s.busSteht && s.evakX > 0);
   ag.fahrtGelingt = () => false;
-  p.ebene = ''; p.x = s.evakX; p.y = s.evakY;
+  p.ebene = ''; { const q = heliStand(raum.welt, s.evakX, s.evakY); p.x = q.x; p.y = q.y; }
   assert.ok(await bis(() => p.anBord), 'steigt nicht ein');
   assert.ok(await bis(() => meldungen.some(m => m.includes('es fehlt'))), 'Meldung „was fehlt“');
   ag.busRest = 0.05; await warte(600);
@@ -162,7 +162,7 @@ test('Kochel: NH90 steht von Anfang an, Einsteigen jederzeit mit Aussteigen, Abf
   ag.fahrtGelingt = () => true;
   let gewechselt = false; ag.levelWechsel = () => { gewechselt = true; }; ag.wechselVerzoegerung = 100;
   const w = { x: s.evakX + 300, y: s.evakY }; p.x = w.x; p.y = w.y; await warte(400);
-  assert.ok(await bis(() => { p.ebene = ''; p.x = s.evakX; p.y = s.evakY; return s.evakPhase === 'abflug'; }, 6000), 'kein Abflug');
+  assert.ok(await bis(() => { p.ebene = ''; const q = heliStand(raum.welt, s.evakX, s.evakY); p.x = q.x; p.y = q.y; return s.evakPhase === 'abflug'; }, 6000), 'kein Abflug');
   assert.ok(await bis(() => gewechselt, 3000), 'kein Levelwechsel');
 }));
 

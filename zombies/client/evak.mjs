@@ -1,5 +1,7 @@
 // Evakuierungsarten (Server und Client): Bus, Panzer (Leopard 2A7) und Flugzeug (A400M, danach Hubschrauber).
 // Maße in Spielpixeln (8 px = 1 m). Gemeinsam genutzt von server/aufgaben.mjs und client/evakdarstellung.mjs.
+import { frei } from './welt.mjs';
+
 export const EVAK_KARTEN = { isarauen: 'panzer', koenigsdorf: 'absturz', kochel: 'heli', andermatt: 'bunker' };            // Evakuierungsart je Karte (nicht aufgeführt = Bus)
 export const evakArtFuer = karte => EVAK_KARTEN[karte] ?? 'bus';
 
@@ -48,3 +50,26 @@ export const HELI = { skala: 0.6667, rumpfX: -23.0, rumpfY: 3.65, rotorRadius: 6
 // Tanklaster als Kulisse neben der Nase des gelandeten A400M (Container-Rahmen des Flugzeugs: nach vorn / nach rechts), 100 px lang
 export const TANKLASTER = { skala: 0.6667, x: 178, y: 72 };
 
+
+// Hubschrauber-Standort: der NH90 landet nicht auf dem Landelicht (state.evakX/evakY, Markierung), sondern HELI_VERSATZ (20 m) daneben,
+// auf einer freien, begehbaren Stelle (nicht in Häusern/Wasser). Deterministisch (feste Richtungstabelle, kein sin/cos): Server und Client
+// rechnen dasselbe; das Ergebnis wird je Welt und Punkt gemerkt. Einsteigen und Anzeige beziehen sich auf diesen Standort.
+export const HELI_VERSATZ = 160;
+const R8 = [[1, 0], [0.7071, 0.7071], [0, 1], [-0.7071, 0.7071], [-1, 0], [-0.7071, -0.7071], [0, -1], [0.7071, -0.7071]];
+export function heliStand(welt, x, y) {
+  x = Math.round(x); y = Math.round(y);
+  const schluessel = x + ',' + y, cache = welt ? (welt._heliStand ??= new Map()) : null;
+  if (cache?.has(schluessel)) return cache.get(schluessel);
+  let erg = { x, y };
+  if (welt) {
+    const start = (Math.abs(x * 7 + y * 13)) % 8;
+    suche: for (const [dist, rad] of [[HELI_VERSATZ, 40], [HELI_VERSATZ, 20], [HELI_VERSATZ - 40, 20], [HELI_VERSATZ + 40, 20], [HELI_VERSATZ, 8]]) {
+      for (let k = 0; k < 8; k++) {
+        const [dx, dy] = R8[(start + k) % 8], px = Math.round(x + dx * dist), py = Math.round(y + dy * dist);
+        if (frei(welt, px, py, rad)) { erg = { x: px, y: py }; break suche; }
+      }
+    }
+  }
+  cache?.set(schluessel, erg);
+  return erg;
+}
