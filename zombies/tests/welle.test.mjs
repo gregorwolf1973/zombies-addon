@@ -9,6 +9,7 @@ import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, BREITE, HOEHE, frei, WERTE as W } from '../client/welt.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
 import { LEVEL_VORGABE } from '../server/schwierigkeit.mjs';
+import { aufParkAuto } from '../client/fzkollision.mjs';
 import { freierPort } from './hilfe.mjs';
 
 const PORT = await freierPort();
@@ -70,7 +71,7 @@ test('Zombies bekommen verschiedene feste Tempofaktoren zwischen 0,6 und 1,0 (ei
     raum.zombieInfo.get(a).tempo = 1.1; raum.zombieInfo.get(b).tempo = 0.9;
     const za = raum.state.zombies.get(a), zb = raum.state.zombies.get(b);
     // zwei freie waagrechte Strecken suchen (die Welt ist zufällig, an festen Stellen stehen manchmal Häuser)
-    const freiStrecke = y => { for (let x = 64; x < 2000; x += 16) if ([0, 40, 80, 120].every(d => frei(raum.welt, x + d, y, 12))) return x; return null; };
+    const freiStrecke = y => { for (let x = 64; x < 2000; x += 16) if ([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120].every(d => frei(raum.welt, x + d, y, 12) && !aufParkAuto(raum.welt, x + d, y, 12))) return x; return null; };   // auch ohne parkende Autos (darüber klettert man langsam)
     const strecken = [];
     for (let y = 80; y < 1500 && strecken.length < 2; y += 24) { const x = freiStrecke(y); if (x !== null && (!strecken.length || Math.abs(strecken[0].y - y) > 60)) strecken.push({ x, y }); }
     assert.equal(strecken.length, 2, 'keine freien Strecken');

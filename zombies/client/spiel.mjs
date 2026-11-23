@@ -1,6 +1,7 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
 import { kartenNr } from './levelkatalog.mjs';
 import { fzPx } from './masse.mjs';
+import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from './fzkollision.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
 import {
@@ -871,6 +872,11 @@ function chatAnschliessen(raum) {
     $('chatliste').scrollTop = $('chatliste').scrollHeight;
   };
   raum.onMessage('tempoWerte', v => tempoWerteSetzen(W, v));   // Held-/Zombietempo (km/h) aus der Verwaltung, gleich wie auf dem Server (Vorhersage)
+  raum.onMessage('taumel', m => {   // ein Fahrzeug hat einen Helden erfasst: Taumeln (eigene Eingabe eingeschränkt, Figur wackelt)
+    const d = Number(m?.d) || 0.7;
+    if (m.id === meineId) taumelBis = performance.now() + d * 1000;
+    const fig = szeneRef?.figuren?.get(m.id); if (fig) fig.taumelBis = performance.now() + d * 1000;
+  });
   raum.onMessage('baumTempo', v => { if (Number.isFinite(v)) baumTempoWert = v; });   // Einstellung „Tempo unter Bäumen“ (%), für die Vorhersage
   raum.onMessage('chatVerlauf', m => {
     const liste = m.nachrichten ?? [];
@@ -912,6 +918,7 @@ const zombieKarte = () => raum?.state?.zombies ?? LEERE_KARTE;
 const fzRichtung = f => (typeof f.rq === 'number' ? ausStufe(f.rq) : f.richtung ?? 0);   // Fahrzeuge: ebenfalls 256 Stufen
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
 let baumTempoWert = 25;
+let taumelBis = 0;   // performance.now(), bis wann der eigene Held taumelt (Fahrzeugstoß, Nachricht 'taumel'): Steuerung eingeschränkt wie auf dem Server
 // Maßstäbliche Innenräume: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
 const INNEN_FIGUR = 0.5;
 let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
@@ -2521,6 +2528,7 @@ class Ort extends Phaser.Scene {
       for (const [id, m] of s.menschen ?? []) pf.merke('m' + id, m.x, m.y, s.takt, true);
     }
     const rt = typeof s.takt === 'number' ? pf.zeit(performance.now()) : null;   // Anzeigezeit (Server-Uhr minus Verzögerung)
+    this.fzAnz = null;   // Fahrzeug-Rechtecke dieses Frames (Kletter-Pose)
     // Spieler
     for (const [id, p] of s.spieler) {
       let f = this.figuren.get(id);
@@ -3119,7 +3127,15 @@ class Ort extends Phaser.Scene {
     const s0 = p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg() : survivor ? BOGEN2_GROESSE * mg()
       : held ? ZOMBIE_GROESSE * groesse('helden160', `held_${gg0}_leer`) * mg()
       : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg();
-    f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03));
+    // Klettern über ein stehendes Auto (20 % Tempo): Figur leicht größer und angehoben, wippt; Taumeln nach einem Fahrzeugstoß: Figur schwankt
+    const jetzt = this.time.now, perf = performance.now();
+    const aufAutoJa = !p.unten && !zombie && !p.ebene && aufAuto(this.welt, (this.fzAnz ??= fzRechtecke(raum.state.fahrzeuge, fzRichtung)), f.x, f.y, W.spielerRadius);
+    const taumelt = !p.unten && f.taumelBis > perf;
+    const klettern = aufAutoJa ? 1.08 + Math.sin(jetzt / 90) * 0.015 : 1;
+    f.bild.setScale(s0 * (p.schleicht && !p.unten ? 0.92 : 1) * (1 + Math.abs(wipp) * 0.03) * klettern);
+    f.bild.setY(aufAutoJa ? -3 + Math.sin(jetzt / 70) * 1.2 : 0); f.fuesse.setY(f.bild.y);
+    if (taumelt) f.bild.setRotation(f.bild.rotation + Math.sin(perf / 45) * 0.35 * Math.min(1, (f.taumelBis - perf) / 300));
+    if (f === this.figuren.get(meineId) && aufAutoJa && jetzt - (this.kletterTon ?? 0) > 380) { this.kletterTon = jetzt; ton.schritt(false); }   // Klettern: Schrittgeräusch (kein eigener Ton nötig)
     const ton = this.schattenTon(f, f.x, f.y);   // Spieler/Bots: im Schatten dunkler (Körper und Füße)
     f.bild.setTint(ton); f.fuesse.setTint(ton);
     // Name, Lebensbalken und Symbole: drinnen auf Bildschirmgröße wie draußen zurückrechnen, Abstände zur (halb so großen) Figur
@@ -3245,9 +3261,10 @@ class Ort extends Phaser.Scene {
     const zombie = p.zombie > 0, schleicht = !zombie && (s || l < 0.55);
     const tempo = zombie ? W.zombieTempoJagen * 1.15
       : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
-    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d * tempoVon(welt) * baumFaktor(welt, pos.x, pos.y, baumTempoWert);   // drinnen Maßstab-Tempo, unter Bäumen langsamer (wie raum.mjs)
+    const tf = !zombie && performance.now() < taumelBis ? STOSS_TAUMEL_FAKTOR : 1;   // Taumeln nach Fahrzeugstoß (wie raum.mjs)
+    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d * tempoVon(welt) * baumFaktor(welt, pos.x, pos.y, baumTempoWert) * tf * autoTempo(welt, this.fzl, pos.x, pos.y, W.spielerRadius);   // stehende Autos: 20 %   // drinnen Maßstab-Tempo, unter Bäumen langsamer (wie raum.mjs)
     const n = Math.max(1, Math.ceil(weg / 4));   // Teilschritte wie auf dem Server (raum.mjs spielerSchritt)
-    for (let i = 0; i < n; i++) bewege(welt, pos, dx / l * weg / n, dy / l * weg / n, W.spielerRadius);
+    for (let i = 0; i < n; i++) bewegeFz(bewege, welt, pos, dx / l * weg / n, dy / l * weg / n, W.spielerRadius, this.fzl);   // fahrende Fahrzeuge sind Wände
   }
 
   // Vorhersage: Serverstand (basis) + alle noch nicht bestätigten Eingaben + das laufende, noch nicht gesendete Stück
@@ -3255,6 +3272,7 @@ class Ort extends Phaser.Scene {
     const pos = { x: basis.x, y: basis.y };
     if (p.unten || p.anBord || raum.state.phase !== 'spiel') return pos;
     const welt = this.wv(p.ebene);
+    this.fzl = p.ebene ? null : fzRechtecke(raum.state.fahrzeuge, fzRichtung);   // Fahrzeuge für Klettern/Blockieren (client/fzkollision.mjs)
     for (const o of this.offen) if (nachSeq(o.n, basis.seq)) this.schrittSim(p, welt, pos, o.dx, o.dy, o.s, o.d);
     const g = this.gesendet;
     if (g.t) this.schrittSim(p, welt, pos, g.dx, g.dy, g.s, Math.min(0.25, (performance.now() - g.t) / 1000));

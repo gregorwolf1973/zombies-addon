@@ -17,6 +17,8 @@ import { Versorgung } from './versorgung.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
 import { Boxer } from './boxer.mjs';
 import { Fahrbare } from './fahrbar.mjs';
+import { Fahrzeugkontakt } from './fahrzeugkontakt.mjs';
+import { autoTempo, bewegeFz } from '../client/fzkollision.mjs';
 import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
 import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
@@ -552,6 +554,7 @@ export class SpielRaum extends Room {
     this.stadt = new Stadtleben(this);
     this.stadt.start(this.welt.karte ? (SpielRaum.einstellungen.menschen ?? 50) : 0);
     this.verkehr = new Verkehr(this);
+    this.kontakt = new Fahrzeugkontakt(this);   // Helden gegen Fahrzeuge: Stoß/Taumeln, Klettern/Blockieren (server/fahrzeugkontakt.mjs)
     if (this.welt.karte) this.verkehr.start(this.stadt.haltestellen, SpielRaum.einstellungen.verkehr ?? 30, SpielRaum.einstellungen.verkehrDichte);
     this.brand = new Brandstifter(this);
     this.welle = new Zombiewelle(this);
@@ -2838,6 +2841,7 @@ export class SpielRaum extends Room {
     }
 
     let t0 = performance.now();
+    this.kontakt?.schritt(dt);
     for (const [id, p] of s.spieler) {
       const x = this.extra.get(id);
       if (!x) continue;
@@ -2942,14 +2946,16 @@ export class SpielRaum extends Room {
     if (p.imBoxer) { this.eingabeSchritte(p, x, dt); this.fahrbare?.fahrerEingabe(id, x.eingabe); return; }   // im Fahrzeug: die Eingabe lenkt ihn (nur der Fahrer), die Figur bleibt sitzen
     if (p.unten || p.anBord || p.kamera) { this.eingabeVerwerfen(p, x); return; }   // an Bord eines Evakuierungsfahrzeugs: sitzt, die Position folgt dem Fahrzeug (server/aufgaben.mjs)
     if (x.sprungT > 0) { x.sprungT -= dt; this.eingabeVerwerfen(p, x); this.waffeSchritt(id, p, x, dt, welt, false); return; }   // Zaunsprung läuft: keine Bewegung, Client und Server bleiben einig
+    const tf = this.kontakt?.taumeln(p, x, dt) ?? 1;   // Stoß eines Fahrzeugs: seitlich gleiten, Steuerung eingeschränkt
+    const fzl = p.ebene ? null : this.kontakt?.fz;     // stehende Fahrzeuge: darüber klettern (20 %), fahrende: Wand
     const schritte = this.eingabeSchritte(p, x, dt);
     const e = x.eingabe;
     if (p.zombie > 0) {
       for (const [se, sd] of schritte) {
         const l = Math.hypot(se.dx, se.dy);
         if (l <= 0.05) continue;
-        const f = Math.min(1, l) * W.zombieTempoJagen * 1.15 * sd * tempoVon(this.wv(p.ebene)) * this.baumTempo(this.wv(p.ebene), p);
-        bewege(this.wv(p.ebene), p, se.dx / l * f, se.dy / l * f, W.spielerRadius);
+        const f = Math.min(1, l) * W.zombieTempoJagen * 1.15 * sd * tempoVon(this.wv(p.ebene)) * this.baumTempo(this.wv(p.ebene), p) * tf * autoTempo(this.wv(p.ebene), fzl, p.x, p.y, W.spielerRadius);
+        bewegeFz(bewege, this.wv(p.ebene), p, se.dx / l * f, se.dy / l * f, W.spielerRadius, fzl);
         p.richtung = Math.atan2(se.dy, se.dx);
       }
       return this.zombieSpielerSchritt(p, x, e, 0, dt);   // Bewegung ist schon erledigt (laenge 0): nur Übergänge und Bisse
@@ -2963,16 +2969,16 @@ export class SpielRaum extends Room {
       const schleicht = se.s || laenge < 0.55;
       // infiziert: langsamer
       const tempo = (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1) * this.fkWert(p, 'tempo') * tempoVon(welt);
-      let f = Math.min(1, laenge / (schleicht ? 0.55 : 1)) * tempo * sd * this.baumTempo(welt, p);
+      let f = Math.min(1, laenge / (schleicht ? 0.55 : 1)) * tempo * sd * this.baumTempo(welt, p) * tf * autoTempo(welt, fzl, p.x, p.y, W.spielerRadius);   // über ein stehendes Auto nur mit 20 % (client/fzkollision.mjs, wie die Vorhersage)
       const x0 = p.x, y0 = p.y;
       if (x.bot) {
         // Bots steigen nicht über Zäune, gehen aber durch Hecken und Holzzäune – langsam
         f *= Math.min(tierGelaende(welt, x0, y0, W.spielerRadius) || 1, tierGelaende(welt, x0 + se.dx / laenge * f, y0 + se.dy / laenge * f, W.spielerRadius) || 1);
-        bewege(welt, p, se.dx / laenge * f, se.dy / laenge * f, W.spielerRadius, freiTier);
+        bewegeFz(bewege, welt, p, se.dx / laenge * f, se.dy / laenge * f, W.spielerRadius, fzl, freiTier);
       } else {
         // in Teilschritten von höchstens 4 px – genau wie die Vorhersage im Client (spiel.mjs schrittSim), damit Ecken gleich ausgehen
         const n = Math.max(1, Math.ceil(f / 4));
-        for (let i = 0; i < n; i++) bewege(welt, p, se.dx / laenge * f / n, se.dy / laenge * f / n, W.spielerRadius);
+        for (let i = 0; i < n; i++) bewegeFz(bewege, welt, p, se.dx / laenge * f / n, se.dy / laenge * f / n, W.spielerRadius, fzl);
       }
       p.richtung = Math.atan2(se.dy, se.dx);
       if (!schleicht) this.laerm(p.x, p.y, W.hoerweiteRennen * this.fkWert(p, 'hoerweite'), false, p.ebene);
@@ -3621,7 +3627,7 @@ export class SpielRaum extends Room {
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
     // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)
-    const schritt = weg * this.baumTempo(welt, z) * Math.min(tierGelaende(welt, x0, y0, W.zombieRadius) || 1, tierGelaende(welt, x0 + Math.cos(w) * weg, y0 + Math.sin(w) * weg, W.zombieRadius) || 1);
+    const schritt = weg * this.baumTempo(welt, z) * (z.ebene ? 1 : autoTempo(welt, this.kontakt?.fz, z.x, z.y, W.zombieRadius)) * Math.min(tierGelaende(welt, x0, y0, W.zombieRadius) || 1, tierGelaende(welt, x0 + Math.cos(w) * weg, y0 + Math.sin(w) * weg, W.zombieRadius) || 1);
     bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.zombieRadius, freiTier);
     // Engpass (Innenhof-Eingang, schmale Passage): Wo der Zombie beim Verfolgen nicht weiterkommt, aber ein Spieler (kleinerer Radius) durchpasst, rutscht er mit Spielerradius durch
     if (eifrig && Math.hypot(z.x - x0, z.y - y0) < schritt * 0.3) bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.spielerRadius, freiTier);
