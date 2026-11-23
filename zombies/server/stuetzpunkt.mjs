@@ -124,6 +124,7 @@ export class Stuetzpunkt {
       else continue;
       const platz = r.freierPlatz({ x, y }, i++);
       const id = r.setzeZombie(platz.x, platz.y, '');
+      r.state.zombies.get(id).variante = 0;   // gefallene Soldaten: Tarn-Zombie (Figur warzombie)
       const info = r.zombieInfo.get(id);
       info.bleibt = true; info.schlaeft = false; info.steht = false;
       this.fallIds.push(id);

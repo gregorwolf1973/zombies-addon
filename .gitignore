@@ -16,3 +16,11 @@ tools/luftbild/cache/
 tools/.pylib/
 tools/einspielen.env.lokal
 tools/__pycache__/
+
+# Mixamo-Rohdateien (Adobe-Lizenz: nur gerenderte Bilder ins Repo, nie die FBX)
+zombies/tools/mixamo/fbx/
+zombies/tools/mixamo/lib/
+zombies/tools/mixamo/*.png
+zombies/tools/mixamo/*.txt
+!zombies/tools/mixamo/LIESMICH.txt
+zombies/tools/mixamo/fbx

@@ -79,3 +79,6 @@ Radpanzer Boxer (grafik/boxer_wanne.webp, boxer_turm.webp): „Boxer CRV (low-po
 https://sketchfab.com/3d-models/boxer-crv-low-poly-a843d0c9366e408293744e017a0e1d58 – CC BY 4.0. Verändert: Draufsichten aus dem 3D-Modell
 gerendert (three.js, tools/glb_draufsicht/boxer.html), Waffenstation mit Aufbau und Rohr per Dreiecksschnitt als Turm von der Wanne getrennt,
 verkleinert (tools/boxer_bilder.py).
+
+Zombie-Figuren (grafik/zombies_*.webp, zombies_neu.json): Figuren und Animationen von Mixamo (Adobe), exakt von oben zu Einzelbildern gerendert
+(tools/mixamo, three.js), aufgehellt (Gamma 0,72); es werden nur die gerenderten Bilder ausgeliefert, keine Modell- oder Animationsdateien.

@@ -175,6 +175,7 @@ export class Polizei {
   aufstehen(q) {
     const r = this.raum;
     const id = r.setzeZombie(q.x, q.y, '');
+    r.state.zombies.get(id).variante = 20;   // Polizist als Zombie: Streife (Client: Figur copzombie)
     const info = r.zombieInfo.get(id);
     info.schlaeft = false; info.steht = false;
     q.tot = 2; q.zid = id;

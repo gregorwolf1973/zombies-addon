@@ -538,6 +538,7 @@ export class Stadtleben {
     this.gruppeVerlassen(id, inf);
     s.menschen.delete(id); this.info.delete(id);
     const zid = this.raum.setzeZombie(m.x, m.y, '');
+    if (String(m.aussehen ?? '').startsWith('p')) this.raum.state.zombies.get(zid).variante = 20;   // verwandelter Polizist: Streife (Figur copzombie)
     this.raum.zombieInfo.get(zid).bleibt = true;
     this.zuletztVerwandelt = zid;
     s.verwandelt = Math.min(65535, (s.verwandelt ?? 0) + 1);
