@@ -370,7 +370,7 @@ export function bereinige(e = {}, alt = {}) {
       streuner: Math.round(zahl(e.hund?.streuner ?? a.hund?.streuner, -1, 20, HUND.streuner, { max: 200 })),   // Streuner-Hunde: -1 = automatisch (1 je 0,5 km²), 0 = keine, 1–20 fest
     },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 8 m ihn statt des Spielers jagt
     funde,
-    beute: { moebel: Math.round(zahl(e.beute?.moebel ?? a.beute?.moebel, 0, 100, MOEBEL_ANTEIL)) },   // % der Möbel/Behälter, die überhaupt etwas enthalten
+    beute: { moebel: Math.round(fest(e.beute?.moebel ?? a.beute?.moebel, 0, 100, MOEBEL_ANTEIL)) },   // Prozent: echte Grenze 0–100   // % der Möbel/Behälter, die überhaupt etwas enthalten
     toene,
     toeneNamen: bereinigeToeneNamen(e.toeneNamen, a.toeneNamen),
     toeneHorde: bereinigeHordeTon({ ...a.toeneHorde, ...(e.toeneHorde ?? {}) }),
