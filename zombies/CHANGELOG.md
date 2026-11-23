@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.85.0 – 23.11.2026
+
+- Funde: Nur noch 30 % der Möbel (Schränke, Küche, Bad, Regale …) enthalten etwas; Läden, Autos, Leichen und Bundeswehr-Kisten sind ausgenommen. Die Regel „Munitionsglück“ ist entfernt.
+- Munition: In 15 % der Kofferräume liegt Munition, tote Zombies haben zu 15 % 5–12 Schuss dabei. Granatwerfer: 30 % Chance im Bundeswehr-Container.
+- Karte: Für jede offene Aufgabe liegen die benötigten Dinge fest in passenden Behältern, verteilt über die Karte, und sind mit gelben Punkten markiert (auch auf der kleinen Karte). Der gelbe Ring eines Missionsgegenstands verschwindet, solange ihn jemand trägt.
+- Bundeswehr-Versorgung: Alle 2 Spieltage liegen für jeden Spieler 50 Schuss, eine zufällige Schusswaffe, 3 Verbandszeug und 1 Spritze in den Munitionskisten bereit. Sonst gibt es dort keine Zufallsbeute mehr; der Munitionstausch beim Soldaten bringt nur noch 30 Schuss.
+- Neues Faust-Feld neben den Waffenplätzen (Schießen abstellen); die doppelte Waffenanzeige darüber ist weg.
+- Evakuierung: Sind alle Aufgaben erledigt und alle eingestiegen, geht es sofort los.
+- Boxer fährt bis 60 km/h (einstellbar).
+- Schatten von Leopard, Boxer und Puma passen jetzt zu Größe und Höhe der Fahrzeuge.
+- Isarauen: Der Evakuierungspanzer kommt vom Kartenrand über die Straßen angefahren und trifft pünktlich ein (Meldung „Panzer im Anmarsch“).
+- Königsdorf: Der A400M landet auf der Piste, rollt aus und fängt erst dann Feuer.
+- Backend: Alle Werte lassen sich frei eingeben, Regler zeigen nur den empfohlenen Bereich; fahrende Autos bis 1000 mit einstellbarer Dichte; Level-Reihenfolge frei sortierbar, einzelne Level abschaltbar.
+- Funkansage nach dem Funkspruch (Datei funk_abholung.mp3 im Tonordner; ohne Datei bleibt es still).
+
 ## 0.84.4 – 23.11.2026
 
 - Das eingestellte Zombietempo (Jagen und Wandern) ist jetzt das Höchsttempo: normale Zombies laufen 60–85 % davon, Läufer 85–100 %. Bisher waren Läufer bis zu 60 % schneller als eingestellt und holten auch eine schnellere Heldin ein. Das Backend zeigt die Spanne neben dem Wert an.
