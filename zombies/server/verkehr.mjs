@@ -4,10 +4,11 @@
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, BREITE, HOEHE } from '../client/welt.mjs';
 import { B11_KARTE, b11Sperrkanten } from './szene_b11_geo.mjs';
-import { frei, bewege } from '../client/welt.mjs';
+import { frei, freiBewegung, bewege } from '../client/welt.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
 import { Unfaelle } from './unfall.mjs';
 import { entkoppeln } from './netzfeld.mjs';
+import { querfeldVon, querfeldKosten } from './querfeld.mjs';
 
 export const Fahrzeug = schema({
   x: t.int16(), y: t.int16(),   // übertragen in ganzen Pixeln (server/netzfeld.mjs; der Server rechnet genau)
@@ -278,13 +279,86 @@ export class Verkehr {
     return id;
   }
 
-  // Evakuierungspanzer (Leopard): fährt querfeldein auf dem Weg aus server/querfeld.mjs (plan.weg: Einfahrtspunkt → Ziel) und wartet dort;
-  // die Ausfahrt nimmt den Weg zurück (plan.rueck)
+  // Evakuierungspanzer (Leopard): Anfahrt von weit weg. Gemischter Weg: erst über das Straßennetz von einem Randknoten (Wanne passt durch, siehe
+  // spurFrei) bis zu einem Knoten nahe am Abholort, dann das letzte Stück querfeldein (plan.weg aus server/querfeld.mjs, ab Knoten).
+  // Ergebnis (am Plan zwischengespeichert): { weg, feldVon, feldWeg, knoten, rand, laenge }; null, wenn keine Straße passt (dann nur Querfeld).
+  panzerWeg(plan) {
+    if (plan._misch !== undefined) return plan._misch;
+    plan._misch = null;
+    const g = this.graph, welt = this.raum.welt;
+    if (!g.knoten.length) return null;
+    const versatz = (SPUR.evakuierung ?? 0.22) * 4 * KACHEL / 4 * 1.85;
+    const kand = g.knoten.map(n => ({ n, k: querfeldKosten(plan, n, welt) })).filter(o => Number.isFinite(o.k) && o.k >= 100)
+      .sort((a, b) => a.k - b.k).slice(0, 40);
+    const rand = this.randKnoten();
+    for (const { n } of kand) {
+      const feld = querfeldVon(welt, plan, n);
+      if (!feld) continue;
+      for (const r of rand.slice().sort((a, b) => Math.hypot(b.x - n.x, b.y - n.y) - Math.hypot(a.x - n.x, a.y - n.y))) {
+        if (r === n) continue;
+        // kürzeste Straße, deren Mitte für die Wanne frei ist; an Engstellen wird der Knoten dahinter gemieden und neu gesucht
+        const meiden = new Set();
+        let strasse = null;
+        for (let versuch = 0; versuch < 8; versuch++) {
+          const wege = route(g, r, n, meiden);
+          if (!wege || wege.length < 2) break;
+          const schlecht = wege.findIndex((p, i) => i < wege.length - 1 && this.spurSchlecht([p, wege[i + 1]], 1) > 3);   // hartes Hindernis auf der Straße (einzelne Ausreißer zählen nicht)
+          if (schlecht < 0 && this.spurSchlecht(wege, 10) <= 14) { strasse = wege; break; }   // höchstens eine kurze Engstelle (≈ 14 Stützpunkte): die Wanne drückt sich durch den Straßenrand
+          if (schlecht < 0) break;
+          const k = naechsterKnoten(g, wege[schlecht + 1].x, wege[schlecht + 1].y);
+          if (!k || k === n) break;
+          meiden.add(k);
+        }
+        if (!strasse) continue;
+        const lane = spurLinie(strasse, versatz);
+        if (this.spurSchlecht(lane, 3) > 6) continue;
+        const weg = [...lane, ...feld];
+        let laenge = 0; for (let i = 0; i < weg.length - 1; i++) laenge += Math.hypot(weg[i + 1].x - weg[i].x, weg[i + 1].y - weg[i].y);
+        return plan._misch = { weg, feldVon: lane.length, feldWeg: feld, knoten: n, rand: r, laenge };
+      }
+    }
+    return null;
+  }
+
+  // Passt die Wanne des Panzers auf die Fahrlinie (kein Haus, kein Wasser im Weg; enge Straßen scheiden aus)?
+  // (nur Hindernisse wie Häuser, Bäume, Mauern zählen; Wasser nicht, denn Brücken laufen über Wasserkacheln)
+  spurFrei(linie, rad = 14) {
+    const welt = this.raum.welt;
+    for (let i = 0; i < linie.length - 1; i++) {
+      const a = linie[i], b = linie[i + 1], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 16));
+      for (let j = 0; j <= n; j++) if (!freiBewegung(welt, a.x + (b.x - a.x) * j / n, a.y + (b.y - a.y) * j / n, rad)) return false;
+    }
+    return true;
+  }
+
+  // Anzahl der Stützpunkte (alle 16 px) auf der Linie, an denen die Wanne nicht passt
+  spurSchlecht(linie, rad) {
+    const welt = this.raum.welt;
+    let n = 0;
+    for (let i = 0; i < linie.length - 1; i++) {
+      const a = linie[i], b = linie[i + 1], m = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 16));
+      for (let j = 0; j <= m; j++) if (!freiBewegung(welt, a.x + (b.x - a.x) * j / m, a.y + (b.y - a.y) * j / m, rad)) n++;
+    }
+    return n;
+  }
+
+  // Länge (Pixel) der Anfahrt des Panzers, für die rechtzeitige Abfahrt
+  panzerLaenge(plan) {
+    const m = this.panzerWeg(plan), w = m ? m.weg : plan.weg;
+    let l = 0; for (let i = 0; i < w.length - 1; i++) l += Math.hypot(w[i + 1].x - w[i].x, w[i + 1].y - w[i].y);
+    return l;
+  }
+
+  // Panzer im Gelände (nicht auf der Straße)? Nur dort gelten die Querfeld-Ausnahmen (nicht überfahren, kein Wenden)
+  imFeld(inf) { return !!inf.querfeld && inf.pos >= (inf.feldVon ?? 0) && inf.pos < (inf.feldBis ?? Infinity); }
+
   evakuierungPanzer(plan) {
-    const id = this.neu('evakuierung', plan.weg[0], { evakuierung: true, angekommen: false, querfeld: plan });
+    const m = this.panzerWeg(plan), weg0 = m ? m.weg : plan.weg;
+    const id = this.neu('evakuierung', weg0[0], { evakuierung: true, angekommen: false, querfeld: plan });
     const f = this.raum.state.fahrzeuge.get(id), inf = this.info.get(id);
-    f.farbe = 0; inf.weg = plan.weg.map(p => ({ x: p.x, y: p.y })); inf.pos = 0;
-    f.richtung = Math.atan2(plan.weg[1].y - plan.weg[0].y, plan.weg[1].x - plan.weg[0].x);
+    f.farbe = 0; inf.weg = weg0.map(p => ({ x: p.x, y: p.y })); inf.pos = 0;
+    if (m) { inf.feldVon = m.feldVon; inf.feldWeg = m.feldWeg; inf.zielKnoten = m.knoten; inf.mischRand = m.rand; }
+    f.richtung = Math.atan2(weg0[1].y - weg0[0].y, weg0[1].x - weg0[0].x);
     return id;
   }
 
@@ -305,7 +379,17 @@ export class Verkehr {
     const f = this.raum.state.fahrzeuge.get(id), inf = this.info.get(id);
     if (!f || !inf) return;
     if (inf.flugzeug) { this.raum.state.fahrzeuge.delete(id); this.info.delete(id); return; }   // hebt ab (kein Straßenweg)
-    if (inf.querfeld) { inf.weg = [{ x: f.x, y: f.y }, ...inf.querfeld.rueck]; inf.pos = 0; inf.halt = 0; inf.abfahrt = true; f.haelt = false; return; }   // Panzer: den Feldweg zurück
+    if (inf.querfeld) {   // Panzer: den Feldweg zurück, bei gemischter Anfahrt danach auf der Straße zum Rand
+      const feld = inf.feldWeg ? [...inf.feldWeg].reverse() : inf.querfeld.rueck;
+      let weg = [{ x: f.x, y: f.y }, ...feld], ende = weg.length;
+      if (inf.feldWeg && inf.mischRand) {
+        const strasse = route(this.graph, inf.zielKnoten, inf.mischRand);
+        if (strasse && strasse.length > 1) { weg = [...weg, ...spurLinie(strasse, (SPUR.evakuierung ?? 0.22) * 4 * KACHEL / 4 * 1.85)]; inf.zielKnoten = inf.mischRand; }
+      }
+      inf.weg = weg; inf.pos = 0; inf.halt = 0; inf.abfahrt = true; f.haelt = false;
+      inf.feldVon = 0; inf.feldBis = ende; inf.feldWeg = null;
+      return;
+    }
     inf.halt = 0; inf.abfahrt = true; f.haelt = false;
     const rand = this.graph.knoten.length ? this.randKnoten() : [];
     const ziel = rand.length ? rand.reduce((a, b) => Math.hypot(b.x - f.x, b.y - f.y) > Math.hypot(a.x - f.x, a.y - f.y) ? b : a) : null;
@@ -346,7 +430,7 @@ export class Verkehr {
         else { f.x += Math.cos(w) * rest; f.y += Math.sin(w) * rest; rest = 0; }
       }
       const bewegt = Math.hypot(f.x - x0, f.y - y0);
-      if (!inf.querfeld && !inf.flugzeug) this.zombiesUeberfahren(id, f, inf, bewegt / dt, dt);
+      if (!this.imFeld(inf) && !inf.flugzeug) this.zombiesUeberfahren(id, f, inf, bewegt / dt, dt);
       if (lauf.faktor < 0.05 && !imWeg) { if (bewegt < 0.3) this.festgefahren(id, f, inf, lauf, dt); }
       else if (bewegt > 1.5) { inf.steht = 0; inf.gewendet = false; inf.kreuzFrei = false; inf.schubSeite = undefined; }
     }
@@ -478,7 +562,7 @@ export class Verkehr {
 
   // Rückwärts auf einen anderen Weg: Route vom Knoten hinter dem Fahrzeug unter Meidung der Knoten vor ihm
   wenden(id, f, inf) {
-    if (!inf.weg || inf.querfeld || inf.flugzeug || !this.graph.knoten.length) return false;
+    if (!inf.weg || this.imFeld(inf) || inf.flugzeug || !this.graph.knoten.length) return false;
     const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), g = this.graph;
     const hinten = naechsterKnoten(g, f.x - c * 50, f.y - sn * 50);
     if (!hinten) return false;
@@ -494,7 +578,10 @@ export class Verkehr {
       // Mitte der Straße unter dem Fahrzeug; die neue Spur liegt auf der anderen Seite (rechts der neuen Fahrtrichtung)
       const versatz = (SPUR[f.art] ?? 0.2) * 4 * KACHEL / 4 * 1.85;   // Spurabstand zur Mitte: Gegenverkehr hat ~26 px Abstand (Autos 18, Laster 22 px breit)
       const mitte = { x: f.x + Math.sin(f.richtung) * versatz, y: f.y - Math.cos(f.richtung) * versatz };
-      inf.weg = spurLinie([mitte, ...weg], versatz); inf.pos = 0; inf.zielKnoten = ziel; inf.kreuz = null; inf.kreuzFrei = false; inf.kreuzWarte = 0;
+      const lane = spurLinie([mitte, ...weg], versatz);
+      if (inf.feldWeg) { inf.weg = [...lane, ...inf.feldWeg]; inf.feldVon = lane.length; }   // Panzer-Anfahrt: das Feldstück bleibt dahinter
+      else { inf.weg = lane; if (inf.querfeld) inf.feldBis = 0; }
+      inf.pos = 0; inf.zielKnoten = ziel; inf.kreuz = null; inf.kreuzFrei = false; inf.kreuzWarte = 0;
       f.x = inf.weg[0].x; f.y = inf.weg[0].y;   // wechselt sofort auf die Gegenspur (sonst stünde er dem Rückstau frontal gegenüber)
       const q = inf.weg[1]; if (q) f.richtung = Math.atan2(q.y - f.y, q.x - f.x);   // der Client dreht weich nach
       return true;

@@ -5,7 +5,7 @@
 import { flach, hat, indexVon, zaehle as zaehleStapel } from '../client/stapel.mjs';
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei, kachelVon, reichVon } from '../client/welt.mjs';
-import { LEOPARD, A400M, evakArtFuer, imFussabdruck } from '../client/evak.mjs';
+import { LEOPARD, A400M, evakArtFuer, imFussabdruck, ABSTURZ, absturzDauer, absturzStrecke } from '../client/evak.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
 import { ueberrolleZombies } from './ueberrollen.mjs';
 import { querfeldPlan } from './querfeld.mjs';
@@ -39,6 +39,7 @@ export const KARTEN_NAMEN = { geretsried: 'Geretsried (Level 1)', geretsried2: '
 
 export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
 const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
+const PANZER_TEMPO = 100;   // px/s des Evakuierungsfahrzeugs (TEMPO in verkehr.mjs: Vorgabe 100)
 const WARNUNG_MIN = 30;     // so viele Spielminuten vor der Ankunft kommt die Funkmeldung
 const WARTE_RADIUS = 800;   // 100 m um den Abholpunkt: stehen dort alle Lebenden, läuft die Uhr schneller (warteRaffer)
 
@@ -104,7 +105,7 @@ export const hhmm = min => {
 const EVAK_REICHWEITE = 230, EVAK_PAUSE = 0.4, EVAK_TREFFER = 0.8;   // Bus/Panzer: Reichweite (px), Schussfolge (s), Trefferchance
 const HELI_ANFLUG = 30, HELI_NEU = 60, HELI_ABSTAND = 90;            // Hubschrauber: Anflugzeit, Wartezeit bis zum nächsten Anflug (echte Sekunden), Einstiegsradius (px)
 const ROLLEN_TEMPO = 190;                                            // A400M: Aufsetzgeschwindigkeit der Landerolle (px/s), bremst bis zum Stand
-const ABSTURZ_DAUER = 14;   // Königsdorf: so viele Sekunden dauert der Landeanflug bis zum Absturz
+// Königsdorf: Landeanflug, Aufsetzen und Ausrollen auf der Piste (Maße und Dauer in client/evak.mjs: ABSTURZ), danach Triebwerksbrand
 const UEBERROLLEN_PAUSE = 0.1;                                       // Leopard: so oft (s) wird der Fußabdruck auf Zombies geprüft
 
 export class Aufgaben {
@@ -486,10 +487,12 @@ export class Aufgaben {
       if (!s.funk || !this.missionFertig()) return;   // der Bus kommt erst, wenn alle Missionsgegenstände abgegeben sind
       const seit = (s.uhr - A + 1440) % 1440;          // Minuten seit der Ankunftszeit
       const bis = (A - s.uhr + 1440) % 1440;           // Minuten bis zur Ankunftszeit
-      if (seit < wartezeit) {
+      const frueh = this.evakArt() === 'panzer' ? this.panzerVorlauf() : 0;   // Panzer: rollt schon vor der Ankunftszeit los (lange Anfahrt)
+      const vorlauf = frueh > 0 && bis > 0 && bis <= frueh;
+      if (seit < wartezeit || (vorlauf && !this.busHeute)) {
         if (!this.busHeute) this.ankunft(wartezeit - seit);
       } else {
-        this.busHeute = false;                          // Zeitfenster vorbei: morgen kommt ein neuer Bus
+        if (!vorlauf) this.busHeute = false;            // Zeitfenster vorbei: morgen kommt ein neuer Bus
         if (bis > 0 && bis <= WARNUNG_MIN && !this.ankGemeldet) {
           this.ankGemeldet = true;
           this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} kommt um ${hhmm(A)} zum Ortsausgang!`, lang: true });
@@ -623,6 +626,25 @@ export class Aufgaben {
     return an ? Math.max(1, Number(this.einst().warteRaffer) || 6) : 1;
   }
 
+  // Panzer-Anfahrt: Dauer in Spielminuten (Weglänge / Tempo, mit Zuschlag für Kreuzungen und Bremsen vor Fußgängern), damit er zur angekündigten Zeit steht
+  panzerVorlauf() {
+    const v = this.raum.verkehr, plan = this.panzerPlan();
+    if (!v || !plan) return 0;
+    const sek = v.panzerLaenge(plan) / PANZER_TEMPO * 1.1 + 5;
+    return sek * 1440 / ((this.raum.einstellungen?.().tagMinuten || 48) * 60);
+  }
+
+  // Hinweis „Panzer im Anmarsch“ mit Richtung (vom Abholort aus gesehen) und Entfernung
+  panzerAnmarsch(plan) {
+    const s = this.raum.state, v = this.raum.verkehr, f = s.fahrzeuge.get(this.busId);
+    const z = s.evakX > 0 ? { x: s.evakX, y: s.evakY } : plan.ziel;
+    const dx = (f?.x ?? plan.start.x) - z.x, dy = (f?.y ?? plan.start.y) - z.y;
+    const m = Math.round(Math.hypot(dx, dy) / 8 / 10) * 10, weg = Math.round(v.panzerLaenge(plan) / 8 / 10) * 10;
+    const w = Math.abs(dx) > Math.abs(dy) * 2.4 ? (dx > 0 ? 'Osten' : 'Westen') : Math.abs(dy) > Math.abs(dx) * 2.4 ? (dy > 0 ? 'Süden' : 'Norden')
+      : (dy > 0 ? 'Süd' : 'Nord') + (dx > 0 ? 'osten' : 'westen');
+    this.raum.broadcast('meldung', { text: `${this.fz().zeichen} Panzer im Anmarsch aus ${w}: ${m} m Luftlinie (${weg} m Fahrt), er trifft um ${hhmm(s.busAnkunft)} an der Abholstelle ein!`, lang: true });
+  }
+
   // Bus erscheint am Ortsausgang (auf der nächsten Straße, sonst dahinter im Ort) und wartet
   ankunft(rest) {
     const s = this.raum.state, w = this.raum.welt, tor = w.tor, v = this.raum.verkehr;
@@ -635,7 +657,7 @@ export class Aufgaben {
         this.busId = v.evakuierungPanzer(plan);
         this.busHeute = true; this.busRest = 0; s.busDa = true; this.busAbSetzen(); this.busGemeldet = false;
         s.busSteht = false;
-        this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} rollt querfeldein zur Abholstelle!`, lang: true });
+        this.panzerAnmarsch(plan);
         return;
       }
     }
@@ -879,18 +901,20 @@ export class Aufgaben {
     return { drinnen, draussen, sieg };
   }
 
-  // ---------- Königsdorf ('absturz'): der A400M kommt zur Evakuierung und stürzt im Landeanflug ab ----------
-  // Ablauf: Anflug (ABSTURZ_DAUER s, Client animiert) → Absturz mit Rauch und Brand, Wrack bleibt als Kulisse → sobald die Fahrt gelingt
-  // (Missionsteile erledigt), kommt der NH90 (Anflug, Landung, Einsteigen/Abflug wie bei der A400M-Evakuierung).
+  // ---------- Königsdorf ('absturz'): der A400M landet auf der Landebahn und fängt erst im Stand Feuer ----------
+  // Ablauf: Anflug auf die Pistenachse → Aufsetzen am Pistenanfang → Ausrollen mit eigenem Bremsweg (Spieler auf der Piste werden zur Seite gestoßen)
+  // → Stillstand, Triebwerksbrand, Wrack bleibt als Kulisse an der Stillstandsposition → sobald die Fahrt gelingt (Missionsteile erledigt),
+  // kommt der NH90 (Anflug, Landung, Einsteigen/Abflug wie bei der A400M-Evakuierung).
   absturzStart() {
     const s = this.raum.state, p = absturzPlan(this.raum.welt, s.seed);
     if (!p) return;   // kann nicht vorkommen (absturzPlan liefert immer einen Plan), aber nie in eine andere Evakuierungsart ausweichen
     this.busHeute = true;
-    this.crash = { rest: ABSTURZ_DAUER, phase: 'anflug' };
-    s.evakArt = 'absturz'; s.evakPhase = 'absturz'; s.evakRest = ABSTURZ_DAUER;
+    const dauer = absturzDauer();
+    this.crash = { rest: dauer, dauer, phase: 'anflug', plan: p };   // rest = verbleibende Sekunden bis zum Stand
+    s.evakArt = 'absturz'; s.evakPhase = 'absturz'; s.evakRest = Math.ceil(dauer);
     s.evakAX = Math.round(p.x); s.evakAY = Math.round(p.y); s.evakW = p.w;
     s.evakX = Math.round(p.heli.x); s.evakY = Math.round(p.heli.y);
-    this.raum.broadcast('meldung', { text: '✈️ Ein A400M kommt im Landeanflug über die Berge …', lang: true });
+    this.raum.broadcast('meldung', { text: '✈️ Ein A400M kommt im Landeanflug auf die Landebahn …', lang: true });
   }
 
   absturzSchritt(dt) {
@@ -898,11 +922,13 @@ export class Aufgaben {
     if (this.wechselLaeuft) return;
     this.takt -= dt;
     if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.orteSync(); }
-    if (c.phase === 'anflug') {
+    if (c.phase === 'anflug' || c.phase === 'rollen') {
       c.rest -= dt; s.evakRest = Math.max(0, Math.ceil(c.rest));
-      if (c.rest > 0) return;
+      const t = c.dauer - c.rest;
+      if (c.phase === 'anflug' && t >= ABSTURZ.anflug) c.phase = 'rollen';
+      if (c.rest > 0) { if (c.phase === 'rollen') this.absturzRollen(t); return; }
       c.phase = 'wrack'; s.evakPhase = 'wrack'; s.evakRest = 0;
-      this.raum.broadcast('meldung', { text: '💥 Der A400M stürzt ab! Keine Rettung aus der Luft – ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
+      this.raum.broadcast('meldung', { text: '🔥 Der A400M ist gelandet – und ein Triebwerk fängt Feuer! Weg vom Flugzeug, ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
       return;
     }
     if (!this.fahrtGelingt()) return;
@@ -910,6 +936,23 @@ export class Aufgaben {
     this.crash = null; this.heli = { phase: 'anflug', rest: HELI_ANFLUG, art: 'absturz' };
     s.evakPhase = 'heliAnflug'; s.evakRest = HELI_ANFLUG;
     this.raum.broadcast('meldung', { text: `🚁 Funkkontakt steht – ein NH90 landet in ${HELI_ANFLUG} s auf dem markierten Platz`, lang: true });
+  }
+
+  // Während der Landerolle: wer im Rumpf-Fußabdruck steht, wird quer zur Piste zur Seite gestoßen (kein Schaden; die Maschine rollt unbeirrt)
+  absturzRollen(t) {
+    const s = this.raum.state, p = this.crash.plan, d = absturzStrecke(t), vor = absturzStrecke(t + 0.1);
+    const tempo = (d - vor) / 0.1;
+    if (tempo < 8) return;
+    const w = p.w, cs = Math.cos(w), sn = Math.sin(w);
+    const fz = { x: p.x - cs * d, y: p.y - sn * d, richtung: w };
+    const hl = A400M.laenge / 2, hb = ABSTURZ.rumpfHalbBreite;
+    for (const [sid, pl] of s.spieler) {
+      if (pl.ebene || pl.anBord || !imFussabdruck(fz, pl.x, pl.y, hl, hb)) continue;
+      const quer = -(pl.x - fz.x) * sn + (pl.y - fz.y) * cs, seite = quer >= 0 ? 1 : -1, weite = hb + 26 - Math.abs(quer);
+      const q = this.platzNeben(pl.x - sn * seite * weite, pl.y + cs * seite * weite);
+      pl.x = q.x; pl.y = q.y;
+      if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, '✈️ Der A400M rollt über die Piste – du wirst zur Seite gestoßen!');
+    }
   }
 
   // Hubschrauber: Anflug → gelandet und wartet (Einsteigen wie beim Bus) → Abflug und Levelwechsel; ohne alle fliegt er ab und kommt später wieder

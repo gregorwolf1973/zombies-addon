@@ -9,7 +9,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { evakArtFuer } from '../client/evak.mjs';
+import { evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke, A400M } from '../client/evak.mjs';
 import { bereinige } from '../server/einstellungen.mjs';
 import { freierPort } from './hilfe.mjs';
 
@@ -52,7 +52,7 @@ test('Karte → Evakuierungsart und Einstellung für die neuen Arten', () => {
   for (const a of ['absturz', 'heli', 'bunker']) assert.equal(bereinige({ aufgaben: { evakArt: a } }).aufgaben.evakArt, a);
 });
 
-test('Königsdorf: A400M stürzt ab (Wrack bleibt), kein Schaden; NH90 landet erst, wenn die Fahrt gelingt; Einsteigen → Abflug', mitArt('absturz', async ({ raum, p, s, ag, meldungen }) => {
+test('Königsdorf: A400M landet auf der Piste und fängt erst im Stand Feuer (Wrack bleibt), kein Schaden; NH90 landet erst, wenn die Fahrt gelingt; Einsteigen → Abflug', mitArt('absturz', async ({ raum, p, s, ag, meldungen }) => {
   assert.equal(s.evakArt, 'absturz');
   assert.ok(s.evakAX > 0, 'keine Absturzstelle');
   nurFunk(raum);
@@ -61,10 +61,10 @@ test('Königsdorf: A400M stürzt ab (Wrack bleibt), kein Schaden; NH90 landet er
   s.uhr = 18 * 60 + 0.1;
   const hp = p.hp;
   assert.ok(await bis(() => s.evakPhase === 'absturz'), 'kein Landeanflug');
-  assert.ok(s.evakRest > 0 && s.evakRest <= 14);
+  assert.ok(s.evakRest > 0 && s.evakRest <= Math.ceil(absturzDauer()));
   ag.crash.rest = 0.05;   // Anflug abkürzen
-  assert.ok(await bis(() => s.evakPhase === 'wrack', 3000), 'kein Absturz');
-  assert.ok(await bis(() => meldungen.some(m => m.includes('stürzt ab'))), 'keine Absturz-Meldung');
+  assert.ok(await bis(() => s.evakPhase === 'wrack', 3000), 'kein Stillstand');
+  assert.ok(await bis(() => meldungen.some(m => m.includes('gelandet') && m.includes('Feuer'))), 'keine Brand-Meldung nach der Landung');
   assert.equal(p.hp, hp, 'Spieler beim Absturz verletzt');
   assert.ok(s.evakAX > 0 && s.evakAY > 0, 'Wrack nicht mehr da');
   assert.equal(s.busDa, false);
@@ -83,6 +83,68 @@ test('Königsdorf: A400M stürzt ab (Wrack bleibt), kein Schaden; NH90 landet er
   assert.ok(p.anBord, 'nicht an Bord');
   assert.ok(await bis(() => gewechselt, 3000), 'kein Levelwechsel');
 }));
+
+test('Königsdorf: Der A400M setzt am Pistenanfang auf, rollt auf der Piste aus (eigener Bremsweg), erst im Stand brennt er; Spieler im Weg werden zur Seite gestoßen', mitArt('absturz', async ({ raum, p, s, ag, meldungen }) => {
+  // Die Testwelt ist Isarauen (ohne Landebahn): eine eigene Piste setzen, Plan neu berechnen lassen
+  raum.welt.landebahn = { x: 3000, y: 3000, w: 0.3, laenge: 5000, breite: 352 }; delete raum.welt._absturzplan;
+  const lb = raum.welt.landebahn, c = Math.cos(lb.w), sn = Math.sin(lb.w);
+  nurFunk(raum);
+  ag.fahrtGelingt = () => false;
+  ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
+  s.uhr = 18 * 60 + 0.1;
+  assert.ok(await bis(() => s.evakPhase === 'absturz'), 'kein Landeanflug');
+  const plan = ag.crash.plan;
+  const aufPiste = (x, y) => { const u = (x - lb.x) * c + (y - lb.y) * sn, v = -(x - lb.x) * sn + (y - lb.y) * c; return { u, v }; };
+  // Plan: Aufsetzen nahe dem Pistenanfang, Stillstand weiter hinten, beides auf der Piste in Pistenrichtung
+  const a0 = aufPiste(plan.aufsetz.x, plan.aufsetz.y), a1 = aufPiste(plan.x, plan.y);
+  assert.ok(a0.u > 0 && a0.u < 400 && Math.abs(a0.v) < 2, 'Aufsetzpunkt nicht am Pistenanfang: ' + JSON.stringify(a0));
+  assert.ok(a1.u > a0.u + 800 && a1.u < lb.laenge - A400M.laenge && Math.abs(a1.v) < 2, 'Stillstand nicht auf der Piste: ' + JSON.stringify(a1));
+  assert.ok(Math.abs(plan.w - lb.w) < 1e-9, 'nicht in Pistenrichtung');
+  assert.equal(Math.round(plan.x), s.evakAX); assert.equal(Math.round(plan.y), s.evakAY);
+  // Bewegung: Anflug mit gleichbleibendem Tempo, am Aufsetzpunkt ABSTURZ.tempo, gleichmäßig gebremst, Stand genau am Plan
+  const { anflug, rollweg, tempo } = ABSTURZ;
+  assert.ok(Math.abs(absturzStrecke(anflug) - rollweg) < 1e-6, 'Aufsetzen nicht am Aufsetzpunkt');
+  assert.ok(Math.abs(absturzStrecke(absturzDauer())) < 1e-6, 'kein Stillstand am Ende');
+  assert.ok(Math.abs((absturzStrecke(anflug + 0.01) - absturzStrecke(anflug)) / -0.01 - tempo) < 2, 'Aufsetztempo');
+  assert.ok(absturzStrecke(0) > rollweg + 2000, 'Anflug startet nicht weit genug draußen');
+  for (let t = 0; t < absturzDauer(); t += 0.5) assert.ok(absturzStrecke(t + 0.5) <= absturzStrecke(t) + 1e-9, 'rückwärts bei t=' + t);
+  // Ablauf im Raum: während Anflug und Rollen kein Brand, erst im Stand
+  assert.ok(!meldungen.some(m => m.includes('Feuer')), 'Brand schon im Anflug');
+  // Spieler mitten auf der Piste, Flugzeug rollt gerade darüber: wird quer zur Piste zur Seite gestoßen, ohne Schaden
+  ag.crash.rest = absturzDauer() - anflug - 3;   // 3 s nach dem Aufsetzen
+  const t = absturzDauer() - ag.crash.rest, d = absturzStrecke(t);
+  const fx = plan.x - c * d, fy = plan.y - sn * d;
+  p.ebene = ''; p.anBord = false; p.x = fx + 20 * c; p.y = fy + 20 * sn;
+  const hp = p.hp; ag.absturzRollen(t);
+  const q = aufPiste(p.x, p.y), f = aufPiste(fx, fy);
+  assert.ok(Math.abs(q.v - f.v) > ABSTURZ.rumpfHalbBreite, 'Spieler nicht aus dem Rumpf gestoßen: ' + (q.v - f.v));
+  assert.equal(p.hp, hp, 'Spieler verletzt');
+  assert.ok(!meldungen.some(m => m.includes('Feuer')), 'Brand schon beim Rollen');
+  ag.crash.rest = 0.05;
+  assert.ok(await bis(() => s.evakPhase === 'wrack', 3000), 'kein Stillstand');
+  assert.ok(meldungen.some(m => m.includes('gelandet') && m.includes('Feuer')), 'Brand erst im Stand');
+  assert.equal(Math.round(s.evakAX), Math.round(plan.x), 'Wrack nicht an der Stillstandsposition');
+}));
+
+test('Königsdorf (echte Karte): Aufsetzpunkt und Stillstand liegen auf der Piste, Wrack und Hubschrauberplatz weit auseinander', async () => {
+  const { setzeKartengroesse, KACHEL } = await import('../client/welt.mjs');
+  const { baueWeltAusKarte } = await import('../client/osmwelt.mjs');
+  const { levelorteSetzen } = await import('../server/levelorte.mjs');
+  const { absturzPlan } = await import('../server/flugplatz.mjs');
+  const k = JSON.parse(fs.readFileSync(new URL('../client/karten/koenigsdorf.json', import.meta.url)));
+  setzeKartengroesse(k.breite, k.hoehe);
+  try {
+    const w = baueWeltAusKarte(k, 7); levelorteSetzen(w, 'koenigsdorf');
+    const lb = w.landebahn, plan = absturzPlan(w, 7), c = Math.cos(lb.w), sn = Math.sin(lb.w);
+    const uv = pt => ({ u: (pt.x - lb.x) * c + (pt.y - lb.y) * sn, v: -(pt.x - lb.x) * sn + (pt.y - lb.y) * c });
+    const a = uv(plan.aufsetz), z = uv(plan);
+    assert.ok(a.u > 0 && Math.abs(a.v) < 1 && z.u > a.u + 1000 && z.u + A400M.laenge / 2 < lb.laenge && Math.abs(z.v) < 1, JSON.stringify({ a, z, laenge: lb.laenge }));
+    assert.ok(Math.hypot(plan.x - plan.heli.x, plan.y - plan.heli.y) > 300, 'Hubschrauberplatz im Wrack');
+    // die ganze Rumpffläche liegt auf freier Piste (kein Haus im Weg)
+    const { frei } = await import('../client/welt.mjs');
+    for (let d = 0; d <= 1200 + A400M.laenge; d += 40) assert.ok(frei(w, plan.aufsetz.x + c * (d - A400M.laenge / 2), plan.aufsetz.y + sn * (d - A400M.laenge / 2), 14), 'Hindernis auf der Piste bei ' + d);
+  } finally { setzeKartengroesse(64, 48); }
+});
 
 test('Kochel: NH90 steht von Anfang an, Einsteigen jederzeit mit Aussteigen, Abflug nur wenn die Fahrt gelingt', mitArt('heli', async ({ c, raum, p, s, ag, meldungen }) => {
   assert.equal(s.evakArt, 'heli');

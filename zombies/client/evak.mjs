@@ -21,6 +21,19 @@ export const A400M = {
   landeStrecke: 720, landeBreite: 170, rollweg: 320,                      // freie Fläche (Länge × Breite) und Weg der Landerolle
 };
 
+// Königsdorf: Der A400M landet auf der Landebahn und fängt erst im Stand Feuer. Anflug mit gleichbleibendem Tempo (`anflug` s vor dem Aufsetzen),
+// Aufsetzen mit `tempo` (px/s) an `aufsetz` px (Rumpfmitte) hinter dem Pistenanfang, gleichmäßig gebremst auf `rollweg` px bis zum Stillstand.
+export const ABSTURZ = { anflug: 14, tempo: 300, rollweg: 1200, aufsetz: 200, rumpfHalbBreite: 34 };
+export const absturzRollDauer = () => 2 * ABSTURZ.rollweg / ABSTURZ.tempo;   // Sekunden vom Aufsetzen bis zum Stand
+export const absturzDauer = () => ABSTURZ.anflug + absturzRollDauer();       // gesamter Ablauf bis zum Brand
+// Ort des A400M (Abstand `d` px vom Stillstandspunkt rückwärts entlang der Piste, <0 = noch vor dem Aufsetzen) zur Zeit t (s) seit Beginn des Anflugs
+export function absturzStrecke(t) {
+  const { anflug, tempo, rollweg } = ABSTURZ, rd = absturzRollDauer();
+  if (t <= anflug) return rollweg + tempo * (anflug - Math.max(0, t));          // noch in der Luft: Abstand zum Stillstandspunkt
+  const tr = Math.min(t - anflug, rd), a = tempo * tempo / (2 * rollweg);
+  return rollweg - (tempo * tr - a * tr * tr / 2);                              // auf der Piste: Rest bis zum Stand
+}
+
 // Liegt der Punkt im Fußabdruck eines Fahrzeugs (Mitte f.x/f.y, Richtung f.richtung, halbe Länge hl, halbe Breite hb, Zuschlag zu)?
 export function imFussabdruck(f, x, y, hl, hb, zu = 0) {
   const dx = x - f.x, dy = y - f.y, c = Math.cos(f.richtung), s = Math.sin(f.richtung);
