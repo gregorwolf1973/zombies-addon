@@ -600,6 +600,11 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       });
       c.p.then(function (o) {
         if (o.ok && getFehler) { getFehler = false; zStatus('✓ Verbunden ' + zeitText(), 'ok'); }
+        if (o.status === 401 || (o.ok && /^\d{3}:/.test(o.text || ''))) {   // Home-Assistant-Ingress-Sitzung abgelaufen (z. B. nach Add-on-Neustart): Antwort „401: Unauthorized“ statt Daten
+          getFehler = true; zStatus('⚠ Sitzung abgelaufen – Seite wird neu geladen …', 'fehler');
+          if (!window.__neuLaden) window.__neuLaden = setTimeout(function () { location.reload(); }, 2500);
+          return;
+        }
         if (!o.ok && o.status !== 403) { getFehler = true; zStatus('⚠ Laden fehlgeschlagen (HTTP ' + o.status + ')', 'fehler'); }
       }, function () { cache = null; getFehler = true; zStatus('⚠ Keine Verbindung zum Spielserver', 'fehler'); });
       cache = c;
@@ -1715,7 +1720,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   });
   $('spAn').addEventListener('change', function () { senden({ an: $('spAn').checked }); });
   $('spLockt').addEventListener('change', function () { senden({ redenLockt: $('spLockt').checked }); });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
+  function laden() { fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
   setInterval(laden, 5000);
 })();
@@ -1786,7 +1791,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   });
   $('agAn').addEventListener('change', function () { senden({ an: $('agAn').checked }); });
   $('agEvakArt').addEventListener('change', function () { senden({ evakArt: $('agEvakArt').value }); });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
+  function laden() { fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
   setInterval(laden, 5000);
 })();
@@ -1831,7 +1836,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   $('fkFaktor').addEventListener('input', function () { aktiv = true; $('fkFaktorWert').textContent = $('fkFaktor').value + ' %'; });
   $('fkFaktor').addEventListener('change', function () { senden({ xpFaktor: Number($('fkFaktor').value) }); });
   $('fkAn').addEventListener('change', function () { senden({ an: $('fkAn').checked }); });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
+  function laden() { fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
   setInterval(laden, 5000);
 })();
@@ -1883,7 +1888,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     el.addEventListener('input', function () { aktiv = r[0]; $(r[0] + 'Wert').textContent = el.value + ' %'; });
     el.addEventListener('change', function () { var t = {}; t[r[1]] = Number(el.value); senden(t); });
   });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
+  function laden() { fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
   setInterval(laden, 5000);
 })();
@@ -1953,7 +1958,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     $('rsLaut').addEventListener('change', function () { senden({ laut: Number($('rsLaut').value) }); });
     $('rsDurchsage').addEventListener('change', function () { senden({ durchsage: Number($('rsDurchsage').value) }); });
     $('rsVorlauf').addEventListener('change', function () { senden({ vorlauf: Number($('rsVorlauf').value) }); });
-    fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); });
+    fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); });
   })();
   </script>
 
@@ -2935,7 +2940,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     el.addEventListener('input', function () { aktiv = f[0]; });
     el.addEventListener('change', function () { senden(f, Number(el.value)); });
   });
-  fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); });
+  fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); });
 })();
 </script>
 
@@ -4039,7 +4044,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   folgeKarte.appendChild(folgeListe); folgeKarte.appendChild(folgeStatus);
   var folgeCss = el('style'); folgeCss.textContent = '.fo-liste{list-style:none;margin:8px 0;padding:0}.fo-zeile{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 0;border-bottom:1px solid var(--border)}.fo-zeile.fo-aus .fo-name{opacity:.5;text-decoration:line-through}.fo-pos{min-width:4.5em;font-weight:600}.fo-name{flex:1 1 12em}.fo-zeile button{min-width:44px;min-height:44px;margin:0}.fo-an{display:inline-flex;align-items:center;gap:4px;min-height:44px}';
   document.head.appendChild(folgeCss);
-  setInterval(function () { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(folgeNeu).catch(function () { /* nächster Versuch */ }); }, 5000);
+  setInterval(function () { fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(folgeNeu).catch(function () { /* nächster Versuch */ }); }, 5000);
   document.addEventListener('z:rueckgaengig', function (e) { if (e.detail) folgeNeu(e.detail); });
 
   lvBauen();
@@ -4049,7 +4054,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   });
 
   // Daten holen: Vorgaben (für ↺) und die Tabelle
-  fetch('verwaltung/api').then(function (r) { return r.json(); }).then(function (d) {
+  fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (d) {
     VORGABEN = d.vorgaben || null;
     folgeNeu(d);
     var z = d.einstellungen && d.einstellungen.zombies;
@@ -4159,7 +4164,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     senden({ superuserPasswort: w }).then(function () { $('suPasswort').value = ''; });
   });
   $('suLoeschen').addEventListener('click', function () { senden({ superuserLoeschen: true }); });
-  function laden() { fetch('verwaltung/api').then(function (r) { return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
+  function laden() { fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(zeige).catch(function (e) { window.zFehler('Laden fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt')); }); }
   laden();
 })();
 </script>
@@ -4246,7 +4251,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     vorlageAnfrage({ aktion: 'laden', quelle: wahl.value }).then(function () { window.zStatus('✓ Vorlage geladen – Seite wird neu geladen', 'ok'); setTimeout(function () { location.reload(); }, 700); })
       .catch(function (e) { window.zFehler('Vorlage nicht geladen: ' + e.message); });
   });
-  fetch('verwaltung/api').then(function (r) { return r.json(); }).then(eigeneMerken).catch(function () { /* Fehler zeigt die Statuszeile */ });
+  fetch('verwaltung/api').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(eigeneMerken).catch(function () { /* Fehler zeigt die Statuszeile */ });
   document.addEventListener('z:rueckgaengig', function (e) { eigeneMerken(e.detail); });
   rein('runde', vor);
   rein('runde', neustartKarte);
