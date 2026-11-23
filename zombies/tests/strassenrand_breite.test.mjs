@@ -6,7 +6,8 @@ import { setzeKartengroesse } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { _randTest as R } from '../client/vektor.mjs';
 
-const karte = JSON.parse(fs.readFileSync(new URL('../client/karten/kochel.json', import.meta.url)));
+// Festpunkt-Karte: die alte OSM-Karte von Kochel (Linienindizes unten); die neue amtliche Karte hat andere Linien und fertige Gehwegbreiten (gl/gr)
+const karte = JSON.parse(fs.readFileSync(new URL('../client/karten/kochel_alt.json', import.meta.url)));
 setzeKartengroesse(karte.breite, karte.hoehe);
 const welt = baueWeltAusKarte(karte, 1, { autos: 0 });
 const v = R.vorbereiten(welt);

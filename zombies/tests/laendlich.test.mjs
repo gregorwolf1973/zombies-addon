@@ -18,7 +18,8 @@ test('Ländliche Karten: mindestens 60 Baumkacheln je 1000, Heuballen und Zäune
     const dichte = zaehle(w, karte, T.BAUM) / (karte.breite * karte.hoehe) * 1000;
     assert.ok(dichte >= 60, `${name} Seed ${seed}: ${dichte.toFixed(1)} Baumkacheln je 1000`);
   }
-  const k = lade('koenigsdorf'), w = baue(k);
+  // Königsdorf/Kochel/Isarauen sind amtliche Karten (keine Zufalls-Details wie Heuballen); Andermatt (OSM) prüft die ländlichen Details
+  const k = lade('andermatt'), w = baue(k);
   assert.ok(w.deko.some(d => d.art === 'heu'), 'Heuballen als Deko');
   assert.ok(w.details.zaeune.length > k.zaeune.length, 'Weidezäune und Hecken ergänzt');
   assert.ok(w.vektor.strassen.length > k.strassen.length, 'Feldwege/Bankette an Landstraßen ergänzt');

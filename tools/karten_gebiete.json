@@ -1,0 +1,177 @@
+{
+ "geretsried2": {
+  "bbox": [
+   47.872,
+   11.4584,
+   47.8872,
+   11.4766
+  ],
+  "meterProKachel": 4.0,
+  "x0": 683670,
+  "y1": 5306840,
+  "breite_m": 1630,
+  "hoehe_m": 1950,
+  "daten": "",
+  "tn_bbox": [
+   683600,
+   5304800,
+   685400,
+   5306900
+  ],
+  "parkplatz_bbox": [
+   683500,
+   5304800,
+   685400,
+   5306900
+  ],
+  "kern": [
+   683677,
+   5304896,
+   685297,
+   5306835
+  ],
+  "ref": [
+   683700,
+   5305000
+  ],
+  "amtlich_e0": 683671,
+  "tn_shp": "tn/shp/Nutzung",
+  "hausumringe_zip": "hausumringe/091_Oberbayern_Hausumringe.zip",
+  "haus_auszug": "hausumringe/hausumringe_gebiet.json",
+  "baeume_auszug": "einzelbaeume/baeume_gebiet_125046.json",
+  "blatt": "125046",
+  "hinweis": "amtlich_e0 = x0 + 1: Altlast (1 m = 5 Pixel Versatz beim Lesen von tn/haus/asphalt in amtlich.py); bleibt für bitgleichen Neubau, neue Karten nutzen x0 (nachgemessen: Raster und Vektoren liegen bei 0 Versatz am besten)"
+ },
+ "isarauen": {
+  "bbox": [
+   47.8948,
+   11.414,
+   47.9023,
+   11.429
+  ],
+  "meterProKachel": 4.0,
+  "x0": 680300,
+  "y1": 5308400,
+  "breite_m": 1360,
+  "hoehe_m": 1080,
+  "daten": "isarauen",
+  "tn_bbox": [
+   680200,
+   5307220,
+   681760,
+   5308500
+  ],
+  "parkplatz_bbox": [
+   680200,
+   5307220,
+   681760,
+   5308500
+  ],
+  "kern": [
+   680307,
+   5307326,
+   681657,
+   5308395
+  ],
+  "ref": [
+   681000.0,
+   5307900.0
+  ],
+  "amtlich_e0": 680300,
+  "tn_shp": "tn/shp/Nutzung",
+  "hausumringe_zip": "hausumringe/091_Oberbayern_Hausumringe.zip",
+  "haus_auszug": "hausumringe/hausumringe_gebiet.json",
+  "baeume_auszug": "einzelbaeume/baeume_gebiet_125046.json",
+  "blatt": "125046",
+  "osm_fluss": 40,
+  "hinweis": "osm_fluss 40: Loisach (waterway=river, Linie) 40 m breit gezeichnet; reproduziert die alte Karte (3641 Wasserkacheln)"
+ },
+ "koenigsdorf": {
+  "bbox": [
+   47.8165,
+   11.4595,
+   47.83,
+   11.4825
+  ],
+  "meterProKachel": 4.0,
+  "x0": 683960,
+  "y1": 5300490,
+  "breite_m": 1980,
+  "hoehe_m": 1760,
+  "daten": "koenigsdorf",
+  "tn_bbox": [
+   683860,
+   5298630,
+   686040,
+   5300590
+  ],
+  "parkplatz_bbox": [
+   683860,
+   5298630,
+   686040,
+   5300590
+  ],
+  "kern": [
+   683967,
+   5298736,
+   685937,
+   5300485
+  ],
+  "ref": [
+   685000.0,
+   5299600.0
+  ],
+  "amtlich_e0": 683960,
+  "tn_shp": "tn/shp/Nutzung",
+  "hausumringe_zip": "hausumringe/091_Oberbayern_Hausumringe.zip",
+  "haus_auszug": "hausumringe/hausumringe_gebiet.json",
+  "baeume_auszug": "einzelbaeume/baeume_gebiet_125046.json",
+  "blatt": "125046",
+  "uebernehmen": [
+   "piste"
+  ],
+  "hinweis": "piste (Landebahn, Rollweg) ist von Hand in der Karten-JSON gepflegt und wird aus koenigsdorf_alt.json übernommen"
+ },
+ "kochel": {
+  "bbox": [
+   47.65,
+   11.352,
+   47.665,
+   11.37
+  ],
+  "meterProKachel": 4.0,
+  "x0": 676470,
+  "y1": 5281890,
+  "breite_m": 1610,
+  "hoehe_m": 1910,
+  "daten": "kochel",
+  "tn_bbox": [
+   676370,
+   5279880,
+   678180,
+   5281990
+  ],
+  "parkplatz_bbox": [
+   676370,
+   5279880,
+   678180,
+   5281990
+  ],
+  "kern": [
+   676477,
+   5279986,
+   678077,
+   5281885
+  ],
+  "ref": [
+   677300.0,
+   5280900.0
+  ],
+  "amtlich_e0": 676470,
+  "tn_shp": "tn/shp/Nutzung",
+  "hausumringe_zip": "hausumringe/091_Oberbayern_Hausumringe.zip",
+  "haus_auszug": "hausumringe/hausumringe_gebiet.json",
+  "baeume_auszug": "einzelbaeume/baeume_gebiet_125046.json",
+  "blatt": "124041"
+ }
+}

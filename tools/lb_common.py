@@ -3,12 +3,19 @@ sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'.pyli
 import numpy as np
 from PIL import Image,ImageDraw
 Image.MAX_IMAGE_PIXELS=None
-B=os.path.join(os.path.dirname(os.path.abspath(__file__)),'luftbild/cache/bayern/')
-OUT=B+'auswertung/'
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+import gebiet as _G
+G=_G.aktuell()      # Karte aus Umgebungsvariable KARTE (Vorgabe geretsried2), Werte aus tools/karten_gebiete.json
+B=str(G.wurzel)+'/'          # Rohdaten dieser Karte
+OUT=str(G.auswertung)+'/'
 NPY=OUT+'_npy/'
-X0,Y1=683670.0,5306840.0
+os.makedirs(NPY,exist_ok=True)
+X0,Y1=G.X0,G.Y1
 RES=0.2
-W,H=8150,9750   # x 683670..685300, y 5304890..5306840
+W,H=G.W,G.H   # geretsried2: x 683670..685300, y 5304890..5306840
+BBOX=tuple(G.tn_bbox)                        # Filter fuer TN-Polygone
+TNSHP=str(G.tn_pfad)                         # ALKIS Tatsaechliche Nutzung (Landkreis-Shapefile)
+HAUS_JSON=B+G.haus_auszug; BAUM_JSON=B+G.baeume_auszug; KERN=tuple(G.kern)
 def e2c(x): return (np.asarray(x)-X0)/RES
 def n2r(y): return (Y1-np.asarray(y))/RES
 def c2e(c): return X0+(np.asarray(c)+0.5)*RES

@@ -13,7 +13,7 @@ def at(arr,E,N,fill=False):
     ok=(c>=0)&(c<W)&(r>=0)&(r<H);v=np.full(E.shape,fill,arr.dtype);v[ok]=arr[r[ok],c[ok]];return v
 # ---- Grenzlinien
 lines=[l for l in json.load(open(OUT+'parzellen.json'))['linien']]
-shp=read_shp(B+'tn/shp/Nutzung',(683600,5304800,685400,5306900))
+shp=read_shp(TNSHP,BBOX)
 extra=[]
 for bb,rings,a in shp:
     if a['nutzart'] not in('Wohnbaufläche','Fläche gemischter Nutzung'): continue

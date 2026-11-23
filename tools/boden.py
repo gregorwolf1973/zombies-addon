@@ -21,13 +21,14 @@ from kulisse import Karte, KARTEN, KACHEL_KK, PX, PPK, index_schreiben
 RAND = 40                   # Rand beim Rechnen (Median, Ausrundung der Straßenecken), wird abgeschnitten; größer als in kulisse.py, damit Kacheln nahtlos bleiben
 
 WURZEL = pathlib.Path(__file__).resolve().parent
-LB = WURZEL / "luftbild" / "cache" / "bayern"
-NPY = LB / "auswertung" / "_npy"
-SHP = LB / "tn" / "shp" / "Nutzung"
+import gebiet as GB
+GG = GB.Gebiet([a for a in sys.argv[1:] if not a.startswith("--")][0] if len(sys.argv) > 1 else os.environ.get("KARTE", "geretsried2"))   # Fenster/Ordner: tools/karten_gebiete.json
+NPY = GG.auswertung / "_npy"
+SHP = GG.tn_pfad
 QUELLE = ("© Bayerische Vermessungsverwaltung, ALKIS Tatsächliche Nutzung und Digitales Orthophoto (nur als Klassifizierung ausgewertet; gezeichneter Boden) (CC BY 4.0)")
 QUALITAET = 80
 SS = 2                      # Überabtastung der Flächenkarte (Antialiasing)
-X0, Y1, RES = 683670.0, 5306840.0, 0.2     # Raster der Zwischendaten (UTM32)
+X0, Y1, RES = GG.X0, GG.Y1, 0.2     # Raster der Zwischendaten (UTM32)
 
 # ---------- Flächenarten ----------
 Z = {n: i + 1 for i, n in enumerate("grund gewerbe strasse weg platz parkplatz gruen acker spiel sport wald gehoelz unland fliess steh bahn".split())}
@@ -133,7 +134,7 @@ class Welt:
     def __init__(self, karte):
         self.karte = karte; self.K = Karte(karte)
         self.daten = Daten() if (NPY / "ndvi.npy").exists() else None
-        zone_bb = (683500, 5304700, 685500, 5307000)
+        zone_bb = (GG.tn_bbox[0] - 100, GG.tn_bbox[1] - 100, GG.tn_bbox[2] + 100, GG.tn_bbox[3] + 100)
         polys = shp_lesen(SHP, zone_bb); self.polys = []
         for bb, ringe, a in polys:
             z = zone(a["nutzart"], a["bez"])

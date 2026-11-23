@@ -1,7 +1,7 @@
 from lb_common import *
 from scipy import ndimage as ndi
 import time;t=time.time()
-T=np.array(json.load(open(B+'einzelbaeume/baeume_gebiet_125046.json')),float) # fid,x,y,dgm,h
+T=np.array(json.load(open(BAUM_JSON)),float) # fid,x,y,dgm,h
 ndvi=np.array(load('ndvi')).astype(np.float32)/127.5-1;ndom=np.array(load('ndom'))
 r=np.floor(n2r(T[:,2])).astype(int);c=np.floor(e2c(T[:,1])).astype(int)
 ok=(r>=0)&(r<H)&(c>=0)&(c<W);T=T[ok];r=r[ok];c=c[ok];n=len(T);print(n)
@@ -30,7 +30,7 @@ for i in range(n):
     else: d=D[i]
     d=float(np.clip(d,1.0,min(0.9*h+2,20)))
     out.append([round(T[i,1],1),round(T[i,2],1),round(h,1),round(d,1)])
-sub=[o for o in out if 683677<=o[0]<=685297 and 4896+5300000<=o[1]<=5306835]
+sub=[o for o in out if KERN[0]<=o[0]<=KERN[2] and KERN[1]<=o[1]<=KERN[3]]
 json.dump({'info':'Einzelbaeume [x,y,hoehe,kronenD] UTM32 m; kronenD aus nDOM (Nachbar-Watershed-light, >=50% Hoehe, NDVI>0); Ersatz Faustformel bei fehlender Spitze','baeume':sub},open(OUT+'baeume.json','w'),separators=(',',':'))
 d=np.array([o[3] for o in sub]);h=np.array([o[2] for o in sub])
 print(len(sub),'Ersatz',nofb,'D perc',np.percentile(d,[5,25,50,75,95]),'D/h',np.median(d/h),round(time.time()-t))

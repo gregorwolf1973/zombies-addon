@@ -24,12 +24,15 @@ for _p in (HIER / ".pylib", pathlib.Path(os.environ.get("PYLIB", "")), pathlib.P
 sys.path.insert(0, str(HIER))
 import numpy as np
 import hausumringe as HU
+import gebiet as GB
+GG = GB.Gebiet(sys.argv[1] if len(sys.argv) > 1 else os.environ.get("KARTE", "geretsried2"))   # Fenster, Ordner, Stützpunkt: tools/karten_gebiete.json
 
 KARTEN = HIER.parent / "zombies" / "client" / "karten"
-BAYERN = HIER / "luftbild" / "cache" / "bayern"
-AUSW = BAYERN / "auswertung"
-# Rasterherkunft der Auswertungen (0,2 m je Pixel; NW-Ecke; an den Hausumringen geprüft)
-E0, NT, PX = 683671.0, 5306840.0, 0.2
+BAYERN = GG.wurzel
+AUSW = GG.auswertung
+# Rasterherkunft der Auswertungen (0,2 m je Pixel; NW-Ecke; geretsried2: an den Hausumringen geprüft, daher amtlich_e0 = x0 + 1)
+E0, NT, PX = float(GG.amtlich_e0), float(GG.Y1), 0.2
+RX, RY = GG.ref   # Stützpunkt der affinen Projektion (irgendein Punkt nahe der Karte)
 TN = {"wohn": 15, "misch": 4, "gewerbe": 6, "platz": 8, "strasse": 11, "weg": 14, "wald": 13, "gehoelz": 5}
 WOHN = (15, 4)
 KFZ = {"primary", "secondary", "tertiary", "residential", "unclassified", "living_street", "service"}
@@ -46,16 +49,16 @@ def hsh(*v):
 class Proj:
     def __init__(self, karte):
         self.zu_k = HU.umkehrung(karte)
-        p0 = self.zu_k(683700, 5305000); p1 = self.zu_k(683800, 5305000); p2 = self.zu_k(683700, 5305100)
+        p0 = self.zu_k(RX, RY); p1 = self.zu_k(RX + 100, RY); p2 = self.zu_k(RX, RY + 100)
         self.A = np.array([[p1[0] - p0[0], p2[0] - p0[0]], [p1[1] - p0[1], p2[1] - p0[1]]]) / 100
         self.Ai = np.linalg.inv(self.A); self.p0 = np.array(p0)
     def kachel(self, E, N):
         E = np.asarray(E, float); N = np.asarray(N, float)
         a = self.A
-        return a[0, 0] * (E - 683700) + a[0, 1] * (N - 5305000) + self.p0[0], a[1, 0] * (E - 683700) + a[1, 1] * (N - 5305000) + self.p0[1]
+        return a[0, 0] * (E - RX) + a[0, 1] * (N - RY) + self.p0[0], a[1, 0] * (E - RX) + a[1, 1] * (N - RY) + self.p0[1]
     def utm(self, tx, ty):
         tx = np.asarray(tx, float) - self.p0[0]; ty = np.asarray(ty, float) - self.p0[1]
-        return 683700 + self.Ai[0, 0] * tx + self.Ai[0, 1] * ty, 5305000 + self.Ai[1, 0] * tx + self.Ai[1, 1] * ty
+        return RX + self.Ai[0, 0] * tx + self.Ai[0, 1] * ty, RY + self.Ai[1, 0] * tx + self.Ai[1, 1] * ty
 
 class Raster:
     def __init__(self):
@@ -139,7 +142,7 @@ def verketten(laeufe, tol=0.9, mincos=0.5):
 def tn_parkplaetze():
     cache = AUSW / "tn_parkplatz.json"
     if cache.exists(): return json.loads(cache.read_text())
-    shp = BAYERN / "tn" / "shp"
+    shp = GG.tn_pfad.parent
     dbf = (shp / "Nutzung.dbf").read_bytes(); shx = (shp / "Nutzung.shx").read_bytes(); sh = (shp / "Nutzung.shp").read_bytes()
     nrec, hlen, rlen = struct.unpack("<IHH", dbf[4:12])
     felder = []; off = 1; p = 32
@@ -153,7 +156,7 @@ def tn_parkplaetze():
         typ = struct.unpack("<i", sh[o + 8:o + 12])[0]
         if typ != 5: continue
         x0, y0, x1, y1 = struct.unpack("<4d", sh[o + 12:o + 44])
-        if x1 < 683500 or x0 > 685400 or y1 < 5304800 or y0 > 5306900: continue
+        if x1 < GG.parkplatz_bbox[0] or x0 > GG.parkplatz_bbox[2] or y1 < GG.parkplatz_bbox[1] or y0 > GG.parkplatz_bbox[3]: continue
         rec = dbf[hlen + i * rlen: hlen + (i + 1) * rlen]
         bez = rec[fi["bez"][0]:fi["bez"][0] + fi["bez"][1]].decode("utf-8", "replace").strip()
         if "Parkplatz" not in bez: continue
