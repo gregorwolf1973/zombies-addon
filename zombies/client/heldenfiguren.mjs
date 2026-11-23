@@ -3,9 +3,12 @@
 // Maßstab gemeinsam mit den Zombies: beide Atlanten haben 40 Atlas-Pixel je Meter (160-px-Feld = 4 m, Render gross=2), im Spiel gilt ZF_GROESSE für beide.
 import { ZF_GROESSE } from './zombiefiguren.mjs';
 export const FIG_PX_JE_M = 40;
-export const HF_GROESSE = ZF_GROESSE;
-// Alte Sprites (Schulterbreite 25,7 px bei Maßstab 0,42) auf die Schulterbreite der Mixamo-Helden (~12 px) bringen: Ziel 12 / 25,7
-export const SCHULTER_ALT_PX = 25.7, SCHULTER_NEU_PX = 12;
+// Helden stehen kompakt (Arme am Körper), Zombies strecken die Arme aus: Schulter-/Körperumriss stehend Zombie ~76 px, Held/Heldin ~53 px (Atlas-px) →
+// Heldenbilder ×1,4 größer, damit Menschen und Zombies im Spiel gleich groß wirken (Körpergröße ~1,8 m)
+export const HF_KORREKTUR = 1.4;
+export const HF_GROESSE = ZF_GROESSE * HF_KORREKTUR;
+// Alte Sprites (Schulterbreite 25,7 px bei Maßstab 0,42) auf die Schulterbreite der Mixamo-Helden (~15 px) bringen: Ziel 15,2 / 25,7
+export const SCHULTER_ALT_PX = 25.7, SCHULTER_NEU_PX = 15.2;   // stehender Held: 53 Atlas-px × 0,2055 × 1,4
 export const ALT_FAKTOR = SCHULTER_NEU_PX / SCHULTER_ALT_PX;
 export const HF_FIGUREN = ['held', 'heldin'];
 export const HF_GRUPPEN = ['ohne', 'pistole', 'gewehr', 'schrot', 'messer', 'schlaeger'];

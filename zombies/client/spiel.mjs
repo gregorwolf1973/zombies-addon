@@ -910,8 +910,8 @@ const dingText = d => `${DINGE[d]?.zeichen ?? '?'} ${DINGE[d]?.name ?? d}`;
 const GRAFIK = ['baum_gross', 'baum_klein', 'baum_herbst', 'baum_herbst_klein', 'busch', 'busch_herbst', 'fels1', 'fels2', 'kiste'];
 // Figuren (Kenney „Topdown Shooter“, CC0): je Spielerfarbe eine Person
 // Gemeinsamer Maßstab aller Menschen- und Zombiefiguren: die Mixamo-Figuren (Helden, Zombies) haben 40 Atlas-px je Meter (heldenfiguren.mjs FIG_PX_JE_M).
-// Die alten Bilder (Menschen, Soldaten, Bewohner, alte Zombies) sind auf eine Schulterbreite von 25,7 px normiert (groessen.mjs), die Mixamo-Helden haben ~12 px
-// (Heldin 10, Held 12; Messung stehen) → ALT_K bringt die alten Sprites auf dieselbe Größe (Rückfall-Schalter eingeschlossen).
+// Die alten Bilder (Menschen, Soldaten, Bewohner, alte Zombies) sind auf eine Schulterbreite von 25,7 px normiert (groessen.mjs), die Mixamo-Helden haben ~15 px
+// (Mixamo-Held stehend ~15 px nach Korrektur HF_KORREKTUR) → ALT_K bringt die alten Sprites auf dieselbe Größe (Rückfall-Schalter eingeschlossen).
 const ALT_K = ALT_FAKTOR;
 const MENSCH_GROESSE = 0.42 * ALT_K, ZOMBIE_GROESSE = 0.42 * ALT_K, BOGEN2_GROESSE = 0.476 * ALT_K;   // figuren2: 160er Felder
 const ZF_G = ZF_GROESSE / ALT_K, HF_G = HF_GROESSE / ALT_K;   // Mixamo-Atlanten: Faktor relativ zu ZOMBIE_GROESSE (ergibt wieder 0,42 · ZF_GROESSE)

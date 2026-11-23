@@ -47,7 +47,7 @@ test('Mündung: Waffenachse zeigt nach Drehung zum Ziel, Versatz dreht mit', () 
 });
 
 test('Atlas: gleicher Maßstab wie Zombies, Kantenlänge ≤ 4096, Clips im Atlas, Mündung je Schussclip', () => {
-  assert.equal(HF_GROESSE, ZF_GROESSE); assert.equal(FIG_PX_JE_M, 40);
+  assert.ok(Math.abs(HF_GROESSE / ZF_GROESSE - 1.4) < 1e-9); assert.equal(FIG_PX_JE_M, 40);
   assert.deepEqual(j.figuren, HF_FIGUREN);
   assert.ok(j.groesse[0] <= 4096 && j.groesse[1] <= 4096);
   for (const f of HF_FIGUREN) assert.ok(fs.statSync(new URL(j.atlas[f], dir)).size > 10000, f);
