@@ -222,13 +222,13 @@ test('Nach dem Betreten läuft man mit gehaltener Taste nicht sofort wieder hina
     assert.ok(await bis(() => p.ebene !== '', 4000), 'nicht hineingekommen');
     // schlafende Zombies im Haus könnten aufwachen und die Figur festhalten – hier geht es nur um die Tür
     for (const [id, z] of raum.state.zombies) if (z.ebene === p.ebene) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); }
-    c.send('eingabe', { dx: 0, dy: 1 });              // … und mit gedrückter Taste nach unten weiter (Ausgang liegt unten)
-    await warte(1500);
-    assert.notEqual(p.ebene, '', 'sofort wieder draußen');
-    // weggehen und zurück: dann geht es hinaus
-    c.send('eingabe', { dx: 0, dy: -1 }); await warte(700);
-    c.send('eingabe', { dx: 0, dy: 1 });
-    assert.ok(await bis(() => p.ebene === '', 4000), 'kommt nicht mehr hinaus');
+    // gehaltene Taste (weiter hinein): kein Rückweg, auch nach langer Zeit nicht
+    await warte(800);
+    assert.notEqual(p.ebene, '', 'mit gehaltener Taste wieder draußen');
+    // gezieltes Umkehren direkt nach der Ankunft: erst nach der kurzen Schutzzeit (0,4 s) hinaus, dann sofort (kein Weit-hinein-und-zurück nötig)
+    c.send('eingabe', { dx: 0, dy: 0 }); await warte(100);
+    c.send('eingabe', { dx: 0, dy: 1 });              // Ausgang liegt unten
+    assert.ok(await bis(() => p.ebene === '', 4000), 'kommt nach dem Umkehren nicht hinaus');
     c.send('eingabe', { dx: 0, dy: 0 });
   } finally { await c.leave(); }
 });

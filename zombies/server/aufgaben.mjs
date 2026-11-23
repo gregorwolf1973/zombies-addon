@@ -13,6 +13,7 @@ import { flugplanBerechnen, heliPlan, bunkerPlan, absturzPlan } from './flugplat
 import { missionsPlan, kreisSchrumpfen, FUNK_TEILE, LANDEFEUER_MAX } from './mission.mjs';
 import { DINGE } from '../client/welt.mjs';
 import { weltVorbereiten } from './weltcache.mjs';
+import { kistenPlan, kistenSchritt, kistenSpeichern, kistenLaden } from './a400m_kisten.mjs';
 import { gesuchteDinge, fundorteListe, missionsOrt, aufgabenFundePlan, aufgabenBedarf } from './fundorte.mjs';
 import { LEVEL_KATALOG, levelSchluessel as katalogSchluessel, aktiveFolge, naechsterEintrag, karteAufloesen, katalogEintrag } from '../client/levelkatalog.mjs';
 
@@ -200,7 +201,7 @@ export class Aufgaben {
     const s = this.raum.state;
     s.level = Math.max(1, Math.min(250, Math.round(Number(stand?.level) || 1)));
     s.funk = false; s.busDa = false; s.busSteht = false; s.busAnkunft = -1; s.busAb = -1; s.busBord = 0; s.busGesamt = 0;
-    this.flug = null; this.heli = null; this.crash = null; s.evakPhase = ''; s.evakRest = 0; this.evakSync();
+    this.flug = null; this.heli = null; this.crash = null; this.kistenGefallen = false; s.evakPhase = ''; s.evakRest = 0; this.evakSync();
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.ausgestiegen.clear(); this.folgenId = null;
     this.basis = s.besiegt;
@@ -217,6 +218,7 @@ export class Aufgaben {
     } else this.ziehen();
     if (this.mission.length && !s.aufgaben.has('mission')) this.neu('mission', false);   // älterer Spielstand ohne Mission
     this.fundePlanen(g?.funde);
+    this.kistenGefallen = !!g?.kisten?.gefallen; kistenLaden(this.raum, g?.kisten?.liste);
     this.abholMeldung = s.funk && [...s.aufgaben.values()].every(x => !x.pflicht || x.erledigt);   // beim Laden nicht erneut melden
     this.aktualisieren(false);
     if (s.funk) s.busAnkunft = this.einst().stunde * 60;
@@ -249,6 +251,7 @@ export class Aufgaben {
       basis: this.basis, funk: s.funk, funkSafe: this.funkSafe, medizin: this.medizin,
       mission: { abgegeben: [...this.abgegeben], hinweise: { ...this.hinweise }, landefeuer: this.landefeuer },
       funde: this.fundePlan ?? [],
+      kisten: { gefallen: !!this.kistenGefallen, liste: kistenSpeichern(this.raum) },   // A400M-Kisten (Königsdorf): noch liegende; gefallen = nicht erneut fallen lassen
     };
   }
 
@@ -927,12 +930,20 @@ export class Aufgaben {
     if (c.phase === 'anflug' || c.phase === 'rollen') {
       c.rest -= dt; s.evakRest = Math.max(0, Math.ceil(c.rest));
       const t = c.dauer - c.rest;
-      if (c.phase === 'anflug' && t >= ABSTURZ.anflug) c.phase = 'rollen';
+      if (c.phase === 'anflug' && t >= ABSTURZ.anflug) {
+        c.phase = 'rollen';
+        if (!this.kistenGefallen) {   // beim Aufsetzen: je Echtspieler 2 Kisten planen (fallen während der Rollstrecke hinten heraus)
+          this.kistenGefallen = true;
+          c.kisten = { plan: kistenPlan(s.seed, this.echteSpieler(), c.plan, this.raum.welt, (x, y) => this.platzNeben(x, y)), fallend: [] };
+        }
+      }
+      if (c.kisten && !kistenSchritt(this.raum, c.kisten, t - ABSTURZ.anflug, dt)) c.kisten = null;
       if (c.rest > 0) { if (c.phase === 'rollen') this.absturzRollen(t); return; }
       c.phase = 'wrack'; s.evakPhase = 'wrack'; s.evakRest = 0;
       this.raum.broadcast('meldung', { text: '🔥 Der A400M ist gelandet – und ein Triebwerk fängt Feuer! Weg vom Flugzeug, ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
       return;
     }
+    if (c.kisten && !kistenSchritt(this.raum, c.kisten, Infinity, dt)) c.kisten = null;   // letzte Kisten noch ablegen
     if (!this.fahrtGelingt()) return;
     // die Missionsteile sind erledigt: der NH90 fliegt den Platz an
     this.crash = null; this.heli = { phase: 'anflug', rest: HELI_ANFLUG, art: 'absturz' };

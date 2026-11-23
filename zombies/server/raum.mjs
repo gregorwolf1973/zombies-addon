@@ -29,6 +29,7 @@ import { fahrzeugHatRadio } from '../client/ton_regeln.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { hat, zaehle, flach, indexVon, entferne, nimmEins, nimmStapel, fuegeHinzu, kannAufnehmen, blockGrund, platzFuer, verschiebe, laden as stapelLaden, dingId, dingN, istTasche } from '../client/stapel.mjs';
 import { munitionGeben, kisteOeffnen, munitionPruefen } from './munition.mjs';
+import { KISTEN, kisteNehmen } from './a400m_kisten.mjs';
 import { SzeneB11 } from './szene_b11.mjs';
 import { Polizei } from './polizei.mjs';
 import * as FK from './faehigkeiten.mjs';
@@ -1632,8 +1633,9 @@ export class SpielRaum extends Room {
     if (x.ankunft && x.bot && x.ankunftT > 1) x.ankunft = null;
     if (x.ankunft) {
       if (x.ankunft.ref && !x.bot) {
-        // erst scharf, wenn man sich einmal vom Rückweg-Übergang entfernt hat (weggehen und zurück)
-        if (Math.hypot(p.x - x.ankunft.ref.x, p.y - x.ankunft.ref.y) <= x.ankunft.d0 + reichVon(this.wv(p.ebene), 14)) return;
+        // erst scharf, wenn man sich einmal vom Rückweg-Übergang entfernt hat (weggehen und zurück) – oder gezielt umkehrt
+        // (Eingabe zeigt deutlich entgegen der Eingaberichtung bei der Ankunft): wer gleich wieder hinaus will, muss nicht erst tiefer ins Haus laufen
+        if (!this.ankunftUmkehr(x, dt) && Math.hypot(p.x - x.ankunft.ref.x, p.y - x.ankunft.ref.y) <= x.ankunft.d0 + reichVon(this.wv(p.ebene), 14)) return;
       } else if (Math.hypot(p.x - x.ankunft.x, p.y - x.ankunft.y) < reichVon(this.wv(p.ebene), 36)) return;
       x.ankunft = null;
     }
@@ -1641,7 +1643,8 @@ export class SpielRaum extends Room {
     if (x.bot && (!x.bot.uebergangZiel || Math.hypot(p.x - x.bot.uebergangZiel.x, p.y - x.bot.uebergangZiel.y) > reichVon(this.wv(p.ebene), 24))) return;
     const welt = this.wv(p.ebene), KW = kachelVon(welt);
     const kx = Math.floor(p.x / KW), ky = Math.floor(p.y / KW);
-    const t = welt.hole(kx, ky);
+    let t = welt.hole(kx, ky);
+    if (t !== T.AUSGANG && p.ebene && !x.bot && this.ausgangBeruehrt(welt, p, x.eingabe)) t = T.AUSGANG;   // Türrand: Figur klemmt am Rahmen, Mitte erreicht die Ausgangskachel nicht
     let ziel = null, pos = null, tuerDraussen = null;
     // Haustür: Bots wie bisher beim Betreten der Türkachel; Menschen erst an der Wandlinie der Tür und nur mit gezieltem Hineinlaufen (tuerEintritt)
     const tuerHaus = !p.ebene ? (x.bot ? (t === T.TUER ? this.welt.haeuser.find(h => h.tuer.x === kx && h.tuer.y === ky) : null) : this.tuerHausNah(p)) : null;
@@ -1683,8 +1686,38 @@ export class SpielRaum extends Room {
       const rk = t === T.TUER ? zw.ausgang : zw.treppen?.find(z => z.ziel === (welt.stock ?? ''));
       if (rk) ref = { x: (rk.x + 0.5) * kachelVon(zw), y: (rk.y + 0.5) * kachelVon(zw) };
     }
-    x.wechselSperre = 0.2; x.ankunft = { x: platz.x, y: platz.y, ref, d0: ref ? Math.hypot(platz.x - ref.x, platz.y - ref.y) : 0 }; x.ankunftT = 0; x.schonT = SCHONZEIT_EBENE;
+    // Ankunft drinnen (Haus, Treppe): gezieltes Umkehren zum Rückweg hebt die Sperre auf (ankunftUmkehr); draußen bleibt die strenge Regel
+    const ea = x.eingabe, la = ea ? Math.hypot(ea.dx, ea.dy) : 0;
+    x.wechselSperre = 0.2; x.ankunft = { x: platz.x, y: platz.y, ref, d0: ref ? Math.hypot(platz.x - ref.x, platz.y - ref.y) : 0, umkehrbar: ziel !== '' && !x.bot, dir: la > 0.05 ? { x: ea.dx / la, y: ea.dy / la } : null, umkehrT: 0 }; x.ankunftT = 0; x.schonT = SCHONZEIT_EBENE;
     if (x.bot) { x.bot.weg = null; x.bot.uebergangZiel = null; }
+  }
+
+  // Feinraster-Haustür von innen: Der Ausgang ist 5 Zellen (1,25 m) breit, die Figur (Kollisionsquadrat) fast 6 px: wer schräg oder am Rand auf die Tür
+  // zuläuft, bleibt mit dem Quadrat am Rahmen hängen, ohne dass die Figurmitte je auf eine Ausgangskachel kommt (die Ecken-Hilfe wirkt nur bis ~22° zur
+  // Türnormalen) – er glitt an der Wand entlang, oft mehrere Sekunden. Darum zählt auch die Berührung: Figurmitte höchstens Körperradius + 1 px vom
+  // Ausgangsrechteck entfernt und Eingabe mit Anteil (> 0,3 ≙ bis ~72° Abweichung) nach draußen.
+  ausgangBeruehrt(welt, p, e) {
+    const a = welt.ausgang;
+    if (!welt.kachel || !a?.rect || !e) return false;
+    const l = Math.hypot(e.dx, e.dy);
+    if (l < 0.05) return false;
+    const n = a.seite === 'unten' ? [0, 1] : a.seite === 'oben' ? [0, -1] : a.seite === 'links' ? [-1, 0] : [1, 0];
+    if ((e.dx * n[0] + e.dy * n[1]) / l < 0.3) return false;
+    const K = welt.kachel, r = a.rect, pad = Math.ceil(Math.min(W.spielerRadius * (welt.rs ?? 1), welt.radMax ?? 1e9)) + 1;
+    return p.x >= r.x * K - pad && p.x <= (r.x + r.b) * K + pad && p.y >= r.y * K - pad && p.y <= (r.y + r.h) * K + pad;
+  }
+
+  // Ankunftssperre nach einem Wechsel nach drinnen (Haus, Treppe): aufgehoben, sobald die Eingabe mindestens 0,06 s lang deutlich von der Eingaberichtung
+  // bei der Ankunft abweicht (Skalarprodukt < 0,5, also mehr als 60° gedreht; ohne Eingabe bei der Ankunft zählt jede Eingabe) und seit der Ankunft
+  // 0,2 s vergangen sind. Eine gehaltene Taste (auch schräg an der Wand entlang gleitend) bleibt gesperrt: kein Pendeln. Der Ausgang selbst löst weiter
+  // nur auf der Ausgangskachel aus; wer gezielt zur Tür umkehrt, muss nicht erst tiefer ins Haus laufen und zurück (vorher oft mehrere Sekunden).
+  ankunftUmkehr(x, dt) {
+    const a = x.ankunft, e = x.eingabe;
+    if (!a?.umkehrbar || !e) return false;
+    const l = Math.hypot(e.dx, e.dy);
+    const weicht = l > 0.05 && (!a.dir || (e.dx * a.dir.x + e.dy * a.dir.y) / l < 0.5);
+    a.umkehrT = weicht ? (a.umkehrT ?? 0) + dt : 0;
+    return x.ankunftT >= 0.2 && a.umkehrT >= 0.06;
   }
 
   // begehbare Nachbarkachel einer Treppe (dort landet man)
@@ -2460,7 +2493,7 @@ export class SpielRaum extends Room {
 
   // Braucht ein Bodengegenstand einen Rucksackplatz? (Waffe in leere Hand, Handgranaten-Platz, Munition/Pfeile/Granaten, Lampe, Kleidung gehen direkt)
   bodenBrauchtPlatz(p, d) {
-    return !((DINGE[d]?.waffe && !p.waffe && !p.faust) || (d === 'granate' && WP.handgranatenPlatz(p) >= 0) || d === 'munition' || d === 'pfeil' || d === 'granate40' || (d === 'taschenlampe' && !(p.lampe > 0)) || (d === 'kleidung' && !(p.kleidung > 0)));
+    return !(KISTEN[d] || (DINGE[d]?.waffe && !p.waffe && !p.faust) || (d === 'granate' && WP.handgranatenPlatz(p) >= 0) || d === 'munition' || d === 'pfeil' || d === 'granate40' || (d === 'taschenlampe' && !(p.lampe > 0)) || (d === 'kleidung' && !(p.kleidung > 0)));
   }
 
   // Passt das Angebot 'an' (Liste einzelner Dinge) noch in den Rucksack? (Das eigene Angebot ist schon herausgenommen.)
@@ -2544,6 +2577,7 @@ export class SpielRaum extends Room {
     if (DINGE[d]?.waffe && !p.waffe && !p.faust) p.waffe = d;
     else if (d === 'granate' && WP.handgranatenPlatz(p) >= 0) p.handgranaten = Math.min(HANDGRANATEN_MAX, (p.handgranaten ?? 0) + 1);   // Handgranaten-Platz: gleich in den Vorrat
     else if (d === 'mg' && p.waffe && p.waffe !== 'mg' && kannAufnehmen(p.rucksack, p.plaetze, p.waffe)) { fuegeHinzu(p.rucksack, p.plaetze, p.waffe); p.waffe = 'mg'; }   // MG sofort in die Hand
+    else if (KISTEN[d]) { kisteNehmen(this, client, p, d); this.state.boden.delete(id); return; }   // A400M-Kiste: fester Inhalt, eigene Meldung (server/a400m_kisten.mjs)
     else if (d === 'munition') this.munitionNehmen(p, MUNITION_PRO_FUND, client);
     else if (d === 'pfeil') p.pfeile = Math.min(PFEILE_MAX, p.pfeile + 1);   // einzelner Pfeil vom Boden
     else if (d === 'granate40') p.granaten = Math.min(GRANATEN_MAX, (p.granaten ?? 0) + 1);
@@ -2596,10 +2630,10 @@ export class SpielRaum extends Room {
     this.legeHin(ding, p.x, p.y, p.ebene);
   }
 
-  legeHin(ding, x, y, ebene = '') {
+  legeHin(ding, x, y, ebene = '', streu = 10) {
     const b = new BodenDing(); b.ebene = ebene;
     const w = this.rnd() * Math.PI * 2;
-    b.x = x + Math.cos(w) * 10; b.y = y + Math.sin(w) * 10; b.ding = ding; b.alter = 0; b.blass = 0;
+    b.x = x + Math.cos(w) * streu; b.y = y + Math.sin(w) * streu; b.ding = ding; b.alter = 0; b.blass = 0;
     const id = 'd' + (this.naechsteBodenId++);
     this.state.boden.set(id, b);
     return id;
@@ -2608,7 +2642,7 @@ export class SpielRaum extends Room {
   bodenAltern(dt) {
     for (const [id, b] of this.state.boden) {
       b.alter = (b.alter ?? 0) + dt;
-      if (DINGE[b.ding]?.mission) continue;   // Missionsgegenstände verschwinden nie
+      if (DINGE[b.ding]?.mission || DINGE[b.ding]?.bleibt) continue;   // Missionsgegenstände und A400M-Kisten verschwinden nie
       if (b.alter > BODEN_DAUER) { this.state.boden.delete(id); continue; }
       const st = blassStufe(BODEN_DAUER - b.alter);
       if (b.blass !== st) b.blass = st;

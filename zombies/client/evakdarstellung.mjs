@@ -310,3 +310,32 @@ export function bunkerAktualisieren(scene, s, aktEbene) {
   }
   b.box.setVisible(aktEbene === '');
 }
+
+// Munitionskiste fällt aus dem Heck des A400M (Nachricht 'kistenFall': Heck x0/y0, Liegeplatz x1/y1, dauer s): fliegt in einem Bogen (wird kleiner),
+// kommt auf und rutscht aus; danach liegt der Bodengegenstand (Server legt ihn nach `dauer` ab). Nur Darstellung.
+export function kisteFaellt(scene, m) {
+  const x0 = Number(m?.x0), y0 = Number(m?.y0), x1 = Number(m?.x1), y1 = Number(m?.y1), dauer = Math.max(0.3, Number(m?.dauer) || 1.2);
+  if (![x0, y0, x1, y1].every(Number.isFinite)) return;
+  const k = scene.add.text(x0, y0, '📦', { fontSize: '26px' }).setOrigin(0.5).setDepth(7.2);
+  const schatten = scene.add.ellipse(x0, y0, 18, 10, 0x000000, 0.35).setDepth(4.2);
+  const dreh = (Math.round(x1 + y1) % 2 ? 1 : -1) * (0.8 + (Math.abs(Math.round(x1)) % 5) * 0.15);
+  const z = { t: 0 };
+  scene.tweens.add({
+    targets: z, t: 1, duration: dauer * 1000, ease: 'Linear',
+    onUpdate: () => {
+      const t = z.t, fliegt = Math.min(1, t / 0.55), rutscht = t <= 0.55 ? 0 : (t - 0.55) / 0.45;
+      const e = rutscht ? 1 - (1 - rutscht) * (1 - rutscht) : 0;                       // am Boden: auslaufend nach vorn rutschen
+      const lauf = fliegt * 0.7 + e * 0.3, hoehe = Math.sin(Math.min(1, fliegt) * Math.PI) * 26 * (1 - rutscht) + (rutscht > 0 && rutscht < 0.25 ? Math.sin(rutscht / 0.25 * Math.PI) * 5 : 0);
+      const px = x0 + (x1 - x0) * lauf, py = y0 + (y1 - y0) * lauf;
+      k.setPosition(px, py - hoehe).setRotation(dreh * (1 - rutscht) * fliegt * 2).setScale(1 + (1 - lauf) * 0.35);
+      schatten.setPosition(px, py).setScale(1 - hoehe / 60).setAlpha(0.35);
+    },
+    onComplete: () => {
+      for (let i = 0; i < 5; i++) {   // Staubwölkchen beim Liegenbleiben
+        const a = i * 1.26, r = scene.add.circle(x1, y1, 4, 0xbcaaa4, 0.4).setDepth(4.3);
+        scene.tweens.add({ targets: r, x: x1 + Math.cos(a) * 16, y: y1 + Math.sin(a) * 16, alpha: 0, scale: 2.2, duration: 500, onComplete: () => r.destroy() });
+      }
+      k.destroy(); schatten.destroy();
+    },
+  });
+}

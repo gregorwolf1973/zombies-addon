@@ -10,6 +10,8 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { heliStand, evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke, A400M } from '../client/evak.mjs';
+import { frei } from '../client/welt.mjs';
+import { zaehle } from '../client/stapel.mjs';
 import { bereinige } from '../server/einstellungen.mjs';
 import { freierPort } from './hilfe.mjs';
 
@@ -51,6 +53,51 @@ test('Karte → Evakuierungsart und Einstellung für die neuen Arten', () => {
   assert.equal(evakArtFuer('isarauen'), 'panzer');
   for (const a of ['absturz', 'heli', 'bunker']) assert.equal(bereinige({ aufgaben: { evakArt: a } }).aufgaben.evakArt, a);
 });
+
+test('Königsdorf: während der Landerolle fallen je Echtspieler 2 Munitionskisten (50+30 Schuss, 2+1 Handgranaten) auf/neben die Piste, auf der Karte, im Spielstand, fest', mitArt('absturz', async ({ c, raum, p, s, ag }) => {
+  const { KISTEN, KISTEN_JE_SPIELER, kistenPlan, kistenSpeichern } = await import('../server/a400m_kisten.mjs');
+  const fall = []; c.onMessage('kistenFall', m => fall.push(m));
+  const fundorte = []; c.onMessage('fundorte', m => fundorte.push(m.l));
+  // reiner Plan: Inhalte fest, Zeiten innerhalb der Rollstrecke, Liegeplätze begehbar und nicht im Rumpf
+  const ap = (await import('../server/flugplatz.mjs')).absturzPlan(raum.welt, s.seed);
+  const plan = kistenPlan(s.seed, 3, ap, raum.welt, (x, y) => ag.platzNeben(x, y));
+  assert.equal(plan.length, 3 * KISTEN_JE_SPIELER);
+  assert.equal(plan.filter(e => e.ding === 'a400m_kiste_a').length, 3); assert.equal(plan.filter(e => e.ding === 'a400m_kiste_b').length, 3);
+  assert.deepEqual(KISTEN, { a400m_kiste_a: { schuss: 50, granaten: 2 }, a400m_kiste_b: { schuss: 30, granaten: 1 } });
+  const rd = absturzDauer() - ABSTURZ.anflug;
+  for (const e of plan) { assert.ok(e.zeit > 0 && e.zeit < rd, 'Zeit außerhalb der Rollstrecke'); assert.ok(frei(raum.welt, e.x1, e.y1, 6), 'Kiste im Hindernis'); }
+  assert.deepEqual(plan, kistenPlan(s.seed, 3, ap, raum.welt, (x, y) => ag.platzNeben(x, y)), 'Plan nicht deterministisch');
+  // Ablauf im Spiel
+  nurFunk(raum);
+  ag.fahrtGelingt = () => false;
+  ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
+  s.uhr = 18 * 60 + 0.1;
+  assert.ok(await bis(() => s.evakPhase === 'absturz'), 'kein Landeanflug');
+  ag.crash.rest = absturzDauer() - ABSTURZ.anflug - 0.05;   // Anflug überspringen: Aufsetzen, Rollen beginnt
+  assert.ok(await bis(() => fall.length >= 2, 9000), 'keine Kisten gefallen');
+  assert.ok(await bis(() => s.evakPhase === 'wrack', 12000), 'kein Stillstand');   // Rollstrecke läuft in Echtzeit
+  assert.ok(await bis(() => [...s.boden.values()].filter(b => KISTEN[b.ding]).length === 2, 3000), 'nicht genau 2 Kisten am Boden');
+  assert.equal(fall.length, 2);
+  const kisten = [...s.boden.entries()].filter(([, b]) => KISTEN[b.ding]);
+  assert.deepEqual(kisten.map(([, b]) => b.ding).sort(), ['a400m_kiste_a', 'a400m_kiste_b']);
+  // Karte: gelbe Punkte
+  assert.ok(await bis(() => fundorte.some(l => l.filter(e => KISTEN[e[2]]).length === 2), 3000), 'Kisten nicht in den Fundorten');
+  // Spielstand merkt sie, die Welt lässt sie nicht verfallen
+  assert.equal(kistenSpeichern(raum).length, 2);
+  assert.equal(ag.speichern().kisten.gefallen, true);
+  for (const [, b] of kisten) b.alter = 1e6;
+  raum.bodenAltern(1);
+  assert.equal([...s.boden.values()].filter(b => KISTEN[b.ding]).length, 2, 'Kisten verfallen wie weggeworfene Dinge');
+  // Aufheben: fester Inhalt (50 + 30 Schuss, 3 Handgranaten), keine weitere Kiste
+  const meldungenK = []; p.munition = 0; p.handgranaten = 0;
+  for (const [id, b] of kisten) { p.ebene = ''; p.x = b.x; p.y = b.y; raum.nimmAuf({ send: (t, m) => meldungenK.push(m?.text) }, p, id, b); }
+  assert.equal(p.munition, 80, 'Schuss: ' + p.munition);
+  assert.ok(meldungenK.some(t => t?.includes('+50 Schuss')) && meldungenK.some(t => t?.includes('+30 Schuss')), 'Meldung fehlt');
+  const granaten = (p.handgranaten ?? 0) + zaehle(p.rucksack, 'granate') + [...s.boden.values()].filter(b => b.ding === 'granate').length;
+  assert.equal(granaten, 3, 'Handgranaten: ' + granaten);
+  assert.equal([...s.boden.values()].filter(b => KISTEN[b.ding]).length, 0);
+  assert.equal(kistenSpeichern(raum).length, 0);
+}));
 
 test('Königsdorf: A400M landet auf der Piste und fängt erst im Stand Feuer (Wrack bleibt), kein Schaden; NH90 landet erst, wenn die Fahrt gelingt; Einsteigen → Abflug', mitArt('absturz', async ({ raum, p, s, ag, meldungen }) => {
   assert.equal(s.evakArt, 'absturz');

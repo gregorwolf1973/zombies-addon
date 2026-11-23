@@ -20,7 +20,7 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { boxerNah } from './boxer.mjs';
 import { boxerLaden, boxerBild, boxerFahrzeug, boxerSchuss } from './boxerdarstellung.mjs';
-import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
+import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, kisteFaellt, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { heliStand } from './evak.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 import { sichtPx } from './zombiesicht.mjs';
@@ -1196,6 +1196,7 @@ class Ort extends Phaser.Scene {
       else meldung('Nichts Brauchbares gefunden');
       if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
     });
+    raum.onMessage('kistenFall', m => { if ((this.aktEbene ?? '') === '') kisteFaellt(this, m); });   // A400M: Munitionskiste fällt aus dem Heck
     raum.onMessage('fundorte', m => { this.fundorte = Array.isArray(m?.l) ? m.l : []; });   // gesuchte Dinge in geöffneten Behältern (Karte)
     raum.onMessage('fundliste', m => fundZeigen(raum, m, this.lokal, meldung));
     raum.onMessage('alle_sperre', m => { this.alleSperreBis = Date.now() + (m.sek ?? 30) * 1000; });

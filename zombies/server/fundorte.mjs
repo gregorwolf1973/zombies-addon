@@ -5,6 +5,7 @@
 import { flach } from '../client/stapel.mjs';
 import { KACHEL, BREITE, zufall, ladenArt } from '../client/welt.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
+import { KISTEN } from './a400m_kisten.mjs';
 import { behaelterAufKarte, missionsBehaelter } from './mission.mjs';
 
 // Aufgaben-Funde: Für jede offene Aufgabe legt der Server die gebrauchten Dinge fest in passende Behälter (verteilt über die Karte).
@@ -110,6 +111,7 @@ export function fundorteListe(raum, gesucht) {
     if (da.has(k)) return;
     da.add(k); aus.push([Math.round(pos[0]), Math.round(pos[1]), ding]);
   };
+  for (const b of raum.state.boden.values()) if (KISTEN[b.ding] && !b.ebene) dazu([b.x, b.y], b.ding);   // A400M-Kisten (feste Funde), gelbe Punkte auf der Karte
   if (!gesucht.size) return aus;
   for (const [id, inhalt] of raum.inhalte) {
     if (id.includes('@') || !inhalt?.length) continue;
