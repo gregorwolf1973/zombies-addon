@@ -82,3 +82,7 @@ verkleinert (tools/boxer_bilder.py).
 
 Zombie-Figuren (grafik/zombies_*.webp, zombies_neu.json): Figuren und Animationen von Mixamo (Adobe), exakt von oben zu Einzelbildern gerendert
 (tools/mixamo, three.js), aufgehellt (Gamma 0,72); es werden nur die gerenderten Bilder ausgeliefert, keine Modell- oder Animationsdateien.
+
+Helden-Figuren (grafik/helden_*.webp, helden_neu.json): Figuren (Jennifer, SWAT Guy) und Animationen von Mixamo (Adobe), exakt von oben zu Einzelbildern gerendert
+(tools/mixamo, three.js), aufgehellt (Gamma 0,72); Waffen in der Hand: CC0-Modelle von Quaternius (Pistole, Sturmgewehr, Schrotflinte) und Pichuliru (Kabar-Messer),
+Schläger selbst erzeugt (siehe tools/mixamo/WAFFEN_QUELLEN.txt). Es werden nur die gerenderten Bilder ausgeliefert, keine Modell- oder Animationsdateien.

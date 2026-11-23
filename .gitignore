@@ -24,3 +24,4 @@ zombies/tools/mixamo/*.png
 zombies/tools/mixamo/*.txt
 !zombies/tools/mixamo/LIESMICH.txt
 zombies/tools/mixamo/fbx
+!zombies/tools/mixamo/WAFFEN_QUELLEN.txt
