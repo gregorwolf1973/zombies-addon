@@ -54,7 +54,8 @@ test('Isarauen: Mülltonnen, Container, Straßensperren, freie Parkplätze', asy
   try {
     const w = baueWeltAusKarte(karte, 7);
     // Tonnen: Gruppen mit grauer Restmülltonne, nur auf freiem Boden
-    assert.ok(w.muell.tonnen.length >= 15, 'zu wenige Tonnengruppen: ' + w.muell.tonnen.length);
+    // amtliche Karte (tools/amtlich.py): Tonnen nur an Wohnhäusern am Grundstücksrand – das Gebiet ist überwiegend Gewerbe (vorher OSM-Zufall: ≥ 15 Gruppen)
+    assert.ok(w.muell.tonnen.length >= 1, 'zu wenige Tonnengruppen: ' + w.muell.tonnen.length);
     for (const g of w.muell.tonnen) {
       assert.ok(g.farben.includes('grau') && g.farben.length >= 2 && g.farben.every(f => ['grau', 'gelb', 'gruen', 'braun', 'blau'].includes(f)));
       const t = w.hole(Math.floor(g.x / KACHEL), Math.floor(g.y / KACHEL));
