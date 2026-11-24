@@ -2,13 +2,13 @@
 """Mixamo-Streifen (<figur>_<clip>_streifen.png aus alle.sh) -> je Figur ein WebP-Atlas + gemeinsame JSON-Liste, Farbstil C
 (aufgehellt, Gamma 0,72 wie farbvarianten.py, ohne Kontur, keine Sättigungsänderung).
 Aufruf: PYTHONPATH=<pil> python3 atlas_bauen.py <ordner mit Streifen> <ausgabeordner = client/grafik>
-Layout je Atlas: eine Zeile je Clip in fester Reihenfolge (walk, run, idle, attack, neckbite = 160er Felder; crawl, dying = 200er Felder),
+Layout je Atlas: eine Zeile je Clip in fester Reihenfolge (walk, run, idle, attack, neckbite = 160er Felder; crawl, dying, tod2, tod3 = 200er Felder; tod2/tod3 = weitere Sterbebewegungen),
 16 Bilder je Zeile. JSON: bilder[<figur>_<clip>_<nn>] = [x, y, b, h] (Rahmen im Atlas der Figur), clips[<clip>] = Meta."""
 import sys, json
 from PIL import Image
 D, OUT = sys.argv[1].rstrip('/') + '/', sys.argv[2].rstrip('/') + '/'
 FIG = ['warzombie', 'copzombie', 'zombiegirl', 'yaku', 'romero']
-CLIPS = [('walk', 160, True), ('run', 160, True), ('idle', 160, True), ('attack', 160, True), ('neckbite', 160, True), ('crawl', 200, True), ('dying', 200, False)]
+CLIPS = [('walk', 160, True), ('run', 160, True), ('idle', 160, True), ('attack', 160, True), ('neckbite', 160, True), ('crawl', 200, True), ('dying', 200, False), ('tod2', 200, False), ('tod3', 200, False)]
 N = 16; GAMMA = [round(255 * (v / 255) ** 0.72) for v in range(256)]
 def hell(s):
     a = s.split()[3]; r = s.convert('RGB').point(GAMMA * 3).convert('RGBA'); r.putalpha(a); return r

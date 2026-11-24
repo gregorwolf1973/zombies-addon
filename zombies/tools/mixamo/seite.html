@@ -3,7 +3,7 @@
 <script type="importmap">{"imports":{"three":"./lib/three.module.js"}}</script>
 <script type="module">
 // Mixamo-FBX -> Draufsicht-Schleife (Streifen aus N Bildern). Parameter: datei, n=16, px=80 (Bildpunkte je Meter), feld=4 (m je Bild),
-// nur=info (Maße), stehen=1 (Root Motion entfernen), dreh=0 (Zusatzdrehung Grad)
+// anim=<fbx ohne Haut>, nur=info (Maße), stehen=1 (Root Motion entfernen), dreh=0 (Zusatzdrehung Grad)
 import * as THREE from 'three';
 import { FBXLoader } from './lib/examples/jsm/loaders/FBXLoader.js';
 const out = document.getElementById('out');
@@ -11,7 +11,8 @@ const q = new URLSearchParams(location.search);
 const LICHT = +(q.get('licht') || 1), N = +(q.get('n') || 16), PX = +(q.get('px') || 80), FELD = +(q.get('feld') || 4), NEIG = 0;   // immer exakt senkrecht von oben (Gregor)
 try {
   const g = await new FBXLoader().loadAsync('fbx/' + q.get('datei'));
-  const clip = g.animations[0];
+  // anim=<datei>: Bewegung aus einer zweiten FBX (Mixamo „Without Skin“, gleiches Skelett), Haut aus datei
+  const clip = q.get('anim') ? (await new FBXLoader().loadAsync('fbx/' + q.get('anim'))).animations[0] : g.animations[0];
   // eingebettete Texturen laden asynchron: warten, bis alle Bilder da sind; Glanz gering halten
   const texte = []; g.traverse(o => { if (o.isMesh) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => { if (m.specular) { m.specular.set(0x1a1a1a); m.shininess = 8; } for (const k of ['map', 'normalMap', 'specularMap']) if (m[k]) texte.push(m[k]); }); } });
   for (let i = 0; i < 100 && !texte.every(t => t.image && (t.image.width || t.image.naturalWidth)); i++) await new Promise(r => setTimeout(r, 100));

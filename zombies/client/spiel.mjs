@@ -5,7 +5,7 @@ import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from '
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
 import { HF_LISTE, HF_GROESSE, ALT_FAKTOR, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
-import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName } from './zombiefiguren.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
@@ -1899,6 +1899,7 @@ class Ort extends Phaser.Scene {
         namen[f][c] = [];
         for (let i = 0; i < ZF_BILDER; i++) {
           const n = zfName(f, c, i), r = j.bilder[n];
+          if (!r && ZF_TODE.includes(c) && c !== 'dying') { namen[f][c] = null; break; }   // ältere Atlanten ohne Zusatz-Sterbebewegung
           if (!r) return null;
           if (!tex.has(n)) tex.add(n, 0, r[0], r[1], r[2], r[3]);
           namen[f][c].push(n);
@@ -2770,9 +2771,10 @@ class Ort extends Phaser.Scene {
         // beide neuen Arten mit den bisherigen Leichenbildern (die Sterbebilder von z7 gefielen nicht)
         if (zfNeu) {
           // Mixamo: sterbender Zombie (dying einmal, danach letztes Bild liegen); beim ersten Durchgang schon vorhandene Tote liegen gleich
-          const fig = zfFigur(l.variante);
-          o = this.add.image(l.x, l.y, 'zf_' + fig, this.zfNamen[fig].dying[0]).setScale(ZOMBIE_GROESSE * ZF_G).setDepth(1.6).setRotation(l.richtung);
-          o.gf = ZF_G; o.zf = { fig, t0: this.time.now, liegt: !this.leichenGesehen || !!l.fest || !!l.deko };
+          // Sterbebewegung, Drehung und Spiegelung je Leiche fest aus der Id (zfLeiche), damit nicht alle Toten gleich daliegen
+          const fig = zfFigur(l.variante), lv = zfLeiche(id), clip = this.zfNamen[fig][lv.clip] ? lv.clip : 'dying';
+          o = this.add.image(l.x, l.y, 'zf_' + fig, this.zfNamen[fig][clip][0]).setScale(ZOMBIE_GROESSE * ZF_G).setDepth(1.6).setRotation(l.richtung + lv.dreh).setFlipX(lv.spiegeln);
+          o.gf = ZF_G; o.zf = { fig, clip, t0: this.time.now, liegt: !this.leichenGesehen || !!l.fest || !!l.deko };
           this.leichen.set(id, o);
         } else {
         const tot3 = this.figurListe3['leiche_' + typ];   // Gemini-Totenbild (figuren3), Kopf nach links wie die alten Leichen
@@ -2784,9 +2786,9 @@ class Ort extends Phaser.Scene {
         }
       }
       if (o.zf && !o.zf.liegt) {
-        const sp = this.time.now - o.zf.t0, i = zfBild('dying', { seit: sp });
-        o.setFrame(this.zfNamen[o.zf.fig].dying[i]); if (sp >= ZF_DAUER.dying) o.zf.liegt = true;
-      } else if (o.zf && !o.zf.fertig) { o.setFrame(this.zfNamen[o.zf.fig].dying[ZF_BILDER - 1]); o.zf.fertig = true; }
+        const sp = this.time.now - o.zf.t0, i = zfBild(o.zf.clip, { seit: sp });
+        o.setFrame(this.zfNamen[o.zf.fig][o.zf.clip][i]); if (sp >= ZF_DAUER[o.zf.clip]) o.zf.liegt = true;
+      } else if (o.zf && !o.zf.fertig) { o.setFrame(this.zfNamen[o.zf.fig][o.zf.clip][ZF_BILDER - 1]); o.zf.fertig = true; }
       if (l.x < rx0 || l.x > rx1 || l.y < ry0 || l.y > ry1) { if (o.visible) o.setVisible(false); continue; }
       o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * zg());   // Leichen folgen der Zombiegröße
       o.setVisible((l.ebene ?? '') === this.aktEbene);

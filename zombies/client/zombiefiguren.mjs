@@ -13,14 +13,16 @@ export const ZF_FIGUREN = ZF_LISTE.map(f => f.id);
 // state.variante ab diesem Wert = Figur direkt (100 + Index in ZF_LISTE); darunter der alte Zombietyp 0–24
 export const ZF_VARIANTE_AB = 100;
 export const zfVariante = id => ZF_VARIANTE_AB + Math.max(0, ZF_FIGUREN.indexOf(id));
-export const ZF_CLIPS = ['walk', 'run', 'idle', 'attack', 'neckbite', 'crawl', 'dying'];
+export const ZF_CLIPS = ['walk', 'run', 'idle', 'attack', 'neckbite', 'crawl', 'dying', 'tod2', 'tod3'];
+// Sterbebewegungen (Mixamo „Zombie Dying“, „Falling Back Death“, „Dying“); fehlen tod2/tod3 im Atlas, gilt dying
+export const ZF_TODE = ['dying', 'tod2', 'tod3'];
 export const ZF_BILDER = 16;
 // Maßstab je Atlas-Pixel relativ zu ZOMBIE_GROESSE (0,42): wie das bisherige Sprite zombie_hemd (0,699) mit der Figurengröße der Renderung (0,7)
 export const ZF_GROESSE = 0.699 * 0.7;
 // Weglänge (Spielpixel, 8 px = 1 m) je Schrittzyklus (16 Bilder)
 export const ZF_SCHRITT = { walk: 13, run: 26, crawl: 9 };
 // Zeit je Durchlauf (ms) der zeitgesteuerten Clips
-export const ZF_DAUER = { idle: 2600, attack: 1100, neckbite: 1500, dying: 1400 };
+export const ZF_DAUER = { idle: 2600, attack: 1100, neckbite: 1500, dying: 1400, tod2: 1700, tod3: 2200 };
 
 // Zombietyp (state variante, Reihenfolge ZOMBIE_TYPEN) → Figur: Soldat (0) warzombie, Polizisten (20 streife, 21 wachtmeister) copzombie, Dirndl/Langhaar zombiegirl, Rest gemischt
 export function zfFigur(variante) {
@@ -50,10 +52,19 @@ export function zfAngriff(zeitMs, h) {
 // Bildnummer 0..15: Gehen/Kriechen nach Weg (lauf in Pixeln, zs = Schrittfrequenz-Faktor), sonst nach Zeit
 export function zfBild(clip, { lauf = 0, zs = 1, zeitMs = 0, versatz = 0, seit = 0 } = {}) {
   const n = ZF_BILDER;
-  if (clip === 'dying') return Math.max(0, Math.min(n - 1, Math.floor(seit / ZF_DAUER.dying * n)));
+  if (ZF_TODE.includes(clip)) return Math.max(0, Math.min(n - 1, Math.floor(seit / ZF_DAUER[clip] * n)));
   if (ZF_SCHRITT[clip]) return Math.floor(lauf * zs / ZF_SCHRITT[clip] * n) % n;
   const d = ZF_DAUER[clip] ?? 2000;
   return Math.floor(((zeitMs + versatz) / d) * n) % n;
+}
+
+// Leiche: Sterbebewegung, Zusatzdrehung (Bogenmaß 0..2π) und Spiegelung fest aus der Leichen-Id (gleich auf allen Geräten, nur Darstellung)
+export function zfLeiche(id) {
+  let h = 2166136261;
+  const s = String(id ?? '');
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; h = (h ^ (h >>> 16)) >>> 0;
+  return { clip: ZF_TODE[h % 3], dreh: ((h >>> 8) % 360) * Math.PI / 180, spiegeln: ((h >>> 2) & 1) === 1 };
 }
 
 export const zfName = (fig, clip, i) => `${fig}_${clip}_${String(i).padStart(2, '0')}`;
