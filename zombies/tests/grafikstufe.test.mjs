@@ -63,7 +63,8 @@ test('Atlas-Varianten: Pfad, Rahmen halbiert, Bildgröße genau halb, Koordinate
     const [w, h] = webpMasse(`zombies_${f}.webp`), [kw, kh] = webpMasse(`zombies_${f}_klein.webp`);
     assert.deepEqual([kw, kh], [w / 2, h / 2], f);
   }
-  for (const r of Object.values(zn.bilder)) { for (const v of r) assert.equal(v % 2, 0); assert.ok(r[0] / 2 + r[2] / 2 <= 3200 / 2 && r[1] / 2 + r[3] / 2 <= 1200 / 2); }
+  const [zw, zh] = webpMasse(`zombies_${ZF_FIGUREN[0]}.webp`);   // Atlasgröße aus der Datei (mit drei Sterbebewegungen 3200×1600)
+  for (const r of Object.values(zn.bilder)) { for (const v of r) assert.equal(v % 2, 0); assert.ok(r[0] / 2 + r[2] / 2 <= zw / 2 && r[1] / 2 + r[3] / 2 <= zh / 2); }
   for (const f of HF_FIGUREN) {
     const [w, h] = webpMasse(`helden_${f}.webp`), [kw, kh] = webpMasse(`helden_${f}_klein.webp`);
     assert.deepEqual([kw, kh], [w / 2, h / 2], f);
