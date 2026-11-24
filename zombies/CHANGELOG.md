@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.89.0 – 24.11.2026
+
+- Autos fahren: Autoschlüssel in Schränken, Kofferräumen und bei Leichen finden – passt in jedes parkende Auto. Bis 80 km/h, Mitfahrer, Zombies überfahren; Aufprall kostet Leben, je schneller desto mehr; bei 0 Lebenspunkten brennt das Auto aus. Werte im Backend unter „🔑 Autos fahren“.
+- Unfallszene: Nach einem Unfall gehen oft die Türen auf, ein Mensch flieht, ein Zombie hinterher – man kann ihn retten.
+- Fahrzeuge fahren rückwärts (Stick nach hinten bzw. S/↓). Boxer, Puma und Leopard walzen Zäune und Hecken platt; der Leopard drückt Autos platt und walzt kleine Bäume um, Puma und Boxer fahren langsam über Autos.
+- Tote Zombies liegen unterschiedlich da: drei Sterbebewegungen je Figur, zufällig gedreht und gespiegelt.
+- Innenräume in echten Maßen (Zimmer 3–6 m) als Vorgabe.
+- Zäune schlank mit Pfosten, Hecken etwa 0,7 m breit mit Blattwerk.
+- Bundeswehrlager in echten Maßen mit feinem Boden; Soldaten in Heldengröße.
+- Grafikstufe im Zahnrad (Automatisch/Hoch/Mittel/Niedrig): auf Handy und Tablet halb so große Figurenbilder (rund 40 % weniger Grafikspeicher); alte Bilder werden nur noch bei Bedarf geladen, Helden schon beim Start.
+- Entfernt: hellgrüne Zufalls-Büsche und dunkle Baumschatten-Flecken ohne Krone im Luftbild.
+
 ## 0.88.1 – 24.11.2026
 
 - Behoben: Der Server hing jede Sekunde für bis zu einer Sekunde (gelbe Fundpunkte bauten jedes Haus neu auf) – alle Spieler ruckelten, je länger das Spiel lief, desto schlimmer. Dazu schnellere Zombie-Berechnung und ruhige Zombies knapp außerhalb des Bildes nur noch jeden 2. Takt.
