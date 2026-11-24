@@ -58,6 +58,14 @@ export function zfBild(clip, { lauf = 0, zs = 1, zeitMs = 0, versatz = 0, seit =
   return Math.floor(((zeitMs + versatz) / d) * n) % n;
 }
 
+// Im S-Draht/Flandernzaun hängen: Kriech-Clip langsam als Zerren statt Zappeln. Ein Zug dauert ZF_ZERREN ms (je Zombie ±15 %):
+// 65 % der Zeit kriecht er weich (langsam an, langsam aus) einen Zyklus voran, dann hängt er still; Bildnummer 0..15
+export const ZF_ZERREN = 5200;
+export function zfZerrBild(zeitMs, h = 0) {
+  const d = ZF_ZERREN * (0.85 + 0.3 * h), p = ((zeitMs / d) + h) % 1, q = Math.min(1, p / 0.65), e = q * q * (3 - 2 * q);
+  return Math.floor(e * ZF_BILDER) % ZF_BILDER;
+}
+
 // Leiche: Sterbebewegung, Zusatzdrehung (Bogenmaß 0..2π) und Spiegelung fest aus der Leichen-Id (gleich auf allen Geräten, nur Darstellung)
 export function zfLeiche(id) {
   let h = 2166136261;

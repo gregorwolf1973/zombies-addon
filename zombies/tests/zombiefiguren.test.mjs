@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche } from '../client/zombiefiguren.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild, ZF_ZERREN } from '../client/zombiefiguren.mjs';
 
 const dir = new URL('../client/grafik/', import.meta.url);
 
@@ -92,4 +92,13 @@ test('Leichen: drei Sterbebewegungen, Drehung und Spiegelung fest je Id und gut 
   assert.equal(dreh.size, 8, 'alle Achtel der Drehung kommen vor');
   assert.ok(gespiegelt > 200 && gespiegelt < 400, 'gespiegelt ' + gespiegelt);
   for (const c of ZF_TODE) { assert.equal(zfBild(c, { seit: 0 }), 0); assert.equal(zfBild(c, { seit: 99999 }), ZF_BILDER - 1); }
+});
+
+test('Im Draht: Kriech-Clip langsam (Zerren), ein Zug ~5 s mit Haltephase, kein schnelles Durchlaufen', () => {
+  for (const h of [0, 0.37, 0.9]) {
+    let wechsel = 0, halt = 0, alt = zfZerrBild(0, h);
+    for (let t = 50; t <= 10000; t += 50) { const b = zfZerrBild(t, h); assert.ok(b >= 0 && b < ZF_BILDER); if (b !== alt) wechsel++; else halt++; alt = b; }
+    assert.ok(wechsel <= 2 * ZF_BILDER * 10000 / (ZF_ZERREN * 0.85) / 2 + 4, 'zu schnell: ' + wechsel + ' Bildwechsel in 10 s');
+    assert.ok(halt > wechsel, 'keine Haltephasen');
+  }
 });

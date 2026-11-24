@@ -21,7 +21,7 @@ import { PkwVerwaltung, schluesselFund } from './pkw.mjs';
 import { Walze } from './walze.mjs';
 import { Fahrzeugkontakt } from './fahrzeugkontakt.mjs';
 import { autoTempo, bewegeFz } from '../client/fzkollision.mjs';
-import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
+import { drahtPruefen, haengendStart, haengtSchritt, drehBegrenzt, HAENG_DREH } from './haengend.mjs';
 import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
@@ -2920,7 +2920,9 @@ export class SpielRaum extends Room {
         if (!info.dran) continue;
         d = info.stau; info.stau = 0;
       } else { info.stau = 0; info.dran = true; }
+      const w0 = z.richtung;
       this.zombieSchritt(id, z, d);
+      if (z.haengt) z.richtung = drehBegrenzt(w0, z.richtung, HAENG_DREH * d);   // im Draht: nur langsam zum Ziel drehen (sonst zuckt er bei jedem Richtungswechsel)
       const re = info.re; if (re) { re.x = z.x; re.y = z.y; re.e = z.ebene; }   // Raster-Kopie auffrischen (zombieAbstand liest sie)
     }
     this.messen('zombies', t0); t0 = performance.now();
