@@ -78,8 +78,9 @@ export function zfZerrBild(zeitMs, h = 0) {
 // Anteile in Prozent aus dem Backend (zombies.anteilKriecher/-Schlurfer/-Laeufer, Vorgabe 10/60/30); bonusLaeufer (0..1, Schwierigkeit) geht vom Schlurfer-Anteil ab.
 export const ZK_SCHLURFER = 0, ZK_LAEUFER = 1, ZK_KRIECHER = 2;
 export const ZK_ANTEILE = { kriecher: 10, schlurfer: 60, laeufer: 30 };
-// Tempo der Klassen relativ zur Einstellung „Zombie wandert“ (km/h); Läufer: bis zum eingestellten Höchsttempo „Zombie jagt“
-export const ZK_TEMPO = { schlurferWandern: 0.6, schlurferJagen: 1.0, kriecher: 0.25 };
+// Tempo der Klassen relativ zur Einstellung „Zombie wandert“ (km/h); Schlurfer jagen mit eigenem Regler „Schlurfer jagt“ (tempoSchlurferJagen),
+// Läufer bis zum eingestellten Höchsttempo „Zombie jagt“
+export const ZK_TEMPO = { schlurferWandern: 0.6, kriecher: 0.25 };
 export function zkKlasse(id, anteile = ZK_ANTEILE, bonusLaeufer = 0) {
   let h = 2166136261;
   const s = 'k' + String(id ?? '');

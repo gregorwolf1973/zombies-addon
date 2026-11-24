@@ -880,7 +880,7 @@ test('Zombies und Bots: durch Hecke und Holzzaun langsam, Metallzaun bleibt zu',
       while (n < 400 && z.x < ziel) { raum.zombieGehen(z, 0, 100 * 0.05, 0.05); n++; }
       return n;
     };
-    const start = () => ({ x: (ort.kx + 1) * KACHEL, y: (ort.ky + 0.5) * KACHEL, ebene: '', jagt: true });
+    const start = () => ({ x: (ort.kx + 1) * KACHEL, y: (ort.ky + 0.5) * KACHEL, ebene: '', jagt: true, kl: 1 });   // Läufer (Bewegungsklasse): volles Tempo
     const ziel = (ort.kx + 10) * KACHEL;
     const frei_ = gehe(start(), ziel);
     // zwei Kacheln dicke Zaunwand über die ganze Kartenhöhe (Kartenrand und Wiese; so führt kein Weg drumherum)

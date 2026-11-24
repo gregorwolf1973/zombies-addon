@@ -1232,7 +1232,7 @@ export class SpielRaum extends Room {
   // Tag/Nacht-Zeiten aus den Einstellungen: für die Regeln auf dem Server und im Zustand für die Clients
   tempoWerte() {
     const e = SpielRaum.einstellungen ?? {};
-    return { gehen: e.tempoHeldGehen ?? 20, schleichen: e.tempoHeldSchleichen ?? 9, jagen: e.tempoZombieJagen ?? 15, wandern: e.tempoZombieWandern ?? 4 };
+    return { gehen: e.tempoHeldGehen ?? 20, schleichen: e.tempoHeldSchleichen ?? 9, jagen: e.tempoZombieJagen ?? 15, wandern: e.tempoZombieWandern ?? 4, schlurfer: e.tempoSchlurferJagen ?? 7 };
   }
 
   tageszeitenUebernehmen() {
@@ -3696,12 +3696,13 @@ export class SpielRaum extends Room {
     if (horde) info.eng = eng;   // gedrängt: im nächsten Schritt langsamer (Stau statt Übereinanderlaufen)
   }
 
-  // Höchsttempo (px/s) der Bewegungsklasse: Kriecher und Schlurfer nach „Zombie wandert“, Läufer nach „Zombie jagt“ (Höchsttempo)
+  // Höchsttempo (px/s) der Bewegungsklasse: Kriecher und umherziehende Schlurfer nach „Zombie wandert“, jagende Schlurfer nach „Schlurfer jagt“,
+  // Läufer nach „Zombie jagt“ (Höchsttempo, gilt für alle)
   klassenTempo(z, eifrig) {
     const wand = W.zombieTempoWandern;
     if (z.kriecht) return wand * ZK_TEMPO.kriecher;
     if (z.kl === ZK_LAEUFER) return W.zombieTempoJagen;
-    return Math.min(W.zombieTempoJagen, wand * (eifrig ? ZK_TEMPO.schlurferJagen : ZK_TEMPO.schlurferWandern));
+    return Math.min(W.zombieTempoJagen, eifrig ? W.zombieTempoSchlurfer : wand * ZK_TEMPO.schlurferWandern);   // Schlurfer jagt: eigener Regler (Vorgabe 7 km/h)
   }
 
   zombieGehen(z, w, weg, dt, info = null) {

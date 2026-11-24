@@ -891,7 +891,7 @@ export function tempoWerteSetzen(w, kmh) {
   if (!kmh) return;
   const z = (v, d) => (Number.isFinite(v) && v > 0 ? kmhZuPx(v) : kmhZuPx(d));
   w.tempoGehen = z(kmh.gehen, 20); w.tempoSchleichen = z(kmh.schleichen, 9);
-  w.zombieTempoJagen = z(kmh.jagen, 15); w.zombieTempoWandern = z(kmh.wandern, 4);
+  w.zombieTempoJagen = z(kmh.jagen, 15); w.zombieTempoWandern = z(kmh.wandern, 4); w.zombieTempoSchlurfer = z(kmh.schlurfer, 7);
 }
 
 // Spielwerte, die Server und Client kennen müssen
@@ -904,6 +904,7 @@ export const WERTE = {
   tempoSchleichen: 9 / 3.6 * 8,
   zombieTempoWandern: 4 / 3.6 * 8,
   zombieTempoJagen: 15 / 3.6 * 8,
+  zombieTempoSchlurfer: 7 / 3.6 * 8,   // Schlurfer jagt (Einstellung tempoSchlurferJagen; nie schneller als zombieTempoJagen)
   sichtWeite: 170,
   sichtWeiteSchleichen: 95,
   sichtWinkel: Math.PI / 2.4,   // ganzer Kegel ~75°
