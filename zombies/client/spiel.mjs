@@ -4,7 +4,7 @@ import { fzPx } from './masse.mjs';
 import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from './fzkollision.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
-import { HF_LISTE, HF_GROESSE, ALT_FAKTOR, SCHULTER_NEU_PX, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
+import { HF_LISTE, HF_GROESSE, ALT_FAKTOR, SCHULTER_NEU_PX, soldatSkala, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
 import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
@@ -988,6 +988,8 @@ const innenFigur = () => (szeneRef?.feinInnen() ? INNEN_FIGUR : 1);
 const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100) * innenFigur();
 const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
 const VERWUNDET_GROESSE = 0.42 * 1.26 * ALT_K;
+// liegender Soldat: gleiches Größenverhältnis zur stehenden Figur wie früher, nur auf Heldengröße gebracht
+const soldatLeicheSk = () => soldatSkala(mg()) * VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') / (BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle'));
 const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // z6/z7 aus figuren2 (Riley Gombart), ab 'kaminkehrer' aus figuren3 (Gemini)
 const GEMINI_TYPEN = new Set(ZOMBIE_TYPEN.slice(7));
@@ -1221,7 +1223,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('ueberrollt', m => leopardUeberrollt(this, m));
     raum.onMessage('leopardkanone', m => { leopardKanone(this, m, raum.state); fahrbarRueckstoss(this, raum.state, m.x1, m.y1); });   // Leopard-Hauptkanone: Mündungsfeuer, Rückstoß, Knall
     raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
-    b11Registrieren(this, raum, { skala: () => BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg() });   // Szene „Stau auf der B11“
+    b11Registrieren(this, raum, { skala: () => soldatSkala(mg()), leicheSkala: () => soldatLeicheSk() });   // Szene „Stau auf der B11“
     const polSk = () => SCHULTER_NEU_PX * mg() / POL_SCHULTER_PX;   // Polizist: Schulterbreite wie die Mixamo-Helden (15,2 px bei mg = 1), nicht mehr kleiner
     polizeiRegistrieren(this, raum, { skala: polSk, leicheSkala: () => polSk() * VERWUNDET_GROESSE * groesse('figuren2', 'polizist') / (BOGEN2_GROESSE * groesse('figuren2', 'polizist')) });   // Polizisten an den Straßensperren
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
@@ -1767,7 +1769,7 @@ class Ort extends Phaser.Scene {
   // Kulisse „Schatten“: eigenes durchscheinendes Bild über dem Boden; die Deckkraft folgt Tageszeit und Nebel (schattenAlphaSetzen)
   baueStueckSchatten(st) {
     const ts = this.textures.createCanvas('schatten-' + st.key, st.B, st.H);
-    if (!zeichneSchattenStueck(ts.getContext(), st.B, st.H, this.welt, st.rect)) { this.textures.remove('schatten-' + st.key); return; }
+    if (!zeichneSchattenStueck(ts.getContext(), st.B, st.H, this.welt, st.rect, !st.foto)) { this.textures.remove('schatten-' + st.key); return; }
     ts.refresh(); this.kanteFesthalten(ts);
     st.maske = schattenMaske(ts.getContext(), st.B, st.H);   // Schattenraster für „Figuren im Schatten dunkler“
     st.schatten = this.add.image(st.rect.x0 * KACHEL, st.rect.y0 * KACHEL, 'schatten-' + st.key).setOrigin(0).setDepth(0.5).setAlpha(this.schattenAlpha ?? 0.28).setVisible(!this.aktEbene);
@@ -2881,7 +2883,7 @@ class Ort extends Phaser.Scene {
         }
       }
       if (istFahrbar(f.art)) fahrbarFahrzeug(this, o, f, dt, this.lokal, this.aktEbene);
-      if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg())) {
+      if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, soldatSkala(mg()))) {
         // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
         const pz = evakArtVon(s) === 'panzer', lx = pz ? -12 : -8, an = Math.floor(this.time.now / 260) % 2;
         o.licht.fillStyle(0xff9100, an ? 0.3 : 0.12).fillCircle(lx, 0, an ? 24 : 16);
@@ -3009,8 +3011,8 @@ class Ort extends Phaser.Scene {
     }
     this.bwLicht = new BwLicht(this, sp);
     const soldat = (x, y, blick, phase, n = -1) => {
-      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
-      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg());
+      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(soldatSkala(mg()));
+      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(soldatSkala(mg()));
       const box = this.add.container(x, y, [fuesse, bild]).setDepth(3.5).setRotation(blick);
       const e = { box, bild, fuesse, phase, blick, schussBis: 0, n };
       o.soldaten.push(e);
@@ -3022,8 +3024,8 @@ class Ort extends Phaser.Scene {
         const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', 'arzt') * mg());
         o.aerzte.push({ box: this.add.container(t.x, t.y, [bild]).setDepth(3.5).setRotation(t.blick), bild });
       } else if (t.art === 'posten' && t.rolle === 'verwundet') {
-        const bild = this.add.image(t.x, t.y, 'figuren2', this.figurBild2('verwundet', t.variante)).setScale(VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg()).setRotation(t.blick).setDepth(0.6);
-        o.verwundete.push({ bild, s0: VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg(), phase: i });
+        const bild = this.add.image(t.x, t.y, 'figuren2', this.figurBild2('verwundet', t.variante)).setScale(soldatLeicheSk()).setRotation(t.blick).setDepth(0.6);
+        o.verwundete.push({ bild, s0: soldatLeicheSk(), phase: i });
       }
     });
   }
@@ -3094,7 +3096,7 @@ class Ort extends Phaser.Scene {
     const o = this.stuetzpunktObj, e = o?.soldaten.find(q => q.n === m.n);
     if (!e || e.tot) return;
     e.tot = true;
-    const bild = this.add.image(m.x, m.y, 'figuren2', this.figurBild2('verwundet', m.n)).setScale(VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg()).setRotation(m.w ?? 0).setDepth(0.6).setTint(0xb0a0a0);
+    const bild = this.add.image(m.x, m.y, 'figuren2', this.figurBild2('verwundet', m.n)).setScale(soldatLeicheSk()).setRotation(m.w ?? 0).setDepth(0.6).setTint(0xb0a0a0);
     (o.leichen ??= []).push(bild);
     if (laut) { ton.ereignis('menschGebissen', m.x, m.y); fetzen(this, m.x, m.y, m.w ?? 0, 1.4); }
   }

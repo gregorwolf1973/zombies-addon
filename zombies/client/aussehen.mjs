@@ -386,8 +386,10 @@ export function zeichneBoden(ctx, welt, rect = null) {
 }
 
 // Kulisse „Schatten“: Schatten von Häusern und Bäumen eines Kartenstücks in ein leeres Bild (null, wenn nichts zu zeichnen ist)
-export function zeichneSchattenStueck(ctx, B, H, welt, rect) {
-  return zeichneSchatten(ctx, B, H, rect, vektorGebaeude(welt), baumKronen(welt, { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 12, y1: rect.y1 + 12 }), welt.nebengebaeude ?? []);
+// Baumschatten nur, wo auch Kronen gezeichnet werden (mitBaeumen = nicht Luftbild): im Luftbild zeigt das Foto Bäume samt eigenem Schatten,
+// ein zusätzlicher Schatten der gerechneten Baumkacheln wäre ein dunkler Fleck ohne Krone.
+export function zeichneSchattenStueck(ctx, B, H, welt, rect, mitBaeumen = true) {
+  return zeichneSchatten(ctx, B, H, rect, vektorGebaeude(welt), !mitBaeumen ? [] : baumKronen(welt, { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 12, y1: rect.y1 + 12 }), welt.nebengebaeude ?? []);
 }
 
 // ---------- obere Ebene: Bäume und Deko aus dem Prototyp ----------

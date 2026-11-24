@@ -11,6 +11,10 @@ export const HF_GROESSE = ZF_GROESSE * HF_KORREKTUR;
 // Alte Sprites (Schulterbreite 25,7 px bei Maßstab 0,42) auf die Schulterbreite der Mixamo-Helden (~15 px) bringen: Ziel 15,2 / 25,7
 export const SCHULTER_ALT_PX = 25.7, SCHULTER_NEU_PX = 15.2;   // stehender Held: 53 Atlas-px × 0,2055 × 1,4
 export const ALT_FAKTOR = SCHULTER_NEU_PX / SCHULTER_ALT_PX;
+// Soldaten (Bundeswehr, Bild soldat_idle/soldat_schuss in figuren2): Schulterbreite 55 Bild-px (Höhe des Bildes quer zur Blickrichtung);
+// Maßstab so, dass sie so breit sind wie die Mixamo-Helden (mg = Größenfaktor der Menschen, 1 = Standard)
+export const SOLDAT_SCHULTER_PX = 55;
+export const soldatSkala = (mg = 1) => SCHULTER_NEU_PX * mg / SOLDAT_SCHULTER_PX;
 
 // Helden-Liste: EINZIGE Stelle für neue Helden (plus Atlas grafik/helden_<id>.webp, Eintrag in helden_neu.json, Vorschaubild in helden_vorschau.webp).
 // Server (Zufall für Bots, Prüfung der Wahl), Startwahl (Auswahl + Vorschau) und Verwaltung (Zeile mit Häkchen) lesen dieselbe Liste.
