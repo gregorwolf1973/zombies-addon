@@ -618,6 +618,7 @@ export class Verkehr {
       if (inf.brand && !inf.amBrand) { inf.amBrand = true; inf.halt = 25; return; }   // (die Sirene ist dabei nach wenigen Sekunden aus, siehe Client)   // Feuerwehr löscht eine Weile
       s.fahrzeuge.delete(id); this.info.delete(id); return;
     }
+    if (inf.randAus) { s.fahrzeuge.delete(id); this.info.delete(id); return; }   // Auto eines Bewohners (menschen.mjs): fährt zum Kartenrand und verschwindet
     // normaler Verkehr: nach der Anfangsphase verschwinden die Autos am Ziel, bis nur noch ein Drittel fährt
     if (zeitMin > (e.verkehrPhase ?? 25)) {
       let normal = 0;

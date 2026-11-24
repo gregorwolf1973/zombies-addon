@@ -23,6 +23,7 @@ async function beitreten(name) {
   const c = await new Client(URL_).joinOrCreate('zombies', { name, spielerId: neueId() });
   const raum = matchMaker.getLocalRoomById(c.roomId);
   raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+  raum.state.menschen.clear(); raum.stadt?.info?.clear?.();   // Alltagsmenschen wandern überall: sonst nehmen sie der Horde die Opfer-Auswahl (Trupp-Tests)
   raum.welle.aktiv = null; raum.welle.ansage = null; raum.welle.uhr = null;
   return { c, raum, p: raum.state.spieler.get(c.sessionId) };
 }

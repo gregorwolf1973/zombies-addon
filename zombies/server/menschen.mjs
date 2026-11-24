@@ -3,6 +3,7 @@
 // Zombies wittern Menschen und beißen sie; Gebissene werden nach einer einstellbaren Zeit selbst zu Zombies.
 import { schema, t } from '@colyseus/schema';
 import { entkoppeln } from './netzfeld.mjs';
+import { parkAutoFrei, parkWinkel } from '../client/pkw.mjs';
 import { KACHEL, BREITE, HOEHE, kachelVon, tempoVon, T, findeWeg, sichtfrei, bewege, baumFaktor, frei, ladenArt, zufall, DINGE, WERTE as W } from '../client/welt.mjs';
 
 export const Mensch = schema({
@@ -24,7 +25,13 @@ export const POLIZIST_ANTEIL = 0.06;
 const RAD = 10;
 const TEMPO = W.tempoGehen * 0.55, FLUCHT = W.tempoGehen * 0.62;   // Flucht langsamer als ein jagender Zombie (105 px/s), sonst holt er sie nie ein
 const BISS_ABSTAND = 30;
-export const PANIK_ANTEIL = 0.12;     // so viele Bewohner laufen schreiend herum, der Rest versteckt sich in Gruppen
+export const PANIK_ANTEIL = 0.12;     // so viele Bewohner laufen bei Gefahr schreiend herum, der Rest versteckt sich in Gruppen (nur solange Zombies in der Nähe sind)
+export const GEFAHR_WEITE = 320;      // px (40 m): Zombie so nah (draußen, gleiche Ebene) = Gefahr, Bewohner verstecken sich oder geraten in Panik
+export const GEFAHR_SICHT = 480;      // px (60 m): in Sichtlinie schon ab hier
+export const SICHER_NACH = 25;        // s ohne Zombie in der Nähe: Versteckte und Panische kommen heraus, Alltag geht weiter
+export const WEG_BESTAND = 0.5;       // Auto-Abfahrt und Weglaufen nur, solange noch mehr als dieser Anteil des Anfangsbestands (gesund) da ist
+// Alltag: Auswahl des nächsten Ziels (kumulierte Anteile; Rest = nach Hause)
+const ALLTAG = { laden: 0.17, wohnhaus: 0.29, haltestelle: 0.41, platz: 0.5, bummeln: 0.78, heim: 0.93, auto: 0.96, rand: 0.98 };
 export const VERSTECK_WEITE = 40;     // Witterungsreichweite der Zombies gegenüber Versteckten (sonst W.sichtWeite)
 const ALARM = 75;                     // so nah darf ein Zombie an eine versteckte Gruppe kommen, bevor sie weiterzieht
 const HAUS_VERSTECKT = 0.12;          // Anteil der Wohnhäuser (ohne Zombies) mit einem versteckten Menschen
@@ -107,6 +114,8 @@ export class Stadtleben {
     this.suchBudget = 0;
     this.hausFertig = new Set();  // Innenräume, in denen die Frage „versteckter Mensch?“ schon entschieden ist
     this.gerettet = 0;
+    this.start0 = 0;              // Menschen zu Spielbeginn (Obergrenze für Abfahrten/Weglaufen)
+    this.parkAutos = null;        // geparkte Autos der Welt (Behälter art 'auto'), beim ersten Bedarf
   }
 
   // ---------- Gruppen und Verstecke ----------
@@ -253,7 +262,7 @@ export class Stadtleben {
 
   // Begleiter wird frei (Spieler weg/tot oder selbst gebissen) und sucht sich ein Versteck
   freilassen(id, m, inf) {
-    inf.folgt = null; m.folgt = false; inf.weg = null;
+    inf.folgt = null; m.folgt = false; inf.weg = null; inf.gefahrBis = this.takt + SICHER_NACH;
     if (m.infiziert) { inf.modus = ''; return; }
     if (m.ebene) { m.ebene = ''; const p = this.vorDerTuer(inf.heim); m.x = p.x; m.y = p.y; }
     const g = this.neueGruppe(m, 1);
@@ -370,7 +379,6 @@ export class Stadtleben {
   // zu Spielbeginn: Menschen an ihren Haustüren, ein Bus, ein paar erste Zombies weit weg vom Start
   start(anzahl, ersteZombies = 3) {
     const r = this.raum.rnd;
-    let gruppe = null;   // laufende Gruppe, die noch Mitglieder aufnimmt
     for (let i = 0; i < anzahl && this.wohnungen.length; i++) {
       const heim = this.wohnungen[Math.floor(r() * this.wohnungen.length)];
       const p = this.vorDerTuer(heim);
@@ -383,17 +391,16 @@ export class Stadtleben {
       const id = 'm' + this.naechsteId++;
       m.typ = m.aussehen.startsWith('p') ? '' : typFuerId(id);
       this.raum.state.menschen.set(id, m);
-      const inf = { heim, ziel: null, weg: null, warte: m.sichtbar ? 0 : 10 + r() * 120, inf: 0, steckt: 0, modus: '' };
+      const inf = { heim, ziel: null, weg: null, warte: m.sichtbar ? 0 : 10 + r() * 120, inf: 0, steckt: 0, modus: '', panisch: r() < PANIK_ANTEIL || !this.verstecke.length };
       this.info.set(id, inf);
-      // ca. 12 % laufen in Panik herum, die übrigen ducken sich in kleinen Gruppen (2–4) an Verstecken
-      if (r() < PANIK_ANTEIL || !this.verstecke.length) { inf.modus = 'panik'; m.sichtbar = true; inf.warte = 0; continue; }
-      if (!gruppe || gruppe.mitglieder.length >= gruppe.soll) gruppe = this.neueGruppe(p);
-      if (!gruppe) { inf.modus = 'panik'; m.sichtbar = true; inf.warte = 0; continue; }
-      this.gruppeAufnehmen(gruppe, id, inf);
-      const slot = inf.slot;
-      m.x = slot.x; m.y = slot.y; m.sichtbar = true; m.versteckt = true; inf.sitzt = true; inf.warte = 0; m.richtung = r() * Math.PI * 2;
+      // Alltag: wer draußen ist, steht nicht dicht gedrängt an der Haustür, sondern irgendwo in der Nähe (verstecken tun sich Menschen erst bei Gefahr)
+      if (m.sichtbar) for (let k = 0; k < 6; k++) {
+        const x = p.x + (r() - 0.5) * 240, y = p.y + (r() - 0.5) * 240;
+        if (frei(this.raum.welt, x, y, RAD) && sichtfrei(this.raum.welt, p.x, p.y, x, y)) { m.x = x; m.y = y; break; }
+      }
+      m.richtung = r() * Math.PI * 2;
     }
-    this.anfangs = anzahl;
+    this.anfangs = anzahl; this.start0 = anzahl;
     if (anzahl > 0) {
       const start = this.raum.welt.start;
       for (let n = 0, v = 0; n < ersteZombies && v < 400; v++) {
@@ -417,10 +424,15 @@ export class Stadtleben {
       return sortiert[Math.floor(r() * Math.min(n, sortiert.length))].e;
     };
     let ziel;
-    if (wahl < 0.35 && this.laeden.length) { const h = nahe(this.laeden, 5, h => this.vorDerTuer(h)); ziel = { ...this.vorDerTuer(h), art: 'haus' }; }
-    else if (wahl < 0.6 && this.haltestellen.length) { const hs = nahe(this.haltestellen, 3, hs => hs); ziel = { x: hs.x, y: hs.y, art: 'haltestelle', hs }; }
-    else if (wahl < 0.75 && this.plaetze.length) { const p = this.plaetze[0]; ziel = { x: p.x + (r() - 0.5) * 120, y: p.y + (r() - 0.5) * 120, art: 'platz' }; }
-    else ziel = { ...this.vorDerTuer(inf.heim), art: 'haus' };
+    const A = ALLTAG;
+    if (wahl < A.laden && this.laeden.length) { const h = nahe(this.laeden, 5, h => this.vorDerTuer(h)); ziel = { ...this.vorDerTuer(h), art: 'haus' }; }
+    else if (wahl < A.wohnhaus && this.wohnungen.length) { const h = nahe(this.wohnungen, 5, h => this.vorDerTuer(h)); ziel = { ...this.vorDerTuer(h), art: 'haus' }; }
+    else if (wahl < A.haltestelle && this.haltestellen.length) { const hs = nahe(this.haltestellen, 3, hs => hs); ziel = { x: hs.x, y: hs.y, art: 'haltestelle', hs }; }
+    else if (wahl < A.platz && this.plaetze.length) { const p = this.plaetze[0]; ziel = { x: p.x + (r() - 0.5) * 120, y: p.y + (r() - 0.5) * 120, art: 'platz' }; }
+    else if (wahl < A.bummeln) ziel = this.bummelZiel(m);
+    else if (wahl >= A.heim && wahl < A.auto && this.darfWeg()) ziel = this.autoZiel(m);
+    else if (wahl >= A.auto && wahl < A.rand && this.darfWeg()) ziel = this.randZiel(m);
+    ziel ??= { ...this.vorDerTuer(inf.heim), art: 'haus' };
     inf.ziel = ziel; inf.weg = null; inf.steckt = 0;
   }
 
@@ -453,6 +465,7 @@ export class Stadtleben {
       // Zombie oder Feuer in der Nähe? Weglaufen (gebissene laufen auch, aber langsamer); Versteckte reagieren erst, wenn er ganz nah kommt
       const welt = m.ebene ? this.raum.wv(m.ebene) : welt0;
       if (inf.folgt) { const pp = s.spieler.get(inf.folgt); if (!pp || (pp.ebene ?? '') !== (m.ebene ?? '') || pp.sicher) { this.folgenSchritt(id, m, inf, d, welt); continue; } }
+      if (!inf.folgt && !m.infiziert && !m.ebene) this.gefahrLage(id, m, inf, d, welt);
       let gefahr = null, gd = inf.gruppe && inf.sitzt ? ALARM : inf.folgt ? 130 : 170;
       for (const z of this.raum.zRaster ? this.raum.zombiesNahe(m.x, m.y, m.ebene ?? '', 2) : m.ebene ? [] : zombies.map(e => e[1])) {
         const dd = Math.hypot(z.x - m.x, z.y - m.y);
@@ -528,7 +541,117 @@ export class Stadtleben {
       inf.drinIn = this.raum.welt.haeuser.find(h => Math.hypot(this.vorDerTuer(h).x - z.x, this.vorDerTuer(h).y - z.y) < 4) ?? inf.heim;
     } else if (z.art === 'haltestelle') {
       if (!inf.wartet) inf.wartet = 40 + r() * 40;   // auf den Bus warten, sonst weitergehen
+    } else if (z.art === 'bummeln') {
+      inf.wartet = 3 + r() * 9;   // kurz stehenbleiben, dann das nächste Ziel
+    } else if (z.art === 'auto') this.insAuto(id, m, inf, z);
+    else if (z.art === 'rand') {
+      if (this.randAbstand(m) <= 3 * KACHEL) this.entfernen(id, m, inf);   // am Kartenrand: weg
+      else { inf.ziel = this.randZiel(m) ?? null; inf.weg = null; if (!inf.ziel) this.neuesZiel(id, m, inf); }
     } else this.neuesZiel(id, m, inf);
+  }
+
+  // ---------- Alltag: Gefahr, Bummeln, Auto, Weglaufen ----------
+
+  // Zombie draußen in der Nähe (GEFAHR_WEITE, in Sichtlinie GEFAHR_SICHT)?
+  zombieNah(m, welt) {
+    const liste = this.raum.zRaster ? this.raum.zombiesNahe(m.x, m.y, m.ebene ?? '', Math.ceil(GEFAHR_SICHT / 96)) : m.ebene ? [] : [...this.raum.state.zombies.values()].filter(z => !z.ebene);
+    for (const z of liste) {
+      const dd = Math.hypot(z.x - m.x, z.y - m.y);
+      if (dd < GEFAHR_WEITE || dd < GEFAHR_SICHT && sichtfrei(welt, m.x, m.y, z.x, z.y)) return true;
+    }
+    return false;
+  }
+
+  // Verstecken/Panik nur bei Gefahr: Zombie in der Nähe → verstecken (oder Panik), SICHER_NACH Sekunden ohne Zombie → wieder Alltag
+  gefahrLage(id, m, inf, d, welt) {
+    inf.scanT = (inf.scanT ?? 0) - d;
+    if (inf.scanT <= 0) { inf.scanT = 0.4; if (this.zombieNah(m, welt)) inf.gefahrBis = this.takt + SICHER_NACH; }
+    const gefahr = this.takt < (inf.gefahrBis ?? 0);
+    if (gefahr && inf.modus === '') {
+      inf.ziel = null; inf.weg = null; inf.wartet = 0;
+      const g = !inf.panisch && this.verstecke.length ? this.gruppeSuchen(m) : null;
+      if (g) this.gruppeAufnehmen(g, id, inf); else inf.modus = 'panik';
+    } else if (!gefahr && (inf.modus === 'versteck' || inf.modus === 'panik')) {
+      if (inf.gruppe) this.gruppeVerlassen(id, inf);
+      inf.modus = ''; inf.sitzt = false; inf.ziel = null; inf.weg = null; inf.fluchtZeit = 0; inf.steckt = 0;
+      m.versteckt = false; m.flieht = false;
+    }
+  }
+
+  // Gruppe mit freiem Platz in der Nähe, sonst eine neue
+  gruppeSuchen(m) {
+    let best = null, bd = 300;
+    for (const g of this.gruppen.values()) {
+      if (g.mitglieder.length >= g.soll || g.flucht || this.schlecht.has(g.vpIdx)) continue;
+      const dd = Math.hypot(g.vp.x - m.x, g.vp.y - m.y);
+      if (dd < bd) { bd = dd; best = g; }
+    }
+    return best ?? this.neueGruppe(m);
+  }
+
+  // Mensch verlässt die Welt (Auto weggefahren, am Rand verschwunden): kein Nachschub, Anteil für den Zombie-Nachschub bleibt stimmig
+  entfernen(id, m, inf) {
+    this.gruppeVerlassen(id, inf);
+    this.raum.state.menschen.delete(id); this.info.delete(id);
+    this.anfangs = Math.max(0, this.anfangs - 1);
+  }
+
+  // Abfahren/Weglaufen nur, solange noch genug Menschen da sind
+  darfWeg() { return this.start0 > 0 && [...this.raum.state.menschen.values()].filter(q => !q.infiziert).length > this.start0 * WEG_BESTAND; }
+
+  // Zufallspunkt in der Nähe (kein Zeichenwinkel nötig), nicht auf der Straße
+  bummelZiel(m) {
+    const r = this.raum.rnd, w = this.raum.welt;
+    for (let k = 0; k < 6; k++) {
+      const x = m.x + (r() - 0.5) * 520, y = m.y + (r() - 0.5) * 520;
+      if (x < 2 * KACHEL || y < 2 * KACHEL || x > (BREITE - 2) * KACHEL || y > (HOEHE - 2) * KACHEL) continue;
+      if (frei(w, x, y, RAD) && w.hole(Math.floor(x / KACHEL), Math.floor(y / KACHEL)) !== T.STRASSE) return { x, y, art: 'bummeln' };
+    }
+    return null;
+  }
+
+  // eines der nächsten geparkten Autos (nicht verbrannt, platt oder schon weg)
+  autoZiel(m) {
+    const r = this.raum, w = r.welt;
+    if (!r.verkehr?.graph?.knoten?.length) return null;
+    this.parkAutos ??= (w.behaelter ?? []).filter(b => b.art === 'auto');
+    const nah = this.parkAutos.filter(b => Math.abs(b.x - m.x) < 700 && Math.abs(b.y - m.y) < 700 && parkAutoFrei(b, w, r.state))
+      .map(b => ({ b, d: Math.hypot(b.x - m.x, b.y - m.y) })).sort((a, c) => a.d - c.d).slice(0, 4);
+    if (!nah.length) return null;
+    const b = nah[Math.floor(r.rnd() * nah.length)].b;
+    return { x: b.x, y: b.y, art: 'auto', auto: b };
+  }
+
+  // am Auto: einsteigen. Das parkende Auto verschwindet, ein normales Verkehrsauto (verkehr.mjs) fährt zu einer Ausfahrt am Kartenrand.
+  insAuto(id, m, inf, z) {
+    const r = this.raum, v = r.verkehr, b = z.auto;
+    if (!b || !v?.graph?.knoten?.length || !parkAutoFrei(b, r.welt, r.state) || !this.darfWeg()) { this.neuesZiel(id, m, inf); return; }
+    const fid = v.neu('auto', { x: b.x, y: b.y }, { randAus: true });
+    const f = r.state.fahrzeuge.get(fid), rand = v.randKnoten();
+    f.farbe = Math.max(0, Math.min(255, Math.round(b.farbe ?? f.farbe))); f.richtung = parkWinkel(b);
+    if (!v.fahreNach(fid, rand[Math.floor(r.rnd() * rand.length)])) { r.state.fahrzeuge.delete(fid); v.info.delete(fid); this.neuesZiel(id, m, inf); return; }
+    r.pkw?.weg(b.id);
+    this.entfernen(id, m, inf);
+  }
+
+  // Abstand zum nächsten Kartenrand (px) und dessen Seite
+  randSeite(m) {
+    const B = BREITE * KACHEL, H = HOEHE * KACHEL, l = [[m.x, 'l'], [B - m.x, 'r'], [m.y, 'o'], [H - m.y, 'u']].sort((a, b) => a[0] - b[0]);
+    return l[0];
+  }
+  randAbstand(m) { return this.randSeite(m)[0]; }
+
+  // nächster Zwischenpunkt (höchstens 480 px) auf dem Weg zum nächsten Kartenrand, null wenn keiner frei ist
+  randZiel(m) {
+    const [abst, seite] = this.randSeite(m), B = BREITE * KACHEL, H = HOEHE * KACHEL, w = this.raum.welt;
+    const schritt = Math.min(480, Math.max(0, abst - 1.5 * KACHEL));
+    for (const q of [0, 48, -48, 96, -96, 160, -160]) {
+      let x = m.x, y = m.y;
+      if (seite === 'l') { x = m.x - schritt; y += q; } else if (seite === 'r') { x = m.x + schritt; y += q; } else if (seite === 'o') { y = m.y - schritt; x += q; } else { y = m.y + schritt; x += q; }
+      if (x < KACHEL || y < KACHEL || x > B - KACHEL || y > H - KACHEL) continue;
+      if (frei(w, x, y, RAD)) return { x, y, art: 'rand' };
+    }
+    return null;
   }
 
   // gebissen → nach der Ansteckungszeit ein Zombie an derselben Stelle
