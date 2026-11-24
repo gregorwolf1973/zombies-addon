@@ -773,6 +773,23 @@ export function radioStarten() {
   return { g, pan, laut: 0.45, quellen: [o, rs], rate: null, osz: o };
 }
 
+// Autoradio für den eigenen Spieler im selbst gefahrenen Auto: Live-Stream (oder Datei „Autoradio“) in voller Lautstärke, ohne Entfernung.
+// Muss beim Einschalten aus einer Nutzergeste kommen (Knopf/Taste; iOS). leise = Faktor 0–1 (z. B. bei Sirene). Rückgabe: spielt es?
+let innenRadio = null;
+export function autoradioInnen(an, faktor = 1) {
+  if (!ctx) return false;
+  if (!an) { if (innenRadio) { sireneStoppen(innenRadio); innenRadio = null; } return false; }
+  if (!innenRadio) {
+    innenRadio = schleifeStarten('autoradio', true);
+    if (!innenRadio) return false;   // kein Sender/keine Datei eingestellt oder Autoradio im Zahnrad aus
+    innenRadio.lautBasis = innenRadio.laut;
+  }
+  innenRadio.laut = innenRadio.lautBasis * faktor;
+  sireneLage(innenRadio, hx, hy, 0, 1400, false);
+  return true;
+}
+export const autoradioInnenAn = () => !!innenRadio;
+
 export function sireneStarten() {
   if (!ctx) return null;
   const g = ctx.createGain(); g.gain.value = 0;

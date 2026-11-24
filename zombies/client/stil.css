@@ -81,7 +81,7 @@ button:disabled { opacity: .6; }
 /* Waffenfelder: im HUD oben links unter den Mitspielern (zwei Plätze + festes Granatenfeld) */
 #waffenzeile { --wf: 54px; display: flex; align-items: flex-end; gap: 6px; margin: 6px 0 0; pointer-events: none; }
 #waffenplaetze { display: flex; gap: 6px; pointer-events: auto; }
-#waffenplaetze button, #granatenfeld {
+#waffenplaetze button, #granatenfeld, .autoknopf {
   position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; flex: none; width: var(--wf); height: var(--wf); margin: 0; padding: 0;
   border-radius: 10px; background: #ffffff4d; color: #fff; border: 2px solid #ffffff66; box-shadow: 0 2px 6px #0007;
   -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: manipulation; pointer-events: auto;
@@ -100,6 +100,9 @@ button:disabled { opacity: .6; }
 /* Granatenfeld: kleiner, feste Stelle neben den Waffenfeldern, bleibt unsichtbar-reserviert ohne Granaten */
 #granatenfeld { width: calc(var(--wf) * .72); height: calc(var(--wf) * .72); flex-direction: column; gap: 0; }
 #granatenfeld .gz { font-size: 22px; line-height: 1; }
+.autoknopf { width: calc(var(--wf) * .86); height: calc(var(--wf) * .86); font-size: 26px; }   /* Autoradio und Blaulicht (nur im Auto) */
+.autoknopf.an { border-color: #ffd54f; background: #ffd54f66; }
+#blauknopf.an { border-color: #2979ff; background: #2979ff80; }
 #granatenfeld #granatenzahl { font-size: 13px; font-weight: 800; line-height: 1.1; text-shadow: 0 1px 2px #000; }
 @media (pointer: coarse) { #waffenzeile { --wf: 60px; } }
 @media (max-width: 420px) { #waffenzeile { --wf: 46px; gap: 4px; } #waffenplaetze { gap: 4px; } #waffenplaetze button .zz { font-size: 26px; } #granatenfeld .gz { font-size: 18px; } }

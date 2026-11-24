@@ -3,7 +3,7 @@
 // Server ist maßgeblich (Fahren, Kollision, Schießen); der Client zeichnet nur (client/fahrbardarstellung.mjs, client/boxerdarstellung.mjs).
 // Es können mehrere Fahrzeuge verschiedener Art gleichzeitig stehen: der Boxer am Flugfeld (server/boxer.mjs, mit Horde) und beliebig viele
 // Superuser-/Schießstand-Fahrzeuge (`Fahrbare`, ohne Horde). Die Spielerfelder anBord/imBoxer gelten für alle Arten („sitzt in einem Fahrzeug“).
-import { frei, kmhZuPx } from '../client/welt.mjs';
+import { frei, kmhZuPx, WERTE as W } from '../client/welt.mjs';
 import { FAHRBAR, FAHRBAR_EINSTIEG, FAHRBAR_PLAETZE, fahrbarNah } from '../client/fahrbar.mjs';
 import { Fahrzeug } from './verkehr.mjs';
 import { Leopard, leopardEinst, turmDrehen, winkelDiff } from './leopard.mjs';
@@ -174,6 +174,9 @@ export class Fahrbar {
       this.ueberT = UEBERROLLEN_PAUSE;
       ueberrolleZombies(r, f, this.m.laenge / 2, this.m.breite / 2, this.von);
     }
+    // Motorlärm lockt Zombies (alle 1,5 s; wie bei den Autos, server/pkw.mjs: mindestens so weit wie ein rennender Spieler, je schneller desto weiter)
+    this.laermUhr = (this.laermUhr ?? 0) - dt;
+    if (this.laermUhr <= 0 && Math.abs(this.v) > 10) { this.laermUhr = 1.5; r.laerm(f.x, f.y, Math.max(W.hoerweiteRennen ?? 110, 160 + Math.abs(this.v)), true, ''); }
     this.schiessen(dt);
     this.hordeSchritt?.(dt);
   }

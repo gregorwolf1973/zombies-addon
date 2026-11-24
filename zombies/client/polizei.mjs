@@ -60,7 +60,8 @@ function polBlaulicht(scene, sichtbar) {
   const g = p.gfx.clear().setVisible(sichtbar);
   if (!sichtbar) return;
   const v = scene.cameras.main.worldView, rand = 120, takt = Math.floor(scene.time.now / 180) % 4;
-  for (const s of sperren) {
+  for (const [k, s] of sperren.entries()) {
+    if (scene.welt?.autosWeg?.has('streife' + k)) continue;   // Streifenwagen weggefahren
     if (s.x < v.x - rand || s.x > v.right + rand || s.y < v.y - rand || s.y > v.bottom + rand) continue;
     const seite = s.seite ?? 1, B = s.breite;
     // Wagenmitte in der Sperren-Ebene (x Richtung der Straße, y quer), Leuchtbalken 4 px hinter der Mitte, Wagen um 0,3 rad gedreht

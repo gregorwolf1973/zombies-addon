@@ -19,6 +19,7 @@ export const Fahrzeug = schema({
   rauch: t.boolean(),       // Unfallfahrzeug raucht (server/unfall.mjs; der Client zeichnet Rauch darüber)
   turm: t.number(),         // Leopard (Evakuierungspanzer): Turmrichtung in Weltkoordinaten (Server dreht ihn mit begrenztem Tempo)
   leben: t.uint8(),         // fahrbares Auto ('pkw', server/pkw.mjs): Lebenspunkte in % (Anzeige über dem Auto)
+  blau: t.boolean(),        // gefahrener Streifenwagen: Blaulicht + Sirene an (server/pkw.mjs)
 }, 'Fahrzeug');
 entkoppeln(Fahrzeug, ['x', 'y']);
 Fahrzeug.prototype.richtung = 0;

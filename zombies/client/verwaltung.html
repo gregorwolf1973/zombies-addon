@@ -934,6 +934,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="tnAutoSchlMoebel" min="0" max="100" step="1"><span id="tnAutoSchlMoebelWert">10 %</span></div>
   <label for="tnAutoSchlKoffer">Autoschlüssel: Chance je Kofferraum</label>
   <div class="tn-zeile"><input type="range" id="tnAutoSchlKoffer" min="0" max="100" step="1"><span id="tnAutoSchlKofferWert">20 %</span></div>
+  <label for="tnAutoLaerm">Motorlärm: Grund-Hörweite fahrender Fahrzeuge (m, dazu kommt das Tempo)</label>
+  <div class="tn-zeile"><input type="range" id="tnAutoLaerm" min="5" max="100" step="1"><span id="tnAutoLaermWert">20</span></div>
+  <label for="tnAutoSirene">Sirene des Streifenwagens: Zombies kommen aus … m</label>
+  <div class="tn-zeile"><input type="range" id="tnAutoSirene" min="20" max="400" step="10"><span id="tnAutoSireneWert">150</span></div>
   <label for="tnAutoSchlLeiche">Autoschlüssel: Chance je totem Zombie</label>
   <div class="tn-zeile"><input type="range" id="tnAutoSchlLeiche" min="0" max="100" step="1"><span id="tnAutoSchlLeicheWert">4 %</span></div>
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
@@ -1341,6 +1345,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnAutoZombieSchaden', pkwE.zombieSchaden === undefined ? 2 : pkwE.zombieSchaden, function (v) { return String(v).replace('.', ','); });
     feld('tnAutoSchlMoebel', pkwE.schluesselMoebel === undefined ? 10 : pkwE.schluesselMoebel, function (v) { return String(v).replace('.', ',') + ' %'; });
     feld('tnAutoSchlKoffer', pkwE.schluesselKofferraum === undefined ? 20 : pkwE.schluesselKofferraum, function (v) { return String(v).replace('.', ',') + ' %'; });
+    feld('tnAutoLaerm', pkwE.laerm === undefined ? 20 : pkwE.laerm, function (v) { return String(v); });
+    feld('tnAutoSirene', pkwE.sireneWeite === undefined ? 150 : pkwE.sireneWeite, function (v) { return String(v); });
     feld('tnAutoSchlLeiche', pkwE.schluesselLeiche === undefined ? 4 : pkwE.schluesselLeiche, function (v) { return String(v).replace('.', ',') + ' %'; });
     var nb = e.nebel || {};
     if (document.activeElement !== $('tnNebelAn')) $('tnNebelAn').checked = nb.an !== false;
@@ -1479,6 +1485,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnAutoZombieSchaden', function (v) { return String(v).replace('.', ','); }, function (v) { return { auto: { zombieSchaden: v } }; });
   regler('tnAutoSchlMoebel', function (v) { return String(v).replace('.', ',') + ' %'; }, function (v) { return { auto: { schluesselMoebel: v } }; });
   regler('tnAutoSchlKoffer', function (v) { return String(v).replace('.', ',') + ' %'; }, function (v) { return { auto: { schluesselKofferraum: v } }; });
+  regler('tnAutoLaerm', function (v) { return String(v); }, function (v) { return { auto: { laerm: v } }; });
+  regler('tnAutoSirene', function (v) { return String(v); }, function (v) { return { auto: { sireneWeite: v } }; });
   regler('tnAutoSchlLeiche', function (v) { return String(v).replace('.', ',') + ' %'; }, function (v) { return { auto: { schluesselLeiche: v } }; });
   regler('rwPistole', function (v) { return v + ' m'; }, function (v) { return { reichweite: { pistole: v } }; });
   regler('rwGewehr', function (v) { return v + ' m'; }, function (v) { return { reichweite: { gewehr: v } }; });
@@ -3897,7 +3905,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     ['tnVerkehr', 'tnVerkehrDichte', 'tnVerkehrPhase', 'tnUnfall', 'tnUnfallExpl', 'tnUnfallSchaden', 'tnUnfallTuer', 'tnFzStoss', 'tnBlaulicht', 'tnFeuer', 'tnFeuerPhase'].forEach(function (id) { zeile(stadt.inhalt, id); });
     gruppe(stadt);
     var pkwK = unter('🔑 Autos fahren (Autoschlüssel)');
-    ['tnAutoTempo', 'tnAutoLenkung', 'tnAutoLeben', 'tnAutoPlaetze', 'tnAutoCrashAb', 'tnAutoCrash', 'tnAutoCrashAuto', 'tnAutoZombieTot', 'tnAutoZombieSchaden', 'tnAutoSchlMoebel', 'tnAutoSchlKoffer', 'tnAutoSchlLeiche'].forEach(function (id) { zeile(pkwK.inhalt, id); });
+    ['tnAutoTempo', 'tnAutoLenkung', 'tnAutoLeben', 'tnAutoPlaetze', 'tnAutoCrashAb', 'tnAutoCrash', 'tnAutoCrashAuto', 'tnAutoZombieTot', 'tnAutoZombieSchaden', 'tnAutoLaerm', 'tnAutoSirene', 'tnAutoSchlMoebel', 'tnAutoSchlKoffer', 'tnAutoSchlLeiche'].forEach(function (id) { zeile(pkwK.inhalt, id); });
     gruppe(pkwK);
     var wk = unter('🔫 Waffen: Schaden, Schussfolge, Magazin'); rein(wk.inhalt, $('wfHinweis'));
     Object.keys(window.WFVORGABE || {}).forEach(function (k) { zeile(wk.inhalt, 'wfS_' + k); zeile(wk.inhalt, 'wfP_' + k); rein(wk.inhalt, $('wfInfo_' + k)); if (window.WFMAG[k]) { zeile(wk.inhalt, 'wfM_' + k); zeile(wk.inhalt, 'wfN_' + k); } });
@@ -3931,7 +3939,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', lagerWelle: 'zombies.lagerWelle', lagerWellePause: 'zombies.lagerWellePause', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
     tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnNebelMorgen: 'nebel.morgen', tnNebelAbend: 'nebel.abend', tnNebelSicht: 'nebel.sicht', tnNebelZombie: 'nebel.zombie', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
-    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnFzStoss: 'fahrzeugStoss', tnGeraeusch: 'geraeuschPause', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnUnfallTuer: 'unfallTuer', tnAutoTempo: 'auto.tempo', tnAutoLenkung: 'auto.lenkung', tnAutoLeben: 'auto.leben', tnAutoPlaetze: 'auto.plaetze', tnAutoCrashAb: 'auto.crashAb', tnAutoCrash: 'auto.crashSchaden', tnAutoCrashAuto: 'auto.crashAuto', tnAutoZombieTot: 'auto.zombieTotKmh', tnAutoZombieSchaden: 'auto.zombieSchaden', tnAutoSchlMoebel: 'auto.schluesselMoebel', tnAutoSchlKoffer: 'auto.schluesselKofferraum', tnAutoSchlLeiche: 'auto.schluesselLeiche', tnGGroesse: 'groesseGesamt',
+    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnFzStoss: 'fahrzeugStoss', tnGeraeusch: 'geraeuschPause', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnUnfallTuer: 'unfallTuer', tnAutoTempo: 'auto.tempo', tnAutoLenkung: 'auto.lenkung', tnAutoLeben: 'auto.leben', tnAutoPlaetze: 'auto.plaetze', tnAutoCrashAb: 'auto.crashAb', tnAutoCrash: 'auto.crashSchaden', tnAutoCrashAuto: 'auto.crashAuto', tnAutoZombieTot: 'auto.zombieTotKmh', tnAutoZombieSchaden: 'auto.zombieSchaden', tnAutoLaerm: 'auto.laerm', tnAutoSirene: 'auto.sireneWeite', tnAutoSchlMoebel: 'auto.schluesselMoebel', tnAutoSchlKoffer: 'auto.schluesselKofferraum', tnAutoSchlLeiche: 'auto.schluesselLeiche', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo', tnPumaTempo: 'bundeswehr.pumaTempo', tnLeoTempo: 'bundeswehr.leopardTempo', tnVsTage: 'bundeswehr.versorgungTage', tnVsMun: 'bundeswehr.versorgungMunition', tnVsVerband: 'bundeswehr.versorgungVerband', tnVsSpritze: 'bundeswehr.versorgungSpritze', tnKiMun: 'bundeswehr.kistenMunChance', tnKiMunMin: 'bundeswehr.kistenMunMin', tnKiMunMax: 'bundeswehr.kistenMunMax', tnKiVerband: 'bundeswehr.kistenVerbandChance', tnKiGranate: 'bundeswehr.kistenGranateChance',
     tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',

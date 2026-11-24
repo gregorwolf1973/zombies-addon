@@ -30,6 +30,8 @@ export const PKW_VORGABE = {
   schluesselMoebel: 10,    // % Chance auf einen Autoschlüssel je gefülltem Schrank/Spind/Aktenschrank/Werkbank (zusätzlich zur Beute; gefüllt sind beute.moebel %)
   schluesselKofferraum: 20,   // % je Kofferraum
   schluesselLeiche: 4,     // % je Leiche (toter Zombie)
+  laerm: 20,               // m: Grund-Hörweite des Motors (Zombies hören ein fahrendes Auto; dazu kommt das Tempo in px), mindestens so weit wie ein rennender Spieler
+  sireneWeite: 150,        // m: so weit lockt die Sirene eines Streifenwagens Zombies an
 };
 // Möbel, in denen ein Autoschlüssel liegen kann
 export const SCHLUESSEL_MOEBEL = new Set(['schrank', 'spind', 'aktenschrank', 'werkbank', 'werkzeugschrank', 'ausstellungsschrank']);
@@ -66,6 +68,32 @@ export function parkAutoBei(welt, s, x, y) {
 
 export const hatSchluessel = p => hat(p?.rucksack, SCHLUESSEL);
 
+// ---------- Streifenwagen an den Straßensperren (welt.sperren): fahrbar wie ein Auto, aber ohne Autoschlüssel (er steckt) ----------
+// Id des Fahrzeugs: 'pkw_streife<Nr der Sperre>'; „weg“ heißt wie bei den geparkten Autos: Eintrag in welt.autosWeg (Bild verschwindet aus der Kulisse).
+export const STREIFE = 'streife';
+export const streifeBid = k => STREIFE + k;
+export const istStreife = bid => String(bid ?? '').startsWith(STREIFE);
+export const STREIFE_LAENGE = 39;        // 4,9 m (client/masse.mjs 'polizei')
+// Lage des gezeichneten Streifenwagens an Sperre s (Maße wie client/aussehen.mjs zeichneSperren): Mitte und Fahrtrichtung (Front nach -x im Bild)
+export function streifePose(s) {
+  const seite = s.seite ?? 1, c = Math.cos(s.winkel), n = Math.sin(s.winkel), lx = seite * 30, ly = -s.breite * 0.16;
+  return { x: s.x + c * lx - n * ly, y: s.y + n * lx + c * ly, w: s.winkel + 0.3 * seite + Math.PI };
+}
+// Streifenwagen der Sperre in Einstiegsnähe (nicht schon weggefahren) oder null: { k, id, x, y, w }
+export function streifeBei(welt, x, y) {
+  let best = null, bd = Infinity;
+  (welt?.sperren ?? []).forEach((s, k) => {
+    if (Math.abs(s.x - x) > 120 || Math.abs(s.y - y) > 120 || welt.autosWeg?.has(streifeBid(k))) return;
+    const q = streifePose(s);
+    if (!pkwNah({ x: q.x, y: q.y, richtung: q.w }, x, y)) return;
+    const d = (q.x - x) ** 2 + (q.y - y) ** 2;
+    if (d < bd) { bd = d; best = { k, id: streifeBid(k), x: q.x, y: q.y, w: q.w }; }
+  });
+  return best;
+}
+// Darf p ein Auto dieser Behälter-Id fahren? Streifenwagen: immer (Schlüssel steckt), sonst nur mit Autoschlüssel
+export const fahrberechtigt = (bid, p) => istStreife(bid) || hatSchluessel(p);
+
 // Aufprall: Anteil (0–1) der Lebensenergie, den Insassen bei `kmh` verlieren (0 unter crashAb, crashSchaden % bei 80 km/h, linear, höchstens 100 %)
 export function crashAnteil(kmh, e = PKW_VORGABE) {
   const ab = Number(e.crashAb ?? PKW_VORGABE.crashAb), voll = Number(e.crashSchaden ?? PKW_VORGABE.crashSchaden) / 100;
@@ -97,6 +125,13 @@ export function parkAutoWeg(welt, bid) {
   if (!welt) return null;
   welt.autosWeg ??= new Set();
   if (welt.autosWeg.has(bid)) return null;
+  if (istStreife(bid)) {   // Streifenwagen einer Sperre: nur als „weg“ markieren (kein Behälter, kein Kletter-Index)
+    const sp = welt.sperren?.[Number(String(bid).slice(STREIFE.length))];
+    if (!sp) return null;
+    welt.autosWeg.add(bid);
+    const q = streifePose(sp);
+    return { id: bid, x: q.x, y: q.y };
+  }
   const b = (welt.behaelter ?? []).find(q => q.id === bid && q.art === 'auto');
   if (!b) return null;
   welt.autosWeg.add(bid);
@@ -118,12 +153,16 @@ export function pkwEinsteigbar(insassen, ichSchluessel, plaetze) {
 export function pkwKontext(welt, s, ich, x, y, richtungVon, plaetze = PKW_VORGABE.plaetze) {
   if (!ich || ich.ebene || ich.anBord || ich.imBoxer) return null;
   const mein = hatSchluessel(ich);
-  for (const [, f] of s?.fahrzeuge ?? []) {
+  for (const [id, f] of s?.fahrzeuge ?? []) {
     if (f.art !== PKW_ART || !pkwNah({ x: f.x, y: f.y, richtung: richtungVon(f) }, x, y)) continue;
-    const drin = [...(s.spieler?.values() ?? [])].filter(q => q.imBoxer && Math.abs(q.x - f.x) < 24 && Math.abs(q.y - f.y) < 24).map(q => ({ schluessel: hatSchluessel(q), bot: false }));
-    if (!pkwEinsteigbar(drin, mein, plaetze)) continue;
-    return { art: 'einsteigen', text: mein && !drin.some(i => i.schluessel) ? '🚗 Auto fahren' : '🚗 Einsteigen (mitfahren)' };
+    const bid = pkwBehaelterId(id);
+    const drin = [...(s.spieler?.values() ?? [])].filter(q => q.imBoxer && Math.abs(q.x - f.x) < 24 && Math.abs(q.y - f.y) < 24).map(q => ({ schluessel: fahrberechtigt(bid, q), bot: false }));
+    if (!pkwEinsteigbar(drin, fahrberechtigt(bid, ich), plaetze)) continue;
+    const wagen = istStreife(bid) ? 'Streifenwagen' : 'Auto';
+    return { art: 'einsteigen', text: fahrberechtigt(bid, ich) && !drin.some(i => i.schluessel) ? `🚗 ${wagen} fahren` : '🚗 Einsteigen (mitfahren)' };
   }
+  const st = streifeBei(welt, x, y);   // Streifenwagen an einer Sperre: ohne Schlüssel fahrbar
+  if (st) return { art: 'einsteigen', text: '🚓 Streifenwagen fahren (Schlüssel steckt)' };
   if (!mein) return null;
   const b = parkAutoBei(welt, s, x, y);
   if (!b) return null;

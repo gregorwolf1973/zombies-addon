@@ -1084,8 +1084,8 @@ function zeichneMuell(ctx, welt, rect) {
 function zeichneSperren(ctx, welt, rect) {
   const rand = 90;
   const x0 = rect.x0 * KACHEL - rand, x1 = rect.x1 * KACHEL + rand, y0 = rect.y0 * KACHEL - rand, y1 = rect.y1 * KACHEL + rand;
-  for (const s of welt.sperren ?? []) {
-    if (s.x < x0 || s.x > x1 || s.y < y0 || s.y > y1) continue;
+  (welt.sperren ?? []).forEach((s, k) => {
+    if (s.x < x0 || s.x > x1 || s.y < y0 || s.y > y1) return;
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.winkel);   // x = Richtung der Straße, y = quer darüber
     const B = s.breite, seite = s.seite ?? 1;
     // Absperrgitter (rot-weiß) nebeneinander quer über die Fahrbahn
@@ -1111,7 +1111,8 @@ function zeichneSperren(ctx, welt, rect) {
       ctx.fillStyle = '#fafafa'; ctx.beginPath(); ctx.arc(x, y, 2.9, 0, TAU); ctx.fill();
       ctx.fillStyle = '#ef6c00'; ctx.beginPath(); ctx.arc(x, y, 1.4, 0, TAU); ctx.fill();
     }
-    // Streifenwagen schräg hinter der Sperre
+    // Streifenwagen schräg hinter der Sperre (weg, wenn ihn ein Spieler genommen hat: welt.autosWeg, client/pkw.mjs)
+    if (welt.autosWeg?.has('streife' + k)) { ctx.restore(); return; }
     ctx.translate(seite * 30, -B * 0.16); ctx.rotate(0.3 * seite); ctx.scale(0.78, 0.76);   // Streifenwagen 4,9 × 2 m
     ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(-23 + 3, -10.5 + 4, 46, 21, 7); ctx.fill();
     ctx.fillStyle = '#f2f4f5'; ctx.beginPath(); ctx.roundRect(-23, -10.5, 46, 21, 7); ctx.fill();
@@ -1119,5 +1120,5 @@ function zeichneSperren(ctx, welt, rect) {
     ctx.fillStyle = '#263238'; ctx.beginPath(); ctx.roundRect(-9, -7.5, 9, 15, 2); ctx.fill(); ctx.fillRect(10, -7, 4, 14);
     ctx.fillStyle = '#e53935'; ctx.fillRect(-4, -7, 2.4, 6); ctx.fillStyle = '#1e88e5'; ctx.fillRect(-4, 1, 2.4, 6);
     ctx.restore();
-  }
+  });
 }

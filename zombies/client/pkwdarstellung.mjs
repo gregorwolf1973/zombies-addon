@@ -2,8 +2,8 @@
 // (server/unfallszene.mjs): Bild des genommenen Autos (gleiche Variante wie geparkt), Lebensbalken, Motorgeräusch (Ereignis 'autoMotor',
 // Tonhöhe nach Tempo), weggefahrene Autos aus den Kartenstücken entfernen (Nachricht 'autosWeg'), offene Autotüren ('autotuer').
 import { KACHEL } from './welt.mjs';
-import { autoVonOben, zeichneBoden } from './aussehen.mjs';
-import { parkAutoWeg, pkwBehaelterId, PKW, PKW_VORGABE } from './pkw.mjs';
+import { autoVonOben, zeichneBoden, autoEintraege } from './aussehen.mjs';
+import { parkAutoWeg, pkwBehaelterId, PKW, PKW_VORGABE, istStreife } from './pkw.mjs';
 import * as ton from './ton.mjs';
 import { dunkelVon, pkwLichtAn, pkwRueckwaerts, pkwLampenMalen } from './pkwlicht.mjs';
 
@@ -46,6 +46,7 @@ export function stueckeNeuMalen(scene, x, y, rand) {
 // Bild des gefahrenen Autos: dieselbe Variante/Farbe wie das geparkte Auto (Behälter-Id steckt in der Fahrzeug-Id), Front nach rechts
 export function pkwTextur(scene, id, f) {
   const bid = pkwBehaelterId(id), key = 'fz-pkw-' + bid;
+  if (istStreife(bid)) return scene.fahrzeugTextur('polizei', 0, f.blau ? 1 + Math.floor(scene.time.now / 150) % 3 : 0);   // Streifenwagen: Polizeibild, bei Blaulicht mit den wechselnden Blaulichtbildern
   if (scene.textures.exists(key)) return key;
   const b = (scene.welt?.behaelter ?? []).find(q => q.id === bid);
   if (!b) return scene.fahrzeugTextur('auto', f.farbe ?? 0);
@@ -79,6 +80,21 @@ export function pkwDarstellung(scene, o, id, f, dt, lokal, aktEbene, s) {
     g.fillStyle(0x000000, 0.6).fillRect(x - 1, y - 1, w + 2, h + 2);
     g.fillStyle(leben > 50 ? 0x66bb6a : leben > 25 ? 0xffca28 : 0xef5350, 1).fillRect(x, y, w * leben / 100, h);
   } else o.pkwBalken?.setVisible(false);
+  // Streifenwagen: Blaulicht-Schein (ohne Polizei-Sprite auch die Lichter selbst) und Sirene (Martinshorn bzw. Datei des Ereignisses „Sirene“), solange sie an ist
+  if (istStreife(pkwBehaelterId(id))) {
+    const blau = !!f.blau && !aktEbene, takt = Math.floor(scene.time.now / 150) % 2;
+    if (blau) {
+      if (!autoEintraege('polizei').length) {
+        o.licht.fillStyle(takt ? 0x2962ff : 0x82b1ff, 1).fillCircle(2, -5, 3.5);
+        o.licht.fillStyle(takt ? 0x82b1ff : 0x2962ff, 1).fillCircle(2, 5, 3.5);
+      }
+      o.licht.fillStyle(takt ? 0xe53935 : 0x2979ff, 0.2).fillCircle(0, 0, 22);
+    }
+    const weite = 520;
+    if (f.blau && !o.sirene && d < weite * 1.2) o.sirene = ton.sireneStarten();
+    else if (o.sirene && (!f.blau || d > weite * 1.6)) { ton.sireneStoppen(o.sirene); o.sirene = null; }
+    if (o.sirene) ton.sireneLage(o.sirene, o.x, o.y, 0, weite, !f.blau || !!aktEbene);
+  }
   // Motor: Schleife aus der Zuordnung 'autoMotor' (ohne Datei still), lauter und höher mit dem Tempo, solange jemand drinsitzt oder es rollt
   const laeuft = !f.haelt || o.pkwV > 2 || [...(s?.spieler?.values() ?? [])].some(q => q.imBoxer && Math.abs(q.x - f.x) < 24 && Math.abs(q.y - f.y) < 24);
   const hoerbar = !aktEbene && d < 600 && laeuft;
@@ -94,6 +110,7 @@ export function pkwDarstellung(scene, o, id, f, dt, lokal, aktEbene, s) {
 export function pkwAufraeumen(o) {
   o.pkwBalken?.destroy(); o.pkwBalken = null; o.pkwLicht = false;
   if (o.motor) { ton.sireneStoppen(o.motor); o.motor = null; }
+  if (o.sirene) { ton.sireneStoppen(o.sirene); o.sirene = null; }
 }
 
 // Unfallszene: Tür(en) eines Unfallautos gehen auf (Server: 'autotuer' { x, y, w, s: Seite der Fahrertür ±1, z: Beifahrertür auch })

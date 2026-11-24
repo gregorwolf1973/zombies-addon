@@ -624,6 +624,7 @@ export class SpielRaum extends Room {
     this.onMessage('durchsuche_alle', (client, m) => this.starteAlle(client, !!m?.weiter));
     this.onMessage('fund_nimm', (client, m) => this.fundNimm(client, m));
     this.onMessage('wurf', (client, m) => this.granaten.werfen(client, m));
+    this.onMessage('blaulicht', client => { const b = this.fahrbare?.von(client.sessionId); if (b?.blaulichtSchalten?.(client.sessionId)) client.send('meldung', { text: b.f?.blau ? '🚨 Blaulicht und Sirene an – Zombies hören dich weithin!' : '🚨 Blaulicht und Sirene aus' }); });   // Streifenwagen (server/pkw.mjs)
     this.onMessage('nachladen', client => { const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId); if (p && x && !p.unten && p.zombie <= 0 && this.state.phase === 'spiel') WP.startNachladen(this, p, x, SpielRaum.einstellungen); });
     this.onMessage('waffenplatz', (client, m) => {
       const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);

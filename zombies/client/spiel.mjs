@@ -26,7 +26,8 @@ import { pkwLichtPunkte, pkwKegelZeichnen } from './pkwlicht.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht, BLUT_GROESSE } from './effekte.mjs';
 import { fahrbarNah, FAHRBAR, FAHRBAR_PLAETZE } from './fahrbar.mjs';
 import { istFahrbar, fahrbarBild, fahrbarFahrzeug, fahrbarRueckstoss, pumaFahrbarSchuss } from './fahrbardarstellung.mjs';
-import { pkwKontext, PKW } from './pkw.mjs';
+import { pkwKontext, PKW, istStreife, pkwBehaelterId } from './pkw.mjs';
+import { radioUmschalten, radioAbgleich, radioFaktor, radioText } from './pkwradio.mjs';
 import { tastenFahrzeug } from './walze.mjs';
 import { walzeEmpfangen, walzeAbgleich } from './walzedarstellung.mjs';
 import { pkwTextur, pkwDarstellung, pkwAufraeumen, autoTuer, autosWegEmpfangen, autosWegAbgleich, pkwPlaetze } from './pkwdarstellung.mjs';
@@ -1126,11 +1127,12 @@ class Ort extends Phaser.Scene {
     this.passeZoomAn();
     this.scale.on('resize', () => this.passeZoomAn());
 
-    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,R,F,X,C,SPACE,ESC');
+    this.tasten = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,E,Q,R,F,X,C,H,SPACE,ESC');
     this.tasten.E.on('down', () => this.aktion());
     this.tasten.Q.on('down', () => this.granateWerfen());
     this.tasten.C.on('down', () => this.alleSuchen());
-    this.tasten.R.on('down', () => raum.send('nachladen'));            // Nachladen von Hand
+    this.tasten.R.on('down', () => { if (this.meinPkw()) this.autoRadioUmschalten(); else raum.send('nachladen'); });   // Nachladen von Hand; im Auto: Autoradio an/aus
+    this.tasten.H.on('down', () => this.blaulichtUmschalten());   // im Streifenwagen: Blaulicht + Sirene
     this.tasten.F.on('down', () => raum.send('waffenplatz', { weiter: true }));   // nächster Waffenplatz
     this.tasten.X.on('down', () => raum.send('faust'));   // Faust: nichts in der Hand (nochmal = zurück)
     this.tasten.SPACE.on('down', () => { if (this.kontext?.art !== 'aussteigen') this.aktion(); });   // Leertaste steigt nie versehentlich aus (E oder Knopf)
@@ -3652,6 +3654,38 @@ class Ort extends Phaser.Scene {
     return b ? (offen ? (kaputt ? null : schliessen()) : b) : (offen ? schliessen() : null);   // wie auf dem Server
   }
 
+  // Auto (pkw oder Streifenwagen), in dem die eigene Figur sitzt: [id, Fahrzeug] oder null
+  meinPkw() {
+    const p = raum.state?.spieler?.get(meineId);
+    if (!p?.imBoxer || p.ebene) return null;
+    for (const [id, v] of raum.state.fahrzeuge ?? []) if (v.art === 'pkw' && Math.abs(v.x - p.x) < 24 && Math.abs(v.y - p.y) < 24) return [id, v];
+    return null;
+  }
+  // Autoradio-Knopf/Taste R (eine Nutzergeste: der Stream darf hier starten); aus beim Aussteigen, bei Sirene leiser (autoKnoepfeZeigen)
+  autoRadioUmschalten() {
+    const pk = this.meinPkw();
+    this.autoRadioAn = radioUmschalten(!!this.autoRadioAn, !!pk); this.autoRadioVersucht = false;
+    ton.audioFreischalten();
+    this.autoKnoepfeZeigen(raum.state?.spieler?.get(meineId));
+    if (this.autoRadioAn && !this.autoRadioSpielt) meldung('📻 Kein Sender eingestellt (Backend: Autoradio/Live-Radio) oder Autoradio im Zahnrad aus', false);
+  }
+  blaulichtUmschalten() { if (this.meinPkw() && istStreife(pkwBehaelterId(this.meinPkw()[0]))) raum.send('blaulicht'); }
+  // Knöpfe 📻 (in jedem Auto) und 🚨 (nur im Streifenwagen) im HUD; Radio spielt nur im Auto, bei Sirene leiser
+  autoKnoepfeZeigen(ich) {
+    const pk = ich ? this.meinPkw() : null, streife = !!pk && istStreife(pkwBehaelterId(pk[0]));
+    const rk = $('radioknopf'), bk = $('blauknopf');
+    if (!rk || !bk) return;
+    const sicht = (k, an) => { const d = an ? 'flex' : 'none'; if (k.style.display !== d) k.style.display = d; };
+    sicht(rk, !!pk); sicht(bk, streife);
+    if (!rk.__an) { rk.__an = true; rk.onclick = e => { e.stopPropagation(); this.autoRadioUmschalten(); }; bk.onclick = e => { e.stopPropagation(); this.blaulichtUmschalten(); }; }
+    const ab = radioAbgleich(!!this.autoRadioAn, !!pk, !!this.autoRadioSpielt);
+    this.autoRadioAn = ab.an;
+    if (ab.an) { if (this.autoRadioSpielt || !this.autoRadioVersucht) { this.autoRadioVersucht = true; this.autoRadioSpielt = ton.autoradioInnen(true, radioFaktor(!!pk?.[1].blau)); } }   // ohne Sender nur ein Versuch je Knopfdruck
+    else { this.autoRadioVersucht = false; if (ab.tun === 'stopp' || ton.autoradioInnenAn()) { ton.autoradioInnen(false); this.autoRadioSpielt = false; } }
+    rk.classList.toggle('an', !!this.autoRadioAn); bk.classList.toggle('an', !!pk?.[1].blau);
+    rk.title = radioText(!!this.autoRadioAn) + ' (R)';
+  }
+
   bestimmeKontext(ich) {
     this.handelKontext = null; this.pkwZweit = null;
     if (ich?.anBord) return { art: 'aussteigen', text: '🚪 Aussteigen' };   // an Bord eines Evakuierungsfahrzeugs: Taste E/Leertaste und Knopf
@@ -3996,6 +4030,7 @@ class Ort extends Phaser.Scene {
       htmlSetzen('waffe', [ich.kleidung > 0 ? `🧥 ${Math.ceil(ich.kleidung)} %` : '', ich.lampe > 0 ? `🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''].filter(Boolean).join(' · '));
       this.waffenplaetzeZeigen(ich);   // Waffenfelder (Antippen wechselt, Doppeltippen lädt nach, Taste R lädt auch nach)
       this.granatenfeldZeigen(ich);
+      this.autoKnoepfeZeigen(ich);   // Autoradio/Blaulicht-Knöpfe im Auto (client/pkwradio.mjs)
       textSetzen('besiegt', `besiegt ${ich.besiegt} / ${Math.max(s.besiegt, ich.besiegt)}`); $('besiegt').title = 'besiegt: von dir / gesamt';
       textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} · 🙋 ${s.gerettet ?? 0}`);
       textSetzen('zombiezahl', `🧟 ${s.zombieZahl || zombieKarte().size}`);   // der Client kennt nur die Zombies in seiner Nähe

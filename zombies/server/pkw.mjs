@@ -9,7 +9,7 @@
 import { frei, bewege, kmhZuPx, WERTE as W } from '../client/welt.mjs';
 import { fzRechtecke, kreisImRechteck, aufParkAuto } from '../client/fzkollision.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
-import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden } from '../client/pkw.mjs';
+import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden, istStreife, streifeBei, fahrberechtigt } from '../client/pkw.mjs';
 import { Fahrbar, FAHRWERK, PX } from './fahrbar.mjs';
 import { stammBei, RUECK_ANTEIL } from '../client/walze.mjs';
 import { LAENGE, BREITE_FZ } from './verkehr.mjs';
@@ -36,14 +36,14 @@ const lenkRad = g => (Number.isFinite(Number(g)) && Number(g) > 0 ? Number(g) : 
 export class FahrbarPkw extends Fahrbar {
   constructor(raum, bid) {
     super(raum, 'boxer', { id: PKW_ID(bid) });
-    this.art = PKW_ART; this.bid = bid;
-    this.m = { name: PKW.name, laenge: PKW.laenge, breite: PKW.breite, turmX: 0, turmY: 0, muendung: 0 };
+    this.art = PKW_ART; this.bid = bid; this.streife = istStreife(bid);   // Streifenwagen einer Sperre: fahrbar ohne Autoschlüssel, mit Blaulicht und Sirene
+    this.m = { name: this.streife ? 'Streifenwagen' : PKW.name, laenge: PKW.laenge, breite: PKW.breite, turmX: 0, turmY: 0, muendung: 0 };
     this.von = { name: 'Auto', x: 0, y: 0, besiegt: 0 };
     const e = this.einstAuto();
     this.lebenMax = Math.max(1, Number(e.leben) || PKW_VORGABE.leben); this.leben = this.lebenMax;
     this.andere = [];                     // Rechtecke der anderen Fahrzeuge (je Takt neu)
     this.pause = new Map();               // Zombie → Uhrzeit, ab der er wieder getroffen werden kann
-    this.uhr = 0; this.crashBis = 0; this.botUhr = 0; this.laermUhr = 0; this.letzteFrei = true; this.startBlock = 0;
+    this.uhr = 0; this.crashBis = 0; this.botUhr = 0; this.laermUhr = 0; this.sireneUhr = 0; this.letzteFrei = true; this.startBlock = 0;
   }
 
   einstAuto() { return pkwEinst(this.raum); }
@@ -54,7 +54,7 @@ export class FahrbarPkw extends Fahrbar {
   }
   // Fahrer ist der erste Mensch mit Autoschlüssel; ohne ihn rollt das Auto aus
   get fahrer() {
-    for (const sid of this.insassen) if (!this.istBot(sid) && hatSchluessel(this.spieler(sid))) return sid;
+    for (const sid of this.insassen) if (!this.istBot(sid) && fahrberechtigt(this.bid, this.spieler(sid))) return sid;
     return null;
   }
   nahGenug(p) { return !!this.f && pkwNah(this.f, p.x, p.y); }
@@ -97,8 +97,8 @@ export class FahrbarPkw extends Fahrbar {
     const p = this.spieler(sid), x = this.raum.extra.get(sid);
     if (!this.f || !p || !x || x.bot || p.anBord || p.imBoxer || p.unten || p.zombie > 0 || p.ebene || p.kamera || p.verbunden === false) return false;
     if (this.raum.state.phase !== 'spiel') return false;
-    const drin = this.insassen.map(sid => ({ schluessel: hatSchluessel(this.spieler(sid)), bot: this.istBot(sid) }));
-    if (!pkwEinsteigbar(drin, hatSchluessel(p), this.plaetze())) return false;   // leeres Auto (oder niemand mit Schlüssel am Steuer): nur mit Autoschlüssel
+    const drin = this.insassen.map(sid => ({ schluessel: fahrberechtigt(this.bid, this.spieler(sid)), bot: this.istBot(sid) }));
+    if (!pkwEinsteigbar(drin, fahrberechtigt(this.bid, p), this.plaetze())) return false;   // leeres Auto (oder niemand mit Schlüssel am Steuer): nur mit Autoschlüssel
     return this.nahGenug(p);
   }
 
@@ -106,7 +106,7 @@ export class FahrbarPkw extends Fahrbar {
     if (!this.kannEinsteigen(sid)) return false;
     this.zusteigen(sid);
     const f = this.fahrer;
-    this.sendeAn(sid, f === sid ? '🚗 Du fährst das Auto (Gehen-Taste lenkt, E steigt aus). Zombies überfahren kostet Blech, Aufprall kostet Leben.' : `🚗 Du fährst mit – ${this.spieler(f)?.name ?? 'niemand'} fährt.`);
+    this.sendeAn(sid, f === sid ? (this.streife ? '🚓 Du fährst den Streifenwagen (Gehen-Taste lenkt, E steigt aus, H = Blaulicht + Sirene, R = Radio). Die Sirene lockt Zombies an.' : '🚗 Du fährst das Auto (Gehen-Taste lenkt, E steigt aus, R = Radio). Zombies überfahren kostet Blech, Aufprall kostet Leben.') : `🚗 Du fährst mit – ${this.spieler(f)?.name ?? 'niemand'} fährt.`);
     return true;
   }
   zusteigen(sid) {
@@ -165,10 +165,31 @@ export class FahrbarPkw extends Fahrbar {
     for (const sid of this.insassen) { const p = s.spieler.get(sid); if (p) { p.x = f.x; p.y = f.y; p.richtung = f.richtung; } }
     f.haelt = Math.abs(this.v) < 1;
     if (Math.abs(this.v) > 6) this.zombiesUeberfahren();
-    // Motorlärm lockt Zombies (alle 1,5 s, je schneller desto weiter)
+    // Motorlärm lockt Zombies (alle 1,5 s, je schneller desto weiter; mindestens so weit wie ein rennender Spieler)
     this.laermUhr -= dt;
-    if (this.laermUhr <= 0 && Math.abs(this.v) > 10) { this.laermUhr = 1.5; r.laerm(f.x, f.y, 160 + Math.abs(this.v), true, ''); }
+    if (this.laermUhr <= 0 && Math.abs(this.v) > 10) {
+      this.laermUhr = 1.5;
+      const grund = Number(this.einstAuto().laerm); r.laerm(f.x, f.y, Math.max(W.hoerweiteRennen ?? 110, (Number.isFinite(grund) ? grund : PKW_VORGABE.laerm) * 8 + Math.abs(this.v)), true, '');
+    }
+    this.sirene(dt);
     this.zustand();
+  }
+
+  // Blaulicht + Sirene (nur Streifenwagen, Knopf/Taste H eines Menschen im Wagen); ohne Menschen im Wagen geht beides aus
+  blaulichtSchalten(sid) {
+    if (!this.streife || !this.f || !this.sitzt(sid) || this.istBot(sid) || this.leben <= 0) return false;
+    this.f.blau = !this.f.blau; this.sireneUhr = 0;
+    return true;
+  }
+  // Sirene lockt Zombies weithin an (Backend-Wert auto.sireneWeite in m), alle 2 s – auch im Stand
+  sirene(dt) {
+    const f = this.f; if (!f?.blau) return;
+    if (!this.insassen.some(sid => !this.istBot(sid))) { f.blau = false; return; }
+    this.sireneUhr -= dt;
+    if (this.sireneUhr > 0) return;
+    this.sireneUhr = 2;
+    const m = Number(this.einstAuto().sireneWeite);
+    this.raum.laerm(f.x, f.y, (Number.isFinite(m) ? m : PKW_VORGABE.sireneWeite) * 8, true, '');
   }
 
   // Lebensanzeige (Fahrzeug.leben in %) und Rauch bei starkem Schaden; bei 0 wird das Auto zum Wrack
@@ -231,7 +252,7 @@ export class FahrbarPkw extends Fahrbar {
     const wer = [...this.insassen];
     for (const sid of wer) this.aussteigen(sid);
     for (const sid of wer) if (!this.istBot(sid)) this.sendeAn(sid, '🔥 Das Auto ist hinüber – alle raus!');
-    f.art = 'wrack'; f.haelt = true; f.rauch = true; f.leben = 0;
+    f.art = 'wrack'; f.haelt = true; f.rauch = true; f.leben = 0; f.blau = false;
     r.broadcast('krach', { x: f.x, y: f.y, ebene: '', pkw: 1 });
     r.verkehr?.unfaelle?.liste.set(this.id, { phase: 'rauch', t: 0, rauchBis: 6 + r.rnd() * 6 });   // Rauch → Feuer → ggf. Explosion (server/unfall.mjs)
     if (r.fahrbare) r.fahrbare.liste = r.fahrbare.liste.filter(b => b !== this);
@@ -258,7 +279,7 @@ export class PkwVerwaltung {
     const r = this.raum, p = r.state.spieler.get(sid), x = r.extra.get(sid);
     if (!p || !x || x.bot || p.unten || p.zombie > 0 || p.kamera || r.state.phase !== 'spiel' || !r.fahrbare) return false;
     const b = this.amParkAuto(p);
-    if (!b || !hatSchluessel(p)) return false;
+    if (!b || !hatSchluessel(p)) return this.streifeEinsteigen(sid, p);   // sonst ein Streifenwagen an einer Sperre (Schlüssel steckt)
     const fz = new FahrbarPkw(r, b.id);
     const f = fz.aufstellen(b.x, b.y, parkWinkel(b));
     f.farbe = b.farbe ?? 0; f.leben = 100; f.turm = 0;
@@ -269,11 +290,27 @@ export class PkwVerwaltung {
     return true;
   }
 
+  // Streifenwagen an einer Straßensperre (ohne Autoschlüssel): wird zum fahrbaren Fahrzeug, die Polizisten bleiben an der Sperre
+  streifeEinsteigen(sid, p) {
+    const r = this.raum;
+    if (p.ebene || p.anBord || p.imBoxer) return false;
+    const st = streifeBei(r.welt, p.x, p.y);
+    if (!st) return false;
+    const fz = new FahrbarPkw(r, st.id);
+    const f = fz.aufstellen(st.x, st.y, st.w);
+    f.farbe = 0; f.leben = 100; f.turm = 0; f.blau = false;
+    fz.andere = fz.andereFahrzeuge(); fz.startBlock = fz.blockPunkte(r.welt, f.x, f.y, f.richtung);
+    r.fahrbare.liste.push(fz);
+    this.weg(st.id);
+    fz.einsteigen(sid);
+    return true;
+  }
+
   // geparktes Auto aus der Welt nehmen (Kletter-Index, Zeichnung bei allen, Kofferraum leer)
   weg(bid) {
     const r = this.raum;
     if (!parkAutoWeg(r.welt, bid)) return;
-    r.setzeInhalt?.(bid, []);
+    if (!istStreife(bid)) r.setzeInhalt?.(bid, []);
     r.broadcast('autosWeg', this.liste());
   }
   liste() { return { seed: this.raum.state.seed, ids: [...(this.raum.welt?.autosWeg ?? [])], plaetze: Math.max(1, Math.round(Number(pkwEinst(this.raum).plaetze) || PKW_VORGABE.plaetze)) }; }
