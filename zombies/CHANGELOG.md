@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.89.3 – 24.11.2026
+
+- Selbst gefahrene Autos haben nachts Scheinwerfer, rote Rücklichter und beim Rückwärtsfahren weiße Rückfahrlichter.
+- Puma-Treffer: kleiner, kurzer Einschlag mit Funken und etwas Staub statt großer grauer Flecken.
+- Der Puma drückt parkende Autos platt wie der Leopard (Boxer fährt weiter langsam drüber).
+
 ## 0.89.2 – 24.11.2026
 
 - Autos lenken ruhiger: 60 °/s statt 110 °/s, bei hohem Tempo noch weicher. Neuer Backend-Wert „Lenkung“ unter „🔑 Autos fahren“.
