@@ -6,7 +6,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { setzeKartengroesse, BEUTE, KACHEL } from '../client/welt.mjs';
+import { setzeKartengroesse, BEUTE, kachelVon } from '../client/welt.mjs';
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import { freierPort } from './hilfe.mjs';
 
@@ -89,7 +89,8 @@ test('Küche: Herd und Spüle liefern oft ein Messer (je Küche 50–85 %)', asy
   einst.ueberraschung = 0; einst.beute = { moebel: 100 };   // alle Möbel gefüllt (der Möbelanteil hat einen eigenen Test in beute_funde.test.mjs)
   let kuechen = 0, treffer = 0, versuche = 0;
   for (const w of ebenen(raum)) for (const r of w.raeume.filter(r => r.typ === 'kueche')) {
-    const bs = w.behaelter.filter(b => (b.art === 'herd' || b.art === 'spuele') && Math.floor(b.x / KACHEL) >= r.x && Math.floor(b.x / KACHEL) < r.x + r.b && Math.floor(b.y / KACHEL) >= r.y && Math.floor(b.y / KACHEL) < r.y + r.h);
+    const KW = kachelVon(w);   // grobes Raster: Kachel, maßstäbliche Innenräume: Zelle
+    const bs = w.behaelter.filter(b => (b.art === 'herd' || b.art === 'spuele') && Math.floor(b.x / KW) >= r.x && Math.floor(b.x / KW) < r.x + r.b && Math.floor(b.y / KW) >= r.y && Math.floor(b.y / KW) < r.y + r.h);
     if (bs.length < 2) continue;
     kuechen++;
     if (kuechen > 25) break;

@@ -18,7 +18,7 @@ const URL_ = `http://127.0.0.1:${PORT}`;
 let server;
 const warte = ms => new Promise(r => setTimeout(r, ms));
 async function bis(f, ms = 3000) { const e = Date.now() + ms; while (Date.now() < e) { if (f()) return true; await warte(20); } return f(); }
-before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: ':memory:' }); });
+before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: ':memory:' }); SpielRaum.einstellungen.innenMassstab = false; });   // prüft das grobe Innenraster (maßstäbliche Innenräume: innen_fein_spiel.test.mjs)
 after(async () => { await server.gracefullyShutdown(false); });
 
 async function beitreten(name) {
