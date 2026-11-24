@@ -247,6 +247,8 @@ const BLOCKIERT_FELD = new Set([...BLOCKIERT, T.WASSER].filter(t => t !== T.INNE
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const FERN_WEITE = 900;     // weiter als so viele px von allen Spielern weg: nur jeden FERN_TAKT-ten Takt rechnen
 const FERN_TAKT = 4;
+const FERN_MITTEL = 450;   // Zwischenstufe: außerhalb dieses Radius um alle Spieler rechnen ruhige Zombies (kein Ziel/Jagd/Geräusch/Horde/Draht) nur jeden 2. Takt
+const FERN_TAKT_MITTEL = 2;
 const AFK_SEKUNDEN = 60;    // so lange ohne Eingabe, dann übernimmt die Bot-Steuerung die Figur
 const RASTER = 96;          // Zellgröße des Zombie-Rasters (px), je Takt neu befüllt
 const WEGEFELD_TIEFE = 60;  // Wegefeld nur so viele Kacheln weit um die Spieler (2000 px) berechnen
@@ -1271,6 +1273,7 @@ export class SpielRaum extends Room {
     for (const [id, m] of [...s.menschen]) if (m.ebene && m.versteckt) { s.menschen.delete(id); this.stadt?.info?.delete(id); }
     this.stadt?.hausFertig?.clear();
     this.ebenen.clear(); this.felder.clear();
+    this.behaelterPosCache = null;
     for (const [sid, nr] of vorher) {
       const p = s.spieler.get(sid), x = this.extra.get(sid);
       if (!p) continue;
@@ -2902,14 +2905,21 @@ export class SpielRaum extends Room {
         info.dran = (this.takteGezaehlt + info.nr) % FERN_TAKT === 0;
         if (!info.dran) continue;
         d = info.stau; info.stau = 0;
+      } else if (!z.jagt && !z.haengt && !info.ziel && !info.punkt && !info.welle && !(info.reakT > 0) && this.istFern(z.x, z.y, z.ebene, FERN_MITTEL)) {
+        info.stau = (info.stau ?? 0) + dt;
+        info.nr ??= Number(id.slice(1)) || 0;
+        info.dran = (this.takteGezaehlt + info.nr) % FERN_TAKT_MITTEL === 0;
+        if (!info.dran) continue;
+        d = info.stau; info.stau = 0;
       } else { info.stau = 0; info.dran = true; }
       this.zombieSchritt(id, z, d);
+      const re = info.re; if (re) { re.x = z.x; re.y = z.y; re.e = z.ebene; }   // Raster-Kopie auffrischen (zombieAbstand liest sie)
     }
     this.messen('zombies', t0); t0 = performance.now();
     this.stadt?.schritt(dt);
     this.messen('menschen', t0); t0 = performance.now();
     this.verkehr?.schritt(dt);
-    this.zRaster = null;
+    this.zRaster = null; this.zRasterF = null;
     this.messen('verkehr', t0); t0 = performance.now();
     this.brand?.schritt(dt);
     this.aufgaben?.schritt(dt);
@@ -3360,24 +3370,28 @@ export class SpielRaum extends Room {
     return l;
   }
 
-  istFern(x, y, ebene = '') {
+  istFern(x, y, ebene = '', weite = FERN_WEITE) {
     const l = this.nahPunkte?.get(ebene ?? '');
     if (!l) return true;
-    const r2 = FERN_WEITE * FERN_WEITE;
+    const r2 = weite * weite;
     for (let i = 0; i < l.length; i += 2) { const dx = l[i] - x, dy = l[i + 1] - y; if (dx * dx + dy * dy < r2) return false; }
     return true;
   }
 
   // Raster aller Zombies je Ebene (Zelle → Liste), gilt für den laufenden Takt
   baueZombieRaster() {
-    const r = new Map();
-    for (const z of this.state.zombies.values()) {
-      const e = z.ebene ?? '';
-      let g = r.get(e); if (!g) r.set(e, g = new Map());
-      const k = Math.floor(z.y / RASTER) * 4096 + Math.floor(z.x / RASTER);
+    const r = new Map(), f = new Map();
+    for (const [id, z] of this.state.zombies) {
+      const e = z.ebene ?? '', x = z.x, y = z.y;
+      let g = r.get(e), gf = f.get(e); if (!g) { r.set(e, g = new Map()); f.set(e, gf = new Map()); }
+      const k = Math.floor(y / RASTER) * 4096 + Math.floor(x / RASTER);
       const l = g.get(k); if (l) l.push(z); else g.set(k, [z]);
+      // einfache Kopie (z, x, y, Ebene): zombieAbstand liest sie statt der Colyseus-Schema-Getter; nach jedem Zombie-Schritt aufgefrischt (zombieEintragFrisch)
+      const en = { z, x, y, e: z.ebene };
+      const lf = gf.get(k); if (lf) lf.push(en); else gf.set(k, [en]);
+      const info = this.zombieInfo.get(id); if (info) info.re = en;
     }
-    this.zRaster = r;
+    this.zRaster = r; this.zRasterF = f;
   }
 
   // Zombies nahe (x, y) (Radius ≤ 1 Zelle ⇒ Zellen ±zellen); ohne Raster: alle auf der Ebene
@@ -3629,10 +3643,20 @@ export class SpielRaum extends Room {
     // Horde: Mindestabstand 1,5 Radien (dichte Traube, aber keine Figuren übereinander); höchstens 40 Nachbarn prüfen (Rastergröße begrenzt die Kosten)
     const horde = !!info?.welle, minD = (horde ? W.zombieRadius * 1.5 : W.zombieRadius * 2) * (welt.reich ?? 1);
     let gepr = 0, eng = 0;
-    for (const o of this.zRaster ? this.zombiesNahe(z.x, z.y, z.ebene) : this.state.zombies.values()) {
-      if (o === z || o.ebene !== z.ebene) continue;
+    let nahe = null;
+    if (this.zRaster && this.zRasterF) {   // einfache Einträge (x, y, Ebene) statt Schema-Getter; Reihenfolge wie zombiesNahe
+      nahe = [];
+      const g = this.zRasterF.get(z.ebene ?? '');
+      if (g) {
+        const cx = Math.floor(z.x / RASTER), cy = Math.floor(z.y / RASTER);
+        for (let j = cy - 1; j <= cy + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) { const l = g.get(j * 4096 + i); if (l) for (const q of l) nahe.push(q); }
+      }
+    }
+    for (const q of nahe ?? this.state.zombies.values()) {
+      const o = nahe ? q.z : q, ox = nahe ? q.x : o.x, oy = nahe ? q.y : o.y, oe = nahe ? q.e : o.ebene;
+      if (o === z || oe !== z.ebene) continue;
       if (horde && ++gepr > 40) break;
-      const dx = z.x - o.x, dy = z.y - o.y;
+      const dx = z.x - ox, dy = z.y - oy;
       if (Math.abs(dx) >= minD || Math.abs(dy) >= minD) continue;
       const d = Math.hypot(dx, dy);
       if (d < minD) {
