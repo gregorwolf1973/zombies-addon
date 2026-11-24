@@ -45,7 +45,7 @@ export function anmelden(hash, passwort, schluessel) {
 }
 
 // ---------- Befehle ----------
-export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel', 'unfall', 'kamera', 'kamerapos', 'status', 'waffe', 'fahrzeug', 'fahrzeug_weg'];
+export const SU_BEFEHLE = ['bw', 'evak', 'bots', 'horde_hin', 'horde', 'hordeanzeige', 'unsterblich', 'zeit', 'auffuellen', 'evakrufen', 'lager', 'level', 'countdown', 'zeitraffer', 'alleaufgaben', 'hin', 'nebel', 'unfall', 'kamera', 'kamerapos', 'status', 'waffe', 'fahrzeug', 'fahrzeug_weg', 'ding'];
 
 // Kameraposition: Zahl innerhalb der Karte, sonst Rückfallwert
 const kameraZahl = (v, rueck, max) => Number.isFinite(Number(v)) ? Math.max(0, Math.min(max, Number(v))) : rueck;
@@ -90,6 +90,9 @@ export function auffuellen(raum, p, x) {
   p.nachladen = 0; x.nRest = 0;
   WP.abgleich(p, x, einst);
 }
+
+// Gegenstände, die der Superuser sich direkt in den Rucksack legen kann (Knöpfe im Testmenü, client/spiel.mjs)
+export const SU_DINGE = ['brechstange', 'autoschluessel'];
 
 // Waffen, die der Superuser direkt wählen kann (alle aus WAFFEN außer der bloßen Faust, die es als eigenen Knopf gibt)
 export const SU_WAFFEN = Object.keys(WAFFEN).filter(n => n !== 'faust');
@@ -235,6 +238,15 @@ export function befehl(raum, client, m) {
       const name = String(m.name ?? '');
       if (!waffeSetzen(raum, p, x, name)) return 'Unbekannte Waffe';
       return `🔫 ${DINGE[name]?.name ?? name} in der Hand, Munition voll`;
+    }
+    case 'ding': {
+      const name = String(m.name ?? '');
+      if (!SU_DINGE.includes(name)) return 'Unbekannter Gegenstand';
+      const dn = `${DINGE[name]?.zeichen ?? ''} ${DINGE[name]?.name ?? name}`;
+      if (p.rucksack.includes(name)) return `${dn} hast du schon im Rucksack`;
+      if (p.rucksack.length >= p.plaetze) return 'Rucksack voll – erst etwas ablegen';
+      p.rucksack.push(name);
+      return `${dn} liegt im Rucksack`;
     }
     case 'fahrzeug': {
       const art = String(m.art ?? '');

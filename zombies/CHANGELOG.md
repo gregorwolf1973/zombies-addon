@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.89.1 – 24.11.2026
+
+- Superuser-Testmenü: Brechstange und Autoschlüssel per Knopf direkt in den Rucksack.
+
 ## 0.89.0 – 24.11.2026
 
 - Autos fahren: Autoschlüssel in Schränken, Kofferräumen und bei Leichen finden – passt in jedes parkende Auto. Bis 80 km/h, Mitfahrer, Zombies überfahren; Aufprall kostet Leben, je schneller desto mehr; bei 0 Lebenspunkten brennt das Auto aus. Werte im Backend unter „🔑 Autos fahren“.

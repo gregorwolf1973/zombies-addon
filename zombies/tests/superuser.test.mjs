@@ -137,6 +137,14 @@ test('richtiges Passwort: Superuser mit ⭐, normaler Spieler daneben kann nicht
   assert.equal(p.munition, MUNITION_MAX); assert.ok(p.hp > 99); assert.ok(p.durst > 99); assert.ok(p.hunger > 99); assert.equal(p.infektion, 0);
   if (p.waffe && p.magmax) assert.equal(p.magazin, p.magmax);
 
+  // Gegenstände in den Rucksack: Brechstange und Autoschlüssel, je einmal; Unbekanntes nicht
+  p.rucksack.splice(0, p.rucksack.length);
+  await su(boss, { befehl: 'ding', name: 'brechstange' });
+  await su(boss, { befehl: 'ding', name: 'autoschluessel' });
+  await su(boss, { befehl: 'ding', name: 'brechstange' });
+  await su(boss, { befehl: 'ding', name: 'munitionskiste' });
+  assert.deepEqual([...p.rucksack].sort(), ['autoschluessel', 'brechstange']);
+
   // Bots zu mir: tot/liegend/krank → heil, neben mir
   const bots = [...raum().extra.entries()].filter(([, x]) => x.bot).map(([sid]) => raum().state.spieler.get(sid));
   assert.ok(bots.length >= 1, 'Bots vorhanden');

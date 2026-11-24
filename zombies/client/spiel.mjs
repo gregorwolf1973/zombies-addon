@@ -766,6 +766,8 @@ function suMenueEinrichten(szene) {
       ${b('bw', '🎖 Zur Bundeswehr')}${b('evak', '📍 Zum Evakuierungspunkt')}${b('horde_hin', '🧟 Zur Zombiehorde (50 m davor)')}
       <div class="titel">Waffe wählen (Munition voll)</div>
       <div class="raster">${SU_WAFFEN_LISTE.map(n => b('waffe', `${DINGE[n]?.zeichen ?? ''} ${DINGE[n]?.name ?? n}`, { name: n })).join('')}</div>
+      <div class="titel">Gegenstand in den Rucksack</div>
+      <div class="zeile">${['brechstange', 'autoschluessel'].map(n => b('ding', `${DINGE[n]?.zeichen ?? ''} ${DINGE[n]?.name ?? n}`, { name: n })).join('')}</div>
       <div class="titel">Fahrzeug zum Selbstfahren</div>
       <div class="zeile">${['boxer', 'puma', 'leopard'].map(a => b('fahrzeug', `🛡️ ${FAHRBAR[a].name}`, { art: a })).join('')}</div>
       ${b('fahrzeug_weg', '🗑 Fahrzeug entfernen')}
