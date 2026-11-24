@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.89.4 – 24.11.2026
+
+- Streifenwagen an den Sperren sind fahrbar – der Schlüssel steckt. Blaulicht und Sirene per Taste H oder 🚨; die Sirene lockt Zombies aus bis zu 150 m an.
+- Autoradio: In jedem Auto mit 📻 bzw. Taste R den Live-Sender ein- und ausschalten (nur für dich, aus beim Aussteigen, leiser bei Sirene).
+- Wer fährt, macht Lärm: Zombies hören Autos und jetzt auch Boxer, Puma und Leopard mindestens so weit wie einen rennenden Spieler.
+
 ## 0.89.3 – 24.11.2026
 
 - Selbst gefahrene Autos haben nachts Scheinwerfer, rote Rücklichter und beim Rückwärtsfahren weiße Rückfahrlichter.
