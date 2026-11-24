@@ -21,10 +21,12 @@ import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { weichKreis } from './weichkreis.mjs';
+import { einschlagWerte } from './einschlag.mjs';
+import { pkwLichtPunkte, pkwKegelZeichnen } from './pkwlicht.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht, BLUT_GROESSE } from './effekte.mjs';
 import { fahrbarNah, FAHRBAR, FAHRBAR_PLAETZE } from './fahrbar.mjs';
 import { istFahrbar, fahrbarBild, fahrbarFahrzeug, fahrbarRueckstoss, pumaFahrbarSchuss } from './fahrbardarstellung.mjs';
-import { pkwKontext } from './pkw.mjs';
+import { pkwKontext, PKW } from './pkw.mjs';
 import { tastenFahrzeug } from './walze.mjs';
 import { walzeEmpfangen, walzeAbgleich } from './walzedarstellung.mjs';
 import { pkwTextur, pkwDarstellung, pkwAufraeumen, autoTuer, autosWegEmpfangen, autosWegAbgleich, pkwPlaetze } from './pkwdarstellung.mjs';
@@ -2633,6 +2635,10 @@ class Ort extends Phaser.Scene {
       if (sicht(p.x, p.y, 100)) { P.setScale(p.lampe > 0 ? 0.7 : 0.45).setAlpha(0.7); rt.erase(P, p.x - ox, p.y - oy); }
     }
     this.fremdeLampen(rt, ox, oy, '');
+    for (const [id, o] of this.busObj) {   // gefahrene Autos: Scheinwerferkegel (client/pkwlicht.mjs)
+      if (!o.pkwLicht || !o.box.visible || !sicht(o.x, o.y, 160) || raum.state.fahrzeuge?.get(id)?.art !== 'pkw') continue;
+      pkwKegelZeichnen(rt, ox, oy, this.lampenPinsel, P, { punkte: pkwLichtPunkte(o.x, o.y, o.r, PKW.laenge, PKW.breite), r: o.r, rueck: o.pkwRueck });
+    }
     const fz = this.flug?.zentrum();
     const lx = (fz ? fz.x : this.lokal.x) - ox, ly = (fz ? fz.y : this.lokal.y) - oy;   // Kameraflug: Schein um die Kamera
     // Ring um den Spieler: ohne Taschenlampe wie früher (Bildschirmgröße), mit Lampe nur ein schwacher Schein (~2 m)
@@ -3242,29 +3248,35 @@ class Ort extends Phaser.Scene {
   // Explosion: Blitz, Druckwelle, Feuer- und Rauchteilchen, Kamerawackeln (stärker, je näher man ist)
   explosion(x, y, r = 40, staerke = 1, ebene = '') {
     if (ebene !== this.aktEbene) return;
-    const blitz = this.add.circle(x, y, r * 0.5, 0xfff3c0, 0.95).setBlendMode('ADD').setDepth(8);
-    this.tweens.add({ targets: blitz, scale: 2.2, alpha: 0, duration: 220, onComplete: () => blitz.destroy() });
-    const ring = this.add.circle(x, y, r * 0.4).setStrokeStyle(3, 0xffe0b2, 0.9).setFillStyle().setDepth(7.9);
-    this.tweens.add({ targets: ring, scale: 2.6, alpha: 0, duration: 340, onComplete: () => ring.destroy() });
+    const ew = einschlagWerte(r, staerke);
+    const blitz = this.add.circle(x, y, ew.fein ? ew.blitzR : r * 0.5, 0xfff3c0, 0.95).setBlendMode('ADD').setDepth(8);
+    this.tweens.add({ targets: blitz, scale: ew.fein ? 1.8 : 2.2, alpha: 0, duration: ew.fein ? 140 : 220, onComplete: () => blitz.destroy() });
+    if (!ew.fein) {
+      const ring = this.add.circle(x, y, r * 0.4).setStrokeStyle(3, 0xffe0b2, 0.9).setFillStyle().setDepth(7.9);
+      this.tweens.add({ targets: ring, scale: 2.6, alpha: 0, duration: 340, onComplete: () => ring.destroy() });
+    }
     const n = Math.round(14 * staerke) + 4;
     for (let i = 0; i < n; i++) {
-      const w = Math.random() * Math.PI * 2, d = r * (0.5 + Math.random() * 0.9);
+      const w = Math.random() * Math.PI * 2, d = ew.fein ? ew.funkenWeite[0] + Math.random() * (ew.funkenWeite[1] - ew.funkenWeite[0]) : r * (0.5 + Math.random() * 0.9);
       const f = this.add.circle(x, y, 1 + Math.random() * 2, [0xffd54f, 0xff9800, 0xf4511e, 0xd84315][i % 4], 0.95).setBlendMode('ADD').setDepth(7.8);
-      this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, scale: 0.4, duration: 350 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
+      this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, scale: 0.4, duration: (ew.fein ? 200 : 350) + Math.random() * (ew.fein ? 150 : 300), ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
     }
-    const fein = staerke < 0.5;   // Puma-Einschlag: viele kleine, weiche Rauchteilchen statt weniger großer Kreise
-    for (let i = 0, nR = Math.round((fein ? Math.round(16 * staerke) + 4 : Math.round(9 * staerke) + 2) * GFS.partikel); i < nR; i++) {
-      const w = Math.random() * Math.PI * 2, d = r * (0.2 + Math.random() * 0.8);
-      if (!fein) {
+    if (ew.fein) {   // Puma-Einschlag: wenige kleine, kurze Staubteilchen, kein grauer Fleck
+      const sb = ew.staub, zw = (a, b) => a + Math.random() * (b - a);
+      for (let i = 0, nR = Math.round(sb.n * GFS.partikel); i < nR; i++) {
+        const w = Math.random() * Math.PI * 2, d = zw(...sb.weite);
+        const staub = weichKreis(this, x, y, zw(...sb.r), sb.farbe, sb.alpha).setDepth(7.7), k0 = staub.scale;
+        this.tweens.add({ targets: staub, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - zw(...sb.steig), alpha: 0, scale: k0 * sb.wachs, duration: zw(...sb.dauer), onComplete: () => staub.destroy() });
+      }
+    } else {
+      for (let i = 0, nR = Math.round((Math.round(9 * staerke) + 2) * GFS.partikel); i < nR; i++) {
+        const w = Math.random() * Math.PI * 2, d = r * (0.2 + Math.random() * 0.8);
         const rauch = this.add.circle(x, y, 3.6 + Math.random() * 4.2, 0x4a4a4a, 0.6).setDepth(7.7);
         this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 8 - Math.random() * 10, alpha: 0, scale: 2.4 + Math.random() * 1.2, duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
-        continue;
       }
-      const rauch = weichKreis(this, x, y, 1.8 + Math.random() * 2.2, 0x4a4a4a, 0.42).setDepth(7.7), k0 = rauch.scale;
-      this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 8 - Math.random() * 10, alpha: 0, scale: k0 * (2.2 + Math.random() * 1.2), duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
+      const brand = this.add.circle(x, y, r * 0.35, 0x1b1b1b, 0.5).setDepth(0.95);   // Brandfleck am Boden
+      this.tweens.add({ targets: brand, alpha: 0, duration: 6000, onComplete: () => brand.destroy() });
     }
-    const brand = this.add.circle(x, y, r * 0.35, 0x1b1b1b, 0.5).setDepth(0.95);   // Brandfleck am Boden
-    this.tweens.add({ targets: brand, alpha: 0, duration: 6000, onComplete: () => brand.destroy() });
     if (this.lokal) {
       const d = Math.hypot(this.lokal.x - x, this.lokal.y - y);
       if (staerke < 0.5) {   // Puma-Einschlag: nur leichtes Zucken, 25 m Umkreis

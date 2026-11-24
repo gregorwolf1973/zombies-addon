@@ -137,8 +137,8 @@ test('Bäume: Puma und Boxer bleiben am Stamm stehen, der Leopard walzt kleine B
   assert.equal(WALZE.leopard.baumMax, 52);
 });
 
-test('Parkende Autos: Leopard drückt sie platt (Kofferraum leer), Puma fährt mit 40 %, Boxer mit 30 % Tempo darüber', () => {
-  for (const [art, faktor] of [['puma', 0.4], ['boxer', 0.3]]) {
+test('Parkende Autos: Leopard und Puma drücken sie platt (Kofferraum leer), Boxer fährt mit 30 % Tempo darüber', () => {
+  for (const [art, faktor] of [['boxer', 0.3]]) {
     const w = welt(); w.behaelter.push({ id: 'b1', art: 'auto', x: 1250, y: 700, winkel: Math.PI / 2, farbe: 1 });
     const r = raum(w), fz = fahrzeug(r, art, 1000, 700, 0), vm = fz.fahrwerk().vmax;
     let vUeber = 0, ueber = false;
@@ -150,11 +150,13 @@ test('Parkende Autos: Leopard drückt sie platt (Kofferraum leer), Puma fährt m
     assert.ok(vUeber <= vm * faktor + 1e-6 && vUeber > vm * faktor * 0.5, `${art} Tempo über dem Auto ${vUeber / vm}`);
     assert.ok(!r.state.platt.has('b1'));
   }
-  const w = welt(); w.behaelter.push({ id: 'b1', art: 'auto', x: 1250, y: 700, winkel: Math.PI / 2, farbe: 1 });
-  const r = raum(w), fz = fahrzeug(r, 'leopard', 1000, 700, 0);
-  fahre(fz, 10, { dx: 1, dy: 0 }, () => fz.f.x > 1400);
-  assert.ok(r.state.platt.has('b1'), 'Auto nicht platt');
-  const { dx } = plattLesen(r.state.platt.get('b1'));
-  assert.ok(dx > 0, 'nicht in Fahrtrichtung geschoben');
-  assert.equal(r.state.behaelter.get('b1')?.rest, 0, 'Kofferraum nicht leer');
+  for (const art of ['leopard', 'puma']) {
+    const w = welt(); w.behaelter.push({ id: 'b1', art: 'auto', x: 1250, y: 700, winkel: Math.PI / 2, farbe: 1 });
+    const r = raum(w), fz = fahrzeug(r, art, 1000, 700, 0);
+    fahre(fz, 10, { dx: 1, dy: 0 }, () => fz.f.x > 1400);
+    assert.ok(r.state.platt.has('b1'), `${art}: Auto nicht platt`);
+    const { dx } = plattLesen(r.state.platt.get('b1'));
+    assert.ok(dx > 0, 'nicht in Fahrtrichtung geschoben');
+    assert.equal(r.state.behaelter.get('b1')?.rest, 0, 'Kofferraum nicht leer');
+  }
 });

@@ -15,7 +15,7 @@ export const RUECK_HALTEN = -0.3;       // schon rückwärts unterwegs: bleibt i
 export const RUECK_ANTEIL = 1 / 3;      // Rückwärts höchstens ein Drittel des Höchsttempos
 export const WALZE = {
   leopard: { zaun: true, auto: 'platt', baumMax: 52 },   // Kronen bis 6,5 m Durchmesser walzt er um, größere blockieren
-  puma: { zaun: true, auto: 0.4, baumMax: 0 },
+  puma: { zaun: true, auto: 'platt', baumMax: 0 },
   boxer: { zaun: true, auto: 0.3, baumMax: 0 },
 };
 

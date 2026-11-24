@@ -1,6 +1,6 @@
 // Boxer, Puma und Leopard walzen Hindernisse (Regeln: client/walze.mjs): Zäune und Hecken unter der Wanne werden dauerhaft platt (Lücke offen
-// für alle, auch Zombies), der Leopard drückt geparkte Autos platt (state.platt wie in der B11-Szene, Kofferraum leer) und walzt kleine Bäume
-// um; Puma und Boxer fahren langsamer über geparkte Autos (40 % bzw. 30 %). Der Server entscheidet, schickt die Änderungen als Nachricht
+// für alle, auch Zombies), Leopard und Puma drücken geparkte Autos platt (state.platt wie in der B11-Szene, Kofferraum leer) und walzt kleine Bäume
+// um; Boxer fährt langsamer über geparkte Autos (30 %). Der Server entscheidet, schickt die Änderungen als Nachricht
 // 'walze' { seed, zaun, baum } an alle (beim Beitritt die ganze Liste) und hält das Wegefeld der Zombies aktuell (wegfeld.mjs).
 import { BREITE } from '../client/welt.mjs';
 import { aufParkAuto } from '../client/fzkollision.mjs';
@@ -29,7 +29,7 @@ export class Walze {
     this.autos = (raum.welt?.behaelter ?? []).filter(b => b.art === 'auto');
   }
 
-  // Tempofaktor über geparkten Autos (Puma 0,4, Boxer 0,3; Leopard walzt sie platt, Autos fahren nicht darüber)
+  // Tempofaktor über geparkten Autos (Boxer 0,3; Leopard und Puma walzt sie platt, Autos fahren nicht darüber)
   autoFaktor(fz) {
     const regel = WALZE[fz.art];
     if (!regel || typeof regel.auto !== 'number' || !fz.f) return 1;

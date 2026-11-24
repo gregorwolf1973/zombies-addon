@@ -5,6 +5,7 @@ import { KACHEL } from './welt.mjs';
 import { autoVonOben, zeichneBoden } from './aussehen.mjs';
 import { parkAutoWeg, pkwBehaelterId, PKW, PKW_VORGABE } from './pkw.mjs';
 import * as ton from './ton.mjs';
+import { dunkelVon, pkwLichtAn, pkwRueckwaerts, pkwLampenMalen } from './pkwlicht.mjs';
 
 let weg = { seed: null, ids: [], plaetze: PKW_VORGABE.plaetze };
 
@@ -61,7 +62,14 @@ export function pkwDarstellung(scene, o, id, f, dt, lokal, aktEbene, s) {
   const d = lokal ? Math.hypot(o.x - lokal.x, o.y - lokal.y) : Infinity;
   // Tempo aus der gezeichneten Bewegung (px/s)
   const v = o.pkwLetzt ? Math.hypot(o.x - o.pkwLetzt[0], o.y - o.pkwLetzt[1]) / Math.max(dt, 0.001) : 0;
+  const rw = o.pkwLetzt && pkwRueckwaerts(o.x - o.pkwLetzt[0], o.y - o.pkwLetzt[1], o.r, v);
   o.pkwLetzt = [o.x, o.y];
+  // Licht: nachts mit Fahrer (jemand sitzt drin) – Rückwärts-Anzeige hält 0,3 s nach, damit sie nicht flackert
+  const fahrer = [...(s?.spieler?.values() ?? [])].some(q => q.imBoxer && Math.abs(q.x - f.x) < 24 && Math.abs(q.y - f.y) < 24);
+  o.pkwRueckT = rw ? 0.3 : Math.max(0, (o.pkwRueckT ?? 0) - dt);
+  o.pkwLicht = pkwLichtAn(f, fahrer, dunkelVon(s?.uhr));
+  o.pkwRueck = o.pkwLicht && o.pkwRueckT > 0;
+  if (o.pkwLicht && !aktEbene) pkwLampenMalen(o.licht, PKW.laenge, PKW.breite, o.pkwRueck);
   o.pkwV = (o.pkwV ?? 0) + (v - (o.pkwV ?? 0)) * Math.min(1, dt * 4);
   // Lebensbalken über dem Auto (nur beschädigt und in der Nähe)
   const leben = f.leben || 100, zeige = !aktEbene && d < 500 && leben < 100;
@@ -84,7 +92,7 @@ export function pkwDarstellung(scene, o, id, f, dt, lokal, aktEbene, s) {
 }
 // Aufräumen, wenn das Fahrzeug verschwindet oder zum Wrack wird
 export function pkwAufraeumen(o) {
-  o.pkwBalken?.destroy(); o.pkwBalken = null;
+  o.pkwBalken?.destroy(); o.pkwBalken = null; o.pkwLicht = false;
   if (o.motor) { ton.sireneStoppen(o.motor); o.motor = null; }
 }
 
