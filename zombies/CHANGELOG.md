@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.90.0 – 24.11.2026
+
+- Zombies bewegen sich unterschiedlich: drei neue Gangarten je Figur (gebeugt, mit vorgestreckten Armen, Mutanten-Lauf), die Beine passen zum Tempo – kein Rutschen mehr.
+- Feste Bewegungsarten: Kriecher (10 %, ca. 1 km/h), Schlurfer (60 %, jagen mit 7 km/h – neuer Backend-Regler „Schlurfer jagen“) und Läufer (30 %, schnell). Anteile im Backend.
+- Zombies im Stacheldraht zerren langsam statt zu zappeln.
+- Neue Polizisten (3D, dunkelblau, mit Pistole).
+- Menschen verstecken sich nur noch, wenn Zombies in der Nähe sind; sonst bummeln sie, gehen in Läden und Häuser und wieder heraus, fahren mit parkenden Autos davon oder laufen weg.
+- Nachts und bei Nebel 30 % weniger automatische Schussreichweite – außer das Ziel steht im Licht von Taschenlampe, Scheinwerfer oder Feuer (Backend-Wert).
+- Sprechfunk beim Levelwechsel: Die Verbindung bleibt bis zum Neuladen bestehen und startet danach sofort wieder.
+- Tempo in Häusern 50 % statt 35 % (Backend).
+- Geparkte Busse haben nur noch ihren gezeichneten Umriss als Hindernis.
+
 ## 0.89.4 – 24.11.2026
 
 - Streifenwagen an den Sperren sind fahrbar – der Schlüssel steckt. Blaulicht und Sirene per Taste H oder 🚨; die Sirene lockt Zombies aus bis zu 150 m an.
