@@ -996,6 +996,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="tnTZombieJagen" min="1" max="60" step="0.5"><span id="tnTZombieJagenWert">15 km/h</span></div>
   <label for="tnTZombieWandern">Zombie wandert – Höchsttempo (km/h)</label>
   <div class="tn-zeile"><input type="range" id="tnTZombieWandern" min="1" max="30" step="0.5"><span id="tnTZombieWandernWert">4 km/h</span></div>
+  <label for="tnTSchlurferJagen">Schlurfer jagt – Tempo (km/h; empfohlen 4–10, nie schneller als „Zombie jagt“; Läufer rennen bis „Zombie jagt“, Kriecher robben)</label>
+  <div class="tn-zeile"><input type="range" id="tnTSchlurferJagen" min="4" max="10" step="0.5"><span id="tnTSchlurferJagenWert">7 km/h</span></div>
   <label for="tnBaumTempo">Tempo unter Bäumen (%)</label>
   <span class="hilfe">Menschen, Zombies, Spieler und Bots laufen auf Baumkacheln nur mit diesem Anteil ihres Tempos (Vorgabe 25 % = 75 % langsamer; 100 = kein Unterschied). Fahrzeuge und der Hund sind nicht betroffen.</span>
   <div class="tn-zeile"><input type="range" id="tnBaumTempo" min="5" max="100" step="5"><span id="tnBaumTempoWert">25 %</span></div>
@@ -1322,6 +1324,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnTHeldSchleichen', e.tempoHeldSchleichen === undefined ? 9 : e.tempoHeldSchleichen, function (v) { return v + ' km/h'; });
     feld('tnTZombieJagen', e.tempoZombieJagen === undefined ? 15 : e.tempoZombieJagen, function (v) { return v + ' km/h (normal ' + Math.round(v * 0.6) + '–' + Math.round(v * 0.85) + ', Läufer bis ' + v + ')'; });
     feld('tnTZombieWandern', e.tempoZombieWandern === undefined ? 4 : e.tempoZombieWandern, function (v) { return v + ' km/h'; });
+    feld('tnTSchlurferJagen', e.tempoSchlurferJagen === undefined ? 7 : e.tempoSchlurferJagen, function (v) { return v + ' km/h'; });
     feld('tnBaumTempo', e.baumTempo === undefined ? 25 : e.baumTempo, function (v) { return v + ' %'; });
     feld('tnZLeben', e.zombieLeben === undefined ? 100 : e.zombieLeben, function (v) { return String(v); });
     if (window.groessenVorschau) window.groessenVorschau();
@@ -1552,6 +1555,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnTHeldSchleichen', function (v) { return v + ' km/h'; }, function (v) { return { tempoHeldSchleichen: v }; });
   regler('tnTZombieJagen', function (v) { return v + ' km/h (normal ' + Math.round(v * 0.6) + '–' + Math.round(v * 0.85) + ', Läufer bis ' + v + ')'; }, function (v) { return { tempoZombieJagen: v }; });
   regler('tnTZombieWandern', function (v) { return v + ' km/h'; }, function (v) { return { tempoZombieWandern: v }; });
+  regler('tnTSchlurferJagen', function (v) { return v + ' km/h'; }, function (v) { return { tempoSchlurferJagen: v }; });
   regler('tnBaumTempo', function (v) { return v + ' %'; }, function (v) { return { baumTempo: v }; });
   regler('tnZGroesse', function (v) { return v + ' %'; }, function (v) { return { zombieGroesse: v }; });
   regler('tnGGroesse', function (v) { return v + ' %'; }, function (v) { return { groesseGesamt: v }; });
@@ -3904,7 +3908,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var zk = ausKarte(karteVon('titelZombies'), '🧟 Zombies');
   if (zk) {
     zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel'); schalter(zk.inhalt, 'tnZFNeu'); schalter(zk.inhalt, 'tnHFNeu');
-    ['tnTZombieJagen', 'tnTZombieWandern', 'tnTHeldGehen', 'tnTHeldSchleichen'].forEach(function (id) { zeile(zk.inhalt, id); }); zeile(zk.inhalt, 'tnBaumTempo'); zeile(zk.inhalt, 'tnGeraeusch'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
+    ['tnTZombieJagen', 'tnTZombieWandern', 'tnTSchlurferJagen', 'tnTHeldGehen', 'tnTHeldSchleichen'].forEach(function (id) { zeile(zk.inhalt, id); }); zeile(zk.inhalt, 'tnBaumTempo'); zeile(zk.inhalt, 'tnGeraeusch'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
     var zs = unter('👁 Zombie-Sicht'); rein(zs.inhalt, $('zsHinweis')); ['zsGehen', 'zsSchleichen', 'zsKegel', 'zsVerfolgen', 'zsAufgeben', 'zsNacht'].forEach(function (id) { zeile(zs.inhalt, id); }); zk.inhalt.appendChild(zs);
     var zfb = $('zfBlock'); if (zfb) { zk.inhalt.appendChild(zfb); rein(zfb, $('zfListe')); }   // 'zfListe' bleibt im Block
     var hfb = $('hfBlock'); if (hfb) { zk.inhalt.appendChild(hfb); rein(hfb, $('hfListe')); }
@@ -3968,7 +3972,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnFzStoss: 'fahrzeugStoss', tnGeraeusch: 'geraeuschPause', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnUnfallTuer: 'unfallTuer', tnAutoTempo: 'auto.tempo', tnAutoLenkung: 'auto.lenkung', tnAutoLeben: 'auto.leben', tnAutoPlaetze: 'auto.plaetze', tnAutoCrashAb: 'auto.crashAb', tnAutoCrash: 'auto.crashSchaden', tnAutoCrashAuto: 'auto.crashAuto', tnAutoZombieTot: 'auto.zombieTotKmh', tnAutoZombieSchaden: 'auto.zombieSchaden', tnAutoLaerm: 'auto.laerm', tnAutoSirene: 'auto.sireneWeite', tnAutoSchlMoebel: 'auto.schluesselMoebel', tnAutoSchlKoffer: 'auto.schluesselKofferraum', tnAutoSchlLeiche: 'auto.schluesselLeiche', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer', rwDunkel: 'schussDunkel',
     tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo', tnPumaTempo: 'bundeswehr.pumaTempo', tnLeoTempo: 'bundeswehr.leopardTempo', tnVsTage: 'bundeswehr.versorgungTage', tnVsMun: 'bundeswehr.versorgungMunition', tnVsVerband: 'bundeswehr.versorgungVerband', tnVsSpritze: 'bundeswehr.versorgungSpritze', tnKiMun: 'bundeswehr.kistenMunChance', tnKiMunMin: 'bundeswehr.kistenMunMin', tnKiMunMax: 'bundeswehr.kistenMunMax', tnKiVerband: 'bundeswehr.kistenVerbandChance', tnKiGranate: 'bundeswehr.kistenGranateChance',
-    tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',
+    tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern', tnTSchlurferJagen: 'tempoSchlurferJagen',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
     spWeite: 'sprache.hoerweite', spStock: 'sprache.stockwerk', spDrin: 'sprache.drinnenDraussen', spFunk: 'sprache.funk',
     agStunde: 'aufgaben.stunde', agWarteEcht: 'aufgaben.wartenEchtMin', agWarte: 'aufgaben.wartezeit', agFinale: 'aufgaben.finaleMinuten', agAnzahl: 'aufgaben.anzahl', fkFaktor: 'faehigkeiten.xpFaktor',

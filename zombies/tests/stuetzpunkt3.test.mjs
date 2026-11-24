@@ -130,6 +130,7 @@ test('Evakuierungsfahrzeug fährt sichtbar ein, steht erst nach der Ankunft und 
   await frisch();
   const { c, raum } = await beitreten('Bus');
   const v = raum.verkehr;
+  raum.state.menschen?.clear?.(); raum.stadt && (raum.stadt.schritt = () => {});   // Bewohner bummeln seit dem Alltag-Umbau auch über Straßen: hier nur die Fahrt prüfen (Bremsen vor Fußgängern prüft der Verkehrstest)
   const halt = v.graph.knoten[Math.floor(v.graph.knoten.length / 2)];
   const id = v.evakuierungBus(halt.x, halt.y, 0, halt);
   const f = raum.state.fahrzeuge.get(id);

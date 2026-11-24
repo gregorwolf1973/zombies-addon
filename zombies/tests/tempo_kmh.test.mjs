@@ -25,12 +25,20 @@ test('Einstellungen: Vorgabe und Grenzen', () => {
   assert.equal(bereinige({ tempoHeldGehen: 999 }, v).tempoHeldGehen, 999);
 });
 
-test('Bewegungsklassen: Kriecher ≤ 1 km/h, Schlurfer ≤ „wandert“ (auch beim Jagen), Läufer bis „jagt“; Vorgabe-Anteile 10/60/30', async () => {
+test('Bewegungsklassen: Kriecher 1 km/h, Schlurfer 2,4 km/h umherziehend / 7 km/h jagend (eigener Regler), Läufer bis „jagt“; Vorgabe-Anteile 10/60/30', async () => {
   const { SpielRaum } = await import('../server/raum.mjs');
   const { ZK_KRIECHER, ZK_LAEUFER, ZK_SCHLURFER } = await import('../client/zombiefiguren.mjs');
   const kmh = px => px / 8 * 3.6, kt = (z, e) => kmh(SpielRaum.prototype.klassenTempo.call({}, z, e));
   assert.ok(Math.abs(kt({ kriecht: true, kl: ZK_KRIECHER }, true) - 1) < 1e-9);
-  assert.ok(Math.abs(kt({ kl: ZK_SCHLURFER }, true) - 4) < 1e-9 && Math.abs(kt({ kl: ZK_SCHLURFER }, false) - 2.4) < 1e-9);
+  assert.ok(Math.abs(kt({ kl: ZK_SCHLURFER }, true) - 7) < 1e-9 && Math.abs(kt({ kl: ZK_SCHLURFER }, false) - 2.4) < 1e-9);
+  // eigener Regler „Schlurfer jagt“: Vorgabe 7 km/h, ohne harte Grenzen, aber nie schneller als „Zombie jagt“
+  const v = vorgaben(); assert.equal(v.tempoSchlurferJagen, 7);
+  assert.equal(bereinige({ tempoSchlurferJagen: 12 }, v).tempoSchlurferJagen, 12, 'empfohlene Spanne ist keine Grenze');
+  const w = {}; tempoWerteSetzen(w, { jagen: 15, wandern: 4, schlurfer: 9 }); assert.ok(Math.abs(w.zombieTempoSchlurfer - 20) < 1e-9);
+  const alt = { ...W }; try {
+    tempoWerteSetzen(W, { jagen: 6, wandern: 4, schlurfer: 9 });
+    assert.ok(Math.abs(kt({ kl: ZK_SCHLURFER }, true) - 6) < 1e-9, 'Schlurfer höchstens so schnell wie „Zombie jagt“');
+  } finally { Object.assign(W, alt); }
   assert.ok(Math.abs(kt({ kl: ZK_LAEUFER }, true) - 15) < 1e-9);
   assert.ok(kt({ kriecht: true, kl: ZK_LAEUFER }, true) <= 1, 'angeschossener Läufer robbt nur noch');
   const z = vorgaben().zombies;
