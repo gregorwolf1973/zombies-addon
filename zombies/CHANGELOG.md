@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.89.2 – 24.11.2026
+
+- Autos lenken ruhiger: 60 °/s statt 110 °/s, bei hohem Tempo noch weicher. Neuer Backend-Wert „Lenkung“ unter „🔑 Autos fahren“.
+
 ## 0.89.1 – 24.11.2026
 
 - Superuser-Testmenü: Brechstange und Autoschlüssel per Knopf direkt in den Rucksack.

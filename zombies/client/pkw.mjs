@@ -19,6 +19,7 @@ export const pkwBehaelterId = id => (String(id).startsWith('pkw_') ? String(id).
 // Backend-Werte (Einstellung `auto`, server/einstellungen.mjs) – Vorgaben, wenn die Einstellung fehlt
 export const PKW_VORGABE = {
   tempo: 80,               // Höchsttempo in km/h
+  lenkung: 60,             // Lenkung in Grad je Sekunde (bei mittlerem Tempo; im Stand und bei Höchsttempo langsamer)
   leben: 100,              // Lebenspunkte des Autos
   plaetze: 4,              // Sitzplätze (Fahrer + Mitfahrer)
   crashAb: 20,             // km/h: ab hier kostet ein Aufprall Lebensenergie

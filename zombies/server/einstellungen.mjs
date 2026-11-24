@@ -223,6 +223,7 @@ export function bereinigeAuto(au = {}) {
   const V = PKW_VORGABE;
   return {
     tempo: Math.round(zahl(au.tempo, 10, 160, V.tempo, { max: 300 })),                  // Höchsttempo in km/h
+    lenkung: Math.round(zahl(au.lenkung, 20, 120, V.lenkung, { min: 5, max: 360 })),   // Lenkung in Grad je Sekunde
     leben: Math.round(zahl(au.leben, 10, 1000, V.leben, { min: 1 })),       // Lebenspunkte des Autos
     plaetze: Math.round(zahl(au.plaetze, 1, 9, V.plaetze, { min: 1, max: 20 })),     // Sitzplätze (Fahrer + Mitfahrer, auch Bots)
     crashAb: Math.round(zahl(au.crashAb, 0, 79, V.crashAb)),                // km/h: ab hier kostet ein Aufprall Lebensenergie

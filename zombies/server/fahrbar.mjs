@@ -190,7 +190,8 @@ export class Fahrbar {
       const hx = Math.cos(f.richtung), hy = Math.sin(f.richtung), ux = e.dx / roh, uy = e.dy / roh;
       const rueck = this.rueck = rueckwaerts(hx * ux + hy * uy, this.v);
       const ziel = rueck ? Math.atan2(-uy, -ux) : Math.atan2(uy, ux), d = winkelDiff(f.richtung, ziel), c = Math.cos(d);
-      const rate = fw.drehrateStand + (fw.drehrate - fw.drehrateStand) * Math.min(1, Math.abs(this.v) / (VM * 0.3));
+      let rate = fw.drehrateStand + (fw.drehrate - fw.drehrateStand) * Math.min(1, Math.abs(this.v) / (VM * 0.3));
+      if (fw.drehrateVmax !== undefined) { const t = Math.max(0, Math.min(1, (Math.abs(this.v) / VM - 0.5) / 0.5)); rate += (fw.drehrateVmax - rate) * t; }   // Autos: bei hohem Tempo weicher lenken
       const schritt = Math.max(-rate * dt, Math.min(rate * dt, d));
       const w = f.richtung + schritt;
       this.drehBlock = false;

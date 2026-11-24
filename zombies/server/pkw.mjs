@@ -30,6 +30,9 @@ const PUNKTE = (() => {                  // Rumpfpunkte (längs × quer) im Fahr
   return p;
 })();
 
+// Lenkung aus der Einstellung (Grad/s) in rad/s; ungültig → Vorgabe
+const lenkRad = g => (Number.isFinite(Number(g)) && Number(g) > 0 ? Number(g) : PKW_VORGABE.lenkung) * Math.PI / 180;
+
 export class FahrbarPkw extends Fahrbar {
   constructor(raum, bid) {
     super(raum, 'boxer', { id: PKW_ID(bid) });
@@ -47,7 +50,7 @@ export class FahrbarPkw extends Fahrbar {
   plaetze() { return Math.max(1, Math.round(Number(this.einstAuto().plaetze) || PKW_VORGABE.plaetze)); }
   fahrwerk() {
     const kmh = Number(this.einstAuto().tempo);
-    return { ...FAHRWERK, beschleunigung: 6 * PX, bremse: 12 * PX, drehrate: 1.9, drehrateStand: 0.7, rueckwaerts: RUECK_ANTEIL, vmax: kmhZuPx(Number.isFinite(kmh) && kmh > 0 ? kmh : PKW_VORGABE.tempo) };
+    return { ...FAHRWERK, beschleunigung: 6 * PX, bremse: 12 * PX, drehrate: lenkRad(this.einstAuto().lenkung), drehrateStand: lenkRad(this.einstAuto().lenkung) * 0.4, drehrateVmax: lenkRad(this.einstAuto().lenkung) * 0.55, rueckwaerts: RUECK_ANTEIL, vmax: kmhZuPx(Number.isFinite(kmh) && kmh > 0 ? kmh : PKW_VORGABE.tempo) };
   }
   // Fahrer ist der erste Mensch mit Autoschlüssel; ohne ihn rollt das Auto aus
   get fahrer() {
