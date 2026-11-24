@@ -8,6 +8,7 @@ import { FAHRBAR, FAHRBAR_EINSTIEG, FAHRBAR_PLAETZE, fahrbarNah } from '../clien
 import { Fahrzeug } from './verkehr.mjs';
 import { Leopard, leopardEinst, turmDrehen, winkelDiff } from './leopard.mjs';
 import { ueberrolleZombies, UEBERROLLEN_PAUSE } from './ueberrollen.mjs';
+import { stammBei, rueckwaerts, RUECK_ANTEIL } from '../client/walze.mjs';
 
 export const PX = 8;                             // Pixel je Meter
 export { FAHRBAR_PLAETZE };
@@ -18,7 +19,7 @@ export const FAHRWERK = {
   bremse: 14 * PX,                               // px/s² (ohne Eingabe)
   drehrate: 1.3,                                 // rad/s bei Fahrt
   drehrateStand: 0.6,                            // rad/s im Stand
-  rueckwaerts: 0.35,                             // Rückwärtsgang: Anteil des Höchsttempos
+  rueckwaerts: RUECK_ANTEIL,                     // Rückwärtsgang: Anteil des Höchsttempos (1/3, client/walze.mjs)
   schrittPx: 2,                                  // Teilschritt der Kollisionsprüfung (px): bei 60 km/h (133 px/s) nie durch Zäune/Wände
 };
 export const ART = {
@@ -40,7 +41,10 @@ const PUNKTE = Object.fromEntries(Object.keys(FAHRBAR).map(a => [a, punkteVon(a)
 // Wanne der Art an Pose (x, y, w) frei? (Welt `welt`, Punkte mit KOLL_R Spielraum)
 export function fahrbarFrei(welt, art, x, y, w) {
   const c = Math.cos(w), s = Math.sin(w);
-  for (const [u, v] of PUNKTE[art]) if (!frei(welt, x + c * u - s * v, y + s * u + c * v, KOLL_R)) return false;
+  for (const [u, v] of PUNKTE[art]) {
+    const px = x + c * u - s * v, py = y + s * u + c * v;
+    if (!frei(welt, px, py, KOLL_R) || stammBei(welt, px, py, 1)) return false;   // Wände, Zäune, Baumstämme (der Leopard walzt kleine Bäume vorher um, server/walze.mjs)
+  }
   return true;
 }
 
@@ -160,6 +164,7 @@ export class Fahrbar {
     const fahrer = this.fahrer;
     const e = fahrer && this.letzteEingabe ? this.letzteEingabe : { dx: 0, dy: 0 };
     if (!fahrer) this.letzteEingabe = { dx: 0, dy: 0 };
+    this.ueberAuto = r.walze?.autoFaktor(this) ?? 1;   // Puma/Boxer über geparkten Autos langsamer (server/walze.mjs)
     this.fahren(e, dt);
     for (const sid of this.insassen) { const p = s.spieler.get(sid); if (p) { p.x = f.x; p.y = f.y; p.richtung = f.richtung; } }
     f.haelt = Math.abs(this.v) < 1;
@@ -173,31 +178,42 @@ export class Fahrbar {
     this.hordeSchritt?.(dt);
   }
 
-  // Lenken wie bei der Figur: Eingabe {dx, dy} gibt die Wunschrichtung; das Fahrzeug dreht mit begrenzter Rate dorthin und fährt vorwärts
+  // Lenken wie bei der Figur: Eingabe {dx, dy} gibt die Wunschrichtung; das Fahrzeug dreht mit begrenzter Rate dorthin und fährt vorwärts.
+  // Liegt die Wunschrichtung mehr als ~135° hinter der Achse (Skalarprodukt, client/walze.mjs rueckwaerts), fährt es rückwärts (höchstens 1/3 Tempo)
+  // und lenkt wie im Rückwärtsgang: das Heck dreht zur Wunschrichtung. Zäune/Hecken/Bäume/Autos unter der Wanne: server/walze.mjs (raum.walze).
   fahren(e, dt) {
-    const f = this.f, welt = this.raum.welt, fw = this.fahrwerk(), VM = fw.vmax;
-    const len = Math.min(1, Math.hypot(e.dx, e.dy));
+    const f = this.f, welt = this.raum.welt, fw = this.fahrwerk(), VM = fw.vmax * (this.ueberAuto ?? 1);
+    const roh = Math.hypot(e.dx, e.dy), len = Math.min(1, roh);
     let soll = 0;
+    this.rueck = false;
     if (len > 0.1) {
-      const ziel = Math.atan2(e.dy, e.dx), d = winkelDiff(f.richtung, ziel), c = Math.cos(d);
+      const hx = Math.cos(f.richtung), hy = Math.sin(f.richtung), ux = e.dx / roh, uy = e.dy / roh;
+      const rueck = this.rueck = rueckwaerts(hx * ux + hy * uy, this.v);
+      const ziel = rueck ? Math.atan2(-uy, -ux) : Math.atan2(uy, ux), d = winkelDiff(f.richtung, ziel), c = Math.cos(d);
       const rate = fw.drehrateStand + (fw.drehrate - fw.drehrateStand) * Math.min(1, Math.abs(this.v) / (VM * 0.3));
       const schritt = Math.max(-rate * dt, Math.min(rate * dt, d));
       const w = f.richtung + schritt;
       this.drehBlock = false;
       if (Math.abs(schritt) > 1e-6) {
+        this.raum.walze?.walzen(this, f.x, f.y, w);
         if (this.frei(welt, f.x, f.y, w)) f.richtung = w; else this.drehBlock = true;
       }
-      soll = c > 0 ? VM * len * c * c : 0;   // quer zur Wunschrichtung: langsam, entgegengesetzt: Stand
-      if (this.drehBlock && c < 0.2) soll = -VM * fw.rueckwaerts * len;   // festgefahren: rückwärts freisetzen
+      if (rueck) soll = c > 0 ? -VM * fw.rueckwaerts * len * c * c : 0;
+      else {
+        soll = c > 0 ? VM * len * c * c : 0;   // quer zur Wunschrichtung: langsam
+        if (this.drehBlock && c < 0.2) soll = -VM * fw.rueckwaerts * len;   // festgefahren: rückwärts freisetzen
+      }
     }
     // Beschleunigen / Bremsen
-    if (soll > this.v) this.v = Math.min(soll, this.v + fw.beschleunigung * dt);
+    if (soll > this.v) this.v = Math.min(soll, this.v + (this.v < 0 ? fw.bremse : fw.beschleunigung) * dt);
     else this.v = Math.max(soll, this.v - (this.v > 0 ? fw.bremse : fw.beschleunigung) * dt);
     if (Math.abs(this.v) < 0.5 && soll === 0) this.v = 0;
+    this.v = Math.max(-VM * fw.rueckwaerts, Math.min(VM, this.v));   // über einem geparkten Auto sofort langsam (Puma 40 %, Boxer 30 %)
     // Vorrücken in kleinen Teilschritten; Hindernis: stehen bleiben
     const weg = this.v * dt, n = Math.max(1, Math.ceil(Math.abs(weg) / fw.schrittPx));
     for (let i = 0; i < n; i++) {
       const nx = f.x + Math.cos(f.richtung) * weg / n, ny = f.y + Math.sin(f.richtung) * weg / n;
+      this.raum.walze?.walzen(this, nx, ny, f.richtung);
       if (!this.frei(welt, nx, ny, f.richtung)) { this.v = 0; break; }
       f.x = nx; f.y = ny;
     }
@@ -355,7 +371,7 @@ export class Fahrbare {
   }
   pose(art, x, y, w) {
     if (!fahrbarFrei(this.raum.welt, art, x, y, w)) return false;
-    for (const b of this.alle()) if (Math.hypot(b.f.x - x, b.f.y - y) < (FAHRBAR[b.art].laenge + FAHRBAR[art].laenge) / 2 * 0.8) return false;   // nicht in ein anderes Fahrzeug
+    for (const b of this.alle()) if (Math.hypot(b.f.x - x, b.f.y - y) < ((b.m?.laenge ?? 36) + FAHRBAR[art].laenge) / 2 * 0.8) return false;   // nicht in ein anderes Fahrzeug (auch Autos, server/pkw.mjs)
     return true;
   }
 

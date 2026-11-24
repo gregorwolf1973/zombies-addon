@@ -47,3 +47,9 @@ export function feldZielpunkt(welt, kx, ky) {
   if (!welt.fein || welt.kachel || welt.ebene) return { x: (kx + 0.5) * KACHEL, y: (ky + 0.5) * KACHEL };
   return feinZiel(welt, kx, ky) ?? { x: (kx + 0.5) * KACHEL, y: (ky + 0.5) * KACHEL };
 }
+
+// Kachel neu prüfen lassen (z. B. nachdem ein Panzer dort einen Zaun plattgewalzt hat, server/walze.mjs)
+export function feinZielVergessen(welt, kx, ky) {
+  const c = cache.get(welt);
+  if (c && kx >= 0 && ky >= 0 && kx < BREITE && ky < HOEHE) c.z[ky * BREITE + kx] = 0;
+}

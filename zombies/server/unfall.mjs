@@ -3,6 +3,7 @@
 // Einstellungen (Verwaltung → Verkehr): unfall (Spielminuten im Mittel, 0 = aus), unfallExplosion (%), unfallSchaden (Lebenspunkte Spieler).
 import { frei } from '../client/welt.mjs';
 import { LAENGE } from './verkehr.mjs';
+import { unfallSzene } from './unfallszene.mjs';
 
 const METER = 8;                              // Pixel je Meter (client/hordenlogik.mjs)
 export const UNFALL_RADIUS = 4 * METER + 14;  // Explosion: 4 m um das Wrack (plus halbe Fahrzeugbreite)
@@ -137,6 +138,7 @@ export class Unfaelle {
     this.raum.laerm(f.x, f.y, 650, true, '');
     this.melden(f.x, f.y, '💥 Unfall!');
     this.liste.set(id, { phase: 'rauch', t: 0, rauchBis: 10 + this.raum.rnd() * 10 });
+    unfallSzene(this.raum, f);   // manchmal: Tür auf, ein Mensch flieht, ein Zombie verfolgt ihn (server/unfallszene.mjs)
   }
 
   melden(x, y, text) {

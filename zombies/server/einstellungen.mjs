@@ -11,6 +11,7 @@ import { SICHT_VORGABE, bereinigeSicht } from '../client/zombiesicht.mjs';
 import { zfFigurenEinst } from '../client/zombiefiguren.mjs';
 import { hfFigurenEinst } from '../client/heldenfiguren.mjs';
 import { zahl, fest } from '../client/zahl.mjs';
+import { PKW_VORGABE } from '../client/pkw.mjs';
 import { LEVEL_KATALOG, bereinigeFolge, folgeVorgabe } from '../client/levelkatalog.mjs';
 
 // Vorlage: im Backend eingestellte Werte, die als Vorgabe übernommen wurden (Stand 22.11.2026) – überschreibt die Grundwerte unten.
@@ -103,6 +104,7 @@ export const EREIGNISSE = [
   { id: 'explosion', name: 'Explosion', beschreibung: 'Granate, Unfall, Fahrzeug; ohne Zuordnung dient die Schrotflinten-Datei bzw. ein tiefer Knall; Regler bis 200 %', art: 'einmal', gruppe: 'waffen', kategorien: ['waffen', 'umgebung'], lautVorgabe: 100, lautMax: 200 },
   { id: 'tuerAuf', name: 'Tür geht auf', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
   { id: 'tuerZu', name: 'Tür fällt zu', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
+  { id: 'autoMotor', name: 'Auto: Motor (selbst gefahren)', beschreibung: 'Motorgeräusch eines Autos, das ein Spieler mit dem Autoschlüssel fährt (Schleife, die Tonhöhe folgt dem Tempo); ohne Datei bleibt es still', art: 'schleife', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
   { id: 'autoVorbei', name: 'Auto fährt vorbei', beschreibung: 'Wenn ein fahrendes Auto oder der Bus dicht vorbeifährt', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
   ...[1, 2, 3, 4, 5].map(n => ({ id: 'durchsageLevel' + n, name: `Radio-Durchsage Level ${n}`, beschreibung: 'Nachrichtensprecher im Live-Radio (Zombie-Eilmeldung mit Ortsname); unterbricht den Sender, kommt aus dem Autoradio', art: 'einmal', gruppe: 'musik', kategorien: ['musik'], lautVorgabe: 100 })),
   { id: 'autoradio', name: 'Autoradio', beschreibung: 'Läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
@@ -216,6 +218,24 @@ function bereinigeLevel(neu, alt) {
   })));
 }
 
+// Autos mit Autoschlüssel (server/pkw.mjs, Vorgaben PKW_VORGABE in client/pkw.mjs): Werte frei, die Grenzen sind nur Empfehlung (außer Prozentchancen)
+export function bereinigeAuto(au = {}) {
+  const V = PKW_VORGABE;
+  return {
+    tempo: Math.round(zahl(au.tempo, 10, 160, V.tempo, { max: 300 })),                  // Höchsttempo in km/h
+    leben: Math.round(zahl(au.leben, 10, 1000, V.leben, { min: 1 })),       // Lebenspunkte des Autos
+    plaetze: Math.round(zahl(au.plaetze, 1, 9, V.plaetze, { min: 1, max: 20 })),     // Sitzplätze (Fahrer + Mitfahrer, auch Bots)
+    crashAb: Math.round(zahl(au.crashAb, 0, 79, V.crashAb)),                // km/h: ab hier kostet ein Aufprall Lebensenergie
+    crashSchaden: Math.round(fest(au.crashSchaden, 0, 100, V.crashSchaden)),   // % Lebensenergie für alle Insassen bei 80 km/h (linear ab crashAb)
+    crashAuto: Math.round(zahl(au.crashAuto, 0, 1000, V.crashAuto)),         // Lebenspunkte des Autos bei einem Aufprall mit 80 km/h
+    zombieTotKmh: Math.round(zahl(au.zombieTotKmh, 1, 160, V.zombieTotKmh)),   // km/h: ab hier stirbt ein überfahrener Zombie sofort
+    zombieSchaden: Math.round(zahl(au.zombieSchaden, 0, 100, V.zombieSchaden) * 10) / 10,   // Lebenspunkte des Autos je überfahrenem Zombie
+    schluesselMoebel: Math.round(fest(au.schluesselMoebel, 0, 100, V.schluesselMoebel) * 10) / 10,         // % Autoschlüssel je gefülltem Schrank/Spind/Aktenschrank/Werkbank (nur Möbel mit Inhalt, siehe beute.moebel)
+    schluesselKofferraum: Math.round(fest(au.schluesselKofferraum, 0, 100, V.schluesselKofferraum) * 10) / 10,   // % je Kofferraum
+    schluesselLeiche: Math.round(fest(au.schluesselLeiche, 0, 100, V.schluesselLeiche) * 10) / 10,         // % je toter Zombie
+  };
+}
+
 // aus beliebiger Eingabe gültige Einstellungen machen (unbekannte Felder fallen weg)
 export function bereinige(e = {}, alt = {}) {
   e = migriereZombies(e ?? {});
@@ -280,6 +300,8 @@ export function bereinige(e = {}, alt = {}) {
     fahrzeugStoss: Math.round(zahl(e.fahrzeugStoss ?? a.fahrzeugStoss, 0, 100, 15)),         // größter Schaden (Lebenspunkte) beim Stoß eines fahrenden Fahrzeugs gegen einen Helden (nie tödlich, Tempo-abhängig, 0 = kein Schaden)
     geraeuschPause: zahl(e.geraeuschPause ?? a.geraeuschPause, 0, 30, 5, { max: 600 }),   // Mindestpause (s) zwischen zwei Zombie-Hintergrundgeräuschen (Stöhnen/Grunzen), empfohlen 0–30
     unfallSchaden: Math.round(zahl(e.unfallSchaden ?? a.unfallSchaden, 0, 100, 30)),         // Lebenspunkte Schaden für Spieler in der Explosion (in der Mitte, am Rand halb)
+    unfallTuer: Math.round(fest(e.unfallTuer ?? a.unfallTuer, 0, 100, 60)),   // % der Verkehrsunfälle mit Unfallszene: Tür geht auf, ein Mensch flieht, ein Zombie verfolgt ihn (server/unfallszene.mjs)
+    auto: bereinigeAuto({ ...a.auto, ...(e.auto ?? {}) }),   // Autos mit Autoschlüssel fahren (server/pkw.mjs)
     blaulicht: ['aus', 'selten', 'normal'].includes(e.blaulicht) ? e.blaulicht : (['aus', 'selten', 'normal'].includes(a.blaulicht) ? a.blaulicht : 'selten'),   // Polizei/Feuerwehr-Durchfahrten
     schwierigkeit: SCHWIERIGKEITEN.includes(e.schwierigkeit) ? e.schwierigkeit : SCHWIERIGKEITEN.includes(a.schwierigkeit) ? a.schwierigkeit : 'normal',   // Regler leicht/normal/schwer (×0,75/1/1,3, siehe schwierigkeit.mjs)
     zombieFigurenNeu: typeof e.zombieFigurenNeu === 'boolean' ? e.zombieFigurenNeu : a.zombieFigurenNeu !== false,   // neue Zombie-Figuren (Mixamo, client/zombiefiguren.mjs); aus = alte Bilder; Vorgabe an
@@ -406,7 +428,7 @@ export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
 
 export function grundwerte() {
   return {
-    superuserHash: '', zugangscode: '', karte: 'level1', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, fahrzeugStoss: 15, geraeuschPause: 5, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, zombieFigurenNeu: true, heldenFigurenNeu: true, innenMassstab: false, innenTempo: 35, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', karte: 'level1', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, fahrzeugStoss: 15, geraeuschPause: 5, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, zombieFigurenNeu: true, heldenFigurenNeu: true, innenMassstab: false, innenTempo: 35, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, unfallTuer: 60, auto: { ...PKW_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     helden: { figuren: hfFigurenEinst() }, zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, figuren: zfFigurenEinst(), typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },

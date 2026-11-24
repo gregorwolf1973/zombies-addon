@@ -106,7 +106,7 @@ function echtIndex(welt) {
 }
 export function echtGr(b) { return Math.max(16, Math.min(240, b.d * 8)); }
 // Deckt eine echte Krone die Mitte der Kachel kx,ky (Kachel liegt im ausgewerteten Fenster)?
-function echtDeckt(welt, kx, ky) {
+export function echtDeckt(welt, kx, ky) {
   const x = (kx + 0.5) * KACHEL, y = (ky + 0.5) * KACHEL;
   if (!imGebiet(welt.baeumeFenster, x, y)) return false;
   const m = echtIndex(welt), cx = Math.floor(x / ECHT_ZELLE), cy = Math.floor(y / ECHT_ZELLE);
@@ -128,11 +128,12 @@ export function baumKronen(welt, rect) {
   for (let ky = Math.max(0, rect.y0 - BAUM_RAND); ky < Math.min(HOEHE, rect.y1 + BAUM_RAND); ky++) for (let kx = Math.max(0, rect.x0 - BAUM_RAND); kx < Math.min(BREITE, rect.x1 + BAUM_RAND); kx++) {
     if (welt.hole(kx, ky) !== T.BAUM) continue;
     if (echt && echtDeckt(welt, kx, ky)) continue;
+    if (welt.baeumeWeg?.has('k' + kx + ',' + ky)) continue;   // vom Leopard umgewalzt (client/walze.mjs)
     if (((kx + ky) & 1) === 0 || (welt.hole(kx - 1, ky) !== T.BAUM && welt.hole(kx + 1, ky) !== T.BAUM && welt.hole(kx, ky - 1) !== T.BAUM && welt.hole(kx, ky + 1) !== T.BAUM)) l.push(baumVon(kx, ky, baumGruppe(welt, kx, ky)));
   }
   if (echt) {
     const x0 = (rect.x0 - BAUM_RAND) * KACHEL, y0 = (rect.y0 - BAUM_RAND) * KACHEL, x1 = (rect.x1 + BAUM_RAND) * KACHEL, y1 = (rect.y1 + BAUM_RAND) * KACHEL;
-    for (const b of welt.baeumeEcht) { const r = echtGr(b) / 2; if (b.x + r >= x0 && b.x - r <= x1 && b.y + r >= y0 && b.y - r <= y1) l.push(echtKrone(b)); }
+    for (const b of welt.baeumeEcht) { const r = echtGr(b) / 2; if (b.x + r >= x0 && b.x - r <= x1 && b.y + r >= y0 && b.y - r <= y1 && !welt.baeumeWeg?.has('e' + Math.round(b.x) + ',' + Math.round(b.y))) l.push(echtKrone(b)); }
   }
   return l;
 }
@@ -369,7 +370,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
   ['#fff59d', '#f8bbd0', '#ffffff', '#ce93d8'].forEach((f, i) => { ctx.fillStyle = f; ctx.fill(blumen[i]); });
   if (vek && !foto) zeichneWasser(ctx, welt, { x0, y0, x1, y1 });
   if (vek && !foto) zeichneStrassen(ctx, welt, { x0, y0, x1, y1 });
-  if (welt.details?.zaeune) zaunLinien(ctx, welt, { x0, y0, x1, y1 });
+  if (welt.details?.zaeune) zaeuneMitLuecken(ctx, welt, { x0, y0, x1, y1 });   // plattgewalzte Stücke (client/walze.mjs) bleiben ausgespart
   zeichneKollisionsSockel(ctx, welt, { x0, y0, x1, y1 }, foto);
   if (welt.details) gartenObjekte(ctx, welt, { x0, y0, x1, y1 }, false);
   zeichneMuell(ctx, welt, { x0, y0, x1, y1 });
@@ -380,6 +381,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
     if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
+    if (welt.autosWeg?.has(b.id)) continue;   // mit Autoschlüssel weggefahren (client/pkw.mjs)
     autoVonOben(ctx, b);
   }
   ctx.restore();
@@ -695,6 +697,21 @@ function zeichneKollisionsSockel(ctx, welt, rect, foto) {
       ctx.fillStyle = 'rgba(161,136,127,.55)'; ctx.fillRect(kx * K, ky * K + K / 2 - 1.5, K, 3);
     }
   }
+}
+
+// Zäune zeichnen; plattgewalzte Zaunfelder (welt.zaunPlatt, Feinindizes, client/walze.mjs) bleiben ausgespart: die Zäune kommen dann
+// erst auf ein eigenes Bild, aus dem die Felder (mit 3 px Rand) gelöscht werden.
+function zaeuneMitLuecken(ctx, welt, rect) {
+  const z = welt.zaunPlatt, K = KACHEL, fb = BREITE * 4, fp = K / 4;
+  const x0 = rect.x0 * K - 48, y0 = rect.y0 * K - 48, x1 = rect.x1 * K + 48, y1 = rect.y1 * K + 48, felder = [];
+  for (const i of z ?? []) { const fx = i % fb, fy = (i - fx) / fb, px = fx * fp, py = fy * fp; if (px >= x0 && px <= x1 && py >= y0 && py <= y1) felder.push([px, py]); }
+  if (!felder.length || typeof OffscreenCanvas === 'undefined') { zaunLinien(ctx, welt, rect); return; }
+  const c2 = new OffscreenCanvas(ctx.canvas.width, ctx.canvas.height), g = c2.getContext('2d');
+  g.setTransform(ctx.getTransform());
+  zaunLinien(g, welt, rect);
+  g.globalCompositeOperation = 'destination-out';
+  for (const [px, py] of felder) g.fillRect(px - 3, py - 3, fp + 6, fp + 6);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c2, 0, 0); ctx.restore();
 }
 
 function zaunLinien(ctx, welt, rect) {

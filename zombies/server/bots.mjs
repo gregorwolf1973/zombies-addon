@@ -40,7 +40,7 @@ export const WAFFEN_RANG = ['messer', 'schlaeger', 'pistole', 'sense', 'schrotfl
 
 // so viele Stück eines Dings will ein Bot höchstens tragen (Waffen: die getragene zählt mit); der Rest fliegt raus
 export const GRENZE = { wasser: 3, essen: 3, schokoriegel: 3, verband: 3, spritze: 2, bretter: 3, munition: 4, schluessel: 1, brechstange: 1, seil: 1,
-  taschenlampe: 2, kleidung: 1, tasche: 0, trekking: 0,
+  taschenlampe: 2, kleidung: 1, tasche: 0, trekking: 0, autoschluessel: 1,
   granate: 2 };   // Bots werfen keine Granaten – nur zwei behalten, damit sie nicht horten
 const grenze = d => GRENZE[d] ?? (WAFFEN[d] ? 1 : 2);
 const anzahl = (p, d) => zaehle(p.rucksack, d) + (p.waffe === d ? 1 : 0);

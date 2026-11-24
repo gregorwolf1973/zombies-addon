@@ -430,6 +430,7 @@ export const DINGE = {
   munition: { name: 'Munition', zeichen: '🧰' },
   spritze: { name: 'Rettungsspritze', zeichen: '💉' },
   schluessel: { name: 'Schlüsselbund', zeichen: '🔑' },
+  autoschluessel: { name: 'Autoschlüssel', zeichen: '🔑' },   // passt in jedes geparkte Auto (client/pkw.mjs, server/pkw.mjs); bleibt nach dem Fahren im Rucksack
   brechstange: { name: 'Brechstange', zeichen: '⚒️' },
   messer: { name: 'Messer', zeichen: '🔪', waffe: true },
   schrotflinte: { name: 'Schrotflinte', zeichen: '💥', waffe: true },
