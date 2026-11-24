@@ -169,22 +169,22 @@ test('Handgranate als Waffe: Magazin 5, Vorrat; kein Auto-Schuss; Wurf auf den Z
   } finally { await c.leave(); }
 });
 
-test('Granatwerfer: Auto-Schuss mit Reichweite aus der Einstellung (60 m Vorgabe), Projektil ~4× schneller als ein Wurf', async () => {
+test('Granatwerfer: Auto-Schuss mit Reichweite aus der Einstellung (25 m Vorgabe), Projektil ~4× schneller als ein Wurf', async () => {
   const { c, raum, p } = await spieler('Granatwerfer');
   const vorher = raum.constructor.einstellungen;
   try {
-    assert.equal(WAFFEN.granatwerfer.reichweite, 480); assert.equal(vorher.reichweite.granatwerfer, 60);
+    assert.equal(WAFFEN.granatwerfer.reichweite, 200); assert.equal(vorher.reichweite.granatwerfer, 25);
     const fluege = []; c.onMessage('granate', m => fluege.push(m));
     p.waffe = 'granatwerfer'; p.granaten = 6;
     assert.ok(await bis(() => p.magazin === 1));
-    // Reichweite 20 m = 160 px: Zombie in 300 px bleibt unbehelligt
-    raum.constructor.einstellungen = { ...vorher, reichweite: { ...vorher.reichweite, granatwerfer: 20 } };
-    const id = zombieIn(raum, p, 300);
+    // Reichweite 10 m = 80 px: Zombie in 190 px bleibt unbehelligt
+    raum.constructor.einstellungen = { ...vorher, reichweite: { ...vorher.reichweite, granatwerfer: 10 } };
+    const id = zombieIn(raum, p, 190);
     await warte(800);
     assert.equal(fluege.length, 0, 'schießt über die eingestellte Reichweite');
-    // 60 m (Vorgabe): Schuss, schneller Flug
+    // 25 m (Vorgabe): Schuss, schneller Flug
     raum.constructor.einstellungen = vorher;
-    assert.ok(await bis(() => fluege.length > 0, 2500), 'kein Schuss bei 60 m');
+    assert.ok(await bis(() => fluege.length > 0, 2500), 'kein Schuss bei 25 m');
     const f = fluege[0], strecke = Math.hypot(f.x2 - f.x1, f.y2 - f.y1);
     assert.equal(f.werfer, true);
     assert.ok(f.flug <= strecke / GRANATE.tempo / 3, `Flug ${f.flug} s für ${Math.round(strecke)} px`);

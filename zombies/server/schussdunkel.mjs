@@ -48,6 +48,7 @@ export function lichtquellen(state, ebene = '') {
   for (const [, p] of state.spieler) {
     if ((p.ebene ?? '') !== '') continue;
     if (p.imBoxer) fahrer.push(p);
+    else if (p.anBord) continue;   // Evakuierungsfahrzeug: Lampe zählt nicht
     else if (p.lampe > 0 && !(p.zombie > 0) && !p.unten) lampen.push({ x: p.x, y: p.y, richtung: p.richtung ?? 0 });
   }
   for (const [, f] of state.fahrzeuge) {

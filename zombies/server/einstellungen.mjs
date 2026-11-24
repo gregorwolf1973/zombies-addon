@@ -30,7 +30,7 @@ export const BISS_LEVEL_VORGABE = { geretsried: 12, isarauen: 12, koenigsdorf: 1
 export const EVAK_ARTEN = ['bus', 'panzer', 'flugzeug', 'absturz', 'heli', 'bunker'];   // Evakuierungsarten (server/aufgaben.mjs); '' in den Einstellungen = je Karte
 export const SCHWIERIGKEITEN = ['leicht', 'normal', 'schwer'];
 export const ZEITRAFFER = [1, 5, 10, 60];
-export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20, mp: 30, mg: 45, armbrust: 25, scharfschuetze: 75, granatwerfer: 60, handgranate: 25 };   // Meter
+export const REICHWEITE_VORGABE = { pistole: 29, gewehr: 52, schrotflinte: 20, mp: 30, mg: 45, armbrust: 25, scharfschuetze: 75, granatwerfer: 25, handgranate: 25 };   // Meter
 // Zombietypen (Reihenfolge = Nummer der Variante, siehe ZOMBIE_TYPEN im Client)
 export const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 'z7',
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // ab 'kaminkehrer': Gemini-Bogen figuren3
@@ -414,7 +414,7 @@ export function bereinige(e = {}, alt = {}) {
     },
     hund: {
       ablenkung: Math.round(fest(e.hund?.ablenkung ?? a.hund?.ablenkung, 0, 100, HUND.ablenkung)),
-      streuner: Math.round(zahl(e.hund?.streuner ?? a.hund?.streuner, -1, 20, HUND.streuner, { max: 200 })),   // Streuner-Hunde: -1 = automatisch (1 je 0,5 km²), 0 = keine, 1–20 fest
+      streuner: Math.round(zahl(e.hund?.streuner ?? a.hund?.streuner, -1, 20, HUND.streuner, { max: 200 })),   // Streuner-Hunde je Karte: Vorgabe 2; -1 = automatisch (höchstens 2), 0 = keine, 1–20 fest
     },   // Begleiter-Hund: Wahrscheinlichkeit in %, dass ein Zombie in 25 m ihn statt des Spielers jagt
     funde,
     beute: { moebel: Math.round(fest(e.beute?.moebel ?? a.beute?.moebel, 0, 100, MOEBEL_ANTEIL)) },   // Prozent: echte Grenze 0–100   // % der Möbel/Behälter, die überhaupt etwas enthalten

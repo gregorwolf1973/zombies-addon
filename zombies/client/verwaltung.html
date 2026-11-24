@@ -1181,7 +1181,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <label for="rwDunkel">🌙 Weniger Reichweite bei Nacht und Nebel (außer das Ziel ist beleuchtet: Taschenlampe, Scheinwerfer, Feuer)</label>
   <div class="tn-zeile"><input type="range" id="rwDunkel" min="0" max="80" step="5"><span id="rwDunkelWert">30 %</span></div>
   <label for="rwGranat">💥 Granatwerfer (Bundeswehr, Bogenschuss)</label>
-  <div class="tn-zeile"><input type="range" id="rwGranat" min="5" max="100" step="1"><span id="rwGranatWert">60 m</span></div>
+  <div class="tn-zeile"><input type="range" id="rwGranat" min="5" max="100" step="1"><span id="rwGranatWert">25 m</span></div>
   <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
   <div class="tn-zeile"><input type="range" id="tnPumaPause" min="0.1" max="10" step="0.1"><span id="tnPumaPauseWert">2,5 s</span></div>
   <label for="tnMgMunition">MG-Nest: Munition (0 = unbegrenzt)</label>
@@ -1246,7 +1246,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <p class="tn-leise" id="bwInfoMo"></p>
   <label for="tnHundAblenk">Begleiter-Hund: Wahrscheinlichkeit, dass ein Zombie in 25 m Umkreis ihn statt des Spielers jagt (8–14 s)</label>
   <div class="tn-zeile"><input type="range" id="tnHundAblenk" min="0" max="100" step="5"><span id="tnHundAblenkWert">40 %</span></div>
-  <label for="tnHundStreuner">Streuner-Hunde: Anzahl auf der Karte (automatisch = 1 je 0,5 km², mindestens 1)</label>
+  <label for="tnHundStreuner">Streuner-Hunde: Anzahl auf der Karte (Vorgabe 2; automatisch = höchstens 2)</label>
   <div class="tn-zeile"><input type="range" id="tnHundStreuner" min="-1" max="20" step="1"><span id="tnHundStreunerWert">automatisch</span></div>
   <p class="tn-leise">Gilt für neue Welten. Mindestens ein Streuner streunt 100–300 m vom Startpunkt; die anderen verteilen sich zufällig (mindestens 40 m vom Start). Ein Streuner, der einen Spieler auf 15 m mit freier Sicht sieht, läuft zu ihm und schließt sich bei 2 m an (jeder Spieler höchstens einen). Streuner bellen alle 20–40 s, hörbar auf etwa 35 m.</p>
   <p class="tn-leise" id="bwInfoMg"></p>
@@ -1401,13 +1401,13 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('rwMp', rw.mp || 30, function (v) { return v + ' m'; });
     feld('rwMg', rw.mg || 45, function (v) { return v + ' m'; });
     feld('rwArmbrust', rw.armbrust || 25, function (v) { return v + ' m'; });
-    feld('rwGranat', rw.granatwerfer || 60, function (v) { return v + ' m'; });
+    feld('rwGranat', rw.granatwerfer || 25, function (v) { return v + ' m'; });
     feld('rwHandgranate', rw.handgranate || 25, function (v) { return v + ' m'; });
     feld('rwScharf', rw.scharfschuetze || 75, function (v) { return v + ' m'; });
     feld('rwDunkel', e.schussDunkel === undefined ? 30 : e.schussDunkel, function (v) { return v + ' %'; });
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
-    feld('tnHundStreuner', (e.hund || {}).streuner === undefined ? -1 : e.hund.streuner, streunerText);
+    feld('tnHundStreuner', (e.hund || {}).streuner === undefined ? 2 : e.hund.streuner, streunerText);
     feld('tnHundAblenk', (e.hund || {}).ablenkung === undefined ? 70 : e.hund.ablenkung, function (v) { return v + ' %'; });
     feld('tnBeuteMoebel', (e.beute || {}).moebel === undefined ? 30 : e.beute.moebel, function (v) { return v + ' %'; });
     feld('tnLeoReich', bwe.leopardReichweite === undefined ? 29 : bwe.leopardReichweite, function (v) { return v + ' m'; });

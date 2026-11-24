@@ -22,7 +22,7 @@ import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { weichKreis } from './weichkreis.mjs';
 import { einschlagWerte } from './einschlag.mjs';
-import { pkwLichtPunkte, pkwKegelZeichnen } from './pkwlicht.mjs';
+import { pkwLichtPunkte, pkwKegelZeichnen, lampeAn } from './pkwlicht.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht, BLUT_GROESSE } from './effekte.mjs';
 import { fahrbarNah, FAHRBAR, FAHRBAR_PLAETZE } from './fahrbar.mjs';
 import { istFahrbar, fahrbarBild, fahrbarFahrzeug, fahrbarRueckstoss, pumaFahrbarSchuss } from './fahrbardarstellung.mjs';
@@ -2472,7 +2472,7 @@ class Ort extends Phaser.Scene {
       return;
     }
     // Dunkelheit: mit Taschenlampe ein langer Kegel; ohne nur ein kleiner, schwacher Lichtkreis in Grau
-    const lampe = ich.lampe > 0;
+    const lampe = lampeAn(ich);
     d.clear();
     d.fill(0x030405, lampe ? (w.stock === 'keller' ? 0.94 : 0.88) : 0.965);
     this.fensterLichtZeichnen(d, a, m, 1 - helligkeit(uhr));
@@ -2554,7 +2554,7 @@ class Ort extends Phaser.Scene {
   // Alle leuchtenden Lampen draußen für den Nebel: eigene + Mitspieler/Bots (Winkel wie bei der Nachtdunkelheit)
   lampenListeAussen(ich) {
     const l = [];
-    if (ich?.lampe > 0 && this.lokal) l.push({ x: this.lokal.x, y: this.lokal.y, winkel: this.lampenRichtung(ich) });
+    if (lampeAn(ich) && this.lokal) l.push({ x: this.lokal.x, y: this.lokal.y, winkel: this.lampenRichtung(ich) });
     this.fremdeLampen(null, 0, 0, '', l);
     return l;
   }
@@ -2564,7 +2564,7 @@ class Ort extends Phaser.Scene {
     const v = this.cameras.main.worldView, r = 360, liste = [];
     for (const [id, p] of raum.state.spieler) {
       if (id === meineId) continue;
-      if (!(p.lampe > 0) || (p.ebene ?? '') !== (ebene ?? '') || p.zombie > 0 || p.unten || !p.verbunden) continue;
+      if (!lampeAn(p) || (p.ebene ?? '') !== (ebene ?? '') || p.zombie > 0 || p.unten || !p.verbunden) continue;
       if (p.x < v.x - r || p.x > v.right + r || p.y < v.y - r || p.y > v.bottom + r) continue;
       liste.push([Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y), id, p]);
     }
@@ -2639,7 +2639,7 @@ class Ort extends Phaser.Scene {
     }
     for (const [id, p] of raum.state.spieler) {
       if ((p.ebene ?? '') !== '' || id === meineId) continue;
-      if (sicht(p.x, p.y, 100)) { P.setScale(p.lampe > 0 ? 0.7 : 0.45).setAlpha(0.7); rt.erase(P, p.x - ox, p.y - oy); }
+      if (sicht(p.x, p.y, 100)) { P.setScale(lampeAn(p) ? 0.7 : 0.45).setAlpha(0.7); rt.erase(P, p.x - ox, p.y - oy); }
     }
     this.fremdeLampen(rt, ox, oy, '');
     for (const [id, o] of this.busObj) {   // gefahrene Autos: Scheinwerferkegel (client/pkwlicht.mjs)
@@ -2649,9 +2649,9 @@ class Ort extends Phaser.Scene {
     const fz = this.flug?.zentrum();
     const lx = (fz ? fz.x : this.lokal.x) - ox, ly = (fz ? fz.y : this.lokal.y) - oy;   // Kameraflug: Schein um die Kamera
     // Ring um den Spieler: ohne Taschenlampe wie früher (Bildschirmgröße), mit Lampe nur ein schwacher Schein (~2 m)
-    if (ich.lampe > 0 && !fz) P.setScale(0.125).setAlpha(0.3); else P.setScale(0.4 * AUSSEN_ZOOM_KORREKTUR).setAlpha(0.45);   // ohne Lampe nur ein dunkler, kleiner Schein (früher 0,6 / 0,8)
+    if (lampeAn(ich) && !fz) P.setScale(0.125).setAlpha(0.3); else P.setScale(0.4 * AUSSEN_ZOOM_KORREKTUR).setAlpha(0.45);   // ohne Lampe nur ein dunkler, kleiner Schein (früher 0,6 / 0,8)
     rt.erase(P, lx, ly);
-    if (ich.lampe > 0 && !fz) this.lampeKegel(rt, lx, ly, this.lampenRichtung(ich), false);
+    if (lampeAn(ich) && !fz) this.lampeKegel(rt, lx, ly, this.lampenRichtung(ich), false);
   }
 
   // Von der eigenen Position aus alles erkunden, was ohne geschlossene Tür erreichbar ist; einmal gesehen bleibt sichtbar
@@ -3355,7 +3355,7 @@ class Ort extends Phaser.Scene {
       const P = this.hfPos[hid]?.[cn];
       let wp = sprite && P?.[sprite]?.[i] || null, lp = null;
       if (wp && schuss && gr === 'pistole') { const kick = 5 * Math.max(0, 1 - seitSchuss / 130); wp = [wp[0] - Math.cos(wp[2]) * kick, wp[1] - Math.sin(wp[2]) * kick, wp[2], wp[3]]; }   // Rückstoß
-      if (p.lampe > 0 && !p.unten) lp = gr === 'gewehr' && wp ? hfLampeAmLauf(wp, this.hfWaffen[sprite]) : P?.lampe_l?.[i] || null;
+      if (lampeAn(p) && !p.unten) lp = gr === 'gewehr' && wp ? hfLampeAmLauf(wp, this.hfWaffen[sprite]) : P?.lampe_l?.[i] || null;
       hfWaffeLage = { sprite, pose: wp, lampe: lp };
       f.hfPose = wp;
       f.hf = { fig: hid, gruppe: gr, sprite };
@@ -3378,7 +3378,7 @@ class Ort extends Phaser.Scene {
     }
     else if (held) {
       // Held/Heldin (Gemini): Haltung nach Waffe und Taschenlampe, Stiefel als eigene Ebene
-      const a = aussehenLesen(p.aussehen), gg = a.g === 'f' ? 'w' : 'm', wf = HELD_WAFFE[aktiveWaffe(p)[0]] ?? '', lampe = p.lampe > 0;
+      const a = aussehenLesen(p.aussehen), gg = a.g === 'f' ? 'w' : 'm', wf = HELD_WAFFE[aktiveWaffe(p)[0]] ?? '', lampe = lampeAn(p);
       const haltung = wf ? (lampe && HELD_HALTUNGEN.includes(wf + '_lampe') ? wf + '_lampe' : wf) : (lampe ? 'lampe' : 'leer');
       textur = this.heldenTextur(p.aussehen); bild = Math.max(0, HELD_HALTUNGEN.indexOf(haltung));
       const fb = !geht ? this.heldBild(`held_${gg}_stiefel_stehen`)

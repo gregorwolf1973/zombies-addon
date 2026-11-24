@@ -72,7 +72,7 @@ export class Granaten {
   // explodiert sofort (schaden = Zombieschaden)
   abfeuern(p, sid, zx, zy, schaden = GRANATE.schadenZombie) {
     const r = this.raum, flug = Math.max(0.08, Math.hypot(zx - p.x, zy - p.y) / GRANATE.tempoWerfer);
-    this.liste.push({ x: zx, y: zy, ebene: p.ebene ?? '', t: 0, von: sid, name: p.name, zuender: flug, schaden });
+    this.liste.push({ x: zx, y: zy, ebene: p.ebene ?? '', t: 0, von: sid, name: p.name, zuender: flug, schaden, werfer: true });
     r.broadcast('granate', { x1: p.x, y1: p.y, x2: zx, y2: zy, flug, zeit: flug, ebene: p.ebene ?? '', werfer: true, wer: sid });
   }
 
@@ -95,6 +95,7 @@ export class Granaten {
       r.schaden(id, z, g.schaden ?? GRANATE.schadenZombie, werfer);
     }
     for (const p of r.state.spieler.values()) {
+      if (g.werfer && p === werfer) continue;   // Granatwerfer: der eigene Schütze bleibt unverletzt (Mindestabstand 4,5 m)
       if (p.ebene !== g.ebene || p.unten || Math.hypot(p.x - g.x, p.y - g.y) > R || !sichtfrei(welt, g.x, g.y, p.x, p.y)) continue;
       p.hp = Math.max(0, p.hp - GRANATE.schadenSpieler);
       if (p.hp <= 0 && p.zombie <= 0 && !r.unsterblich?.(p)) r.liegtAmBoden(p);

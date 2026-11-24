@@ -54,7 +54,7 @@ import { feinDurchgang, feldZielpunkt } from './wegfeld.mjs';
 import {
   KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, INNEN_FEIN, setzeInnenFein, setzeInnenTempo, setzeTageszeiten,
-  WAFFEN, GRANATE, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
+  WAFFEN, GRANATE, GRANATWERFER_MINDEST, DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEUTE, MUNITION_PRO_FUND, AKTION_ABSTAND,
   BLOCKIERT, ziehe, LEICHE_MUNITION, LEICHE_MUNITION_MIN, LEICHE_MUNITION_MAX, AUTO_MUNITION, GRANATWERFER_CHANCE, MOEBEL_ANTEIL, MOEBEL_ARTEN, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB, MUNITION_MAX, PFEILE_MAX, PFEILE_PRO_FUND, GRANATEN_MAX, HANDGRANATEN_MAX, GRANATEN_PRO_FUND, vorratVon, vorratFeld, TEMPO_MG, traegtMg, BEUTE_BONUS, setzeKartengroesse, INFEKTION_DAUER, ZOMBIE_ZEIT, LEICHE_SELTEN, LEICHE_OFT, LEICHE_WOHNUNG, ladenArt, LEICHE_DAUER, LEICHEN_MAX, BODEN_DAUER, TAUSCH_ABSTAND, weltFingerabdruck } from '../client/welt.mjs';
 
 export const Spieler = schema({
@@ -2406,7 +2406,7 @@ export class SpielRaum extends Room {
     }
     // Kofferraum: Munition nur mit eigener Wahrscheinlichkeit; Bundeswehr-Container: Granatwerfer mit eigener Wahrscheinlichkeit
     if (art === 'auto' && this.rnd() < AUTO_MUNITION && (f.munition ?? 10) > 0) funde.push('munition');
-    if (art === 'bw_container' && this.rnd() < GRANATWERFER_CHANCE) funde.push('granatwerfer');
+    if (art === 'bw_container' && this.rnd() < GRANATWERFER_CHANCE) funde.push('granatwerfer', 'granate40', 'granate40');   // mit Munition (je 2 Granaten), sonst bliebe der Fund wirkungslos
     if (gefuellt) funde.push(...schluesselFund(this, art === 'auto' ? 'kofferraum' : 'moebel', art));   // Autoschlüssel (Einstellung auto.schluessel*, server/pkw.mjs; Möbel: nur gefüllte)
     funde.push(...(this.aufgaben?.aufgabenFunde(b.id) ?? []));   // Aufgaben-Funde (Spritze, Vorräte, Lampen, Bretter): garantiert, auch in leeren Möbeln
     funde.push(...(this.aufgaben?.missionsFunde(b.id) ?? []));   // Missionsgegenstand dieses Behälters
@@ -3088,7 +3088,13 @@ export class SpielRaum extends Room {
       let ziel = null, zuNah = false;
       if (!feuerAus && !ladet && !wf0.wurf) {
         ziel = this.naechsterZombie(p.x, p.y, Math.min(wf.reichweite, nahR), p) || this.naechsterZombie(p.x, p.y, wf.reichweite, p, this.schussDunkel(p, wf.reichweite));   // nächster Zombie (< 3 m) zuerst; nachts/im Nebel nur kürzer, außer beleuchtet
-        if (ziel && wf.granate && Math.hypot(ziel[1].x - p.x, ziel[1].y - p.y) < GRANATE.radius + 12) { ziel = null; zuNah = true; }   // zu nah: Splitter träfen den Schützen
+        if (ziel && wf.granate && Math.hypot(ziel[1].x - p.x, ziel[1].y - p.y) < GRANATWERFER_MINDEST) {   // zu nah (< 4,5 m)
+          // …aber ein weiter entfernter Zombie ist ein sicheres Ziel, solange keiner in Stoßreichweite steht (der wird zuerst geschlagen)
+          const stoss = bauWf('faust', WAFFEN.faust).reichweite;
+          const weiter = this.naechsterZombie(p.x, p.y, wf.reichweite, p, this.schussDunkel(p, wf.reichweite), GRANATWERFER_MINDEST);
+          if (weiter && !this.naechsterZombie(p.x, p.y, stoss, p)) ziel = weiter;
+          else { ziel = null; zuNah = true; }
+        }
       }
       if (!feuerAus && !ziel && (ladet || wf0.wurf || zuNah)) {
         // Waffe kann nicht angreifen: Faust-Stoß, sonst (Wurf/zu nah) die andere Waffe nehmen
@@ -3197,7 +3203,7 @@ export class SpielRaum extends Room {
 
   beduerfnisse(p, x, dt) {
     if (!p.verbunden) { p.ruht = false; return; }
-    if (this.brauchtLicht(p)) {
+    if (!p.imBoxer && !p.anBord && this.brauchtLicht(p)) {   // im Fahrzeug läuft die Lampenzeit nicht ab
       if (p.lampe <= 0) {
         if (entferne(p.rucksack, 'taschenlampe', 1) > 0) p.lampe = LAMPE_DAUER;
       } else p.lampe = Math.max(0, p.lampe - dt);
@@ -3259,17 +3265,19 @@ export class SpielRaum extends Room {
     return { reduziert: reichweite * f, beleuchtet: z => beleuchtet(q, z.x, z.y) };
   }
 
-  naechsterZombie(x, y, reichweite, selbst = null, dunkel = null) {
+  naechsterZombie(x, y, reichweite, selbst = null, dunkel = null, mindest = 0) {   // mindest: näher gelegene Ziele überspringen (Granatwerfer)
     const ebene = selbst?.ebene ?? '', welt = this.wv(ebene), kand = [];
     const sid = selbst ? [...this.state.spieler].find(([, o]) => o === selbst)?.[0] : null;
     for (const [id, z] of this.state.zombies) {
       if ((z.ebene ?? '') !== ebene) continue;
+      if (mindest && Math.hypot(z.x - x, z.y - y) < mindest) continue;
       if (dunkel && Math.hypot(z.x - x, z.y - y) > dunkel.reduziert && !dunkel.beleuchtet(z)) continue;
       kand.push([id, z, !!sid && this.zombieInfo.get(id)?.ziel === sid && Math.hypot(z.x - x, z.y - y) < 40]);
     }
     // verwandelte Mitspieler sind auch Ziele
     for (const [s, o] of this.state.spieler) {
       if (o === selbst || !(o.zombie > 0) || o.ebene !== ebene) continue;
+      if (mindest && Math.hypot(o.x - x, o.y - y) < mindest) continue;
       if (dunkel && Math.hypot(o.x - x, o.y - y) > dunkel.reduziert && !dunkel.beleuchtet(o)) continue;
       kand.push(['spieler:' + s, o, false]);
     }
