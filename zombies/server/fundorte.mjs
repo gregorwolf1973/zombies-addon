@@ -3,7 +3,7 @@
 // das Ergebnis geht nur bei Änderung (und alle 10 s zur Sicherheit) als Nachricht 'fundorte' an die Clients.
 // Hinweis: Inhalte ungeöffneter Behälter stehen noch nicht fest (werden erst beim Durchsuchen ausgewürfelt), darum gibt es dafür keine Punkte.
 import { flach } from '../client/stapel.mjs';
-import { KACHEL, BREITE, zufall, ladenArt } from '../client/welt.mjs';
+import { KACHEL, BREITE, zufall, ladenArt, INNEN_FEIN } from '../client/welt.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
 import { KISTEN } from './a400m_kisten.mjs';
 import { behaelterAufKarte, missionsBehaelter } from './mission.mjs';
@@ -75,11 +75,17 @@ export function gesuchteDinge(state, medizinGefunden = false) {
 }
 
 // Kartenposition (px) eines Behälters anhand seiner Id; null, wenn nicht auffindbar
+// Ergebnis je Behälter-Id wird am Raum gemerkt (deterministisch aus Seed, Welt und Innenmodus; sonst baute jeder Aufruf das ganze Haus neu)
 export function behaelterPosition(raum, id) {
   const m = EBENE.exec(id);
   if (m) {
+    let c = raum.behaelterPosCache;
+    if (!c || c.welt !== raum.welt || c.seed !== raum.state.seed || c.fein !== INNEN_FEIN) c = raum.behaelterPosCache = { welt: raum.welt, seed: raum.state.seed, fein: INNEN_FEIN, map: new Map() };
+    if (c.map.has(id)) return c.map.get(id);
     const w = innenraumFuer(raum.state.seed, raum.welt, m[0]), b = w?.behaelter?.find(q => q.id === id);
-    return b ? behaelterAufKarte(raum.state.seed, raum.welt, Number(m[1]), b) : null;
+    const pos = b ? behaelterAufKarte(raum.state.seed, raum.welt, Number(m[1]), b) : null;
+    c.map.set(id, pos);
+    return pos;
   }
   const b = raum.welt.behaelter?.find(q => q.id === id);
   return b ? [b.x, b.y] : null;
