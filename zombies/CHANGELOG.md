@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.88.1 – 24.11.2026
+
+- Behoben: Der Server hing jede Sekunde für bis zu einer Sekunde (gelbe Fundpunkte bauten jedes Haus neu auf) – alle Spieler ruckelten, je länger das Spiel lief, desto schlimmer. Dazu schnellere Zombie-Berechnung und ruhige Zombies knapp außerhalb des Bildes nur noch jeden 2. Takt.
+- Name und Lebensbalken bleiben bei jedem Zoom und jeder Gesamtgröße über der Figur; Eckkarte: Text verdeckt den Entfernungsbalken nicht mehr.
+- Blut halb so groß; Rauch von Leopard und Puma feiner und kleiner; Zombies im Stacheldraht zappeln ruhiger.
+- Klettern über Autos erst direkt am Auto, dann mit 50 % Tempo.
+- Neue Einstellung „Pause zwischen Zombiegeräuschen“ (Vorgabe 5 s).
+- Polizisten in Heldengröße; Blumenbeete entfernt.
+- Superuser-Menü bleibt offen, bis man es schließt; Unsterblichkeit beim Superuser standardmäßig an.
+
 ## 0.88.0 – 24.11.2026
 
 - Acht wählbare Helden in der Startwahl: Einsatzkraft, Rote Jacke, Blondschopf, Schwarzer Anzug, Muskelmann, SWAT-Polizist, Rosa Pulli, Weißes Hemd (plus der alte Survivor). Im Backend per Häkchen festlegen, welche wählbar sind; Bots bekommen zufällig einen aktiven Helden.
