@@ -11,6 +11,7 @@ import { fzRechtecke, kreisImRechteck, aufParkAuto } from '../client/fzkollision
 import { imFussabdruck } from '../client/evak.mjs';
 import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden } from '../client/pkw.mjs';
 import { Fahrbar, FAHRWERK, PX } from './fahrbar.mjs';
+import { stammBei, RUECK_ANTEIL } from '../client/walze.mjs';
 import { LAENGE, BREITE_FZ } from './verkehr.mjs';
 
 export const kmhVon = px => px / PX * 3.6;
@@ -46,7 +47,7 @@ export class FahrbarPkw extends Fahrbar {
   plaetze() { return Math.max(1, Math.round(Number(this.einstAuto().plaetze) || PKW_VORGABE.plaetze)); }
   fahrwerk() {
     const kmh = Number(this.einstAuto().tempo);
-    return { ...FAHRWERK, beschleunigung: 6 * PX, bremse: 12 * PX, drehrate: 1.9, drehrateStand: 0.7, rueckwaerts: 0.3, vmax: kmhZuPx(Number.isFinite(kmh) && kmh > 0 ? kmh : PKW_VORGABE.tempo) };
+    return { ...FAHRWERK, beschleunigung: 6 * PX, bremse: 12 * PX, drehrate: 1.9, drehrateStand: 0.7, rueckwaerts: RUECK_ANTEIL, vmax: kmhZuPx(Number.isFinite(kmh) && kmh > 0 ? kmh : PKW_VORGABE.tempo) };
   }
   // Fahrer ist der erste Mensch mit Autoschlüssel; ohne ihn rollt das Auto aus
   get fahrer() {
@@ -60,7 +61,7 @@ export class FahrbarPkw extends Fahrbar {
     let n = 0;
     for (const [u, v] of PUNKTE) {
       const px = x + c * u - s * v, py = y + s * u + c * v;
-      if (!frei(welt, px, py, KOLL_R) || aufParkAuto(welt, px, py, 1)) { n++; continue; }
+      if (!frei(welt, px, py, KOLL_R) || aufParkAuto(welt, px, py, 1) || stammBei(welt, px, py, 1)) { n++; continue; }   // auch Baumstämme
       for (const r of this.andere) if (Math.abs(px - r.x) <= r.hl + 3 && Math.abs(py - r.y) <= r.hl + 3 && kreisImRechteck(r, px, py, 1)) { n++; break; }
     }
     return n;

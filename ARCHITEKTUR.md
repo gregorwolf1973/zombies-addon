@@ -26,6 +26,13 @@ Wichtige Dateien:
 - `stuetzpunkt.mjs`, `szene_b11*.mjs`, `leopard.mjs`, `flugplatz.mjs`, `haengend.mjs` – Lager und Sonderszenen.
 - `a400m_kisten.mjs` – Königsdorf: Munitionskisten fallen während der Landerolle aus dem A400M (je Echtspieler 2, fester Inhalt, Bodengegenstände `a400m_kiste_a/b`, Nachricht `kistenFall`, Fundorte, Spielstand über `aufgaben.speichern`).
 - `fahrbar.mjs` – fahrbare Fahrzeuge Boxer/Puma/Leopard (Liste `raum.fahrbare` + `raum.boxer`; Spielerfeld `imBoxer` = „sitzt in einem fahrbaren Fahrzeug“); `boxer.mjs` = echter Boxer am Flugfeld mit Horde; Superuser-Menü und Schießstand stellen Fahrzeuge ohne Horde auf. Client: `fahrbar.mjs` (Maße), `fahrbardarstellung.mjs`.
+- `pkw.mjs` – Autos mit Autoschlüssel (Gegenstand `autoschluessel`): geparktes Auto (welt.behaelter 'auto') wird beim Einsteigen zum fahrbaren
+  Fahrzeug 'pkw' (Klasse `FahrbarPkw` auf `Fahrbar`, Id `pkw_<Behälter-Id>`, eigene Lebenspunkte `Fahrzeug.leben`, Aufprall-/Überfahr-Schaden),
+  das gemalte Auto verschwindet bei allen (Nachricht `autosWeg`, `welt.autosWeg`, Kletter-Index). Regeln/Maße gemeinsam: `client/pkw.mjs`,
+  Darstellung `client/pkwdarstellung.mjs`, Einstellung `auto.*`. `unfallszene.mjs` – Verkehrsunfall mit Tür auf, fliehendem Menschen und Zombie (`unfallTuer`).
+- `walze.mjs` – Boxer/Puma/Leopard walzen Zäune/Hecken platt (Feinraster 2 → 0, Kachel ohne Rest → Wiese, Nachricht `walze`), Leopard drückt
+  geparkte Autos platt (`state.platt`) und walzt kleine Bäume um (`welt.baeumeWeg`); Puma/Boxer über Autos 40/30 % Tempo. Regeln und
+  Rückwärtsgang (Eingabe > 135° hinter der Achse, Skalarprodukt; PC-Tasten W/S/A/D im Fahrzeug) in `client/walze.mjs`, Darstellung `client/walzedarstellung.mjs`.
 - `speicher.mjs` (Spielstand), `superuser.mjs` (Testmenü, Zugangscode-Hash), `radio.mjs`, `raetsel.mjs`/`spielfragen.txt`, `nebel.mjs`.
 
 ### Schema und Sichtfilter

@@ -192,3 +192,14 @@ test('Schlüssel-Funde: Möbel, Kofferraum, Leiche nach Backend-Wert; Fundhäufi
   let n = 0; for (let i = 0; i < 4000; i++) n += schluesselFund(rv, 'kofferraum').length;
   assert.ok(n > 650 && n < 950, 'Kofferraum-Anteil ' + n / 4000);
 });
+
+test('Superuser-Fahrzeug neben einem gefahrenen Auto setzen: kein Absturz (Auto hat keine FAHRBAR-Maße)', async () => {
+  const { Fahrbare } = await import('../server/fahrbar.mjs');
+  const r = raum({}, welt(false));
+  r.fahrbare = new Fahrbare(r); r.boxer = null;
+  const fz = new FahrbarPkw(r, 'b5'); fz.aufstellen(600, 400, 0); r.fahrbare.liste.push(fz);
+  const p = spieler(r, 'su', 600, 430);
+  const b = r.fahrbare.setzen('su', 'puma', p);
+  assert.ok(b && b.art === 'puma', 'Puma nicht gesetzt');
+  assert.ok(Math.hypot(b.f.x - 600, b.f.y - 400) > 20, 'Puma steht im Auto');
+});

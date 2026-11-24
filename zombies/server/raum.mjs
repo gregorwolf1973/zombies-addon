@@ -18,6 +18,7 @@ import { levelorteSetzen } from './levelorte.mjs';
 import { Boxer } from './boxer.mjs';
 import { Fahrbare } from './fahrbar.mjs';
 import { PkwVerwaltung, schluesselFund } from './pkw.mjs';
+import { Walze } from './walze.mjs';
 import { Fahrzeugkontakt } from './fahrzeugkontakt.mjs';
 import { autoTempo, bewegeFz } from '../client/fzkollision.mjs';
 import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
@@ -572,6 +573,7 @@ export class SpielRaum extends Room {
     this.boxer = new Boxer(this); this.boxer.start();   // Radpanzer Boxer am Flugfeld (nur Königsdorf), siehe server/boxer.mjs
     this.fahrbare = new Fahrbare(this);   // fahrbare Fahrzeuge neben dem Boxer (Superuser, Schießstand), siehe server/fahrbar.mjs
     this.pkw = new PkwVerwaltung(this);   // geparkte Autos mit Autoschlüssel fahren, siehe server/pkw.mjs
+    this.walze = new Walze(this);   // Boxer/Puma/Leopard walzen Zäune, Hecken, Autos, kleine Bäume (server/walze.mjs)
     haengendStart(this);   // hängende Zombies im S-Draht (Lager, Flugfeld) und Tote am Flugfeld Königsdorf
     this.granaten = new Granaten(this);
     this.radios = new Radios(this);
@@ -723,7 +725,7 @@ export class SpielRaum extends Room {
       this.hunde?.besitzerWechsel(sid, client.sessionId);
       this.suAnmeldung(client, alt, auth);
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
-      client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte()); this.pkw?.beitritt(client);
+      client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte()); this.pkw?.beitritt(client); this.walze?.beitritt(client);
       this.startwahlSenden(client.sessionId);
       this.einstellungenSenden(client, spielerId, alt.aussehen, optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? '')));
       this.sprachStart(client); this.sprachPartner();
@@ -800,7 +802,7 @@ export class SpielRaum extends Room {
     this.fkSenden(client.sessionId);
     this.startwahlSenden(client.sessionId);
     client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
-    client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte()); this.pkw?.beitritt(client);
+    client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte()); this.pkw?.beitritt(client); this.walze?.beitritt(client);
     this.einstellungenSenden(client, spielerId, p.aussehen, gewaehlt);
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
     this.botsAnpassen();

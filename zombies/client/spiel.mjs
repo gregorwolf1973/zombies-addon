@@ -24,6 +24,8 @@ import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.
 import { fahrbarNah, FAHRBAR, FAHRBAR_PLAETZE } from './fahrbar.mjs';
 import { istFahrbar, fahrbarBild, fahrbarFahrzeug, fahrbarRueckstoss, pumaFahrbarSchuss } from './fahrbardarstellung.mjs';
 import { pkwKontext } from './pkw.mjs';
+import { tastenFahrzeug } from './walze.mjs';
+import { walzeEmpfangen, walzeAbgleich } from './walzedarstellung.mjs';
 import { pkwTextur, pkwDarstellung, pkwAufraeumen, autoTuer, autosWegEmpfangen, autosWegAbgleich, pkwPlaetze } from './pkwdarstellung.mjs';
 import { boxerLaden, boxerSchuss } from './boxerdarstellung.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, kisteFaellt, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
@@ -1002,7 +1004,7 @@ class Ort extends Phaser.Scene {
 
   preload() {
     if (ASSETS) this.load.setBaseURL(ASSETS);   // Grafiken aus dem versionierten Ordner (lange zwischengespeichert)
-    this.load.on('progress', v => ladenZeigen(40 + 30 * v, 'Generiere Welt … lade Grafiken'));
+    this.load.on('progress', v => { if (!this.ladenFertig) ladenZeigen(40 + 30 * v, 'Generiere Welt … lade Grafiken'); });   // später nachgeladene Bilder (Helden-Atlanten) holen die Ladeanzeige nicht zurück
     for (const g of GRAFIK) this.load.image(g, 'grafik/' + g + '.png');
     // Figuren aus den KI-Bögen (tools/figuren_schneiden.py): 160er-Felder, Drehpunkt in der Feldmitte
     this.load.spritesheet('figuren', 'grafik/figuren.png', { frameWidth: 160, frameHeight: 160 });
@@ -1237,6 +1239,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) { fs.schlagBis = this.time.now + 400; if (typeof m.w === 'number') { fs.zielW = m.w; fs.zielBis = this.time.now + 400; } } if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); if (istEigen(m, meineId)) ton.stoss(null, null, m.messer); else if (hoertEbene(m)) ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (hoertEbene(m)) if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('autosWeg', m => autosWegEmpfangen(m));   // mit Autoschlüssel weggefahrene Autos (client/pkwdarstellung.mjs)
+    raum.onMessage('walze', m => walzeEmpfangen(m));   // plattgewalzte Zäune/Bäume (client/walzedarstellung.mjs)
     raum.onMessage('autotuer', m => { if (hoertEbene(m)) autoTuer(this, m); });   // Unfallszene: Tür geht auf (server/unfallszene.mjs)
     raum.onMessage('krach', m => { if (hoertEbene(m) && !ton.ereignis('krach', m.x, m.y)) { ton.schuss(m.x, m.y, 1.8); ton.stoss(m.x, m.y, false); } this.krachEffekt(m.x, m.y); });
     raum.onMessage('blech', m => { if (!ton.ereignis('blech', m.x, m.y)) ton.stoss(m.x, m.y, false); });
@@ -3412,6 +3415,14 @@ class Ort extends Phaser.Scene {
     return p;
   }
 
+  // Fahrtrichtung des Fahrzeugs, in dem die eigene Figur sitzt (Boxer, Puma, Leopard, Auto), sonst null
+  fahrzeugWinkel() {
+    const p = raum.state?.spieler?.get(meineId);
+    if (!p?.imBoxer) return null;
+    for (const [, v] of raum.state.fahrzeuge ?? []) if ((istFahrbar(v.art) || v.art === 'pkw') && Math.abs(v.x - p.x) < 24 && Math.abs(v.y - p.y) < 24) return fzRichtung(v);
+    return null;
+  }
+
   leseEingabe() {
     const k = this.tasten;
     let dx = 0, dy = 0;
@@ -3423,6 +3434,7 @@ class Ort extends Phaser.Scene {
       if (k.S.isDown || k.DOWN.isDown) dy += 1;
     }
     let s = k.SHIFT.isDown;
+    if (dx || dy) { const fw = this.fahrzeugWinkel(); if (fw !== null) ({ dx, dy } = tastenFahrzeug(-dy, dx, fw)); }   // im Fahrzeug: W/S vor/zurück, A/D lenken (client/walze.mjs)
     if (dx || dy) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; }
     else if (this.joystick.id !== null) { dx = this.joystick.vx; dy = this.joystick.vy; s = false; }
     if (window.__startwahlOffen || this.flug?.aktiv) { dx = 0; dy = 0; s = false; }   // Kameraflug: die Figur steht, die Tasten steuern die Kamera
@@ -3787,6 +3799,7 @@ class Ort extends Phaser.Scene {
     this.zeichneStick();
     this.abgleichen(dt);
     autosWegAbgleich(this, raum.state.seed);   // weggefahrene Autos aus Karte und Kletter-Index nehmen
+    walzeAbgleich(this, raum.state.seed);   // von Panzern plattgewalzte Zäune, umgewalzte Bäume
     this.ladeRingeZeichnen();
     this.wurfBogenZeichnen();
     this.stuetzpunktAnimieren();

@@ -28,7 +28,7 @@ export function autosWegAbgleich(scene, seed) {
 }
 
 // Bodenbild (enthält die geparkten Autos) der Kartenstücke um (x, y) neu malen, ohne das Stück abzubauen
-function stueckeNeuMalen(scene, x, y, rand) {
+export function stueckeNeuMalen(scene, x, y, rand) {
   for (const st of scene.stuecke?.values() ?? []) {
     const r = st.rect, x0 = r.x0 * KACHEL, y0 = r.y0 * KACHEL, x1 = r.x1 * KACHEL, y1 = r.y1 * KACHEL;
     if (x + rand < x0 || x - rand > x1 || y + rand < y0 || y - rand > y1) continue;
