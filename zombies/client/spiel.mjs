@@ -17,7 +17,7 @@ import { HAARFARBEN, KLEIDFARBEN, WAFFEN_BILD, istHeld, aussehenLesen, aussehenT
 import { zeichneSandsaecke } from './safe_moebel.mjs';
 import { setzeMoebelBilder } from './moebel_bilder.mjs';
 import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBaeume, zeichneDaecher, zeichneSafeDach, DACH_RAND, zeichneInnen, busVonOben, autoVonOben, FZ_SCHATTEN, FZ_HOEHE, fzSchattenVersatz, setzeAutoBilder, autoEintraege, autoAnimEintrag, zeichneAutoBild } from './aussehen.mjs';
-import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
+import { PUMA_SKALA, PUMA_BILD, handelPartner, MG_NEST, zeichneMgNestMg } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { weichKreis } from './weichkreis.mjs';
@@ -1242,6 +1242,7 @@ class Ort extends Phaser.Scene {
     const polSk = () => SCHULTER_NEU_PX * mg() / POL_SCHULTER_PX;   // Polizist: Schulterbreite wie die Mixamo-Helden (15,2 px bei mg = 1), nicht mehr kleiner
     polizeiRegistrieren(this, raum, { neuSkala: () => ZOMBIE_GROESSE * HF_G * GFS.k * mg(), halb: () => GFS.halb, rahmenHalb, skala: polSk, leicheSkala: () => polSk() * VERWUNDET_GROESSE * groesse('figuren2', 'polizist') / (BOGEN2_GROESSE * groesse('figuren2', 'polizist')) });   // Polizisten an den Straßensperren
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
+    raum.onMessage('bwMg', m => { for (const [n, ax, ay] of m.m ?? []) { const e = this.stuetzpunktObj?.soldaten.find(q => q.n === n); if (e) e.mgZiel = Math.atan2(ay, ax); } });
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => {
       const fw = m.wer ? this.figuren?.get(m.wer) : null;   // Wurf-Clip des Werfers (Mixamo-Helden), Körper dreht zum Ziel
@@ -3071,15 +3072,19 @@ class Ort extends Phaser.Scene {
       this.pumaTurmSetzen();
     }
     this.bwLicht = new BwLicht(this, sp);
-    const soldat = (x, y, blick, phase, n = -1) => {
-      const fuesse = this.add.image(0, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(soldatSkala(mg()));
-      const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(soldatSkala(mg()));
-      const box = this.add.container(x, y, [fuesse, bild]).setDepth(3.5).setRotation(blick);
-      const e = { box, bild, fuesse, phase, blick, schussBis: 0, n };
+    const soldat = (x, y, blick, phase, n = -1, mgNest = false) => {
+      const sx = mgNest ? -MG_NEST.mgVor - 2.2 : 0;   // MG-Schütze: Körper hinter dem Drehpunkt, MG davor (alles im selben Maßstab, 8 px = 1 m)
+      const fuesse = this.add.image(sx, 0, 'figuren2', this.figurBild2('sv_fuesse_idle')).setScale(soldatSkala(mg()));
+      const bild = this.add.image(sx, 0, 'figuren2', this.figurBild2('soldat_idle', phase)).setScale(soldatSkala(mg()));
+      const teileBox = [fuesse, bild];
+      let muendung = 0;
+      if (mgNest) { const gun = this.add.graphics(); muendung = zeichneMgNestMg(gun); teileBox.unshift(gun); }
+      const box = this.add.container(x, y, teileBox).setDepth(3.5).setRotation(blick);
+      const e = { box, bild, fuesse, phase, blick, schussBis: 0, n, mgW: blick, mgZiel: blick, muendung };
       o.soldaten.push(e);
     };
     sp.teile.forEach((t, i) => {
-      if (t.art === 'mgnest') soldat(t.x - Math.cos(t.blick) * 5, t.y - Math.sin(t.blick) * 5, t.blick, i, i);   // hinter dem MG
+      if (t.art === 'mgnest') soldat(t.x, t.y, t.blick, i, i, true);   // Drehpunkt = Nestmitte; MG und Schütze drehen zum Ziel (Server: bwMg)
       else if (t.art === 'posten' && t.rolle === 'soldat') soldat(t.x, t.y, t.blick, i, i);   // n = Teil-Nummer: Schüsse vom Server zeigen den Soldaten feuernd
       else if (t.art === 'posten' && t.rolle === 'arzt') {
         const bild = this.add.image(0, 0, 'figuren2', this.figurBild2('arzt', i)).setScale(BOGEN2_GROESSE * 0.95 * groesse('figuren2', 'arzt') * mg());
@@ -3113,7 +3118,11 @@ class Ort extends Phaser.Scene {
       s.fuesse?.setFrame(geht ? this.figurBild2('sv_fuesse_walk', Math.floor(jetzt / 110)) : this.figurBild2('sv_fuesse_idle'));
       const schiesst = s.schussBis > jetzt;
       s.bild.setFrame(schiesst ? this.figurBild2('soldat_schuss', Math.floor(jetzt / 70)) : this.figurBild2('soldat_idle', Math.floor(jetzt / 220 + s.phase * 3)));
-      if (s.n >= 0) s.box.setRotation(schiesst && s.w !== undefined ? s.w : s.blick);
+      if (s.muendung) {   // MG-Nest: Drehung zur Server-Zielrichtung, höchstens 90°/s
+        let dm = s.mgZiel - s.mgW; dm = Math.atan2(Math.sin(dm), Math.cos(dm));
+        const st = Math.PI / 2 * dtS; s.mgW += Math.abs(dm) <= st ? dm : Math.sign(dm) * st;
+        s.box.setRotation(s.mgW);
+      } else if (s.n >= 0) s.box.setRotation(schiesst && s.w !== undefined ? s.w : s.blick);
     }
     for (const a of o.aerzte) a.box.setVisible(steht);
     for (const v of o.verwundete) { v.bild.setVisible(steht); if (steht) v.bild.setScale(v.s0 * (1 + Math.sin(jetzt / 900 + v.phase) * 0.012)); }
@@ -3181,6 +3190,9 @@ class Ort extends Phaser.Scene {
     if (!kanone) {
       const sold = o?.soldaten.find(q => q.n === m.n);
       if (sold) { sold.schussBis = this.time.now + 260; sold.w = w; }
+      if (sold?.muendung) {   // MG-Nest: Mündung am Rohr des gedrehten MG, Mündungsfeuer in Drehrichtung
+        wb = sold.box.rotation; mx = sold.box.x + Math.cos(wb) * sold.muendung; my = sold.box.y + Math.sin(wb) * sold.muendung;
+      }
     }
     // Leuchtspur: kurzer heller Streifen, der zum Ziel läuft
     const g = this.add.graphics().setDepth(7);

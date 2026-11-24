@@ -156,7 +156,7 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
   }
   for (const [u, v] of [[4.5, 4.3], [25.5, 4.3], [27.2, 7.0]]) {
     const [x, y] = ort(u, v);
-    teile.push({ art: 'mgnest', x, y, r: 14, blick: blickVorn, winkel: th });   // Sandsackring Ø 3,5 m
+    teile.push({ art: 'mgnest', x, y, r: 13, blick: blickVorn, winkel: th });   // Sandsackring außen Ø 3,2 m, innen Ø 2,1 m
     sperren.push({ x, y, r: 13 });
   }
   posten('soldat', 13.4, 4.4); posten('soldat', 17.6, 4.4);   // hinter der Pumabahn (v 1,75–3,45)
@@ -475,7 +475,7 @@ export function zeichneStuetzpunktBoden(ctx, welt, rect) {
     if (t.art === 'sanizelt' || t.art === 'zelt' || t.art === 'funkzelt') zeltBoden(ctx, t);
     else if (t.art === 'feldbett' || t.art === 'funktisch') mitRahmen(ctx, t, () => zeichneSafeMoebel(ctx, { art: t.art, x: -t.w / 2 / K, y: -t.d / 2 / K, b: t.w / K, h: t.d / K }, K));
     else if (t.art === 'mgnest') {   // Sandboden im Nest (unter dem Soldaten)
-      const rb = 17 * t.r / 23;
+      const rb = MG_NEST.innen;
       ctx.fillStyle = '#a08c5c'; ctx.beginPath(); ctx.arc(t.x, t.y, rb, 0, TAU); ctx.fill();
       ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.arc(t.x, t.y, rb, 0.2, Math.PI - 0.2); ctx.fill();
     }
@@ -658,30 +658,37 @@ function sandsackStellung(ctx, t) {
   mitRahmen(ctx, t, () => { sandsackWaende(t.w, t.d).forEach((rc, i) => sandsaecke(ctx, ...rc, Math.round(t.x + t.y) + i * 9)); });
 }
 
-// MG-Nest: Ring aus Sandsäcken, MG auf Dreibein in Blickrichtung, Munitionskiste
+// MG-Nest (nur der feste Teil): Ring aus Sandsäcken in echten Maßen (8 px = 1 m): Sandsack 0,6 × 0,3 m, zwei Lagen, Innenraum Ø ≈ 2,1 m,
+// außen Ø ≈ 3,2 m. MG und Schütze sind eigene, drehbare Figuren (spiel.mjs, baueStuetzpunktFiguren + mgNestZeichnen).
+export const MG_NEST = { innen: 8.3, aussen: 12.6, sack: [4.8, 2.4], mgLaenge: 9.6, lafette: 5.6, mgVor: 1 };   // px
 function mgNest(ctx, t) {
-  ctx.translate(t.x, t.y); ctx.scale(t.r / 23, t.r / 23);   // Vorlage für r = 23 px, echtes Nest Ø 3,5 m
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(2.5, 4, 24, 0, TAU); ctx.fill();
-  const n = 15;
-  for (let i = 0; i < n; i++) {
-    const a = i / n * TAU + 0.2;
-    ctx.save(); ctx.translate(Math.cos(a) * 19.5, Math.sin(a) * 19.5); ctx.rotate(a + Math.PI / 2);
-    ctx.fillStyle = ['#c8b27a', '#bfa86c', '#d2bd88'][Math.floor(hash(Math.round(t.x), i) * 3)];
-    ctx.beginPath(); ctx.ellipse(0, 0, 8.5, 5.6, 0, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(80,60,20,.55)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
-  }
-  ctx.fillStyle = '#c4ae76';   // zweite Lage innen, nach hinten offen (Einstieg)
-  for (let i = 0; i < 9; i++) {
-    const a = t.blick + 0.9 + i * 0.58;
-    ctx.save(); ctx.translate(Math.cos(a) * 15, Math.sin(a) * 15); ctx.rotate(a + Math.PI / 2);
-    ctx.beginPath(); ctx.ellipse(0, 0, 6.5, 4, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(80,60,20,.5)'; ctx.stroke(); ctx.restore();
-  }
-  ctx.rotate(t.blick);
-  ctx.strokeStyle = '#2b2b2b'; ctx.lineWidth = 1.6;   // Dreibein und MG (Lauf nach vorn)
-  for (const a of [0.7, -0.7, Math.PI]) { ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(6 + Math.cos(a) * 10, Math.sin(a) * 10); ctx.stroke(); }
-  rundRechteck(ctx, '#1d1f1c', 0, -2.4, 17, 4.8, 1.2); rundRechteck(ctx, '#33382f', 2, -1.6, 9, 3.2, 1);
-  ctx.fillStyle = '#111'; ctx.fillRect(15, -0.9, 14, 1.8); ctx.fillRect(26, -2.2, 3, 4.4);
-  ctx.fillStyle = '#4b5320'; ctx.fillRect(-4, 4, 8, 6); ctx.fillStyle = '#c9a227'; ctx.fillRect(-3, 8, 6, 1.3);   // Munitionskiste mit Gurt
+  ctx.translate(t.x, t.y);
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(1.2, 2, MG_NEST.aussen, 0, TAU); ctx.fill();
+  const lage = (rad, n, a0, offen) => {
+    for (let i = 0; i < n; i++) {
+      const a = a0 + i / n * TAU;
+      if (offen && Math.abs(diffW(a, t.blick + Math.PI)) < 0.6) continue;   // hinten offen (Einstieg)
+      ctx.save(); ctx.translate(Math.cos(a) * rad, Math.sin(a) * rad); ctx.rotate(a + Math.PI / 2);
+      ctx.fillStyle = ['#c8b27a', '#bfa86c', '#d2bd88'][Math.floor(hash(Math.round(t.x), i + n) * 3)];
+      ctx.beginPath(); ctx.ellipse(0, 0, MG_NEST.sack[0] / 2, MG_NEST.sack[1] / 2, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(80,60,20,.55)'; ctx.lineWidth = 0.4; ctx.stroke(); ctx.restore();
+    }
+  };
+  lage(11.3, 15, 0.2, false);
+  lage(9.6, 13, 0.5, true);
+}
+const diffW = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+
+// MG3 auf Lafette, Blick +x, Drehpunkt = Nestmitte: Lauf 1,2 m (MG_NEST.mgLaenge), Dreibein, Munitionskasten; Rückgabe ist die Mündung (px vom Drehpunkt)
+export function zeichneMgNestMg(g) {
+  const v = MG_NEST.mgVor, L = MG_NEST.mgLaenge;
+  g.lineStyle(0.5, 0x2b2b2b, 1);
+  for (const a of [0.8, -0.8]) g.lineBetween(v + 3, 0, v + 3 + Math.cos(a) * MG_NEST.lafette * 0.8, Math.sin(a) * MG_NEST.lafette * 0.8);
+  g.fillStyle(0x1d1f1c, 1).fillRect(v, -0.7, L * 0.55, 1.4);          // Gehäuse/Schaft
+  g.fillStyle(0x111111, 1).fillRect(v + L * 0.5, -0.3, L * 0.5, 0.6);  // Lauf
+  g.fillStyle(0x111111, 1).fillRect(v + L - 1.1, -0.7, 0.6, 1.4);      // Korn
+  g.fillStyle(0x4b5320, 1).fillRect(v + 1, 0.9, 1.6, 1.2);             // Munitionskasten
+  return v + L;
 }
 
 // Schützenpanzer Puma, Wanne (Turm = eigene Zeichnung, siehe zeichnePumaTurm); Rahmen: x = Bug, y = rechts
