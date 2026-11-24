@@ -15,7 +15,7 @@ export const Hund = schema({
 }, 'Hund');
 entkoppeln(Hund, ['x', 'y']);
 
-export const HUND = { ablenkung: 70, streuner: -1 };   // Vorgabe der Einstellung: Wahrscheinlichkeit in %, dass ein Zombie in der Nähe den Hund jagt
+export const HUND = { ablenkung: 70, streuner: 2 };   // Vorgabe der Einstellung: Wahrscheinlichkeit in %, dass ein Zombie in der Nähe den Hund jagt
 
 const PX = 8;
 const RAD = 5;                       // Kollisionsradius
@@ -70,7 +70,7 @@ export class Hunde {
     const e = this.streunerEinstellung;
     if (e >= 0) return e;
     const km2 = BREITE * HOEHE * KACHEL * KACHEL / (PX * PX) / 1e6;   // Kacheln → m² → km²
-    return Math.min(20, Math.max(1, Math.round(km2 / KM2_JE_HUND)));
+    return Math.min(HUND.streuner, Math.max(1, Math.round(km2 / KM2_JE_HUND)));   // automatisch: höchstens so viele wie die Vorgabe (2 je Karte)
   }
 
   // Beim Start der Welt: Streuner an zufälligen Orten, der erste streunt 100–300 m vom Start

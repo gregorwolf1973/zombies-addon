@@ -42,7 +42,7 @@ test('Werte: jede Fernwaffe hat Magazin und Nachladezeit, Granatwerfer ist eine 
   for (const [k, n] of Object.entries(soll)) { assert.equal(WAFFEN[k].magazin, n, k); assert.ok(WAFFEN[k].nachlade > 0, k); }
   assert.equal(WAFFEN.pistole.nachlade, 4);
   assert.ok(WAFFEN.armbrust.nachlade < 4);
-  assert.equal(WAFFEN.granatwerfer.reichweite, 480);
+  assert.equal(WAFFEN.granatwerfer.reichweite, 200);
   assert.ok(DINGE.granatwerfer.waffe && DINGE.granate40.name === 'Granate (40 mm)');
   assert.ok(BEUTE.bw_container.includes('granate40'));   // Munitionskisten: seit der Versorgung kein Zufallsinhalt mehr (tests/versorgung.test.mjs)
   assert.deepEqual(BEUTE.bw_kiste, []);
@@ -171,21 +171,21 @@ test('Granatwerfer: Bogenschuss, Explosion am Ziel (Zombie stirbt, Granate verbr
     await warte(500);
     assert.equal(explosionen.length, 0, 'schießt auf zu nahes Ziel');
     raum.state.zombies.delete(nah); raum.zombieInfo.delete(nah);
-    // Ziel 200 px entfernt
-    const id = zombieIn(raum, p, 200);
+    // Ziel 160 px entfernt
+    const id = zombieIn(raum, p, 160);
     assert.ok(await bis(() => fluege.length > 0, 2500), 'kein Abschuss');
     assert.equal(fluege[0].werfer, true);
     const halte = setInterval(() => { const z = raum.state.zombies.get(id); if (z) { z.x = fluege[0].x2; z.y = fluege[0].y2; } }, 5);   // der Zombie läuft nicht aus dem Zielpunkt
-    assert.ok(Math.abs(fluege[0].x2 - (p.x + 200)) < 40, 'Zielpunkt (Zombie rückt kurz vor)');
+    assert.ok(Math.abs(fluege[0].x2 - (p.x + 160)) < 40, 'Zielpunkt (Zombie rückt kurz vor)');
     assert.ok(raum.state.zombies.has(id), 'Zombie darf nicht sofort fallen (Flugzeit)');
     assert.ok(await bis(() => explosionen.length > 0, 2500), 'keine Explosion');
     assert.ok(!raum.state.zombies.has(id) || raum.state.zombies.get(id).hp <= 0, 'Zombie nicht getroffen: ' + JSON.stringify(raum.state.zombies.get(id)) + ' Explosion ' + JSON.stringify(explosionen[0]) + ' p ' + p.x);
     assert.ok(Math.abs(explosionen[0].x - fluege[0].x2) < 1, 'Explosion am Ziel');
     clearInterval(halte);
     assert.equal(p.magazin, 0);
-    // außerhalb der Reichweite (> 60 m = 480 px) kein Schuss
+    // außerhalb der Reichweite (> 25 m = 200 px) kein Schuss
     const n = fluege.length;
-    const weit = zombieIn(raum, p, 540);
+    const weit = zombieIn(raum, p, 260);
     await warte(700);
     assert.equal(fluege.length, n, 'schießt über die Reichweite');
     raum.state.zombies.delete(weit); raum.zombieInfo.delete(weit);
@@ -207,7 +207,7 @@ test('Verwaltung: Magazin und Nachladezeit je Waffe einstellbar, Granatwerfer ha
       raum.extra.get(c.sessionId).mag = [null, null, null]; p.wp0 = '';
       assert.ok(await bis(() => p.magmax === 7 && p.magazin === 7), 'Magazingröße 7: ' + p.magazin + '/' + p.magmax);
     } finally { raum.constructor.einstellungen = vorher; }
-    assert.ok(vorher.waffen.granatwerfer && vorher.waffen.granatwerfer.schaden > 0 && vorher.reichweite.granatwerfer === 60);
+    assert.ok(vorher.waffen.granatwerfer && vorher.waffen.granatwerfer.schaden > 0 && vorher.reichweite.granatwerfer === 25);
     assert.equal(vorher.waffen.pistole.magazin, 15);
     assert.equal(vorher.waffen.pistole.nachlade, 4);
     assert.equal(vorher.waffen.schlaeger.magazin, undefined);

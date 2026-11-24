@@ -170,11 +170,12 @@ test('Zimmertüren: öffnen, schließen, mehrzellig; Zombie hämmert gegen die g
     assert.ok(t.zellen.every(([x, y]) => w.hole(x, y) === T.TUER_OFFEN), 'offene Tür: nicht alle Zellen offen');
     assert.ok(frei(w, b.x, b.y, 7) && frei(w, t.zellen[2][0] * 2 + 1, t.zellen[2][1] * 2 + 1, 7), 'offene Tür nicht passierbar');
     raum.setzeTuer(key, false);
+    raum.extra.get(c.sessionId).tuerSperre = { key, ebene: w.ebene, tuer: t };   // sonst öffnet die Tür-Automatik (0,5 s davorstehen) sie wieder: der Zombie liefe hindurch statt zu hämmern
     // Zombie auf der anderen Seite, Spieler hinter der Tür: er hämmert
     const zid = raum.setzeZombie(b.x, b.y, w.ebene, false), z = raum.state.zombies.get(zid), info = raum.zombieInfo.get(zid);
     info.ziel = c.sessionId; z.jagt = true; info.tempo = 1;
     const hp0 = raum.state.tueren.get(key).hp;
-    assert.ok(await bis(() => raum.state.tueren.get(key).hp < hp0 || raum.state.tueren.get(key).barrikade < 0, 6000) || await bis(() => raum.state.tueren.get(key).hp < hp0, 4000), 'Zombie hämmert nicht gegen die Tür');
+    assert.ok(await bis(() => raum.state.tueren.get(key).hp < hp0 || raum.state.tueren.get(key).barrikade < 0, 25000), 'Zombie hämmert nicht gegen die Tür');   // Bewegungsklassen: er zögert mal Sekunden vor dem Hämmern
     raum.state.zombies.delete(zid); raum.zombieInfo.delete(zid);
   } finally { await c.leave(); }
 });

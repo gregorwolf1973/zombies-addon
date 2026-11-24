@@ -7,6 +7,8 @@ export const PKW_LICHT_DUNKEL = 0.3;
 export const dunkelVon = uhr => 1 - helligkeit(uhr ?? 480);
 
 // Licht an? f = Fahrzeug aus state.fahrzeuge, fahrer = sitzt jemand drin, dunkel 0…1
+// Taschenlampe leuchtet nur zu Fuß: wer in einem Fahrzeug sitzt (Auto, Streifenwagen, Boxer/Puma/Leopard, Evakuierung), hat keinen Kegel und keine Lampe an der Figur (die Scheinwerfer übernehmen)
+export const lampeAn = p => !!p && p.lampe > 0 && !p.imBoxer && !p.anBord;
 export const pkwLichtAn = (f, fahrer, dunkel) => !!f && f.art === 'pkw' && !(f.leben <= 0) && !!fahrer && dunkel >= PKW_LICHT_DUNKEL;
 
 // Rückwärts? Bewegung (dx, dy) in einem Bild gegen die Blickrichtung r (Bogenmaß), Tempo in px/s

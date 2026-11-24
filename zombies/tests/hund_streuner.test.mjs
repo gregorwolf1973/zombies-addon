@@ -29,21 +29,22 @@ const mitEinstellung = (streuner, fn) => {
 };
 const tick = (raum, n, dt = 0.05) => { for (let i = 0; i < n; i++) raum.hunde.schritt(dt); };
 
-test('Grundwert der Einstellung ist automatisch (-1)', () => {
-  assert.equal(grundwerte().hund.streuner, -1);
+test('Grundwert der Einstellung: 2 Streuner je Karte', () => {
+  assert.equal(grundwerte().hund.streuner, 2);
 });
 
-test('Anzahl: automatisch 1 je 0,33 km² (mindestens 1, höchstens 20), 0 = keine, fest = fest', async () => {
+test('Anzahl: automatisch 1 je 0,33 km² (mindestens 1, höchstens 2), 0 = keine, fest = fest', async () => {
   const { raum } = await beitreten('Anzahl');
   const h = raum.hunde, b0 = BREITE, h0 = HOEHE;
   try {
     // Kachel = 4 m, also 16 m²: 500 × 400 Kacheln = 3,2 km² → 10; 64 × 48 → mindestens 1; 700 × 700 → gedeckelt 20
-    for (const [b, hh, erw] of [[64, 48, 1], [300, 300, 4], [500, 400, 10], [700, 700, 20]]) {
+    for (const [b, hh, erw] of [[64, 48, 1], [300, 300, 2], [500, 400, 2], [700, 700, 2]]) {
       setzeKartengroesse(b, hh);
       mitEinstellung(-1, () => assert.equal(h.streunerAnzahl(), erw, `${b}x${hh}`));
     }
     mitEinstellung(0, () => assert.equal(h.streunerAnzahl(), 0));
     mitEinstellung(7, () => assert.equal(h.streunerAnzahl(), 7));
+    mitEinstellung(undefined, () => assert.equal(h.streunerAnzahl(), 2, 'ohne Einstellung: Vorgabe 2'));
   } finally { setzeKartengroesse(b0, h0); }
 });
 
@@ -59,6 +60,13 @@ test('start: Einstellung 0 = keine Streuner; sonst Anzahl, einer 100–300 m vom
     assert.ok(ds.some(d => d >= 100 && d <= 300), 'einer nahe am Start: ' + ds.map(Math.round));
     assert.ok(ds.every(d => d >= 40), 'keiner näher als 40 m');
   });
+});
+
+test('start ohne Einstellung: höchstens 2 Streuner je Karte', async () => {
+  const { raum } = await beitreten('Zwei');
+  const h = raum.hunde;
+  mitEinstellung(undefined, () => { ruhig(raum); h.start(); assert.equal(raum.state.hunde.size, 2); });
+  mitEinstellung(-1, () => { ruhig(raum); h.start(); assert.ok(raum.state.hunde.size <= 2); });
 });
 
 test('Zulaufen: Streuner sieht Spieler auf 12 m und läuft hin; hat der Spieler einen Hund, ignoriert er ihn', async () => {

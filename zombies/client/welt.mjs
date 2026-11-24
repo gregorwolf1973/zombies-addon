@@ -580,6 +580,7 @@ export function bezahlung(rucksack, kostet) {
   return zahl;
 }
 // Bundeswehr-Handgranate: Zünder 2 s ab dem Wurf, fliegt 0,6 s, Radius 5 m (8 px je m), Lärm 600 px
+export const GRANATWERFER_MINDEST = 36;   // Mindestabstand zum Ziel (4,5 m): näher kein Abschuss (Stoß statt Schuss)
 export const GRANATE = { flug: 0.6, flugWerfer: 0.8, tempo: 330, tempoWerfer: 1500, bogen: Math.PI / 3, zuender: 2.0, radius: 60, schadenZombie: 220, schadenSpieler: 70, wurfWeite: 200, blickWeite: 136, laerm: 600 };   // Wurfweite +67 %, Radius +50 %, mehr Schaden
 // Wer ein Maschinengewehr trägt (in der Hand oder im Rucksack), läuft 15 % langsamer
 export const TEMPO_MG = 0.85;
@@ -1031,8 +1032,8 @@ export const WAFFEN = {
   // Scharfschützengewehr: 75 m, sehr hoher Schaden, langsame Schussfolge, sehr laut; Gewehrmunition
   scharfschuetze: { fern: true, magazin: 5, nachlade: 4, reichweite: 75 * 8, schaden: 220, pause: 2.8, laut: 2.2, ueberraschung: 1.5, bild: 1 },
   schrotflinte: { fern: true, magazin: 6, nachlade: 4, reichweite: 160, schaden: 70, nebenSchaden: 45, kegel: 0.45, pause: 0.95, laut: 1.3, ueberraschung: 1.5, bild: 1 },
-  // Granatwerfer: Bogenschuss auf den Zielpunkt (bis 60 m, in der Verwaltung bis 100 m; Projektil ~4× so schnell wie ein Wurf), Explosion wie Handgranate (Schaden = Zombieschaden), Granaten (40 mm) als Vorrat
-  granatwerfer: { fern: true, granate: true, vorrat: 'granaten', magazin: 1, nachlade: 3, reichweite: 60 * 8, schaden: 220, pause: 2.2, laut: 1.5, ueberraschung: 1, bild: 1 },
+  // Granatwerfer: Bogenschuss auf den Zielpunkt (bis 25 m, in der Verwaltung bis 100 m; Projektil ~4× so schnell wie ein Wurf), Explosion wie Handgranate (Schaden = Zombieschaden), Granaten (40 mm) als Vorrat
+  granatwerfer: { fern: true, granate: true, vorrat: 'granaten', magazin: 1, nachlade: 3, reichweite: 25 * 8, schaden: 220, pause: 2.2, laut: 1.5, ueberraschung: 1, bild: 1 },
   // Handgranaten als Waffe: kein Auto-Schuss (wurf), Wurf auf den angetippten Punkt (Bogen 60° vor der Figur), Magazin 5, Aufschlagzündung
   handgranate: { fern: true, wurf: true, vorrat: 'handgranaten', magazin: 5, nachlade: 1.5, reichweite: 200, schaden: 220, pause: 0.6, laut: 1, ueberraschung: 1, bild: 0 },
   schlaeger: { reichweite: 21, schaden: 40, pause: 0.6, stoss: true, ueberraschung: 3, bild: 2 },
