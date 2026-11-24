@@ -277,6 +277,7 @@ test('Puma fährt zum Hotspot: stärkste Häufung, auch rechts und seitlich des 
   const sp = raum.welt.stuetzpunkt, st = raum.stuetzpunkt;
   imLagerSetzen(raum, p); leeren(raum);
   st.nester = []; st.schuetzen = [];
+  st.puma.kuehl = 1e9;   // nur Fahren prüfen: im kleinen Lager (72 m) läge die Gruppe sonst schon in Kanonenreichweite (60 m) und wäre weg, bevor er losfährt
   const b = beobachten(raum);
   // ein einzelner Zombie vor der Front links, dicht daneben die große Gruppe rechts außerhalb des Lagers
   zombieBei(raum, sp, 4, -6);

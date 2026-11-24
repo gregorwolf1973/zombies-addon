@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, zfFigur, zfClip, zfAngriff, zfBild, zfName } from '../client/zombiefiguren.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche } from '../client/zombiefiguren.mjs';
 
 const dir = new URL('../client/grafik/', import.meta.url);
 
@@ -78,4 +78,18 @@ test('Auswahl: nur aktive Figuren, Anteile wirken, mindestens eine bleibt an', (
   const nullen = Object.fromEntries(ZF_LISTE.map(f => [f.id, { an: true, anteil: 0 }]));
   assert.ok(ZF_LISTE.some(f => f.id === zfWaehle(nullen, 0.5)), 'Anteil 0 überall = gleich verteilt');
   assert.equal(zfWaehle(e, 1), 'zombiegirl'); assert.equal(zfWaehle(e, -1), 'copzombie');
+});
+
+test('Leichen: drei Sterbebewegungen, Drehung und Spiegelung fest je Id und gut gestreut', () => {
+  assert.deepEqual(zfLeiche('l17'), zfLeiche('l17'), 'deterministisch');
+  const clips = {}, dreh = new Set(); let gespiegelt = 0;
+  for (let i = 0; i < 600; i++) {
+    const l = zfLeiche('l' + i);
+    assert.ok(ZF_TODE.includes(l.clip)); assert.ok(l.dreh >= 0 && l.dreh < 2 * Math.PI);
+    clips[l.clip] = (clips[l.clip] ?? 0) + 1; dreh.add(Math.floor(l.dreh / (Math.PI / 4))); if (l.spiegeln) gespiegelt++;
+  }
+  for (const c of ZF_TODE) assert.ok(clips[c] > 120, c + ' ' + clips[c]);
+  assert.equal(dreh.size, 8, 'alle Achtel der Drehung kommen vor');
+  assert.ok(gespiegelt > 200 && gespiegelt < 400, 'gespiegelt ' + gespiegelt);
+  for (const c of ZF_TODE) { assert.equal(zfBild(c, { seit: 0 }), 0); assert.equal(zfBild(c, { seit: 99999 }), ZF_BILDER - 1); }
 });

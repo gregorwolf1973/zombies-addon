@@ -5,7 +5,7 @@
 import { ueberrolleZombies, UEBERROLLEN_PAUSE } from './ueberrollen.mjs';
 import { entferne, fuegeHinzu, kannAufnehmen, blockGrund } from '../client/stapel.mjs';
 import { KACHEL, WAFFEN, sichtfrei, HANDEL, HANDEL_ABSTAND, HANDEL_RAETSEL, bezahlung, MUNITION_MAX, DINGE } from '../client/welt.mjs';
-import { imLager, planKoord, handelPartner, zeltWandImWeg, rahmen, fahrFlaeche, FAHR_SCHRITT, PUMA_PARK, SP_BREITE, SP_TIEFE } from '../client/stuetzpunkt.mjs';
+import { imLager, planKoord, handelPartner, zeltWandImWeg, rahmen, fahrFlaeche, FAHR_SCHRITT, PUMA_PARK, SP_BREITE, SP_TIEFE, SP_PK } from '../client/stuetzpunkt.mjs';
 
 export const MG_REICHWEITE = 45 * 8;       // 45 m (8 px je Meter)
 export const PUMA_REICHWEITE = 60 * 8;     // 60 m
@@ -246,7 +246,7 @@ export class Stuetzpunkt {
     if (!lebend.length) return;
     const naechster = (x, y) => lebend.reduce((a, b) => Math.hypot(a.x - x, a.y - y) <= Math.hypot(b.x - x, b.y - y) ? a : b);
     const rufen = (x, y) => { const q = naechster(x, y); this.raum.broadcast('soldatRuf', { n: q.n, x: q.x, y: q.y, t: this.raum.rnd() < 0.5 ? 0 : 1 }); };
-    const E = RUF_WEITE / KACHEL;
+    const E = RUF_WEITE / SP_PK;   // Bauplan-Einheiten
     for (const [sid, p] of this.raum.state.spieler) {
       if (this.raum.extra.get(sid)?.bot || !p.verbunden || p.ebene || p.unten || p.zombie > 0) continue;
       const { u, v } = planKoord(this.sp, p.x, p.y);
@@ -491,7 +491,7 @@ export class Stuetzpunkt {
   // Hotspot: Zelle (96-px-Raster) mit den meisten Zombies im Umkreis von 600 px um das Lager (alle Seiten); Ergebnis: Mittelpunkt der
   // Zombies dieser Zelle als Bauplan-Punkt { u, v, n } oder null. Die bisherige Zelle bleibt, solange sie fast so voll ist wie die beste.
   hotspot(p) {
-    const sp = this.sp, r = HOT_RADIUS / KACHEL, zellen = new Map();
+    const sp = this.sp, r = HOT_RADIUS / SP_PK, zellen = new Map();
     for (const [id, z] of this.raum.state.zombies) {
       if (z.ebene || !(z.hp > 0) || this.dekoHaengt(id)) continue;
       const { u, v } = planKoord(sp, z.x, z.y);
@@ -624,7 +624,7 @@ export class Stuetzpunkt {
     }
   }
 
-  // Feldbett des Sanitätszelts (≤ 1 Kachel Rand) – draußen gilt es wie ein Safe-Room-Bett (Ruhen in raum.ruhtAmBett)
+  // Feldbett des Sanitätszelts (≤ 1,5 m Rand) – draußen gilt es wie ein Safe-Room-Bett (Ruhen in raum.ruhtAmBett)
   amFeldbett(p) {
     const sp = this.sp;
     if (!sp || p.ebene) return false;
@@ -632,7 +632,7 @@ export class Stuetzpunkt {
       if (t.art !== 'feldbett') continue;
       const co = Math.round(Math.cos(t.winkel)), si = Math.round(Math.sin(t.winkel));
       const lx = (p.x - t.x) * co + (p.y - t.y) * si, ly = -(p.x - t.x) * si + (p.y - t.y) * co;
-      if (Math.abs(lx) <= t.w / 2 + KACHEL && Math.abs(ly) <= t.d / 2 + KACHEL) return true;
+      if (Math.abs(lx) <= t.w / 2 + 12 && Math.abs(ly) <= t.d / 2 + 12) return true;   // 1,5 m um das Bett (echte Maße 0,75 × 2 m)
     }
     return false;
   }

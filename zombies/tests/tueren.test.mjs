@@ -25,7 +25,7 @@ async function bis(bedingung, ms = 3000) {
 const neueId = () => crypto.randomBytes(16).toString('hex');
 const mitteK = k => ({ x: (k.x + 0.5) * KACHEL, y: (k.y + 0.5) * KACHEL });
 
-before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: path.join(ordner, 'spiel.db') }); });
+before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: path.join(ordner, 'spiel.db') }); SpielRaum.einstellungen.innenMassstab = false; });   // prüft das grobe Innenraster (maßstäbliche Innenräume: innen_fein_spiel.test.mjs)
 after(async () => { await server.gracefullyShutdown(false); fs.rmSync(ordner, { recursive: true, force: true }); });
 
 async function beitreten(name, spielerId = neueId()) {

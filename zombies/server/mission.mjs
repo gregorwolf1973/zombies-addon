@@ -2,8 +2,19 @@
 // Gegenstände in WEIT auseinanderliegenden Gebäuden versteckt (in einem Behälter des Erdgeschosses). Auf der Karte sitzt
 // das Symbol GENAU am Gebäude (Paket N); der Kreis darum ist nur eine animierte Auffindhilfe. Hinweise (Zettel, Gerettete)
 // gibt es deshalb nicht mehr. Alles deterministisch aus Seed + Level + Karte; nur der Server braucht es.
-import { KACHEL, BREITE, zufall, ladenArt } from '../client/welt.mjs';
+import { KACHEL, BREITE, zufall, ladenArt, INNEN_FEIN } from '../client/welt.mjs';
 import { innenraumFuer } from '../client/innen.mjs';
+
+// Innenräume nur lesend (Behälterlisten, Kartenlage) – je Welt zwischengespeichert: maßstäbliche Innenräume kosten je Haus
+// bis ~0,1 s; ohne Speicher baute die Fundort-Liste (alle 10 s und bei Änderung) sie jedes Mal neu und hielt das Spiel an.
+const innenSpeicher = new WeakMap();
+export function innenLesen(seed, welt, ebene) {
+  let m = innenSpeicher.get(welt);
+  if (!m) innenSpeicher.set(welt, m = new Map());
+  const k = `${seed}|${INNEN_FEIN ? 1 : 0}|${ebene}`;
+  if (!m.has(k)) m.set(k, innenraumFuer(seed, welt, ebene));
+  return m.get(k);
+}
 import { waehleOrte } from './mission_orte.mjs';
 
 export const MISSION_MAX = 3;      // höchstens so viele Missionsgegenstände je Level (Gregor: nicht zu langwierig)
@@ -43,7 +54,7 @@ const hash = s => { let h = 2166136261; for (const c of String(s)) h = Math.imul
 
 // Behälter eines Hauses (Erdgeschoss), in die ein Missionsgegenstand passt: nicht hinter Zimmertüren
 export function missionsBehaelter(seed, welt, nr) {
-  const w = innenraumFuer(seed, welt, `h${nr}eg`);
+  const w = innenLesen(seed, welt, `h${nr}eg`);
   return (w?.behaelter ?? []).filter(b => BEHAELTER_OK.has(b.art) && !b.tuer);
 }
 
@@ -60,7 +71,7 @@ export function ortText(haus) {
 // Position des Behälters auf der Karte: Der Innenraum hat eigene Maße (nicht deckungsgleich mit dem Grundriss), also wird die relative
 // Lage im Innenraum (ohne Außenrand ox/oy) auf das Hausrechteck abgebildet; Rückfall Hausmitte
 export function behaelterAufKarte(seed, welt, nr, b) {
-  const h = welt.haeuser[nr], w = innenraumFuer(seed, welt, `h${nr}eg`);
+  const h = welt.haeuser[nr], w = innenLesen(seed, welt, `h${nr}eg`);
   if (!h || !w?.b || !w?.h) return [((h?.x ?? 0) + (h?.b ?? 0) / 2) * KACHEL, ((h?.y ?? 0) + (h?.h ?? 0) / 2) * KACHEL];
   if (w.zuKarte) return w.zuKarte(b.x, b.y);   // maßstäbliche Innenräume: exakt (Umkehrung der Ausrichtung am Umriss)
   const rx = Math.max(0, Math.min(1, (b.x / KACHEL - w.ox) / w.b)), ry = Math.max(0, Math.min(1, (b.y / KACHEL - w.oy) / w.h));

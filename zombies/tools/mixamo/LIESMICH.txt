@@ -7,8 +7,9 @@ Mixamo-FBX -> Draufsicht-Laufschleifen (Prototyp, nur exakt senkrechte Draufsich
 4. Altes Sprite zombie_hemd als alt0..5.png (160er Felder 18..23 aus client/grafik/figuren.png) in den Ordner legen, dann
    PYTHONPATH=<pil> python3 anschauen.py <ordner>  -> mixamo_proto.gif, _phasen.png, _kreis.gif
 Chrome und Server danach per PID beenden.
-5. Atlas fürs Spiel: sh alle.sh <ordner> (alle Figuren x Clips), dann PYTHONPATH=<pil> python3 atlas_bauen.py <ordner> ../../client/grafik
-   -> client/grafik/zombies_<figur>.webp (3200x1200, Stil C: Gamma 0,72, ohne Kontur) + zombies_neu.json; Logik client/zombiefiguren.mjs, Einbau client/spiel.mjs (Backend-Schalter zombieFigurenNeu, state.optionen Bit 256).
+5. Atlas fürs Spiel: sh alle.sh <ordner> (alle Figuren x 9 Clips; Ports per SEITE_PORT/CDP_PORT; tod2/tod3 = zusätzliche Sterbebewegungen „Falling Back Death“/„Dying“
+   als fbx/<figur>/tod2.fbx, tod3.fbx: Mixamo-UI, Figur zuerst wählen, FBX Binary, Without Skin, 30 fps, keine Reduktion; seite.html ?anim= nimmt die Haut aus dying.fbx), dann PYTHONPATH=<pil> python3 atlas_bauen.py <ordner> ../../client/grafik
+   -> client/grafik/zombies_<figur>.webp (3200x1600, Stil C: Gamma 0,72, ohne Kontur) + zombies_neu.json; Logik client/zombiefiguren.mjs, Einbau client/spiel.mjs (Backend-Schalter zombieFigurenNeu, state.optionen Bit 256).
 Helden (acht Figuren: swatguy, jennifer, remy, alex, brute, swat, jody, roth; Liste client/heldenfiguren.mjs HF_LISTE): Körper OHNE Waffe + Waffen als eigene Sprites.
    Daten je Figur in fbx/<figur>/{pistole,gewehr}_paket.zip + pistole_schiessen, gewehr_schiessen, stechen, schlagen, gehen, rennen, stehen, werfen, faust (.fbx).
    Pakete vorher entpacken: unzip -o <figur>/pistole_paket.zip -d <figur>/pistole_pak ; unzip -o <figur>/gewehr_paket.zip -d <figur>/gewehr_pak (Haut + Clips idle/walk/run/death).

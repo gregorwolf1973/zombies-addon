@@ -179,6 +179,25 @@ test('Zimmertüren: öffnen, schließen, mehrzellig; Zombie hämmert gegen die g
   } finally { await c.leave(); }
 });
 
+test('Zimmertür öffnet automatisch: 0,5 s davorstehen (nicht früher), auch im Feinraster', async () => {
+  const { c, raum, p } = await beitreten('Steher');
+  try {
+    raum.state.tuerFrei = 100; raum.state.tuerRaetsel = 0; raum.state.tuerSchluessel = 0;
+    const { w } = hausMit(raum, w => w.tueren.length >= 1);
+    const t = w.tueren[0], key = `${w.ebene}:${t.x},${t.y}`;
+    const [a] = (t.senkrecht ? [[-3, 0]] : [[0, -3]]).map(([dx, dy]) => zellMitte(w, [t.x + dx, t.y + dy]));
+    raum.state.tueren.get(key) ?? raum.baueEbene?.(w.ebene);
+    const st = raum.state.tueren.get(key), x = raum.extra.get(c.sessionId);
+    p.ebene = w.ebene; Object.assign(p, a);
+    await warte(150);   // erster Schritt nach dem Versetzen bringt die Zeit seit dem Beitreten mit
+    raum.setzeTuer(key, false); st.verschlossen = false; raum.setzeBarrikade?.(key, 0);
+    x.ankunft = null; x.tuerT = 0; x.tuerKey = null; x.tuerSperre = null;
+    await warte(250);
+    assert.equal(st.offen, false, 'nach 0,25 s schon offen');
+    assert.ok(await bis(() => st.offen === true, 2000), 'Tür geht im Stehen nicht auf');
+  } finally { await c.leave(); }
+});
+
 test('Langes Regal: Durchsuchen auch am Ende (Reichweite zählt bis zum Möbelrand, nicht zur Mitte)', async () => {
   const { c, raum, p } = await beitreten('Regalsucher');
   try {

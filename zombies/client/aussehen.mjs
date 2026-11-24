@@ -737,21 +737,31 @@ function zaunLinien(ctx, welt, rect) {
       }
       f(z.p.at(-2) * K, z.p.at(-1) * K, n);
     };
-    if (z.a !== 'h' && z.a !== 'w') strich('rgba(70,62,50,.3)', 12);   // Grundstreifen in der blockierten Breite (Kollision ±6 px), sonst wäre ein Drahtzaun fast unsichtbar
+    // Maßstab 8 px = 1 m: Zaun ~10 cm (Linie ~1 px) mit Pfosten, Hecke ~0,7 m (5,6 px) mit Blattstruktur und weichem Rand; Kollision siehe osmwelt baueFein
     if (z.a === 'h') {
-      // Hecke ~0,9 m breit (7 px, 8 px = 1 m), glatte Linie; Kollision bleibt breiter (Feinraster)
       const sv = FZ_SCHATTEN.dx * 0.5, sw = FZ_SCHATTEN.dy * 0.5;   // niedrige Hecke: halber Schattenversatz, selbe Weltrichtung wie die Häuser
-      strich(`rgba(0,0,0,${FZ_SCHATTEN.alpha * 0.7})`, 7, sv, sw); strich('#2f6b2a', 7);
-      ctx.fillStyle = '#3f8a37';
-      entlang(5, (x, y, s) => { ctx.beginPath(); ctx.arc(x + (hash(s, 1) - 0.5) * 3, y + (hash(1, s) - 0.5) * 3, 2.4, 0, TAU); ctx.fill(); });
+      strich(`rgba(0,0,0,${FZ_SCHATTEN.alpha * 0.45})`, 7.5, sv, sw); strich(`rgba(0,0,0,${FZ_SCHATTEN.alpha * 0.4})`, 5.6, sv, sw);   // weicher Schatten (zwei Lagen)
+      strich('rgba(38,84,34,.45)', 7);    // weicher Rand: lockeres Laub außen
+      strich('#2b6227', 5.6);
+      // Blattwerk: kleine Büschel in zwei Grüntönen, leicht versetzt (fest je Linie, kein Flimmern)
+      ctx.fillStyle = '#3a7d33';
+      entlang(2.2, (x, y, s) => { ctx.beginPath(); ctx.arc(x + (hash(s, 1) - 0.5) * 3.2, y + (hash(1, s) - 0.5) * 3.2, 1.1 + hash(s, 3) * 0.7, 0, TAU); ctx.fill(); });
+      ctx.fillStyle = 'rgba(120,180,90,.55)';
+      entlang(3.1, (x, y, s) => { ctx.beginPath(); ctx.arc(x + (hash(s, 5) - 0.5) * 2.6 - 0.4, y + (hash(5, s) - 0.5) * 2.6 - 0.4, 0.6 + hash(s, 7) * 0.4, 0, TAU); ctx.fill(); });
     } else if (z.a === 'm') {
-      strich('rgba(0,0,0,.25)', 3, FZ_SCHATTEN.dx * 0.3, FZ_SCHATTEN.dy * 0.3); strich('#90a4ae', 2);
-      ctx.fillStyle = '#455a64'; entlang(22, (x, y) => ctx.fillRect(x - 2.5, y - 2.5, 5, 5));
+      // Maschendraht: dünner Draht mit Rautenmuster angedeutet, runde Metallpfosten alle 2,5 m
+      strich('rgba(0,0,0,.18)', 1.2, FZ_SCHATTEN.dx * 0.12, FZ_SCHATTEN.dy * 0.12);   // Schatten dicht am Zaun (Draht wirft kaum Schatten)
+      strich('rgba(176,190,197,.9)', 1);
+      ctx.setLineDash([0.7, 0.7]); strich('rgba(84,110,122,.8)', 0.8); ctx.setLineDash([]);
+      ctx.fillStyle = '#455a64'; entlang(20, (x, y) => { ctx.beginPath(); ctx.arc(x, y, 0.9, 0, TAU); ctx.fill(); });
     } else if (z.a === 'w') {
       strich('rgba(0,0,0,.35)', 10, FZ_SCHATTEN.dx * 0.5, FZ_SCHATTEN.dy * 0.5); strich('#8a8580', 10); strich('#b5b0a8', 5);
     } else {
-      strich('rgba(0,0,0,.31)', 7, FZ_SCHATTEN.dx * 0.4, FZ_SCHATTEN.dy * 0.4); strich('#a1887f', 6); strich('#8d6e63', 2);
-      ctx.fillStyle = '#5d4037'; entlang(18, (x, y) => ctx.fillRect(x - 3.5, y - 3.5, 7, 7));
+      // Holzlattenzaun: ~10 cm Linie aus einzelnen Latten, kantige Holzpfosten (12 cm) alle 2 m
+      strich('rgba(0,0,0,.22)', 1.6, FZ_SCHATTEN.dx * 0.15, FZ_SCHATTEN.dy * 0.15);   // kurzer Schatten (Zaun ~1 m hoch)
+      strich('#a1887f', 1.2);
+      ctx.setLineDash([0.55, 0.45]); strich('#7b5e52', 1.2); ctx.setLineDash([]);
+      ctx.fillStyle = '#4e342e'; entlang(16, (x, y) => ctx.fillRect(x - 1, y - 1, 2, 2));
     }
   });
   ctx.restore();

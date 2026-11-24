@@ -39,7 +39,7 @@ async function bis(bedingung, ms = 3000) {
 }
 const neueId = () => crypto.randomBytes(16).toString('hex');
 
-before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: DB }); });
+before(async () => { server = await starte({ port: PORT, optionen: { karte: 'dorf' }, leise: true, datenbank: DB }); SpielRaum.einstellungen.innenMassstab = false; });   // prüft das grobe Innenraster (maßstäbliche Innenräume: innen_fein_spiel.test.mjs)
 after(async () => { await server.gracefullyShutdown(false); fs.rmSync(ordner, { recursive: true, force: true }); });
 
 async function beitreten(name, spielerId = neueId()) {
