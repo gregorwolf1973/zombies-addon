@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Halb aufgelöste Varianten der Figuren-Atlanten (Grafikstufe Mittel/Niedrig): zombies_<figur>.webp, helden_<id>.webp, helden_waffen.webp
+"""Halb aufgelöste Varianten der Figuren-Atlanten (Grafikstufe Mittel/Niedrig): zombies_<figur>.webp, helden_<id>.webp, helden_waffen.webp, polizei.webp
 -> *_klein.webp (Breite und Höhe halbiert). Die JSON-Rahmen (zombies_neu.json, helden_neu.json) bleiben unverändert; der Client halbiert die
 Koordinaten (client/grafikstufe.mjs rahmenHalb) und gleicht die Darstellungsgröße über den Faktor 2 aus.
 Aufruf (PIL steht nicht überall: PYTHONPATH=~/code/ahnen-werkzeuge/pil):  python3 tools/grafik_klein.py [--neu]
@@ -23,7 +23,7 @@ def main():
     neu = '--neu' in sys.argv
     zf = json.load(open(G / 'zombies_neu.json'))['figuren']
     hf = json.load(open(G / 'helden_neu.json'))['figuren']
-    namen = [f'zombies_{f}' for f in zf] + [f'helden_{f}' for f in hf] + ['helden_waffen']
+    namen = [f'zombies_{f}' for f in zf] + [f'helden_{f}' for f in hf] + ['helden_waffen'] + (['polizei'] if (G / 'polizei.webp').exists() else [])
     for n in namen:
         q, z = G / f'{n}.webp', G / f'{n}_klein.webp'
         if z.exists() and not neu and z.stat().st_mtime >= q.stat().st_mtime:

@@ -5,7 +5,7 @@ import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from '
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
 import { HF_LISTE, HF_FIGUREN, HF_GROESSE, ALT_FAKTOR, SCHULTER_NEU_PX, soldatSkala, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
-import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche } from './zombiefiguren.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild, zfGang, ZF_OPTIONAL, ZF_REF, ZK_LAEUFER } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
@@ -989,7 +989,7 @@ const fzRichtung = f => (typeof f.rq === 'number' ? ausStufe(f.rq) : f.richtung 
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
 let baumTempoWert = 25;
 // Zombie im Draht: leichtes Schwanken und etwa jede Sekunde ein kurzes Zerren (statt Dauerzittern)
-const haengZerren = (jetzt, x) => { const ph = ((jetzt + x * 137) % 1100) / 1100; return Math.sin(jetzt / 700 + x) * 0.03 + (ph < 0.2 ? Math.sin(ph / 0.2 * Math.PI) * 0.09 : 0); };
+const haengZerren = (jetzt, x) => Math.sin(jetzt / 1900 + x) * 0.025;   // alte Kriecher-Bilder im Draht: nur leichtes, langsames Wiegen (kein Ruck mehr)
 let taumelBis = 0;   // performance.now(), bis wann der eigene Held taumelt (Fahrzeugstoß, Nachricht 'taumel'): Steuerung eingeschränkt wie auf dem Server
 // Maßstäbliche Innenräume: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
 const INNEN_FIGUR = 0.5;
@@ -1035,6 +1035,9 @@ class Ort extends Phaser.Scene {
     this.ladeListeLaden();
     // neue Helden-Figuren (Mixamo von oben, tools/mixamo/helden_atlas_bauen.py): je Figur ein Atlas, Clips in helden_neu.json; Rückfall = Heldenbilder von Gemini (Backend-Schalter)
     this.load.json('heldenneu', 'grafik/helden_neu.json');
+    // Polizisten an den Straßensperren: SWAT-Held dunkelblau mit Pistole (tools/mixamo/polizei_atlas.py), Heldengröße
+    this.load.json('polizeineu', 'grafik/polizei.json');
+    this.load.image('polizei_neu', atlasPfad('grafik/polizei.webp', GFS.halb));
     // Waffen/Lampe (hf_waffen) und die Körper-Atlanten der anwesenden Helden stehen in der Ladeliste; später auftauchende Helden lädt hfLaden im Hintergrund
     // Helden (Gemini, nur ohne Bit 512): Körper mit roten Haaren/blauer Jacke zum Umfärben + Stiefel als eigene Ebene (Bogen 'helden160' steht in der Ladeliste)
     this.load.json('heldenliste', 'grafik/helden160.json');
@@ -1237,7 +1240,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
     b11Registrieren(this, raum, { skala: () => soldatSkala(mg()), leicheSkala: () => soldatLeicheSk() });   // Szene „Stau auf der B11“
     const polSk = () => SCHULTER_NEU_PX * mg() / POL_SCHULTER_PX;   // Polizist: Schulterbreite wie die Mixamo-Helden (15,2 px bei mg = 1), nicht mehr kleiner
-    polizeiRegistrieren(this, raum, { skala: polSk, leicheSkala: () => polSk() * VERWUNDET_GROESSE * groesse('figuren2', 'polizist') / (BOGEN2_GROESSE * groesse('figuren2', 'polizist')) });   // Polizisten an den Straßensperren
+    polizeiRegistrieren(this, raum, { neuSkala: () => ZOMBIE_GROESSE * HF_G * GFS.k * mg(), halb: () => GFS.halb, rahmenHalb, skala: polSk, leicheSkala: () => polSk() * VERWUNDET_GROESSE * groesse('figuren2', 'polizist') / (BOGEN2_GROESSE * groesse('figuren2', 'polizist')) });   // Polizisten an den Straßensperren
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => {
@@ -1923,9 +1926,9 @@ class Ort extends Phaser.Scene {
       const tex = this.textures.get('zf_' + f); namen[f] = {};
       for (const c of ZF_CLIPS) {
         namen[f][c] = [];
-        for (let i = 0; i < ZF_BILDER; i++) {
+        for (let i = 0; i < (j.clips?.[c]?.n ?? ZF_BILDER); i++) {
           const n = zfName(f, c, i), r = j.bilder[n];
-          if (!r && ZF_TODE.includes(c) && c !== 'dying') { namen[f][c] = null; break; }   // ältere Atlanten ohne Zusatz-Sterbebewegung
+          if (!r && ZF_OPTIONAL.has(c)) { namen[f][c] = null; break; }   // ältere Atlanten ohne Zusatz-Sterbe-/Gangvariante
           if (!r) return null;
           if (!tex.has(n)) { const q = rahmenHalb(r, GFS.halb); tex.add(n, 0, q[0], q[1], q[2], q[3]); }
           namen[f][c].push(n);
@@ -2769,9 +2772,12 @@ class Ort extends Phaser.Scene {
         let nah = false;
         if (z.jagt && !z.kriecht) for (const p of s.spieler.values()) if ((p.ebene ?? '') === (z.ebene ?? '') && Math.hypot(p.x - z.x, p.y - z.y) < (W.spielerRadius + W.zombieRadius + 16) * (this.feinInnen() ? INNEN_REICH : 1)) { nah = true; break; }
         const fig = zfFigur(z.variante), geht = bildNr >= 0;
-        let clip = zfClip({ kriecht: z.kriecht, jagt: z.jagt, geht, nah });
+        let clip = zfClip({ kriecht: z.kriecht, jagt: z.jagt, geht, nah, laeufer: z.kl === undefined ? undefined : z.kl === ZK_LAEUFER });   // Bewegungsklasse vom Server (z.kl)
         if (clip === 'attack') clip = zfAngriff(this.time.now, f.zh);
-        const i = zfBild(clip, { lauf: f.lauf ?? 0, zs: f.zs, zeitMs: this.time.now, versatz: f.zv * 7, ...(z.kriecht && (z.haengt || !geht) ? { lauf: z.haengt ? this.time.now / 45 : 0 } : {}) });
+        const gang = f.gang ??= zfGang(id);   // Gangart je Zombie (Variante + eigenes Tempo)
+        if (clip === 'walk' || clip === 'run') { const v = gang[clip]; if (this.zfNamen[fig][v]) clip = v; }
+        // im Draht: langsames Zerren (zfZerrBild) statt des schnell durchlaufenden Kriech-Clips (sah aus wie Zappeln)
+        const i = z.haengt && clip === 'crawl' ? zfZerrBild(this.time.now, f.zh) : zfBild(clip, { lauf: f.lauf ?? 0, zs: ZF_REF * innenFigur() / zf, zeitMs: this.time.now, versatz: f.zv * 7, ...(z.kriecht && !geht ? { lauf: 0 } : {}) });
         const key = 'zf_' + fig;
         if (f.bild.texture.key !== key) f.bild.setTexture(key);
         f.bild.setFrame(this.zfNamen[fig][clip][i]).setRotation(0).setScale(ZOMBIE_GROESSE * ZF_G * GFS.k * zf);
@@ -2787,7 +2793,7 @@ class Ort extends Phaser.Scene {
       const tex = gem ? 'figuren3' : neu ? 'figuren2' : 'figuren';
       if (f.bild.texture.key !== tex) f.bild.setTexture(tex, 0);
       if (z.kriecht) {
-        f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], z.haengt ? Math.floor(this.time.now / 450 + z.x) : bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
+        f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], z.haengt ? Math.floor(this.time.now / 1300 + z.x) : bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
         f.bild.setRotation(z.haengt ? haengZerren(this.time.now, z.x) : 0).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'kriecher_' + 'abcd'[(z.variante ?? 0) % 4]));
       } else if (gem) {
         // Einzelbild (Gemini): beim Gehen leicht wanken, Maßstab wie die übrigen Zombies

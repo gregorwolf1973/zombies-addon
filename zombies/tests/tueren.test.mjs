@@ -10,7 +10,8 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { KACHEL, T, frei, schlossArt, ladenArt } from '../client/welt.mjs';
-import { freierPort } from './hilfe.mjs';
+import { freierPort, alleLaeufer } from './hilfe.mjs';
+alleLaeufer(SpielRaum);   // Verhalten ohne Bewegungsklassen (alle jagen bis zum Höchsttempo)
 
 const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;

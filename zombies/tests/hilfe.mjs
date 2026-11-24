@@ -29,8 +29,12 @@ export async function bisBedingung(bedingung, ms = 5000, takt = 20) {
   return !!(await bedingung());
 }
 
+// Alle neuen Zombies als Läufer (Verhalten vor den Bewegungsklassen: jagen bis zum Höchsttempo, keine geborenen Kriecher)
+export function alleLaeufer(SpielRaum) { SpielRaum.klasseFest = 1; }
+
 // Diese Tests gehen von den früheren, schnellen Tempi aus (Held 67,5 km/h, Zombie 47 km/h): feste Wartezeiten/Wege.
 // Die Vorgaben (20/9/15/4 km/h) prüft tests/tempo_kmh.test.mjs.
 export function altesTempo(SpielRaum) {
+  alleLaeufer(SpielRaum);
   SpielRaum.prototype.tempoWerte = () => ({ gehen: 67.5, schleichen: 31.5, jagen: 47.25, wandern: 13.5 });
 }

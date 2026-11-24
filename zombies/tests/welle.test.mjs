@@ -10,7 +10,8 @@ import { KACHEL, BREITE, HOEHE, frei, WERTE as W } from '../client/welt.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
 import { LEVEL_VORGABE } from '../server/schwierigkeit.mjs';
 import { aufParkAuto } from '../client/fzkollision.mjs';
-import { freierPort } from './hilfe.mjs';
+import { freierPort, alleLaeufer } from './hilfe.mjs';
+alleLaeufer(SpielRaum);   // Verhalten ohne Bewegungsklassen (alle jagen bis zum Höchsttempo)
 
 const PORT = await freierPort();
 const URL_ = `http://127.0.0.1:${PORT}`;

@@ -109,3 +109,15 @@ test('Heldenvorladen: nur der eigene und die anwesenden Helden, nie alle, ohne D
   assert.equal(l.length, 4);
   assert.deepEqual(figurenLadeliste({ optionen: 768, helden: ['gibtsnicht'] }).filter(e => e.key.startsWith('hf_') && e.key !== 'hf_waffen'), []);
 });
+
+test('Polizisten-Atlas (SWAT dunkelblau, tools/mixamo/polizei_atlas.py): Clips stehen/gehen/tod, Rahmen im Bild, kleine Fassung halb so groß', () => {
+  const j = json('polizei.json'), [w, h] = webpMasse('polizei.webp'), [kw, kh] = webpMasse('polizei_klein.webp');
+  assert.deepEqual([w, h], j.groesse);
+  assert.deepEqual([kw, kh], [w / 2, h / 2]);
+  for (const c of ['stehen', 'gehen', 'tod']) {
+    const k = j.clips[c];
+    assert.ok(k && k.n >= 8, c);
+    assert.ok(k.n * k.feld <= w && k.y + k.feld <= h && k.y % 2 === 0 && k.feld % 2 === 0, c);
+  }
+  assert.ok(j.clips.gehen.weg > 0 && j.clips.tod.einmal);
+});

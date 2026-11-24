@@ -6,6 +6,16 @@ import { WERTE, KACHEL } from '../client/welt.mjs';
 
 export const DRAHT_CHANCE = 0.4, DRAHT_DAUER = 60, DRAHT_RAND = 9;   // Wahrscheinlichkeit je Berührung, Sekunden, Zuschlag (px) zum Zombieradius (Feinraster: die Figur stoppt bis ~14 px vor der Rolle)
 const cache = new WeakMap();
+export const HAENG_DREH = 0.6;   // rad/s: so schnell dreht sich ein Zombie im Draht höchstens zu seinem Ziel
+
+// Winkel von alt in Richtung neu drehen, höchstens um max (kürzester Weg)
+export function drehBegrenzt(alt, neu, max) {
+  if (!Number.isFinite(alt)) return neu;
+  let d = neu - alt;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return alt + Math.max(-max, Math.min(max, d));
+}
 
 // alle Rollen der Welt als orientierte Rechtecke { x, y, hl, hb, c, s, ausen: [nx, ny] | null, lager }
 export function drahtRollen(welt) {

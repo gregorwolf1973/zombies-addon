@@ -21,12 +21,12 @@ import { PkwVerwaltung, schluesselFund } from './pkw.mjs';
 import { Walze } from './walze.mjs';
 import { Fahrzeugkontakt } from './fahrzeugkontakt.mjs';
 import { autoTempo, bewegeFz } from '../client/fzkollision.mjs';
-import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
+import { drahtPruefen, haengendStart, haengtSchritt, drehBegrenzt, HAENG_DREH } from './haengend.mjs';
 import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
 import { nachSeq } from '../client/netzpuffer.mjs';
-import { zfWaehle, zfVariante } from '../client/zombiefiguren.mjs';
+import { zfWaehle, zfVariante, zkKlasse, ZK_ANTEILE, ZK_KRIECHER, ZK_LAEUFER, ZK_TEMPO } from '../client/zombiefiguren.mjs';
 import { waehleZiel, schussGuete, ersterBaum } from './baumschuss.mjs';
 import { aussehenMigriert, AUSSEHEN_MUSTER } from '../client/figurbild.mjs';
 import { hfZufall, hfAktive, hfFigurenEinst, HF_LISTE } from '../client/heldenfiguren.mjs';
@@ -117,6 +117,7 @@ export const Zombie = schema({
   haengt: t.boolean(),      // hängt im S-Draht fest (Kriecher-Bild, zappelt; server/haengend.mjs)
   ebene: t.string(),
   variante: t.uint8(),      // Zombietyp 0–24 (Reihenfolge ZOMBIE_TYPEN in einstellungen.mjs)
+  kl: t.uint8(),            // Bewegungsklasse (client/zombiefiguren.mjs ZK_*): 0 Schlurfer, 1 Läufer, 2 Kriecher
 }, 'Zombie');
 entkoppeln(Zombie, ['x', 'y']);   // übertragen wird erst in netzAbgleich (ganze Pixel, ab 1 px Änderung, Ferne nur jeden 2. Patch)
 
@@ -1609,11 +1610,14 @@ export class SpielRaum extends Room {
       z.variante = erlaubt?.length ? erlaubt[Math.floor(this.rnd() * erlaubt.length)] : Math.floor(this.rnd() * 25);
     } z.ebene = ebene;
     const id = 'z' + (this.naechsteZombieId++);
-    const schnell = this.schwierigkeit().schnell;   // Anteil schneller Zombies („Läufer“) steigt mit Level und Spieltagen
+    const schnell = this.schwierigkeit().schnell;   // Zusatzanteil „Läufer“ (steigt mit Level und Spieltagen), geht vom Schlurfer-Anteil ab
+    // Bewegungsklasse fest aus der Id (client/zombiefiguren.mjs zkKlasse; Anteile im Backend): Kriecher robben von Anfang an
+    const zk = SpielRaum.einstellungen?.zombies ?? {};
+    z.kl = SpielRaum.klasseFest ?? zkKlasse(id, { kriecher: zk.anteilKriecher ?? ZK_ANTEILE.kriecher, schlurfer: zk.anteilSchlurfer ?? ZK_ANTEILE.schlurfer, laeufer: zk.anteilLaeufer ?? ZK_ANTEILE.laeufer }, schnell);
+    if (z.kl === ZK_KRIECHER) z.kriecht = true;   // (SpielRaum.klasseFest: nur Tests, tests/hilfe.mjs alleLaeufer)
     this.state.zombies.set(id, z);
-    // tempo: fester Tempofaktor, damit nicht alle gleich schnell sind (Kriecher bleiben langsam, siehe zombieGehen). Seit 0.84.4 ist das
-    // eingestellte Zombietempo das HÖCHSTtempo: normale 60–85 %, Läufer 85–100 % (vorher 0,75–1,25 bzw. Läufer 1,3–1,6 – schneller als eingestellt)
-    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: schnell > 0 && this.rnd() < schnell ? 0.85 + this.rnd() * 0.15 : 0.6 + this.rnd() * 0.25 });
+    // tempo: fester Tempofaktor 0,85–1,0 innerhalb der Klasse (zombieGehen): Läufer bis zum eingestellten Höchsttempo, Schlurfer/Kriecher langsam
+    this.zombieInfo.set(id, { ziel: null, punkt: null, wechsel: 0, verloren: 0, steht: schlaeft, schlaeft, tempo: 0.85 + this.rnd() * 0.15 });
     return id;
   }
 
@@ -2922,7 +2926,9 @@ export class SpielRaum extends Room {
         if (!info.dran) continue;
         d = info.stau; info.stau = 0;
       } else { info.stau = 0; info.dran = true; }
+      const w0 = z.richtung;
       this.zombieSchritt(id, z, d);
+      if (z.haengt) z.richtung = drehBegrenzt(w0, z.richtung, HAENG_DREH * d);   // im Draht: nur langsam zum Ziel drehen (sonst zuckt er bei jedem Richtungswechsel)
       const re = info.re; if (re) { re.x = z.x; re.y = z.y; re.e = z.ebene; }   // Raster-Kopie auffrischen (zombieAbstand liest sie)
     }
     this.messen('zombies', t0); t0 = performance.now();
@@ -3690,12 +3696,21 @@ export class SpielRaum extends Room {
     if (horde) info.eng = eng;   // gedrängt: im nächsten Schritt langsamer (Stau statt Übereinanderlaufen)
   }
 
+  // Höchsttempo (px/s) der Bewegungsklasse: Kriecher und Schlurfer nach „Zombie wandert“, Läufer nach „Zombie jagt“ (Höchsttempo)
+  klassenTempo(z, eifrig) {
+    const wand = W.zombieTempoWandern;
+    if (z.kriecht) return wand * ZK_TEMPO.kriecher;
+    if (z.kl === ZK_LAEUFER) return W.zombieTempoJagen;
+    return Math.min(W.zombieTempoJagen, wand * (eifrig ? ZK_TEMPO.schlurferJagen : ZK_TEMPO.schlurferWandern));
+  }
+
   zombieGehen(z, w, weg, dt, info = null) {
     if (z.haengt) return false;   // im S-Draht festgehakt
     const eifrig = z.jagt || weg > W.zombieTempoWandern * dt * 1.5;   // jagt oder folgt einem Geräusch (nicht nur Umherirren)
+    weg = Math.min(weg, this.klassenTempo(z, eifrig) * dt);   // Bewegungsklasse: Schlurfer und Kriecher werden nie schnell
     weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
     weg *= tempoVon(this.wv(z.ebene));                  // drinnen im Feinraster: Tempo im Maßstab des Raums
-    if (info && !z.kriecht) weg *= info.tempo ?? 1;     // eigener Tempofaktor des Zombies (0,6–1,0: eingestelltes Tempo = Höchsttempo)
+    if (info) weg *= info.tempo ?? 1;                   // eigener Tempofaktor des Zombies (0,85–1,0: eingestelltes Tempo = Höchsttempo)
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
     // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)

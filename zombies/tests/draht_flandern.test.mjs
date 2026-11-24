@@ -7,7 +7,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum, Zombie } from '../server/raum.mjs';
-import { drahtPruefen, haengtSchritt, haengendStart, drahtRollen, DRAHT_DAUER } from '../server/haengend.mjs';
+import { drahtPruefen, haengtSchritt, haengendStart, drahtRollen, DRAHT_DAUER, drehBegrenzt, HAENG_DREH } from '../server/haengend.mjs';
 import { ueberrolleZombies } from '../server/ueberrollen.mjs';
 import { KACHEL, WERTE, setzeKartengroesse, frei, tierGelaende, feinWert, bewege, zufall, WELT_VERSION, FLANDERN_TEMPO } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
@@ -203,6 +203,38 @@ test('S-Draht: ein Zombie, der gegen die Rolle läuft, bleibt wirklich hängen (
     for (let i = 0; i < 400 && !z.haengt; i++) raum.zombieSchritt(id, z, 0.1);
     assert.ok(z.haengt && z.kriecht, 'Zombie bleibt nicht hängen');
   });
+});
+
+test('Im Draht: Position bleibt fest, Blickrichtung dreht nur langsam zum Spieler (kein Zucken)', async () => {
+  await beitreten(async ({ raum, p }) => {
+    const roll = drahtRollen(raum.welt).find(q => q.lager);
+    const id = raum.setzeZombie(roll.x + roll.ausen[0] * (roll.hb + 9), roll.y + roll.ausen[1] * (roll.hb + 9), '');
+    const z = raum.state.zombies.get(id), info = raum.zombieInfo.get(id);
+    raum.haengenBleiben(z, info, Infinity);
+    const x0 = z.x, y0 = z.y;
+    p.x = x0 + 45; p.y = y0; p.ebene = ''; info.ziel = raum.state.spieler.keys().next().value;
+    await warte(300);   // erster Takt nach dem Aufbau bringt die bis dahin verstrichene Zeit mit (große Drehung erlaubt): erst danach messen
+    let w = z.richtung, maxSprung = 0, tl = Date.now();
+    const t0 = Date.now();
+    for (let i = 0; i < 40; i++) {   // Spieler kreist dicht um ihn herum (er sieht und jagt ihn)
+      const a = i * 0.7; p.x = x0 + Math.cos(a) * 45; p.y = y0 + Math.sin(a) * 45; p.ebene = '';
+      info.ziel = raum.state.spieler.keys().next().value;
+      await warte(50);
+      let d = z.richtung - w; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+      const zeit = (Date.now() - tl) / 1000; tl = Date.now();
+      maxSprung = Math.max(maxSprung, Math.abs(d) - HAENG_DREH * (zeit + 0.15)); w = z.richtung;   // erlaubt: Drehtempo × vergangene Zeit (+ ein Takt Spiel)
+    }
+    const dauer = (Date.now() - t0) / 1000;
+    assert.ok(Math.hypot(z.x - x0, z.y - y0) < 0.5, 'hängender Zombie bewegt sich');
+    assert.ok(maxSprung <= 0.05, `Richtung springt um ${maxSprung.toFixed(2)} rad mehr als erlaubt (${dauer.toFixed(1)} s)`);
+  });
+});
+
+test('drehBegrenzt: kürzester Weg, höchstens max', () => {
+  assert.equal(drehBegrenzt(0, 1, 0.2), 0.2);
+  assert.equal(drehBegrenzt(0, -1, 0.2), -0.2);
+  assert.ok(Math.abs(drehBegrenzt(3, -3, 0.1) - 3.1) < 1e-9, 'über ±π hinweg');
+  assert.equal(drehBegrenzt(1, 1.05, 0.2), 1.05);
 });
 
 test('Puma fährt Zombies platt (Einstellung leopardUeberrollen), zählt nicht für die Aufgaben; aus: überfährt nicht', async () => {
