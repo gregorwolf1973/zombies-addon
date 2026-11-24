@@ -11,7 +11,7 @@ import { drahtPruefen, haengtSchritt, haengendStart, drahtRollen, DRAHT_DAUER } 
 import { ueberrolleZombies } from '../server/ueberrollen.mjs';
 import { KACHEL, WERTE, setzeKartengroesse, frei, tierGelaende, feinWert, bewege, zufall, WELT_VERSION, FLANDERN_TEMPO } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
-import { rahmen } from '../client/stuetzpunkt.mjs';
+import { rahmen, SP_PK } from '../client/stuetzpunkt.mjs';
 import { FLUGFELD_TOTE } from '../client/flugfeld_deko.mjs';
 import { freierPort } from './hilfe.mjs';
 
@@ -33,7 +33,7 @@ for (const name of ['geretsried', 'geretsried2', 'isarauen']) {
     const r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung);
     const fest = (u, v) => { const [x, y] = r.ort(u, v); return !frei(w, x, y, WERTE.spielerRadius); };
     for (const [u, v] of [[10, 1.5], [24, 1.5], [0.5, 10], [29.5, 10], [15, 21.9], [0.5, 5]]) assert.ok(fest(u, v), `Zaun bei ${u}/${v} durchlässig`);
-    for (const [u, v] of [[15.5, 1.5], [14.5, 1.5], [16.5, 1.5]]) assert.ok(!fest(u, v), `Tor blockiert bei ${u}/${v}`);
+    for (const [u, v] of [[15.5, 1.5], [15.0, 1.5], [16.0, 1.5]]) assert.ok(!fest(u, v), `Tor blockiert bei ${u}/${v}`);   // Tor 3 Bauplan-Einheiten = 7,2 m (u 14–17)
     // Zombie: gebremst, aber nicht gesperrt
     const [zx, zy] = r.ort(24, 1.5), f = tierGelaende(w, zx, zy, WERTE.zombieRadius);
     assert.ok(f > 0 && f <= FLANDERN_TEMPO + 1e-9, 'Zombietempo am Zaun ' + f);
@@ -45,7 +45,7 @@ for (const name of ['geretsried', 'geretsried2', 'isarauen']) {
     void rueck; void dirU;
     const [ex, ey] = r.ort(24, 0.9);   // Mitte zwischen Rolle und Zaun: ab hier ist der Zaun (v 1,35) das Hindernis
     assert.ok(Math.hypot(schritt.x - sx, schritt.y - sy) < Math.hypot(ex - sx, ey - sy) + 40, 'Spieler kommt durch den Zaun');
-    const vEnde = ((schritt.x - r.ort(0, 0)[0]) * -r.s + (schritt.y - r.ort(0, 0)[1]) * r.c) / KACHEL;
+    const vEnde = ((schritt.x - r.ort(0, 0)[0]) * -r.s + (schritt.y - r.ort(0, 0)[1]) * r.c) / SP_PK;   // Bauplan-Einheiten
     assert.ok(vEnde < 1.4, 'Spieler hinter dem Zaun: v=' + vEnde);
     // Rollen vor dem Tor und hinter dem Lager
     assert.ok(sp.teile.filter(t => t.art === 'sdraht').length >= 3);

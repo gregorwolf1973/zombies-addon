@@ -110,8 +110,8 @@ test('Bundeswehr-Lager ist Safe House (solange es steht) mit 4 Vorratskisten, Mu
   p.x = mx; p.y = my; p.ebene = '';
   assert.ok(await bis(() => p.sicher === 'lager'), 'im Lager nicht sicher');
   // vor der ersten Kiste: Munition hinein, gemeinsame Kiste
-  const k = kisten[0];
-  p.x = k.x; p.y = k.y + 20;
+  const k = kisten[0], kp = planKoord(sp, k.x, k.y), [vx, vy] = planOrt(sp, kp.u, kp.v - 0.8);   // vor der Kiste (zur Lagermitte hin, ~1,9 m)
+  p.x = vx; p.y = vy;
   p.rucksack.splice(0, p.rucksack.length, 'munition');
   c.send('kiste', { richtung: 'rein', platz: 0 });
   assert.ok(await bis(() => [...raum.state.safes.get(k.id).kiste].includes('munition')), 'Munition nicht in der Kiste');
@@ -122,7 +122,7 @@ test('Bundeswehr-Lager ist Safe House (solange es steht) mit 4 Vorratskisten, Mu
   p.x = ax; p.y = ay;
   assert.ok(await bis(() => p.sicher === ''), 'draußen vor dem Lager sicher');
   // Lager fällt: keine Safe-House-Wirkung mehr, Kisten gesperrt
-  p.x = k.x; p.y = k.y + 20;
+  p.x = vx; p.y = vy;
   assert.ok(await bis(() => p.sicher === 'lager'));
   raum.state.stuetzpunkt = 'gefallen';
   assert.ok(await bis(() => p.sicher === ''), 'gefallenes Lager noch Safe House');

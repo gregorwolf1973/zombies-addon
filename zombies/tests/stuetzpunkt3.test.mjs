@@ -84,7 +84,7 @@ test('Soldaten sterben im Nahkampf; sind alle tot, fällt das Lager', async () =
   const nachlegen = setInterval(() => { for (const q of st.schuetzen) if (!q.tot && ![...raum.state.zombies.values()].some(z => Math.hypot(z.x - q.x, z.y - q.y) < 20)) zombieBei(raum, sp, ...Object.values(planKoord(sp, q.x, q.y))); }, 200);
   assert.ok(await bis(() => raum.state.stuetzpunkt === 'gefallen', 25000), 'Lager fällt nicht ' + JSON.stringify(st.schuetzen.map(q => [q.tot, Math.round(q.hp)])));
   clearInterval(nachlegen);
-  assert.ok(nachrichten.meldung.some(m => m.text.includes('Alle Soldaten sind gefallen')));
+  assert.ok(await bis(() => nachrichten.meldung.some(m => m.text.includes('Alle Soldaten sind gefallen')), 5000), 'keine Meldung „Alle Soldaten sind gefallen“');   // kommt über das Netz
   await beenden(c);
 });
 
@@ -106,7 +106,8 @@ test('Soldaten sind bei „fällt nie“ unverwundbar', async () => {
 test('Angriffs-Hotspot: ein Teil der Soldaten rückt aus (mindestens 2 bleiben), danach zurück auf die Posten, nie aus dem Lager', async () => {
   await frisch();
   const { c, raum } = await beitreten('Hot');
-  const sp = raum.welt.stuetzpunkt, st = raum.stuetzpunkt;
+  const sp = raum.welt.stuetzpunkt, st = raum.stuetzpunkt, e = SpielRaum.einstellungen, altBw = e.bundeswehr;
+  e.bundeswehr = { ...altBw, falltage: 0 };   // Soldaten unverwundbar: im echten Maßstab (72 m) liegt der Hotspot nah an den Posten, geprüft wird nur das Ausrücken
   st.nester = []; st.puma = null;
   const alle = st.schuetzen, n = alle.length;
   for (const [u, v] of [[24, 6], [24.1, 6.1], [23.9, 5.9], [24.05, 6.15], [23.95, 6.05], [24.1, 5.9], [24, 6.2], [23.9, 6.1]]) zombieBei(raum, sp, u, v);   // im Lager, aber weit weg von den Soldaten
@@ -121,6 +122,7 @@ test('Angriffs-Hotspot: ein Teil der Soldaten rückt aus (mindestens 2 bleiben),
   for (const q of aus) { const { u, v } = planKoord(sp, q.x, q.y); assert.ok(u > -1 && u < 31 && v > 0 && v < 23, `Soldat verlässt das Lager: u=${u} v=${v}`); }
   raum.state.zombies.clear(); raum.zombieInfo.clear();
   assert.ok(await bis(() => alle.every(q => zuHause(q) && q.modus === 'post'), 25000), 'nicht alle zurück auf den Posten');
+  e.bundeswehr = altBw;
   await beenden(c);
 });
 

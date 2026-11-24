@@ -933,9 +933,10 @@ function baueFein(welt, karte, lbObj) {
       }
     }
   }
-  // 3. Gartenzäune und Hecken entlang der Linien (Hecken etwas dicker)
+  // 3. Gartenzäune und Hecken entlang der Linien. Ein Feinfeld ist 1 m groß: Halbbreite 4 px (½ Feld) ist das Schlankste, was ohne Lücken
+  // geht (jede Spalte/Zeile entlang der Linie trifft mindestens eine Feldmitte) → Band ~1 Feld breit; Hecken etwas breiter (0,7 m dick)
   for (const z of karte.zaeune ?? []) {
-    const dicke = (z.a === 'h' ? 9 : 6) / KACHEL;   // in Kacheln
+    const dicke = (z.a === 'h' ? 5 : 4) / KACHEL, d2 = dicke * dicke;   // in Kacheln
     for (let i = 0; i + 3 < z.p.length; i += 2) {
       const ax = z.p[i], ay = z.p[i + 1], bx = z.p[i + 2], by = z.p[i + 3], L2 = (bx - ax) ** 2 + (by - ay) ** 2 || 1e-9;
       const fx0 = Math.max(0, Math.floor((Math.min(ax, bx) - dicke) * FEIN)), fx1 = Math.min(fb - 1, Math.ceil((Math.max(ax, bx) + dicke) * FEIN));
@@ -943,7 +944,8 @@ function baueFein(welt, karte, lbObj) {
       for (let fy = fy0; fy <= fy1; fy++) for (let fx = fx0; fx <= fx1; fx++) {
         const px = (fx + 0.5) / FEIN, py = (fy + 0.5) / FEIN;
         const t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / L2));
-        if (Math.hypot(ax + t * (bx - ax) - px, ay + t * (by - ay) - py) > dicke) continue;
+        const qx = ax + t * (bx - ax) - px, qy = ay + t * (by - ay) - py;
+        if (qx * qx + qy * qy > d2) continue;   // ohne hypot (Weltcode: gleich auf allen Engines)
         const kt = hole(Math.floor(px), Math.floor(py));
         if (kt === T.TUER || kt === T.STRASSE) continue;
         if (!f[fy * fb + fx]) f[fy * fb + fx] = 2;

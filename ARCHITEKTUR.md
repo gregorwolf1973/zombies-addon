@@ -99,6 +99,9 @@ Wichtige Dateien:
 - Drinnen (Schalter `INNEN_FEIN`, Backend-Option `innenMassstab`, der Server gibt ihn vor): Zelle `INNEN_Z` = 0,25 m, eigene Rastergröße `w.breite/w.hoehe`,
   Figurenradius `w.rs`, Faktoren `w.tempo` (`INNEN_TEMPO`) und `w.reich` (`INNEN_REICH` = 0,35; Helfer `reichVon`, `tempoVon`) – das ist der Raumfaktor R:
   Aktionsreichweiten und Tempo drinnen werden damit skaliert. Figuren erscheinen drinnen halb so groß (`INNEN_FIGUR` = 0,5 in `spiel.mjs`), die Kamera ist näher.
+- Bundeswehr-Lager (`stuetzpunkt.mjs`): Bauplan in eigenen Einheiten (u quer, v von der Front), eine Einheit = `SP_M` = 0,6 Kachel (2,4 m, `SP_PK` px),
+  Baufeld `SP_KB` × `SP_KT` Kacheln (72 × 53 m); Teile in echten Metern (`teilM`). Zelteingänge liegen auf Kachelmitten (grobe Wegsuche `findeWeg`).
+- Zäune/Hecken: Kollision im Feinraster mit Halbbreite 4 px (Hecke 5 px), Zeichnung ~10 cm bzw. 0,7 m (`aussehen.mjs` `zaunLinien`).
 - Client: `uiMass()` hält Namen, Balken, Symbole in Bildschirmgröße konstant (teilt durch den Innenzoom); `feinInnen()` fragt ab, ob die Ebene Feinraster hat.
 - Effekte und Reichweiten in Metern denken und mit 8 px/m umrechnen (`masse.mjs`, `hordenlogik.mjs` `PIXEL_JE_METER`).
 

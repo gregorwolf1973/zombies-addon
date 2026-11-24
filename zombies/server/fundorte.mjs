@@ -4,9 +4,8 @@
 // Hinweis: Inhalte ungeöffneter Behälter stehen noch nicht fest (werden erst beim Durchsuchen ausgewürfelt), darum gibt es dafür keine Punkte.
 import { flach } from '../client/stapel.mjs';
 import { KACHEL, BREITE, zufall, ladenArt } from '../client/welt.mjs';
-import { innenraumFuer } from '../client/innen.mjs';
 import { KISTEN } from './a400m_kisten.mjs';
-import { behaelterAufKarte, missionsBehaelter } from './mission.mjs';
+import { behaelterAufKarte, missionsBehaelter, innenLesen } from './mission.mjs';
 
 // Aufgaben-Funde: Für jede offene Aufgabe legt der Server die gebrauchten Dinge fest in passende Behälter (verteilt über die Karte).
 // Sie kommen beim Befüllen garantiert dazu (wie die Missionsgegenstände) und stehen als gelber Punkt auf der Karte.
@@ -26,7 +25,7 @@ export function aufgabenFundePlan(seed, level, welt, bedarf) {
   const plan = [], genutzt = new Map();   // Behälter-Id → Anzahl belegt (höchstens 1 Ding je Behälter und Art)
   const haeuser = (welt.haeuser ?? []).filter(h => h.betretbar && !h.safe);
   const eg = new Map();
-  const behaelterVon = h => { if (!eg.has(h.nr)) eg.set(h.nr, (innenraumFuer(seed, welt, `h${h.nr}eg`)?.behaelter ?? []).filter(b => !b.tuer)); return eg.get(h.nr); };
+  const behaelterVon = h => { if (!eg.has(h.nr)) eg.set(h.nr, (innenLesen(seed, welt, `h${h.nr}eg`)?.behaelter ?? []).filter(b => !b.tuer)); return eg.get(h.nr); };
   for (const [ding, soll] of Object.entries(bedarf)) {
     const n = soll + FUNDE_RESERVE, arten = new Set(ARTEN_JE_DING[ding] ?? []);
     const mischen = l => { const a = [...l]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -78,7 +77,7 @@ export function gesuchteDinge(state, medizinGefunden = false) {
 export function behaelterPosition(raum, id) {
   const m = EBENE.exec(id);
   if (m) {
-    const w = innenraumFuer(raum.state.seed, raum.welt, m[0]), b = w?.behaelter?.find(q => q.id === id);
+    const w = innenLesen(raum.state.seed, raum.welt, m[0]), b = w?.behaelter?.find(q => q.id === id);
     return b ? behaelterAufKarte(raum.state.seed, raum.welt, Number(m[1]), b) : null;
   }
   const b = raum.welt.behaelter?.find(q => q.id === id);

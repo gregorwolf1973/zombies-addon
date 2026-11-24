@@ -3,10 +3,10 @@
 // Die Übungsfläche ist immer SS_B × SS_H Kacheln groß und liegt links oben; ist die Kartengröße (BREITE × HOEHE) größer
 // – der Server rechnet mit der Größe der Hauptwelt –, ist alles außerhalb der Fläche gesperrt.
 import { KACHEL, BREITE, HOEHE, T, FEIN } from './welt.mjs';
-import { baueStuetzpunkt } from './stuetzpunkt.mjs';
+import { baueStuetzpunkt, SP_KB, SP_KT } from './stuetzpunkt.mjs';
 
 export const SS_B = 64, SS_H = 48;                    // Übungsfläche in Kacheln (2048 × 1536 px = 256 × 192 m)
-export const SS_LAGER = { x0: 17, y0: 2, b: 30, h: 22, richtung: 's' };   // Stützpunkt im Norden, Front nach Süden
+export const SS_LAGER = { x0: 32 - SP_KB / 2, y0: 24 - SP_KT, b: SP_KB, h: SP_KT, richtung: 's' };   // Stützpunkt im Norden, Front nach Süden (Front bei y 24, mittig über dem Spieler)
 export const SS_START = { x: 32 * KACHEL, y: 25 * KACHEL };               // hier steht der Spieler (0-m-Linie)
 export const SS_MARKEN = [10, 25, 50, 75];            // Meter ab dem Spieler nach Süden (8 px = 1 m)
 export const SS_ZOMBIE_Y = SS_START.y + 75 * 8 + 44;  // Zombies starten hinter der 75-m-Marke

@@ -12,7 +12,12 @@ import { fzPx } from './masse.mjs';
 
 const K = KACHEL, TAU = Math.PI * 2;
 export const PUMA_SKALA = 1;   // Puma (Wanne und Turm) wird in echten Maßen gezeichnet (7,3 × 3,7 m, client/masse.mjs); früher 1,6 (zu groß)
-export const SP_BREITE = 30, SP_TIEFE = 22;   // Kacheln im Bauplan (quer zur Front, von der Front nach hinten)
+export const SP_BREITE = 30, SP_TIEFE = 22;   // Bauplan-Einheiten (quer zur Front, von der Front nach hinten)
+// Maßstab des Bauplans: eine Bauplan-Einheit = SP_M Kacheln (0,6 × 4 m = 2,4 m) → Lager 72 × 53 m; früher 1 Kachel (120 × 88 m, viel zu groß).
+// Alle Teile stehen in echten Maßen darin (Feldbett 0,75 × 2 m, Kiste 1,2 × 0,8 m, Container 6 × 2,4 m, Sandsack-Stellung 3,2 × 2,2 m …)
+export const SP_M = 0.6, SP_PK = K * SP_M;   // Kacheln bzw. Pixel je Bauplan-Einheit
+export const SP_KB = Math.ceil(SP_BREITE * SP_M), SP_KT = Math.ceil(SP_TIEFE * SP_M);   // Baufeld in Kacheln (18 × 14)
+const PX_M = 8;   // Pixel je Meter
 const WINKEL = { n: 0, o: Math.PI / 2, s: Math.PI, w: -Math.PI / 2 };
 const hash = (a, b) => { let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 
@@ -24,7 +29,7 @@ const hash = (a, b) => { let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0,
 export function rahmen(x0, y0, b, h, richtung) {
   const th = WINKEL[richtung], c = Math.round(Math.cos(th)), s = Math.round(Math.sin(th));
   const ox = (richtung === 'n' || richtung === 'w' ? x0 : x0 + b) * K, oy = (richtung === 'n' || richtung === 'o' ? y0 : y0 + h) * K;
-  const ort = (u, v) => [ox + (u * c - v * s) * K, oy + (u * s + v * c) * K];
+  const ort = (u, v) => [ox + (u * c - v * s) * SP_PK, oy + (u * s + v * c) * SP_PK];
   return { th, c, s, ort };
 }
 
@@ -43,7 +48,7 @@ function platzSuchen(welt, start) {
   const RAND_NEIN = new Set([T.WAND, T.WASSER, T.ZAUN, T.TOR, T.LEER, T.TUER, T.DEKO]);
   const sx = start.x / K, sy = start.y / K;
   const treffer = [];
-  for (const [bb, hh, ausrichtung] of [[SP_BREITE, SP_TIEFE, 'ns'], [SP_TIEFE, SP_BREITE, 'ow']]) {
+  for (const [bb, hh, ausrichtung] of [[SP_KB, SP_KT, 'ns'], [SP_KT, SP_KB, 'ow']]) {
     for (let y0 = 1; y0 + hh < HOEHE - 1; y0 += 2) for (let x0 = 1; x0 + bb < BREITE - 1; x0 += 2) {
       const cx = x0 + bb / 2, cy = y0 + hh / 2, dx = sx - cx, dy = sy - cy;
       if ((ausrichtung === 'ns') !== (Math.abs(dy) >= Math.abs(dx))) continue;
@@ -104,10 +109,12 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
   const blickVorn = th - Math.PI / 2;   // Blick zur Stadt (Richtung −v)
   // Rechteckteil in Rahmenkoordinaten (Kacheln)
   const teil = (art, u0, v0, u1, v1, extra = {}) => {
-    const [x, y] = ort((u0 + u1) / 2, (v0 + v1) / 2), w = (u1 - u0) * K, d = (v1 - v0) * K;
+    const [x, y] = ort((u0 + u1) / 2, (v0 + v1) / 2), w = (u1 - u0) * SP_PK, d = (v1 - v0) * SP_PK;
     const t = { art, x, y, w, d, winkel: th, b: c ? w : d, h: c ? d : w, ...extra };
     teile.push(t); return t;
   };
+  // Rechteckteil in echten Maßen: Mitte (u, v) im Bauplan, Breite quer/Tiefe in Metern
+  const teilM = (art, u, v, wm, dm, extra = {}) => teil(art, u - wm * PX_M / SP_PK / 2, v - dm * PX_M / SP_PK / 2, u + wm * PX_M / SP_PK / 2, v + dm * PX_M / SP_PK / 2, extra);
   const posten = (rolle, u, v, blick = blickVorn, extra = {}) => { const [x, y] = ort(u, v); teile.push({ art: 'posten', rolle, x, y, blick, ...extra }); };
   const behaelterNeu = (art, u, v) => {
     const [x, y] = ort(u, v);
@@ -133,8 +140,8 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
     sperre(t.x, t.y, -t.w / 2, -t.d / 2, t.w / 2, t.d / 2);
   }
   {
-    const [x, y] = ort((DU0 + DU1) / 2, 1.5), w = (DU1 - DU0) * K;
-    teile.push({ art: 'durchfahrt', x, y, w, d: K, winkel: th, b: c ? w : K, h: c ? K : w, aussen: ort((DU0 + DU1) / 2, -0.5), innen: ort((DU0 + DU1) / 2, 4.5) });
+    const [x, y] = ort((DU0 + DU1) / 2, 1.5), w = (DU1 - DU0) * SP_PK, d = SP_PK;
+    teile.push({ art: 'durchfahrt', x, y, w, d, winkel: th, b: c ? w : d, h: c ? d : w, aussen: ort((DU0 + DU1) / 2, -0.5), innen: ort((DU0 + DU1) / 2, 4.5) });
   }
   {   // Puma: Wanne 72 × 34 px, Bug zur Stadt (−v); der Turm ist ein eigenes Teil (Mittelpunkt, Ausrichtung, Rohrlänge)
     // Ruheplatz in der Lagermitte; danach fährt er frei im Innenbereich (server/stuetzpunkt.mjs, fahrFlaeche), deshalb keine Sperre im Feinraster
@@ -143,14 +150,14 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
   }
   // ---- (b) Sandsackstellungen (U) und MG-Nester hinter der Sperrlinie ----
   for (const [u, v] of [[10.5, 4.0], [19.5, 4.0]]) {
-    const t = teil('sandsack', u - 1.5, v - 0.75, u + 1.5, v + 0.75, { offen: 'vorn' });
+    const t = teilM('sandsack', u, v, 3.2, 2.2, { offen: 'vorn' });   // Schützenstellung 3,2 × 2,2 m, Wände 0,6 m
     for (const rc of sandsackWaende(t.w, t.d)) sperre(t.x, t.y, ...rc);
     posten('soldat', u, v - 0.1);
   }
   for (const [u, v] of [[4.5, 4.3], [25.5, 4.3], [27.2, 7.0]]) {
     const [x, y] = ort(u, v);
-    teile.push({ art: 'mgnest', x, y, r: 23, blick: blickVorn, winkel: th });
-    sperren.push({ x, y, r: 22 });
+    teile.push({ art: 'mgnest', x, y, r: 14, blick: blickVorn, winkel: th });   // Sandsackring Ø 3,5 m
+    sperren.push({ x, y, r: 13 });
   }
   posten('soldat', 13.4, 4.4); posten('soldat', 17.6, 4.4);   // hinter der Pumabahn (v 1,75–3,45)
 
@@ -158,11 +165,15 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
   const zelt = (art, nutzung, u0, v0, u1, v1, seite, von, bis) => {
     const t = teil(art, u0, v0, u1, v1, { nutzung });
     const achseU = seite === 'v0' || seite === 'v1', mitte = achseU ? (u0 + u1) / 2 : (v0 + v1) / 2;
-    const g0 = (von - mitte) * K, g1 = (bis - mitte) * K;
+    // Eingang auf eine Kachelmitte legen und mindestens 2 × 18 px breit: die grobe Wegsuche (4-m-Kacheln, findeWeg) führt nur
+    // durch Lücken, in denen eine Kachelmittel-Linie mit Figurenradius 9 px plus Feinraster-Rundung frei bleibt
+    const gm = (Math.floor((von + bis) / 2 * SP_M) + 0.5) / SP_M, gh = Math.max((bis - von) / 2, 18 / SP_PK);
+    von = gm - gh; bis = gm + gh;
+    const g0 = (von - mitte) * SP_PK, g1 = (bis - mitte) * SP_PK;
     const w = fw(t.x, t.y), hw = t.w / 2, hd = t.d / 2, m = (g0 + g1) / 2;
     const nx = seite === 'u1' ? 1 : seite === 'u0' ? -1 : 0, ny = seite === 'v1' ? 1 : seite === 'v0' ? -1 : 0;
     const pm = achseU ? [m, ny * hd] : [nx * hw, m];
-    t.eingang = { seite, von: g0, bis: g1, mitte: w(...pm), aussen: w(pm[0] + nx * K, pm[1] + ny * K), innen: w(pm[0] - nx * K, pm[1] - ny * K) };
+    t.eingang = { seite, von: g0, bis: g1, mitte: w(...pm), aussen: w(pm[0] + nx * SP_PK, pm[1] + ny * SP_PK), innen: w(pm[0] - nx * SP_PK, pm[1] - ny * SP_PK) };
     for (const rc of zeltBaender(t.w, t.d, t.eingang)) sperre(t.x, t.y, ...rc);
     return t;
   };
@@ -170,24 +181,24 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
   // (um DV nach hinten gerückt: zwischen Sandsäcken und Zelten bleibt eine breite Fahrgasse für den Puma, v ≈ 6–8)
   const DV = 1.5;
   {
-    const z = zelt('sanizelt', 'sani', 3, 8 + DV, 12, 14 + DV, 'u1', 10 + DV, 12 + DV);
+    const z = zelt('sanizelt', 'sani', 3, 8 + DV, 12, 13 + DV, 'u1', 10 + DV, 12 + DV);   // 21,6 × 12 m
     const betten = [];
-    for (const bv of [8.4 + DV, 11.6 + DV]) for (const bu of [3.5, 5, 6.5]) {
-      const t = teil('feldbett', bu, bv, bu + 1, bv + 2);
+    for (const bv of [8.4 + DV, 11.0 + DV]) for (const bu of [3.5, 5, 6.5]) {
+      const t = teilM('feldbett', bu + 0.5, bv + 1, 0.75, 2);   // Feldbett 0,75 × 2 m
       sperre(t.x, t.y, -t.w / 2, -t.d / 2, t.w / 2, t.d / 2);
       betten.push(t);
     }
     // Verwundete liegen auf vier Betten, Kopf zum Kissen (zur Front); (x, y) = Kopfmitte
     for (const i of [0, 1, 4, 5]) {
-      const [x, y] = fw(betten[i].x, betten[i].y)(0, -19);
+      const [x, y] = fw(betten[i].x, betten[i].y)(0, -5);
       teile.push({ art: 'posten', rolle: 'verwundet', x, y, blick: blickVorn, variante: i });
     }
-    posten('arzt', 9.2, 9.7 + DV, th + Math.PI); posten('arzt', 9.2, 12.9 + DV, th + Math.PI);
-    for (const [u, v] of [[10.5, 9.0 + DV], [10.5, 13.0 + DV]]) {
+    posten('arzt', 9.2, 9.7 + DV, th + Math.PI); posten('arzt', 9.2, 12.3 + DV, th + Math.PI);
+    for (const [u, v] of [[10.5, 9.0 + DV], [10.5, 12.4 + DV]]) {
       const [x, y] = behaelterNeu('sanikiste', u, v);
-      sperren.push({ x0: x - 10, y0: y - 10, x1: x + 10, y1: y + 10 });
+      sperren.push({ x0: x - 4, y0: y - 4, x1: x + 4, y1: y + 4 });   // Sanitätskiste 0,8 × 0,5 m (Sperre auf ein Feinfeld gerundet)
     }
-    z.kreuz = ort(9.8, 11 + DV);   // weißes Feld mit rotem Kreuz auf dem Zeltboden
+    z.kreuz = ort(9.8, 10.6 + DV);   // weißes Feld mit rotem Kreuz auf dem Zeltboden
     const [fx, fy] = ort(12.9, 9.3 + DV);
     teile.push({ art: 'flagge', x: fx, y: fy, winkel: th });
   }
@@ -195,8 +206,9 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
   {
     const z = zelt('funkzelt', 'funk', 19, 8 + DV, 25, 12 + DV, 'u0', 9 + DV, 11 + DV);
     const [tx, ty] = ort(23.5, 11.0 + DV);
-    teile.push({ art: 'funktisch', x: tx, y: ty, w: 2 * K, d: K, winkel: th, b: c ? 2 * K : K, h: c ? K : 2 * K });
-    sperre(tx, ty, -K, -K / 2, K, K / 2);
+    const FW = 1.6 * PX_M, FD = 0.8 * PX_M;   // Funktisch 1,6 × 0,8 m
+    teile.push({ art: 'funktisch', x: tx, y: ty, w: FW, d: FD, winkel: th, b: c ? FW : FD, h: c ? FD : FW });
+    sperre(tx, ty, -FW / 2, -FD / 2, FW / 2, FD / 2);
     z.funkpunkt = ort(23.5, 9.8 + DV);       // hier steht man zum Funken (Teil 2)
     const [ax, ay] = ort(25.9, 8.6 + DV);
     teile.push({ art: 'antenne', x: ax, y: ay });
@@ -205,27 +217,28 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
   }
   // ---- (d) Lager: zwei Zelte, Munitionskisten, Container, LKW ----
   zelt('zelt', 'lager', 3, 17.5, 9, 21.5, 'v0', 5, 7);
-  zelt('zelt', 'lager', 22, 17.5, 28, 21.5, 'v0', 24, 26);
+  zelt('zelt', 'lager', 22, 17.5, 28, 21.5, 'v0', 23, 25);
   {
-    const [x, y] = ort(13.9, 19.4), L = 84, Bw = 36;   // LKW parkt quer, Bug nach „links“ (−u)
+    const [x, y] = ort(13.9, 19.4), L = 7.6 * PX_M, Bw = 2.5 * PX_M;   // LKW (7,6 × 2,5 m) parkt quer, Bug nach „links“ (−u)
     teile.push({ art: 'lkw', x, y, winkel: th + Math.PI, laenge: L, breite: Bw, b: c ? L : Bw, h: c ? Bw : L });
     sperre(x, y, -L / 2, -Bw / 2, L / 2, Bw / 2);
   }
   {
     const [x, y] = behaelterNeu('bw_container', 18.6, 19.5);
-    teile.push({ art: 'container', x, y, w: 2 * K, d: K, winkel: th, b: c ? 2 * K : K, h: c ? K : 2 * K });
-    sperre(x, y, -K, -K / 2, K, K / 2);
+    const CW = 6.06 * PX_M, CD = 2.44 * PX_M;   // 20-Fuß-Container
+    teile.push({ art: 'container', x, y, w: CW, d: CD, winkel: th, b: c ? CW : CD, h: c ? CD : CW });
+    sperre(x, y, -CW / 2, -CD / 2, CW / 2, CD / 2);
   }
-  for (const [u, v] of [[10.4, 16.8], [11.3, 16.8], [20.0, 16.8], [20.9, 16.8], [17.0, 15.0]]) {
+  for (const [u, v] of [[10.4, 16.8], [11.3, 16.8], [20.0, 16.8], [20.9, 16.8], [12.2, 16.8]]) {
     const [x, y] = behaelterNeu('bw_kiste', u, v);
-    teile.push({ art: 'kiste', x, y, w: 22, d: 15, winkel: th, b: c ? 22 : 15, h: c ? 15 : 22 });
-    sperre(x, y, -11, -7.5, 11, 7.5);
+    teile.push({ art: 'kiste', x, y, w: 10, d: 6.5, winkel: th, b: c ? 10 : 6.5, h: c ? 6.5 : 10 });   // Transportkiste 1,2 × 0,8 m
+    sperre(x, y, -5, -3.25, 5, 3.25);
   }
   // vier Vorratskisten des Lagers (Safe House, gemeinsame Kisten wie im Safe Room: state.safes 'lager0'…'lager3'; Munition darf hinein)
   [[11.0, 21.2], [12.0, 21.2], [13.0, 21.2], [14.0, 21.2]].forEach(([u, v], i) => {
     const [x, y] = ort(u, v);
-    teile.push({ art: 'vorratskiste', id: 'lager' + i, x, y, w: 26, d: 18, winkel: th, b: c ? 26 : 18, h: c ? 18 : 26 });
-    sperre(x, y, -13, -9, 13, 9);
+    teile.push({ art: 'vorratskiste', id: 'lager' + i, x, y, w: 11, d: 7, winkel: th, b: c ? 11 : 7, h: c ? 7 : 11 });   // 1,4 × 0,9 m
+    sperre(x, y, -5.5, -3.5, 5.5, 3.5);
   });
   for (const [u, v] of [[12.7, 16.1], [20.5, 14.9], [15.8, 16.0], [9.8, 19.0], [21.0, 20.2]]) posten('soldat', u, v);
 
@@ -277,7 +290,7 @@ export function baueStuetzpunkt(welt, seed, setze, lageVorgabe = null) {   // la
 
 // Wandrechtecke der U-förmigen Sandsackstellung (Rahmen um die Mitte, Öffnung nach vorn = −y)
 function sandsackWaende(w, d) {
-  const D = 12;
+  const D = 5;   // Sandsäcke 0,6 m
   return [[-w / 2, -d / 2, -w / 2 + D, d / 2], [w / 2 - D, -d / 2, w / 2, d / 2], [-w / 2, d / 2 - D, w / 2, d / 2]];
 }
 // Zeltwände (8 px dick) außen um das Innere w × d; eingang = Lücke in einer Wand (von/bis in Pixel relativ zur Mitte)
@@ -302,7 +315,7 @@ function zeltBaender(w, d, eingang) {
 // Weltpunkt → Bauplan-Koordinaten (Kacheln): u quer nach rechts, v von der Front nach hinten
 export function planKoord(sp, x, y) {
   const r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung), [ox, oy] = r.ort(0, 0);
-  const dx = (x - ox) / K, dy = (y - oy) / K;
+  const dx = (x - ox) / SP_PK, dy = (y - oy) / SP_PK;
   return { u: dx * r.c + dy * r.s, v: -dx * r.s + dy * r.c };
 }
 // Hinter der Sperrlinie (im Lager)? Die Front (Draht) liegt bei v ≈ 1,5.
@@ -316,7 +329,7 @@ export function imLager(sp, x, y) {
 // Wanne in jeder Drehung ab: 58 × 30 px) kein festes Teil berührt: Draht, Sandsäcke, MG-Nester, Zelte (auch innen), Betten, Kisten,
 // Container, LKW, Antenne, Posten sowie die Einfahrt (Durchfahrt bis v 4,5 und 3 Kacheln seitlich: dort treten Spieler ein).
 // Raster in Bauplan-Koordinaten (u, v in Kacheln), Knoten alle 0,5 Kacheln; frei[j * nu + i] = 1: Knoten darf befahren werden.
-export const PUMA_R = 45;                 // Pixel (halbe Diagonale der Wanne 58 × 30 px = 32,7 plus Luft für die Knotenabstände der Wegsuche)
+export const PUMA_R = 38;                 // Pixel (halbe Diagonale der Wanne 58 × 30 px = 32,7 plus Luft für die Knotenabstände der Wegsuche)
 export const FAHR_SCHRITT = 0.5;          // Kacheln
 export const PUMA_PARK = [15.5, 9.0];     // Ruheplatz: Lagermitte hinter der Einfahrt
 const fahrCache = new WeakMap();
@@ -324,20 +337,20 @@ export function fahrFlaeche(sp) {
   let f = fahrCache.get(sp);
   if (f) return f;
   const r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung), [ox, oy] = r.ort(0, 0);
-  const plan = (x, y) => { const dx = (x - ox) / K, dy = (y - oy) / K; return [dx * r.c + dy * r.s, -dx * r.s + dy * r.c]; };
+  const plan = (x, y) => { const dx = (x - ox) / SP_PK, dy = (y - oy) / SP_PK; return [dx * r.c + dy * r.s, -dx * r.s + dy * r.c]; };
   const rects = [], kreise = [];   // Rechteck [u0, v0, u1, v1], Kreis [u, v, Radius] in Kacheln
   for (const q of sp.sperren) {
-    if (q.r) { const [u, v] = plan(q.x, q.y); kreise.push([u, v, q.r / K]); continue; }
+    if (q.r) { const [u, v] = plan(q.x, q.y); kreise.push([u, v, q.r / SP_PK]); continue; }
     const [a, b] = plan(q.x0, q.y0), [c, d] = plan(q.x1, q.y1);
     rects.push([Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)]);
   }
   for (const t of sp.teile) {
     if (t.art === 'sanizelt' || t.art === 'zelt' || t.art === 'funkzelt') {   // Zeltinneres und Wände
-      const [u, v] = plan(t.x, t.y); rects.push([u - t.w / K / 2 - 0.17, v - t.d / K / 2 - 0.17, u + t.w / K / 2 + 0.17, v + t.d / K / 2 + 0.17]);
-    } else if (t.art === 'posten') { const [u, v] = plan(t.x, t.y); kreise.push([u, v, 14 / K]); }
+      const [u, v] = plan(t.x, t.y), g = 8 / SP_PK; rects.push([u - t.w / SP_PK / 2 - g, v - t.d / SP_PK / 2 - g, u + t.w / SP_PK / 2 + g, v + t.d / SP_PK / 2 + g]);   // Wände 8 px
+    } else if (t.art === 'posten') { const [u, v] = plan(t.x, t.y); kreise.push([u, v, 10 / SP_PK]); }
   }
   rects.push([12.5, 0, 18.5, 4.5]);   // Einfahrt
-  const nu = Math.round(SP_BREITE / FAHR_SCHRITT) + 1, nv = Math.round(SP_TIEFE / FAHR_SCHRITT) + 1, rk = PUMA_R / K;
+  const nu = Math.round(SP_BREITE / FAHR_SCHRITT) + 1, nv = Math.round(SP_TIEFE / FAHR_SCHRITT) + 1, rk = PUMA_R / SP_PK;
   const abstand = (u, v) => {   // Abstand (Kacheln) zum nächsten Hindernis, negativ nicht nötig
     let m = Infinity;
     for (const [u0, v0, u1, v1] of rects) m = Math.min(m, Math.hypot(Math.max(u0 - u, 0, u - u1), Math.max(v0 - v, 0, v - v1)));
@@ -347,10 +360,27 @@ export function fahrFlaeche(sp) {
   const ok = (u, v, mehr = 0) => u >= rk && u <= SP_BREITE - rk && v >= rk && v <= SP_TIEFE - rk && abstand(u, v) > rk + mehr;
   const frei = new Uint8Array(nu * nv);
   for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) frei[j * nu + i] = ok(i * FAHR_SCHRITT, j * FAHR_SCHRITT, 0.08) ? 1 : 0;   // Knoten mit etwas Luft: Wege zwischen Knoten laufen an runden Hindernissen minimal innen vorbei
+  // nur Knoten, die vom Ruheplatz aus erreichbar sind (sonst wählt die Zielsuche abgetrennte Inseln, und Puma/Soldaten bleiben stehen)
+  {
+    const s0 = Math.round(PUMA_PARK[1] / FAHR_SCHRITT) * nu + Math.round(PUMA_PARK[0] / FAHR_SCHRITT), drin = new Uint8Array(nu * nv);
+    if (frei[s0]) {
+      const q = [s0]; drin[s0] = 1;
+      for (let k = 0; k < q.length; k++) {
+        const c = q[k], i = c % nu, j = (c - i) / nu;
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          const a = i + di, b = j + dj, n = b * nu + a;
+          if (a < 0 || b < 0 || a >= nu || b >= nv || drin[n] || !frei[n]) continue;
+          if (di && dj && !(frei[j * nu + a] && frei[b * nu + i])) continue;   // keine Ecken schneiden
+          drin[n] = 1; q.push(n);
+        }
+      }
+      frei.set(drin);
+    }
+  }
   // Strecke frei befahrbar? (abgetastet alle 0,2 Kacheln)
   const strecke = (u0, v0, u1, v1) => {
     const n = Math.max(1, Math.ceil(Math.hypot(u1 - u0, v1 - v0) / 0.2));
-    for (let k = 0; k <= n; k++) if (!ok(u0 + (u1 - u0) * k / n, v0 + (v1 - v0) * k / n)) return false;
+    for (let k = 0; k <= n; k++) if (!ok(u0 + (u1 - u0) * k / n, v0 + (v1 - v0) * k / n, 0.05)) return false;   // mit etwas Luft (Abtastung alle 0,2)
     return true;
   };
   f = { frei, nu, nv, ok, strecke, r };
@@ -437,46 +467,75 @@ export function zeichneStuetzpunktBoden(ctx, welt, rect) {
   if (!sp) return;
   const bx0 = sp.x * K, by0 = sp.y * K, bx1 = (sp.x + sp.b) * K, by1 = (sp.y + sp.h) * K;
   if (bx1 + 40 < rect.x0 * K || bx0 - 40 > rect.x1 * K || by1 + 40 < rect.y0 * K || by0 - 40 > rect.y1 * K) return;
-  // festgefahrener Boden: Zellen von 8 px, zum Rand hin lückenhafter
-  const Z = 8, nx = sp.b * K / Z, ny = sp.h * K / Z, cols = ['#8b7b55', '#80714e', '#94855e', '#76694a'];
-  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-    const px = bx0 + i * Z, py = by0 + j * Z;
-    if (px + Z < rect.x0 * K || px > rect.x1 * K || py + Z < rect.y0 * K || py > rect.y1 * K) continue;
-    const rd = Math.min(i, j, nx - 1 - i, ny - 1 - j);
-    if (hash(i + sp.x * 131, j + sp.y * 71) > Math.min(1, 0.25 + rd / 5)) continue;
-    ctx.globalAlpha = Math.min(0.92, 0.35 + rd / 6);
-    ctx.fillStyle = cols[Math.floor(hash(i * 3 + sp.x, j * 5 + sp.y) * 4)];
-    ctx.fillRect(px, py, Z, Z);
-  }
+  // festgefahrener Boden: glatte Fläche mit weich auslaufendem Rand, feiner Körnung (Kies/Sand, 0,1–0,4 m), Fahrspuren; nur im sichtbaren Ausschnitt
+  stuetzpunktBodenFein(ctx, sp, rect);
   ctx.globalAlpha = 1;
   for (const t of sp.teile) {
     if (!sichtbar(t, rect, 80)) continue;
     if (t.art === 'sanizelt' || t.art === 'zelt' || t.art === 'funkzelt') zeltBoden(ctx, t);
     else if (t.art === 'feldbett' || t.art === 'funktisch') mitRahmen(ctx, t, () => zeichneSafeMoebel(ctx, { art: t.art, x: -t.w / 2 / K, y: -t.d / 2 / K, b: t.w / K, h: t.d / K }, K));
     else if (t.art === 'mgnest') {   // Sandboden im Nest (unter dem Soldaten)
-      ctx.fillStyle = '#a08c5c'; ctx.beginPath(); ctx.arc(t.x, t.y, 17, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.arc(t.x, t.y, 17, 0.2, Math.PI - 0.2); ctx.fill();
+      const rb = 17 * t.r / 23;
+      ctx.fillStyle = '#a08c5c'; ctx.beginPath(); ctx.arc(t.x, t.y, rb, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.arc(t.x, t.y, rb, 0.2, Math.PI - 0.2); ctx.fill();
     }
   }
+}
+
+// Lagerboden (rein Zeichnung): Fläche des Bauplans (gedreht), Rand 4 m weich ausgeblendet, darauf viele kleine Körner und Spuren
+function stuetzpunktBodenFein(ctx, sp, rect) {
+  const r = rahmen(sp.x, sp.y, sp.b, sp.h, sp.richtung), [ox, oy] = r.ort(0, 0);
+  ctx.save();
+  ctx.translate(ox, oy); ctx.rotate(r.th);
+  const W = SP_BREITE * SP_PK, D = SP_TIEFE * SP_PK, RAND = 4 * PX_M;
+  // weicher Rand: mehrere Lagen nach innen dichter
+  for (let i = 0; i < 6; i++) {
+    const e = RAND * (1 - i / 6);
+    ctx.fillStyle = `rgba(128,113,78,${0.16})`;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-e + 4, -e + 4, W + 2 * e - 8, D + 2 * e - 8, e + 6); ctx.fill(); } else ctx.fillRect(-e, -e, W + 2 * e, D + 2 * e);
+  }
+  ctx.fillStyle = 'rgba(139,123,85,.55)'; ctx.fillRect(RAND / 2, RAND / 2, W - RAND, D - RAND);
+  // Körnung: Zellen 4 × 4 m nur im sichtbaren Bereich, je Zelle feste Körner (Hash), 1–3 px
+  const inv = (x, y) => [(x - ox) * r.c + (y - oy) * r.s, -(x - ox) * r.s + (y - oy) * r.c];
+  const ecken = [inv(rect.x0 * K, rect.y0 * K), inv(rect.x1 * K, rect.y0 * K), inv(rect.x0 * K, rect.y1 * K), inv(rect.x1 * K, rect.y1 * K)];
+  const Z = 32, u0 = Math.max(0, Math.floor(Math.min(...ecken.map(e => e[0])) / Z)), u1 = Math.min(Math.ceil(W / Z), Math.ceil(Math.max(...ecken.map(e => e[0])) / Z));
+  const v0 = Math.max(0, Math.floor(Math.min(...ecken.map(e => e[1])) / Z)), v1 = Math.min(Math.ceil(D / Z), Math.ceil(Math.max(...ecken.map(e => e[1])) / Z));
+  const farben = ['rgba(98,86,58,.55)', 'rgba(166,150,108,.6)', 'rgba(120,106,74,.5)', 'rgba(186,172,132,.45)', 'rgba(84,74,52,.4)'];
+  for (let j = v0; j < v1; j++) for (let i = u0; i < u1; i++) {
+    for (let n = 0; n < 46; n++) {
+      const a = hash(i * 977 + n, j * 131 + sp.x), b = hash(j * 619 + n, i * 37 + sp.y), g = hash(i + n * 13, j - n * 7);
+      const x = (i + a) * Z, y = (j + b) * Z;
+      if (x > W || y > D) continue;
+      ctx.fillStyle = farben[Math.floor(g * 5)];
+      ctx.beginPath(); ctx.ellipse(x, y, 0.5 + g * 1.4, 0.4 + a * 1.0, b * TAU, 0, TAU); ctx.fill();
+    }
+  }
+  // Fahrspuren des Puma/LKW von der Einfahrt in die Lagermitte (weich, zwei Spuren)
+  ctx.strokeStyle = 'rgba(70,60,40,.16)'; ctx.lineCap = 'round'; ctx.lineWidth = 6;
+  for (const q of [-9, 9]) {
+    ctx.beginPath(); ctx.moveTo(15.5 * SP_PK + q, 0); ctx.bezierCurveTo(15.5 * SP_PK + q, 6 * SP_PK, 14 * SP_PK + q, 14 * SP_PK, 13.9 * SP_PK + q, 19.4 * SP_PK); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function zeltBoden(ctx, t) {
   mitRahmen(ctx, t, () => {
     const hw = t.w / 2, hd = t.d / 2;
     rundRechteck(ctx, '#6e7342', -hw, -hd, t.w, t.d, 1);
-    ctx.fillStyle = 'rgba(255,255,255,.07)';   // Zeltbahnen
-    for (let x = -hw + 14; x < hw; x += 28) ctx.fillRect(x, -hd, 12, t.d);
-    ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fillRect(-hw, -hd, t.w, 5);   // Schatten der Wand
-    if (t.nutzung === 'lager') {   // Schlafsäcke und Kiste auf dem Boden
-      for (let i = 0; i < 3; i++) {
-        const x = -hw + 16 + i * 40, y = hd - 46;
-        rundRechteck(ctx, '#556b2f', x, y, 17, 36, 7); rundRechteck(ctx, '#8aa05a', x + 2, y + 2, 13, 8, 4);
+    ctx.fillStyle = 'rgba(255,255,255,.07)';   // Zeltbahnen (1,5 m)
+    for (let x = -hw + 6; x < hw; x += 12) ctx.fillRect(x, -hd, 6, t.d);
+    ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fillRect(-hw, -hd, t.w, 3);   // Schatten der Wand
+    if (t.nutzung === 'lager') {   // Schlafsäcke (0,8 × 2 m) und Kiste (1,2 × 0,8 m) auf dem Boden
+      for (let i = 0; i < 4; i++) {
+        const x = -hw + 4 + i * 10, y = hd - 20;
+        rundRechteck(ctx, '#556b2f', x, y, 6.4, 16, 3); rundRechteck(ctx, '#8aa05a', x + 0.8, y + 0.8, 4.8, 3.4, 1.6);
       }
-      rundRechteck(ctx, '#3a2f1e', hw - 36, -hd + 12, 24, 16, 2); rundRechteck(ctx, '#6d5a3a', hw - 34, -hd + 14, 20, 12, 2);
+      rundRechteck(ctx, '#3a2f1e', hw - 14, -hd + 4, 10, 6.5, 1); rundRechteck(ctx, '#6d5a3a', hw - 13.2, -hd + 4.8, 8.4, 4.9, 1);
     }
   });
   if (t.nutzung === 'sani' && t.kreuz) {   // weißes Feld mit rotem Kreuz
     mitRahmen(ctx, { x: t.kreuz[0], y: t.kreuz[1], winkel: t.winkel }, () => {
+      ctx.scale(0.45, 0.45);   // Plane mit Kreuz ~2,6 m
       ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(-20, -18, 46, 46);
       ctx.fillStyle = '#f5f5f0'; ctx.fillRect(-23, -23, 46, 46);
       ctx.strokeStyle = '#9e9e9e'; ctx.lineWidth = 1.5; ctx.strokeRect(-22.5, -22.5, 45, 45);
@@ -561,7 +620,8 @@ function flandernZaun(ctx, t) {
 export function zeichneSDrahtRolle(ctx, w, d) { sDraht(ctx, { x: 0, y: 0, w, d, winkel: 0 }); }   // für Flugfeld-Deko (flugfeld_deko.mjs), um den Ursprung
 function sDraht(ctx, t) {
   mitRahmen(ctx, t, () => {
-    const hw = t.w / 2, n = Math.max(2, Math.round(t.w / 12)), s = t.w / n;
+    const hw = t.w / 2, n = Math.max(2, Math.round(t.w / 7)), s = t.w / n;
+    ctx.scale(1, 0.62);   // Rollen Ø ~0,9 m (Zeichnung gestaucht, Länge unverändert)
     for (let i = 0; i < n; i++) {
       const x = -hw + (i + 0.5) * s, y = i % 2 ? 1.2 : -1.2;
       ctx.fillStyle = 'rgba(0,0,0,.26)'; ctx.beginPath(); ctx.ellipse(x + 2, y + 4, s * 0.55, 8, 0, 0, TAU); ctx.fill();
@@ -569,7 +629,7 @@ function sDraht(ctx, t) {
     ctx.lineCap = 'round';
     for (let i = 0; i < n; i++) {
       const x = -hw + (i + 0.5) * s, y = i % 2 ? 1.2 : -1.2;
-      ctx.strokeStyle = '#4a4d50'; ctx.lineWidth = 1.7; ctx.beginPath(); ctx.arc(x, y, 7.2, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = '#4a4d50'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(x, y, Math.min(7.2, s * 0.62), 7.2, 0, 0, TAU); ctx.stroke();
       ctx.strokeStyle = '#8d9498'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x + 0.4, y - 0.3, 4.6, 0.3, TAU - 0.5); ctx.stroke();
       ctx.strokeStyle = '#2e3033'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, TAU); ctx.stroke();
       ctx.strokeStyle = '#b0b7ba'; ctx.lineWidth = 0.9;   // Zacken
@@ -582,15 +642,15 @@ function sDraht(ctx, t) {
 
 // Sandsäcke auf einer Fläche (Reihen versetzt, Schatten)
 function sandsaecke(ctx, x0, y0, x1, y1, saat) {
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x0 + 3, y0 + 4, x1 - x0, y1 - y0);
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x0 + 1.5, y0 + 2, x1 - x0, y1 - y0);
   ctx.fillStyle = '#a89560'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-  const lang = (x1 - x0) >= (y1 - y0), L = lang ? x1 - x0 : y1 - y0, Q = lang ? y1 - y0 : x1 - x0, reihen = Math.max(1, Math.round(Q / 8)), q1 = Q / reihen;
+  const lang = (x1 - x0) >= (y1 - y0), L = lang ? x1 - x0 : y1 - y0, Q = lang ? y1 - y0 : x1 - x0, reihen = Math.max(1, Math.round(Q / 2.8)), q1 = Q / reihen, SL = 4.8;   // Sack 0,6 × 0,35 m
   for (let r = 0; r < reihen; r++) {
-    for (let a = r % 2 ? 7 : 0; a < L; a += 14) {
-      const q = (r + 0.5) * q1, cx = lang ? x0 + a + 7 : x0 + q, cy = lang ? y0 + q : y0 + a + 7;
-      ctx.fillStyle = ['#c8b27a', '#bfa86c', '#d2bd88'][Math.floor(hash(saat + r, a) * 3)];
-      ctx.beginPath(); ctx.ellipse(cx, cy, lang ? 7 : q1 / 2 + 0.5, lang ? q1 / 2 + 0.5 : 7, 0, 0, TAU); ctx.fill();
-      ctx.strokeStyle = 'rgba(80,60,20,.55)'; ctx.lineWidth = 1; ctx.stroke();
+    for (let a = r % 2 ? SL / 2 : 0; a < L; a += SL) {
+      const q = (r + 0.5) * q1, cx = lang ? x0 + a + SL / 2 : x0 + q, cy = lang ? y0 + q : y0 + a + SL / 2;
+      ctx.fillStyle = ['#c8b27a', '#bfa86c', '#d2bd88'][Math.floor(hash(saat + r, Math.round(a * 10)) * 3)];
+      ctx.beginPath(); ctx.ellipse(cx, cy, lang ? SL / 2 : q1 / 2 + 0.3, lang ? q1 / 2 + 0.3 : SL / 2, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(80,60,20,.55)'; ctx.lineWidth = 0.5; ctx.stroke();
     }
   }
 }
@@ -600,7 +660,7 @@ function sandsackStellung(ctx, t) {
 
 // MG-Nest: Ring aus Sandsäcken, MG auf Dreibein in Blickrichtung, Munitionskiste
 function mgNest(ctx, t) {
-  ctx.translate(t.x, t.y);
+  ctx.translate(t.x, t.y); ctx.scale(t.r / 23, t.r / 23);   // Vorlage für r = 23 px, echtes Nest Ø 3,5 m
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(2.5, 4, 24, 0, TAU); ctx.fill();
   const n = 15;
   for (let i = 0; i < n; i++) {
@@ -715,9 +775,9 @@ function bwContainer(ctx, t) {
 }
 
 // Munitionskiste (olivgrün, Schablonenschrift, gelbes Band)
-function munKiste(ctx, t) {
-  ctx.translate(t.x, t.y); ctx.rotate(t.winkel);
-  const hw = t.w / 2, hd = t.d / 2;
+function munKiste(ctx, t0) {
+  ctx.translate(t0.x, t0.y); ctx.rotate(t0.winkel); ctx.scale(t0.w / 22, t0.d / 15);   // Zeichnung für 22 × 15, echte Kiste kleiner
+  const t = { w: 22, d: 15 }, hw = t.w / 2, hd = t.d / 2;
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-hw + 2, -hd + 3, t.w, t.d);
   rundRechteck(ctx, '#3d4720', -hw, -hd, t.w, t.d, 2); rundRechteck(ctx, '#56632b', -hw + 1.5, -hd + 1.5, t.w - 3, t.d - 3, 1.4);
   ctx.fillStyle = '#d4b530'; ctx.fillRect(-hw + 4, -hd + 1.5, 2.4, t.d - 3);
@@ -725,16 +785,16 @@ function munKiste(ctx, t) {
   ctx.fillStyle = 'rgba(240,240,225,.9)'; ctx.fillRect(-hw + 8, -2.5, 8, 1.2); ctx.fillRect(-hw + 8, -0.2, 6, 1.2); ctx.fillRect(-hw + 8, 2, 7, 1.2);
 }
 // Vorratskiste des Lagers: helle Holzkiste mit grünem Deckelband und weißem Kreuz (Safe House)
-function vorratsKiste(ctx, t) {
-  ctx.translate(t.x, t.y); ctx.rotate(t.winkel);
-  const hw = t.w / 2, hd = t.d / 2;
+function vorratsKiste(ctx, t0) {
+  ctx.translate(t0.x, t0.y); ctx.rotate(t0.winkel); ctx.scale(t0.w / 26, t0.d / 18);   // Zeichnung für 26 × 18
+  const t = { w: 26, d: 18 }, hw = t.w / 2, hd = t.d / 2;
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-hw + 2, -hd + 3, t.w, t.d);
   rundRechteck(ctx, '#5a4326', -hw, -hd, t.w, t.d, 2); rundRechteck(ctx, '#8a6a3c', -hw + 1.5, -hd + 1.5, t.w - 3, t.d - 3, 1.4);
   ctx.fillStyle = '#4f5d2a'; ctx.fillRect(-hw + 1.5, -2.2, t.w - 3, 4.4);
   ctx.fillStyle = 'rgba(240,240,225,.92)'; ctx.fillRect(-1, -hd + 3, 2, t.d - 6); ctx.fillRect(-4.5, -1, 9, 2);
 }
 function saniKiste(ctx, b) {
-  ctx.translate(b.x, b.y); ctx.rotate(b.winkel ?? 0);
+  ctx.translate(b.x, b.y); ctx.rotate(b.winkel ?? 0); ctx.scale(0.34, 0.34);   // Sanitätskiste 0,8 × 0,5 m
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-8, -5, 20, 16);
   rundRechteck(ctx, '#e8e8e0', -10, -8, 20, 16, 2);
   ctx.strokeStyle = '#7d7d73'; ctx.lineWidth = 1.2; ctx.strokeRect(-9.5, -7.5, 19, 15);
@@ -754,7 +814,7 @@ function antenne(ctx, t) {
 }
 // Fahne mit rotem Kreuz am Sanitätszelt (von oben: Stange, Tuch)
 function flagge(ctx, t) {
-  ctx.translate(t.x, t.y); ctx.rotate(t.winkel);
+  ctx.translate(t.x, t.y); ctx.rotate(t.winkel); ctx.scale(0.6, 0.6);   // Fahne 1,2 × 0,8 m
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(-3, -3, 20, 14);
   ctx.fillStyle = '#f5f5f0'; ctx.fillRect(-2, -5, 18, 12);
   ctx.strokeStyle = '#9e9e9e'; ctx.lineWidth = 1; ctx.strokeRect(-1.5, -4.5, 17, 11);

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { KACHEL, T, BEUTE, BEHAELTER_NAME, setzeKartengroesse, frei, findeWeg, feinWert } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
-import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben, zeichnePumaTurm, zeichnePumaWanne } from '../client/stuetzpunkt.mjs';
+import { zeichneStuetzpunktBoden, zeichneStuetzpunktOben, zeichnePumaTurm, zeichnePumaWanne, SP_KB, SP_KT, SP_PK } from '../client/stuetzpunkt.mjs';
 
 function scheinCanvas() {
   let aufrufe = 0;
@@ -27,7 +27,8 @@ for (const name of ['geretsried', 'geretsried2', 'isarauen']) {
     assert.ok(sp, 'kein Stützpunkt');
     assert.ok(['n', 's', 'o', 'w'].includes(sp.richtung));
     assert.ok(sp.x >= 1 && sp.y >= 1 && sp.x + sp.b < karte.breite && sp.y + sp.h < karte.hoehe);
-    assert.ok(Math.max(sp.b, sp.h) >= 30 && Math.min(sp.b, sp.h) >= 22);
+    assert.ok(Math.max(sp.b, sp.h) === SP_KB && Math.min(sp.b, sp.h) === SP_KT);
+    assert.ok(SP_KB * 4 <= 80 && SP_KT * 4 <= 60, 'Lagerfläche höchstens 80 × 60 m (echte Maße)');
     for (let y = sp.y; y < sp.y + sp.h; y++) for (let x = sp.x; x < sp.x + sp.b; x++) {
       assert.ok([T.WIESE, T.PLATZ, T.BAUM].includes(w.hole(x, y)), `Kachel ${x},${y} ist ${w.hole(x, y)}`);
       assert.notEqual(w.hole(x, y), T.BAUM, 'Bäume im Baufeld müssen weg sein');
@@ -42,13 +43,13 @@ for (const name of ['geretsried', 'geretsried2', 'isarauen']) {
     assert.equal(w2.behaelter.length, w.behaelter.length);
   });
 
-  test(`Stützpunkt ${name}: Teile vollständig und innerhalb, Durchfahrt 3 Kacheln`, () => {
+  test(`Stützpunkt ${name}: Teile vollständig und innerhalb, Durchfahrt 7,2 m`, () => {
     const arten = a => sp.teile.filter(t => t.art === a);
     assert.equal(arten('puma').length, 1);
     assert.ok(arten('puma')[0].turm.x === arten('puma')[0].x && Number.isFinite(arten('puma')[0].turm.winkel));
     assert.ok(arten('sdraht').length >= 2);
     assert.equal(arten('durchfahrt').length, 1);
-    assert.ok(Math.max(arten('durchfahrt')[0].b, arten('durchfahrt')[0].h) === 3 * KACHEL);
+    assert.ok(Math.abs(Math.max(arten('durchfahrt')[0].b, arten('durchfahrt')[0].h) - 3 * SP_PK) < 1e-6, 'Durchfahrt 3 Bauplan-Einheiten (7,2 m)');
     assert.ok(arten('sandsack').length >= 2 && arten('mgnest').length >= 2 && arten('mgnest').length <= 3);
     assert.ok(arten('mgnest').every(n => Number.isFinite(n.blick)));
     assert.equal(arten('sanizelt').length, 1); assert.equal(arten('funkzelt').length, 1); assert.ok(arten('zelt').length >= 2);
@@ -129,3 +130,20 @@ for (const name of ['geretsried', 'geretsried2', 'isarauen']) {
     assert.equal(fern.aufrufe, 0, 'zeichnet außerhalb des Ausschnitts');
   });
 }
+
+testNode('Stützpunkt: Teile in echten Maßen (8 px = 1 m)', () => {
+  const karte = JSON.parse(fs.readFileSync(new URL('../client/karten/geretsried2.json', import.meta.url)));
+  setzeKartengroesse(karte.breite, karte.hoehe);
+  const sp = baueWeltAusKarte(karte, 7).stuetzpunkt, m = px => px / 8;
+  const arten = a => sp.teile.filter(t => t.art === a);
+  const masse = t => [m(Math.max(t.w, t.d)), m(Math.min(t.w, t.d))];
+  for (const t of arten('feldbett')) { const [l, b] = masse(t); assert.ok(l <= 2.2 && b <= 0.9, `Feldbett ${l} × ${b} m`); }
+  for (const t of arten('kiste')) { const [l, b] = masse(t); assert.ok(l <= 1.5 && b <= 1, `Kiste ${l} × ${b} m`); }
+  for (const t of arten('vorratskiste')) { const [l, b] = masse(t); assert.ok(l <= 1.5 && b <= 1, `Vorratskiste ${l} × ${b} m`); }
+  for (const t of arten('container')) { const [l, b] = masse(t); assert.ok(l <= 6.2 && b <= 2.5, `Container ${l} × ${b} m`); }
+  for (const t of arten('funktisch')) { const [l, b] = masse(t); assert.ok(l <= 2 && b <= 1, `Funktisch ${l} × ${b} m`); }
+  for (const t of arten('sandsack')) { const [l, b] = masse(t); assert.ok(l <= 4 && b <= 3, `Sandsackstellung ${l} × ${b} m`); }
+  for (const t of arten('mgnest')) assert.ok(m(2 * t.r) <= 4, 'MG-Nest Ø ' + m(2 * t.r));
+  for (const t of arten('lkw')) assert.ok(m(t.laenge) <= 8.5 && m(t.breite) <= 2.6, 'LKW');
+  for (const t of [...arten('zelt'), ...arten('funkzelt'), ...arten('sanizelt')]) { const [l, b] = masse(t); assert.ok(l <= 22 && b <= 15, `Zelt ${t.art} ${l} × ${b} m`); }
+});
