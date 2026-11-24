@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.90.1 – 24.11.2026
+
+- Granatwerfer: schießt automatisch auf Zombies bis 25 m (Mindestabstand 4,5 m – steht einer näher, nimmt er das nächste Ziel dahinter), Explosion wie Handgranate, lädt automatisch nach. Ein gefundener Granatwerfer bringt 2 Granaten mit; die eigene Granate verletzt den Schützen nicht mehr.
+- MG-Nester drehen sich sichtbar zum Ziel (schwenken ohne Ziel langsam) und sind maßstäblich (Nest 2,1 m innen, MG 1,2 m mit Dreibein).
+- Im Fahrzeug keine Taschenlampe (Scheinwerfer übernehmen), die Lampenzeit läuft dort nicht ab.
+- Höchstens 2 streunende Hunde je Karte (Backend).
+
 ## 0.90.0 – 24.11.2026
 
 - Zombies bewegen sich unterschiedlich: drei neue Gangarten je Figur (gebeugt, mit vorgestreckten Armen, Mutanten-Lauf), die Beine passen zum Tempo – kein Rutschen mehr.
