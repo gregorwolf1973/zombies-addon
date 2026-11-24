@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild, ZF_ZERREN, zfGang, zfAnzahl, ZF_GANG, ZF_OPTIONAL } from '../client/zombiefiguren.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild, ZF_ZERREN, zfGang, zfAnzahl, ZF_GANG, ZF_OPTIONAL, zkKlasse, ZK_ANTEILE, ZK_KRIECHER, ZK_LAEUFER, ZK_SCHLURFER, ZF_SCHRITT, ZF_REF } from '../client/zombiefiguren.mjs';
 
 const dir = new URL('../client/grafik/', import.meta.url);
 
@@ -32,7 +32,7 @@ test('Clip je Zustand', () => {
 
 test('Bildnummern: Weg, Zeit, Sterben einmalig', () => {
   for (const clip of ['walk', 'run', 'crawl']) {
-    const nummern = new Set(); for (let l = 0; l < 100; l += 0.5) nummern.add(zfBild(clip, { lauf: l }));
+    const nummern = new Set(); for (let l = 0; l < 100; l += 0.1) nummern.add(zfBild(clip, { lauf: l }));
     assert.equal(nummern.size, ZF_BILDER, clip);
   }
   assert.equal(zfBild('walk', { lauf: 0 }), 0);
@@ -69,13 +69,12 @@ test('Atlas: JSON passt zu den Bildern, Kantenlänge ≤ 4096, alle Rahmen im At
   }
 });
 
-test('Gangart je Zombie: fest aus der Id, alle Varianten kommen vor, Tempo 0,88–1,12, Bildnummern im Clip', () => {
+test('Gangart je Zombie: fest aus der Id, alle Varianten kommen vor, Bildnummern im Clip', () => {
   assert.deepEqual(zfGang('z17'), zfGang('z17'));
   const w = {}, r = {};
   for (let i = 0; i < 1000; i++) {
     const g = zfGang('z' + i);
     w[g.walk] = (w[g.walk] ?? 0) + 1; r[g.run] = (r[g.run] ?? 0) + 1;
-    assert.ok(g.tempo >= 0.88 && g.tempo <= 1.12);
   }
   for (const v of ZF_GANG.walk) assert.ok(w[v] > 200, v + ' ' + w[v]);
   for (const v of ZF_GANG.run) assert.ok(r[v] > 350, v + ' ' + r[v]);
@@ -129,4 +128,22 @@ test('Im Draht: Kriech-Clip langsam (Zerren), ein Zug ~5 s mit Haltephase, kein 
     assert.ok(wechsel <= 2 * ZF_BILDER * 10000 / (ZF_ZERREN * 0.85) / 2 + 4, 'zu schnell: ' + wechsel + ' Bildwechsel in 10 s');
     assert.ok(halt > wechsel, 'keine Haltephasen');
   }
+});
+
+test('Bewegungsklassen: fest aus der Id, Anteile wie eingestellt, Läufer-Bonus geht vom Schlurfer ab', () => {
+  assert.equal(zkKlasse('z5'), zkKlasse('z5'));
+  const zaehle = (anteile, bonus = 0) => { const n = [0, 0, 0]; for (let i = 0; i < 5000; i++) n[zkKlasse('z' + i, anteile, bonus)]++; return n.map(x => x / 5000); };
+  const v = zaehle(ZK_ANTEILE);
+  assert.ok(Math.abs(v[ZK_KRIECHER] - 0.1) < 0.02 && Math.abs(v[ZK_SCHLURFER] - 0.6) < 0.03 && Math.abs(v[ZK_LAEUFER] - 0.3) < 0.03, JSON.stringify(v));
+  const b = zaehle(ZK_ANTEILE, 0.2);
+  assert.ok(Math.abs(b[ZK_LAEUFER] - 0.5) < 0.03 && Math.abs(b[ZK_KRIECHER] - 0.1) < 0.02, JSON.stringify(b));
+  assert.deepEqual(zaehle({ kriecher: 0, schlurfer: 0, laeufer: 5 }), [0, 1, 0]);
+  // Schlurfer gehen auch beim Jagen, Läufer rennen
+  assert.equal(zfClip({ geht: true, jagt: true, laeufer: false }), 'walk');
+  assert.equal(zfClip({ geht: true, jagt: true, laeufer: true }), 'run');
+});
+
+test('Kein Rutschen: Weg je Bildzyklus = gemessene Schrittlänge der Mixamo-Clips × Anzeigemaßstab (16,44 px je m × 0,7)', () => {
+  const m = { walk: 1.37, walk2: 0.78, walk3: 1.37, run: 1.91, run2: 1.57, crawl: 0.43 };   // tools/mixamo/seite.html ?nur=tempo (Mittel aus romero/warzombie)
+  for (const [c, meter] of Object.entries(m)) assert.ok(Math.abs(ZF_SCHRITT[c] - meter * 16.44 * ZF_REF) < 1, c + ' ' + ZF_SCHRITT[c]);
 });

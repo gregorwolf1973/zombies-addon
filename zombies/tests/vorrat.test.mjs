@@ -445,7 +445,7 @@ test('Kriecher: nicht ganz tot, langsam, beim zweiten Mal Leiche', async () => {
     const x0 = z.x;
     await warte(1000);
     const weg = x0 - z.x;
-    assert.ok(weg > 3 && weg < 50, 'Kriecher-Tempo falsch: ' + weg);
+    assert.ok(weg > 1 && weg < 50, 'Kriecher-Tempo falsch: ' + weg);   // Kriecher-Klasse: 25 % von „wandert“ (hier altesTempo 13,5 km/h → ~7 px/s, mit Anlauf)
     raum.schaden(zid, z, 999, p);
     assert.ok(!raum.state.zombies.has(zid));
     assert.equal(raum.state.leichen.size, 1);

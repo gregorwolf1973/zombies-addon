@@ -7,7 +7,8 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
 import { setzeKartengroesse } from '../client/welt.mjs';
-import { freierPort } from './hilfe.mjs';
+import { freierPort, alleLaeufer } from './hilfe.mjs';
+alleLaeufer(SpielRaum);   // Verhalten ohne Bewegungsklassen (alle jagen bis zum Höchsttempo)
 
 const PORT = await freierPort();
 let server;

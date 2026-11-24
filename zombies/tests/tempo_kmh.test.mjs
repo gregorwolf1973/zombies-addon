@@ -24,3 +24,15 @@ test('Einstellungen: Vorgabe und Grenzen', () => {
   assert.deepEqual([v.tempoHeldGehen, v.tempoHeldSchleichen, v.tempoZombieJagen, v.tempoZombieWandern], [20, 9, 15, 4]);
   assert.equal(bereinige({ tempoHeldGehen: 999 }, v).tempoHeldGehen, 999);
 });
+
+test('Bewegungsklassen: Kriecher ≤ 1 km/h, Schlurfer ≤ „wandert“ (auch beim Jagen), Läufer bis „jagt“; Vorgabe-Anteile 10/60/30', async () => {
+  const { SpielRaum } = await import('../server/raum.mjs');
+  const { ZK_KRIECHER, ZK_LAEUFER, ZK_SCHLURFER } = await import('../client/zombiefiguren.mjs');
+  const kmh = px => px / 8 * 3.6, kt = (z, e) => kmh(SpielRaum.prototype.klassenTempo.call({}, z, e));
+  assert.ok(Math.abs(kt({ kriecht: true, kl: ZK_KRIECHER }, true) - 1) < 1e-9);
+  assert.ok(Math.abs(kt({ kl: ZK_SCHLURFER }, true) - 4) < 1e-9 && Math.abs(kt({ kl: ZK_SCHLURFER }, false) - 2.4) < 1e-9);
+  assert.ok(Math.abs(kt({ kl: ZK_LAEUFER }, true) - 15) < 1e-9);
+  assert.ok(kt({ kriecht: true, kl: ZK_LAEUFER }, true) <= 1, 'angeschossener Läufer robbt nur noch');
+  const z = vorgaben().zombies;
+  assert.deepEqual([z.anteilKriecher, z.anteilSchlurfer, z.anteilLaeufer], [10, 60, 30]);
+});

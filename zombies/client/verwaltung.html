@@ -708,6 +708,28 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     </div>
 
     <div class="feld">
+      <label for="anteilKriecher">Bewegungsklassen (Anteile, werden auf 100 % gerechnet): Kriecher robben sehr langsam</label>
+      <div class="wertzeile">
+        <input type="range" id="anteilKriecher" min="0" max="100" step="1">
+        <span class="wert" id="anteilKriecherWert">10 %</span>
+      </div>
+    </div>
+    <div class="feld">
+      <label for="anteilSchlurfer">Schlurfer (gehen langsam, auch beim Jagen; Tempo nach „Zombie wandert“)</label>
+      <div class="wertzeile">
+        <input type="range" id="anteilSchlurfer" min="0" max="100" step="1">
+        <span class="wert" id="anteilSchlurferWert">60 %</span>
+      </div>
+    </div>
+    <div class="feld">
+      <label for="anteilLaeufer">Läufer (rennen beim Jagen bis „Zombie jagt“; mit Level und Spieltagen kommen mehr dazu)</label>
+      <div class="wertzeile">
+        <input type="range" id="anteilLaeufer" min="0" max="100" step="1">
+        <span class="wert" id="anteilLaeuferWert">30 %</span>
+      </div>
+    </div>
+
+    <div class="feld">
       <label for="ueberraschung">Überraschungszombie beim Durchsuchen (Schrank, Spind, Müllcontainer, Auto)</label>
       <div class="wertzeile">
         <input type="range" id="ueberraschung" min="0" max="100" step="1">
@@ -3461,13 +3483,13 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var tempo = $("tempo");
     if (!zeitGeber["tempo"] && !istFokussiert(tempo)) { tempo.value = z.tempo; }
     $("tempoWert").textContent = Math.round(Number(tempo.value)) + " %";
-    [["hordeZiel", z.hordeZiel || 3.5], ["hordeTrupp", z.hordeTrupp || 10], ["hordeReichweite", z.hordeReichweite || 18], ["lagerWelle", z.lagerWelle === undefined ? 200 : z.lagerWelle], ["lagerWellePause", z.lagerWellePause || 10], ["ueberraschung", z.ueberraschung === undefined ? 3 : z.ueberraschung]].forEach(function (p) {
+    [["hordeZiel", z.hordeZiel || 3.5], ["hordeTrupp", z.hordeTrupp || 10], ["hordeReichweite", z.hordeReichweite || 18], ["lagerWelle", z.lagerWelle === undefined ? 200 : z.lagerWelle], ["lagerWellePause", z.lagerWellePause || 10], ["ueberraschung", z.ueberraschung === undefined ? 3 : z.ueberraschung], ["anteilKriecher", z.anteilKriecher === undefined ? 10 : z.anteilKriecher], ["anteilSchlurfer", z.anteilSchlurfer === undefined ? 60 : z.anteilSchlurfer], ["anteilLaeufer", z.anteilLaeufer === undefined ? 30 : z.anteilLaeufer]].forEach(function (p) {
       var el = $(p[0]);
       if (!zeitGeber[p[0]] && !istFokussiert(el)) el.value = p[1];
       $(p[0] + "Wert").textContent = welleText(p[0], Number(el.value));
     });
   }
-  function welleText(id, v) { return id === "hordeZiel" ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : id === "lagerWelle" ? (v ? String(v) : "aus") : id === "lagerWellePause" ? v + " min" : id === "ueberraschung" ? v + " %" : String(v); }
+  function welleText(id, v) { return id === "hordeZiel" ? String(v).replace(".", ",") + " min" : id === "hordeReichweite" ? v + " m" : id === "lagerWelle" ? (v ? String(v) : "aus") : id === "lagerWellePause" ? v + " min" : (id === "ueberraschung" || /^anteil/.test(id)) ? v + " %" : String(v); }
 
   function rendereSpiel(d) {
     var e = d.einstellungen || {};
@@ -3607,7 +3629,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       sendenTeil("zombies", "tempo", Number(tempo.value));
     });
 
-    ["hordeZiel", "hordeTrupp", "hordeReichweite", "lagerWelle", "lagerWellePause", "ueberraschung"].forEach(function (id) {
+    ["hordeZiel", "hordeTrupp", "hordeReichweite", "lagerWelle", "lagerWellePause", "ueberraschung", "anteilKriecher", "anteilSchlurfer", "anteilLaeufer"].forEach(function (id) {
       var el = $(id);
       el.addEventListener("input", function () { $(id + "Wert").textContent = welleText(id, Number(el.value)); });
       el.addEventListener("change", function () {
@@ -3928,7 +3950,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
 
   // ---------- Zahlenfelder statt Schieber ----------
   var ORIG = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-  var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', lagerWelle: 'zombies.lagerWelle', lagerWellePause: 'zombies.lagerWellePause', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
+  var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', lagerWelle: 'zombies.lagerWelle', lagerWellePause: 'zombies.lagerWellePause', ueberraschung: 'zombies.ueberraschung', anteilKriecher: 'zombies.anteilKriecher', anteilSchlurfer: 'zombies.anteilSchlurfer', anteilLaeufer: 'zombies.anteilLaeufer', tnNacht: 'zombies.nacht',
     tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnNebelMorgen: 'nebel.morgen', tnNebelAbend: 'nebel.abend', tnNebelSicht: 'nebel.sicht', tnNebelZombie: 'nebel.zombie', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnFzStoss: 'fahrzeugStoss', tnGeraeusch: 'geraeuschPause', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnUnfallTuer: 'unfallTuer', tnAutoTempo: 'auto.tempo', tnAutoLenkung: 'auto.lenkung', tnAutoLeben: 'auto.leben', tnAutoPlaetze: 'auto.plaetze', tnAutoCrashAb: 'auto.crashAb', tnAutoCrash: 'auto.crashSchaden', tnAutoCrashAuto: 'auto.crashAuto', tnAutoZombieTot: 'auto.zombieTotKmh', tnAutoZombieSchaden: 'auto.zombieSchaden', tnAutoSchlMoebel: 'auto.schluesselMoebel', tnAutoSchlKoffer: 'auto.schluesselKofferraum', tnAutoSchlLeiche: 'auto.schluesselLeiche', tnGGroesse: 'groesseGesamt',
@@ -4008,7 +4030,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var FMT_FAKTOR = { modus: 'decimal', an: function (v) { return '×' + (Number(v) / 10).toFixed(1).replace('.', ','); },
     ein: function (t) { var x = parseFloat(String(t).replace(/[×x\s]/gi, '').replace(',', '.')); return isFinite(x) ? Math.round(x * 10) : null; } };
   // Werte mit echten Grenzen (Server: fest()): [von, bis]; null = Min bzw. Max des Schiebers (Wahrscheinlichkeiten/Lautstärken in %, Winkel, Zeitpunkte)
-  var FESTE = { ueberraschung: null, tnBiss: null, tnUnfallExpl: null, tnUnfallTuer: null, tnAutoCrash: null, tnAutoSchlMoebel: null, tnAutoSchlKoffer: null, tnAutoSchlLeiche: null, spStock: null, spDrin: null, spFunk: null, tuFrei: null, tuRaetsel: null, tuSchluessel: null, tnHundAblenk: null, tnKiMun: null, tnKiVerband: null, tnKiGranate: null,
+  var FESTE = { ueberraschung: null, anteilKriecher: null, anteilSchlurfer: null, anteilLaeufer: null, tnBiss: null, tnUnfallExpl: null, tnUnfallTuer: null, tnAutoCrash: null, tnAutoSchlMoebel: null, tnAutoSchlKoffer: null, tnAutoSchlLeiche: null, spStock: null, spDrin: null, spFunk: null, tuFrei: null, tuRaetsel: null, tuSchluessel: null, tnHundAblenk: null, tnKiMun: null, tnKiVerband: null, tnKiGranate: null,
     tnMgLeben: null, tnMgNot: null, muLaut: null, rsLaut: null, tnNebelMorgen: null, tnNebelAbend: null, tnNebelZombie: null, tnNachtDunkel: null,
     tnBissSpGeretsried: null, tnBissSpIsarauen: null, tnBissSpKoenigsdorf: null, tnBissSpKochel: null, tnBissSpAndermatt: null, agStunde: null, tnTagAb: null, tnNachtAb: null, zsKegel: [null, 360] };
   var FORMATE = { tnTagAb: FMT_UHR, tnNachtAb: FMT_UHR, agStunde: FMT_STUNDE, tnNacht: FMT_FAKTOR, tnAutos: FMT_FAKTOR };
