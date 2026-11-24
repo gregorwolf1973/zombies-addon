@@ -274,6 +274,7 @@ button:disabled { opacity: .6; }
 #einstellungen .fenster { background: #1e2a1e; border: 1px solid #fff3; border-radius: 14px; padding: 12px 14px; width: min(460px, 100%); max-height: 90vh; overflow: auto; touch-action: pan-y; }
 #einstellungen .kopfzeile { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 #einstellzu { width: auto; margin: 0; background: #ffffff22; color: #fff; padding: 6px 12px; font-size: 18px; }
+.eg-hinweis { font-size: 12px; opacity: .75; margin-top: 4px; }
 .eg-titel { font-weight: 700; margin: 14px 0 6px; font-size: 15px; }
 .eg-reihe { display: flex; flex-wrap: wrap; gap: 8px; }
 .eg-reihe button { flex: 1 1 90px; width: auto; margin: 0; min-height: 48px; font-size: 16px; padding: 8px; background: #ffffff1f; color: #fff; }

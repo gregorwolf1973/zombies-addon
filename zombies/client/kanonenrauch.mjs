@@ -3,6 +3,7 @@
 // ist sie voll, wird das älteste Teilchen überschrieben. Mehrere Schüsse kurz nacheinander verdichten den Rauch (Deckkraft steigt mit der Menge).
 // Die Logik (Streuen, Bewegen) ist von Phaser getrennt und einzeln testbar; `RauchZeichner` hängt sie an eine Phaser-Szene.
 import { weichTextur, weichSkala, WEICH_SCHLUESSEL } from './weichkreis.mjs';
+import { GRAFIK as GFS } from './grafikstufe.mjs';
 export const RAUCH_MAX = 170;   // mehr, dafür kleinere und weichere Teilchen (0.89)
 const PX = 8;
 const FEIN = 0.55;              // Teilchen-Radien gegenüber früher
@@ -69,7 +70,7 @@ const FARBE = [0xb7b7b7, 0x9c8a6c, 0xffb347];
 
 // hängt den Pool an eine Phaser-Szene: feste Kreisobjekte (einmal angelegt), pro Frame nur umgesetzt
 export class RauchZeichner {
-  constructor(scene, max = RAUCH_MAX) {
+  constructor(scene, max = Math.round(RAUCH_MAX * GFS.partikel)) {
     this.scene = scene; this.pool = new RauchPool(max);
     weichTextur(scene);
     this.kreise = Array.from({ length: max }, () => scene.add.image(0, 0, WEICH_SCHLUESSEL).setAlpha(0).setVisible(false).setDepth(6.5));

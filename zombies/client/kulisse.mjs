@@ -6,6 +6,7 @@
 // Daten je Karte: karten/kulisse/<karte>/index.json (+ <kx>_<ky>.webp, daecher.json). Ohne Daten bleibt alles wie bisher.
 import { KACHEL as K } from './welt.mjs';
 import { ASSETS } from './basis.mjs';
+import { GRAFIK as GFS } from './grafikstufe.mjs';
 import { KUL_SCHLUESSEL, schalterLesen, bodenArt, indexLesen, kachelName, kachelnFuerRect, puffer, daecherLesen, flaecheAufbereiten,
   SCHATTEN_JE_M, STANDARD_HAUSHOEHE, baumHoehe } from './kulisse_regeln.mjs';
 
@@ -36,6 +37,8 @@ export async function ladeKulisse(karte) {
   let gezIndex = null;   // gezeichneter Boden: eigener Index unter boden/
   if (index.boden) { try { const r = await fetch(basis + 'boden/index.json'); if (r.ok) { const i = indexLesen(await r.json()); if (i?.foto) gezIndex = i; } } catch { /* ohne gezeichneten Boden */ } }
   const an = schalterLesen(lies(KUL_SCHLUESSEL.boden), lies(KUL_SCHLUESSEL.daecher), lies(KUL_SCHLUESSEL.schatten), lies(KUL_SCHLUESSEL.gezeichnet));
+  if (!GFS.luftbild) an.boden = false;        // Grafikstufe Niedrig: kein Luftbild-Boden (spart Grafikspeicher)
+  if (!GFS.schatten) an.schatten = false;     // … und keine Kulisse-Schatten
   const q = new URLSearchParams(location.search);   // zum Prüfen: ?kul=boden,gezeichnet,daecher,schatten (nur diese an) oder ?kul=aus
   if (q.has('kul')) { const w = q.get('kul').split(','); an.boden = w.includes('boden'); an.gezeichnet = w.includes('gezeichnet'); an.daecher = w.includes('daecher'); an.schatten = w.includes('schatten'); }
   const kacheln = new Map();

@@ -2,10 +2,11 @@
 //  - fetzen(): „Fetzen fliegen“ bei Treffern auf Zombies (Blutspritzer, Fleischbrocken, Fleck am Boden) – wenige Teilchen aus einem Pool
 //  - BwLicht: nachts Scheinwerfer (schwenken sanft zu Zombie-Häufungen) und Lampen im Lager, schneiden aus der Nachtdecke aus
 import { rahmen, SP_BREITE } from './stuetzpunkt.mjs';
+import { GRAFIK as GFS } from './grafikstufe.mjs';
 
 const BLUT = [0x8b0000, 0xb71c1c, 0x6a0b0b, 0xa31515], FLEISCH = [0xc2574f, 0x9b3b3b, 0x7a2b2b, 0xb86a5e];
 export const BLUT_GROESSE = 0.5;   // Blut und Fleisch etwa halb so groß wie früher (0.89)
-const MAX_AKTIV = 60;          // gleichzeitig fliegende Teilchen (Handy)
+const MAX_AKTIV = Math.round(60 * GFS.partikel);          // gleichzeitig fliegende Teilchen (Handy; Grafikstufe Niedrig: halb so viele)
 const zufall = (a, b) => a + Math.random() * (b - a);
 
 // ---------------------------------------------------------------------------------------------------------------------
