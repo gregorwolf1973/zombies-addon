@@ -575,7 +575,7 @@ export function baueWeltAusKarte(karteOrig, seed, optionen = {}) {
   for (let n = 0, v = 0; n < 120 && v < 3000; v++) {
     const x = 2 + Math.floor(r() * (BREITE - 4)), y = 2 + Math.floor(r() * (HOEHE - 4));
     if (hole(x, y) !== T.WIESE) continue;
-    deko.push({ art: 'busch', kx: x, ky: y, b: 1, h: 1, x: (x + 0.5) * KACHEL, y: (y + 0.5) * KACHEL, v: r() });
+    r();   // frühere Zufalls-„Büsche“ (hellgrüne Kleckse, keine Quelle in den Kartendaten) entfallen; Zufallsfolge bleibt gleich
     n++;
   }
 

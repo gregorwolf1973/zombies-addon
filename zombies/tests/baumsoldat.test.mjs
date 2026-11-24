@@ -31,3 +31,12 @@ test('Schatten: ohne Kronen (Luftbild) kein Baumschatten, sonst einer je Baum', 
   assert.match(a, /!mitBaeumen \? \[\] : baumKronen/);
   assert.match(fs.readFileSync(new URL('../client/spiel.mjs', import.meta.url), 'utf8'), /zeichneSchattenStueck\([^\n]*!st\.foto\)/);
 });
+
+test('keine Zufalls-Büsche (hellgrüne Kleckse) in den gebauten Welten', async () => {
+  const { baueWeltAusKarte } = await import('../client/osmwelt.mjs');
+  const { setzeKartengroesse } = await import('../client/welt.mjs');
+  const k = JSON.parse(fs.readFileSync(new URL('../client/karten/geretsried2.json', import.meta.url)));
+  const w = baueWeltAusKarte(k, 1);
+  assert.equal((w.deko ?? []).filter(d => d.art === 'busch').length, 0);
+  setzeKartengroesse(64, 48);
+});
