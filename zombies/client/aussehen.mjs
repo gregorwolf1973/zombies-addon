@@ -380,6 +380,7 @@ export function zeichneBoden(ctx, welt, rect = null) {
   // geparkte Autos gehören zum Boden (viele – als eigene Objekte wären sie zu teuer)
   for (const b of welt.behaelter ?? []) {
     if (b.art !== 'auto' || b.x < x0 * KACHEL - 40 || b.x > x1 * KACHEL + 40 || b.y < y0 * KACHEL - 40 || b.y > y1 * KACHEL + 40) continue;
+    if (welt.autosWeg?.has(b.id)) continue;   // mit Autoschlüssel weggefahren (client/pkw.mjs)
     autoVonOben(ctx, b);
   }
   ctx.restore();

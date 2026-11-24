@@ -23,6 +23,8 @@ import { RadioAnzeige } from './radio.mjs';
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
 import { fahrbarNah, FAHRBAR, FAHRBAR_PLAETZE } from './fahrbar.mjs';
 import { istFahrbar, fahrbarBild, fahrbarFahrzeug, fahrbarRueckstoss, pumaFahrbarSchuss } from './fahrbardarstellung.mjs';
+import { pkwKontext } from './pkw.mjs';
+import { pkwTextur, pkwDarstellung, pkwAufraeumen, autoTuer, autosWegEmpfangen, autosWegAbgleich, pkwPlaetze } from './pkwdarstellung.mjs';
 import { boxerLaden, boxerSchuss } from './boxerdarstellung.mjs';
 import { evakLaden, evakArtVon, evakFahrzeugBild, evakFahrzeug, leopardSchuss, leopardKanone, leopardUeberrollt, heliAktualisieren, kisteFaellt, absturzAktualisieren, bunkerAktualisieren, evakHudText } from './evakdarstellung.mjs';
 import { heliStand } from './evak.mjs';
@@ -1234,6 +1236,8 @@ class Ort extends Phaser.Scene {
     raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
     raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) { fs.schlagBis = this.time.now + 400; if (typeof m.w === 'number') { fs.zielW = m.w; fs.zielBis = this.time.now + 400; } } if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); if (istEigen(m, meineId)) ton.stoss(null, null, m.messer); else if (hoertEbene(m)) ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (hoertEbene(m)) if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
+    raum.onMessage('autosWeg', m => autosWegEmpfangen(m));   // mit Autoschlüssel weggefahrene Autos (client/pkwdarstellung.mjs)
+    raum.onMessage('autotuer', m => { if (hoertEbene(m)) autoTuer(this, m); });   // Unfallszene: Tür geht auf (server/unfallszene.mjs)
     raum.onMessage('krach', m => { if (hoertEbene(m) && !ton.ereignis('krach', m.x, m.y)) { ton.schuss(m.x, m.y, 1.8); ton.stoss(m.x, m.y, false); } this.krachEffekt(m.x, m.y); });
     raum.onMessage('blech', m => { if (!ton.ereignis('blech', m.x, m.y)) ton.stoss(m.x, m.y, false); });
     raum.onMessage('aufprall', m => { if (hoertEbene(m) && !ton.ereignis('aufprall', m.x, m.y)) ton.stoss(m.x, m.y, false); this.aufprallEffekt(m); });
@@ -2835,7 +2839,7 @@ class Ort extends Phaser.Scene {
     const blink = Math.floor(this.time.now / 180) % 2;
     for (const [id, f] of s.fahrzeuge ?? []) {
       let o = this.busObj.get(id);
-      const key = this.fahrzeugTextur(f.art, f.farbe, f.art === 'polizei' ? 1 + Math.floor(this.time.now / 150) % 3 : 0);
+      const key = f.art === 'pkw' ? pkwTextur(this, id, f) : this.fahrzeugTextur(f.art, f.farbe, f.art === 'polizei' ? 1 + Math.floor(this.time.now / 150) % 3 : 0);   // pkw: selbst gefahrenes Auto (client/pkwdarstellung.mjs)
       if (!o) {
         const bild = this.add.image(0, 0, key);
         const licht = this.add.graphics();
@@ -2875,6 +2879,7 @@ class Ort extends Phaser.Scene {
         }
       }
       if (istFahrbar(f.art)) fahrbarFahrzeug(this, o, f, dt, this.lokal, this.aktEbene);
+      if (f.art === 'pkw') pkwDarstellung(this, o, id, f, dt, this.lokal, this.aktEbene, s);   // Lebensbalken, Motor
       if (f.art === 'evakuierung' && !evakFahrzeug(this, o, f, s, dt, this.lokal, this.aktEbene, BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg())) {
         // blinkende orange Rundumleuchte; ohne Leopard-Bilder (Puma-Ersatz) zusätzlich Fahne am Heck
         const pz = evakArtVon(s) === 'panzer', lx = pz ? -12 : -8, an = Math.floor(this.time.now / 260) % 2;
@@ -2909,7 +2914,7 @@ class Ort extends Phaser.Scene {
       }
     }
     for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id) || s.fahrzeuge.get(id).art === 'wrack') {
-      ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); ton.sireneStoppen(o.kette); o.sirene = o.radio = o.kette = null;
+      ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); ton.sireneStoppen(o.kette); o.sirene = o.radio = o.kette = null; pkwAufraeumen(o);
       if (!s.fahrzeuge?.has(id)) { o.box.destroy(); o.sch?.destroy(); o.russ?.destroy(); this.busObj.delete(id); }
     }
     this.parktRadios(s, dt);
@@ -3398,7 +3403,7 @@ class Ort extends Phaser.Scene {
       this.lokal.x = pred.x + this.korr.x; this.lokal.y = pred.y + this.korr.y;
     }
     if (p.imBoxer) {   // im fahrbaren Fahrzeug (Boxer, Puma, Leopard): die Kamera folgt dem gezeichneten (glatt bewegten) Fahrzeug unter der Figur statt der 20-Hz-Position des Servers
-      for (const [id, v] of raum.state.fahrzeuge ?? []) if (istFahrbar(v.art) && Math.hypot(v.x - p.x, v.y - p.y) < 24) { const bo = this.busObj.get(id); if (bo) { this.lokal.x = bo.x; this.lokal.y = bo.y; } }
+      for (const [id, v] of raum.state.fahrzeuge ?? []) if ((istFahrbar(v.art) || v.art === 'pkw') && Math.hypot(v.x - p.x, v.y - p.y) < 24) { const bo = this.busObj.get(id); if (bo) { this.lokal.x = bo.x; this.lokal.y = bo.y; } }
     }
     f.x = this.lokal.x; f.y = this.lokal.y;
     f.box.setPosition(f.x, f.y);
@@ -3572,7 +3577,7 @@ class Ort extends Phaser.Scene {
   }
 
   bestimmeKontext(ich) {
-    this.handelKontext = null;
+    this.handelKontext = null; this.pkwZweit = null;
     if (ich?.anBord) return { art: 'aussteigen', text: '🚪 Aussteigen' };   // an Bord eines Evakuierungsfahrzeugs: Taste E/Leertaste und Knopf
     if (!ich || ich.unten || ich.aktion || ich.zombie > 0 || raum.state.phase !== 'spiel' || !this.lokal) return null;
     const { x, y } = this.lokal;
@@ -3581,6 +3586,9 @@ class Ort extends Phaser.Scene {
       if (!istFahrbar(f.art) || !fahrbarNah(f.art, { x: f.x, y: f.y, richtung: fzRichtung(f) }, x, y)) continue;
       if ([...raum.state.spieler.values()].filter(q => q.imBoxer && Math.hypot(q.x - f.x, q.y - f.y) < 24).length < FAHRBAR_PLAETZE) return { art: 'einsteigen', text: `🛡️ In den ${FAHRBAR[f.art].name} einsteigen` };   // Plätze je Fahrzeug
     }
+    // Auto: mit Autoschlüssel fahren bzw. mitfahren (client/pkw.mjs, gleiche Regel wie server/pkw.mjs); zweiter Knopf am geparkten Auto = Kofferraum
+    const pk = pkwKontext(this.welt, raum.state, ich, x, y, fzRichtung, pkwPlaetze());
+    if (pk) { this.pkwZweit = pk.zweit ?? null; return pk; }
     // Arzt oder Soldat im Lager in Reichweite (nur solange der Stützpunkt steht)
     const hp = !ich.ebene && raum.state.stuetzpunkt === 'steht' ? handelPartner(this.welt.stuetzpunkt, x, y, HANDEL_ABSTAND) : null;
     if (hp) this.handelKontext = { art: 'handel', wer: hp.wer, text: hp.wer === 'arzt' ? '🩺 Mit dem Arzt tauschen' : '🎖 Mit dem Soldaten tauschen' };
@@ -3778,6 +3786,7 @@ class Ort extends Phaser.Scene {
     this.zoomNachziehen(dt);
     this.zeichneStick();
     this.abgleichen(dt);
+    autosWegAbgleich(this, raum.state.seed);   // weggefahrene Autos aus Karte und Kletter-Index nehmen
     this.ladeRingeZeichnen();
     this.wurfBogenZeichnen();
     this.stuetzpunktAnimieren();
@@ -3947,6 +3956,7 @@ class Ort extends Phaser.Scene {
     // zweiter Knopf: andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
     const frei2 = ich && !ich.unten && !ich.aktion && !(ich.zombie > 0) && s.phase === 'spiel' && this.lokal;
     let zweit = frei2 ? this.tuerKontext(ich, 'zweit') : null;
+    if (frei2 && !zweit && this.pkwZweit) zweit = this.pkwZweit;   // am geparkten Auto mit Autoschlüssel: Kofferraum
     if (frei2 && !zweit && this.handelKontext && this.kontext !== this.handelKontext && !handelOffen) zweit = this.handelKontext;
     if (zweit && this.kontext?.art === zweit.art && this.kontext.text === zweit.text) zweit = null;   // dieselbe Aktion nicht doppelt anbieten
     this.zweit = zweit;

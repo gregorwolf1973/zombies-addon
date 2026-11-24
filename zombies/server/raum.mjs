@@ -17,6 +17,7 @@ import { Versorgung } from './versorgung.mjs';
 import { levelorteSetzen } from './levelorte.mjs';
 import { Boxer } from './boxer.mjs';
 import { Fahrbare } from './fahrbar.mjs';
+import { PkwVerwaltung, schluesselFund } from './pkw.mjs';
 import { Fahrzeugkontakt } from './fahrzeugkontakt.mjs';
 import { autoTempo, bewegeFz } from '../client/fzkollision.mjs';
 import { drahtPruefen, haengendStart, haengtSchritt } from './haengend.mjs';
@@ -570,6 +571,7 @@ export class SpielRaum extends Room {
     this.versorgung = new Versorgung(this); this.versorgung.start(stand, !!passt);   // Bundeswehr-Versorgung über die Munitionskisten
     this.boxer = new Boxer(this); this.boxer.start();   // Radpanzer Boxer am Flugfeld (nur Königsdorf), siehe server/boxer.mjs
     this.fahrbare = new Fahrbare(this);   // fahrbare Fahrzeuge neben dem Boxer (Superuser, Schießstand), siehe server/fahrbar.mjs
+    this.pkw = new PkwVerwaltung(this);   // geparkte Autos mit Autoschlüssel fahren, siehe server/pkw.mjs
     haengendStart(this);   // hängende Zombies im S-Draht (Lager, Flugfeld) und Tote am Flugfeld Königsdorf
     this.granaten = new Granaten(this);
     this.radios = new Radios(this);
@@ -721,7 +723,7 @@ export class SpielRaum extends Room {
       this.hunde?.besitzerWechsel(sid, client.sessionId);
       this.suAnmeldung(client, alt, auth);
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
-      client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte());
+      client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte()); this.pkw?.beitritt(client);
       this.startwahlSenden(client.sessionId);
       this.einstellungenSenden(client, spielerId, alt.aussehen, optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? '')));
       this.sprachStart(client); this.sprachPartner();
@@ -798,7 +800,7 @@ export class SpielRaum extends Room {
     this.fkSenden(client.sessionId);
     this.startwahlSenden(client.sessionId);
     client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
-    client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte());
+    client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte()); this.pkw?.beitritt(client);
     this.einstellungenSenden(client, spielerId, p.aussehen, gewaehlt);
     this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
     this.botsAnpassen();
@@ -2139,6 +2141,8 @@ export class SpielRaum extends Room {
     if (p.imBoxer) return void this.fahrbare?.aussteigen(client.sessionId);   // in einem fahrbaren Fahrzeug (Boxer, Puma, Leopard): die Aktionstaste steigt aus
     if (p.anBord) return void this.aufgaben?.aussteigen(client.sessionId);   // an Bord: die Aktionstaste steigt aus
     if (!zweit && this.fahrbare?.einsteigen(client.sessionId)) return;   // am Boxer (oder Superuser-Fahrzeug): einsteigen (hat Vorrang, der Client zeigt dann „Einsteigen“)
+    if (!zweit && this.pkw?.einsteigen(client.sessionId)) return;   // geparktes Auto + Autoschlüssel: einsteigen und fahren (server/pkw.mjs)
+    if (zweit && this.pkw?.amParkAuto(p)) zweit = false;   // zweiter Knopf am geparkten Auto (Hauptknopf = fahren): Kofferraum
     // zweite Taste: die andere Möglichkeit an derselben Tür (z. B. schließen statt verbarrikadieren)
     const k = zweit ? (p.unten || p.zombie > 0 || this.state.phase !== 'spiel' ? null : this.tuerKontext(p, 'zweit')) : this.kontext(p, x);
     if (!k) return;
@@ -2392,6 +2396,7 @@ export class SpielRaum extends Room {
     // Kofferraum: Munition nur mit eigener Wahrscheinlichkeit; Bundeswehr-Container: Granatwerfer mit eigener Wahrscheinlichkeit
     if (art === 'auto' && this.rnd() < AUTO_MUNITION && (f.munition ?? 10) > 0) funde.push('munition');
     if (art === 'bw_container' && this.rnd() < GRANATWERFER_CHANCE) funde.push('granatwerfer');
+    if (gefuellt) funde.push(...schluesselFund(this, art === 'auto' ? 'kofferraum' : 'moebel', art));   // Autoschlüssel (Einstellung auto.schluessel*, server/pkw.mjs; Möbel: nur gefüllte)
     funde.push(...(this.aufgaben?.aufgabenFunde(b.id) ?? []));   // Aufgaben-Funde (Spritze, Vorräte, Lampen, Bretter): garantiert, auch in leeren Möbeln
     funde.push(...(this.aufgaben?.missionsFunde(b.id) ?? []));   // Missionsgegenstand dieses Behälters
     this.setzeInhalt(b.id, funde);
@@ -2502,6 +2507,7 @@ export class SpielRaum extends Room {
       inhalt.push('munition');
       this.leichenMunition.set(id, LEICHE_MUNITION_MIN + Math.floor(this.rnd() * (LEICHE_MUNITION_MAX - LEICHE_MUNITION_MIN + 1)));
     }
+    inhalt.push(...schluesselFund(this, 'leiche'));   // selten ein Autoschlüssel (server/pkw.mjs)
     const l = new Leiche();
     l.x = z.x; l.y = z.y; l.richtung = z.richtung; l.rest = inhalt.length; l.alter = 0; l.blass = 0; l.variante = z.variante ?? 0; l.ebene = z.ebene ?? ''; l.fest = fest;
     this.state.leichen.set(id, l);
