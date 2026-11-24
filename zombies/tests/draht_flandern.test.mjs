@@ -212,6 +212,8 @@ test('Im Draht: Position bleibt fest, Blickrichtung dreht nur langsam zum Spiele
     const z = raum.state.zombies.get(id), info = raum.zombieInfo.get(id);
     raum.haengenBleiben(z, info, Infinity);
     const x0 = z.x, y0 = z.y;
+    p.x = x0 + 45; p.y = y0; p.ebene = ''; info.ziel = raum.state.spieler.keys().next().value;
+    await warte(300);   // erster Takt nach dem Aufbau bringt die bis dahin verstrichene Zeit mit (große Drehung erlaubt): erst danach messen
     let w = z.richtung, maxSprung = 0, tl = Date.now();
     const t0 = Date.now();
     for (let i = 0; i < 40; i++) {   // Spieler kreist dicht um ihn herum (er sieht und jagt ihn)

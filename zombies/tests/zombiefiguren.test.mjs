@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild, ZF_ZERREN } from '../client/zombiefiguren.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild, ZF_ZERREN, zfGang, zfAnzahl, ZF_GANG, ZF_OPTIONAL } from '../client/zombiefiguren.mjs';
 
 const dir = new URL('../client/grafik/', import.meta.url);
 
@@ -43,18 +43,46 @@ test('Bildnummern: Weg, Zeit, Sterben einmalig', () => {
   assert.ok(zfBild('attack', { zeitMs: 123456, versatz: 777 }) < ZF_BILDER);
 });
 
-test('Atlas: JSON passt zu den Bildern, Kantenlänge ≤ 4096, alle Rahmen im Atlas', () => {
+test('Atlas: JSON passt zu den Bildern, Kantenlänge ≤ 4096, alle Rahmen im Atlas, Pflicht-Clips vollständig', () => {
   const j = JSON.parse(fs.readFileSync(new URL('zombies_neu.json', dir)));
   assert.deepEqual(j.figuren, ZF_FIGUREN);
   assert.ok(j.groesse[0] <= 4096 && j.groesse[1] <= 4096);
+  let soll = 0;
+  for (const c of ZF_CLIPS) {
+    if (!j.clips[c]) { assert.ok(ZF_OPTIONAL.has(c), 'Pflicht-Clip fehlt: ' + c); continue; }
+    assert.equal(j.clips[c].n, zfAnzahl(c), 'Bildzahl ' + c);
+    soll += j.clips[c].n;
+  }
   for (const f of ZF_FIGUREN) {
     assert.ok(fs.statSync(new URL(j.atlas[f], dir)).size > 10000, f);
-    for (const c of ZF_CLIPS) for (let i = 0; i < ZF_BILDER; i++) {
+    for (const c of ZF_CLIPS) for (let i = 0; i < (j.clips[c]?.n ?? 0); i++) {
       const r = j.bilder[zfName(f, c, i)]; assert.ok(r, zfName(f, c, i));
       assert.ok(r[0] + r[2] <= j.groesse[0] && r[1] + r[3] <= j.groesse[1]);
     }
   }
-  assert.equal(Object.keys(j.bilder).length, ZF_FIGUREN.length * ZF_CLIPS.length * ZF_BILDER);
+  assert.equal(Object.keys(j.bilder).length, ZF_FIGUREN.length * soll);
+  // Rahmen überlappen nicht (fließend gepackt)
+  const f0 = ZF_FIGUREN[0], rs = Object.entries(j.bilder).filter(([n]) => n.startsWith(f0 + '_')).map(([, r]) => r);
+  for (let a = 0; a < rs.length; a++) for (let b = a + 1; b < rs.length; b++) {
+    const p = rs[a], q = rs[b];
+    assert.ok(p[0] + p[2] <= q[0] || q[0] + q[2] <= p[0] || p[1] + p[3] <= q[1] || q[1] + q[3] <= p[1], 'Rahmen überlappen');
+  }
+});
+
+test('Gangart je Zombie: fest aus der Id, alle Varianten kommen vor, Tempo 0,88–1,12, Bildnummern im Clip', () => {
+  assert.deepEqual(zfGang('z17'), zfGang('z17'));
+  const w = {}, r = {};
+  for (let i = 0; i < 1000; i++) {
+    const g = zfGang('z' + i);
+    w[g.walk] = (w[g.walk] ?? 0) + 1; r[g.run] = (r[g.run] ?? 0) + 1;
+    assert.ok(g.tempo >= 0.88 && g.tempo <= 1.12);
+  }
+  for (const v of ZF_GANG.walk) assert.ok(w[v] > 200, v + ' ' + w[v]);
+  for (const v of ZF_GANG.run) assert.ok(r[v] > 350, v + ' ' + r[v]);
+  for (const c of ['walk2', 'walk3', 'run2']) {
+    const nr = new Set(); for (let l = 0; l < 200; l += 0.25) nr.add(zfBild(c, { lauf: l }));
+    assert.equal(nr.size, zfAnzahl(c), c); assert.ok(Math.max(...nr) < zfAnzahl(c));
+  }
 });
 
 import { ZF_LISTE, ZF_VARIANTE_AB, zfVariante, zfFigurenEinst, zfWaehle } from '../client/zombiefiguren.mjs';

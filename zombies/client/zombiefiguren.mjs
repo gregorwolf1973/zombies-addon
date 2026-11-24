@@ -13,14 +13,19 @@ export const ZF_FIGUREN = ZF_LISTE.map(f => f.id);
 // state.variante ab diesem Wert = Figur direkt (100 + Index in ZF_LISTE); darunter der alte Zombietyp 0–24
 export const ZF_VARIANTE_AB = 100;
 export const zfVariante = id => ZF_VARIANTE_AB + Math.max(0, ZF_FIGUREN.indexOf(id));
-export const ZF_CLIPS = ['walk', 'run', 'idle', 'attack', 'neckbite', 'crawl', 'dying', 'tod2', 'tod3'];
+export const ZF_CLIPS = ['walk', 'run', 'idle', 'attack', 'neckbite', 'crawl', 'dying', 'tod2', 'tod3', 'walk2', 'walk3', 'run2'];
+// Gang-Varianten (Mixamo „Walking“ gebeugt/hinkend, „Walking“ mit vorgestreckten Armen, „Mutant Run“; je 12 Bilder); fehlen sie im Atlas, gilt walk/run
+export const ZF_GANG = { walk: ['walk', 'walk2', 'walk3'], run: ['run', 'run2'] };
+export const ZF_OPTIONAL = new Set(['tod2', 'tod3', 'walk2', 'walk3', 'run2']);
+export const ZF_N = { walk2: 12, walk3: 12, run2: 12 };   // Bilder je Clip (sonst ZF_BILDER)
+export const zfAnzahl = clip => ZF_N[clip] ?? ZF_BILDER;
 // Sterbebewegungen (Mixamo „Zombie Dying“, „Falling Back Death“, „Dying“); fehlen tod2/tod3 im Atlas, gilt dying
 export const ZF_TODE = ['dying', 'tod2', 'tod3'];
 export const ZF_BILDER = 16;
 // Maßstab je Atlas-Pixel relativ zu ZOMBIE_GROESSE (0,42): wie das bisherige Sprite zombie_hemd (0,699) mit der Figurengröße der Renderung (0,7)
 export const ZF_GROESSE = 0.699 * 0.7;
 // Weglänge (Spielpixel, 8 px = 1 m) je Schrittzyklus (16 Bilder)
-export const ZF_SCHRITT = { walk: 13, run: 26, crawl: 9 };
+export const ZF_SCHRITT = { walk: 13, run: 26, crawl: 9, walk2: 7.5, walk3: 13, run2: 21 };   // Varianten im Verhältnis ihres gemessenen Wegs je Zyklus (seite.html ?nur=tempo: walk 1,37 m, walk2 0,78 m, walk3 1,37 m, run 1,93 m, run2 1,56 m)
 // Zeit je Durchlauf (ms) der zeitgesteuerten Clips
 export const ZF_DAUER = { idle: 2600, attack: 1100, neckbite: 1500, dying: 1400, tod2: 1700, tod3: 2200 };
 
@@ -51,7 +56,7 @@ export function zfAngriff(zeitMs, h) {
 
 // Bildnummer 0..15: Gehen/Kriechen nach Weg (lauf in Pixeln, zs = Schrittfrequenz-Faktor), sonst nach Zeit
 export function zfBild(clip, { lauf = 0, zs = 1, zeitMs = 0, versatz = 0, seit = 0 } = {}) {
-  const n = ZF_BILDER;
+  const n = zfAnzahl(clip);
   if (ZF_TODE.includes(clip)) return Math.max(0, Math.min(n - 1, Math.floor(seit / ZF_DAUER[clip] * n)));
   if (ZF_SCHRITT[clip]) return Math.floor(lauf * zs / ZF_SCHRITT[clip] * n) % n;
   const d = ZF_DAUER[clip] ?? 2000;
@@ -64,6 +69,17 @@ export const ZF_ZERREN = 5200;
 export function zfZerrBild(zeitMs, h = 0) {
   const d = ZF_ZERREN * (0.85 + 0.3 * h), p = ((zeitMs / d) + h) % 1, q = Math.min(1, p / 0.65), e = q * q * (3 - 2 * q);
   return Math.floor(e * ZF_BILDER) % ZF_BILDER;
+}
+
+// Gangart je Zombie fest aus seiner Id: Geh- und Laufvariante und ein eigener Tempofaktor (0,88–1,12) für die Schrittfrequenz.
+// Anteile: gehen 40 % walk, 30 % walk2, 30 % walk3; laufen 55 % run, 45 % run2. Nur Darstellung (gleich auf allen Geräten)
+export function zfGang(id) {
+  let h = 2166136261;
+  const s = 'g' + String(id ?? '');
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; h = (h ^ (h >>> 16)) >>> 0;
+  const a = (h % 100), b = ((h >>> 8) % 100), c = ((h >>> 16) % 1000) / 1000;
+  return { walk: a < 40 ? 'walk' : a < 70 ? 'walk2' : 'walk3', run: b < 55 ? 'run' : 'run2', tempo: 0.88 + c * 0.24 };
 }
 
 // Leiche: Sterbebewegung, Zusatzdrehung (Bogenmaß 0..2π) und Spiegelung fest aus der Leichen-Id (gleich auf allen Geräten, nur Darstellung)

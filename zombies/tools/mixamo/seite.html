@@ -31,10 +31,24 @@ try {
   const EINMAL = q.get('einmal') === '1', TZ = i => EINMAL ? clip.duration * Math.min(i, N - 1) / (N - 1) : clip.duration * i / N;
   let fx = 0, fz = 0; g.rotation.y = 0;
   for (let i = 0; i < (EINMAL ? 1 : 16); i++) { mixer.setTime(clip.duration * i / 16); g.updateMatrixWorld(true); const a = bL.getWorldPosition(new THREE.Vector3()), b = bR.getWorldPosition(new THREE.Vector3()); const dx = b.x - a.x, dz = b.z - a.z; fx += dz * 1 - 0; fz += -dx; }   // up x (R-L) = (dz, 0, -dx)
-  const gier = Math.atan2(fx, fz); window.__gier = gier * 180 / Math.PI;
+  // gier=<Grad>: feste Blickrichtung statt Messung (Mixamo-Clips laufen nach +z; bei Gang-Varianten mit verdrehter Hüfte täuscht die Messung)
+  const gier = q.get('gier') !== null ? +q.get('gier') * Math.PI / 180 : Math.atan2(fx, fz); window.__gier = gier * 180 / Math.PI;
   g.rotation.y = Math.PI / 2 - gier + (+(q.get('dreh') || 0)) * Math.PI / 180;
   const dauer = clip.duration;
   const box = () => { g.updateMatrixWorld(true); const b = new THREE.Box3(); g.traverse(o => { if ((o.isMesh || o.isSkinnedMesh)) { o.frustumCulled = false; if (o.isSkinnedMesh) { o.skeleton.update(); b.union(new THREE.Box3().setFromObject(o, true)); } else b.expandByObject(o); } }); return b; };
+  if (q.get('nur') === 'tempo') {   // Bodengeschwindigkeit, die zur Animation passt (echte Größe, 1× Tempo): Fuß steht still = bewegt sich relativ zur Hüfte mit -v nach hinten
+    let hipsB = null, fuesse = []; g.traverse(o => { if (o.isBone) { if (/Hips$/.test(o.name)) hipsB = hipsB || o; if (/(Left|Right)Foot$/.test(o.name)) fuesse.push(o); } });
+    const M = 240, dt = clip.duration / M, vs = [], hp = [];
+    const lage = t => { mixer.setTime(t); g.updateMatrixWorld(true); return { h: hipsB.getWorldPosition(new THREE.Vector3()), f: fuesse.map(b => b.getWorldPosition(new THREE.Vector3())) }; };
+    // Richtung: Mixamo-Clips laufen nach +z (vor der Drehung g.rotation.y); hier ohne Drehung messen
+    g.rotation.y = 0; const sk = g.scale.x;
+    let a = lage(0); const h0 = a.h.clone();
+    for (let i = 1; i <= M; i++) { const b = lage(i * dt); for (let k = 0; k < b.f.length; k++) vs.push(((b.f[k].z - b.h.z) - (a.f[k].z - a.h.z)) / dt / sk); a = b; }
+    vs.sort((x, y) => x - y);
+    const stand = -vs[Math.floor(vs.length * 0.25)] * 0.01;   // m/s (FBX cm → m)
+    const wurzel = Math.hypot(a.h.x - h0.x, a.h.z - h0.z) / sk * 0.01 / clip.duration;
+    out.textContent = 'TEMPO ' + JSON.stringify({ dauer: +clip.duration.toFixed(3), fuss_ms: +stand.toFixed(2), wurzel_ms: +wurzel.toFixed(2) }); throw 0;
+  }
   if (q.get('nur') === 'info') {
     const info = ['DAUER ' + dauer.toFixed(3) + ' s, Spuren ' + clip.tracks.length];
     let mn = new THREE.Vector3(1e9, 1e9, 1e9), mx = new THREE.Vector3(-1e9, -1e9, -1e9);

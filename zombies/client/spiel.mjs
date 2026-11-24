@@ -5,7 +5,7 @@ import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from '
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
 import { HF_LISTE, HF_FIGUREN, HF_GROESSE, ALT_FAKTOR, SCHULTER_NEU_PX, soldatSkala, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
-import { ZF_FIGUREN, ZF_CLIPS, ZF_TODE, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild } from './zombiefiguren.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild, zfGang, ZF_OPTIONAL } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
@@ -1917,9 +1917,9 @@ class Ort extends Phaser.Scene {
       const tex = this.textures.get('zf_' + f); namen[f] = {};
       for (const c of ZF_CLIPS) {
         namen[f][c] = [];
-        for (let i = 0; i < ZF_BILDER; i++) {
+        for (let i = 0; i < (j.clips?.[c]?.n ?? ZF_BILDER); i++) {
           const n = zfName(f, c, i), r = j.bilder[n];
-          if (!r && ZF_TODE.includes(c) && c !== 'dying') { namen[f][c] = null; break; }   // ältere Atlanten ohne Zusatz-Sterbebewegung
+          if (!r && ZF_OPTIONAL.has(c)) { namen[f][c] = null; break; }   // ältere Atlanten ohne Zusatz-Sterbe-/Gangvariante
           if (!r) return null;
           if (!tex.has(n)) { const q = rahmenHalb(r, GFS.halb); tex.add(n, 0, q[0], q[1], q[2], q[3]); }
           namen[f][c].push(n);
@@ -2761,8 +2761,10 @@ class Ort extends Phaser.Scene {
         const fig = zfFigur(z.variante), geht = bildNr >= 0;
         let clip = zfClip({ kriecht: z.kriecht, jagt: z.jagt, geht, nah });
         if (clip === 'attack') clip = zfAngriff(this.time.now, f.zh);
+        const gang = f.gang ??= zfGang(id);   // Gangart je Zombie (Variante + eigenes Tempo)
+        if (clip === 'walk' || clip === 'run') { const v = gang[clip]; if (this.zfNamen[fig][v]) clip = v; }
         // im Draht: langsames Zerren (zfZerrBild) statt des schnell durchlaufenden Kriech-Clips (sah aus wie Zappeln)
-        const i = z.haengt && clip === 'crawl' ? zfZerrBild(this.time.now, f.zh) : zfBild(clip, { lauf: f.lauf ?? 0, zs: f.zs, zeitMs: this.time.now, versatz: f.zv * 7, ...(z.kriecht && !geht ? { lauf: 0 } : {}) });
+        const i = z.haengt && clip === 'crawl' ? zfZerrBild(this.time.now, f.zh) : zfBild(clip, { lauf: f.lauf ?? 0, zs: f.zs * gang.tempo, zeitMs: this.time.now, versatz: f.zv * 7, ...(z.kriecht && !geht ? { lauf: 0 } : {}) });
         const key = 'zf_' + fig;
         if (f.bild.texture.key !== key) f.bild.setTexture(key);
         f.bild.setFrame(this.zfNamen[fig][clip][i]).setRotation(0).setScale(ZOMBIE_GROESSE * ZF_G * GFS.k * zf);
