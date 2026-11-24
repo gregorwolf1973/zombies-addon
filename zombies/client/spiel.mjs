@@ -522,6 +522,8 @@ async function mitspielen() {
     });
     merkzettelAnschliessen(raum, { zombies_lautstaerke: v => ton.lautstaerkeSetzen(Number(v)) });   // Einstellungen je Spieler vom Server
     chatAnschliessen(raum);
+    // Sprache/Funk sofort nach dem Beitritt (nicht erst nach Karte, Kulisse und Weltbau): nach einem Levelwechsel, der die Seite neu lädt, steht sie so Sekunden früher
+    sprache.starte({ raum, meineId, welt: () => chatSzene?.welt ?? null, meldung });
     // Pi entlasten: Tab länger als 5 min im Hintergrund → abmelden (Fortschritt ist gespeichert), beim Zurückkommen neu laden
     let versteckTimer = null, autoGetrennt = false;
     document.addEventListener('visibilitychange', () => {
@@ -697,7 +699,6 @@ async function starteSpiel() {
     scene: [Ort],
   });
   bildschirmDrehenEinrichten(spielObj);
-  sprache.starte({ raum, meineId, welt: () => chatSzene?.welt ?? null, meldung });
 }
 
 // Drehen/Größenänderung (Tablet): Canvas auf die echte Fenstergröße bringen, Zoom und Chunks neu berechnen.
@@ -1323,6 +1324,7 @@ class Ort extends Phaser.Scene {
     });
     raum.onMessage('neustart', m => {
       abgemeldet = true;
+      sprache.uebergang();   // Levelwechsel: Sprachverbindungen laufen weiter, bis die Seite neu lädt (der Server schließt nur den Raum)
       if (m?.level) ladenZeigen(30, 'Generiere nächstes Level …', `🎉 Level ${m.level - 1} abgeschlossen!`); else ladenZeigen(30, 'Generiere Welt neu …');
       setTimeout(() => ladenZeigen(60, m?.level ? 'Generiere nächstes Level … Karte wird vorbereitet' : 'Generiere Welt neu …', m?.level ? `🎉 Level ${m.level - 1} abgeschlossen!` : ''), 1200);
       meldung(m?.level ? `🚌 Level ${m.level} – die Fahrt geht los, gleich geht es weiter …` : '🔄 Die Welt wird neu gestartet – gleich geht es weiter …', true);

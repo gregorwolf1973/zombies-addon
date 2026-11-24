@@ -46,6 +46,7 @@ import { weltBeschaffen } from './weltcache.mjs';
 import { lautstaerke } from '../client/sprache_regeln.mjs';
 import { Room, ServerError } from '@colyseus/core';
 import { Nebel, NEBEL_VORGABE, zombieSichtFaktor } from './nebel.mjs';
+import { schussFaktor, lichtquellen, beleuchtet } from './schussdunkel.mjs';
 import { sichtPx } from '../client/zombiesicht.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
@@ -1248,9 +1249,9 @@ export class SpielRaum extends Room {
     if (bt !== this.baumTempoSend) { this.baumTempoSend = bt; try { this.broadcast('baumTempo', bt); } catch { /* noch kein Raum */ } }
   }
 
-  // Bits: 1 Sichtkegel, 2 maßstäbliche Innenräume, 4–128 Tempo drinnen in 2-%-Schritten (Vorgabe 35 % → 17), 256 neue Zombie-Figuren
+  // Bits: 1 Sichtkegel, 2 maßstäbliche Innenräume, 4–128 Tempo drinnen in 2-%-Schritten (Vorgabe 50 % → 25), 256 neue Zombie-Figuren
   optionenSetzen() {
-    const tempo = Math.max(5, Math.min(50, Math.round((SpielRaum.einstellungen?.innenTempo ?? 35) / 2)));
+    const tempo = Math.max(5, Math.min(50, Math.round((SpielRaum.einstellungen?.innenTempo ?? 50) / 2)));
     setzeInnenTempo(tempo * 2 / 100);
     this.state.optionen = (SpielRaum.einstellungen?.sichtkegel ? 1 : 0) | (INNEN_FEIN ? 2 : 0) | (tempo << 2) | (SpielRaum.einstellungen?.zombieFigurenNeu !== false ? 256 : 0) | (SpielRaum.einstellungen?.heldenFigurenNeu !== false ? 512 : 0);
   }
@@ -3079,7 +3080,7 @@ export class SpielRaum extends Room {
       const feuerAus = x.feuerAus && !(x.feuerSchuldT > 0);
       let ziel = null, zuNah = false;
       if (!feuerAus && !ladet && !wf0.wurf) {
-        ziel = this.naechsterZombie(p.x, p.y, Math.min(wf.reichweite, nahR), p) || this.naechsterZombie(p.x, p.y, wf.reichweite, p);   // nächster Zombie (< 3 m) zuerst
+        ziel = this.naechsterZombie(p.x, p.y, Math.min(wf.reichweite, nahR), p) || this.naechsterZombie(p.x, p.y, wf.reichweite, p, this.schussDunkel(p, wf.reichweite));   // nächster Zombie (< 3 m) zuerst; nachts/im Nebel nur kürzer, außer beleuchtet
         if (ziel && wf.granate && Math.hypot(ziel[1].x - p.x, ziel[1].y - p.y) < GRANATE.radius + 12) { ziel = null; zuNah = true; }   // zu nah: Splitter träfen den Schützen
       }
       if (!feuerAus && !ziel && (ladet || wf0.wurf || zuNah)) {
@@ -3242,16 +3243,27 @@ export class SpielRaum extends Room {
   }
 
   // Ziel für die automatische Waffe: Bäume verdecken nicht ganz (Güte), Wand/Innentür/Leer vollständig; Ergebnis [id, z, guete]
-  naechsterZombie(x, y, reichweite, selbst = null) {
+  // Nacht/Nebel: Reichweite × Faktor, Ausnahme beleuchtete Ziele (Lampe, Scheinwerfer, Feuer; server/schussdunkel.mjs). null = keine Einbuße.
+  schussDunkel(p, reichweite) {
+    if ((p.ebene ?? '') !== '') return null;
+    const f = schussFaktor(this.state.uhr, this.state.nebel, SpielRaum.einstellungen?.schussDunkel);
+    if (!(f < 1)) return null;
+    const q = lichtquellen(this.state, '');
+    return { reduziert: reichweite * f, beleuchtet: z => beleuchtet(q, z.x, z.y) };
+  }
+
+  naechsterZombie(x, y, reichweite, selbst = null, dunkel = null) {
     const ebene = selbst?.ebene ?? '', welt = this.wv(ebene), kand = [];
     const sid = selbst ? [...this.state.spieler].find(([, o]) => o === selbst)?.[0] : null;
     for (const [id, z] of this.state.zombies) {
       if ((z.ebene ?? '') !== ebene) continue;
+      if (dunkel && Math.hypot(z.x - x, z.y - y) > dunkel.reduziert && !dunkel.beleuchtet(z)) continue;
       kand.push([id, z, !!sid && this.zombieInfo.get(id)?.ziel === sid && Math.hypot(z.x - x, z.y - y) < 40]);
     }
     // verwandelte Mitspieler sind auch Ziele
     for (const [s, o] of this.state.spieler) {
       if (o === selbst || !(o.zombie > 0) || o.ebene !== ebene) continue;
+      if (dunkel && Math.hypot(o.x - x, o.y - y) > dunkel.reduziert && !dunkel.beleuchtet(o)) continue;
       kand.push(['spieler:' + s, o, false]);
     }
     return waehleZiel(welt, kand, x, y, reichweite);

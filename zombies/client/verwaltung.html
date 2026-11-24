@@ -955,8 +955,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <label for="zsNacht">Sicht bei Nacht (Faktor auf Entdecken und Verfolgen, wächst mit der Dunkelheit)</label>
   <div class="tn-zeile"><input type="range" id="zsNacht" min="10" max="200" step="5"><span id="zsNachtWert">100 %</span></div>
   <label class="tn-schalter" id="diagnoseSchalter"><input type="checkbox" id="tnDiagnose"> Diagnose der Geräte: Fehler und Leistung (FPS, Ping, Ton) der Spieler als „[diag]“-Zeilen im Add-on-Log und in /data/diag.jsonl (keine Namen, keine IP)</label>
-  <label for="tnInnenTempo">Tempo in maßstäblichen Innenräumen (% vom Tempo draußen; drinnen sind Figuren halb so groß und die Kamera ist näher)</label>
-  <div class="tn-zeile"><input type="range" id="tnInnenTempo" min="10" max="100" step="2"><span id="tnInnenTempoWert">35 %</span></div>
+  <label for="tnInnenTempo">Tempo in maßstäblichen Innenräumen (% vom Tempo draußen, empfohlen 40–60 %; drinnen sind Figuren halb so groß und die Kamera ist näher)</label>
+  <div class="tn-zeile"><input type="range" id="tnInnenTempo" min="10" max="100" step="2"><span id="tnInnenTempoWert">50 %</span></div>
   <label class="tn-schalter"><input type="checkbox" id="tnInnen"> Maßstäbliche Innenräume (echter Grundriss, Wände 25 cm, Möbel in echten Maßen; wirkt sofort – wer drinnen ist, kommt an die Haustür)</label>
   <label for="tnZLeben">Lebenspunkte eines Zombies (100 = normal; ein Kriecher – ein Zombie, der nach dem Tod am Boden weiterkriecht – hat 35 % davon)</label>
   <div class="tn-zeile"><input type="range" id="tnZLeben" min="20" max="500" step="5"><span id="tnZLebenWert">100</span></div>
@@ -1150,6 +1150,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="rwHandgranate" min="5" max="80" step="1"><span id="rwHandgranateWert">25 m</span></div>
   <label for="rwScharf">🔭 Scharfschützengewehr (Bundeswehr, Polizei)</label>
   <div class="tn-zeile"><input type="range" id="rwScharf" min="5" max="80" step="1"><span id="rwScharfWert">75 m</span></div>
+  <label for="rwDunkel">🌙 Weniger Reichweite bei Nacht und Nebel (außer das Ziel ist beleuchtet: Taschenlampe, Scheinwerfer, Feuer)</label>
+  <div class="tn-zeile"><input type="range" id="rwDunkel" min="0" max="80" step="5"><span id="rwDunkelWert">30 %</span></div>
   <label for="rwGranat">💥 Granatwerfer (Bundeswehr, Bogenschuss)</label>
   <div class="tn-zeile"><input type="range" id="rwGranat" min="5" max="100" step="1"><span id="rwGranatWert">60 m</span></div>
   <label for="tnPumaPause">Panzer (Puma): Pause zwischen zwei Schüssen</label>
@@ -1360,7 +1362,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('zsNacht', (e.zombieSicht || {}).nacht === undefined ? 100 : e.zombieSicht.nacht, function (v) { return v + ' %'; });
     if (document.activeElement !== $('tnDiagnose')) $('tnDiagnose').checked = e.diagnose !== false;
     if (document.activeElement !== $('tnInnen')) $('tnInnen').checked = !!e.innenMassstab;
-    feld('tnInnenTempo', e.innenTempo === undefined ? 35 : e.innenTempo, function (v) { return v + ' %'; });
+    feld('tnInnenTempo', e.innenTempo === undefined ? 50 : e.innenTempo, function (v) { return v + ' %'; });
     var rw = e.reichweite || {};
     feld('rwPistole', rw.pistole || 29, function (v) { return v + ' m'; });
     feld('rwGewehr', rw.gewehr || 52, function (v) { return v + ' m'; });
@@ -1371,6 +1373,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('rwGranat', rw.granatwerfer || 60, function (v) { return v + ' m'; });
     feld('rwHandgranate', rw.handgranate || 25, function (v) { return v + ' m'; });
     feld('rwScharf', rw.scharfschuetze || 75, function (v) { return v + ' m'; });
+    feld('rwDunkel', e.schussDunkel === undefined ? 30 : e.schussDunkel, function (v) { return v + ' %'; });
     var bwe = e.bundeswehr || {};
     feld('tnPumaPause', bwe.pumaPause === undefined ? 2.5 : bwe.pumaPause, function (v) { return String(v).replace('.', ',') + ' s'; });
     feld('tnHundStreuner', (e.hund || {}).streuner === undefined ? -1 : e.hund.streuner, streunerText);
@@ -1489,6 +1492,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('rwGranat', function (v) { return v + ' m'; }, function (v) { return { reichweite: { granatwerfer: v } }; });
   regler('rwHandgranate', function (v) { return v + ' m'; }, function (v) { return { reichweite: { handgranate: v } }; });
   regler('rwScharf', function (v) { return v + ' m'; }, function (v) { return { reichweite: { scharfschuetze: v } }; });
+  regler('rwDunkel', function (v) { return v + ' %'; }, function (v) { return { schussDunkel: v }; });
   regler('tnBwTage', function (v) { return Number(v) ? v + (Number(v) === 1 ? ' Tag' : ' Tage') : 'nie'; }, function (v) { return { bundeswehr: { falltage: v } }; });
   $('tnBwAktiv').addEventListener('change', function () {
     anfrage('verwaltung/api', { bundeswehr: { aktiv: $('tnBwAktiv').checked } }).then(function (d) { zeige(d); status('✓ Gespeichert'); }).catch(function (e) { status('Fehler: ' + e.message, true); });
@@ -3904,7 +3908,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     var wt = $('wfTitel'); if (wt) wt.remove();
     gruppe(wk);
     var rw = unter('🎯 Automatische Schussreichweite');
-    ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwGranat', 'rwHandgranate', 'rwScharf'].forEach(function (id) { zeile(rw.inhalt, id); });
+    ['rwPistole', 'rwGewehr', 'rwSchrot', 'rwMp', 'rwMg', 'rwArmbrust', 'rwGranat', 'rwHandgranate', 'rwScharf', 'rwDunkel'].forEach(function (id) { zeile(rw.inhalt, id); });
     gruppe(rw);
     var bw = unter('🎖 Bundeswehr, Panzer');
     schalter(bw.inhalt, 'tnBwAktiv');
@@ -3932,7 +3936,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnNebelMorgen: 'nebel.morgen', tnNebelAbend: 'nebel.abend', tnNebelSicht: 'nebel.sicht', tnNebelZombie: 'nebel.zombie', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
     tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnFzStoss: 'fahrzeugStoss', tnGeraeusch: 'geraeuschPause', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnUnfallTuer: 'unfallTuer', tnAutoTempo: 'auto.tempo', tnAutoLenkung: 'auto.lenkung', tnAutoLeben: 'auto.leben', tnAutoPlaetze: 'auto.plaetze', tnAutoCrashAb: 'auto.crashAb', tnAutoCrash: 'auto.crashSchaden', tnAutoCrashAuto: 'auto.crashAuto', tnAutoZombieTot: 'auto.zombieTotKmh', tnAutoZombieSchaden: 'auto.zombieSchaden', tnAutoSchlMoebel: 'auto.schluesselMoebel', tnAutoSchlKoffer: 'auto.schluesselKofferraum', tnAutoSchlLeiche: 'auto.schluesselLeiche', tnGGroesse: 'groesseGesamt',
-    rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
+    rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwDunkel: 'schussDunkel', rwGranat: 'reichweite.granatwerfer',
     tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo', tnPumaTempo: 'bundeswehr.pumaTempo', tnLeoTempo: 'bundeswehr.leopardTempo', tnVsTage: 'bundeswehr.versorgungTage', tnVsMun: 'bundeswehr.versorgungMunition', tnVsVerband: 'bundeswehr.versorgungVerband', tnVsSpritze: 'bundeswehr.versorgungSpritze', tnKiMun: 'bundeswehr.kistenMunChance', tnKiMunMin: 'bundeswehr.kistenMunMin', tnKiMunMax: 'bundeswehr.kistenMunMax', tnKiVerband: 'bundeswehr.kistenVerbandChance', tnKiGranate: 'bundeswehr.kistenGranateChance',
     tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',
     thAb: 'toeneHorde.ab', thNur: 'toeneHorde.nurHorde', thVoll: 'toeneHorde.voll', thAus: 'toeneHorde.aus', thWeite: 'toeneHorde.hoerweite', muLaut: 'musik.laut', muBlende: 'musik.blende',
