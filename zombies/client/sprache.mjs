@@ -14,6 +14,12 @@ import {
 
 let ac = null;           // AudioContext – muss im Klick auf „Mitspielen“ entstehen (iOS)
 let ctxWeckerAn = false;
+let uebergangAn = false;   // Levelwechsel/Neustart angekündigt: der Server schließt den Raum, die Sprachverbindungen (WebRTC läuft direkt) bleiben bis zum Neuladen
+
+// Der Server kündigt einen Levelwechsel an ('neustart'); danach schließt er den Raum. Die direkten Verbindungen der Mitspieler
+// brauchen den Raum nur zum Aushandeln und laufen deshalb weiter, bis die Seite neu lädt (nur der Weg über den Server endet).
+export function uebergang() { uebergangAn = true; }
+export const imUebergang = () => uebergangAn;
 
 // Im Klick auf „Mitspielen“ (Nutzergeste) aufrufen, vor dem ersten await
 export function vorbereiten() {
@@ -56,7 +62,7 @@ export function starte({ raum, meineId, welt, meldung }) {
   const sende = (an, daten) => { try { raum.send('rtc', { an, daten }); } catch { /* Verbindung weg */ } };
   const sendeSpricht = an => { if (an !== sprichtGesendet) { sprichtGesendet = an; try { raum.send('spricht', { an }); } catch { /* egal */ } } };
 
-  const namen = sid => raum.state.spieler.get(sid)?.name ?? 'Mitspieler';
+  const namen = sid => raum.state?.spieler?.get(sid)?.name ?? 'Mitspieler';
   // ---------- Knopf ----------
   function knopfZeigen() {
     if (!knopf) return;
@@ -289,7 +295,7 @@ export function starte({ raum, meineId, welt, meldung }) {
   // ---------- Lautstärke nach Lage ----------
   const spielerDaten = p => p && { x: p.x, y: p.y, ebene: p.ebene ?? '', rucksack: flach(p.rucksack ?? []) };
   function lautstaerkeSetzen() {
-    if (!ac || (!peers.size && !relais.size)) return;
+    if (!ac || (!peers.size && !relais.size) || !raum.state?.spieler) return;   // Sprache startet jetzt schon vor dem ersten Zustand
     const ich = spielerDaten(raum.state.spieler.get(meineId)), w = welt();
     const t = ac.currentTime;
     for (const p of [...peers.values(), ...relais.values()]) {
@@ -506,7 +512,15 @@ export function starte({ raum, meineId, welt, meldung }) {
     }
     p.kette = p.kette.then(() => signalVerarbeiten(p, m.daten)).catch(e => console.warn('Signal fehlgeschlagen:', e?.message ?? e));
   }
-  raum.onLeave(() => { beendet = true; for (const r of relais.values()) relaisSchliessen(r); aufnahmeStoppen(); alleSchliessen(); mikroLoslassen(); clearInterval(messTimer); knopfZeigen(); });
+  raum.onLeave(() => {
+    if (uebergangAn) {   // Levelwechsel: Raum zu, aber die Seite lebt noch bis zum Neuladen – direkte Verbindungen und Mikrofon behalten, nur den Serverweg beenden
+      for (const r of relais.values()) relaisSchliessen(r);
+      aufnahmeStoppen();
+      for (const sid of [...serverWeg]) serverWegEnde(sid);
+      return;
+    }
+    beendet = true; for (const r of relais.values()) relaisSchliessen(r); aufnahmeStoppen(); alleSchliessen(); mikroLoslassen(); clearInterval(messTimer); knopfZeigen();
+  });
 
   messTimer = setInterval(lautstaerkeSetzen, 100);
   // Falls der AudioContext keine Nutzergeste hatte (z. B. Seite neu geladen): bei der ersten Berührung wecken

@@ -4,6 +4,7 @@ import { berechneTuerPose, nachbarPolys, aussenFrei, FREI_M } from './tuerpose.m
 import { zaeuneVorTuerenKappen } from './zaunkappen.mjs';
 import { zaeuneVonStrassen } from './zaunstrasse.mjs';
 import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
+import { fzPx } from './masse.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite, parkplatzBuchten } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
 import { baueFlugfeldDeko } from './flugfeld_deko.mjs';
@@ -899,19 +900,36 @@ function pisteSetzen(pi, k, setze, hole, dinge) {
 // Feines Kollisionsraster (1 m) aus den echten Umrissen: Häuser nach ihrem OSM-Polygon, Gartenzäune und Hecken nach den
 // geglätteten Zaunlinien; alles andere (Wasser, Gartenhäuser, Kartenrand, Busse …) wie im groben Raster.
 // Wo das grobe Raster begehbar ist und der Kachelmittelpunkt frei liegt, bleibt der Weg offen (Wegsuche bleibt grob).
+// Umriss eines geparkten Busses [x0, y0, x1, y1] in Pixeln: Mitte der Deko, Maße wie die Zeichnung (busVonOben: fzPx('bus'), quer bei `senkrecht`)
+export function busUmriss(d) {
+  const [L, B] = fzPx('bus'), hl = (d.senkrecht ? B : L) / 2, hb = (d.senkrecht ? L : B) / 2;
+  return [d.x - hl, d.y - hb, d.x + hl, d.y + hb];
+}
 function baueFein(welt, karte, lbObj) {
   const fb = BREITE * FEIN, fh = HOEHE * FEIN, f = new Uint8Array(fb * fh);
   const hole = welt.hole, zaunart = welt.details?.zaunart ?? '';
   const grob = new Uint8Array(BREITE * HOEHE);   // 1 = Kachel wird grob übernommen
+  const busKachel = new Set();   // Kacheln geparkter Busse (Index ky * BREITE + kx)
+  for (const d of welt.deko ?? []) if (d.art === 'bus') for (let yy = d.ky; yy < d.ky + d.h; yy++) for (let xx = d.kx; xx < d.kx + d.b; xx++) busKachel.add(yy * BREITE + xx);
   for (const o of welt.details?.objekte ?? []) if (o.a === 'gartenhaus') for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) grob[y * BREITE + x] = 1;
   const kachelFuellen = (kx, ky, wert) => { for (let dy = 0; dy < FEIN; dy++) for (let dx = 0; dx < FEIN; dx++) f[(ky * FEIN + dy) * fb + kx * FEIN + dx] = wert; };
   // 1. grob übernehmen – außer Hauswänden (Polygon) und Gartenzäunen (Linien)
   for (let ky = 0; ky < HOEHE; ky++) for (let kx = 0; kx < BREITE; kx++) {
     const t = hole(kx, ky), i = ky * BREITE + kx;
     if (!BLOCKIERT.has(t)) continue;
+    if (t === T.DEKO && busKachel.has(i)) continue;   // geparkte Busse: nur der gezeichnete Umriss sperrt (unten, Schritt 1b)
     const haus = (t === T.WAND || t === T.LEER) && !grob[i];
     const zaun = t === T.ZAUN && 'hzmw'.includes(zaunart[i]);
     if (!haus && !zaun) kachelFuellen(kx, ky, 1);
+  }
+  // 1b. geparkte Busse (Deko): 4 Kacheln sind grob gesperrt (128 × 32 px), gezeichnet ist der Bus 12 × 2,7 m (96 × 21,6 px, client/masse.mjs):
+  //     im Feinraster sperren nur die Felder, die der Umriss zu mindestens der Hälfte deckt
+  for (const d of welt.deko ?? []) if (d.art === 'bus') for (const [x0, y0, x1, y1] of [busUmriss(d)]) {
+    for (let fy = Math.floor(y0 / FEIN_PX); fy * FEIN_PX < y1; fy++) for (let fx = Math.floor(x0 / FEIN_PX); fx * FEIN_PX < x1; fx++) {
+      if (fx < 0 || fy < 0 || fx >= fb || fy >= fh) continue;
+      const ox = Math.min(x1, (fx + 1) * FEIN_PX) - Math.max(x0, fx * FEIN_PX), oy = Math.min(y1, (fy + 1) * FEIN_PX) - Math.max(y0, fy * FEIN_PX);
+      if (ox > 0 && oy > 0 && ox * oy >= FEIN_PX * FEIN_PX / 2) f[fy * fb + fx] = 1;
+    }
   }
   // 2. Häuser nach ihrem Umriss
   const imPolygon = (px, py, p) => {
