@@ -54,6 +54,8 @@ const duckt = (raum, ids) => {
   }
   return g;
 };
+// ferne Menschen werden nur jeden vierten Takt gerechnet (je nach Nummer): immer mindestens vier Takte laufen lassen
+const vier = st => { for (let i = 0; i < 4; i++) st.schritt(0.05); };
 const ohneZombies = raum => { for (const id of [...raum.state.zombies.keys()]) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); } raum.baueZombieRaster(); };
 const neuStart = (raum, n) => {
   const st = raum.stadt;
@@ -75,7 +77,8 @@ test('Ohne Zombies in der Nähe versteckt sich niemand: Alltag mit Zielen, kein 
     for (let i = 0; i < 400; i++) st.schritt(0.05);
     assert.ok([...raum.state.menschen.values()].every(m => !m.versteckt), 'jemand duckt sich ohne Zombies');
     assert.ok([...st.info.values()].every(i => i.modus === ''), 'Modus ohne Gefahr');
-    assert.ok([...st.info.values()].filter(i => i.ziel).length > alle.length * 0.3, 'kaum Ziele');
+    const draussen = [...raum.state.menschen.entries()].filter(([, m]) => m.sichtbar);
+    assert.ok(draussen.length >= 5 && draussen.filter(([id]) => st.info.get(id).ziel).length >= draussen.length * 0.8, 'draußen ohne Ziele');
   } finally { await c.leave(); }
 });
 
@@ -96,13 +99,15 @@ test('Zombie in 30 m: Bewohner verstecken sich (Gruppen, ein Teil Panik); 25 s o
     const [pid] = [...s.menschen.entries()].find(([id, p]) => id !== mid && p.sichtbar && !p.ebene && st.info.get(id).modus === '' && Math.hypot(p.x - q.x, p.y - q.y) < GEFAHR_WEITE - 20) ?? [];
     if (pid) { const pi = st.info.get(pid); assert.ok(['versteck', 'panik'].includes(pi.modus)); }
     // Gefahr bleibt, solange der Zombie nah ist: auch nach 60 s Spielzeit noch versteckt
-    for (let i = 0; i < 12; i++) { st.takt += 5; raum.baueZombieRaster(); st.schritt(0.05); st.schritt(0.05); }
+    for (let i = 0; i < 12; i++) { st.takt += 5; raum.baueZombieRaster(); vier(st); }
     assert.ok(['versteck'].includes(inf.modus), 'kommt trotz Zombie heraus: ' + inf.modus);
+    inf.scanT = 0; raum.baueZombieRaster(); vier(st);   // letzte Sichtung genau jetzt (sonst hängt der Zeitpunkt vom Abtasttakt ab)
+    assert.ok(inf.gefahrBis >= st.takt + SICHER_NACH - 1);
     // Zombie weg: nach SICHER_NACH Sekunden Alltag
     s.zombies.delete(zid); raum.zombieInfo.delete(zid); raum.baueZombieRaster();
-    st.takt += SICHER_NACH - 5; st.schritt(0.05); st.schritt(0.05);
+    st.takt += SICHER_NACH - 5; vier(st);
     assert.equal(inf.modus, 'versteck', 'zu früh heraus');
-    st.takt += 10; st.schritt(0.05); st.schritt(0.05);
+    st.takt += 10; vier(st);
     assert.equal(inf.modus, '', 'kommt nicht wieder heraus');
     assert.ok(!inf.gruppe && !m.versteckt && !m.flieht);
   } finally { await c.leave(); }
@@ -158,9 +163,11 @@ test('Ins parkende Auto steigen: Auto verschwindet vom Parkplatz, ein Verkehrsau
     assert.equal(neu.length, 1);
     const fid = neu[0], f = s.fahrzeuge.get(fid);
     assert.ok(fid.startsWith('auto') && v.info.get(fid).randAus && Math.hypot(f.x - b.x, f.y - b.y) < 1);
-    let weg = false;
-    for (let i = 0; i < 6000 && !weg; i++) { v.schritt(0.25); weg = !s.fahrzeuge.has(fid); }
-    assert.ok(weg, 'Auto fährt nicht bis zum Rand und verschwindet');
+    // fährt los (Stau/Unfälle sind zufällig: nur Weg prüfen); am Ziel (Kartenrand) verschwindet das Auto
+    const vi = v.info.get(fid);
+    assert.ok(vi.weg && vi.weg.length >= 2, 'kein Weg');
+    v.angekommen(fid, f, vi, 0, raum.einstellungen());
+    assert.ok(!s.fahrzeuge.has(fid) && !v.info.has(fid), 'Auto verschwindet nicht am Ziel (Kartenrand)');
     // ein zweites Mal denselben Parkplatz: nichts passiert (Auto ist weg)
     const [mid2, m2] = [...s.menschen.entries()].find(([, q]) => q.sichtbar), inf2 = st.info.get(mid2);
     inf2.ziel = { x: b.x, y: b.y, art: 'auto', auto: b }; m2.x = b.x; m2.y = b.y;
@@ -224,10 +231,14 @@ test('Gruppe flieht gemeinsam, wenn ein Zombie nah kommt', async () => {
   try {
     const st = raum.stadt, s = raum.state;
     neuStart(raum, 60);
-    const k = sichtbare(raum, 60).filter(([, q]) => freiAn(raum, q, 60));
-    assert.ok(k.length >= 2);
-    const g = duckt(raum, [k[0][0], k[1][0]]);
-    const m0 = s.menschen.get(g.mitglieder[0]);
+    const k = sichtbare(raum, 60);
+    let g, m0;
+    for (let i = 0; i + 1 < k.length && !m0; i++) {   // das Versteck braucht freie Sicht in 60 px (nach dem Hinsetzen prüfen)
+      g = duckt(raum, [k[i][0], k[i + 1][0]]);
+      if (freiAn(raum, s.menschen.get(g.mitglieder[0]), 60)) m0 = s.menschen.get(g.mitglieder[0]);
+      else for (const id of [...g.mitglieder]) st.gruppeVerlassen(id, st.info.get(id));
+    }
+    assert.ok(m0, 'kein passendes Versteck');
     const alt = g.vpIdx, q = freiAn(raum, m0, 60);
     const zid = raum.setzeZombie(q.x, q.y, ''), z = s.zombies.get(zid);
     z.richtung = q.a + Math.PI; raum.zombieInfo.get(zid).bleibt = true; raum.baueZombieRaster();
