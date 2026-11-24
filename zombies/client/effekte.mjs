@@ -4,6 +4,7 @@
 import { rahmen, SP_BREITE } from './stuetzpunkt.mjs';
 
 const BLUT = [0x8b0000, 0xb71c1c, 0x6a0b0b, 0xa31515], FLEISCH = [0xc2574f, 0x9b3b3b, 0x7a2b2b, 0xb86a5e];
+export const BLUT_GROESSE = 0.5;   // Blut und Fleisch etwa halb so groß wie früher (0.89)
 const MAX_AKTIV = 60;          // gleichzeitig fliegende Teilchen (Handy)
 const zufall = (a, b) => a + Math.random() * (b - a);
 
@@ -35,17 +36,17 @@ export function fetzen(scene, x, y, w = null, menge = 1, ebene = '') {
   const richtung = () => (w === null || Math.random() < 0.25 ? Math.random() * Math.PI * 2 : w + zufall(-0.8, 0.8));
   for (let i = 0; i < nBlut; i++) {
     const o = nimm(scene), a = richtung(), d = zufall(7, 22) * weit;
-    o.setPosition(x, y).setFillStyle(BLUT[i % BLUT.length]).setScale(zufall(0.5, 1)).setDepth(7.2);
+    o.setPosition(x, y).setFillStyle(BLUT[i % BLUT.length]).setScale(zufall(0.5, 1) * BLUT_GROESSE).setDepth(7.2);
     scene.tweens.add({ targets: o, x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, alpha: 0, scale: o.scale * 0.5, duration: zufall(350, 650), ease: 'Cubic.easeOut', onComplete: () => gib(scene, o) });
   }
   for (let i = 0; i < nStueck; i++) {
     const o = nimm(scene), a = richtung(), d = zufall(5, 17) * weit;
-    o.setPosition(x, y).setFillStyle(FLEISCH[i % FLEISCH.length]).setScale(zufall(0.8, 1.4)).setDepth(7.2);
+    o.setPosition(x, y).setFillStyle(FLEISCH[i % FLEISCH.length]).setScale(zufall(0.8, 1.4) * BLUT_GROESSE).setDepth(7.2);
     scene.tweens.add({ targets: o, x: x + Math.cos(a) * d, y: y + Math.sin(a) * d + 6, alpha: 0.2, scale: o.scale * 0.8, duration: zufall(500, 900), ease: 'Quad.easeOut', onComplete: () => gib(scene, o) });
   }
   if (st.aktiv < MAX_AKTIV) {   // Fleck am Boden, verblasst langsam
     const f = nimm(scene), a = richtung(), d = zufall(0, 5) * weit;
-    f.setPosition(x + Math.cos(a) * d, y + Math.sin(a) * d).setFillStyle(0x5a0808).setScale(zufall(1.7, 2.5) * weit).setAlpha(0.55).setDepth(0.7);
+    f.setPosition(x + Math.cos(a) * d, y + Math.sin(a) * d).setFillStyle(0x5a0808).setScale(zufall(1.7, 2.5) * weit * BLUT_GROESSE).setAlpha(0.55).setDepth(0.7);
     scene.tweens.add({ targets: f, alpha: 0, duration: 2500, delay: 400, onComplete: () => gib(scene, f) });
   }
 }

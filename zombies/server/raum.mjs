@@ -717,7 +717,7 @@ export class SpielRaum extends Room {
       if (optionen.aussehenGewaehlt !== false && AUSSEHEN.test(String(optionen.aussehen ?? ''))) alt.aussehen = optionen.aussehen;
       alt.aussehen = this.heldPruefen(alt.aussehen);   // im Backend abgeschalteter Held → aktiver
       this.state.spieler.set(client.sessionId, alt);
-      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, warte: null, guthaben: 0, afkBot: null, letzteEingabe: Date.now(), superuser: !!auth?.su, suUnsterblich: !!auth?.su && x.suUnsterblich }); alt.afk = false;
+      this.extra.set(client.sessionId, { ...x, eingabe: { dx: 0, dy: 0, s: false }, warte: null, guthaben: 0, afkBot: null, letzteEingabe: Date.now(), superuser: !!auth?.su, suUnsterblich: auth?.su ? (x.suUnsterblich ?? true) : false }); alt.afk = false;
       this.hunde?.besitzerWechsel(sid, client.sessionId);
       this.suAnmeldung(client, alt, auth);
       client.send('chatVerlauf', { nachrichten: this.chatVerlauf, ich: this.chatKennung(client.sessionId) });
@@ -738,7 +738,7 @@ export class SpielRaum extends Room {
     p.aussehen = this.heldPruefen(p.aussehen);
     p.verbunden = true; p.unten = false; p.afk = false; p.hilfe = 0; p.richtung = 0;
     p.schleicht = false; p.aktion = ''; p.fortschritt = 0; p.sicher = ''; p.infektion = 0; p.zombie = 0; p.kleidung = 0; p.plaetze = RUCKSACK_PLAETZE; p.ebene = ''; p.lampe = 0; p.spricht = false;
-    const extra = { superuser: !!auth?.su, spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null, letzteEingabe: Date.now() };
+    const extra = { superuser: !!auth?.su, suUnsterblich: !!auth?.su, spielerId, letzterSafe: '', pause: 0, eingabe: { dx: 0, dy: 0, s: false }, aktionZiel: null, letzteEingabe: Date.now() };
     const gespeichert = this.speicher?.ladeSpieler(spielerId);
     if (gespeichert) {
       p.hp = Math.max(25, Math.min(100, Number(gespeichert.hp) || 100));
@@ -2996,7 +2996,7 @@ export class SpielRaum extends Room {
       const schleicht = se.s || laenge < 0.55;
       // infiziert: langsamer
       const tempo = (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1) * this.fkWert(p, 'tempo') * tempoVon(welt);
-      let f = Math.min(1, laenge / (schleicht ? 0.55 : 1)) * tempo * sd * this.baumTempo(welt, p) * tf * autoTempo(welt, fzl, p.x, p.y, W.spielerRadius);   // über ein stehendes Auto nur mit 20 % (client/fzkollision.mjs, wie die Vorhersage)
+      let f = Math.min(1, laenge / (schleicht ? 0.55 : 1)) * tempo * sd * this.baumTempo(welt, p) * tf * autoTempo(welt, fzl, p.x, p.y, W.spielerRadius);   // über ein stehendes Auto nur mit 50 % (client/fzkollision.mjs, wie die Vorhersage)
       const x0 = p.x, y0 = p.y;
       if (x.bot) {
         // Bots steigen nicht über Zäune, gehen aber durch Hecken und Holzzäune – langsam

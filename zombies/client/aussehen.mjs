@@ -782,12 +782,6 @@ function gartenObjekte(ctx, welt, rect, oben) {
       ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(x + 19, y + 20, 14, 0, TAU); ctx.fill();
       ctx.fillStyle = '#1565c0'; ctx.beginPath(); ctx.arc(x + 16, y + 16, 14, 0, TAU); ctx.fill();
       ctx.fillStyle = '#212121'; ctx.beginPath(); ctx.arc(x + 16, y + 16, 11, 0, TAU); ctx.fill();
-    } else if (!oben && o.a === 'beet') {
-      ctx.fillStyle = '#6d4c41'; ctx.fillRect(x + 3, y + 5, b - 6, h - 10);
-      for (let i = 0; i < 10; i++) {
-        ctx.fillStyle = ['#e53935', '#fdd835', '#ab47bc', '#ffffff', '#43a047'][i % 5];
-        ctx.beginPath(); ctx.arc(x + 7 + hash(o.x * 7 + i, o.y) * (b - 14), y + 9 + hash(o.y * 5 + i, o.x) * (h - 18), 2.6, 0, TAU); ctx.fill();
-      }
     } else if (!oben && o.a === 'sitzgruppe') {
       ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.arc(x + 18, y + 18, 9, 0, TAU); ctx.fill();
       ctx.fillStyle = '#eeeeee'; ctx.beginPath(); ctx.arc(x + 16, y + 16, 8, 0, TAU); ctx.fill();

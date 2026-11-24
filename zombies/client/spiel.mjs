@@ -4,7 +4,7 @@ import { fzPx } from './masse.mjs';
 import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from './fzkollision.mjs';
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
-import { HF_LISTE, HF_GROESSE, ALT_FAKTOR, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
+import { HF_LISTE, HF_GROESSE, ALT_FAKTOR, SCHULTER_NEU_PX, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
 import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
@@ -20,7 +20,8 @@ import { zeichneBoden, zeichneSchattenStueck, zeichneOben, zeichneKronen, hatBae
 import { PUMA_SKALA, PUMA_BILD, handelPartner } from './stuetzpunkt.mjs';
 import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
-import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht } from './effekte.mjs';
+import { weichKreis } from './weichkreis.mjs';
+import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht, BLUT_GROESSE } from './effekte.mjs';
 import { fahrbarNah, FAHRBAR, FAHRBAR_PLAETZE } from './fahrbar.mjs';
 import { istFahrbar, fahrbarBild, fahrbarFahrzeug, fahrbarRueckstoss, pumaFahrbarSchuss } from './fahrbardarstellung.mjs';
 import { boxerLaden, boxerSchuss } from './boxerdarstellung.mjs';
@@ -791,7 +792,7 @@ function suMenueEinrichten(szene) {
       const bt = e.target.closest('button[data-su]');
       if (!bt) return;
       try { raum?.send('su', JSON.parse(bt.dataset.su)); } catch { /* egal */ }
-      if (!bt.dataset.schalter && !bt.dataset.zr) zu();   // Umschalter bleiben offen: der Zustand springt sichtbar um
+      // das Menü bleibt offen, bis der Spieler es schließt (✕, Klick daneben, Esc)
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') zu(); });
   }
@@ -975,9 +976,13 @@ const zombieKarte = () => raum?.state?.zombies ?? LEERE_KARTE;
 const fzRichtung = f => (typeof f.rq === 'number' ? ausStufe(f.rq) : f.richtung ?? 0);   // Fahrzeuge: ebenfalls 256 Stufen
 const zRichtung = o => (typeof o.rq === 'number' ? ausStufe(o.rq) : o.richtung ?? 0);
 let baumTempoWert = 25;
+// Zombie im Draht: leichtes Schwanken und etwa jede Sekunde ein kurzes Zerren (statt Dauerzittern)
+const haengZerren = (jetzt, x) => { const ph = ((jetzt + x * 137) % 1100) / 1100; return Math.sin(jetzt / 700 + x) * 0.03 + (ph < 0.2 ? Math.sin(ph / 0.2 * Math.PI) * 0.09 : 0); };
 let taumelBis = 0;   // performance.now(), bis wann der eigene Held taumelt (Fahrzeugstoß, Nachricht 'taumel'): Steuerung eingeschränkt wie auf dem Server
 // Maßstäbliche Innenräume: in Innenräumen mit 1-m-Raster (8 px = 1 m) erscheinen Figuren nur halb so groß (Schulterbreite sonst 1,1 m statt ~0,5 m)
 const INNEN_FIGUR = 0.5;
+const POL_SCHULTER_PX = 59;   // Schulterbreite des Polizist-Bildes (figuren2) in Bild-px
+const FIG_RADIUS = 11;   // halbe Figurhöhe in Welt-px bei mg() = 1 (Abstand von Name/Balken zur Figurmitte)
 let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
 const innenFigur = () => (szeneRef?.feinInnen() ? INNEN_FIGUR : 1);
 const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100) * innenFigur();
@@ -1217,7 +1222,8 @@ class Ort extends Phaser.Scene {
     raum.onMessage('leopardkanone', m => { leopardKanone(this, m, raum.state); fahrbarRueckstoss(this, raum.state, m.x1, m.y1); });   // Leopard-Hauptkanone: Mündungsfeuer, Rückstoß, Knall
     raum.onMessage('bunkerEnde', m => finaleAbspann(this, m, meineId, ton, this.lokal ?? raum.state.spieler.get(meineId)));   // Atomschlag: weißer Blitz, Abspann
     b11Registrieren(this, raum, { skala: () => BOGEN2_GROESSE * groesse('figuren2', 'soldat_idle') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'verwundet') * mg() });   // Szene „Stau auf der B11“
-    polizeiRegistrieren(this, raum, { skala: () => BOGEN2_GROESSE * 0.95 * groesse('figuren2', 'polizist') * mg(), leicheSkala: () => VERWUNDET_GROESSE * groesse('figuren2', 'polizist') * mg() });   // Polizisten an den Straßensperren
+    const polSk = () => SCHULTER_NEU_PX * mg() / POL_SCHULTER_PX;   // Polizist: Schulterbreite wie die Mixamo-Helden (15,2 px bei mg = 1), nicht mehr kleiner
+    polizeiRegistrieren(this, raum, { skala: polSk, leicheSkala: () => polSk() * VERWUNDET_GROESSE * groesse('figuren2', 'polizist') / (BOGEN2_GROESSE * groesse('figuren2', 'polizist')) });   // Polizisten an den Straßensperren
     raum.onMessage('bwSoldaten', m => this.soldatenSync(m));
     raum.onMessage('soldatTot', m => this.soldatStirbt(m, true));
     raum.onMessage('granate', m => {
@@ -2710,7 +2716,7 @@ class Ort extends Phaser.Scene {
         const fig = zfFigur(z.variante), geht = bildNr >= 0;
         let clip = zfClip({ kriecht: z.kriecht, jagt: z.jagt, geht, nah });
         if (clip === 'attack') clip = zfAngriff(this.time.now, f.zh);
-        const i = zfBild(clip, { lauf: f.lauf ?? 0, zs: f.zs, zeitMs: this.time.now, versatz: f.zv * 7, ...(z.kriecht && (z.haengt || !geht) ? { lauf: z.haengt ? this.time.now / 12 : 0 } : {}) });
+        const i = zfBild(clip, { lauf: f.lauf ?? 0, zs: f.zs, zeitMs: this.time.now, versatz: f.zv * 7, ...(z.kriecht && (z.haengt || !geht) ? { lauf: z.haengt ? this.time.now / 45 : 0 } : {}) });
         const key = 'zf_' + fig;
         if (f.bild.texture.key !== key) f.bild.setTexture(key);
         f.bild.setFrame(this.zfNamen[fig][clip][i]).setRotation(0).setScale(ZOMBIE_GROESSE * ZF_G * zf);
@@ -2726,8 +2732,8 @@ class Ort extends Phaser.Scene {
       const tex = gem ? 'figuren3' : neu ? 'figuren2' : 'figuren';
       if (f.bild.texture.key !== tex) f.bild.setTexture(tex, 0);
       if (z.kriecht) {
-        f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], z.haengt ? Math.floor(this.time.now / 170 + z.x) : bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
-        f.bild.setRotation(z.haengt ? Math.sin(this.time.now / 80 + z.x * 0.7) * 0.16 : 0).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'kriecher_' + 'abcd'[(z.variante ?? 0) % 4]));
+        f.bild.setFrame(this.figurBild('kriecher_' + 'abcd'[(z.variante ?? 0) % 4], z.haengt ? Math.floor(this.time.now / 450 + z.x) : bildNr < 0 ? 0 : Math.floor((f.lauf ?? 0) / 16)));
+        f.bild.setRotation(z.haengt ? haengZerren(this.time.now, z.x) : 0).setScale(ZOMBIE_GROESSE * zf * groesse('figuren', 'kriecher_' + 'abcd'[(z.variante ?? 0) % 4]));
       } else if (gem) {
         // Einzelbild (Gemini): beim Gehen leicht wanken, Maßstab wie die übrigen Zombies
         const l3 = this.figurListe3[typ];
@@ -3125,9 +3131,9 @@ class Ort extends Phaser.Scene {
       .setScale(kanone || evak ? 0.6 : 0.32).setDepth(7);
     this.tweens.add({ targets: blitz, alpha: 0, duration: kanone ? 100 : 60, onComplete: () => blitz.destroy() });
     if (kanone) {
-      for (let i = 0; i < 6; i++) {
-        const r = this.add.circle(mx + (Math.random() - 0.5) * 5, my + (Math.random() - 0.5) * 5, 2.5 + Math.random() * 2.5, 0xbdbdbd, 0.55).setDepth(6.5);
-        this.tweens.add({ targets: r, x: r.x + c * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, y: r.y + sn * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, alpha: 0, scale: 2.2, duration: 700, onComplete: () => r.destroy() });
+      for (let i = 0; i < 12; i++) {   // Pulverrauch: viele kleine, weiche Teilchen
+        const r = weichKreis(this, mx + (Math.random() - 0.5) * 5, my + (Math.random() - 0.5) * 5, 1.2 + Math.random() * 1.4, 0xbdbdbd, 0.4).setDepth(6.5), k0 = r.scale;
+        this.tweens.add({ targets: r, x: r.x + c * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, y: r.y + sn * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, alpha: 0, scale: k0 * 2.2, duration: 700, onComplete: () => r.destroy() });
       }
       this.explosion(m.x2, m.y2, 24, 0.45);
     }
@@ -3164,7 +3170,7 @@ class Ort extends Phaser.Scene {
     if (this.aktEbene) return;
     for (let i = 0; i < 9; i++) {
       const w = (m.w ?? 0) + (Math.random() - 0.5) * 1.6, d = 8 + Math.random() * (m.tot ? 22 : 12);
-      const c = this.add.circle(m.x, m.y, 0.9 + Math.random() * 1.4, i % 3 ? 0x8b0000 : 0xb71c1c, 0.9).setDepth(7);
+      const c = this.add.circle(m.x, m.y, (0.9 + Math.random() * 1.4) * BLUT_GROESSE, i % 3 ? 0x8b0000 : 0xb71c1c, 0.9).setDepth(7);
       this.tweens.add({ targets: c, x: m.x + Math.cos(w) * d, y: m.y + Math.sin(w) * d, alpha: 0, duration: 350 + Math.random() * 250, ease: 'Cubic.easeOut', onComplete: () => c.destroy() });
     }
     const o = this.busObj.get(m.id);
@@ -3199,10 +3205,16 @@ class Ort extends Phaser.Scene {
       const f = this.add.circle(x, y, 1 + Math.random() * 2, [0xffd54f, 0xff9800, 0xf4511e, 0xd84315][i % 4], 0.95).setBlendMode('ADD').setDepth(7.8);
       this.tweens.add({ targets: f, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d, alpha: 0, scale: 0.4, duration: 350 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
     }
-    for (let i = 0; i < Math.round(9 * staerke) + 2; i++) {
+    const fein = staerke < 0.5;   // Puma-Einschlag: viele kleine, weiche Rauchteilchen statt weniger großer Kreise
+    for (let i = 0; i < (fein ? Math.round(16 * staerke) + 4 : Math.round(9 * staerke) + 2); i++) {
       const w = Math.random() * Math.PI * 2, d = r * (0.2 + Math.random() * 0.8);
-      const rauch = this.add.circle(x, y, 3.6 + Math.random() * 4.2, 0x4a4a4a, 0.6).setDepth(7.7);
-      this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 8 - Math.random() * 10, alpha: 0, scale: 2.4 + Math.random() * 1.2, duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
+      if (!fein) {
+        const rauch = this.add.circle(x, y, 3.6 + Math.random() * 4.2, 0x4a4a4a, 0.6).setDepth(7.7);
+        this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 8 - Math.random() * 10, alpha: 0, scale: 2.4 + Math.random() * 1.2, duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
+        continue;
+      }
+      const rauch = weichKreis(this, x, y, 1.8 + Math.random() * 2.2, 0x4a4a4a, 0.42).setDepth(7.7), k0 = rauch.scale;
+      this.tweens.add({ targets: rauch, x: x + Math.cos(w) * d, y: y + Math.sin(w) * d - 8 - Math.random() * 10, alpha: 0, scale: k0 * (2.2 + Math.random() * 1.2), duration: 1100 + Math.random() * 700, delay: 80, onComplete: () => rauch.destroy() });
     }
     const brand = this.add.circle(x, y, r * 0.35, 0x1b1b1b, 0.5).setDepth(0.95);   // Brandfleck am Boden
     this.tweens.add({ targets: brand, alpha: 0, duration: 6000, onComplete: () => brand.destroy() });
@@ -3319,7 +3331,7 @@ class Ort extends Phaser.Scene {
     const s0 = hn ? ZOMBIE_GROESSE * HF_G * mg() : p.unten ? 1 : zombie ? ZOMBIE_GROESSE * groesse('figuren', 'zombie_hemd') * zg() : survivor ? BOGEN2_GROESSE * mg()
       : held ? ZOMBIE_GROESSE * groesse('helden160', `held_${gg0}_leer`) * mg()
       : MENSCH_GROESSE * groesse('figuren', (aussehenLesen(p.aussehen).g === 'w' ? 'frau' : 'mann') + '_hand') * mg();
-    // Klettern über ein stehendes Auto (20 % Tempo): Figur leicht größer und angehoben, wippt; Taumeln nach einem Fahrzeugstoß: Figur schwankt
+    // Klettern über ein stehendes Auto (50 % Tempo): Figur leicht größer und angehoben, wippt; Taumeln nach einem Fahrzeugstoß: Figur schwankt
     const jetzt = this.time.now, perf = performance.now();
     const aufAutoJa = !p.unten && !zombie && !p.ebene && aufAuto(this.welt, (this.fzAnz ??= fzRechtecke(raum.state.fahrzeuge, fzRichtung)), f.x, f.y, W.spielerRadius);
     const taumelt = !p.unten && f.taumelBis > perf;
@@ -3338,11 +3350,12 @@ class Ort extends Phaser.Scene {
       img.setVisible(true).setPosition(L.x, L.y + f.bild.y).setRotation(L.rot).setScale(L.sx, L.sy).setTint(tonung);
     }
     // Name, Lebensbalken und Symbole: drinnen auf Bildschirmgröße wie draußen zurückrechnen, Abstände zur (halb so großen) Figur
-    const k = this.uiMass(), fp = this.feinInnen() ? INNEN_FIGUR : 1;
-    f.name.setScale(k).setY(-28 * fp);
-    f.hp.setScale(k).setPosition(-12 * k, -18 * fp);
-    f.tun.setScale(k).setPosition(16 * k, -16 * fp);
-    f.sprechen.setScale(k).setPosition(-18 * k, -16 * fp);
+    // Abstand = halbe Figurgröße (Welt, wächst mit Zoom und Figurgröße) + fester Bildschirmabstand (Text hat Bildschirmgröße k) → bleibt bei jedem Zoom über der Figur
+    const k = this.uiMass(), R = FIG_RADIUS * mg();
+    f.name.setScale(k).setY(-(R + 20 * k));
+    f.hp.setScale(k).setPosition(-12 * k, -(R + 10 * k));
+    f.tun.setScale(k).setPosition(16 * k, -(R + 8 * k));
+    f.sprechen.setScale(k).setPosition(-18 * k, -(R + 8 * k));
     f.hp.width = 24 * Math.max(0, p.hp) / 100;
     f.hp.setFillStyle(p.hp > 50 ? 0x66bb6a : p.hp > 25 ? 0xffca28 : 0xe53935);
     const tun = zombie ? '🧟' : p.aktion === 'klettern' ? '🧗' : p.aktion === 'durchsuchen' ? '🔍' : p.aktion === 'barrikade' ? '🔨' : p.aktion === 'funk' ? '📻' : p.ruht ? '💤' : p.infektion > 0 ? '🦠' : '';
@@ -3461,7 +3474,7 @@ class Ort extends Phaser.Scene {
     const tempo = zombie ? W.zombieTempoJagen * 1.15
       : (schleicht ? W.tempoSchleichen : W.tempoGehen) * (p.infektion > 0 ? 0.85 : 1) * (traegtMg(p) ? TEMPO_MG : 1);
     const tf = !zombie && performance.now() < taumelBis ? STOSS_TAUMEL_FAKTOR : 1;   // Taumeln nach Fahrzeugstoß (wie raum.mjs)
-    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d * tempoVon(welt) * baumFaktor(welt, pos.x, pos.y, baumTempoWert) * tf * autoTempo(welt, this.fzl, pos.x, pos.y, W.spielerRadius);   // stehende Autos: 20 %   // drinnen Maßstab-Tempo, unter Bäumen langsamer (wie raum.mjs)
+    const weg = (zombie ? Math.min(1, l) : Math.min(1, l / (schleicht ? 0.55 : 1))) * tempo * d * tempoVon(welt) * baumFaktor(welt, pos.x, pos.y, baumTempoWert) * tf * autoTempo(welt, this.fzl, pos.x, pos.y, W.spielerRadius);   // stehende Autos: 50 %   // drinnen Maßstab-Tempo, unter Bäumen langsamer (wie raum.mjs)
     const n = Math.max(1, Math.ceil(weg / 4));   // Teilschritte wie auf dem Server (raum.mjs spielerSchritt)
     for (let i = 0; i < n; i++) bewegeFz(bewege, welt, pos, dx / l * weg / n, dy / l * weg / n, W.spielerRadius, this.fzl);   // fahrende Fahrzeuge sind Wände
   }
@@ -3876,7 +3889,7 @@ class Ort extends Phaser.Scene {
       // drinnen sind Innenraum-Pixel kleiner (reich ≈ 0,35): Abstände auf Außenmaß umrechnen, sonst klingt jeder Zombie im Haus „ganz nah“;
       // drinnen außerdem seltener (Gregor 23.11.: dauerndes Grunzen in Gebäuden)
       const rm = this.aktEbene ? (this.wv(this.aktEbene)?.reich || 1) : 1, lx = this.lokal.x, ly = this.lokal.y;
-      this.stoehnZeit = this.aktEbene ? 3 + Math.random() * 4 : 1 + Math.random() * 2;
+      this.stoehnZeit = Math.max(ton.geraeuschPause() / 1000, this.aktEbene ? 3 + Math.random() * 4 : 1 + Math.random() * 2);   // nie öfter als die Mindestpause (geraeuschPause)
       // nur die nächsten ~6 Zombies kommen als Einzellaut in Frage; die Zahl in Hörweite steuert das Horden-Grollen
       const nahe = [];
       for (const z of zombieKarte().values()) {

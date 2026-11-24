@@ -248,7 +248,7 @@ button:disabled { opacity: .6; }
 #kartenunten { bottom: 5px; font-size: 10px; line-height: 1.25; }
 #kartenunten #zombiezahl { font-size: 13px; }
 #kartenbox.gross #kartenoben { font-size: 16px; top: 8px; left: 10px; }
-#kartenbox.gross #kartenunten { font-size: 13px; bottom: 8px; left: 10px; }
+#kartenbox.gross #kartenunten { font-size: 13px; bottom: 30px; left: 10px; }   /* über dem Maßstabsbalken (unten links im Bild, 22 px hoch) */
 #kartenbox.gross #kartenunten #zombiezahl { font-size: 17px; }
 #kartenbox {
   position: relative; width: 180px; display: none; pointer-events: auto;

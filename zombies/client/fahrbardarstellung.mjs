@@ -7,6 +7,7 @@ import { PUMA_SKALA, PUMA_BILD } from './stuetzpunkt.mjs';
 import { boxerBild, boxerFahrzeug } from './boxerdarstellung.mjs';
 import { kettenSpur } from './ketten.mjs';
 import { fetzen } from './effekte.mjs';
+import { weichKreis } from './weichkreis.mjs';
 import * as ton from './ton.mjs';
 
 const winkelDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
@@ -72,9 +73,9 @@ export function pumaFahrbarSchuss(scene, m) {
   scene.muendungsLicht(mx, my, '', 'puma');
   const blitz = scene.add.image(mx, my, 'figuren2', scene.figurBild2('muendungsblitz')).setOrigin(0.5).setBlendMode('ADD').setRotation(m.w ?? w).setScale(0.6).setDepth(7);
   scene.tweens.add({ targets: blitz, alpha: 0, duration: 100, onComplete: () => blitz.destroy() });
-  for (let i = 0; i < 6; i++) {
-    const r = scene.add.circle(mx + (Math.random() - 0.5) * 5, my + (Math.random() - 0.5) * 5, 2.5 + Math.random() * 2.5, 0xbdbdbd, 0.55).setDepth(6.5);
-    scene.tweens.add({ targets: r, x: r.x + c * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, y: r.y + sn * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, alpha: 0, scale: 2.2, duration: 700, onComplete: () => r.destroy() });
+  for (let i = 0; i < 12; i++) {   // Pulverrauch: viele kleine, weiche Teilchen
+    const r = weichKreis(scene, mx + (Math.random() - 0.5) * 5, my + (Math.random() - 0.5) * 5, 1.2 + Math.random() * 1.4, 0xbdbdbd, 0.4).setDepth(6.5), k0 = r.scale;
+    scene.tweens.add({ targets: r, x: r.x + c * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, y: r.y + sn * (5 + Math.random() * 12) + (Math.random() - 0.5) * 8, alpha: 0, scale: k0 * 2.2, duration: 700, onComplete: () => r.destroy() });
   }
   scene.explosion(m.x2, m.y2, 24, 0.45);
   if (m.t) fetzen(scene, m.x2, m.y2, w, 2);

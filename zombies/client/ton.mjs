@@ -188,6 +188,7 @@ let hordeSt = { aktiv: false, pegel: 0, halb: false, nur: false, n: 0 }, akzentS
 export const hordeAktiv = () => hordeSt.aktiv;
 export function toneEinstellungen(i) {
   hordeEin = hordeEinstellung(i?.toeneHorde);
+  if (i && 'geraeuschPause' in i) geraeuschPauseSetzen(i.geraeuschPause);
   const r = i?.radioStream ?? {}, rl = Number(r.laut);
   const url = typeof r.url === 'string' && r.url.startsWith('https://') ? r.url : '';
   if (radioEl && radioEin.url !== url) radioPausieren(true);   // Senderwechsel: beim nächsten Auto neu verbinden
@@ -465,13 +466,18 @@ export function hundBellen(x, y) {
   }
 }
 
+// Mindestpause zwischen zwei Hintergrundgeräuschen (Stöhnen/Grunzen/Kriechen), Backend-Einstellung geraeuschPause (s), Vorgabe 5; 'entdeckt' (pruefen = false) ist ausgenommen
+let geraeuschPauseMs = 5000, letztesHintergrund = -1e9;
+export const geraeuschPauseSetzen = s => { const v = Number(s); geraeuschPauseMs = Number.isFinite(v) && v >= 0 ? v * 1000 : 5000; };
+export const geraeuschPause = () => geraeuschPauseMs;
 export function stoehnen(x, y, laut = 0.5, kriecht = false, pruefen = true) {
   if (pruefen && !zombieTonAn) return;   // Zahnrad: Zombiegeräusche aus (entdeckt ruft mit pruefen=false)
   if (pruefen && !schreiErlaubt(x, y)) return;   // in der Horde: Einzelschreie seltener bzw. nur aus der Nähe
-  if (probe(kriecht ? 'kriecher' : 'stoehnen', x, y, laut * 1.6)) return;
+  if (pruefen && performance.now() - letztesHintergrund < geraeuschPauseMs) return;   // Mindestpause zwischen zwei Hintergrundgeräuschen
+  if (probe(kriecht ? 'kriecher' : 'stoehnen', x, y, laut * 1.6)) { if (pruefen) letztesHintergrund = performance.now(); return; }
   if (!abstandOk('stoehnen')) return;
   const z = ort(x, y, laut); if (!z) return;
-  abstandMerken('stoehnen');
+  abstandMerken('stoehnen'); if (pruefen) letztesHintergrund = performance.now();
   const t = ctx.currentTime, dauer = 0.9 + Math.random() * 0.9, f0 = 75 + Math.random() * 45;
   const o = ctx.createOscillator(); o.type = 'sawtooth';
   o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * (0.7 + Math.random() * 0.25), t + dauer);

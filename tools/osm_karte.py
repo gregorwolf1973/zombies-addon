@@ -304,7 +304,7 @@ for i in haeuser_g:
     if zufall.random() < 0.10: wuensche.append(("pool", 3, 2))
     if zufall.random() < 0.22: wuensche.append(("gartenhaus", 1, 1))
     if zufall.random() < 0.12: wuensche.append(("trampolin", 1, 1))
-    if zufall.random() < 0.30: wuensche.append(("beet", 2, 1))
+    zufall.random()   # Blumenbeete entfallen (0.89); Aufruf bleibt, damit die Zufallsfolge der übrigen Gartenobjekte gleich bleibt
     if zufall.random() < 0.18: wuensche.append(("sitzgruppe", 1, 1))
     for _ in range(zufall.choice((0, 1, 1, 2))): wuensche.append(("obstbaum", 1, 1))
     for art, b, h in wuensche:

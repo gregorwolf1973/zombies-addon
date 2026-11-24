@@ -275,8 +275,8 @@ export async function starte({
     anwenden(neu);
     // Ton-Einstellungen sofort an laufende Spiele (sonst erst nach Neuladen der Seite)
     if ('zombieSicht' in (req.body ?? {})) { try { SpielRaum.aktiv?.broadcast('tonEinst', { zombieSicht: neu.zombieSicht }); } catch { /* kein Raum */ } }
-    if (['radioStream', 'musik', 'toeneHorde', 'toene'].some(k => k in (req.body ?? {}))) {
-      try { SpielRaum.aktiv?.broadcast('tonEinst', { radioStream: neu.radioStream, musik: neu.musik, toeneHorde: neu.toeneHorde, toene: neu.toene }); } catch { /* kein Raum */ }
+    if (['radioStream', 'musik', 'toeneHorde', 'toene', 'geraeuschPause'].some(k => k in (req.body ?? {}))) {
+      try { SpielRaum.aktiv?.broadcast('tonEinst', { radioStream: neu.radioStream, musik: neu.musik, toeneHorde: neu.toeneHorde, toene: neu.toene, geraeuschPause: neu.geraeuschPause }); } catch { /* kein Raum */ }
     }
     res.json(lage());
   });
@@ -350,6 +350,7 @@ export async function starte({
     zombieSicht: datei.werte.zombieSicht,   // Client: Sichtkegel-Anzeige
     helden: { neu: datei.werte.heldenFigurenNeu !== false, aktive: hfAktive(datei.werte.helden?.figuren) },   // Startwahl: neue Mixamo-Helden an/aus und welche wählbar sind (Kennbuchstaben)
     toene: datei.werte.toene,
+    geraeuschPause: datei.werte.geraeuschPause,   // Mindestpause (s) zwischen zwei Zombie-Hintergrundgeräuschen
     toeneHorde: datei.werte.toeneHorde,   // Hordengeräusch: Schwellen und Hörweite (client/hordenlogik.mjs)
     musik: datei.werte.musik,             // Musik: laut (%), blende (s)
     radioStream: datei.werte.radioStream, // Autoradio als Live-Radio (Stream direkt vom Sender)

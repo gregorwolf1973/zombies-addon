@@ -158,8 +158,10 @@ test('richtiges Passwort: Superuser mit ⭐, normaler Spieler daneben kann nicht
   assert.ok(Math.hypot(p.x - m.x, p.y - m.y) < 700, 'vor der Horde: ' + Math.round(Math.hypot(p.x - m.x, p.y - m.y)));
 
   // Unsterblich nur für sich
-  await su(boss, { befehl: 'unsterblich' }); assert.ok(ex(boss).suUnsterblich); assert.ok(!ex(normal).suUnsterblich);
+  assert.ok(ex(boss).suUnsterblich, 'Superuser ist beim Einloggen unsterblich'); assert.ok(!ex(normal).suUnsterblich);
   p.hp = 20; await warte(200); assert.ok(p.hp > 99);
+  await su(boss, { befehl: 'unsterblich' }); assert.ok(!ex(boss).suUnsterblich, 'abschaltbar');
+  await su(boss, { befehl: 'unsterblich' }); assert.ok(ex(boss).suUnsterblich);
   await su(boss, { befehl: 'unsterblich' }); assert.ok(!ex(boss).suUnsterblich);
 
   // Lager fallen / aufbauen
@@ -189,9 +191,11 @@ test('Statusanzeige: Server schickt den Zustand der Umschalter (nur an Superuser
   normal.onMessage('suStatus', m => { stNormal = m; });
   await su(boss, { befehl: 'status' });
   assert.ok(st, 'Status auf Anfrage');
-  assert.equal(st.unsterblich, false); assert.equal(st.zeitraffer, 1);
+  assert.equal(st.unsterblich, true); assert.equal(st.zeitraffer, 1);
   await su(boss, { befehl: 'unsterblich' });
-  assert.equal(st.unsterblich, true); assert.equal(ex(boss).suUnsterblich, true);
+  assert.equal(st.unsterblich, false); assert.equal(ex(boss).suUnsterblich, false);
+  await su(boss, { befehl: 'unsterblich' });
+  assert.equal(st.unsterblich, true);
   await su(boss, { befehl: 'unsterblich' });
   assert.equal(st.unsterblich, false);
   const nebelVorher = st.nebel;

@@ -1,4 +1,4 @@
-// Fahrzeuge und Helden: über stehende/geparkte Autos klettern (20 % Tempo), fahrende Fahrzeuge blockieren und stoßen (Taumeln, leichter Schaden,
+// Fahrzeuge und Helden: über stehende/geparkte Autos klettern (50 % Tempo), fahrende Fahrzeuge blockieren und stoßen (Taumeln, leichter Schaden,
 // nie tödlich); Server und Client-Vorhersage rechnen mit denselben Funktionen (client/fzkollision.mjs)
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { setzeKartengroesse, frei, bewege, WERTE as W } from '../client/welt.mjs';
 import { bereinige, vorgaben } from '../server/einstellungen.mjs';
-import { fzRechtecke, autoTempo, bewegeFz, AUTO_KLETTERN, STOSS_TAUMEL_FAKTOR } from '../client/fzkollision.mjs';
+import { fzRechtecke, autoTempo, aufAuto, KLETTER_RADIUS, bewegeFz, AUTO_KLETTERN, STOSS_TAUMEL_FAKTOR } from '../client/fzkollision.mjs';
 import { Fahrzeug } from '../server/verkehr.mjs';
 import { freierPort } from './hilfe.mjs';
 let fahrzeugZaehler = 0;
@@ -50,7 +50,7 @@ function fahrzeug(raum, art, fx, fy, richtung, haelt) {
   return fz;
 }
 
-test('Parkendes Auto: darüber klettern mit 20 % Tempo statt Durchlaufen', async () => {
+test('Parkendes Auto: darüber klettern mit 50 % Tempo statt Durchlaufen', async () => {
   const { c, raum, p, x } = await beitreten();
   try {
     const ort = freiePlatz(raum.welt);
@@ -61,7 +61,7 @@ test('Parkendes Auto: darüber klettern mit 20 % Tempo statt Durchlaufen', async
     const schritte = [];
     for (let i = 0; i < 200; i++) { const x0 = p.x; raum.kontakt.schritt(0.05); raum.spielerSchritt(c.sessionId, p, x, 0.05); schritte.push([p.x, p.x - x0]); }
     const vor = schritte[1][1];                                          // freier Schritt
-    const drauf = schritte.filter(([px]) => px > ort.x - 18 - 6 && px < ort.x + 18 - 6).map(s => s[1]);   // Kreis (Radius ~6) liegt auf dem Auto
+    const drauf = schritte.filter(([px]) => px > ort.x - 18 && px < ort.x + 18 - 2).map(s => s[1]);   // Kletterzone (Radius 0,3 × 7 px) liegt auf dem Auto
     assert.ok(vor > 1, 'freier Lauf: ' + vor);
     assert.ok(drauf.length >= 6, 'war auf dem Auto: ' + drauf.length);
     const mittel = drauf.slice(1, -1).reduce((a, b) => a + b, 0) / (drauf.length - 2);
@@ -84,7 +84,7 @@ test('Stehendes Fahrzeug (haelt): klettern; fahrendes: blockiert, kein Durchlauf
     x.eingabe = { dx: 1, dy: 0, s: false };
     let langsam = 0;
     for (let i = 0; i < 200; i++) { const x0 = p.x; raum.kontakt.schritt(0.05); raum.spielerSchritt(c.sessionId, p, x, 0.05); if (p.x > ort.x - 15 && p.x < ort.x + 10) langsam = Math.max(langsam, p.x - x0); }
-    assert.ok(langsam > 0 && langsam < 0.6, 'auf dem stehenden Auto langsam: ' + langsam);
+    assert.ok(langsam > 0 && langsam < 1.4, 'auf dem stehenden Auto langsam: ' + langsam);
     assert.ok(p.x > ort.x + 20, 'hinüber gekommen');
     // fahrend: quer zur Laufrichtung (Fahrt nach +y), der Held läuft von der Seite hinein
     raum.state.fahrzeuge.delete([...raum.state.fahrzeuge.keys()][0]);
@@ -175,7 +175,7 @@ test('Steuerung im Taumeln eingeschränkt; Vorhersage (gemeinsame Funktionen) = 
       raum.kontakt.alt.clear();
       const sim = { x: p.x, y: p.y }, tempo = W.tempoGehen;
       x.eingabe = { dx: 1, dy: 0, s: false };
-      for (let i = 0; i < (haelt ? 180 : 40); i++) {
+      for (let i = 0; i < (haelt ? 90 : 40); i++) {
         raum.kontakt.schritt(0.05);
         raum.spielerSchritt(c.sessionId, p, x, 0.05);
         const fz = fzRechtecke(raum.state.fahrzeuge);
@@ -194,4 +194,13 @@ test('Einstellung fahrzeugStoss: Vorgabe 15, 0–100', () => {
   assert.equal(bereinige({ fahrzeugStoss: 0 }, {}).fahrzeugStoss, 0);
   assert.equal(bereinige({ fahrzeugStoss: 40 }, {}).fahrzeugStoss, 40);
   assert.equal(bereinige({}, {}).fahrzeugStoss, 15);
+});
+
+test('Kletterzone: nur wer wirklich am/auf dem Auto steht, klettert (Rand berührt zählt nicht)', () => {
+  const welt = { behaelter: [{ id: 'b', art: 'auto', x: 100, y: 100, winkel: 0 }] };
+  assert.ok(KLETTER_RADIUS < 0.5);
+  assert.equal(aufAuto(welt, null, 100 - 18 - 5, 100, 7), false, '5 px vor der Kante: noch frei');
+  assert.equal(aufAuto(welt, null, 100 - 18 - 1, 100, 7), true, 'direkt an der Kante: klettert');
+  assert.equal(aufAuto(welt, null, 100, 100, 7), true, 'mittendrauf');
+  assert.equal(aufAuto(welt, null, 100, 100 - 8 - 5, 7), false, 'seitlich 5 px daneben: frei');
 });

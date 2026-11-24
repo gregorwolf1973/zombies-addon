@@ -908,6 +908,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <div class="tn-zeile"><input type="range" id="tnUnfallSchaden" min="0" max="100" step="5"><span id="tnUnfallSchadenWert">30</span></div>
   <label for="tnFzStoss">Fahrendes Fahrzeug erfasst einen Helden: größter Schaden (Lebenspunkte, nach Tempo, nie tödlich)</label>
   <div class="tn-zeile"><input type="range" id="tnFzStoss" min="0" max="50" step="1"><span id="tnFzStossWert">15</span></div>
+  <label for="tnGeraeusch">Zombie-Hintergrundgeräusche (Stöhnen/Grunzen): Mindestpause zwischen zwei Geräuschen (Sekunden)</label>
+  <div class="tn-zeile"><input type="range" id="tnGeraeusch" min="0" max="30" step="1"><span id="tnGeraeuschWert">5 s</span></div>
   <label for="tnBlaulicht">Blaulicht-Fahrten (Polizei, Feuerwehr, Sirene)</label>
   <div class="tn-zeile"><select id="tnBlaulicht"><option value="aus">aus</option><option value="selten">selten</option><option value="normal">normal</option></select></div>
   <label class="tn-schalter"><input type="checkbox" id="tnKegel"> Sichtkegel der Zombies anzeigen</label>
@@ -1299,6 +1301,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     feld('tnUnfallExpl', e.unfallExplosion === undefined ? 50 : e.unfallExplosion, function (v) { return v + ' %'; });
     feld('tnUnfallSchaden', e.unfallSchaden === undefined ? 30 : e.unfallSchaden, function (v) { return String(v); });
     feld('tnFzStoss', e.fahrzeugStoss === undefined ? 15 : e.fahrzeugStoss, function (v) { return String(v); });
+    feld('tnGeraeusch', e.geraeuschPause === undefined ? 5 : e.geraeuschPause, function (v) { return v + ' s'; });
     var nb = e.nebel || {};
     if (document.activeElement !== $('tnNebelAn')) $('tnNebelAn').checked = nb.an !== false;
     feld('tnNebelMorgen', nb.morgen === undefined ? 35 : nb.morgen, function (v) { return v + ' %'; });
@@ -1423,6 +1426,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   regler('tnUnfallExpl', function (v) { return v + ' %'; }, function (v) { return { unfallExplosion: v }; });
   regler('tnUnfallSchaden', function (v) { return String(v); }, function (v) { return { unfallSchaden: v }; });
   regler('tnFzStoss', function (v) { return String(v); }, function (v) { return { fahrzeugStoss: v }; });
+  regler('tnGeraeusch', function (v) { return v + ' s'; }, function (v) { return { geraeuschPause: v }; });
   regler('rwPistole', function (v) { return v + ' m'; }, function (v) { return { reichweite: { pistole: v } }; });
   regler('rwGewehr', function (v) { return v + ' m'; }, function (v) { return { reichweite: { gewehr: v } }; });
   regler('rwSchrot', function (v) { return v + ' m'; }, function (v) { return { reichweite: { schrotflinte: v } }; });
@@ -3813,7 +3817,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var zk = ausKarte(karteVon('titelZombies'), '🧟 Zombies');
   if (zk) {
     zeile(zk.inhalt, 'tnZLeben'); rein(zk.inhalt, $('tnZLebenHinweis')); schalter(zk.inhalt, 'tnKegel'); schalter(zk.inhalt, 'tnZFNeu'); schalter(zk.inhalt, 'tnHFNeu');
-    ['tnTZombieJagen', 'tnTZombieWandern', 'tnTHeldGehen', 'tnTHeldSchleichen'].forEach(function (id) { zeile(zk.inhalt, id); }); zeile(zk.inhalt, 'tnBaumTempo'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
+    ['tnTZombieJagen', 'tnTZombieWandern', 'tnTHeldGehen', 'tnTHeldSchleichen'].forEach(function (id) { zeile(zk.inhalt, id); }); zeile(zk.inhalt, 'tnBaumTempo'); zeile(zk.inhalt, 'tnGeraeusch'); schalter(zk.inhalt, 'tnInnen'); zeile(zk.inhalt, 'tnInnenTempo');   // sonst beim Entfernen der Sammelkarte verloren (zeige() brach ab)
     var zs = unter('👁 Zombie-Sicht'); rein(zs.inhalt, $('zsHinweis')); ['zsGehen', 'zsSchleichen', 'zsKegel', 'zsVerfolgen', 'zsAufgeben', 'zsNacht'].forEach(function (id) { zeile(zs.inhalt, id); }); zk.inhalt.appendChild(zs);
     var zfb = $('zfBlock'); if (zfb) { zk.inhalt.appendChild(zfb); rein(zfb, $('zfListe')); }   // 'zfListe' bleibt im Block
     var hfb = $('hfBlock'); if (hfb) { zk.inhalt.appendChild(hfb); rein(hfb, $('hfListe')); }
@@ -3871,7 +3875,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var PFAD = { tempo: 'zombies.tempo', hordeZiel: 'zombies.hordeZiel', hordeTrupp: 'zombies.hordeTrupp', hordeReichweite: 'zombies.hordeReichweite', lagerWelle: 'zombies.lagerWelle', lagerWellePause: 'zombies.lagerWellePause', ueberraschung: 'zombies.ueberraschung', tnNacht: 'zombies.nacht',
     tnTag: 'tagMinuten', tnTagAb: 'tagAb', tnNachtAb: 'nachtAb', tnNachtDunkel: 'nachtDunkel', tnNebelMorgen: 'nebel.morgen', tnNebelAbend: 'nebel.abend', tnNebelSicht: 'nebel.sicht', tnNebelZombie: 'nebel.zombie', tnAutos: 'autos', tnMenschen: 'menschen', tnAnst: 'verwandlung',
     tnBissSpGeretsried: 'bissSpielerLevel.geretsried', tnBissSpIsarauen: 'bissSpielerLevel.isarauen', tnBissSpKoenigsdorf: 'bissSpielerLevel.koenigsdorf', tnBissSpKochel: 'bissSpielerLevel.kochel', tnBissSpAndermatt: 'bissSpielerLevel.andermatt',
-    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnFzStoss: 'fahrzeugStoss', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
+    tnBiss: 'biss', tnFeuer: 'feuer', tnFeuerPhase: 'feuerPhase', tnVerkehr: 'verkehr', tnVerkehrDichte: 'verkehrDichte', tnVerkehrPhase: 'verkehrPhase', tnUnfall: 'unfall', tnUnfallExpl: 'unfallExplosion', tnUnfallSchaden: 'unfallSchaden', tnFzStoss: 'fahrzeugStoss', tnGeraeusch: 'geraeuschPause', tnZLeben: 'zombieLeben', tnMGroesse: 'menschenGroesse', tnZGroesse: 'zombieGroesse', tnGGroesse: 'groesseGesamt',
     rwPistole: 'reichweite.pistole', rwGewehr: 'reichweite.gewehr', rwSchrot: 'reichweite.schrotflinte', rwMp: 'reichweite.mp', rwMg: 'reichweite.mg', rwArmbrust: 'reichweite.armbrust', rwHandgranate: 'reichweite.handgranate', rwScharf: 'reichweite.scharfschuetze', rwGranat: 'reichweite.granatwerfer',
     tnBeuteMoebel: 'beute.moebel', tnPumaPause: 'bundeswehr.pumaPause', tnMgMunition: 'bundeswehr.mgMunition', tnPumaMunition: 'bundeswehr.pumaMunition', tnBwTage: 'bundeswehr.falltage', tnLeoReich: 'bundeswehr.leopardReichweite', tnLeoPause: 'bundeswehr.leopardPause', tnLeoSchaden: 'bundeswehr.leopardSchaden', tnLeoKanonePause: 'bundeswehr.leopardKanonePause', tnLeoKanoneMin: 'bundeswehr.leopardKanoneMin', tnBoxHordeSek: 'bundeswehr.boxerHordeSek', tnBoxHordeMin: 'bundeswehr.boxerHordeMin', tnBoxHordeMax: 'bundeswehr.boxerHordeMax', tnBoxPause: 'bundeswehr.boxerSchussPause', tnBoxReich: 'bundeswehr.boxerReichweite', tnBoxTempo: 'bundeswehr.boxerTempo', tnPumaTempo: 'bundeswehr.pumaTempo', tnLeoTempo: 'bundeswehr.leopardTempo', tnVsTage: 'bundeswehr.versorgungTage', tnVsMun: 'bundeswehr.versorgungMunition', tnVsVerband: 'bundeswehr.versorgungVerband', tnVsSpritze: 'bundeswehr.versorgungSpritze', tnKiMun: 'bundeswehr.kistenMunChance', tnKiMunMin: 'bundeswehr.kistenMunMin', tnKiMunMax: 'bundeswehr.kistenMunMax', tnKiVerband: 'bundeswehr.kistenVerbandChance', tnKiGranate: 'bundeswehr.kistenGranateChance',
     tnHundAblenk: 'hund.ablenkung', tnHundStreuner: 'hund.streuner', tnBaumTempo: 'baumTempo', tnTHeldGehen: 'tempoHeldGehen', tnTHeldSchleichen: 'tempoHeldSchleichen', tnTZombieJagen: 'tempoZombieJagen', tnTZombieWandern: 'tempoZombieWandern',

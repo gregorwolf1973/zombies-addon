@@ -1,11 +1,12 @@
 // Fahrzeuge als Hindernisse für Figuren (Server UND Client-Vorhersage rechnen mit denselben Funktionen, ARCHITEKTUR.md):
 //  - parkende/stehende Fahrzeuge (geparkte Autos der Welt = welt.behaelter 'auto', Fahrzeuge mit haelt = Wracks, wartende Autos, Stau): man steigt
-//    langsam darüber (20 % Tempo, AUTO_KLETTERN) statt hindurchzulaufen;
+//    langsam darüber (50 % Tempo, AUTO_KLETTERN) statt hindurchzulaufen;
 //  - fahrende Fahrzeuge (haelt = false): blockieren den Spielerkreis (Kreis gegen gedrehtes Rechteck); ihr Stoß: server/fahrzeugkontakt.mjs.
 // Maße in Pixeln (8 px = 1 m). Nur + − × ÷ und Math.sqrt/cos/sin für die Ausrichtung (Laufzeitlogik, keine Weltdaten).
 import { FAHRBAR } from './fahrbar.mjs';
 
-export const AUTO_KLETTERN = 0.2;                 // Tempo auf einem stehenden Fahrzeug (Anteil)
+export const AUTO_KLETTERN = 0.5;                 // Tempo auf einem stehenden Fahrzeug (Anteil; bis 0.88: 0.2)
+export const KLETTER_RADIUS = 0.3;                // Kletterzone: nur der Mittelpunkt-Bereich der Figur zählt (Anteil des Kreisradius), erst wer wirklich am/auf dem Auto steht, klettert (0.89)
 export const STOSS_TAUMEL_FAKTOR = 0.4;           // Steuerung während des Taumelns (Anteil der Eingabe)
 const ZELLE = 64;
 const PARK = { hl: 18, hb: 8 };                   // geparkter Pkw 4,5 × 2,0 m
@@ -65,8 +66,9 @@ export function fzRechtecke(fahrzeuge, richtungVon = f => f.richtung ?? 0) {
 }
 
 // liegt der Kreis auf einem stehenden Fahrzeug (Liste aus fzRechtecke) oder einem geparkten Auto?
-export function aufAuto(welt, fz, x, y, rad) {
+export function aufAuto(welt, fz, x, y, rad0) {
   if (welt.kachel || welt.ebene) return false;
+  const rad = rad0 * KLETTER_RADIUS;
   if (aufParkAuto(welt, x, y, rad)) return true;
   if (fz) for (const r of fz.steht) if (Math.abs(x - r.x) <= r.hl + rad + 2 && Math.abs(y - r.y) <= r.hl + rad + 2 && kreisImRechteck(r, x, y, rad)) return true;
   return false;
