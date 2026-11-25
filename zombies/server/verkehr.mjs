@@ -32,6 +32,10 @@ export const LAENGE = { pkw: 36, auto: 36, laster: 72, bus: 96, evakuierung: 96,
 export const BREITE_FZ = { pkw: 16, auto: 16, laster: 23, bus: 22, evakuierung: 22, polizei: 16, feuerwehr: 22, boxer: 24, puma: 30, leopard: 30 };   // Fahrzeugbreite in Pixeln (Abstandsprüfung)
 const SCHIEBBAR = new Set(['auto', 'laster', 'polizei', 'feuerwehr', 'bus', 'wrack']);   // diese Fahrzeuge schiebt ein festgefahrenes Fahrzeug zur Seite (nicht Panzer/Evakuierung/Mörser)
 const STAU_WENDEN = 8, STAU_SCHIEBEN = 15, STAU_WEG = 40;   // Sekunden Stillstand bis Wenden / Schieben / (unbeobachtet) Verschwinden
+// Vorrang der Evakuierung: Verkehr, der dem Evakuierungsfahrzeug im Weg steht, wird nach STAU_VORRANG s Stillstand zur Seite geschoben
+// und nach STAU_VORRANG_WEG s (oder ohne Platz zum Schieben) aus dem Weg genommen – auch wenn jemand zusieht (Linienbus: nächste Haltestelle)
+const STAU_VORRANG = 2, STAU_VORRANG_WEG = 6;
+const WEICHT = new Set(['auto', 'laster', 'polizei', 'feuerwehr', 'bus']);   // Verkehr (mit Verkehrs-Info), der der Evakuierung ausweicht
 const SCHUB = 45;                                          // Tempo (px/s), mit dem ein Hindernis zur Seite geschoben wird
 const KREUZ_ZELLE = 64;
 // Fahrzeuge fahren Zombies um (Fußabdruck des Fahrzeugs, nur fahrende Fahrzeuge; Zombies per Raster des Raums, Fahrzeuge bremsen nicht dafür)
@@ -531,7 +535,7 @@ export class Verkehr {
       if (vor <= 0 || d > halte + 14 || quer > 30) continue;
       const gruppe = [k, ...(k.gruppe ?? [])];
       const gegner = gruppe.flatMap(g => this.kreuzHalter(g.id, id)).find(g => winkelUnterschied(g.f.richtung, f.richtung) > 0.7);
-      if (gegner && !inf.kreuzFrei) {
+      if (gegner && !inf.kreuzFrei && !inf.evakuierung) {   // die Evakuierung hat an Kreuzungen immer Vorfahrt (der Korridor schützt vor Überlappung)
         // gegenseitiges Warten > 3 s: das Fahrzeug mit der kleineren Nummer fährt
         if ((inf.kreuzWarte ?? 0) > 3 && (gegner.inf.steht ?? 0) > 3 && (inf.nr ?? 0) < (gegner.inf.nr ?? 0)) { for (const g of gruppe) (inf.kreuz ??= new Map()).set(g.id, true); continue; }
         wartet = true; gegnerId = gegner.id;
@@ -548,6 +552,9 @@ export class Verkehr {
   festgefahren(id, f, inf, lauf, dt) {
     inf.steht = (inf.steht ?? 0) + dt;
     inf.blechUhr = (inf.blechUhr ?? 0) - dt;
+    if (inf.evakuierung && this.vorrang(f, inf, lauf, dt)) return;
+    // vom (stehenden) Evakuierungsfahrzeug blockiert: nach dem Wenden spätestens nach STAU_WEG aus dem Weg, auch wenn jemand zusieht
+    if (inf.steht >= STAU_WEG && lauf.hindernis && this.info.get(lauf.hindernis.oid)?.evakuierung && WEICHT.has(f.art)) { this.ausDemWeg(id, f, inf, lauf.hindernis.o); return; }
     if (inf.steht >= STAU_WENDEN && !inf.gewendet) { inf.gewendet = true; this.wenden(id, f, inf); return; }
     if (inf.steht >= STAU_SCHIEBEN) {
       if (lauf.hindernis && lauf.hindernis.luecke < 12) {
@@ -562,6 +569,41 @@ export class Verkehr {
       const s = this.raum.state;
       if (![...s.spieler.values()].some(p => !p.ebene && Math.hypot(p.x - f.x, p.y - f.y) < 700)) { s.fahrzeuge.delete(id); this.info.delete(id); }
     }
+  }
+
+  // Evakuierungsfahrzeug `f` steht vor einem Hindernis: Verkehr kurz warten lassen, dann zur Seite schieben, notfalls aus dem Weg nehmen.
+  // true = erledigt (kein Wenden des Evakuierungsfahrzeugs); false = kein Verkehr im Weg (dann wie jedes Fahrzeug: wenden usw.)
+  vorrang(f, inf, lauf, dt) {
+    const h = lauf.hindernis;
+    if (!h || inf.flugzeug) return false;
+    const oi = this.info.get(h.oid), weicht = !!oi && !oi.evakuierung && WEICHT.has(h.o.art);
+    if (!weicht && !SCHIEBBAR.has(h.o.art)) return false;
+    if (inf.steht < STAU_VORRANG) return true;
+    if (weicht && inf.steht >= STAU_VORRANG_WEG) { this.ausDemWeg(h.oid, h.o, oi, f); inf.steht = 0; return true; }
+    if (this.schieben(f, h.o, dt, inf)) {
+      if (inf.blechUhr <= 0) { inf.blechUhr = 1.2; this.raum.broadcast('blech', { x: h.o.x, y: h.o.y }); }
+      return true;
+    }
+    if (weicht) { this.ausDemWeg(h.oid, h.o, oi, f); inf.steht = 0; return true; }
+    return false;   // Wrack ohne Platz zum Schieben: wenden wie sonst
+  }
+
+  // Verkehrsfahrzeug `oid` macht der Evakuierung (`vor`) Platz: der Linienbus springt zur nächsten Haltestelle, die weit genug weg liegt
+  // (Mitfahrer steigen dort wie gewohnt aus), alle anderen verschwinden.
+  ausDemWeg(oid, o, oi, vor) {
+    const s = this.raum.state;
+    if (o.art === 'bus' && oi?.linie?.length) {
+      const n = oi.linie.length, abst = st => Math.hypot(oi.linie[st].knoten.x - vor.x, oi.linie[st].knoten.y - vor.y);
+      let st = -1;
+      for (let k = 1; k <= n && st < 0; k++) if (abst((oi.stopp + k) % n) >= 300) st = (oi.stopp + k) % n;
+      if (st < 0) for (let k = 0; k < n; k++) if (st < 0 || abst(k) > abst(st)) st = k;
+      const kn = oi.linie[st].knoten;
+      o.x = kn.x; o.y = kn.y; o.haelt = true;
+      Object.assign(oi, { stopp: st, weg: null, pos: 0, halt: 8, steht: 0, gewendet: false, kreuz: null, kreuzFrei: false, kreuzWarte: 0, schubSeite: undefined, hindernis: null });
+      this.raum.stadt?.busHalt(oi, oi.linie[st]);
+      return;
+    }
+    s.fahrzeuge.delete(oid); this.info.delete(oid);
   }
 
   // Rückwärts auf einen anderen Weg: Route vom Knoten hinter dem Fahrzeug unter Meidung der Knoten vor ihm
