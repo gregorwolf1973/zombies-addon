@@ -5,6 +5,7 @@
 // Explosion mit 5 m Radius und hohem Flächenschaden (nach außen schwächer, Spieler nie verletzt). Nie schießen, wenn ein Spieler oder
 // Mensch im Sicherheitsradius um den Einschlag steht (Zielwahl: server/zielwahl.mjs).
 import { LEOPARD } from '../client/evak.mjs';
+import { sichtfrei } from '../client/welt.mjs';
 import { PX, gefaehrdet, haufenZiel } from './zielwahl.mjs';
 import { bewege, WERTE as W } from '../client/welt.mjs';
 
@@ -64,7 +65,7 @@ export class Leopard {
     if (e.kanone && this.kuehlK <= 0) {
       if (this.scanT <= 0) {
         this.scanT = KANONE.scan;
-        this.kz = haufenZiel(s, pv, { rmin: KANONE.reichweiteMin * PX, rmax: KANONE.reichweiteMax * PX, R: KANONE.haufenRadius * PX, min: e.kanoneMin, sicher: KANONE.sicherheit * PX });
+        this.kz = haufenZiel(s, pv, { rmin: KANONE.reichweiteMin * PX, rmax: KANONE.reichweiteMax * PX, R: KANONE.haufenRadius * PX, min: e.kanoneMin, sicher: KANONE.sicherheit * PX, sicht: (x, y) => sichtfrei(r.welt, pv.x, pv.y, x, y) });
       }
     } else this.kz = null;
     // Lader-MG: nächster Zombie in Reichweite
@@ -72,7 +73,7 @@ export class Leopard {
     for (const [id, z] of s.zombies) {
       if (z.ebene || !(z.hp > 0)) continue;
       const d = Math.hypot(z.x - pv.x, z.y - pv.y);
-      if (d < bd) { bd = d; mz = [id, z]; }
+      if (d < bd && sichtfrei(r.welt, pv.x, pv.y, z.x, z.y)) { bd = d; mz = [id, z]; }   // MG nur mit freier Sichtlinie
     }
     const kw = this.kz ? Math.atan2(this.kz.y - pv.y, this.kz.x - pv.x) : null;
     const zielW = kw ?? (mz ? Math.atan2(mz[1].y - pv.y, mz[1].x - pv.x) : f.richtung);
@@ -112,7 +113,7 @@ export class Leopard {
     for (const [id, z] of [...s.zombies]) {
       if (z.ebene) continue;
       const d = Math.hypot(z.x - ziel.x, z.y - ziel.y);
-      if (d > R) continue;
+      if (d > R || !sichtfrei(r.welt, ziel.x, ziel.y, z.x, z.y)) continue;   // Wände schirmen die Druck-/Splitterwirkung ab
       const sch = Math.max(1, Math.round(KANONE.schaden * (1 - 0.5 * d / R)));
       if (sch >= z.hp) z.kriecht = true;   // ein Treffer, der ihn erledigt, lässt ihn nicht mehr kriechen
       r.schaden(id, z, sch, von);

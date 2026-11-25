@@ -11,7 +11,7 @@ export function gefaehrdet(s, x, y, R) {
 
 // bester Einschlagpunkt: Schwerpunkt des Zombies mit den meisten Nachbarn im Haufenradius R (px), mindestens `min` Zombies,
 // Entfernung vom Punkt `von` zwischen rmin und rmax (px), Sicherheitsradius `sicher` (px) frei; sonst null. Ergebnis { x, y, n, d }
-export function haufenZiel(s, von, { rmin, rmax, R, min, sicher }) {
+export function haufenZiel(s, von, { rmin, rmax, R, min, sicher, sicht }) {
   const liste = [];
   for (const z of s.zombies.values()) if (!z.ebene && z.hp > 0) liste.push(z);
   let best = null;
@@ -22,7 +22,7 @@ export function haufenZiel(s, von, { rmin, rmax, R, min, sicher }) {
     for (const q of liste) if (Math.hypot(q.x - z.x, q.y - z.y) <= R) { n++; sx += q.x; sy += q.y; }
     if (n < min) continue;
     const x = sx / n, y = sy / n, dd = Math.hypot(x - von.x, y - von.y);
-    if (dd < rmin || dd > rmax || gefaehrdet(s, x, y, sicher)) continue;
+    if (dd < rmin || dd > rmax || gefaehrdet(s, x, y, sicher) || (sicht && !sicht(x, y))) continue;
     if (!best || n > best.n || (n === best.n && dd < best.d)) best = { x, y, n, d: dd };
   }
   return best;

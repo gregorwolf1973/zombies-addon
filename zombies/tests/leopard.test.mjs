@@ -14,6 +14,7 @@ import { freierPort } from './hilfe.mjs';
 // ---------- Einheiten mit einem Spielraum-Ersatz ----------
 function attrappe() {
   const nachrichten = [], r = {
+    welt: { hole: () => 0 },   // offenes Gelände (Wiese): Sichtlinie immer frei
     state: { zombies: new Map(), spieler: new Map(), menschen: new Map(), besiegt: 0 },
     rnd: () => 0, broadcast: (typ, m) => nachrichten.push({ typ, ...m }), laerm() {},
     schaden(id, z, menge) { z.hp -= menge; if (z.hp <= 0) r.state.zombies.delete(id); },

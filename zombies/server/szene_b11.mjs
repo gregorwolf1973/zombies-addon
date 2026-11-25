@@ -195,7 +195,7 @@ export class SzeneB11 {
     r.broadcast('b11schuss', { art: 'kanone', x1: p.x, y1: p.y, x2: ix, y2: iy, w: p.turm, t: 1 });
     this.treffen(p.ziel, z, KANONE_SCHADEN, p);
     for (const [id, q] of [...r.state.zombies]) {
-      if (id === p.ziel || q.ebene || Math.hypot(q.x - ix, q.y - iy) > KANONE_RADIUS) continue;
+      if (id === p.ziel || q.ebene || Math.hypot(q.x - ix, q.y - iy) > KANONE_RADIUS || !this.sicht(ix, iy, q.x, q.y)) continue;
       this.treffen(id, q, KANONE_FLAECHE, p);
     }
     r.laerm(p.x, p.y, PUMA_LAERM, true, '');

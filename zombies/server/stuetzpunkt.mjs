@@ -655,7 +655,7 @@ export class Stuetzpunkt {
     r.broadcast('bwschuss', { art: 'kanone', n: p.n, x1: p.x, y1: p.y, x2: ix, y2: iy, w: s.bwTurm, t: 1 });
     this.treffen(p.ziel, z, KANONE_SCHADEN, p);
     for (const [id, q] of [...s.zombies]) {
-      if (id === p.ziel || q.ebene || Math.hypot(q.x - ix, q.y - iy) > KANONE_RADIUS) continue;
+      if (id === p.ziel || q.ebene || Math.hypot(q.x - ix, q.y - iy) > KANONE_RADIUS || !this.sicht(ix, iy, q.x, q.y)) continue;
       this.treffen(id, q, KANONE_FLAECHE, p);
     }
     r.laerm(p.x, p.y, PUMA_LAERM, true, '');

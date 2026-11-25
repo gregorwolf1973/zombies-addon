@@ -853,7 +853,7 @@ export function bewege(welt, obj, dx, dy, rad, frei = freiStandard) {
 // Freie Sichtlinie zwischen zwei Punkten (Wände und Bäume verdecken)
 export function sichtfrei(welt, x1, y1, x2, y2) {
   const K = welt.kachel ?? KACHEL;
-  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (K / (welt.kachel ? 1 : 3)));
+  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (K / 3));
   for (let i = 1; i < n; i++) {
     const x = x1 + (x2 - x1) * i / n, y = y1 + (y2 - y1) * i / n;
     const t = welt.hole(Math.floor(x / K), Math.floor(y / K));
@@ -867,7 +867,7 @@ export function sichtfrei(welt, x1, y1, x2, y2) {
 export const BAUM_SICHT = 0.8, BAUM_SICHT_MIN = 0.3;
 export function sichtGuete(welt, x1, y1, x2, y2) {
   const K = welt.kachel ?? KACHEL;
-  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (K / (welt.kachel ? 1 : 3)));
+  const d = Math.hypot(x2 - x1, y2 - y1), n = Math.ceil(d / (K / 3));
   const k1 = Math.floor(x1 / K) + ',' + Math.floor(y1 / K), k2 = Math.floor(x2 / K) + ',' + Math.floor(y2 / K);
   const baeume = new Set();
   for (let i = 1; i < n; i++) {

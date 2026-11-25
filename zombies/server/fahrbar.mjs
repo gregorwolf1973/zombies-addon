@@ -3,7 +3,7 @@
 // Server ist maßgeblich (Fahren, Kollision, Schießen); der Client zeichnet nur (client/fahrbardarstellung.mjs, client/boxerdarstellung.mjs).
 // Es können mehrere Fahrzeuge verschiedener Art gleichzeitig stehen: der Boxer am Flugfeld (server/boxer.mjs, mit Horde) und beliebig viele
 // Superuser-/Schießstand-Fahrzeuge (`Fahrbare`, ohne Horde). Die Spielerfelder anBord/imBoxer gelten für alle Arten („sitzt in einem Fahrzeug“).
-import { frei, kmhZuPx, WERTE as W } from '../client/welt.mjs';
+import { frei, kmhZuPx, sichtfrei, WERTE as W } from '../client/welt.mjs';
 import { FAHRBAR, FAHRBAR_EINSTIEG, FAHRBAR_PLAETZE, fahrbarNah } from '../client/fahrbar.mjs';
 import { Fahrzeug } from './verkehr.mjs';
 import { Leopard, leopardEinst, turmDrehen, winkelDiff } from './leopard.mjs';
@@ -246,7 +246,7 @@ export class Fahrbar {
     for (const [id, z] of this.raum.state.zombies) {
       if (z.ebene || !(z.hp > 0)) continue;
       const d = Math.hypot(z.x - pv.x, z.y - pv.y);
-      if (d < bd) { bd = d; mz = [id, z]; }
+      if (d < bd && sichtfrei(this.raum.welt, pv.x, pv.y, z.x, z.y)) { bd = d; mz = [id, z]; }   // nur mit freier Sichtlinie (keine Hauswand dazwischen)
     }
     return mz;
   }
@@ -306,7 +306,7 @@ export class FahrbarPuma extends Fahrbar {
     this.von.x = m.x; this.von.y = m.y;
     r.schaden(id, z, W.schaden, this.von);
     for (const [qid, q] of [...s.zombies]) {
-      if (qid === id || q.ebene || !(q.hp > 0) || Math.hypot(q.x - ix, q.y - iy) > W.radius) continue;
+      if (qid === id || q.ebene || !(q.hp > 0) || Math.hypot(q.x - ix, q.y - iy) > W.radius || !sichtfrei(r.welt, ix, iy, q.x, q.y)) continue;   // Wände schirmen den Flächenschaden ab
       r.schaden(qid, q, W.flaeche, this.von);
     }
     s.besiegt = vorher;   // zählt nicht für die Aufgaben der Spieler
