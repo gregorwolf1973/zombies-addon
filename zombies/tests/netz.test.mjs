@@ -44,7 +44,7 @@ test('Eingabe-Stücke: Server läuft genau die gemeldete Dauer, bestätigt die N
     assert.ok(ort, 'keine freie Strecke');
     raum.state.zombies.clear(); raum.zombieInfo.clear();
     p.x = ort.x; p.y = ort.y; p.ebene = ''; p.infektion = 0; p.zombie = 0; p.unten = false; p.waffe = ''; p.rucksack.clear();
-    await warte(150);
+    await warte(800);   // Zeitguthaben für 0,5 s Eingabe ansparen (langsame CI-Rechner: 150 ms reichten nicht)
     const x0 = p.x;
     // 10 Stücke à 0,05 s auf einmal (wie nach einem Netz-Hänger): alles wird nachgeholt
     for (let n = 1; n <= 10; n++) a.send('eingabe', { dx: 1, dy: 0, s: false, n, d: 0.05 });
