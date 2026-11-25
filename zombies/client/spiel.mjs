@@ -1075,10 +1075,10 @@ class Ort extends Phaser.Scene {
     this.load.spritesheet('hund', 'grafik/hund.webp', { frameWidth: 100, frameHeight: 100 });   // Begleiter-Hund (harrison-lord, CC-BY 3.0)
     this.load.json('hundliste', 'grafik/hund.json');
     this.load.image('autos', 'grafik/autos.webp');
-    this.load.image('puma-wanne-bild', 'grafik/puma_wanne.webp');   // Draufsicht aus dem 3D-Modell (Bug rechts)
+    this.load.image('puma-wanne-bild', 'grafik/puma_wanne.webp');   // Draufsicht aus dem eigenen 3D-Modell (Bug rechts, tools/panzer_modell)
     this.load.image('puma-turm-bild', 'grafik/puma_turm.webp');
     this.load.json('autosliste', 'grafik/autos.json');
-    evakLaden(this);   // Leopard 2A7, A400M (Draufsichten, siehe grafik/LIZENZ.txt)
+    evakLaden(this);   // Leopard 2A7 (eigenes Modell), A400M (Draufsichten, siehe grafik/LIZENZ.txt)
     boxerLaden(this);  // Radpanzer Boxer (Königsdorf)
     this.load.image('moebel', 'grafik/moebel.webp');
     this.load.json('moebelliste', 'grafik/moebel.json');
@@ -2094,7 +2094,7 @@ class Ort extends Phaser.Scene {
     const t = this.textures.createCanvas(key, breit, hoch), c = t.getContext();
     if (FAHRBAR[art]) { c.fillStyle = '#4a5a3a'; c.fillRect(0, 1, breit, hoch - 2); c.fillStyle = '#35422b'; c.fillRect(breit * 0.35, 6, breit * 0.28, hoch - 12); }   // Ersatz ohne Bilder
     else if (panzer) {
-      // Puma-Draufsicht aus dem 3D-Modell (Wanne + Turm nach vorn), Bug nach rechts wie bei allen Fahrzeugen; Wanne 7,3 m = 58 px lang
+      // Puma-Draufsicht aus dem eigenen 3D-Modell (Wanne + Turm nach vorn), Bug nach rechts wie bei allen Fahrzeugen; Wanne 7,3 m = 58 px lang
       const m = this.pumaMasse(fzPx('puma')[0]), wb = this.textures.get('puma-wanne').getSourceImage(), tb = this.textures.get('puma-turm').getSourceImage();
       c.save(); c.translate(breit / 2, hoch / 2); c.scale(m.skala, m.skala); c.drawImage(wb, -wb.width / 2, -wb.height / 2);
       c.translate(PUMA_BILD.turmX * PUMA_BILD.px, PUMA_BILD.turmY * PUMA_BILD.px); c.drawImage(tb, -PUMA_BILD.turmMx - m.R, -PUMA_BILD.turmMy - m.R); c.restore();
@@ -3171,7 +3171,7 @@ class Ort extends Phaser.Scene {
     if (!sp) return;
     const pumaT = sp.teile.find(t => t.art === 'puma');
     if (pumaT) {
-      // Wanne und Turm als eigene Bilder (Draufsicht aus dem 3D-Modell); der Puma fährt (bwX, bwY, bwW), der Turm dreht (bwTurm)
+      // Wanne und Turm als eigene Bilder (Draufsicht aus dem eigenen 3D-Modell); der Puma fährt (bwX, bwY, bwW), der Turm dreht (bwTurm)
       // und sitzt wie im Original links hinter der Mitte (Versatz dreht mit der Wanne, siehe pumaTurmSetzen)
       const m = this.pumaMasse(pumaT.laenge), tb = this.textures.get('puma-turm').getSourceImage(), k = PUMA_SKALA * m.f;
       o.pumaVersatz = { x: PUMA_BILD.turmX * k, y: PUMA_BILD.turmY * k };

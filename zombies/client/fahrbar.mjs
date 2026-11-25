@@ -6,7 +6,7 @@ import { fzPx } from './masse.mjs';
 import { PUMA_SKALA, PUMA_BILD } from './stuetzpunkt.mjs';
 
 const [PUMA_L, PUMA_B] = fzPx('puma');
-const PUMA_K = PUMA_SKALA * PUMA_L / PUMA_BILD.laenge;   // Spielpixel je Modelleinheit (wie in der Darstellung des Lager-Pumas)
+const PUMA_K = PUMA_SKALA * PUMA_L / PUMA_BILD.laenge;   // Spielpixel je Modellmeter (wie in der Darstellung des Lager-Pumas)
 
 // je Art: Anzeigename, Wannenmaße und Turmdrehpunkt im Wannen-Rahmen (vorn, rechts); muendung = Rohrende vor dem Turmdrehpunkt
 export const FAHRBAR = {

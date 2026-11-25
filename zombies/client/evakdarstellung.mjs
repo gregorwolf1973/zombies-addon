@@ -12,7 +12,7 @@ const TAU = Math.PI * 2;
 const winkelDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 
 export function evakLaden(scene) {
-  scene.load.image('leopard-wanne', 'grafik/leopard_wanne.webp');   // Draufsichten aus dem 3D-Modell (Bug rechts), siehe grafik/LIZENZ.txt
+  scene.load.image('leopard-wanne', 'grafik/leopard_wanne.webp');   // Draufsichten aus dem eigenen 3D-Modell (Bug rechts, tools/panzer_modell)
   scene.load.image('leopard-turm', 'grafik/leopard_turm.webp');
   scene.load.image('a400m-rumpf', 'grafik/a400m_rumpf.webp');
   scene.load.image('a400m-prop', 'grafik/a400m_prop.webp');

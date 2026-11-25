@@ -5,11 +5,11 @@ import { frei } from './welt.mjs';
 export const EVAK_KARTEN = { isarauen: 'panzer', koenigsdorf: 'absturz', kochel: 'heli', andermatt: 'bunker' };            // Evakuierungsart je Karte (nicht aufgeführt = Bus)
 export const evakArtFuer = karte => EVAK_KARTEN[karte] ?? 'bus';
 
-// Leopard 2A7: Wanne 7,7 m = 61,6 px lang, 3,75 m = 30 px breit (Bild: tools/leopard_bilder.py, 8 px je Meter -> 7,95 Spielpixel je Modellmeter;
-// früher 1,83-fach zu groß mit 113 px), Turmdrehpunkt 8,1 px vor der Wannenmitte, Lader-MG (Knoten Axe_Canon_02) im Turm-Rahmen (nach vorn, nach rechts)
+// Leopard 2A7: Wanne 7,7 m = 61,6 px lang, 3,75 m = 30 px breit (Bilder aus dem eigenen Modell tools/panzer_modell/leopard.mjs, 80/3 Bildpunkte
+// je Meter -> Skala 0,3 = 8 Spielpixel je Meter), Turmdrehpunkt 8,1 px vor der Wannenmitte, Ladeschütze mit MG im Turm-Rahmen (nach vorn, nach rechts)
 export const LEOPARD = {
-  laenge: 61.6, breite: 30, skala: 0.3013,                 // Wannenbild: Spielpixel je Bildpunkt
-  turmX: 8.1, turmY: 0, turmOx: 0.392, turmOy: 0.490,      // Drehpunkt im Turmbild (Anteile)
+  laenge: 61.6, breite: 30, skala: 0.3,                    // Wannenbild: Spielpixel je Bildpunkt
+  turmX: 8.1, turmY: 0, turmOx: 110.67 / 272, turmOy: 54.67 / 109,   // Drehpunkt im Turmbild (Anteile; Turmbild 272 × 109 px)
   mgX: -4.1, mgY: -7.5,
   kommandantX: -0.5, kommandantY: 6,                       // Lukenplätze im Turm-Rahmen: Kommandant rechts hinten, Ladeschütze (mit MG) links
   muendung: 48.5,                                          // Rohrende: so weit vor dem Turmdrehpunkt (Rohr ragt gut 3 m über die Wanne, gesamt ~10,9 m)
