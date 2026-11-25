@@ -358,14 +358,12 @@
   },
   "durchsageLevel1": {
    "dateien": [
-    "eilmeldung_geretsried_mann.mp3",
-    "eilmeldung_geretsried_frau.mp3"
+    "eilmeldung_allgemein.mp3"
    ]
   },
   "durchsageLevel2": {
    "dateien": [
-    "eilmeldung_geretsried_mann.mp3",
-    "eilmeldung_geretsried_frau.mp3"
+    "eilmeldung_allgemein.mp3"
    ]
   },
   "autoradio": {
@@ -471,8 +469,8 @@
   "voll": 35
  },
  "radioStream": {
-  "an": true,
-  "url": "https://dispatcher.rndfnk.com/br/br3/live/mp3/mid",
-  "name": "Bayern 3"
+  "an": false,
+  "url": "",
+  "name": ""
  }
 }

@@ -629,7 +629,7 @@ export function knistern(x, y, staerke = 1) {
 
 // ---------- Sirene: läuft dauernd, solange das Fahrzeug da ist; Lautstärke, Richtung und Tonhöhe folgen der Entfernung ----------
 // Mit zugeordneter Datei (Ereignis „Sirene“) als Schleife, sonst ein erzeugtes Martinshorn (a' 440 Hz / d'' 587 Hz).
-// ---------- Autoradio als Live-Radio (Einstellung radioStream, z. B. Antenne Bayern) ----------
+// ---------- Autoradio als Live-Radio (Einstellung radioStream, Sender trägt der Betreiber ein) ----------
 // Ein gemeinsames <audio> holt den Stream direkt beim Sender (CORS erlaubt); jedes Auto mit Radio bekommt einen eigenen
 // Lautstärke-/Richtungszweig (wie die Sirene). Ohne Autos mit Radio wird der Stream nach 5 s getrennt (spart Datenvolumen).
 let radioEin = { an: false, url: '', laut: 60, vorlauf: 30 };
@@ -694,7 +694,7 @@ function durchsagePruefen(h) {
   if (!radioEin.durchsage || durchsageLaeuft || jetzt < radioStummBis) return;
   if (!durchsageNaechste) { durchsageNaechste = jetzt + 20000; return; }
   if (jetzt < durchsageNaechste) return;
-  const t = zuordnung['durchsageLevel' + aktLevel], liste = t?.dateien ?? [];   // kein Rückfall auf andere Level (Ortsname!)
+  const t = zuordnung['durchsageLevel' + aktLevel], liste = t?.dateien ?? [];   // kein Rückfall auf andere Level
   if (!liste.length) return;
   durchsageNr = (durchsageNr + 1) % liste.length;   // mehrere Aufnahmen: abwechselnd
   const datei = liste[durchsageNr];

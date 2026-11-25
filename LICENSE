@@ -19,3 +19,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+Hinweis zum Geltungsbereich / Scope note
+
+Die MIT-Lizenz oben gilt ausschliesslich fuer den Quellcode dieses Projekts.
+Grafiken (insbesondere aus Mixamo-Figuren gerenderte Bilder), Kartendaten
+(OpenStreetMap, Bayerische Vermessungsverwaltung, swisstopo), Toene, Texte und
+sonstige Fremdinhalte unterliegen ihren eigenen Lizenzen, siehe CREDITS.md.
+Die aus Mixamo-Figuren gerenderten Bilder duerfen nicht separat als
+Grafikpaket weiterverwendet oder weiterverbreitet werden.
+
+The MIT License above applies to the source code only. Graphics (in particular
+images rendered from Mixamo characters), map data, sounds, texts and other
+third-party content are subject to their own licenses; see CREDITS.md. Images
+rendered from Mixamo characters must not be reused or redistributed separately.

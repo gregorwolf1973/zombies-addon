@@ -39,7 +39,7 @@ export const WAFFEN_VORGABE = Object.fromEntries(Object.entries(WAFFEN).map(([w,
 export const HORDE_TON_VORGABE = { ab: 8, nurHorde: 20, voll: 40, aus: 5, hoerweite: 30 };   // Hordengeräusch: Zombies in Hörweite (Meter), siehe client/hordenlogik.mjs
 export const MUSIK_VORGABE = { laut: 35, blende: 3 };
 // Autoradio als Live-Radio: Jedes Gerät holt den Stream direkt beim Sender (nicht über diesen Server); an = statt der Autoradio-Datei
-export const RADIO_STREAM_VORGABE = { an: false, url: 'https://stream.antenne.de/antenne', name: 'Antenne Bayern', laut: 60, vorlauf: 30, durchsage: 4 };   // durchsage: alle … Minuten Eilmeldung (0 = aus)   // vorlauf: s stumm ab Spielbeginn (Senderwerbung am Anfang)   // Musik-Lautstärke in %, Überblendzeit in Sekunden
+export const RADIO_STREAM_VORGABE = { an: false, url: '', name: '', laut: 60, vorlauf: 30, durchsage: 4 };   // durchsage: alle … Minuten Eilmeldung (0 = aus)   // vorlauf: s stumm ab Spielbeginn (Senderwerbung am Anfang)   // Musik-Lautstärke in %, Überblendzeit in Sekunden
 // Vorbelegung (nur wenn die Dateien im Tonordner liegen und dem Ereignis noch nichts zugeordnet ist, siehe server/index.mjs)
 export const TON_STANDARD = {
   funkAnsage: { dateien: ['funk_abholung.mp3'], laut: 100 },   // Sprachansage nach dem Funkspruch (Datei legt Gregor selbst in den Tonordner)
@@ -47,8 +47,8 @@ export const TON_STANDARD = {
   hordeAkzent: { dateien: ['freesound_community-zombie-horde-87204.mp3'], laut: 80 },
   musikLevel5: { dateien: ['franzian-deo-apocalypse-469581.mp3'], laut: 100 },
   hundBellen: { dateien: ['dragon-studio-free-dog-bark-419014.mp3', 'dragon-studio-dog-bark-382732.mp3'], laut: 80 },
-  durchsageLevel1: { dateien: ['eilmeldung_geretsried_mann.mp3', 'eilmeldung_geretsried_frau.mp3'], laut: 100 },   // Aufnahmen mit ElevenLabs-Stimmen
-  durchsageLevel2: { dateien: ['eilmeldung_geretsried_mann.mp3', 'eilmeldung_geretsried_frau.mp3'], laut: 100 },   // Isarauen: „nähere Umgebung“ von Geretsried
+  durchsageLevel1: { dateien: ['eilmeldung_allgemein.mp3'], laut: 100 },   // allgemeine Eilmeldung ohne Ortsnamen, Piper-Stimme
+  durchsageLevel2: { dateien: ['eilmeldung_allgemein.mp3'], laut: 100 },
 };
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
 
@@ -106,7 +106,7 @@ export const EREIGNISSE = [
   { id: 'tuerZu', name: 'Tür fällt zu', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
   { id: 'autoMotor', name: 'Auto: Motor (selbst gefahren)', beschreibung: 'Motorgeräusch eines Autos, das ein Spieler mit dem Autoschlüssel fährt (Schleife, die Tonhöhe folgt dem Tempo); ohne Datei bleibt es still', art: 'schleife', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
   { id: 'autoVorbei', name: 'Auto fährt vorbei', beschreibung: 'Wenn ein fahrendes Auto oder der Bus dicht vorbeifährt', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
-  ...[1, 2, 3, 4, 5].map(n => ({ id: 'durchsageLevel' + n, name: `Radio-Durchsage Level ${n}`, beschreibung: 'Nachrichtensprecher im Live-Radio (Zombie-Eilmeldung mit Ortsname); unterbricht den Sender, kommt aus dem Autoradio', art: 'einmal', gruppe: 'musik', kategorien: ['musik'], lautVorgabe: 100 })),
+  ...[1, 2, 3, 4, 5].map(n => ({ id: 'durchsageLevel' + n, name: `Radio-Durchsage Level ${n}`, beschreibung: 'Nachrichtensprecher im Live-Radio (allgemeine Zombie-Eilmeldung); unterbricht den Sender, kommt aus dem Autoradio', art: 'einmal', gruppe: 'musik', kategorien: ['musik'], lautVorgabe: 100 })),
   { id: 'autoradio', name: 'Autoradio', beschreibung: 'Läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
   { id: 'startmusik', name: 'Startmusik', beschreibung: 'Auf der Startseite (nach dem ersten Antippen), blendet beim Spielbeginn aus', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
   { id: 'funkAnsage', name: 'Funk-Ansage Abholung', beschreibung: 'Sprachansage nach dem Funkspruch: „Alles klar, sichern Sie die notwendigen Gegenstände und halten Sie sich bereit, wir holen Sie da raus.“ (ohne Uhrzeit; ohne Datei bleibt es still)', art: 'einmal', gruppe: 'bundeswehr', kategorien: ['bundeswehr'] },
