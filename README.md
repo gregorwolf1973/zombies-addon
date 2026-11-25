@@ -94,14 +94,10 @@ dienen nur als Startwerte beim allerersten Start:
 
 | Option | Bedeutung |
 |---|---|
-| `karte` | Startkarte (`level1` = Levelfolge, oder eine einzelne Karte) |
-| `zombies`, `zombie_faktor` | Zombie-Menge (10 = normal) und Zusatzfaktor |
-| `funde` | Fundhäufigkeit je Gegenstand (10 = normal, 0 = nie, 20 = doppelt) |
-| `zugangscode` | Code, den Mitspieler eingeben müssen – bei Internetzugang unbedingt setzen |
-| `bots` | Simulierte Mitspieler (0–9) |
 | `externe_adresse` | https-Adresse von außen (Mikrofon) |
-| `wiki_adresse` | Optional: DokuWiki für die Quizfragen am Tor und die Links danach |
-| `stun_server`, `turn_*` | Sprachfunk-Server |
+| `stun_server`, `turn_*` | Sprachfunk-Server (STUN, optional TURN-Relais) |
+
+Alle anderen Einstellungen (Karte, Zombies, Funde, Zugangscode, Bots, Wiki-Adresse …) stehen auf der Einstellungsseite des Spiels (Seitenleiste).
 
 Mehr dazu im Reiter „Dokumentation“ des Add-ons (`zombies/DOCS.md`).
 
@@ -194,14 +190,10 @@ initial values for the very first start:
 
 | Option | Meaning |
 |---|---|
-| `karte` | Starting map (`level1` = level sequence, or a single map) |
-| `zombies`, `zombie_faktor` | Zombie amount (10 = normal) and extra multiplier |
-| `funde` | Item frequency per item (10 = normal, 0 = never, 20 = double) |
-| `zugangscode` | Access code players must enter – always set it when exposed to the internet |
-| `bots` | Simulated teammates (0–9) |
 | `externe_adresse` | External https address (needed for the microphone) |
-| `wiki_adresse` | Optional DokuWiki used for the gate quiz questions and the links after them |
-| `stun_server`, `turn_*` | Voice chat servers |
+| `stun_server`, `turn_*` | Voice chat servers (STUN, optional TURN relay) |
+
+All other settings (map, zombies, finds, access code, bots, wiki address …) are on the game's settings page (sidebar).
 
 More details are in the add-on's "Documentation" tab (`zombies/DOCS.md`).
 

@@ -1,74 +1,16 @@
 configuration:
-  karte:
-    name: "Map"
-    description: "Starting map (first start only; later changeable in the Zombies sidebar panel)."
-  zombies:
-    name: "Zombies"
-    description: "Amount of zombies outside (10 = normal), initial value."
-  zombie_faktor:
-    name: "Zombie factor"
-    description: "Additional multiplier for the zombie count (0.1 to 5)."
-  funde:
-    name: "Item frequency"
-    description: "How often items are found (10 = normal, 0 = never, 20 = double)."
-    fields:
-      wasser:
-        name: "Water"
-      essen:
-        name: "Food"
-      verband:
-        name: "First-aid kit"
-      bretter:
-        name: "Planks"
-      pistole:
-        name: "Pistol"
-      schlaeger:
-        name: "Baseball bat"
-      munition:
-        name: "Ammo"
-      spritze:
-        name: "Rescue syringe"
-      schluessel:
-        name: "Key ring"
-      brechstange:
-        name: "Crowbar"
-      messer:
-        name: "Knife"
-      kleidung:
-        name: "Clothing"
-      seil:
-        name: "Rope"
-      taschenlampe:
-        name: "Torch"
-      schokoriegel:
-        name: "Chocolate bar"
-      tasche:
-        name: "Bag (more slots)"
-      trekking:
-        name: "Trekking backpack"
-      funkgeraet:
-        name: "Radio"
-  zugangscode:
-    name: "Access code"
-    description: "If set, players need this code to join. Strongly recommended if the game is reachable from the internet."
-  wiki_adresse:
-    name: "Wiki address"
-    description: "Optional: address of a DokuWiki for the links shown after the puzzles."
   externe_adresse:
-    name: "External address"
-    description: "https address of the game from outside; needed for the microphone (voice chat) when accessed externally."
-  bots:
-    name: "Bots"
-    description: "Simulated teammates (0 to 9) while only one human is playing."
+    name: "External address (https)"
+    description: "Public https address the game is reachable at – needed for the microphone/voice chat from outside. All other settings (map, zombies, access code, wiki address …) are on the game's settings page (sidebar)."
   stun_server:
     name: "STUN server"
-    description: "For voice chat. The default asks a Google server (IP addresses go there); leave empty to disable."
+    description: "For voice chat. The default asks a Google server (IP addresses are sent there); leave empty to disable it."
   turn_server:
     name: "TURN server"
-    description: "Optional: your own TURN server for voice chat behind strict firewalls."
+    description: "Optional: your own TURN server (relay) for voice chat behind strict firewalls/NATs."
   turn_username:
-    name: "TURN username"
-    description: "Username for the TURN server."
+    name: "TURN user"
+    description: "User name for the TURN server."
   turn_password:
     name: "TURN password"
     description: "Password for the TURN server."
