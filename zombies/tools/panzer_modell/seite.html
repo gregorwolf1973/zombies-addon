@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#0000">
+<pre id="out">LAEUFT</pre>
+<script type="importmap">{"imports":{"three":"../glb_draufsicht/lib/three/three.module.js"}}</script>
+<script type="module">
+// Draufsicht eines selbst gebauten Panzermodells (puma.mjs, leopard.mjs) rendern: ?modell=puma&teil=wanne|turm|alles&ss=4
+// Orthografische Kamera genau von oben; Bild: Bug nach rechts (+x), rechte Fahrzeugseite unten (+z) – wie im Spiel.
+// Der Bildausschnitt kommt aus dem Modell (RAHMEN), damit Turm-Drehpunkt und Wannenmitte auf festen Bildpunkten liegen.
+import * as THREE from 'three';
+const out = document.getElementById('out');
+const q = new URLSearchParams(location.search);
+try {
+  const mod = await import('./' + (q.get('modell') || 'puma') + '.mjs');
+  const teil = q.get('teil') || 'alles', SS = +(q.get('ss') || 4), PX = mod.RAHMEN.px * SS;   // Bildpunkte je Meter (überabgetastet)
+  const { wanne, turm } = mod.baue(THREE);
+  const root = new THREE.Group();
+  // Rahmen in Metern: Wanne um die Wannenmitte, Turm um den Drehpunkt; „alles“ = Wanne mit aufgesetztem Turm (nur zur Ansicht)
+  let r = teil === 'turm' ? mod.RAHMEN.turm : mod.RAHMEN.wanne;
+  if (teil !== 'turm') root.add(wanne);
+  if (teil !== 'wanne') { root.add(turm); if (teil === 'alles') { turm.position.set(mod.RAHMEN.turmOrt[0], 0, mod.RAHMEN.turmOrt[1]); turm.rotation.y = -(+(q.get('turmwinkel') || 0)) * Math.PI / 180;
+    r = { x0: Math.min(r.x0, mod.RAHMEN.turmOrt[0] + mod.RAHMEN.turm.x0), x1: Math.max(r.x1, mod.RAHMEN.turmOrt[0] + mod.RAHMEN.turm.x1), z0: r.z0, z1: r.z1 }; } }
+  const W = Math.round((r.x1 - r.x0) * mod.RAHMEN.px) * SS, H = Math.round((r.z1 - r.z0) * mod.RAHMEN.px) * SS;
+  // Kamera: linker Rand bei x0, oberer Rand bei z0 (Breite W/PX bzw. H/PX Meter)
+  const cam = new THREE.OrthographicCamera(0, W / PX, 0, -H / PX, 0.1, 100);
+  cam.position.set(r.x0, 30, r.z0); cam.up.set(0, 0, -1); cam.lookAt(r.x0, 0, r.z0);
+  const sz = new THREE.Scene(); sz.add(root);
+  sz.add(new THREE.AmbientLight(0xffffff, 0.36));
+  sz.add(new THREE.HemisphereLight(0xe8efff, 0x403a2c, 0.3));
+  // Sonne schräg von hinten links oben: erhabene Teile werfen kurze, weiche Schatten
+  const sonne = new THREE.DirectionalLight(0xfff6e6, 1.5);
+  sonne.position.set(-7, 10, -6); sonne.target.position.set(0, 0, 0);
+  sonne.castShadow = true; sonne.shadow.mapSize.set(4096, 4096); sonne.shadow.bias = -0.0004; sonne.shadow.normalBias = 0.01; sonne.shadow.radius = 3;
+  Object.assign(sonne.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 40 });
+  sz.add(sonne, sonne.target);
+  const rd = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  rd.setPixelRatio(1); rd.setSize(W, H); rd.setClearColor(0x000000, 0); rd.outputColorSpace = THREE.SRGBColorSpace;
+  rd.shadowMap.enabled = true; rd.shadowMap.type = THREE.PCFSoftShadowMap;
+  rd.render(sz, cam);
+  out.textContent = 'BILD ' + JSON.stringify({ teil, w: W / SS, h: H / SS, ss: SS, px: mod.RAHMEN.px, rahmen: r }) + '\n' + rd.domElement.toDataURL('image/png');
+} catch (e) { out.textContent = 'FEHLER ' + (e && e.stack || e); }
+</script></body></html>

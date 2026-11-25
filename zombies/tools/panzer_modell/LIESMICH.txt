@@ -1,0 +1,12 @@
+Eigene 3D-Modelle für die Draufsichten von Schützenpanzer Puma und Kampfpanzer Leopard 2A7 (client/grafik/puma_*.webp, leopard_*.webp).
+Alles prozedural aus Grundformen (three.js), keine fremden Modelle oder Texturen:
+  teile.mjs    Bausteine (Körper, Prismen, Zylinder, Laufwerk, Luken, Gitter, Kisten, Werkzeug) und Flecktarn-Textur (Zufall mit festem Startwert)
+  puma.mjs     Puma 7,3 × 3,7 m;   leopard.mjs  Leopard 2A7 7,7 × 3,75 m   (RAHMEN = Bildausschnitt, Bildpunkte je Meter, Turm-Drehpunkt)
+  seite.html   Draufsicht genau von oben (Bug rechts, rechte Seite unten), Wanne und Turm getrennt, 4-fach überabgetastet
+  render.mjs   rendert alle Teile über einen laufenden Headless-Chrome (CDP) und schreibt PNGs + masse.json
+Ablauf (three.js 0.160.0 in ../glb_draufsicht/lib, siehe LIESMICH.txt dort; Speicherdeckel wie bei allen Chrome-Läufen):
+  systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 google-chrome --headless=new --enable-unsafe-swiftshader \
+    --use-angle=swiftshader --remote-debugging-port=9711 --user-data-dir=<scratch>/chrome about:blank &
+  node tools/panzer_modell/render.mjs 9711 <scratch>/panzer [puma leopard]
+  PYTHONPATH=~/code/ahnen-werkzeuge/pil python3 tools/panzer_bilder.py <scratch>/panzer        (WebP nach client/grafik)
+Ändern sich RAHMEN (Bildgröße, Drehpunkt, Mündung), Werte nachziehen: PUMA_BILD (client/stuetzpunkt.mjs), LEOPARD (client/evak.mjs).

@@ -7,7 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const out = document.getElementById('out');
 const q = new URLSearchParams(location.search);
 const PX = +(q.get('px') || 8);          // Bildpunkte je Modelleinheit
-const TURM = q.get('turm') ? q.get('turm').split(',') : ['turret', 'gun', 'rocket00', 'rocket01', 'spike_lr'];   // Knotennamen des Turms (?turm=a,b)
+const TURM = q.get('turm') ? q.get('turm').split(',') : [];   // Knotennamen des Turms (?turm=a,b)
 const NICHT = q.get('weg') ? q.get('weg').split(',') : [];   // Knoten ausblenden (?weg=a,b)
 const AB = k => q.get(k) === null ? null : +q.get(k);
 const FILTER = { y0: AB('y0'), y1: AB('y1'), z0: AB('z0'), z1: AB('z1'), x0: AB('x0'), x1: AB('x1') };   // Dreiecke behalten, deren Schwerpunkt im Bereich liegt (Modellkoordinaten)
@@ -16,13 +16,13 @@ const INV = q.get('inv') === '1';   // Filter umkehren (alles außer dem Bereich
 const ANSICHT = q.get('ansicht') || 'oben';                                // oben | seite | vorn
 const DREH = (+(q.get('drehung') || 0)) * Math.PI / 180;     // Modell um die Hochachse drehen (Grad), falls der Bug nicht nach rechts zeigt
 try {
-  const g = await new GLTFLoader().loadAsync(q.get('datei') || 'spz_puma.glb');
+  const g = await new GLTFLoader().loadAsync(q.get('datei'));
   const root = g.scene; root.rotation.y = DREH; root.updateMatrixWorld(true);
   const box = o => new THREE.Box3().setFromObject(o);
   const fmt = b => [b.min, b.max].map(v => [v.x, v.y, v.z].map(n => n.toFixed(2)).join(',')).join(' .. ');
   const info = ['GESAMT ' + fmt(box(root))];
   root.traverse(o => { if (o.isMesh) { if (q.get('alle')) { const k = []; for (let p = o.parent; p && p !== root; p = p.parent) k.push(p.name); info.push('MESH ' + o.name + ' <' + k.join('<') + '> ' + fmt(box(o))); } return; } const b = box(o); if (!b.isEmpty() && o.name && (q.get('alle') || !o.name.includes('#'))) info.push(o.name + ' <' + (o.parent?.name || '') + '> ' + fmt(b)); });
-  for (const n of ['turret','gun_rot','gun', ...(q.get('turm') ? q.get('turm').split(',') : []), 'Axe_Canon_01']) { const o = root.getObjectByName(n); if (o) { const v = o.getWorldPosition(new THREE.Vector3()); info.push('URSPRUNG ' + n + ' ' + [v.x,v.y,v.z].map(z=>z.toFixed(2)).join(',')); } }
+  for (const n of TURM) { const o = root.getObjectByName(n); if (o) { const v = o.getWorldPosition(new THREE.Vector3()); info.push('URSPRUNG ' + n + ' ' + [v.x,v.y,v.z].map(z=>z.toFixed(2)).join(',')); } }
   if (q.get('nur') === 'info') { out.textContent = info.join('\n'); throw 0; }
   // Teile auswählen: wanne = alles ohne Turm, turm = nur Turm
   const teil = 'alles';
