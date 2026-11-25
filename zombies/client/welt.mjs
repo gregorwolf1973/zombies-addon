@@ -418,7 +418,7 @@ export function safeRoomVon(welt, p) {
 }
 
 // Ändert sich die Kartenerzeugung, passen gespeicherte Behälter nicht mehr
-export const WELT_VERSION = 38;   // 38: schlanke Zäune/Hecken (Kollision ½ Feinfeld), Bundeswehr-Lager in echten Maßen, 37: keine Zufalls-Büsche (hellgrüne Kleckse) mehr, 36: keine Blumenbeete mehr (Objekte 'beet' aus allen Karten entfernt), 35: Königsdorf und Kochel mit amtlichen Daten, graue Flachdächer für Gebäude ohne LoD2-Dach, Isarauen mit festen TN-Codes neu, 34: Isarauen mit amtlichen Daten wie geretsried2 (Hausumringe, Hecken, Zäune, Einzelbäume, Straßenbreiten, Laternen, Mülltonnen; Karte neu aus tools/karte_bauen.py), 33: Haustüren nie an Nachbarwänden, Zäune/Hecken nicht auf Fahrbahn und Gehweg, 32: 32: Wasser begehbar (10 % Tempo), Laternen ohne Mast, Haustüren auf der Hauswand/in Nischen mit Zaunschnitten, große Gebäude eingerichtet (Büro, Werkstatt, Lager, Supermarkt, Möbelhaus), Ladenregale als ein Behälter, 31: 31: geretsried2 mit amtlichen Daten (Hecken, Zäune, Einzelbäume, Straßenbreiten, Gehwege, Zebrastreifen, Laternen, Mülltonnen aus Bayern Open Data statt Zufall/OSM-Schätzung), 30: geretsried2 mit amtlichen Hausumringen statt OSM-Umrissen (Reihenhäuser zusammengefasst, Dächer LoD2 passen genau), 29: Spielplätze mit Zaun und Eingang (spielplatzzaun.mjs), 28: Pools sind keine Hindernisse mehr (Tempo 10 % im Wasser, welt.poolZonen), 27: Einzelbäume, Hecken, Pools, Schuppen und Beläge aus dem Luftbild (baeumeLuftbild …), echte Foto-Autos (autosLuftbild von Gemini), 26: Maibaum entfällt, Panzer in echten Maßen (Puma/Leopard im Lager und auf dem Flugfeld), 25: Autos aus dem Luftbild (karte.autosLuftbild ersetzt die zufälligen Parkplatz-/Bucht-Autos), 24: Parkplatzautos stehen in den gezeichneten Buchten (Winkel = Buchtrichtung, parkplatzBuchten in vektor.mjs), 23: Kulisse nach Luftbild (Bäume, Äcker, Dachfarben nach amtlichen Luftbildern), 22: Einkaufswagen vor Läden (durchsuchbar), geglättete Zaunlinien (zaunglatt.mjs), 21: ländliche Details (Alleen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen), B-11-Kreuzung ausgedünnt, feste Safehouses per Kachel, 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
+export const WELT_VERSION = 39;   // 39: Zäune/Hecken auch auf Straßenkacheln neben der gezeichneten Straße (kein Laufen „in“ der Hecke, kein Hängenbleiben am Straßenende), 38: schlanke Zäune/Hecken (Kollision ½ Feinfeld), Bundeswehr-Lager in echten Maßen, 37: keine Zufalls-Büsche (hellgrüne Kleckse) mehr, 36: keine Blumenbeete mehr (Objekte 'beet' aus allen Karten entfernt), 35: Königsdorf und Kochel mit amtlichen Daten, graue Flachdächer für Gebäude ohne LoD2-Dach, Isarauen mit festen TN-Codes neu, 34: Isarauen mit amtlichen Daten wie geretsried2 (Hausumringe, Hecken, Zäune, Einzelbäume, Straßenbreiten, Laternen, Mülltonnen; Karte neu aus tools/karte_bauen.py), 33: Haustüren nie an Nachbarwänden, Zäune/Hecken nicht auf Fahrbahn und Gehweg, 32: 32: Wasser begehbar (10 % Tempo), Laternen ohne Mast, Haustüren auf der Hauswand/in Nischen mit Zaunschnitten, große Gebäude eingerichtet (Büro, Werkstatt, Lager, Supermarkt, Möbelhaus), Ladenregale als ein Behälter, 31: 31: geretsried2 mit amtlichen Daten (Hecken, Zäune, Einzelbäume, Straßenbreiten, Gehwege, Zebrastreifen, Laternen, Mülltonnen aus Bayern Open Data statt Zufall/OSM-Schätzung), 30: geretsried2 mit amtlichen Hausumringen statt OSM-Umrissen (Reihenhäuser zusammengefasst, Dächer LoD2 passen genau), 29: Spielplätze mit Zaun und Eingang (spielplatzzaun.mjs), 28: Pools sind keine Hindernisse mehr (Tempo 10 % im Wasser, welt.poolZonen), 27: Einzelbäume, Hecken, Pools, Schuppen und Beläge aus dem Luftbild (baeumeLuftbild …), echte Foto-Autos (autosLuftbild von Gemini), 26: Maibaum entfällt, Panzer in echten Maßen (Puma/Leopard im Lager und auf dem Flugfeld), 25: Autos aus dem Luftbild (karte.autosLuftbild ersetzt die zufälligen Parkplatz-/Bucht-Autos), 24: Parkplatzautos stehen in den gezeichneten Buchten (Winkel = Buchtrichtung, parkplatzBuchten in vektor.mjs), 23: Kulisse nach Luftbild (Bäume, Äcker, Dachfarben nach amtlichen Luftbildern), 22: Einkaufswagen vor Läden (durchsuchbar), geglättete Zaunlinien (zaunglatt.mjs), 21: ländliche Details (Alleen, Baumgruppen, Hecken, Feldwege, Weidezäune, Heuballen), B-11-Kreuzung ausgedünnt, feste Safehouses per Kachel, 20: Bundeswehr-Lager mit Flandernzaun und S-Draht-Rollen (Feinwert 4), Flugfeld-Deko Königsdorf, 19: Türen zur Straße, freier Vorplatz und Weg (tuerenFreihalten), 18: Küchen-Behälter Herd/Spüle, Behälter hinter Zimmertüren tragen die Tür ('tuer', Belohnungsbeute hinter Rätsel-Türen), 17: Bundeswehr-Lager mit 4 Vorratskisten (Safe House), 16: Polizeiwache (amenity=police) als Laden mit Waffenschrank, 6: Autos längs am Straßenrand, 7: Safe Rooms als Innenräume, 8: Autos meist in Parkbuchten/auf Parkplätzen, 9: Müllcontainer, Straßensperren, Parkbuchten mit freien Plätzen, 10: mehr Bäume, 11: Bundeswehr-Stützpunkt
 
 // ---------- Gegenstände ----------
 export const DINGE = {
@@ -621,6 +621,76 @@ export function feinWert(welt, x, y) {
   return welt.fein[fy * fb + fx];
 }
 
+// ---------- Zäune und Hecken genau nach der Zeichnung ----------
+// Das Feinraster markiert Zaunfelder (Wert 2) im 1-m-Raster; die gezeichnete Linie ist aber nur 0,1 m (Holz/Draht) bis 0,9 m (Hecke) dick.
+// Darum sperrt ein Zaunfeld nur, wo der Kreis das Linienstück IN diesem Feld (Halbdicke ZAUN_HALB, wie aussehen.mjs zaunLinien zeichnet) berührt.
+// Plattgewalzte oder geöffnete Felder (Wert 0) sperren gar nicht, Felder ohne Linie (Testwelten, alte Daten) ganz.
+// Weltcode: nur + − × ÷ (Abstandsquadrate, Strecke am Feld abschneiden), läuft auf Server und Client gleich.
+export const ZAUN_HALB = { h: 3.5, z: 1, m: 0.75, w: 5 };   // px (8 px = 1 m): Hecke 7 px breit, Latten-/Drahtzaun mit Pfosten ~2 px, Mauer 10 px
+export const zaunHalb = a => ZAUN_HALB[a] ?? ZAUN_HALB.z;
+export const ZAUN_HALB_MAX = 5;
+// Index Feinfeld → Linienstücke in seiner Nähe (aus welt.details.zaeune, einmal je Welt; seg = [ax, ay, bx, by, halb] in px)
+export function zaunIndex(welt) {
+  const zl = welt.details?.zaeune, f = welt.fein, alt = welt._zaunIdx;
+  if (alt !== undefined && (alt === null ? !zl?.length : alt.quelle === zl && alt.breite === BREITE)) return alt;
+  if (!zl?.length || !f) return (welt._zaunIdx = null);
+  const fb = BREITE * FEIN, fh = HOEHE * FEIN, seg = [], m = new Map();
+  for (const z of zl) {
+    const h = zaunHalb(z.a);
+    for (let i = 0; i + 3 < z.p.length; i += 2) {
+      const ax = z.p[i] * KACHEL, ay = z.p[i + 1] * KACHEL, bx = z.p[i + 2] * KACHEL, by = z.p[i + 3] * KACHEL;
+      const s = seg.length / 5;
+      seg.push(ax, ay, bx, by, h);
+      const fx0 = Math.max(0, Math.floor(Math.min(ax, bx) / FEIN_PX) - 1), fx1 = Math.min(fb - 1, Math.floor(Math.max(ax, bx) / FEIN_PX) + 1);
+      const fy0 = Math.max(0, Math.floor(Math.min(ay, by) / FEIN_PX) - 1), fy1 = Math.min(fh - 1, Math.floor(Math.max(ay, by) / FEIN_PX) + 1);
+      const L2 = (bx - ax) * (bx - ax) + (by - ay) * (by - ay) || 1e-9;
+      for (let fy = fy0; fy <= fy1; fy++) for (let fx = fx0; fx <= fx1; fx++) {
+        // Felder, die das Stück schneidet, und Felder, deren Mitte so nah liegt, dass baueFein sie markiert (sonst sperrten sie ganz)
+        if (!stueckImFeld(ax, ay, bx, by, fx, fy)) {
+          const cx = (fx + 0.5) * FEIN_PX, cy = (fy + 0.5) * FEIN_PX, t = Math.max(0, Math.min(1, ((cx - ax) * (bx - ax) + (cy - ay) * (by - ay)) / L2));
+          const qx = ax + t * (bx - ax) - cx, qy = ay + t * (by - ay) - cy;
+          if (qx * qx + qy * qy > 36) continue;   // 6 px: Hecken markieren bis 5 px
+        }
+        const k = fy * fb + fx, l = m.get(k);
+        if (l) l.push(s); else m.set(k, [s]);
+      }
+    }
+  }
+  // nah[k] = 1: Feld k oder ein Nachbar hat Linienstücke (freiBewegung prüft den Ring um den Kreis nur dann)
+  const nah = new Uint8Array(fb * fh);
+  for (const k of m.keys()) { const fx = k % fb, fy = (k - fx) / fb; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = fx + dx, y = fy + dy; if (x >= 0 && y >= 0 && x < fb && y < fh) nah[y * fb + x] = 1; } }
+  return (welt._zaunIdx = { seg, map: m, nah, quelle: zl, breite: BREITE });
+}
+// Teil der Strecke A→B im Feld (fx, fy) als Parameter [t0, t1] oder null (Liang-Barsky)
+function stueckImFeld(ax, ay, bx, by, fx, fy) {
+  const x0 = fx * FEIN_PX, y0 = fy * FEIN_PX, x1 = x0 + FEIN_PX, y1 = y0 + FEIN_PX, dx = bx - ax, dy = by - ay;
+  STK[0] = 0; STK[1] = 1;
+  if (!kante(-dx, ax - x0) || !kante(dx, x1 - ax) || !kante(-dy, ay - y0) || !kante(dy, y1 - ay)) return null;
+  return STK[1] >= STK[0] ? STK : null;
+}
+const STK = [0, 1];   // Ergebnis von stueckImFeld (wiederverwendet: keine Speicheranforderung je Prüfung)
+function kante(p, q) {
+  if (p === 0) return q >= 0;
+  const r = q / p;
+  if (p < 0) { if (r > STK[1]) return false; if (r > STK[0]) STK[0] = r; } else { if (r < STK[0]) return false; if (r < STK[1]) STK[1] = r; }
+  return true;
+}
+export const zaunStueck = stueckImFeld;   // für die Superuser-Anzeige (hindernisse.mjs); Ergebnis sofort kopieren (wird wiederverwendet)
+// berührt der Kreis (x, y, rad) eines der Linienstücke `liste` innerhalb des Feldes (fx, fy)?
+export function zaunImFeld(seg, liste, fx, fy, x, y, rad) {
+  for (const s of liste) {
+    const o = s * 5, ax = seg[o], ay = seg[o + 1], bx = seg[o + 2], by = seg[o + 3], g = rad + seg[o + 4];
+    const t = stueckImFeld(ax, ay, bx, by, fx, fy);
+    if (!t) continue;
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    let u = L2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0;
+    if (u < t[0]) u = t[0]; else if (u > t[1]) u = t[1];
+    const qx = ax + dx * u - x, qy = ay + dy * u - y;
+    if (qx * qx + qy * qy < g * g) return true;
+  }
+  return false;
+}
+
 // Innenraum im Feinraster: Figurenradius schrumpft (rs, höchstens radMax), alle überdeckten Zellen müssen begehbar sein
 function freiInnen(welt, x, y, rad) {
   const K = welt.kachel, B = welt.breite, H = welt.hoehe, r = Math.min(rad * (welt.rs ?? 1), welt.radMax ?? 1e9), k = welt.kacheln;
@@ -644,7 +714,29 @@ export function freiBewegung(welt, x, y, rad) {
     const x0 = Math.floor((x - rad) / FEIN_PX), x1 = Math.floor((x + rad) / FEIN_PX);
     const y0 = Math.floor((y - rad) / FEIN_PX), y1 = Math.floor((y + rad) / FEIN_PX);
     if (x0 < 0 || y0 < 0 || x1 >= fb || y1 >= fh) return false;
-    for (let fy = y0; fy <= y1; fy++) for (let fx = x0, i = fy * fb + x0; fx <= x1; fx++, i++) if (f[i]) return false;
+    const zi = welt.details?.zaeune ? zaunIndex(welt) : null, zn = zi?.nah;
+    let nah = false;
+    for (let fy = y0; fy <= y1; fy++) for (let fx = x0, i = fy * fb + x0; fx <= x1; fx++, i++) {
+      if (zn && zn[i]) nah = true;
+      const v = f[i];
+      if (!v) continue;
+      if (v !== 2) return false;
+      // Zaun/Hecke: genau gegen die gezeichnete Linie (Stück in diesem Feld, Halbdicke je Art); Felder ohne Linie sperren ganz
+      const l = zi?.map.get(i);
+      if (!l || zaunImFeld(zi.seg, l, fx, fy, x, y, rad)) return false;
+    }
+    if (!nah) return true;
+    // Ring außen herum: die Halbdicke (Hecke 3,5 px, Mauer 5 px) ragt über das Feld der Linie hinaus
+    const ux0 = Math.floor((x - rad - ZAUN_HALB_MAX) / FEIN_PX), ux1 = Math.floor((x + rad + ZAUN_HALB_MAX) / FEIN_PX);
+    const uy0 = Math.floor((y - rad - ZAUN_HALB_MAX) / FEIN_PX), uy1 = Math.floor((y + rad + ZAUN_HALB_MAX) / FEIN_PX);
+    if (ux0 === x0 && ux1 === x1 && uy0 === y0 && uy1 === y1) return true;
+    for (let fy = Math.max(0, uy0); fy <= Math.min(fh - 1, uy1); fy++) for (let fx = Math.max(0, ux0); fx <= Math.min(fb - 1, ux1); fx++) {
+      if (fx >= x0 && fx <= x1 && fy >= y0 && fy <= y1) continue;
+      const i = fy * fb + fx;
+      if (f[i] !== 2) continue;
+      const l = zi.map.get(i);
+      if (l && zaunImFeld(zi.seg, l, fx, fy, x, y, rad)) return false;
+    }
     return true;
   }
   return !blockiert(welt, x - rad, y - rad) && !blockiert(welt, x + rad, y - rad)

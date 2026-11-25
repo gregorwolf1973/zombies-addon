@@ -64,7 +64,7 @@ import { zeichneInnenFein, zeichneTuerFein, BILD_SKALA, INNEN_ZOOM_FEIN } from '
 import { lichtRichtungWelt, lichtSeite, fensterFlecken } from './fensterlicht.mjs';
 import { Blitzliste, WEICH_RADIUS, MUENDUNG_MAX } from './muendungslicht.mjs';
 // ?innen1m in der Adresse: nur noch zum Testen vorgesehen; maßgeblich ist der Schalter des Servers (state.optionen, siehe erzeuge())
-import { hindernisFelder, hindernisFelderFein, hindernisPixel } from './hindernisse.mjs';
+import { hindernisFelder, hindernisFelderFein, hindernisPixel, kollisionsUmrisse, K_FARBEN } from './hindernisse.mjs';
 import * as ton from './ton.mjs';
 import { HundAnzeige, eigenerHund } from './hund.mjs';
 import { naheBodenDinge, auswahlAuf, auswahlPruefen, brauchtPlatz } from './aufheben.mjs';
@@ -781,6 +781,7 @@ function suMenueEinrichten(szene) {
       <div class="zeile">${b('horde', '50', { groesse: 50 })}${b('horde', '200', { groesse: 200 })}${b('horde', '500', { groesse: 500 })}</div>
       ${bs('hordeanzeige', '🎯 Horden-Ziele anzeigen')}
       <button type="button" class="umschalter" data-hind="1" data-text="🧱 Hindernisse zeigen">🧱 Hindernisse zeigen: AUS</button>
+      <button type="button" class="umschalter" data-koll="1" data-text="📐 Kollision zeigen">📐 Kollision zeigen: AUS</button>
       <div class="titel">Tageszeit</div>
       <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
       ${bs('nebel', '🌫 Nebel')}
@@ -801,6 +802,7 @@ function suMenueEinrichten(szene) {
       if (e.target === fenster) return zu();
       if (e.target.closest('button[data-flug]')) { zu(); szene?.flug?.starten(); return; }
       if (e.target.closest('button[data-hind]')) { hindernisAn = !hindernisAn; hindernisKnopf(); return; }   // rein lokal, kein Server
+      if (e.target.closest('button[data-koll]')) { kollisionAn = !kollisionAn; hindernisKnopf(); return; }   // rein lokal, kein Server
       const bt = e.target.closest('button[data-su]');
       if (!bt) return;
       try { raum?.send('su', JSON.parse(bt.dataset.su)); } catch { /* egal */ }
@@ -820,10 +822,13 @@ function suMenueEinrichten(szene) {
 // Zustand der Umschalter im Testmenü anzeigen (AN grün, AUS grau); Werte kommen als 'suStatus' vom Server
 let suStatusRaum = null;
 let hindernisAn = false;   // „Hindernisse zeigen“ (nur lokal, nur Superuser)
+let kollisionAn = false;   // „Kollision zeigen“: Umrisse der Sperrflächen (nur lokal, nur Superuser)
 function hindernisKnopf() {
-  const bt = $('sumenue')?.querySelector('button[data-hind]'); if (!bt) return;
-  bt.textContent = `${bt.dataset.text}: ${hindernisAn ? 'AN' : 'AUS'}`;
-  bt.classList.toggle('an', hindernisAn); bt.setAttribute('aria-pressed', hindernisAn ? 'true' : 'false');
+  for (const [sel, an] of [['button[data-hind]', hindernisAn], ['button[data-koll]', kollisionAn]]) {
+    const bt = $('sumenue')?.querySelector(sel); if (!bt) continue;
+    bt.textContent = `${bt.dataset.text}: ${an ? 'AN' : 'AUS'}`;
+    bt.classList.toggle('an', an); bt.setAttribute('aria-pressed', an ? 'true' : 'false');
+  }
 }
 function suStatusZeigen(st) {
   const f = $('sumenue'); if (!f || !st) return;
@@ -1629,6 +1634,39 @@ class Ort extends Phaser.Scene {
     hindernisPixel(codes, bd.data); c.putImageData(bd, 0, 0); tex.refresh(); tex.setFilter(1);   // 1 = NEAREST: scharfe Felder
     this.hindBild = this.add.image(x0 * FP, y0 * FP, 'hindernisse').setOrigin(0).setScale(FP).setDepth(8.6);
     this.hindStand = { t: jetzt, x0, y0, nx, ny, ebene };
+  }
+
+  // Superuser „Kollision zeigen“: Umrisse der Sperrflächen um den sichtbaren Ausschnitt (client/hindernisse.mjs kollisionsUmrisse), wie die
+  // Bewegung rechnet: rot fest (Wände, Wasser, Kartenrand …), orange Zaun/Hecke (gezeichnete Linie mit Halbdicke), gelb Zaunfeld ohne Linie,
+  // violett Flandernzaun, blau geparkte Autos (Klettern), grün Baumstämme (nur für Fahrzeuge), weiß der eigene Kollisionskreis.
+  // Neu gerechnet höchstens 5-mal je Sekunde (walzende Fahrzeuge ändern die Zäune), nur draußen.
+  kollisionAktualisieren() {
+    const an = kollisionAn && suAn && !this.aktEbene;
+    if (!an) { if (this.kollGfx) { this.kollGfx.destroy(); this.kollGfx = null; this.kollFigur.destroy(); this.kollFigur = null; } return; }
+    if (!this.kollGfx) { this.kollGfx = this.add.graphics().setDepth(8.7); this.kollFigur = this.add.graphics().setDepth(8.71); this.kollT = 0; }
+    const ich = this.lokal, fg = this.kollFigur;
+    fg.clear();
+    if (ich) { fg.lineStyle(1.2, K_FARBEN.figur, 0.95); fg.strokeCircle(ich.x, ich.y, W.spielerRadius); }
+    const jetzt = performance.now();
+    if (jetzt - this.kollT < 200) return;
+    this.kollT = jetzt;
+    const v = this.cameras.main.worldView, rand = 48, g = this.kollGfx;
+    const u = kollisionsUmrisse(this.welt, v.x - rand, v.y - rand, v.x + v.width + rand, v.y + v.height + rand);
+    g.clear();
+    const linien = (liste, farbe, breite = 1.4) => { g.lineStyle(breite, farbe, 0.95); for (const [a, b, c, d] of liste) g.lineBetween(a, b, c, d); };
+    linien(u.fest, K_FARBEN.fest); linien(u.flandern, K_FARBEN.flandern); linien(u.zaunFeld, K_FARBEN.zaunFeld);
+    g.lineStyle(1.2, K_FARBEN.zaun, 1);
+    for (const z of u.zaun) {   // Linienstück als Rechteck mit Halbdicke h (die Figur hält ihren Radius Abstand davon)
+      const dx = z.bx - z.ax, dy = z.by - z.ay, L = Math.hypot(dx, dy) || 1, nx = -dy / L * z.h, ny = dx / L * z.h;
+      g.strokePoints([{ x: z.ax + nx, y: z.ay + ny }, { x: z.bx + nx, y: z.by + ny }, { x: z.bx - nx, y: z.by - ny }, { x: z.ax - nx, y: z.ay - ny }], true);
+    }
+    g.lineStyle(1.2, K_FARBEN.auto, 0.95);
+    for (const r of u.autos) {
+      const e = [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([a, b]) => ({ x: r.x + r.c * a * r.hl - r.s * b * r.hb, y: r.y + r.s * a * r.hl + r.c * b * r.hb }));
+      g.strokePoints(e, true);
+    }
+    g.lineStyle(1, K_FARBEN.stamm, 0.95);
+    for (const b of u.staemme) g.strokeCircle(b.x, b.y, b.r);
   }
 
   // Zielfahne, gestrichelte Linie und Countdown (jedes Bild, nur wenn Infos da sind)
@@ -3909,6 +3947,7 @@ class Ort extends Phaser.Scene {
     const dt = Math.min(0.1, ms / 1000);
     if (this.hordeInfo) this.hordeZeichnen();
     this.hindernisAktualisieren();
+    this.kollisionAktualisieren();
     // Tag/Nacht-Zeiten vom Server (Einstellung) übernehmen
     if (raum.state.tagAb && (raum.state.tagAb !== this.tagAb || raum.state.nachtAb !== this.nachtAb)) {
       this.tagAb = raum.state.tagAb; this.nachtAb = raum.state.nachtAb; setzeTageszeiten(this.tagAb, this.nachtAb);

@@ -9,7 +9,7 @@
 import { frei, bewege, kmhZuPx, WERTE as W } from '../client/welt.mjs';
 import { fzRechtecke, kreisImRechteck, aufParkAuto } from '../client/fzkollision.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
-import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden, istStreife, streifeBei, fahrberechtigt } from '../client/pkw.mjs';
+import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden, zaunAutoSchaden, zaunTempoFaktor, istStreife, streifeBei, fahrberechtigt } from '../client/pkw.mjs';
 import { Fahrbar, FAHRWERK, PX } from './fahrbar.mjs';
 import { stammBei, RUECK_ANTEIL } from '../client/walze.mjs';
 import { LAENGE, BREITE_FZ } from './verkehr.mjs';
@@ -22,6 +22,7 @@ const ZOMBIE_PAUSE = 0.8;               // s, in denen derselbe Zombie nicht noc
 const ZOMBIE_BREMSE = 0.9;              // jeder Treffer kostet 10 % Tempo
 const SCHLEUDER = 12;                   // px, die ein langsam getroffener Zombie zur Seite fliegt
 const CRASH_PAUSE = 0.6;                // s zwischen zwei Aufprall-Schäden
+export const ZAUN_PAUSE = 0.4;          // s zwischen zwei Zaun-/Hecken-Durchbrüchen (Bremsen + Schaden), eine lange Hecke kostet also laufend
 const BOT_EINSTIEG = 110;               // px: Bots in dieser Nähe steigen zu, wenn ein Mensch im stehenden Auto sitzt
 const RAUCH_AB = 0.3;                   // unter 30 % Lebenspunkten raucht das Auto
 const PUNKTE = (() => {                  // Rumpfpunkte (längs × quer) im Fahrzeugrahmen
@@ -43,7 +44,7 @@ export class FahrbarPkw extends Fahrbar {
     this.lebenMax = Math.max(1, Number(e.leben) || PKW_VORGABE.leben); this.leben = this.lebenMax;
     this.andere = [];                     // Rechtecke der anderen Fahrzeuge (je Takt neu)
     this.pause = new Map();               // Zombie → Uhrzeit, ab der er wieder getroffen werden kann
-    this.uhr = 0; this.crashBis = 0; this.botUhr = 0; this.laermUhr = 0; this.sireneUhr = 0; this.letzteFrei = true; this.startBlock = 0;
+    this.uhr = 0; this.crashBis = 0; this.zaunBis = 0; this.botUhr = 0; this.laermUhr = 0; this.sireneUhr = 0; this.letzteFrei = true; this.startBlock = 0;
   }
 
   einstAuto() { return pkwEinst(this.raum); }
@@ -219,6 +220,17 @@ export class FahrbarPkw extends Fahrbar {
     const rest = Math.max(0, Math.round(this.leben / this.lebenMax * 100));
     for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, `💥 Aufprall mit ${Math.round(kmh)} km/h${minus ? ` – −${minus} ❤️` : ''} · Auto ${rest} %`);
     for (const sid of [...this.insassen]) { const p = s.spieler.get(sid); if (p?.unten) this.aussteigen(sid); }
+  }
+
+  // Zaun/Hecke plattgefahren (server/walze.mjs meldet die Zahl neuer Felder): bremst (auto.zaunBremse) und kostet Lebenspunkte ∝ Tempo
+  // (auto.zaunSchaden bei 80 km/h); höchstens alle ZAUN_PAUSE Sekunden, die Insassen bleiben unverletzt. Mauern und Häuser blockieren weiter.
+  gewalzt() {
+    if (!this.f || this.uhr < this.zaunBis) return;
+    this.zaunBis = this.uhr + ZAUN_PAUSE;
+    const e = this.einstAuto(), kmh = kmhVon(Math.abs(this.v));
+    this.leben -= zaunAutoSchaden(kmh, e);
+    this.v *= zaunTempoFaktor(e);
+    this.zaunMeldung ??= (() => { for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, '🌿 Durch Zaun und Hecke – das bremst und kostet Blech.'); return true; })();
   }
 
   // Zombies im Fußabdruck: schnell = tot, langsam = Schaden ∝ Tempo und weggeschleudert; jeder Treffer bremst und kostet das Auto Blech

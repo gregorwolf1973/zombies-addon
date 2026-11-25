@@ -2,8 +2,8 @@
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { berechneTuerPose, nachbarPolys, aussenFrei, FREI_M } from './tuerpose.mjs';
 import { zaeuneVorTuerenKappen } from './zaunkappen.mjs';
-import { zaeuneVonStrassen } from './zaunstrasse.mjs';
-import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
+import { zaeuneVonStrassen, strassenFlaechen, strassenTiefe, STRASSE_RAND, MIT_ZUFAHRT } from './zaunstrasse.mjs';
+import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen, zaunStueck } from './welt.mjs';
 import { fzPx } from './masse.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite, parkplatzBuchten } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
@@ -952,7 +952,12 @@ function baueFein(welt, karte, lbObj) {
     }
   }
   // 3. Gartenzäune und Hecken entlang der Linien. Ein Feinfeld ist 1 m groß: Halbbreite 4 px (½ Feld) ist das Schlankste, was ohne Lücken
-  // geht (jede Spalte/Zeile entlang der Linie trifft mindestens eine Feldmitte) → Band ~1 Feld breit; Hecken etwas breiter (0,7 m dick)
+  // geht (jede Spalte/Zeile entlang der Linie trifft mindestens eine Feldmitte) → Band ~1 Feld breit; Hecken etwas breiter (0,7 m dick).
+  // Auf Straßenkacheln fehlt ein Zaunfeld nur, wo es auf der GEZEICHNETEN Straße liegt (Fahrbahn + Gehweg, zaunstrasse.mjs): die 4-m-Kacheln
+  // reichen weit über den Straßenrand, früher war die Hecke dort unsichtbar offen – die Figur lief „in“ der Hecke den Gehweg entlang und
+  // blieb am Ende der Straßenkacheln (Straßenende, Kurve) stecken, ohne klettern zu können (bis WELT_VERSION 38).
+  const strFl = strassenFlaechen(karte.strassen, KACHEL, fahrbahnBreite, MIT_ZUFAHRT), gehweg = karte.amtlich ? 0 : 11;   // OSM-Karten ohne Gehwegbreite: 11 px wie die Zeichnung
+  const aufStrasse = (px, py) => !!strassenTiefe(strFl, px * KACHEL, py * KACHEL, gehweg - STRASSE_RAND);
   for (const z of karte.zaeune ?? []) {
     const dicke = (z.a === 'h' ? 5 : 4) / KACHEL, d2 = dicke * dicke;   // in Kacheln
     for (let i = 0; i + 3 < z.p.length; i += 2) {
@@ -963,9 +968,9 @@ function baueFein(welt, karte, lbObj) {
         const px = (fx + 0.5) / FEIN, py = (fy + 0.5) / FEIN;
         const t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / L2));
         const qx = ax + t * (bx - ax) - px, qy = ay + t * (by - ay) - py;
-        if (qx * qx + qy * qy > d2) continue;   // ohne hypot (Weltcode: gleich auf allen Engines)
+        if (qx * qx + qy * qy > d2 && !zaunStueck(ax * KACHEL, ay * KACHEL, bx * KACHEL, by * KACHEL, fx, fy)) continue;   // ohne hypot (Weltcode: gleich auf allen Engines); Felder, durch die die Linie läuft, immer (die Bewegung prüft darin die Linie genau, welt.mjs zaunImFeld)
         const kt = hole(Math.floor(px), Math.floor(py));
-        if (kt === T.TUER || kt === T.STRASSE) continue;
+        if (kt === T.TUER || (kt === T.STRASSE && aufStrasse(px, py))) continue;
         if (!f[fy * fb + fx]) f[fy * fb + fx] = 2;
       }
     }

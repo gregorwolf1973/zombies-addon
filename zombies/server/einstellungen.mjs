@@ -231,6 +231,8 @@ export function bereinigeAuto(au = {}) {
     crashAuto: Math.round(zahl(au.crashAuto, 0, 1000, V.crashAuto)),         // Lebenspunkte des Autos bei einem Aufprall mit 80 km/h
     zombieTotKmh: Math.round(zahl(au.zombieTotKmh, 1, 160, V.zombieTotKmh)),   // km/h: ab hier stirbt ein überfahrener Zombie sofort
     zombieSchaden: Math.round(zahl(au.zombieSchaden, 0, 100, V.zombieSchaden) * 10) / 10,   // Lebenspunkte des Autos je überfahrenem Zombie
+    zaunBremse: Math.round(fest(au.zaunBremse, 0, 90, V.zaunBremse)),        // % Tempo weg je durchbrochenem Zaun-/Heckenstück (Auto walzt sie platt)
+    zaunSchaden: Math.round(zahl(au.zaunSchaden, 0, 100, V.zaunSchaden) * 10) / 10,   // Lebenspunkte des Autos je Zaun-/Heckenstück bei 80 km/h (linear mit dem Tempo)
     laerm: Math.round(zahl(au.laerm, 5, 100, V.laerm, { min: 0, max: 1000 })),             // m: Grund-Hörweite des Motors beim Fahren (dazu Tempo in px; Panzer/Boxer ebenso)
     sireneWeite: Math.round(zahl(au.sireneWeite, 20, 400, V.sireneWeite, { min: 0, max: 2000 })),   // m: so weit lockt die Sirene eines Streifenwagens Zombies an
     schluesselMoebel: Math.round(fest(au.schluesselMoebel, 0, 100, V.schluesselMoebel) * 10) / 10,         // % Autoschlüssel je gefülltem Schrank/Spind/Aktenschrank/Werkbank (nur Möbel mit Inhalt, siehe beute.moebel)

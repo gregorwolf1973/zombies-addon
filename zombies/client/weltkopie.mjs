@@ -6,7 +6,7 @@ import { BREITE, HOEHE, T, WELT_VERSION } from './welt.mjs';
 
 // Übertragbare Form: alles außer der Funktion `hole`
 export function weltZerlegen(w) {
-  const { hole, ...rest } = w;   // eslint-disable-line no-unused-vars
+  const { hole, _zaunIdx, ...rest } = w;   // eslint-disable-line no-unused-vars -- Zaunindex (welt.mjs zaunIndex) baut sich bei Bedarf neu
   return rest;
 }
 

@@ -1,4 +1,4 @@
-// Boxer, Puma und Leopard walzen Hindernisse (Regeln: client/walze.mjs): Zäune und Hecken unter der Wanne werden dauerhaft platt (Lücke offen
+// Boxer, Puma, Leopard und gefahrene Autos walzen Hindernisse (Regeln: client/walze.mjs): Zäune und Hecken unter der Wanne werden dauerhaft platt (Lücke offen
 // für alle, auch Zombies), Leopard und Puma drücken geparkte Autos platt (state.platt wie in der B11-Szene, Kofferraum leer) und walzt kleine Bäume
 // um; Boxer fährt langsamer über geparkte Autos (30 %). Der Server entscheidet, schickt die Änderungen als Nachricht
 // 'walze' { seed, zaun, baum } an alle (beim Beitritt die ganze Liste) und hält das Wegefeld der Zombies aktuell (wegfeld.mjs).
@@ -13,9 +13,9 @@ import { feinZielVergessen } from './wegfeld.mjs';
 const KOLL_R = 5;          // wie server/fahrbar.mjs: Spielraum der Wannenpunkte
 const LAERM_PAUSE = 0.4;   // s zwischen zwei Geräuschen (Holz/Blech); Uhr = state.takt (ms)
 
-// Wannenpunkte (5 × 3) einer Art an Pose (x, y, w)
-function punkte(art, x, y, w) {
-  const m = FAHRBAR[art], c = Math.cos(w), s = Math.sin(w), l = [];
+// Wannenpunkte (5 × 3) eines Fahrzeugs an Pose (x, y, w); Maße aus fz.m (Panzer: FAHRBAR, Auto: client/pkw.mjs PKW)
+function punkte(fz, x, y, w) {
+  const m = fz.m ?? FAHRBAR[fz.art], c = Math.cos(w), s = Math.sin(w), l = [];
   for (const u of [-1, -0.5, 0, 0.5, 1]) for (const v of [-1, 0, 1]) { const a = u * m.laenge / 2, b = v * m.breite / 2; l.push([x + c * a - s * b, y + s * a + c * b]); }
   return l;
 }
@@ -33,7 +33,7 @@ export class Walze {
   autoFaktor(fz) {
     const regel = WALZE[fz.art];
     if (!regel || typeof regel.auto !== 'number' || !fz.f) return 1;
-    for (const [px, py] of punkte(fz.art, fz.f.x, fz.f.y, fz.f.richtung)) if (aufParkAuto(this.raum.welt, px, py, 1)) return regel.auto;
+    for (const [px, py] of punkte(fz, fz.f.x, fz.f.y, fz.f.richtung)) if (aufParkAuto(this.raum.welt, px, py, 1)) return regel.auto;
     return 1;
   }
 
@@ -42,7 +42,7 @@ export class Walze {
     const regel = WALZE[fz.art];
     if (!regel || !fz.f) return;
     const r = this.raum, welt = r.welt, zellen = new Set(), baum = [];
-    for (const [px, py] of punkte(fz.art, x, y, w)) {
+    for (const [px, py] of punkte(fz, x, y, w)) {
       if (regel.zaun) zaunZellen(welt, px, py, KOLL_R + 1, zellen);
       if (regel.baumMax) {
         const b = stammBei(welt, px, py, 1);
@@ -53,6 +53,7 @@ export class Walze {
     const zaun = [...zellen].filter(i => !this.zaun.has(i));
     if (!zaun.length && !baum.length) return;
     this.anwenden({ zaun, baum });
+    if (zaun.length) fz.gewalzt?.(zaun.length);   // Auto: bremst und verliert Lebenspunkte (server/pkw.mjs)
     if ((r.state.takt ?? 0) >= this.laermBis || !r.state.takt) {
       this.laermBis = (r.state.takt ?? 0) + LAERM_PAUSE * 1000;
       r.broadcast('blech', { x, y });   // Holz/Blech knirscht (Ereignis „Blech schabt“)

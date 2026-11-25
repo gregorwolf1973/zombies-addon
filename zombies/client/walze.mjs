@@ -2,7 +2,7 @@
 //  - Rückwärts: liegt die Eingaberichtung mehr als ~135° hinter der Fahrzeugachse, fährt das Fahrzeug rückwärts (statt zu wenden) und lenkt
 //    wie im Rückwärtsgang (das Heck dreht zur Eingaberichtung). Entscheidung per Skalarprodukt (kein Winkelvergleich mit atan2).
 //    PC-Tasten im Fahrzeug: W/↑ vor, S/↓ zurück, A/D lenken (tastenFahrzeug rechnet sie in eine Weltrichtung um).
-//  - Zäune und Hecken (Feinraster-Wert 2, nicht Mauern): Boxer, Puma und Leopard walzen sie dauerhaft platt (welt.fein → 0, Kachel ohne
+//  - Zäune und Hecken (Feinraster-Wert 2, nicht Mauern): Boxer, Puma, Leopard und gefahrene Autos walzen sie dauerhaft platt (welt.fein → 0, Kachel ohne
 //    Restzaun → Wiese, welt.zaunPlatt für die Zeichnung). Parkende Autos: Leopard drückt sie platt (state.platt), Puma fährt mit 40 %,
 //    Boxer mit 30 % Tempo darüber. Bäume: der Leopard walzt kleine Bäume um (welt.baeumeWeg), sonst blockieren Stämme. Hauswände blockieren alle.
 // Der Server entscheidet und schickt die Änderungen (Nachricht 'walze'); beide Seiten wenden sie mit walzeAnwenden() gleich an.
@@ -17,6 +17,7 @@ export const WALZE = {
   leopard: { zaun: true, auto: 'platt', baumMax: 52 },   // Kronen bis 6,5 m Durchmesser walzt er um, größere blockieren
   puma: { zaun: true, auto: 'platt', baumMax: 0 },
   boxer: { zaun: true, auto: 0.3, baumMax: 0 },
+  pkw: { zaun: true, auto: 1, baumMax: 0 },   // gefahrenes Auto/Streifenwagen: Zäune und Hecken platt, wird dabei langsamer und verliert Lebenspunkte (server/pkw.mjs gewalzt)
 };
 
 // Rückwärtsgang? dot = Skalarprodukt aus Fahrzeugachse und (normierter) Eingaberichtung, v = Tempo (negativ = rückwärts)
@@ -54,6 +55,15 @@ function stammListe(welt, kx, ky) {
   }
   memo.set(i, l);
   return l;
+}
+// alle noch stehenden Stämme mit Mittelpunkt im Rechteck (px) – Superuser-Anzeige „Kollision zeigen“ (sperren nur Fahrzeuge)
+export function staemmeIn(welt, x0, y0, x1, y1) {
+  const aus = [];
+  if (!welt?.hole || welt.kachel || welt.ebene) return aus;
+  for (let j = Math.max(0, Math.floor(y0 / KACHEL)); j <= Math.min(HOEHE - 1, Math.floor(y1 / KACHEL)); j++)
+    for (let i = Math.max(0, Math.floor(x0 / KACHEL)); i <= Math.min(BREITE - 1, Math.floor(x1 / KACHEL)); i++)
+      for (const b of stammListe(welt, i, j)) if (!welt.baeumeWeg?.has(b.k)) aus.push(b);
+  return aus;
 }
 // Stamm, den ein Kreis (x, y, rad) berührt, oder null (nur draußen)
 export function stammBei(welt, x, y, rad) {
