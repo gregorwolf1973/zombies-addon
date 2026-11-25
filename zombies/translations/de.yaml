@@ -1,0 +1,74 @@
+configuration:
+  karte:
+    name: "Karte"
+    description: "Startkarte (nur beim allerersten Start; später in der Seitenleiste Zombies änderbar)."
+  zombies:
+    name: "Zombies"
+    description: "Menge der Zombies draußen (10 = normal), Startwert."
+  zombie_faktor:
+    name: "Zombie-Faktor"
+    description: "Zusätzlicher Faktor für die Zombie-Menge (0,1 bis 5)."
+  funde:
+    name: "Fundhäufigkeit"
+    description: "Wie oft Gegenstände gefunden werden (10 = normal, 0 = nie, 20 = doppelt)."
+    fields:
+      wasser:
+        name: "Wasser"
+      essen:
+        name: "Essen"
+      verband:
+        name: "Verbandskasten"
+      bretter:
+        name: "Bretter"
+      pistole:
+        name: "Pistole"
+      schlaeger:
+        name: "Baseballschläger"
+      munition:
+        name: "Munition"
+      spritze:
+        name: "Rettungsspritze"
+      schluessel:
+        name: "Schlüsselbund"
+      brechstange:
+        name: "Brechstange"
+      messer:
+        name: "Messer"
+      kleidung:
+        name: "Kleidung"
+      seil:
+        name: "Seil"
+      taschenlampe:
+        name: "Taschenlampe"
+      schokoriegel:
+        name: "Schokoriegel"
+      tasche:
+        name: "Tasche (mehr Platz)"
+      trekking:
+        name: "Trekkingrucksack"
+      funkgeraet:
+        name: "Funkgerät"
+  zugangscode:
+    name: "Zugangscode"
+    description: "Wenn gesetzt, brauchen Mitspieler diesen Code. Unbedingt setzen, wenn das Spiel aus dem Internet erreichbar ist."
+  wiki_adresse:
+    name: "Wiki-Adresse"
+    description: "Optional: Adresse eines DokuWiki für die Links nach den Rätseln."
+  externe_adresse:
+    name: "Externe Adresse"
+    description: "https-Adresse des Spiels von außen; nötig für das Mikrofon (Sprachfunk) bei Zugriff von außen."
+  bots:
+    name: "Bots"
+    description: "Simulierte Mitspieler (0 bis 9), solange nur ein Mensch spielt."
+  stun_server:
+    name: "STUN-Server"
+    description: "Für den Sprachfunk. Der Standard fragt einen Google-Server (IP-Adressen gehen dorthin); leer lassen schaltet ihn ab."
+  turn_server:
+    name: "TURN-Server"
+    description: "Optional: eigener TURN-Server für Sprachfunk hinter strengen Firewalls."
+  turn_username:
+    name: "TURN-Benutzer"
+    description: "Benutzername für den TURN-Server."
+  turn_password:
+    name: "TURN-Passwort"
+    description: "Passwort für den TURN-Server."
