@@ -2,8 +2,8 @@
 // Kartendaten © OpenStreetMap-Mitwirkende, ODbL 1.0.
 import { berechneTuerPose, nachbarPolys, aussenFrei, FREI_M } from './tuerpose.mjs';
 import { zaeuneVorTuerenKappen } from './zaunkappen.mjs';
-import { zaeuneVonStrassen } from './zaunstrasse.mjs';
-import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen } from './welt.mjs';
+import { zaeuneVonStrassen, strassenFlaechen, strassenTiefe, STRASSE_RAND, MIT_ZUFAHRT } from './zaunstrasse.mjs';
+import { KACHEL, BREITE, HOEHE, T, zufall, BLOCKIERT, BLOCKIERT_BAU, FEIN, FEIN_PX, safeRoomsVervollstaendigen, zaunStueck } from './welt.mjs';
 import { fzPx } from './masse.mjs';
 import { randParkplaetze, strassenBuchten, fahrbahnBreite, parkplatzBuchten } from './vektor.mjs';
 import { baueStuetzpunkt } from './stuetzpunkt.mjs';
@@ -912,12 +912,16 @@ function baueFein(welt, karte, lbObj) {
   const busKachel = new Set();   // Kacheln geparkter Busse (Index ky * BREITE + kx)
   for (const d of welt.deko ?? []) if (d.art === 'bus') for (let yy = d.ky; yy < d.ky + d.h; yy++) for (let xx = d.kx; xx < d.kx + d.b; xx++) busKachel.add(yy * BREITE + xx);
   for (const o of welt.details?.objekte ?? []) if (o.a === 'gartenhaus') for (let y = o.y; y < o.y + (o.h ?? 1); y++) for (let x = o.x; x < o.x + (o.b ?? 1); x++) grob[y * BREITE + x] = 1;
+  // Container (Mulde, Großtonne, Altglas-Iglu): nur der gezeichnete Umriss sperrt (Feinwert 5 + welt.kaesten, genau geprüft in welt.mjs freiBewegung)
+  const contKachel = new Map();
+  for (const c of welt.behaelter ?? []) if (c.art === 'container') contKachel.set(Math.floor(c.y / KACHEL) * BREITE + Math.floor(c.x / KACHEL), c);
   const kachelFuellen = (kx, ky, wert) => { for (let dy = 0; dy < FEIN; dy++) for (let dx = 0; dx < FEIN; dx++) f[(ky * FEIN + dy) * fb + kx * FEIN + dx] = wert; };
   // 1. grob übernehmen – außer Hauswänden (Polygon) und Gartenzäunen (Linien)
   for (let ky = 0; ky < HOEHE; ky++) for (let kx = 0; kx < BREITE; kx++) {
     const t = hole(kx, ky), i = ky * BREITE + kx;
     if (!BLOCKIERT.has(t)) continue;
     if (t === T.DEKO && busKachel.has(i)) continue;   // geparkte Busse: nur der gezeichnete Umriss sperrt (unten, Schritt 1b)
+    if (t === T.DEKO && contKachel.has(i)) continue;  // Container: Schritt 1c
     const haus = (t === T.WAND || t === T.LEER) && !grob[i];
     const zaun = t === T.ZAUN && 'hzmw'.includes(zaunart[i]);
     if (!haus && !zaun) kachelFuellen(kx, ky, 1);
@@ -929,6 +933,16 @@ function baueFein(welt, karte, lbObj) {
       if (fx < 0 || fy < 0 || fx >= fb || fy >= fh) continue;
       const ox = Math.min(x1, (fx + 1) * FEIN_PX) - Math.max(x0, fx * FEIN_PX), oy = Math.min(y1, (fy + 1) * FEIN_PX) - Math.max(y0, fy * FEIN_PX);
       if (ox > 0 && oy > 0 && ox * oy >= FEIN_PX * FEIN_PX / 2) f[fy * fb + fx] = 1;
+    }
+  }
+  // 1c. Container: Rechteck wie gezeichnet (aussehen.mjs Straßendeko), Felder darunter Wert 5
+  welt.kaesten = [];
+  for (const c of contKachel.values()) {
+    const [hx, hy] = kastenHalb(c);
+    const k = { id: c.id, x0: c.x - hx, y0: c.y - hy, x1: c.x + hx, y1: c.y + hy };
+    welt.kaesten.push(k);
+    for (let fy = Math.floor(k.y0 / FEIN_PX); fy * FEIN_PX < k.y1; fy++) for (let fx = Math.floor(k.x0 / FEIN_PX); fx * FEIN_PX < k.x1; fx++) {
+      if (fx >= 0 && fy >= 0 && fx < fb && fy < fh && !f[fy * fb + fx]) f[fy * fb + fx] = 5;
     }
   }
   // 2. Häuser nach ihrem Umriss
@@ -952,7 +966,12 @@ function baueFein(welt, karte, lbObj) {
     }
   }
   // 3. Gartenzäune und Hecken entlang der Linien. Ein Feinfeld ist 1 m groß: Halbbreite 4 px (½ Feld) ist das Schlankste, was ohne Lücken
-  // geht (jede Spalte/Zeile entlang der Linie trifft mindestens eine Feldmitte) → Band ~1 Feld breit; Hecken etwas breiter (0,7 m dick)
+  // geht (jede Spalte/Zeile entlang der Linie trifft mindestens eine Feldmitte) → Band ~1 Feld breit; Hecken etwas breiter (0,7 m dick).
+  // Auf Straßenkacheln fehlt ein Zaunfeld nur, wo es auf der GEZEICHNETEN Straße liegt (Fahrbahn + Gehweg, zaunstrasse.mjs): die 4-m-Kacheln
+  // reichen weit über den Straßenrand, früher war die Hecke dort unsichtbar offen – die Figur lief „in“ der Hecke den Gehweg entlang und
+  // blieb am Ende der Straßenkacheln (Straßenende, Kurve) stecken, ohne klettern zu können (bis WELT_VERSION 38).
+  const strFl = strassenFlaechen(karte.strassen, KACHEL, fahrbahnBreite, MIT_ZUFAHRT), gehweg = karte.amtlich ? 0 : 11;   // OSM-Karten ohne Gehwegbreite: 11 px wie die Zeichnung
+  const aufStrasse = (px, py) => !!strassenTiefe(strFl, px * KACHEL, py * KACHEL, gehweg - STRASSE_RAND);
   for (const z of karte.zaeune ?? []) {
     const dicke = (z.a === 'h' ? 5 : 4) / KACHEL, d2 = dicke * dicke;   // in Kacheln
     for (let i = 0; i + 3 < z.p.length; i += 2) {
@@ -963,9 +982,9 @@ function baueFein(welt, karte, lbObj) {
         const px = (fx + 0.5) / FEIN, py = (fy + 0.5) / FEIN;
         const t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / L2));
         const qx = ax + t * (bx - ax) - px, qy = ay + t * (by - ay) - py;
-        if (qx * qx + qy * qy > d2) continue;   // ohne hypot (Weltcode: gleich auf allen Engines)
+        if (qx * qx + qy * qy > d2 && !zaunStueck(ax * KACHEL, ay * KACHEL, bx * KACHEL, by * KACHEL, fx, fy)) continue;   // ohne hypot (Weltcode: gleich auf allen Engines); Felder, durch die die Linie läuft, immer (die Bewegung prüft darin die Linie genau, welt.mjs zaunImFeld)
         const kt = hole(Math.floor(px), Math.floor(py));
-        if (kt === T.TUER || kt === T.STRASSE) continue;
+        if (kt === T.TUER || (kt === T.STRASSE && aufStrasse(px, py))) continue;
         if (!f[fy * fb + fx]) f[fy * fb + fx] = 2;
       }
     }
@@ -988,6 +1007,20 @@ function baueFein(welt, karte, lbObj) {
   // Nebengebäude (LoD2): Hindernisse mit glattem Umriss; was ein Haus einsperren würde, fällt weg
   if (lbObj?.neben?.length) welt.nebengebaeude = nebenPlatzieren(f, fb, FEIN, hole, lbObj.neben, welt.haeuser, ff => tuerenOhneWeg({ fein: ff, hole, haeuser: welt.haeuser }));
   return f;
+}
+
+// halbe Maße (px) eines Containers wie gezeichnet: Mulde 4,5 × 2,6 m (mit Haken), Großtonne 1,4 × 1,1 m, Altglas-Iglu Ø 1,6 m; quer bei 90°
+export function kastenHalb(c) {
+  const [a, b] = c.typ === 'glas' ? [6.6, 6.6] : c.typ === 'gross' ? [5.6, 4.3] : [19, 10.5];
+  return c.winkel ? [b, a] : [a, b];   // Container stehen nur längs (0) oder quer (π/2)
+}
+function kastenWeg(welt, c, setze) {
+  const kx = Math.floor(c.x / KACHEL), ky = Math.floor(c.y / KACHEL), f = welt.fein, fb = BREITE * FEIN;
+  if (welt.hole(kx, ky) === T.DEKO) setze(kx, ky, T.WIESE);
+  const k = welt.kaesten?.find(q => q.id === c.id);
+  if (!k || !f) return;
+  welt.kaesten.splice(welt.kaesten.indexOf(k), 1);
+  for (let fy = Math.floor(k.y0 / FEIN_PX); fy * FEIN_PX < k.y1; fy++) for (let fx = Math.floor(k.x0 / FEIN_PX); fx * FEIN_PX < k.x1; fx++) if (f[fy * fb + fx] === 5) f[fy * fb + fx] = 0;
 }
 
 function zugaengeOeffnen(f, fb, fh, welt) {
@@ -1088,7 +1121,10 @@ function tuerenFreihalten(welt, setze, abstandRechteck) {
     const drin = (px, py, m = 0) => px >= x0 - m && px <= x1 + m && py >= y0 - m && py <= y1 + m;
     for (let i = welt.behaelter.length - 1; i >= 0; i--) {
       const b = welt.behaelter[i];
-      if ((b.art === 'auto' && drin(b.x, b.y, 22)) || ((b.art === 'muelltonne' || b.art === 'container') && drin(b.x, b.y, 0))) welt.behaelter.splice(i, 1);
+      if ((b.art === 'auto' && drin(b.x, b.y, 22)) || ((b.art === 'muelltonne' || b.art === 'container') && drin(b.x, b.y, 0))) {
+        if (b.art === 'container') kastenWeg(welt, b, setze);   // Kachel und Umriss wieder frei (sonst unsichtbare Sperre vor der Tür)
+        welt.behaelter.splice(i, 1);
+      }
     }
     for (let i = welt.muell.tonnen.length - 1; i >= 0; i--) if (drin(welt.muell.tonnen[i].x, welt.muell.tonnen[i].y, 0)) welt.muell.tonnen.splice(i, 1);
     for (let i = welt.parkbuchten.length - 1; i >= 0; i--) {

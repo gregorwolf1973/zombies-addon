@@ -186,7 +186,7 @@ test('Über Gartenzäune steigen: länger dagegenlaufen, dann drüber; Kartenran
     const k = raum.kontext(p);
     assert.equal(k?.art, 'klettern', 'kein Drübersteigen angeboten: ' + k?.art);
     c.send('aktion');
-    assert.ok(await bis(() => p.y < ort.fy * KACHEL - 8, 3000), 'Aktionsknopf steigt nicht hinüber');
+    assert.ok(await bis(() => p.y < ort.fy * KACHEL - 4, 3000), 'Aktionsknopf steigt nicht hinüber');   // Landung direkt hinter der Linie (Kollision seit WELT_VERSION 39 genau an der Linie, nicht am 1-m-Feld)
   } finally { await c.leave(); }
 });
 

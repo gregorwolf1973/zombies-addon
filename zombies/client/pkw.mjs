@@ -31,6 +31,8 @@ export const PKW_VORGABE = {
   crashAuto: 40,           // Lebenspunkte, die das Auto bei einem Aufprall mit 80 km/h verliert (linear wie oben)
   zombieTotKmh: 25,        // km/h: ab hier stirbt ein überfahrener Zombie sofort, darunter Schaden ∝ Tempo
   zombieSchaden: 2,        // Lebenspunkte, die das Auto je überfahrenem Zombie verliert
+  zaunBremse: 40,          // % Tempo, die das Auto je durchbrochenem Zaun-/Heckenstück verliert (höchstens alle 0,4 s)
+  zaunSchaden: 15,         // Lebenspunkte des Autos je durchbrochenem Zaun-/Heckenstück bei 80 km/h (linear mit dem Tempo, wie der Aufprall)
   schluesselMoebel: 10,    // % Chance auf einen Autoschlüssel je gefülltem Schrank/Spind/Aktenschrank/Werkbank (zusätzlich zur Beute; gefüllt sind beute.moebel %)
   schluesselKofferraum: 20,   // % je Kofferraum
   schluesselLeiche: 4,     // % je Leiche (toter Zombie)
@@ -105,6 +107,15 @@ export function crashAnteil(kmh, e = PKW_VORGABE) {
   return Math.max(0, Math.min(1, voll * (kmh - ab) / (80 - ab)));
 }
 // Schaden am Auto bei einem Aufprall mit `kmh` (Lebenspunkte)
+// Zaun/Hecke durchbrochen: Lebenspunkte des Autos (∝ Tempo, zaunSchaden bei 80 km/h) und Tempo-Faktor danach (1 − zaunBremse %)
+export function zaunAutoSchaden(kmh, e = PKW_VORGABE) {
+  const voll = Number(e.zaunSchaden ?? PKW_VORGABE.zaunSchaden);
+  return kmh > 0 && voll > 0 ? voll * kmh / 80 : 0;
+}
+export function zaunTempoFaktor(e = PKW_VORGABE) {
+  const b = Number(e.zaunBremse ?? PKW_VORGABE.zaunBremse);
+  return Math.max(0, Math.min(1, 1 - (Number.isFinite(b) ? b : PKW_VORGABE.zaunBremse) / 100));
+}
 export function crashAutoSchaden(kmh, e = PKW_VORGABE) {
   const ab = Number(e.crashAb ?? PKW_VORGABE.crashAb), voll = Number(e.crashAuto ?? PKW_VORGABE.crashAuto);
   if (!(kmh >= ab)) return 0;

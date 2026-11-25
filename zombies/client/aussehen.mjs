@@ -683,8 +683,8 @@ function zeichneKollisionsSockel(ctx, welt, rect, foto) {
     }
     ctx.restore();
   }
-  for (const c of welt.behaelter ?? []) {   // Container blockieren die ganze Kachel (4 × 4 m), das Bild ist viel kleiner: Stellfläche in Kachelgröße
-    if (c.art !== 'container') continue;
+  for (const c of welt.behaelter ?? []) {   // alte Welten: Container blockieren die ganze Kachel (4 × 4 m) → Stellfläche in Kachelgröße; seit WELT_VERSION 39 sperrt nur der Umriss (welt.kaesten)
+    if (c.art !== 'container' || welt.kaesten) continue;
     const kx = Math.floor(c.x / K), ky = Math.floor(c.y / K);
     if (kx < x0 - 1 || kx > x1 || ky < y0 - 1 || ky > y1 || welt.hole(kx, ky) !== T.DEKO) continue;
     ctx.fillStyle = 'rgba(35,38,42,.42)'; ctx.fillRect(kx * K + 1, ky * K + 1, K - 2, K - 2);

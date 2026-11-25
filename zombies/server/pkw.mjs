@@ -9,7 +9,7 @@
 import { frei, bewege, kmhZuPx, WERTE as W } from '../client/welt.mjs';
 import { fzRechtecke, kreisImRechteck, aufParkAuto } from '../client/fzkollision.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
-import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden, istStreife, streifeBei, fahrberechtigt } from '../client/pkw.mjs';
+import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden, zaunAutoSchaden, zaunTempoFaktor, istStreife, streifeBei, fahrberechtigt } from '../client/pkw.mjs';
 import { Fahrbar, FAHRWERK, PX, lenkWerte } from './fahrbar.mjs';
 import { stammBei, RUECK_ANTEIL } from '../client/walze.mjs';
 import { LAENGE, BREITE_FZ } from './verkehr.mjs';
@@ -22,11 +22,15 @@ const ZOMBIE_PAUSE = 0.8;               // s, in denen derselbe Zombie nicht noc
 const ZOMBIE_BREMSE = 0.9;              // jeder Treffer kostet 10 % Tempo
 const SCHLEUDER = 12;                   // px, die ein langsam getroffener Zombie zur Seite fliegt
 const CRASH_PAUSE = 0.6;                // s zwischen zwei Aufprall-Schäden
+export const ZAUN_PAUSE = 0.4;          // s zwischen zwei Zaun-/Hecken-Durchbrüchen (Bremsen + Schaden), eine lange Hecke kostet also laufend
 const BOT_EINSTIEG = 110;               // px: Bots in dieser Nähe steigen zu, wenn ein Mensch im stehenden Auto sitzt
 const RAUCH_AB = 0.3;                   // unter 30 % Lebenspunkten raucht das Auto
-const PUNKTE = (() => {                  // Rumpfpunkte (längs × quer) im Fahrzeugrahmen
-  const p = [];
-  for (const u of [-1, -0.5, 0, 0.5, 1]) for (const v of [-1, 0, 1]) p.push([u * PKW.laenge / 2, v * PKW.breite / 2]);
+// Rumpfpunkte (längs × quer) im Fahrzeugrahmen: um KOLL_R − 1 nach innen gerückt, damit die Kreise (Radius KOLL_R) genau 1 px über die
+// Karosserie reichen – wie gegen geparkte Autos (aufParkAuto mit Radius 1). Früher saßen die Punkte auf der Kante und das Auto hielt
+// 3 px (0,4 m) vor Wand und Zaun an, sichtbar wie ein Anstoßen am Schatten. Abstand der Punkte ≤ 6 px: auch dünne Zäune fallen nicht dazwischen.
+const PUNKTE = (() => {
+  const p = [], hl = PKW.laenge / 2 - (KOLL_R - 1), hb = PKW.breite / 2 - (KOLL_R - 1);
+  for (const u of [-1, -2 / 3, -1 / 3, 0, 1 / 3, 2 / 3, 1]) for (const v of [-1, 0, 1]) p.push([u * hl, v * hb]);
   return p;
 })();
 
@@ -41,9 +45,10 @@ export class FahrbarPkw extends Fahrbar {
     this.von = { name: 'Auto', x: 0, y: 0, besiegt: 0 };
     const e = this.einstAuto();
     this.lebenMax = Math.max(1, Number(e.leben) || PKW_VORGABE.leben); this.leben = this.lebenMax;
+    this.walzR = KOLL_R + 1;              // server/walze.mjs: platt wird nur, was die Rumpfpunkte sonst blockierte
     this.andere = [];                     // Rechtecke der anderen Fahrzeuge (je Takt neu)
     this.pause = new Map();               // Zombie → Uhrzeit, ab der er wieder getroffen werden kann
-    this.uhr = 0; this.crashBis = 0; this.botUhr = 0; this.laermUhr = 0; this.sireneUhr = 0; this.letzteFrei = true; this.startBlock = 0;
+    this.uhr = 0; this.crashBis = 0; this.zaunBis = 0; this.botUhr = 0; this.laermUhr = 0; this.sireneUhr = 0; this.letzteFrei = true; this.startBlock = 0;
   }
 
   einstAuto() { return pkwEinst(this.raum); }
@@ -66,10 +71,15 @@ export class FahrbarPkw extends Fahrbar {
     let n = 0;
     for (const [u, v] of PUNKTE) {
       const px = x + c * u - s * v, py = y + s * u + c * v;
-      if (!frei(welt, px, py, KOLL_R) || aufParkAuto(welt, px, py, 1) || stammBei(welt, px, py, 1)) { n++; continue; }   // auch Baumstämme
-      for (const r of this.andere) if (Math.abs(px - r.x) <= r.hl + 3 && Math.abs(py - r.y) <= r.hl + 3 && kreisImRechteck(r, px, py, 1)) { n++; break; }
+      if (!frei(welt, px, py, KOLL_R) || aufParkAuto(welt, px, py, KOLL_R) || stammBei(welt, px, py, KOLL_R)) { n++; continue; }   // auch Baumstämme
+      for (const r of this.andere) if (Math.abs(px - r.x) <= r.hl + KOLL_R + 2 && Math.abs(py - r.y) <= r.hl + KOLL_R + 2 && kreisImRechteck(r, px, py, KOLL_R)) { n++; break; }
     }
     return n;
+  }
+  // Startwert für frei(): blockierte Punkte an der Parkpose und 4 px davor/dahinter (eng geparkt oder Nase an Wand/Hecke: darf herausrangieren)
+  startBlockVon(welt, f) {
+    const c = Math.cos(f.richtung) * 4, s = Math.sin(f.richtung) * 4;
+    return Math.max(this.blockPunkte(welt, f.x, f.y, f.richtung), this.blockPunkte(welt, f.x + c, f.y + s, f.richtung), this.blockPunkte(welt, f.x - c, f.y - s, f.richtung));
   }
   // Pose frei? Steht das Auto schon beim Aufstellen eng (Parklücke an der Hecke, Luftbild-Autos dicht an dicht), darf es sich bewegen,
   // solange es nicht schlimmer wird, bis es einmal ganz frei ist. letzteFrei merkt sich das Ergebnis für die Aufprallerkennung.
@@ -222,6 +232,17 @@ export class FahrbarPkw extends Fahrbar {
     for (const sid of [...this.insassen]) { const p = s.spieler.get(sid); if (p?.unten) this.aussteigen(sid); }
   }
 
+  // Zaun/Hecke plattgefahren (server/walze.mjs meldet die Zahl neuer Felder): bremst (auto.zaunBremse) und kostet Lebenspunkte ∝ Tempo
+  // (auto.zaunSchaden bei 80 km/h); höchstens alle ZAUN_PAUSE Sekunden, die Insassen bleiben unverletzt. Mauern und Häuser blockieren weiter.
+  gewalzt() {
+    if (!this.f || this.uhr < this.zaunBis) return;
+    this.zaunBis = this.uhr + ZAUN_PAUSE;
+    const e = this.einstAuto(), kmh = kmhVon(Math.abs(this.v));
+    this.leben -= zaunAutoSchaden(kmh, e);
+    this.v *= zaunTempoFaktor(e);
+    this.zaunMeldung ??= (() => { for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, '🌿 Durch Zaun und Hecke – das bremst und kostet Blech.'); return true; })();
+  }
+
   // Zombies im Fußabdruck: schnell = tot, langsam = Schaden ∝ Tempo und weggeschleudert; jeder Treffer bremst und kostet das Auto Blech
   zombiesUeberfahren() {
     const r = this.raum, s = r.state, f = this.f, e = this.einstAuto();
@@ -284,7 +305,7 @@ export class PkwVerwaltung {
     const fz = new FahrbarPkw(r, b.id);
     const f = fz.aufstellen(b.x, b.y, parkWinkel(b));
     f.farbe = b.farbe ?? 0; f.leben = 100; f.turm = 0;
-    fz.andere = fz.andereFahrzeuge(); fz.startBlock = fz.blockPunkte(r.welt, f.x, f.y, f.richtung);   // eng geparkt: darf erst herausrangieren
+    fz.andere = fz.andereFahrzeuge(); fz.startBlock = fz.startBlockVon(r.welt, f);   // eng geparkt: darf erst herausrangieren
     r.fahrbare.liste.push(fz);
     this.weg(b.id);
     fz.einsteigen(sid);
@@ -300,7 +321,7 @@ export class PkwVerwaltung {
     const fz = new FahrbarPkw(r, st.id);
     const f = fz.aufstellen(st.x, st.y, st.w);
     f.farbe = 0; f.leben = 100; f.turm = 0; f.blau = false;
-    fz.andere = fz.andereFahrzeuge(); fz.startBlock = fz.blockPunkte(r.welt, f.x, f.y, f.richtung);
+    fz.andere = fz.andereFahrzeuge(); fz.startBlock = fz.startBlockVon(r.welt, f);
     r.fahrbare.liste.push(fz);
     this.weg(st.id);
     fz.einsteigen(sid);

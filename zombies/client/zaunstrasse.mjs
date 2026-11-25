@@ -10,10 +10,11 @@ const AUTO = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclas
 export const STRASSE_RAND = 0.3 * M;   // Sicherheitsabstand hinter dem Gehweg
 
 // Straßenflächen vorbereiten (Pixel); gleiche Breitenrechnung wie vektor.mjs
-export function strassenFlaechen(strassen, kachel, fahrbahnPx) {
+export const MIT_ZUFAHRT = new Set([...AUTO, 'service']);   // auch Zufahrten (osmwelt baueFein: Zaunfelder auf der gezeichneten Fläche)
+export function strassenFlaechen(strassen, kachel, fahrbahnPx, arten = AUTO) {
   const K = kachel, sl = [];
   for (const s of strassen ?? []) {
-    if (!AUTO.has(s.t) || !s.p || s.p.length < 4) continue;
+    if (!arten.has(s.t) || !s.p || s.p.length < 4) continue;
     const p = []; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (let i = 0; i + 1 < s.p.length; i += 2) { const x = s.p[i] * K, y = s.p[i + 1] * K; p.push(x, y); if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     const fb = fahrbahnPx({ t: s.t, ref: s.ref, spuren: Number(s.spuren) || 0, breite: parseFloat(s.breite) || 0 });

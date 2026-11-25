@@ -44,6 +44,14 @@ function parkIndex(welt) {
   return (welt._parkIdx = m.size ? m : null);
 }
 
+// Rechtecke der geparkten Autos der Welt, deren Zelle das Rechteck (x0, y0)–(x1, y1) in px berührt (Superuser-Anzeige „Kollision zeigen“)
+export function parkRechteckeIn(welt, x0, y0, x1, y1) {
+  const idx = parkIndex(welt), aus = [];
+  if (!idx) return aus;
+  for (let cy = Math.floor(y0 / ZELLE) - 1; cy <= Math.floor(y1 / ZELLE) + 1; cy++) for (let cx = Math.floor(x0 / ZELLE) - 1; cx <= Math.floor(x1 / ZELLE) + 1; cx++) for (const r of idx.get(cx + ',' + cy) ?? []) aus.push(r);
+  return aus;
+}
+
 // liegt der Kreis auf einem geparkten Auto der Welt?
 export function aufParkAuto(welt, x, y, rad) {
   const idx = parkIndex(welt);
