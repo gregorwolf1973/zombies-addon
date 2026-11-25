@@ -503,3 +503,9 @@ body.feuerknopf-an #rucksack { padding-left: calc(var(--fk, 56px) + 16px + env(s
 .credits-dialog::backdrop { background: rgba(0, 0, 0, .6); }
 .credits-dialog ul { padding-left: 18px; }
 .credits-dialog a { color: #9ecbff; }
+
+/* Spenden-Knöpfe auf der Startseite (Buy Me a Coffee, Liberapay) */
+.spenden { font-size: 12px; opacity: .85; margin-top: 10px; text-align: center; line-height: 2; }
+.spenden .spende { display: inline-block; margin: 0 4px; padding: 3px 10px; border-radius: 6px; font-weight: 600; text-decoration: none; color: #1b1b1b; }
+.spenden .bmc { background: #ffdd00; }
+.spenden .lp { background: #f6c915; }

@@ -79,6 +79,10 @@ Eigene Töne lassen sich in der Verwaltung hochladen oder unter `/share/zombies/
 Quellen und Lizenzen der Grafiken, Karten und Bibliotheken: siehe `CREDITS.md` im Repository.
 Das Spiel enthält Gewalt gegen Zombies und Waffen – empfohlen ab 16 Jahren.
 
+## Unterstützen
+
+Gefällt dir das Spiel? [☕ Buy me a coffee](https://buymeacoffee.com/gregorwolf1973) · [💛 Liberapay](https://liberapay.com/Gregor_Wolf/donate)
+
 ---
 
 # Zombies in Oberbayern (English)
@@ -154,3 +158,7 @@ if you leave outside, your character waits 2 minutes and appears in the last saf
 
 amd64 or aarch64 with roughly 400 MB of free RAM (measured 325–420 MB with one player and about 40 zombies) and one to
 two CPU cores.
+
+## Support
+
+Enjoying the game? [☕ Buy me a coffee](https://buymeacoffee.com/gregorwolf1973) · [💛 Liberapay](https://liberapay.com/Gregor_Wolf/donate)
