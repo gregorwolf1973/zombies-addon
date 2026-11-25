@@ -13,7 +13,7 @@ Der Quellcode steht unter der MIT-Lizenz (siehe LICENSE). Sie gilt **nur für de
 - Kenney, „Topdown Shooter“ (Bäume, Büsche, Felsen u. a.), https://www.kenney.nl – CC0 1.0.
 - Riley Gombart, „Animated Top Down Survivor Player“ – [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/), https://opengameart.org/content/animated-top-down-survivor-player; „tds_zombie“ – CC0 1.0; „Top Down Animated Zombie Set“ – OGA-BY 3.0, https://opengameart.org/content/top-down-animated-zombie-set. Zugeschnitten, skaliert, neu angeordnet.
 - KonitaTutorials, „Top Down Civillians and Police Man“ – CC-BY 3.0, https://opengameart.org/content/top-down-civillians-and-police-man.
-- „Survivor Spine“ (Waffenbilder, Mündungsblitz) – CC-BY 3.0, OpenGameArt (Autor siehe `zombies/client/grafik/LIZENZ.txt`).
+- „Survivor Spine“ (Waffenbilder, Mündungsblitz): Riley Gombart, aus „Animated Top Down Survivor Player“ (https://opengameart.org/content/animated-top-down-survivor-player) – CC-BY 3.0.
 - harrison-lord, „Top-down Dog + Simple Animation“ – CC-BY 3.0, https://opengameart.org/content/top-down-dog-simple-animation.
 - Autos: Unlucky Studio (sujit1717), „Free Top Down Car Sprites“ – CC0, https://opengameart.org/content/free-top-down-car-sprites-by-unlucky-studio; „Red Car (top-down)“ – CC0 (umgefärbt); looneybits, „TopDownCar 2/3/4“ – CC0; TRBRY, „Car Sedan“ – CC-BY 3.0 / OGA-BY 3.0, https://opengameart.org/content/car-sedan; Cliipso, „Top Down Car Sprite“ – CC-BY 3.0, https://opengameart.org/content/top-down-car-sprite.
 - 3D-Modelle, als Draufsicht gerendert und verändert (Modelle selbst nicht enthalten):

@@ -12,7 +12,7 @@ figuren2.webp / figuren2.json (mit tools/figuren2_schneiden.py aus OpenGameArt-P
   https://opengameart.org/content/top-down-animated-zombie-set – OGA-BY 3.0
 - Bürger (Stadtbewohner) und Polizisten: KonitaTutorials, „Top Down Civillians and Police Man“,
   https://opengameart.org/content/top-down-civillians-and-police-man – CC-BY 3.0
-- Waffenbilder und Mündungsblitz: „Survivor Spine“ (OpenGameArt) – CC-BY 3.0
+- Waffenbilder und Mündungsblitz: Riley Gombart, „Survivor Spine“ aus „Animated Top Down Survivor Player“ (OpenGameArt) – CC-BY 3.0
 
 autos.webp / autos.json (mit tools/autos_schneiden.py aus OpenGameArt-Bildern zusammengestellt; freigestellt, gedreht, verkleinert):
 - „Free Top Down Car Sprites by Unlucky Studio“ (Autor sujit1717 / Unlucky Studio),
