@@ -28,6 +28,9 @@ async function spieler(name) {
   raum.state.zombies.clear(); raum.zombieInfo.clear();
   const p = raum.state.spieler.get(c.sessionId), x = raum.extra.get(c.sessionId);
   p.rucksack.splice(0, p.rucksack.length);
+  // Startpistole: Lief zwischen onJoin und dem Auflösen von joinOrCreate schon ein Server-Tick (unter Last häufig), hat er das Magazin
+  // aus der Startmunition gefüllt – dann füllte der Test-Vorrat es nicht mehr. Magazine leeren: der nächste Tick lädt aus dem Vorrat des Tests.
+  p.magazin = 0; p.nachladen = 0; x.mag = [null, null]; x.nRest = 0;
   return { c, raum, p, x };
 }
 function zombieIn(raum, p, abstand) {
@@ -159,9 +162,14 @@ test('Waffenplätze: Magazinstand je Waffe bleibt beim Wechseln, „In die Hand�
 
 test('Granatwerfer: Bogenschuss, Explosion am Ziel (Zombie stirbt, Granate verbraucht), kein Schuss bei zu naher Entfernung', async () => {
   const { c, raum, p } = await spieler('Werfer');
+  let halte = null;
   try {
     const explosionen = []; c.onMessage('explosion', m => explosionen.push(m));
     const fluege = []; c.onMessage('granate', m => fluege.push(m));
+    // Flugzeit auf der Spieluhr des Servers messen (die Nachrichten kommen unter Last später an als die Explosion nach ~0,1 s)
+    const g = raum.granaten, ab = g.abfeuern.bind(g), ex = g.explodiert.bind(g), ablauf = { ziel: null };
+    g.abfeuern = (...a) => { if (!ablauf.ab) ablauf.ab = { zeit: g.zeit, lebt: raum.state.zombies.has(ablauf.ziel) }; return ab(...a); };
+    g.explodiert = gr => { if (!ablauf.ex) ablauf.ex = { zeit: g.zeit, lebt: raum.state.zombies.has(ablauf.ziel) }; return ex(gr); };
     const ort = raum.welt.start;
     p.x = ort.x; p.y = ort.y; p.ebene = ''; p.unten = false;
     p.waffe = 'granatwerfer'; p.granaten = 4; p.munition = 0; p.pfeile = 0;
@@ -172,16 +180,17 @@ test('Granatwerfer: Bogenschuss, Explosion am Ziel (Zombie stirbt, Granate verbr
     assert.equal(explosionen.length, 0, 'schießt auf zu nahes Ziel');
     raum.state.zombies.delete(nah); raum.zombieInfo.delete(nah);
     // Ziel 160 px entfernt
-    const id = zombieIn(raum, p, 160);
+    const id = ablauf.ziel = zombieIn(raum, p, 160);
     assert.ok(await bis(() => fluege.length > 0, 2500), 'kein Abschuss');
     assert.equal(fluege[0].werfer, true);
-    const halte = setInterval(() => { const z = raum.state.zombies.get(id); if (z) { z.x = fluege[0].x2; z.y = fluege[0].y2; } }, 5);   // der Zombie läuft nicht aus dem Zielpunkt
+    halte = setInterval(() => { const z = raum.state.zombies.get(id); if (z) { z.x = fluege[0].x2; z.y = fluege[0].y2; } }, 5);   // der Zombie läuft nicht aus dem Zielpunkt
     assert.ok(Math.abs(fluege[0].x2 - (p.x + 160)) < 40, 'Zielpunkt (Zombie rückt kurz vor)');
-    assert.ok(raum.state.zombies.has(id), 'Zombie darf nicht sofort fallen (Flugzeit)');
     assert.ok(await bis(() => explosionen.length > 0, 2500), 'keine Explosion');
+    assert.ok(ablauf.ab?.lebt && ablauf.ex?.lebt, 'Zombie darf nicht sofort fallen (Flugzeit): ' + JSON.stringify(ablauf));
+    assert.ok(ablauf.ex.zeit - ablauf.ab.zeit >= fluege[0].flug - 1e-6, 'Explosion erst nach der Flugzeit: ' + JSON.stringify({ ...ablauf, flug: fluege[0].flug }));
     assert.ok(!raum.state.zombies.has(id) || raum.state.zombies.get(id).hp <= 0, 'Zombie nicht getroffen: ' + JSON.stringify(raum.state.zombies.get(id)) + ' Explosion ' + JSON.stringify(explosionen[0]) + ' p ' + p.x);
     assert.ok(Math.abs(explosionen[0].x - fluege[0].x2) < 1, 'Explosion am Ziel');
-    clearInterval(halte);
+    clearInterval(halte); halte = null;
     assert.equal(p.magazin, 0);
     // außerhalb der Reichweite (> 25 m = 200 px) kein Schuss
     const n = fluege.length;
@@ -193,7 +202,7 @@ test('Granatwerfer: Bogenschuss, Explosion am Ziel (Zombie stirbt, Granate verbr
     assert.ok(await bis(() => p.nachladen > 0 || p.magazin === 1, 1500));
     assert.ok(await bis(() => p.magazin === 1, 5000), 'Granatwerfer lädt nicht nach');
     assert.equal(p.granaten, 2);
-  } finally { await c.leave(); }
+  } finally { clearInterval(halte); await c.leave(); }   // Intervall auch nach einem Fehlschlag beenden (sonst hängt der Lauf bis zum Timeout)
 });
 
 test('Verwaltung: Magazin und Nachladezeit je Waffe einstellbar, Granatwerfer hat Schaden/Pause/Reichweite', async () => {
