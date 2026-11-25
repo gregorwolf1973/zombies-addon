@@ -84,8 +84,8 @@ test('B-11-Kreuzung (geretsried2): Bäume im Umkreis von 40 Kacheln stark ausged
 test('Feste Safehouses per Kachel: Haus wird Safe Room, höchstens SAFE_MAX, ohne Eintrag bleibt alles wie zuvor', () => {
   const karte = lade('geretsried2');
   const ohne = baue(karte);
-  assert.deepEqual(festeSafesVon(karte).map(f => f.name), ['Wohnhaus'], 'Vorbelegung: ein festes Wohnhaus');
-  assert.ok(ohne.safeRooms.some(s => s.name === 'Wohnhaus'), 'festes Wohnhaus ist Safe Room');
+  assert.deepEqual(festeSafesVon(karte).map(f => f.name), ['Kirche Hl. Familie'], 'Vorbelegung: ein festes Safehouse');
+  assert.ok(ohne.safeRooms.some(s => s.name === 'Kirche Hl. Familie'), 'festes Safehouse ist Safe Room');
   // zusätzliches Haus per Kartenfeld: Kachel (210, 41) liegt im Umriss des Hauses (207, 38) (Enzianweg 28, amtlicher Hausumring)
   const mit = baue({ ...karte, festeSafes: [{ x: 210, y: 41, name: 'Testhaus' }] });
   assert.ok(mit.safeRooms.length >= ohne.safeRooms.length && mit.safeRooms.length <= SAFE_MAX);
