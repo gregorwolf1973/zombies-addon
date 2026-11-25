@@ -24,12 +24,13 @@ export const HF_LISTE = [
   { id: 'jennifer', g: 'f', name: 'Rote Jacke' },
   { id: 'remy', g: 'r', name: 'Blondschopf' },          // blonder Mann, graues T-Shirt
   { id: 'alex', g: 'a', name: 'Schwarzer Anzug' },
-  { id: 'brute', g: 'b', name: 'Muskelmann' },          // ~1,95 m
+  { id: 'brute', g: 'b', name: 'Muskelmann', k: 0.85 },   // ~1,95 m und sehr breit: etwas kleiner zeichnen (Gregor 25.11.: „bisschen groß der Dicke“)
   { id: 'swat', g: 't', name: 'SWAT-Polizist' },
   { id: 'jody', g: 'j', name: 'Rosa Pulli' },
   { id: 'roth', g: 'o', name: 'Weißes Hemd' },
 ];
 export const HF_FIGUREN = HF_LISTE.map(f => f.id);
+export const hfSkala = id => HF_LISTE.find(f => f.id === id)?.k ?? 1;   // eigener Größenfaktor je Held (1 = wie alle)
 export const HF_BUCHSTABEN = HF_LISTE.map(f => f.g).join('');
 export const hfFigurVon = g => HF_LISTE.find(f => f.g === g)?.id ?? null;       // Kennbuchstabe → Figur-Id (null = kein Mixamo-Held)
 export const hfBuchstabeVon = id => HF_LISTE.find(f => f.id === id)?.g ?? 'h';   // Figur-Id → Kennbuchstabe
