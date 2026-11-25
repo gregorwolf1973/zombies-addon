@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.90.4 – 25.11.2026
+
+- Panzer gegen fahrende Autos: Boxer, Puma oder Leopard rammen ein Verkehrsauto – Ruck, das Auto wird weggeschleudert und brennt, ein Mensch flieht; Überfahren walzt jedes Autowrack platt und löscht das Feuer. Panzerbesatzung nimmt keinen Feuerschaden.
+- Tempostufen beim Fahren: Knopf im Fahrzeug (am PC Taste T) schaltet 🐢 30 → 50 → 🚀 Höchsttempo; Umschalt beim Fahren = höchstens 30 km/h.
+- Muskelmann 15 % kleiner gezeichnet.
+
 ## 0.90.3 – 25.11.2026
 
 - Waffen: Langwaffen liegen mit dem Kolben an der Schulter und zeigen nach vorn, Pistole beidhändig vor der Brust.
