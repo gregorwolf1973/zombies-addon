@@ -339,9 +339,11 @@ export function bereinige(e = {}, alt = {}) {
       hordeReichweite: Math.round(zahl(z.hordeReichweite, 5, 60, 18)), // so nah (Meter) an Spielern/Bots/Soldaten/Menschen löst sich ein Trupp
       lagerWelle: Math.round(zahl(z.lagerWelle, 0, 400, 200, { max: 5000 })),   // Zombies der Welle, wenn alle Menschen im Bundeswehr-Lager sind (0 = aus)
       lagerWellePause: Math.round(zahl(z.lagerWellePause, 1, 120, 10)),   // höchstens alle … Minuten eine Lager-Welle
-      anteilKriecher: Math.round(fest(z.anteilKriecher, 0, 100, 10)),     // Bewegungsklassen (Anteile in %, werden auf 100 normiert): Kriecher robben (sehr langsam),
-      anteilSchlurfer: Math.round(fest(z.anteilSchlurfer, 0, 100, 60)),   // Schlurfer gehen (langsam, auch beim Jagen),
-      anteilLaeufer: Math.round(fest(z.anteilLaeufer, 0, 100, 30)),       // Läufer rennen beim Jagen bis „Zombie jagt“ (Höchsttempo); client/zombiefiguren.mjs zkKlasse
+      anteilKriecher: Math.round(fest(z.anteilKriecher, 0, 100, 5)),     // Bewegungsklassen (Anteile in %, werden auf 100 normiert): Kriecher robben (sehr langsam),
+      anteilSchlurfer: Math.round(fest(z.anteilSchlurfer, 0, 100, 45)),   // Schlurfer gehen (langsam, auch beim Jagen),
+      anteilLaeufer: Math.round(fest(z.anteilLaeufer, 0, 100, 50)),       // Läufer rennen beim Jagen bis „Zombie jagt“ (Höchsttempo); client/zombiefiguren.mjs zkKlasse
+      drahtVoll: Math.round(fest(z.drahtVoll, 1, 50, 4)),      // S-Draht: ab so vielen hängenden Zombies an einer Rolle ist sie „voll“, weitere bleiben nicht mehr hängen, sondern steigen drüber
+      drahtUeber: Math.round(fest(z.drahtUeber, 10, 100, 70)), // Tempo (% des eigenen) beim Übersteigen eines vollen S-Drahts
       ueberraschung: Math.round(fest(z.ueberraschung, 0, 100, 3)),   // % Chance, dass beim ersten Durchsuchen von Schrank/Spind/Müllcontainer/Auto ein Zombie herausspringt
       figuren: figuren,                                  // neue Zombie-Figuren (client/zombiefiguren.mjs): { id: { an, anteil % } }, nur mit zombieFigurenNeu
       typen: typen,                                      // welche Zombietypen (Aussehen) vorkommen dürfen; mindestens einer bleibt an
@@ -437,7 +439,7 @@ export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
 export function grundwerte() {
   return {
     superuserHash: '', zugangscode: '', karte: 'level1', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, fahrzeugStoss: 15, geraeuschPause: 5, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, zombieFigurenNeu: true, heldenFigurenNeu: true, innenMassstab: true, innenTempo: 50, schussDunkel: 30, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, tempoSchlurferJagen: 7, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, unfallTuer: 60, auto: { ...PKW_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
-    helden: { figuren: hfFigurenEinst() }, zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, anteilKriecher: 10, anteilSchlurfer: 60, anteilLaeufer: 30, figuren: zfFigurenEinst(), typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
+    helden: { figuren: hfFigurenEinst() }, zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, anteilKriecher: 5, anteilSchlurfer: 45, anteilLaeufer: 50, drahtVoll: 4, drahtUeber: 70, figuren: zfFigurenEinst(), typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },

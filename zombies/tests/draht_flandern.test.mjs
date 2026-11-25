@@ -7,12 +7,13 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum, Zombie } from '../server/raum.mjs';
-import { drahtPruefen, haengtSchritt, haengendStart, drahtRollen, DRAHT_DAUER, drehBegrenzt, HAENG_DREH } from '../server/haengend.mjs';
+import { haengerAn, drahtPruefen, haengtSchritt, haengendStart, drahtRollen, DRAHT_DAUER, drehBegrenzt, HAENG_DREH } from '../server/haengend.mjs';
 import { ueberrolleZombies } from '../server/ueberrollen.mjs';
 import { KACHEL, WERTE, setzeKartengroesse, frei, tierGelaende, feinWert, bewege, zufall, WELT_VERSION, FLANDERN_TEMPO } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { rahmen, SP_PK } from '../client/stuetzpunkt.mjs';
 import { FLUGFELD_TOTE } from '../client/flugfeld_deko.mjs';
+import { ZK_LAEUFER, ZK_KRIECHER } from '../client/zombiefiguren.mjs';
 import { freierPort } from './hilfe.mjs';
 
 const kartenDatei = name => JSON.parse(fs.readFileSync(new URL(`../client/karten/${name}.json`, import.meta.url)));
@@ -182,7 +183,7 @@ test('S-Draht: Zombie bleibt mit 40 % hängen (einmal je Berührung), beißt, is
     haengtSchritt(raum, z, info, 40);   // 10 s + 1 s + 40 s = 51 s
     assert.ok(z.haengt, 'noch nicht frei');
     for (let i = 0; i < 120 && z.haengt; i++) raum.zombieSchritt(id, z, 1);
-    assert.ok(!z.haengt && z.kriecht, 'reißt sich nicht los');
+    assert.ok(!z.haengt && z.kriecht === (z.kl === ZK_KRIECHER), 'reißt sich nicht los oder kriecht als Nicht-Kriecher weiter');
     // ein hängender Zombie ist erschießbar
     const [id2, z2, info2] = neu(); raum.rnd = () => 0; drahtPruefen(raum, z2, info2); assert.ok(z2.haengt);
     raum.schaden(id2, z2, 999, { name: 'Test', x: 0, y: 0, besiegt: 0 });
@@ -273,4 +274,32 @@ test('ueberrolleZombies (gemeinsam mit dem Leopard): Fußabdruck 72 × 34, Zusch
   assert.ok(zombies.has('c') && zombies.has('d') && !zombies.has('a') && !zombies.has('b'));
   assert.equal(raum.state.besiegt, 3);
   assert.equal(gemeldet.length, 2);
+});
+
+test('S-Draht voll: weitere Zombies steigen mit 70 % Tempo drüber, nicht voll: bleiben hängen', async () => {
+  await beitreten(async ({ raum }) => {
+    const roll = drahtRollen(raum.welt).find(q => q.lager), [ax, ay] = roll.ausen;
+    SpielRaum.einstellungen.zombies = { ...(SpielRaum.einstellungen.zombies ?? {}), drahtVoll: 2, drahtUeber: 70 };
+    const hang = abstand => { const id = raum.setzeZombie(roll.x + ax * (roll.hb + 5) + roll.c * abstand, roll.y + ay * (roll.hb + 5) + roll.s * abstand, ''); const z = raum.state.zombies.get(id), i = raum.zombieInfo.get(id); raum.haengenBleiben(z, i, Infinity); return z; };
+    const gehe = (lat = 0) => {   // Läufer, 25 px vor der Rolle, läuft geradewegs hindurch
+      const id = raum.setzeZombie(roll.x + ax * (roll.hb + 25) + roll.c * lat, roll.y + ay * (roll.hb + 25) + roll.s * lat, ''), z = raum.state.zombies.get(id), info = ruhig(raum, id);
+      z.kl = ZK_LAEUFER; z.jagt = true; info.tempo = 1; raum.rnd = () => 0;
+      const w = Math.atan2(-ay, -ax); let n = 0, weg = 0;
+      for (let i = 0; i < 200 && !z.haengt; i++) { const x = z.x, y = z.y; raum.zombieGehen(z, w, 999, 0.1, info); drahtPruefen(raum, z, info); weg += Math.hypot(z.x - x, z.y - y); n++; if ((z.x - roll.x) * ax + (z.y - roll.y) * ay < -(roll.hb + 12)) break; }
+      return { z, info, ueber: (z.x - roll.x) * ax + (z.y - roll.y) * ay < -(roll.hb + 12) };
+    };
+    // nicht voll (0 Hängende): bleibt hängen
+    assert.ok(gehe().z.haengt, 'nicht voller Draht hält nicht fest');
+    // voll: 2 Hängende an der Rolle (der erste Test-Zombie hängt schon) → geht durch
+    hang(-35);
+    assert.ok(haengerAn(raum, roll) >= 2);
+    const r = gehe(40);
+    assert.ok(!r.z.haengt && r.ueber, 'kommt nicht über den vollen Draht');
+    // Tempo: gleiches Stück Freiland mit und ohne drueber
+    const id = raum.setzeZombie(roll.x + ax * 120, roll.y + ay * 120, ''), z = raum.state.zombies.get(id), info = ruhig(raum, id);
+    z.kl = ZK_LAEUFER; z.jagt = true; info.tempo = 1;
+    const schritt = d => { info.drueber = d; const x = z.x, y = z.y; raum.zombieGehen(z, Math.atan2(ay, ax), 999, 0.1, info); const l = Math.hypot(z.x - x, z.y - y); z.x = x; z.y = y; return l; };
+    const frei = schritt(false), ueber = schritt(true);
+    assert.ok(Math.abs(ueber / frei - 0.7) < 0.03, 'Tempo ' + (ueber / frei));
+  });
 });

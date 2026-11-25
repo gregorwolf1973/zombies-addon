@@ -75,9 +75,9 @@ export function zfZerrBild(zeitMs, h = 0) {
 }
 
 // Bewegungsklassen (fest je Zombie aus der Id): 0 Schlurfer (langsam, Geh-Clips), 1 Läufer (jagt mit Renn-Clip), 2 Kriecher (Kriech-Clip).
-// Anteile in Prozent aus dem Backend (zombies.anteilKriecher/-Schlurfer/-Laeufer, Vorgabe 10/60/30); bonusLaeufer (0..1, Schwierigkeit) geht vom Schlurfer-Anteil ab.
+// Anteile in Prozent aus dem Backend (zombies.anteilKriecher/-Schlurfer/-Laeufer, Vorgabe 5/45/50); bonusLaeufer (0..1, Schwierigkeit) geht vom Schlurfer-Anteil ab.
 export const ZK_SCHLURFER = 0, ZK_LAEUFER = 1, ZK_KRIECHER = 2;
-export const ZK_ANTEILE = { kriecher: 10, schlurfer: 60, laeufer: 30 };
+export const ZK_ANTEILE = { kriecher: 5, schlurfer: 45, laeufer: 50 };
 // Tempo der Klassen relativ zur Einstellung „Zombie wandert“ (km/h); Schlurfer jagen mit eigenem Regler „Schlurfer jagt“ (tempoSchlurferJagen),
 // Läufer bis zum eingestellten Höchsttempo „Zombie jagt“
 export const ZK_TEMPO = { schlurferWandern: 0.6, kriecher: 0.25 };
@@ -110,6 +110,15 @@ export function zfLeiche(id) {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
   h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; h = (h ^ (h >>> 16)) >>> 0;
   return { clip: ZF_TODE[h % 3], dreh: ((h >>> 8) % 360) * Math.PI / 180, spiegeln: ((h >>> 2) & 1) === 1 };
+}
+
+// Blut unter der Leiche: Lache oder Spritzer (je Leiche fest aus der Id, gleich auf allen Geräten); nr = Textur-Variante 0..2, dreh/Versatz nur Darstellung
+export function zfBlut(id) {
+  let h = 2166136261;
+  const s = 'blut' + String(id ?? '');
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; h = (h ^ (h >>> 16)) >>> 0;
+  return { art: h % 100 < 50 ? 'lache' : 'spritzer', nr: (h >>> 7) % 3, dreh: ((h >>> 9) % 360) * Math.PI / 180, groesse: 0.85 + ((h >>> 17) % 31) / 100, dx: ((h >>> 3) % 7 - 3) / 3, dy: ((h >>> 5) % 7 - 3) / 3 };
 }
 
 export const zfName = (fig, clip, i) => `${fig}_${clip}_${String(i).padStart(2, '0')}`;

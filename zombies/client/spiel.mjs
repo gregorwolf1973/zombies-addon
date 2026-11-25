@@ -5,7 +5,7 @@ import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from '
 import { ASSETS } from './basis.mjs';
 import { groesse } from './groessen.mjs';
 import { HF_LISTE, HF_FIGUREN, HF_GROESSE, ALT_FAKTOR, SCHULTER_NEU_PX, soldatSkala, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon } from './heldenfiguren.mjs';
-import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfZerrBild, zfGang, ZF_OPTIONAL, ZF_REF, ZK_LAEUFER } from './zombiefiguren.mjs';
+import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfBlut, zfZerrBild, zfGang, ZF_OPTIONAL, ZF_REF, ZK_LAEUFER } from './zombiefiguren.mjs';
 import {
   KACHEL, kachelVon, breiteVon, setzeInnenFein, setzeTuerKacheln, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, INNEN_FEIN, INNEN_TEMPO, setzeInnenTempo, INNEN_REICH, ladenArt, BREITE, HOEHE, T, WERTE as W, baueWelt, bewege, sichtfrei, safeRoomVon, setzeKartengroesse,
   DINGE, RUCKSACK_PLAETZE, KISTE_PLAETZE, BEHAELTER_NAME, AKTION_ABSTAND, INFEKTION_DAUER, LEICHE_DAUER,
@@ -998,6 +998,24 @@ const FIG_RADIUS = 11;   // halbe Figurhöhe in Welt-px bei mg() = 1 (Abstand vo
 let szeneRef = null;   // die laufende Spielszene (für Größenfaktor drinnen)
 const innenFigur = () => (szeneRef?.feinInnen() ? INNEN_FIGUR : 1);
 const mg = () => ((raum.state?.menschenGroesse || 100) / 100) * ((raum.state?.groesseGesamt || 70) / 100) * innenFigur();
+// Blut unter Leichen: prozedurale Bodentexturen (je 3 Varianten Lache/Spritzer), einmal erzeugt und wiederverwendet; Niedrig = halbe Auflösung
+function blutTexturen(szene) {
+  if (szene.textures.exists('blut_lache_2')) return;
+  const N = GFS.stufe === 'niedrig' ? 64 : 128, m = N / 2;
+  const rnd = (() => { let a = 12345; return () => { a = (Math.imul(a, 1664525) + 1013904223) >>> 0; return a / 4294967296; }; })();
+  const fleck = (c, x, y, r, a) => { const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(96,8,8,${a})`); g.addColorStop(0.75, `rgba(80,6,6,${a * 0.9})`); g.addColorStop(1, 'rgba(70,5,5,0)'); c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); };
+  for (let v = 0; v < 3; v++) {
+    const tl = szene.textures.createCanvas('blut_lache_' + v, N, N), cl = tl.getContext();
+    const arme = 5 + v;   // unregelmäßige Lache: Mitte + Ausbuchtungen
+    fleck(cl, m, m, N * 0.30, 0.85);
+    for (let i = 0; i < arme; i++) { const w = rnd() * Math.PI * 2, d = N * (0.10 + rnd() * 0.12); fleck(cl, m + Math.cos(w) * d, m + Math.sin(w) * d, N * (0.12 + rnd() * 0.10), 0.8); }
+    tl.refresh();
+    const ts = szene.textures.createCanvas('blut_spritzer_' + v, N, N), cs = ts.getContext();
+    for (let i = 0; i < 14 + v * 3; i++) { const w = rnd() * Math.PI * 2, d = N * (0.08 + rnd() * 0.36); fleck(cs, m + Math.cos(w) * d, m + Math.sin(w) * d, N * (0.012 + rnd() * rnd() * 0.05), 0.9); }
+    fleck(cs, m, m, N * 0.07, 0.6);
+    ts.refresh();
+  }
+}
 const zg = () => mg() * ((raum.state?.zombieGroesse || 100) / 100);
 const VERWUNDET_GROESSE = 0.42 * 1.26 * ALT_K;
 // liegender Soldat: gleiches Größenverhältnis zur stehenden Figur wie früher, nur auf Heldengröße gebracht
@@ -2853,17 +2871,31 @@ class Ort extends Phaser.Scene {
         this.leichen.set(id, o);
         }
       }
+      if (!o.blut && !l.deko) {
+        // Blut: Lache läuft in ca. 2 s aus (unter der Leiche), oder Spritzer um sie herum; Art je Leiche fest aus der Id
+        blutTexturen(this);
+        const b = zfBlut(id);
+        o.blut = this.add.image(l.x, l.y, `blut_${b.art}_${b.nr}`).setDepth(1.55).setRotation(b.dreh);
+        o.blutB = b; o.blutT0 = o.zf?.liegt ? -1e9 : this.time.now;
+      }
+      if (o.blut) {
+        const b = o.blutB, ausl = Math.min(1, (this.time.now - o.blutT0) / 2000), ease = 1 - (1 - ausl) * (1 - ausl);
+        const d = (b.art === 'lache' ? 27 : 34) * (b.groesse * zg()) * (b.art === 'lache' ? 0.25 + 0.75 * ease : 1) / (GFS.stufe === 'niedrig' ? 64 : 128);
+        o.blut.setPosition(l.x + b.dx * 2 * zg(), l.y + b.dy * 2 * zg()).setScale(d);
+        o.blut.setVisible((l.ebene ?? '') === this.aktEbene);
+        o.blut.setAlpha((b.art === 'lache' ? 0.55 + 0.4 * ease : 0.85) * (l.fest ? 1 : Math.max(0, 1 - (l.blass ?? 0) / 10)));
+      }
       if (o.zf && !o.zf.liegt) {
         const sp = this.time.now - o.zf.t0, i = zfBild(o.zf.clip, { seit: sp });
         o.setFrame(this.zfNamen[o.zf.fig][o.zf.clip][i]); if (sp >= ZF_DAUER[o.zf.clip]) o.zf.liegt = true;
       } else if (o.zf && !o.zf.fertig) { o.setFrame(this.zfNamen[o.zf.fig][o.zf.clip][ZF_BILDER - 1]); o.zf.fertig = true; }
-      if (l.x < rx0 || l.x > rx1 || l.y < ry0 || l.y > ry1) { if (o.visible) o.setVisible(false); continue; }
+      if (l.x < rx0 || l.x > rx1 || l.y < ry0 || l.y > ry1) { if (o.visible) o.setVisible(false); if (o.blut?.visible) o.blut.setVisible(false); continue; }
       o.setScale(ZOMBIE_GROESSE * (o.gf ?? 1) * zg());   // Leichen folgen der Zombiegröße
       o.setVisible((l.ebene ?? '') === this.aktEbene);
       const ausblenden = l.fest ? 1 : 1 - (l.blass ?? 0) / 10;   // Server: blass 0..10 in den letzten 20 s
       o.setAlpha((l.rest === 0 && !l.deko ? 0.5 : 1) * Math.max(0, ausblenden));   // deko: Tote am Flugfeld, voll sichtbar
     }
-    for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.destroy(); this.leichen.delete(id); }
+    for (const [id, o] of this.leichen) if (!s.leichen.has(id)) { o.blut?.destroy(); o.destroy(); this.leichen.delete(id); }
     this.leichenGesehen = true;
     // Bewohner: gehen umher, fliehen, verschwinden in Häusern und im Bus; Gebissene werden grünlich
     for (const [id, m] of s.menschen ?? []) {

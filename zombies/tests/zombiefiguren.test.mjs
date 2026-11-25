@@ -134,9 +134,9 @@ test('Bewegungsklassen: fest aus der Id, Anteile wie eingestellt, Läufer-Bonus 
   assert.equal(zkKlasse('z5'), zkKlasse('z5'));
   const zaehle = (anteile, bonus = 0) => { const n = [0, 0, 0]; for (let i = 0; i < 5000; i++) n[zkKlasse('z' + i, anteile, bonus)]++; return n.map(x => x / 5000); };
   const v = zaehle(ZK_ANTEILE);
-  assert.ok(Math.abs(v[ZK_KRIECHER] - 0.1) < 0.02 && Math.abs(v[ZK_SCHLURFER] - 0.6) < 0.03 && Math.abs(v[ZK_LAEUFER] - 0.3) < 0.03, JSON.stringify(v));
+  assert.ok(Math.abs(v[ZK_KRIECHER] - 0.05) < 0.02 && Math.abs(v[ZK_SCHLURFER] - 0.45) < 0.03 && Math.abs(v[ZK_LAEUFER] - 0.5) < 0.03, JSON.stringify(v));
   const b = zaehle(ZK_ANTEILE, 0.2);
-  assert.ok(Math.abs(b[ZK_LAEUFER] - 0.5) < 0.03 && Math.abs(b[ZK_KRIECHER] - 0.1) < 0.02, JSON.stringify(b));
+  assert.ok(Math.abs(b[ZK_LAEUFER] - 0.7) < 0.03 && Math.abs(b[ZK_KRIECHER] - 0.05) < 0.02, JSON.stringify(b));
   assert.deepEqual(zaehle({ kriecher: 0, schlurfer: 0, laeufer: 5 }), [0, 1, 0]);
   // Schlurfer gehen auch beim Jagen, Läufer rennen
   assert.equal(zfClip({ geht: true, jagt: true, laeufer: false }), 'walk');
@@ -146,4 +146,13 @@ test('Bewegungsklassen: fest aus der Id, Anteile wie eingestellt, Läufer-Bonus 
 test('Kein Rutschen: Weg je Bildzyklus = gemessene Schrittlänge der Mixamo-Clips × Anzeigemaßstab (16,44 px je m × 0,7)', () => {
   const m = { walk: 1.37, walk2: 0.78, walk3: 1.37, run: 1.91, run2: 1.57, crawl: 0.43 };   // tools/mixamo/seite.html ?nur=tempo (Mittel aus romero/warzombie)
   for (const [c, meter] of Object.entries(m)) assert.ok(Math.abs(ZF_SCHRITT[c] - meter * 16.44 * ZF_REF) < 1, c + ' ' + ZF_SCHRITT[c]);
+});
+
+test('zfBlut: je Leiche fest aus der Id, Lache und Spritzer kommen beide vor', async () => {
+  const { zfBlut } = await import('../client/zombiefiguren.mjs');
+  const a = Array.from({ length: 200 }, (_, i) => zfBlut('l' + i));
+  assert.deepEqual(zfBlut('l7'), zfBlut('l7'));
+  const lachen = a.filter(q => q.art === 'lache').length;
+  assert.ok(lachen > 60 && lachen < 140, 'Verteilung ' + lachen);
+  for (const q of a) assert.ok(q.nr >= 0 && q.nr <= 2 && q.groesse >= 0.85 && q.groesse <= 1.15);
 });

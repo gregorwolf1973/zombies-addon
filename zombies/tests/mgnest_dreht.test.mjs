@@ -1,7 +1,7 @@
 // MG-Nester drehen sich (max. 90°/s, deterministisch) und sind maßstäblich (8 px = 1 m)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Stuetzpunkt, MG_DREH } from '../server/stuetzpunkt.mjs';
+import { Stuetzpunkt, MG_DREH, nestTakt } from '../server/stuetzpunkt.mjs';
 import { MG_NEST, zeichneMgNestMg } from '../client/stuetzpunkt.mjs';
 
 const neu = w => ({ bx: Math.cos(w), by: Math.sin(w), ax: Math.cos(w), ay: Math.sin(w), richt: 1 });
@@ -40,4 +40,15 @@ test('MG-Nest maßstäblich: Innenraum Ø 2–2,5 m, MG 1,2 m, Sandsack 0,6 m', 
   assert.ok(MG_NEST.mgVor + MG_NEST.mgLaenge < MG_NEST.aussen + 1.5);
   const g = new Proxy({}, { get: () => () => g });
   assert.equal(zeichneMgNestMg(g), MG_NEST.mgVor + MG_NEST.mgLaenge);
+});
+
+test('jedes Nest hat eigenen Schwenktakt (deterministisch, im Feld, verschieden)', () => {
+  const a = [0, 1, 2, 3, 4, 5].map(n => nestTakt(n, 0.5));
+  assert.deepEqual(a, [0, 1, 2, 3, 4, 5].map(n => nestTakt(n, 0.5)));
+  for (const q of a) { assert.ok(Math.abs(diff(Math.atan2(q.ay, q.ax), 0.5)) < 0.91); assert.ok(q.tempo >= 0.8 && q.tempo <= 1.25); }
+  assert.ok(new Set(a.map(q => q.ax.toFixed(3))).size >= 5, 'Startwinkel zu gleich');
+  assert.ok(new Set(a.map(q => q.tempo.toFixed(3))).size >= 5, 'Tempo zu gleich');
+  const w = a.map(q => ({ bx: Math.cos(0.5), by: Math.sin(0.5), ...q }));
+  for (let i = 0; i < 400; i++) for (const n of w) st.nestSchwenken(n, 0.05);
+  assert.ok(new Set(w.map(n => winkel(n).toFixed(2))).size >= 5, 'schwenken im Gleichtakt');
 });
