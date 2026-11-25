@@ -22,7 +22,9 @@ import { zeichneFlugfeldDeko } from './flugfeld_deko.mjs';
 import { RadioAnzeige } from './radio.mjs';
 import { weichKreis } from './weichkreis.mjs';
 import { einschlagWerte } from './einschlag.mjs';
-import { pkwLichtPunkte, pkwKegelZeichnen, lampeAn } from './pkwlicht.mjs';
+import { pkwLichtPunkte, pkwKegelZeichnen, lampeAn, pkwLampenMalen, dunkelVon } from './pkwlicht.mjs';
+// Verkehr (Polizei, Krankenwagen, Feuerwehr, Autos, Laster, Bus) fährt nachts mit Scheinwerfern: Länge × Breite in px wie server/verkehr.mjs
+const VERKEHR_LICHT = { auto: [36, 16], polizei: [39, 16], krankenwagen: [47, 18], feuerwehr: [76, 22], laster: [72, 23], bus: [96, 22] };
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht, BLUT_GROESSE } from './effekte.mjs';
 import { fahrbarNah, FAHRBAR, FAHRBAR_PLAETZE } from './fahrbar.mjs';
 import { istFahrbar, fahrbarBild, fahrbarFahrzeug, fahrbarRueckstoss, pumaFahrbarSchuss } from './fahrbardarstellung.mjs';
@@ -2726,9 +2728,11 @@ class Ort extends Phaser.Scene {
       if (sicht(p.x, p.y, 100)) { P.setScale(lampeAn(p) ? 0.7 : 0.45).setAlpha(0.7); rt.erase(P, p.x - ox, p.y - oy); }
     }
     this.fremdeLampen(rt, ox, oy, '');
-    for (const [id, o] of this.busObj) {   // gefahrene Autos: Scheinwerferkegel (client/pkwlicht.mjs)
-      if (!o.pkwLicht || !o.box.visible || !sicht(o.x, o.y, 160) || raum.state.fahrzeuge?.get(id)?.art !== 'pkw') continue;
-      pkwKegelZeichnen(rt, ox, oy, this.lampenPinsel, P, { punkte: pkwLichtPunkte(o.x, o.y, o.r, PKW.laenge, PKW.breite), r: o.r, rueck: o.pkwRueck });
+    for (const [id, o] of this.busObj) {   // gefahrene Autos und Verkehr: Scheinwerferkegel (client/pkwlicht.mjs)
+      if (!o.box.visible || !sicht(o.x, o.y, 160)) continue;
+      const art = raum.state.fahrzeuge?.get(id)?.art, vl = VERKEHR_LICHT[art];
+      if (art === 'pkw' && o.pkwLicht) pkwKegelZeichnen(rt, ox, oy, this.lampenPinsel, P, { punkte: pkwLichtPunkte(o.x, o.y, o.r, PKW.laenge, PKW.breite), r: o.r, rueck: o.pkwRueck });
+      else if (vl) pkwKegelZeichnen(rt, ox, oy, this.lampenPinsel, P, { punkte: pkwLichtPunkte(o.x, o.y, o.r, vl[0], vl[1]), r: o.r, rueck: false });
     }
     const fz = this.flug?.zentrum();
     const lx = (fz ? fz.x : this.lokal.x) - ox, ly = (fz ? fz.y : this.lokal.y) - oy;   // Kameraflug: Schein um die Kamera
@@ -3016,6 +3020,7 @@ class Ort extends Phaser.Scene {
       const shv = fzSchattenVersatz(istFahrbar(f.art) ? FZ_HOEHE[f.art] : f.art === 'evakuierung' && evakArtVon(raum.state) === 'panzer' ? FZ_HOEHE.leopard : 1);
       o.sch?.setPosition(o.x + shv.dx, o.y + shv.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible);
       o.licht.clear();
+      if (VERKEHR_LICHT[f.art] && !this.aktEbene && dunkelVon(s.uhr) >= 0.3) pkwLampenMalen(o.licht, VERKEHR_LICHT[f.art][0], VERKEHR_LICHT[f.art][1], false);   // Scheinwerfer und Rücklichter am Verkehr
       // dicht vorbeifahrende Autos und Busse rauschen vorbei; jedes dritte Auto hat das Radio an
       if ((f.art === 'auto' || f.art === 'bus' || f.art === 'laster') && this.lokal && !this.aktEbene) {
         const d = Math.hypot(o.x - this.lokal.x, o.y - this.lokal.y);
