@@ -10,6 +10,7 @@ import { Leopard, leopardEinst, turmDrehen, winkelDiff } from './leopard.mjs';
 import { ueberrolleZombies, UEBERROLLEN_PAUSE } from './ueberrollen.mjs';
 import { stammBei, rueckwaerts, RUECK_ANTEIL } from '../client/walze.mjs';
 import { strassenRichtung } from './spurhilfe.mjs';
+import { Panzercrash } from './panzercrash.mjs';
 
 export const PX = 8;                             // Pixel je Meter
 export { FAHRBAR_PLAETZE };
@@ -193,6 +194,7 @@ export class Fahrbar {
     if (!fahrer) this.letzteEingabe = { dx: 0, dy: 0 };
     this.ueberAuto = r.walze?.autoFaktor(this) ?? 1;   // Puma/Boxer über geparkten Autos langsamer (server/walze.mjs)
     this.fahren(e, dt);
+    r.fahrbare?.crash?.pruefen(this);   // Zusammenstoß mit Verkehrsautos, Wracks plattwalzen (server/panzercrash.mjs)
     for (const sid of this.insassen) { const p = s.spieler.get(sid); if (p) { p.x = f.x; p.y = f.y; p.richtung = f.richtung; } }
     f.haelt = Math.abs(this.v) < 1;
     // Zombies im Fußabdruck überrollen
@@ -447,7 +449,7 @@ export const KLASSEN = { boxer: FahrbarBoxer, puma: FahrbarPuma, leopard: Fahrba
 // Der Boxer am Flugfeld (raum.boxer) gehört nicht dazu, wird aber überall mitgezählt (`alle()`); hier leben die Fahrzeuge,
 // die ein Superuser oder der Schießstand aufstellt (`liste`, je Besitzer höchstens eins).
 export class Fahrbare {
-  constructor(raum) { this.raum = raum; this.liste = []; this.zaehler = 0; }
+  constructor(raum) { this.raum = raum; this.liste = []; this.zaehler = 0; this.crash = new Panzercrash(raum); }
 
   alle() { return [this.raum.boxer, ...this.liste].filter(b => b?.f); }
   von(sid) { return this.alle().find(b => b.sitzt(sid)) ?? null; }
@@ -456,6 +458,7 @@ export class Fahrbare {
   aussteigen(sid) { return this.von(sid)?.aussteigen(sid) ?? false; }
   fahrerEingabe(sid, e) { this.von(sid)?.fahrerEingabe(sid, e); }
   schritt(dt) {
+    this.crash.schritt(dt);   // gerammte Autos: rutschen, brennen, Insassen steigen aus (server/panzercrash.mjs)
     this.raum.boxer?.schritt(dt);
     // Fahrzeug, dessen Besitzer gegangen ist und das leer steht: verschwindet
     for (const b of [...this.liste]) if (!b.insassen.length && b.besitzer && !this.raum.state.spieler.has(b.besitzer)) this.entfernen(b.besitzer);

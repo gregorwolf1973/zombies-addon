@@ -34,6 +34,9 @@ Wichtige Dateien:
 - `walze.mjs` – Boxer/Puma/Leopard walzen Zäune/Hecken platt (Feinraster 2 → 0, Kachel ohne Rest → Wiese, Nachricht `walze`), Leopard drückt
   geparkte Autos platt (`state.platt`) und walzt kleine Bäume um (`welt.baeumeWeg`); Puma/Boxer über Autos 40/30 % Tempo. Regeln und
   Rückwärtsgang (Eingabe > 135° hinter der Achse, Skalarprodukt; PC-Tasten W/S/A/D im Fahrzeug) in `client/walze.mjs`, Darstellung `client/walzedarstellung.mjs`.
+- `panzercrash.mjs` – gefahrener Boxer/Puma/Leopard rammt Verkehrsauto (`auto`/`polizei`) oder Spielerauto: Ruck (Tempo × 0,45, Nachricht `krach` mit `ruck`),
+  Wrack rutscht seitlich weg und dreht sich, brennt über `raum.brand` (keine Explosion), Unfallszene (`unfallTuer`), Spielerauto: Insassen steigen unverletzt aus.
+  Panzer über einem Wrack → `Fahrzeug.art = 'platt'` (kein Hindernis, Feuer aus, Darstellung `client/plattwrack.mjs`). Eingehängt in `Fahrbare` (`crash`), kein Schemafeld.
 - `speicher.mjs` (Spielstand), `superuser.mjs` (Testmenü, Zugangscode-Hash), `radio.mjs`, `raetsel.mjs`/`spielfragen.txt`, `nebel.mjs`.
 
 ### Schema und Sichtfilter

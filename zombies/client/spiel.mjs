@@ -91,6 +91,7 @@ import { NetzPuffer, nachSeq, ausStufe, verzFuerServer, naheAnzeigeVerz } from '
 import { STICK_TOT, STICK_WEG, stickWert } from './stick.mjs';
 import { Sammler, geraetTyp } from './diagnose.mjs';
 import { wrackAnimieren } from './wrack.mjs';
+import { plattWrackZeichnen, PLATT_TIEFE } from './plattwrack.mjs';
 import { GRAFIK as GFS, rahmenHalb, atlasPfad, figurenLadeliste, heldenBenoetigt, altBoegenNoetig, OPT_ZOMBIE_NEU, OPT_HELDEN_NEU, GRAFIK_SCHLUESSEL, GRAFIK_WAHL, grafikWahlGespeichert } from './grafikstufe.mjs';
 import { dingIcon, dingHtml, setzeDingListe, dingRahmen, hatDingBild } from './dingbild.mjs';
 
@@ -1284,7 +1285,11 @@ class Ort extends Phaser.Scene {
     raum.onMessage('autosWeg', m => autosWegEmpfangen(m));   // mit Autoschlüssel weggefahrene Autos (client/pkwdarstellung.mjs)
     raum.onMessage('walze', m => walzeEmpfangen(m));   // plattgewalzte Zäune/Bäume (client/walzedarstellung.mjs)
     raum.onMessage('autotuer', m => { if (hoertEbene(m)) autoTuer(this, m); });   // Unfallszene: Tür geht auf (server/unfallszene.mjs)
-    raum.onMessage('krach', m => { if (hoertEbene(m) && !ton.ereignis('krach', m.x, m.y)) { ton.schuss(m.x, m.y, 1.8); ton.stoss(m.x, m.y, false); } this.krachEffekt(m.x, m.y); });
+    raum.onMessage('krach', m => {
+      if (hoertEbene(m) && !ton.ereignis('krach', m.x, m.y)) { ton.schuss(m.x, m.y, 1.8); ton.stoss(m.x, m.y, false); }
+      this.krachEffekt(m.x, m.y);
+      if (m.ruck && raum.state?.spieler?.get(raum.sessionId)?.imBoxer && this.lokal && Math.hypot(this.lokal.x - m.x, this.lokal.y - m.y) < 90) this.cameras.main.shake(220, 0.006);   // Panzer rammt ein Auto: Ruck für die Besatzung (server/panzercrash.mjs)
+    });
     raum.onMessage('blech', m => { if (!ton.ereignis('blech', m.x, m.y)) ton.stoss(m.x, m.y, false); });
     raum.onMessage('aufprall', m => { if (hoertEbene(m) && !ton.ereignis('aufprall', m.x, m.y)) ton.stoss(m.x, m.y, false); this.aufprallEffekt(m); });
     raum.onMessage('menschGebissen', m => { if (hoertEbene(m)) ton.ereignis('menschGebissen', m.x, m.y); });
@@ -2122,7 +2127,8 @@ class Ort extends Phaser.Scene {
       c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(30,20,15,.8)'; c.fillRect(0, 0, breit, hoch);
       c.fillStyle = 'rgba(120,60,20,.5)'; for (let i = 0; i < 12; i++) c.fillRect(8 + ((i * 7919 + 13) % 997) / 997 * 44, 8 + ((i * 4177 + 5) % 991) / 991 * 18, 3, 3);   // feste Flecken (gleich bei allen Clients)
       c.globalCompositeOperation = 'source-over';
-    } else {
+    } else if (art === 'platt') plattWrackZeichnen(c, breit, hoch);   // vom Panzer plattgewalztes Wrack (client/plattwrack.mjs)
+    else {
       const f = art === 'polizei' ? 2 : farbe;
       autoVonOben(c, { id: 'fz' + art + f * 7919, x: breit / 2 + ((f + Math.round(breit / 2)) % 2 ? 1 : 0), y: hoch / 2, senkrecht: false, farbe: f, vorwaerts: true, gezeichnet: art === 'polizei', ohneSchatten: true });
       if (art === 'polizei') { c.fillStyle = '#1565c0'; c.fillRect(14, hoch / 2 - 7, 32, 2); c.fillRect(14, hoch / 2 + 5, 32, 2); c.fillStyle = '#263238'; c.fillRect(28, hoch / 2 - 4, 5, 8); }
@@ -2990,8 +2996,9 @@ class Ort extends Phaser.Scene {
       o.x += (f.x - o.x) * glatt; o.y += (f.y - o.y) * glatt;
       o.r = Phaser.Math.Angle.RotateTo(o.r, fzRichtung(f), dt * 6);
       o.box.setPosition(o.x, o.y).setRotation(o.r).setVisible(this.aktEbene === '');
+      if (o.platt !== (f.art === 'platt')) { o.platt = f.art === 'platt'; o.box.setDepth(o.platt ? PLATT_TIEFE : 4.6); }   // plattes Wrack liegt flach am Boden, ohne Schatten
       const shv = fzSchattenVersatz(istFahrbar(f.art) ? FZ_HOEHE[f.art] : f.art === 'evakuierung' && evakArtVon(raum.state) === 'panzer' ? FZ_HOEHE.leopard : 1);
-      o.sch?.setPosition(o.x + shv.dx, o.y + shv.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible);
+      o.sch?.setPosition(o.x + shv.dx, o.y + shv.dy).setRotation(o.r).setVisible(this.aktEbene === '' && o.box.visible && !o.platt);
       o.licht.clear();
       // dicht vorbeifahrende Autos und Busse rauschen vorbei; jedes dritte Auto hat das Radio an
       if ((f.art === 'auto' || f.art === 'bus' || f.art === 'laster') && this.lokal && !this.aktEbene) {
@@ -3052,7 +3059,7 @@ class Ort extends Phaser.Scene {
         o.licht.fillStyle(0x448aff, 0.18).fillCircle(vx, 0, blink ? 26 : 18);
       }
     }
-    for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id) || s.fahrzeuge.get(id).art === 'wrack') {
+    for (const [id, o] of this.busObj) if (!s.fahrzeuge?.has(id) || s.fahrzeuge.get(id).art === 'wrack' || s.fahrzeuge.get(id).art === 'platt') {
       ton.sireneStoppen(o.sirene); ton.sireneStoppen(o.radio); ton.sireneStoppen(o.kette); o.sirene = o.radio = o.kette = null; pkwAufraeumen(o);
       if (!s.fahrzeuge?.has(id)) { o.box.destroy(); o.sch?.destroy(); o.russ?.destroy(); this.busObj.delete(id); }
     }
