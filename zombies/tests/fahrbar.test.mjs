@@ -14,6 +14,7 @@ import { fahrbarFrei, ART, FAHRBAR_PLAETZE } from '../server/fahrbar.mjs';
 import { SU_WAFFEN } from '../server/superuser.mjs';
 import { FAHRBAR, FAHRBAR_ARTEN, fahrbarNah } from '../client/fahrbar.mjs';
 import { WAFFEN, vorratVon, frei, kmhZuPx } from '../client/welt.mjs';
+import { stammBei } from '../client/walze.mjs';
 import { freierPort } from './hilfe.mjs';
 
 const PORT = await freierPort();
@@ -52,6 +53,10 @@ function findeArt(raum, art, gang, hinderAb = 0, hinderBis = 0) {
     let weg = 0;
     while (weg < 1200 && fahrbarFrei(welt, art, x + weg, y, 0)) weg += 4;
     if (hinderAb ? weg >= hinderAb && weg <= hinderBis : weg >= gang) {
+      // Hindernis darf nichts Walzbares sein: geparkte Autos platt Leopard/Puma (server/walze.mjs), Bäume und Zäune ebenso
+      const ex = x + weg + FAHRBAR[art].laenge / 2;
+      if (hinderAb && (welt.behaelter ?? []).some(b => b.art === 'auto' && Math.abs(b.x - ex) < 140 && Math.abs(b.y - y) < 100)) continue;
+      if ([-20, 0, 20].some(dy => [0, 12, 24].some(dx => stammBei(welt, ex + dx, y + dy, 6)))) continue;
       if (frei(welt, x, y + 50, 10)) return { x, y, weg };
     }
   }
@@ -155,12 +160,35 @@ for (const art of ['puma', 'leopard']) {
     assert.ok(vmax > kmhZuPx(60) * 0.97 && vmax <= kmhZuPx(60) + 0.5, 'Höchsttempo ' + vmax);
     assert.ok(fahrbarFrei(raum.wv(''), art, f.x, f.y, f.richtung), 'steht im Hindernis');
     await warte(500);
-    assert.ok(f.x < w.x + w.weg + 1, 'durch das Hindernis gefahren');
+    assert.ok(f.x < w.x + w.weg + 1, 'durch das Hindernis gefahren, platt: ' + raum.state.platt.size + ', Baeume weg: ' + (raum.welt.baeumeWeg?.size ?? 0));
     assert.ok(Math.hypot(a.p.x - f.x, a.p.y - f.y) < 1, 'Insasse folgt nicht');
     raum.extra.get(a.sid).eingabe = { dx: 0, dy: 0, s: false };
     a.c.send('aussteigen');
     assert.ok(await bis(() => !a.p.imBoxer && !a.p.anBord), 'steigt nicht aus');
     assert.ok(frei(raum.wv(''), a.p.x, a.p.y, 10), 'nicht auf freiem Platz');
+  }));
+}
+
+// Walzbares Hindernis (geparktes Auto) wird von Leopard und Puma plattgemacht, der Weg danach ist frei
+for (const art of ['puma', 'leopard']) {
+  test(`${art} fahren: geparktes Auto im Weg wird plattgewalzt, die Fahrt geht weiter`, mitRaum(async ({ raum, a }) => {
+    const welt = raum.wv('');
+    let ort = null;
+    for (const c of welt.behaelter ?? []) {
+      if (c.art !== 'auto') continue;
+      for (const x of [c.x - 200, c.x - 150]) if (x > 100 && fahrbarFrei(welt, art, x, c.y, 0) && fahrbarFrei(welt, art, x + 60, c.y, 0)) { ort = { x, y: c.y, auto: c }; break; }
+      if (ort) break;
+    }
+    if (!ort) return;   // Welt ohne passend stehendes Auto
+    const b = raum.fahrbare.setzen(a.sid, art, a.p);
+    const f = b.aufstellen(ort.x, ort.y, 0);
+    a.p.x = f.x; a.p.y = f.y + FAHRBAR[art].breite / 2 + 12;
+    a.c.send('aktion');
+    assert.ok(await bis(() => a.p.imBoxer && a.p.anBord), 'steigt nicht ein');
+    raum.extra.get(a.sid).eingabe = { dx: 1, dy: 0, s: false };
+    assert.ok(await bis(() => raum.state.platt.has(ort.auto.id) || f.x > ort.auto.x + 80, 12000), 'Auto nicht plattgewalzt');
+    assert.ok(raum.state.platt.has(ort.auto.id), 'Auto steht noch, Fahrzeug trotzdem vorbei');
+    raum.extra.get(a.sid).eingabe = { dx: 0, dy: 0, s: false };
   }));
 }
 
