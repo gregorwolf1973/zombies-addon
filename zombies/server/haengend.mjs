@@ -2,10 +2,12 @@
 // Rollen: client/stuetzpunkt.mjs (Teile 'sdraht', Feinwert 1: niemand kommt durch) und client/flugfeld_deko.mjs (welt.flugfeld.draht).
 // Läuft ein Zombie an eine Rolle (Rand DRAHT_RAND px), bleibt er mit DRAHT_CHANCE hängen: Kriecher-Aussehen (z.kriecht + z.haengt),
 // bewegt sich nicht, zappelt (Client), beißt, ist erschießbar, und reißt sich nach DRAHT_DAUER Sekunden los (dann normaler Kriecher).
-import { WERTE, KACHEL } from '../client/welt.mjs';
+import { ZK_KRIECHER } from '../client/zombiefiguren.mjs';
+import { WERTE, KACHEL, freiTier } from '../client/welt.mjs';
 
 export const DRAHT_CHANCE = 0.4, DRAHT_DAUER = 60, DRAHT_RAND = 9;   // Wahrscheinlichkeit je Berührung, Sekunden, Zuschlag (px) zum Zombieradius (Feinraster: die Figur stoppt bis ~14 px vor der Rolle)
 const cache = new WeakMap();
+const DRAHT_ZAEHLRAND = 24;   // px: so nah an der Rolle zählt ein Hängender zu ihr
 export const HAENG_DREH = 0.6;   // rad/s: so schnell dreht sich ein Zombie im Draht höchstens zu seinem Ziel
 
 // Winkel von alt in Richtung neu drehen, höchstens um max (kürzester Weg)
@@ -45,21 +47,35 @@ const beruehrt = (q, x, y, zu) => {
 };
 
 // nach jedem Schritt eines gehenden Zombies draußen: berührt er eine Rolle (neu), würfelt er das Hängenbleiben
+// Wie viele Zombies hängen gerade an dieser Rolle?
+export function haengerAn(raum, q) {
+  let n = 0;
+  for (const z of raum.state.zombies.values()) if (z.haengt && !z.ebene && beruehrt(q, z.x, z.y, DRAHT_ZAEHLRAND)) n++;
+  return n;
+}
+
+// Übersteigen eines vollen Drahts: frei begehbar ist, wo der Zombiekreis eine Rolle berührt (sonst wie freiTier); Tempo: Backend zombies.drahtUeber
+export const drahtUeberFrei = welt => (w, x, y, r) => freiTier(w, x, y, r) || drahtRollen(welt).some(q => beruehrt(q, x, y, r + 1));
+export const drahtUeberTempo = raum => (raum.constructor.einstellungen?.zombies?.drahtUeber ?? 70) / 100;
+
 export function drahtPruefen(raum, z, info) {
   if (z.haengt || z.kriecht) return;
   const rollen = drahtRollen(raum.welt);
   if (!rollen.length) return;
   const zu = WERTE.zombieRadius + DRAHT_RAND;
-  if (!rollen.some(q => beruehrt(q, z.x, z.y, zu))) { info.imDraht = false; return; }
+  const q = rollen.find(r => beruehrt(r, z.x, z.y, zu));
+  if (!q) { info.imDraht = false; info.drueber = false; return; }
   if (info.imDraht) return;   // ein Wurf je Berührung
   info.imDraht = true;
+  // Rolle voll (zombies.drahtVoll hängende Zombies): kein Wurf mehr, er steigt mit zombies.drahtUeber % seines Tempos drüber
+  if (haengerAn(raum, q) >= (raum.constructor.einstellungen?.zombies?.drahtVoll ?? 4)) { info.drueber = true; return; }
   if (raum.rnd() < DRAHT_CHANCE) raum.haengenBleiben(z, info, DRAHT_DAUER);
 }
 
 // Zeit im Draht: nach Ablauf reißt er sich los (bleibt Kriecher)
 export function haengtSchritt(raum, z, info, dt) {
   info.haengtT = (info.haengtT ?? DRAHT_DAUER) - dt;
-  if (info.haengtT <= 0) z.haengt = false;
+  if (info.haengtT <= 0) { z.haengt = false; if (z.kl !== ZK_KRIECHER) z.kriecht = false; }   // nur echte Kriecher kriechen danach weiter
 }
 
 // beim Weltstart: je Lager-Rolle 1–2, je Flugfeld-Rolle 2–3 Zombies, die schon im Draht hängen (dauerhaft), und die toten Deko-Leichen

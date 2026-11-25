@@ -21,7 +21,7 @@ import { PkwVerwaltung, schluesselFund } from './pkw.mjs';
 import { Walze } from './walze.mjs';
 import { Fahrzeugkontakt } from './fahrzeugkontakt.mjs';
 import { autoTempo, bewegeFz } from '../client/fzkollision.mjs';
-import { drahtPruefen, haengendStart, haengtSchritt, drehBegrenzt, HAENG_DREH } from './haengend.mjs';
+import { drahtUeberFrei, drahtUeberTempo, drahtPruefen, haengendStart, haengtSchritt, drehBegrenzt, HAENG_DREH } from './haengend.mjs';
 import { Finale } from './finale.mjs';
 import * as SU from './superuser.mjs';
 import { imLager } from '../client/stuetzpunkt.mjs';
@@ -231,7 +231,7 @@ const STOSS_WEG = 11;   // Schläger und Faust stoßen den Zombie etwa 1,4 m zur
 const ANKUNFT_ZOMBIEFREI = 144;   // Pixel (4,5 Kacheln): so weit um den Ankunftspunkt entstehen beim ersten Betreten keine Zombies
 const SCHONZEIT_EBENE = 1;   // Sekunden nach einem Ebenenwechsel, in denen Zombies nicht beißen
 const BISS_PRO_SEK = 14;
-const KRIECHER_CHANCE = 0.25, KRIECHER_HP = 35, KRIECHER_TEMPO = 0.28, KRIECHER_SPUERT = 110;
+const KRIECHER_CHANCE = 0.1, KRIECHER_HP = 35, KRIECHER_TEMPO = 0.28, KRIECHER_SPUERT = 110;
 const UNTEN_ABSTAND = 110;   // so nah an einem am Boden liegenden Spieler halten sich Zombies nicht auf
 const VERZ_MAX_MS = 450;     // größte vom Client gemeldete Anzeigeverzögerung (ms), siehe client/netzpuffer.mjs
 const VERLAUF_MS = 600;      // so lange merkt sich der Server die Positionen jagender Zombies (Lag-Kompensation beim Biss)
@@ -3719,14 +3719,16 @@ export class SpielRaum extends Room {
     weg = Math.min(weg, this.klassenTempo(z, eifrig) * dt);   // Bewegungsklasse: Schlurfer und Kriecher werden nie schnell
     weg *= SpielRaum.einstellungen.tempoFaktor ?? 1;   // Einstellung „Tempo“
     weg *= tempoVon(this.wv(z.ebene));                  // drinnen im Feinraster: Tempo im Maßstab des Raums
+    if (info?.drueber) weg *= drahtUeberTempo(this);         // über vollen S-Draht: nur 70 % (zombies.drahtUeber)
     if (info) weg *= info.tempo ?? 1;                   // eigener Tempofaktor des Zombies (0,85–1,0: eingestelltes Tempo = Höchsttempo)
     const x0 = z.x, y0 = z.y;
     const welt = this.wv(z.ebene);
     // Hecken und Holzzäune: durchquerbar, aber langsam (Metallzäune und Mauern bleiben zu)
     const schritt = weg * this.baumTempo(welt, z) * (z.ebene ? 1 : autoTempo(welt, this.kontakt?.fz, z.x, z.y, W.zombieRadius)) * Math.min(tierGelaende(welt, x0, y0, W.zombieRadius) || 1, tierGelaende(welt, x0 + Math.cos(w) * weg, y0 + Math.sin(w) * weg, W.zombieRadius) || 1);
-    bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.zombieRadius, freiTier);
+    const gehFrei = info?.drueber ? drahtUeberFrei(welt) : freiTier;   // voller S-Draht: drübersteigen
+    bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.zombieRadius, gehFrei);
     // Engpass (Innenhof-Eingang, schmale Passage): Wo der Zombie beim Verfolgen nicht weiterkommt, aber ein Spieler (kleinerer Radius) durchpasst, rutscht er mit Spielerradius durch
-    if (eifrig && Math.hypot(z.x - x0, z.y - y0) < schritt * 0.3) bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.spielerRadius, freiTier);
+    if (eifrig && Math.hypot(z.x - x0, z.y - y0) < schritt * 0.3) bewege(welt, z, Math.cos(w) * schritt, Math.sin(w) * schritt, W.spielerRadius, gehFrei);
     // geschlossene oder verbarrikadierte Tür (Haustür, Zimmertür): nicht durch, sondern dagegen hämmern
     const sperre = this.zombieSperre(z, w, welt);
     if (sperre) {

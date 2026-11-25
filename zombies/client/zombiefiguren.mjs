@@ -75,9 +75,9 @@ export function zfZerrBild(zeitMs, h = 0) {
 }
 
 // Bewegungsklassen (fest je Zombie aus der Id): 0 Schlurfer (langsam, Geh-Clips), 1 Läufer (jagt mit Renn-Clip), 2 Kriecher (Kriech-Clip).
-// Anteile in Prozent aus dem Backend (zombies.anteilKriecher/-Schlurfer/-Laeufer, Vorgabe 10/60/30); bonusLaeufer (0..1, Schwierigkeit) geht vom Schlurfer-Anteil ab.
+// Anteile in Prozent aus dem Backend (zombies.anteilKriecher/-Schlurfer/-Laeufer, Vorgabe 5/45/50); bonusLaeufer (0..1, Schwierigkeit) geht vom Schlurfer-Anteil ab.
 export const ZK_SCHLURFER = 0, ZK_LAEUFER = 1, ZK_KRIECHER = 2;
-export const ZK_ANTEILE = { kriecher: 10, schlurfer: 60, laeufer: 30 };
+export const ZK_ANTEILE = { kriecher: 5, schlurfer: 45, laeufer: 50 };
 // Tempo der Klassen relativ zur Einstellung „Zombie wandert“ (km/h); Schlurfer jagen mit eigenem Regler „Schlurfer jagt“ (tempoSchlurferJagen),
 // Läufer bis zum eingestellten Höchsttempo „Zombie jagt“
 export const ZK_TEMPO = { schlurferWandern: 0.6, kriecher: 0.25 };

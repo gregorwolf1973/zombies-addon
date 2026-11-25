@@ -711,21 +711,21 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       <label for="anteilKriecher">Bewegungsklassen (Anteile, werden auf 100 % gerechnet): Kriecher robben sehr langsam</label>
       <div class="wertzeile">
         <input type="range" id="anteilKriecher" min="0" max="100" step="1">
-        <span class="wert" id="anteilKriecherWert">10 %</span>
+        <span class="wert" id="anteilKriecherWert">5 %</span>
       </div>
     </div>
     <div class="feld">
       <label for="anteilSchlurfer">Schlurfer (gehen langsam, auch beim Jagen; Tempo nach „Zombie wandert“)</label>
       <div class="wertzeile">
         <input type="range" id="anteilSchlurfer" min="0" max="100" step="1">
-        <span class="wert" id="anteilSchlurferWert">60 %</span>
+        <span class="wert" id="anteilSchlurferWert">45 %</span>
       </div>
     </div>
     <div class="feld">
       <label for="anteilLaeufer">Läufer (rennen beim Jagen bis „Zombie jagt“; mit Level und Spieltagen kommen mehr dazu)</label>
       <div class="wertzeile">
         <input type="range" id="anteilLaeufer" min="0" max="100" step="1">
-        <span class="wert" id="anteilLaeuferWert">30 %</span>
+        <span class="wert" id="anteilLaeuferWert">50 %</span>
       </div>
     </div>
 
@@ -4046,7 +4046,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var FMT_FAKTOR = { modus: 'decimal', an: function (v) { return '×' + (Number(v) / 10).toFixed(1).replace('.', ','); },
     ein: function (t) { var x = parseFloat(String(t).replace(/[×x\s]/gi, '').replace(',', '.')); return isFinite(x) ? Math.round(x * 10) : null; } };
   // Werte mit echten Grenzen (Server: fest()): [von, bis]; null = Min bzw. Max des Schiebers (Wahrscheinlichkeiten/Lautstärken in %, Winkel, Zeitpunkte)
-  var FESTE = { ueberraschung: null, anteilKriecher: null, anteilSchlurfer: null, anteilLaeufer: null, tnBiss: null, tnUnfallExpl: null, tnUnfallTuer: null, tnAutoCrash: null, tnAutoSchlMoebel: null, tnAutoSchlKoffer: null, tnAutoSchlLeiche: null, spStock: null, spDrin: null, spFunk: null, tuFrei: null, tuRaetsel: null, tuSchluessel: null, tnHundAblenk: null, tnKiMun: null, tnKiVerband: null, tnKiGranate: null,
+  var FESTE = { ueberraschung: null, anteilKriecher: null, anteilSchlurfer: null, anteilLaeufer: null, drahtVoll: null, drahtUeber: null, tnBiss: null, tnUnfallExpl: null, tnUnfallTuer: null, tnAutoCrash: null, tnAutoSchlMoebel: null, tnAutoSchlKoffer: null, tnAutoSchlLeiche: null, spStock: null, spDrin: null, spFunk: null, tuFrei: null, tuRaetsel: null, tuSchluessel: null, tnHundAblenk: null, tnKiMun: null, tnKiVerband: null, tnKiGranate: null,
     tnMgLeben: null, tnMgNot: null, muLaut: null, rsLaut: null, tnNebelMorgen: null, tnNebelAbend: null, tnNebelZombie: null, tnNachtDunkel: null,
     tnBissSpGeretsried: null, tnBissSpIsarauen: null, tnBissSpKoenigsdorf: null, tnBissSpKochel: null, tnBissSpAndermatt: null, agStunde: null, tnTagAb: null, tnNachtAb: null, zsKegel: [null, 360] };
   var FORMATE = { tnTagAb: FMT_UHR, tnNachtAb: FMT_UHR, agStunde: FMT_STUNDE, tnNacht: FMT_FAKTOR, tnAutos: FMT_FAKTOR };

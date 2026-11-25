@@ -134,9 +134,9 @@ test('Bewegungsklassen: fest aus der Id, Anteile wie eingestellt, Läufer-Bonus 
   assert.equal(zkKlasse('z5'), zkKlasse('z5'));
   const zaehle = (anteile, bonus = 0) => { const n = [0, 0, 0]; for (let i = 0; i < 5000; i++) n[zkKlasse('z' + i, anteile, bonus)]++; return n.map(x => x / 5000); };
   const v = zaehle(ZK_ANTEILE);
-  assert.ok(Math.abs(v[ZK_KRIECHER] - 0.1) < 0.02 && Math.abs(v[ZK_SCHLURFER] - 0.6) < 0.03 && Math.abs(v[ZK_LAEUFER] - 0.3) < 0.03, JSON.stringify(v));
+  assert.ok(Math.abs(v[ZK_KRIECHER] - 0.05) < 0.02 && Math.abs(v[ZK_SCHLURFER] - 0.45) < 0.03 && Math.abs(v[ZK_LAEUFER] - 0.5) < 0.03, JSON.stringify(v));
   const b = zaehle(ZK_ANTEILE, 0.2);
-  assert.ok(Math.abs(b[ZK_LAEUFER] - 0.5) < 0.03 && Math.abs(b[ZK_KRIECHER] - 0.1) < 0.02, JSON.stringify(b));
+  assert.ok(Math.abs(b[ZK_LAEUFER] - 0.7) < 0.03 && Math.abs(b[ZK_KRIECHER] - 0.05) < 0.02, JSON.stringify(b));
   assert.deepEqual(zaehle({ kriecher: 0, schlurfer: 0, laeufer: 5 }), [0, 1, 0]);
   // Schlurfer gehen auch beim Jagen, Läufer rennen
   assert.equal(zfClip({ geht: true, jagt: true, laeufer: false }), 'walk');
