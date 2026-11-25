@@ -9,7 +9,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 import { starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
-import { heliStand, evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke, A400M } from '../client/evak.mjs';
+import { heliStand, evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke, A400M, absturzLage, absturzPose, absturzSeite, absturzAufpralle, ABSTURZ_HERDE } from '../client/evak.mjs';
 import { frei } from '../client/welt.mjs';
 import { zaehle } from '../client/stapel.mjs';
 import { bereinige } from '../server/einstellungen.mjs';
@@ -54,18 +54,22 @@ test('Karte → Evakuierungsart und Einstellung für die neuen Arten', () => {
   for (const a of ['absturz', 'heli', 'bunker']) assert.equal(bereinige({ aufgaben: { evakArt: a } }).aufgaben.evakArt, a);
 });
 
-test('Königsdorf: während der Landerolle fallen je Echtspieler 2 Munitionskisten (50+30 Schuss, 2+1 Handgranaten) auf/neben die Piste, auf der Karte, im Spielstand, fest', mitArt('absturz', async ({ c, raum, p, s, ag }) => {
-  const { KISTEN, KISTEN_JE_SPIELER, kistenPlan, kistenSpeichern } = await import('../server/a400m_kisten.mjs');
+test('Königsdorf: erst wenn das Wrack steht, fallen je Echtspieler 2 Munitionskisten (50+30 Schuss, 2+1 Handgranaten) hinten heraus – neben das Wrack, nicht ins Feuer; auf der Karte, im Spielstand, fest', mitArt('absturz', async ({ c, raum, p, s, ag }) => {
+  const { KISTEN, KISTEN_JE_SPIELER, kistenPlan, kistenSpeichern, imWrackFeuer } = await import('../server/a400m_kisten.mjs');
   const fall = []; c.onMessage('kistenFall', m => fall.push(m));
   const fundorte = []; c.onMessage('fundorte', m => fundorte.push(m.l));
-  // reiner Plan: Inhalte fest, Zeiten innerhalb der Rollstrecke, Liegeplätze begehbar und nicht im Rumpf
+  // reiner Plan: Inhalte fest, Zeiten kurz nach dem Stillstand, Liegeplätze begehbar, nahe am Wrack und außerhalb aller Brandherde
   const ap = (await import('../server/flugplatz.mjs')).absturzPlan(raum.welt, s.seed);
   const plan = kistenPlan(s.seed, 3, ap, raum.welt, (x, y) => ag.platzNeben(x, y));
   assert.equal(plan.length, 3 * KISTEN_JE_SPIELER);
   assert.equal(plan.filter(e => e.ding === 'a400m_kiste_a').length, 3); assert.equal(plan.filter(e => e.ding === 'a400m_kiste_b').length, 3);
   assert.deepEqual(KISTEN, { a400m_kiste_a: { schuss: 50, granaten: 2 }, a400m_kiste_b: { schuss: 30, granaten: 1 } });
-  const rd = absturzDauer() - ABSTURZ.anflug;
-  for (const e of plan) { assert.ok(e.zeit > 0 && e.zeit < rd, 'Zeit außerhalb der Rollstrecke'); assert.ok(frei(raum.welt, e.x1, e.y1, 6), 'Kiste im Hindernis'); }
+  for (const e of plan) {
+    assert.ok(e.zeit > 0 && e.zeit < 4, 'Kiste fällt nicht kurz nach dem Stillstand');
+    assert.ok(frei(raum.welt, e.x1, e.y1, 6), 'Kiste im Hindernis');
+    assert.ok(!imWrackFeuer(ap.ende, e.x1, e.y1, 20), 'Kiste liegt im Feuer');
+    assert.ok(Math.hypot(e.x1 - ap.ende.x, e.y1 - ap.ende.y) < 600, 'Kiste nicht neben dem Wrack');
+  }
   assert.deepEqual(plan, kistenPlan(s.seed, 3, ap, raum.welt, (x, y) => ag.platzNeben(x, y)), 'Plan nicht deterministisch');
   // Ablauf im Spiel
   nurFunk(raum);
@@ -73,13 +77,15 @@ test('Königsdorf: während der Landerolle fallen je Echtspieler 2 Munitionskist
   ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
   s.uhr = 18 * 60 + 0.1;
   assert.ok(await bis(() => s.evakPhase === 'absturz'), 'kein Landeanflug');
-  ag.crash.rest = absturzDauer() - ABSTURZ.anflug - 0.05;   // Anflug überspringen: Aufsetzen, Rollen beginnt
-  assert.ok(await bis(() => fall.length >= 2, 9000), 'keine Kisten gefallen');
-  assert.ok(await bis(() => s.evakPhase === 'wrack', 12000), 'kein Stillstand');   // Rollstrecke läuft in Echtzeit
+  ag.crash.rest = absturzDauer() - ABSTURZ.anflug - 0.05;   // Anflug überspringen: Aufprall, Hüpfer, Schlittern laufen in Echtzeit
+  assert.ok(await bis(() => s.evakPhase === 'wrack', 12000), 'kein Stillstand');
+  assert.equal(fall.length, 0, 'Kisten fallen schon während der Bruchlandung');
+  assert.ok(await bis(() => fall.length >= 2, 4000), 'keine Kisten gefallen');
   assert.ok(await bis(() => [...s.boden.values()].filter(b => KISTEN[b.ding]).length === 2, 3000), 'nicht genau 2 Kisten am Boden');
   assert.equal(fall.length, 2);
   const kisten = [...s.boden.entries()].filter(([, b]) => KISTEN[b.ding]);
   assert.deepEqual(kisten.map(([, b]) => b.ding).sort(), ['a400m_kiste_a', 'a400m_kiste_b']);
+  for (const [, b] of kisten) assert.ok(!imWrackFeuer(ap.ende, b.x, b.y, 20), 'Kiste im Feuer');
   // Karte: gelbe Punkte
   assert.ok(await bis(() => fundorte.some(l => l.filter(e => KISTEN[e[2]]).length === 2), 3000), 'Kisten nicht in den Fundorten');
   // Spielstand merkt sie, die Welt lässt sie nicht verfallen
@@ -112,6 +118,7 @@ test('Königsdorf: A400M landet auf der Piste und fängt erst im Stand Feuer (Wr
   ag.crash.rest = 0.05;   // Anflug abkürzen
   assert.ok(await bis(() => s.evakPhase === 'wrack', 3000), 'kein Stillstand');
   assert.ok(await bis(() => meldungen.some(m => m.includes('gelandet') && m.includes('Feuer'))), 'keine Brand-Meldung nach der Landung');
+  assert.equal([...s.feuer.values()].filter(f => f.art === 'a400m').length, ABSTURZ_HERDE.length, 'im Stand kein Vollbrand');
   assert.equal(p.hp, hp, 'Spieler beim Absturz verletzt');
   assert.ok(s.evakAX > 0 && s.evakAY > 0, 'Wrack nicht mehr da');
   assert.equal(s.busDa, false);
@@ -122,6 +129,7 @@ test('Königsdorf: A400M landet auf der Piste und fängt erst im Stand Feuer (Wr
   assert.ok(await bis(() => s.evakPhase === 'heliAnflug', 3000), 'NH90 kommt nicht');
   assert.ok(Math.hypot(s.evakX - s.evakAX, s.evakY - s.evakAY) > 300, 'Landeplatz liegt im Wrack');
   assert.ok(s.evakAX > 0, 'Wrack verschwindet beim Anflug');
+  assert.equal([...s.feuer.values()].filter(f => f.art === 'a400m').length, ABSTURZ_HERDE.length, 'Wrack brennt nicht weiter');
   ag.heli.rest = 0.1;
   assert.ok(await bis(() => s.evakPhase === 'heli', 3000), 'NH90 landet nicht');
   let gewechselt = false; ag.levelWechsel = () => { gewechselt = true; }; ag.wechselVerzoegerung = 100;
@@ -131,7 +139,46 @@ test('Königsdorf: A400M landet auf der Piste und fängt erst im Stand Feuer (Wr
   assert.ok(await bis(() => gewechselt, 3000), 'kein Levelwechsel');
 }));
 
-test('Königsdorf: Der A400M setzt am Pistenanfang auf, rollt auf der Piste aus (eigener Bremsweg), erst im Stand brennt er; Spieler im Weg werden zur Seite gestoßen', mitArt('absturz', async ({ raum, p, s, ag, meldungen }) => {
+test('Königsdorf: Bruchlandung – hartes Aufsetzen am Pistenanfang, 3 Hüpfer, Schlittern (quer, fest je Seed) bis zum Stand auf/neben der Piste', () => {
+  const { anflug, rollweg, tempo, huepfer, quer, gier, pendel } = ABSTURZ, ende = absturzDauer(), prallen = absturzAufpralle();
+  assert.ok(huepfer.length >= 2 && huepfer.length <= 3, '2–3 Hüpfer');
+  assert.equal(prallen.length, huepfer.length + 1); assert.equal(prallen[0], anflug);
+  // Strecke: Anflug mit gleichbleibendem Tempo, am Aufsetzpunkt ABSTURZ.tempo, gleichmäßig gebremst, Stand genau am Plan
+  assert.ok(Math.abs(absturzStrecke(anflug) - rollweg) < 1e-6, 'Aufsetzen nicht am Aufsetzpunkt');
+  assert.ok(Math.abs(absturzStrecke(ende)) < 1e-6, 'kein Stillstand am Ende');
+  assert.ok(Math.abs((absturzStrecke(anflug + 0.01) - absturzStrecke(anflug)) / -0.01 - tempo) < 2, 'Aufsetztempo');
+  assert.ok(absturzStrecke(0) > rollweg + 2000, 'Anflug startet nicht weit genug draußen');
+  for (let t = 0; t < ende; t += 0.5) assert.ok(absturzStrecke(t + 0.5) <= absturzStrecke(t) + 1e-9, 'rückwärts bei t=' + t);
+  for (const seite of [1, -1]) {
+    // Ablauf: anflug → huepfen → schlittern → stand, jede Phase genau einmal und in dieser Reihenfolge
+    const folge = [], boegen = [];
+    let luft = false, qAlt = 0, herdeAlt = 0;
+    for (let k = 0; k <= Math.round(ende * 100) + 50; k++) {
+      const t = k / 100, l = absturzLage(t, seite);
+      if (folge.at(-1) !== l.phase) folge.push(l.phase);
+      if (t > anflug + 1e-9) { if (l.h > 1e-6 && !luft) boegen.push(t); luft = l.h > 1e-6; }
+      assert.ok(l.h >= 0 && l.h <= 1, 'Höhe');
+      assert.ok(Math.abs(l.q) >= qAlt - 1e-9 && Math.abs(l.q) <= quer + 1e-9, 'Querversatz springt zurück bei t=' + t);
+      assert.ok(Math.abs(l.gier) <= gier + pendel + 1e-9 && Math.sign(l.gier || seite) === seite, 'Gieren falsch bei t=' + t);
+      assert.ok(l.herde >= herdeAlt, 'Brandherde gehen aus'); herdeAlt = l.herde;
+      if (t < anflug) assert.equal(l.herde, 0, 'brennt schon im Anflug');
+      else assert.ok(l.herde >= 1, 'brennt nicht ab dem ersten Aufprall bei t=' + t);
+      qAlt = Math.abs(l.q);
+    }
+    assert.deepEqual(folge, ['anflug', 'huepfen', 'schlittern', 'stand']);
+    assert.equal(boegen.length, huepfer.length, 'Zahl der Hüpfer: ' + boegen.length);
+    for (const t of prallen) assert.ok(absturzLage(t, seite).h < 1e-9, 'beim Aufprall nicht am Boden: ' + t);
+    assert.ok(absturzLage((prallen[0] + prallen[1]) / 2, seite).h > 0.3, 'erster Hüpfer zu flach');
+    const st = absturzLage(ende, seite);
+    assert.equal(st.phase, 'stand'); assert.equal(st.h, 0); assert.ok(Math.abs(st.q - seite * quer) < 1e-9 && Math.abs(st.gier - seite * gier) < 1e-9, 'Endlage');
+    // fest: gleiche Zeit → gleiche Lage (kein Zufall)
+    for (const t of [3, anflug + 0.3, anflug + 2, anflug + 5, ende]) assert.deepEqual(absturzLage(t, seite), absturzLage(t, seite));
+  }
+  assert.equal(absturzSeite(12345), absturzSeite(12345)); assert.ok([1, -1].includes(absturzSeite(7)));
+  assert.ok(new Set(Array.from({ length: 40 }, (_, i) => absturzSeite(i * 977))).size === 2, 'bricht immer zur selben Seite aus');
+});
+
+test('Königsdorf: Der A400M setzt am Pistenanfang auf, brennt ab dem ersten Aufprall (Feuer wandern mit), schlittert bis zum Stand auf/neben der Piste; Spieler im Weg werden zur Seite gestoßen, Zombies umgerissen', mitArt('absturz', async ({ raum, p, s, ag, meldungen }) => {
   // Die Testwelt ist Isarauen (ohne Landebahn): eine eigene Piste setzen, Plan neu berechnen lassen
   raum.welt.landebahn = { x: 3000, y: 3000, w: 0.3, laenge: 5000, breite: 352 }; delete raum.welt._absturzplan;
   const lb = raum.welt.landebahn, c = Math.cos(lb.w), sn = Math.sin(lb.w);
@@ -140,37 +187,51 @@ test('Königsdorf: Der A400M setzt am Pistenanfang auf, rollt auf der Piste aus 
   ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
   s.uhr = 18 * 60 + 0.1;
   assert.ok(await bis(() => s.evakPhase === 'absturz'), 'kein Landeanflug');
-  const plan = ag.crash.plan;
+  const plan = ag.crash.plan, { anflug } = ABSTURZ;
   const aufPiste = (x, y) => { const u = (x - lb.x) * c + (y - lb.y) * sn, v = -(x - lb.x) * sn + (y - lb.y) * c; return { u, v }; };
-  // Plan: Aufsetzen nahe dem Pistenanfang, Stillstand weiter hinten, beides auf der Piste in Pistenrichtung
-  const a0 = aufPiste(plan.aufsetz.x, plan.aufsetz.y), a1 = aufPiste(plan.x, plan.y);
+  // Plan: Aufsetzen nahe dem Pistenanfang auf der Achse, Stillstand weiter hinten; das Wrack steht seitlich versetzt noch auf/neben der Piste
+  const a0 = aufPiste(plan.aufsetz.x, plan.aufsetz.y), a1 = aufPiste(plan.x, plan.y), e = aufPiste(plan.ende.x, plan.ende.y);
   assert.ok(a0.u > 0 && a0.u < 400 && Math.abs(a0.v) < 2, 'Aufsetzpunkt nicht am Pistenanfang: ' + JSON.stringify(a0));
   assert.ok(a1.u > a0.u + 800 && a1.u < lb.laenge - A400M.laenge && Math.abs(a1.v) < 2, 'Stillstand nicht auf der Piste: ' + JSON.stringify(a1));
+  assert.ok(Math.abs(e.v) > 20 && Math.abs(e.v) < lb.breite / 2 && Math.abs(e.u - a1.u) < 1, 'Wrack nicht seitlich auf/neben der Piste: ' + JSON.stringify(e));
+  assert.equal(plan.seite, absturzSeite(s.seed));
   assert.ok(Math.abs(plan.w - lb.w) < 1e-9, 'nicht in Pistenrichtung');
+  assert.ok(Math.abs(plan.ende.richtung - lb.w - plan.seite * ABSTURZ.gier) < 1e-9, 'Wrack nicht quer gestellt');
   assert.equal(Math.round(plan.x), s.evakAX); assert.equal(Math.round(plan.y), s.evakAY);
-  // Bewegung: Anflug mit gleichbleibendem Tempo, am Aufsetzpunkt ABSTURZ.tempo, gleichmäßig gebremst, Stand genau am Plan
-  const { anflug, rollweg, tempo } = ABSTURZ;
-  assert.ok(Math.abs(absturzStrecke(anflug) - rollweg) < 1e-6, 'Aufsetzen nicht am Aufsetzpunkt');
-  assert.ok(Math.abs(absturzStrecke(absturzDauer())) < 1e-6, 'kein Stillstand am Ende');
-  assert.ok(Math.abs((absturzStrecke(anflug + 0.01) - absturzStrecke(anflug)) / -0.01 - tempo) < 2, 'Aufsetztempo');
-  assert.ok(absturzStrecke(0) > rollweg + 2000, 'Anflug startet nicht weit genug draußen');
-  for (let t = 0; t < absturzDauer(); t += 0.5) assert.ok(absturzStrecke(t + 0.5) <= absturzStrecke(t) + 1e-9, 'rückwärts bei t=' + t);
-  // Ablauf im Raum: während Anflug und Rollen kein Brand, erst im Stand
-  assert.ok(!meldungen.some(m => m.includes('Feuer')), 'Brand schon im Anflug');
-  // Spieler mitten auf der Piste, Flugzeug rollt gerade darüber: wird quer zur Piste zur Seite gestoßen, ohne Schaden
-  ag.crash.rest = absturzDauer() - anflug - 3;   // 3 s nach dem Aufsetzen
-  const t = absturzDauer() - ag.crash.rest, d = absturzStrecke(t);
-  const fx = plan.x - c * d, fy = plan.y - sn * d;
-  p.ebene = ''; p.anBord = false; p.x = fx + 20 * c; p.y = fy + 20 * sn;
+  const a400mFeuer = () => [...s.feuer.entries()].filter(([, f]) => f.art === 'a400m');
+  // im Anflug brennt nichts
+  assert.equal(a400mFeuer().length, 0, 'Feuer schon im Anflug');
+  assert.ok(!meldungen.some(m => m.includes('brennt')), 'Brand schon im Anflug');
+  // erster Aufprall: Triebwerk brennt sofort (echtes Feuer), Meldung
+  ag.crash.rest = absturzDauer() - anflug - 0.02;
+  assert.ok(await bis(() => a400mFeuer().length >= 1, 2000), 'kein Feuer nach dem ersten Aufprall');
+  assert.ok(await bis(() => meldungen.some(m => m.includes('hart') && m.includes('brennt'))), 'keine Aufprall-Meldung');
+  const [fid, f0] = a400mFeuer()[0], x0 = f0.x;
+  assert.ok(await bis(() => s.feuer.get(fid)?.x !== x0, 2000), 'Feuer bleibt nicht an der Maschine');
+  // Spieler mitten im Weg, Maschine schlittert gerade darüber (Bauch am Boden): wird quer zum Rumpf zur Seite gestoßen, ohne Schaden
+  ag.crash.rest = absturzDauer() - anflug - 3;   // 3 s nach dem Aufsetzen: schlittert
+  const t = absturzDauer() - ag.crash.rest, pose = absturzPose(plan, plan.c, plan.s, t, plan.seite);
+  assert.equal(pose.phase, 'schlittern');
+  const rc = Math.cos(pose.richtung), rs = Math.sin(pose.richtung);
+  p.ebene = ''; p.anBord = false; p.x = pose.x + 20 * rc; p.y = pose.y + 20 * rs;
   const hp = p.hp; ag.absturzRollen(t);
-  const q = aufPiste(p.x, p.y), f = aufPiste(fx, fy);
-  assert.ok(Math.abs(q.v - f.v) > ABSTURZ.rumpfHalbBreite, 'Spieler nicht aus dem Rumpf gestoßen: ' + (q.v - f.v));
-  assert.equal(p.hp, hp, 'Spieler verletzt');
-  assert.ok(!meldungen.some(m => m.includes('Feuer')), 'Brand schon beim Rollen');
+  const quer = Math.abs(-(p.x - pose.x) * rs + (p.y - pose.y) * rc);
+  assert.ok(quer > ABSTURZ.rumpfHalbBreite, 'Spieler nicht aus dem Rumpf gestoßen: ' + quer);
+  assert.equal(p.hp, hp, 'Spieler durch den Stoß verletzt');
+  // Zombie im Weg wird umgerissen
+  raum.neuerZombie(0);
+  const [zid, z] = [...s.zombies.entries()].at(-1);
+  z.ebene = ''; z.x = pose.x - 30 * rc; z.y = pose.y - 30 * rs; z.hp = 100;
+  ag.crash.zombieT = -1; ag.absturzRollen(t);
+  assert.ok(!s.zombies.has(zid) || !(s.zombies.get(zid).hp > 0), 'Zombie im Weg überlebt');
+  // Stand: Vollbrand, Wrack an der Endlage
   ag.crash.rest = 0.05;
   assert.ok(await bis(() => s.evakPhase === 'wrack', 3000), 'kein Stillstand');
-  assert.ok(meldungen.some(m => m.includes('gelandet') && m.includes('Feuer')), 'Brand erst im Stand');
-  assert.equal(Math.round(s.evakAX), Math.round(plan.x), 'Wrack nicht an der Stillstandsposition');
+  assert.ok(await bis(() => meldungen.some(m => m.includes('gelandet') && m.includes('Feuer')), 2000), 'keine Meldung im Stand');
+  assert.equal(a400mFeuer().length, ABSTURZ_HERDE.length, 'kein Vollbrand');
+  const mitte = s.feuer.get('fa400m_' + ABSTURZ_HERDE.findIndex(h => h.x === 0));
+  assert.ok(mitte && Math.hypot(mitte.x - plan.ende.x, mitte.y - plan.ende.y) < 12, 'Rumpfbrand nicht am Wrack');
+  assert.equal(Math.round(s.evakAX), Math.round(plan.x), 'Absturzstelle verschoben');
 }));
 
 test('Königsdorf (echte Karte): Aufsetzpunkt und Stillstand liegen auf der Piste, Wrack und Hubschrauberplatz weit auseinander', async () => {
@@ -344,4 +405,19 @@ test('Erzwungene Evakuierungsart (Verwaltung) gilt nur für die aktuelle Karte: 
     ({ c, raum } = await neuBeitreten());
     assert.equal(raum.state.evakArt, 'absturz', 'Königsdorf: Art ' + raum.state.evakArt);
   } finally { await c.leave(); await bis(() => !SpielRaum.aktiv, 3000); SpielRaum.kartenWechsel?.('isarauen'); SpielRaum.speicher.loescheWelt(); delete process.env.ZOMBIES_VERWALTUNG_LOKAL; }
+});
+
+test('A400M-Brand (Darstellung): Teilchen-Pool bleibt in seiner Grenze, Rauch steigt auf und zieht mit dem Wind ab, Teilchen erlöschen', async () => {
+  const { FxPool, RAUCH, WIND } = await import('../client/absturzfx.mjs');
+  const pool = new FxPool(60);
+  for (let i = 0; i < 400; i++) { pool.rauch(0, 0); pool.flamme(0, 0, 40); pool.funken(0, 0, 1, 0, 2); pool.staub(0, 0, 2); pool.glut(0, 0); }
+  assert.equal(pool.aktiv(), 60, 'Pool wächst über die Grenze');
+  const leer = new FxPool(10, () => 0.5);
+  const q = leer.rauch(100, 100);
+  for (let i = 0; i < 40; i++) leer.schritt(0.1);
+  assert.equal(q.art, RAUCH);
+  assert.ok(q.y < 100 - 150, 'Rauch steigt nicht hoch: ' + q.y);
+  assert.ok(Math.sign(q.x - 100) === Math.sign(WIND.x), 'Rauch zieht nicht mit dem Wind');
+  for (let i = 0; i < 200; i++) pool.schritt(0.1);
+  assert.equal(pool.aktiv(), 0, 'Teilchen erlöschen nicht');
 });

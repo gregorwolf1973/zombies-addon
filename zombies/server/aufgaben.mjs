@@ -5,7 +5,8 @@
 import { flach, hat, indexVon, zaehle as zaehleStapel } from '../client/stapel.mjs';
 import { schema, t } from '@colyseus/schema';
 import { KACHEL, WELT_VERSION, BUS_ABSTAND, zufall, WAFFEN, frei, kachelVon, reichVon } from '../client/welt.mjs';
-import { LEOPARD, A400M, heliStand, evakArtFuer, imFussabdruck, ABSTURZ, absturzDauer, absturzStrecke } from '../client/evak.mjs';
+import { LEOPARD, A400M, heliStand, evakArtFuer, imFussabdruck, ABSTURZ, absturzDauer, absturzStrecke, absturzPose, ABSTURZ_HERDE, herdOrt } from '../client/evak.mjs';
+import { Feuer } from './feuer.mjs';
 import { Leopard, leopardEinst } from './leopard.mjs';
 import { ueberrolleZombies } from './ueberrollen.mjs';
 import { querfeldPlan } from './querfeld.mjs';
@@ -108,7 +109,7 @@ export const hhmm = min => {
 const EVAK_REICHWEITE = 230, EVAK_PAUSE = 0.4, EVAK_TREFFER = 0.8;   // Bus/Panzer: Reichweite (px), Schussfolge (s), Trefferchance
 const HELI_ANFLUG = 30, HELI_NEU = 60, HELI_ABSTAND = 90;            // Hubschrauber: Anflugzeit, Wartezeit bis zum nächsten Anflug (echte Sekunden), Einstiegsradius (px)
 const ROLLEN_TEMPO = 190;                                            // A400M: Aufsetzgeschwindigkeit der Landerolle (px/s), bremst bis zum Stand
-// Königsdorf: Landeanflug, Aufsetzen und Ausrollen auf der Piste (Maße und Dauer in client/evak.mjs: ABSTURZ), danach Triebwerksbrand
+// Königsdorf: Landeanflug, Bruchlandung mit Hüpfern und Schlittern auf der Piste (Maße und Dauer in client/evak.mjs: ABSTURZ), brennt ab dem ersten Aufprall
 const UEBERROLLEN_PAUSE = 0.1;                                       // Leopard: so oft (s) wird der Fußabdruck auf Zombies geprüft
 
 export class Aufgaben {
@@ -201,7 +202,7 @@ export class Aufgaben {
     const s = this.raum.state;
     s.level = Math.max(1, Math.min(250, Math.round(Number(stand?.level) || 1)));
     s.funk = false; s.busDa = false; s.busSteht = false; s.busAnkunft = -1; s.busAb = -1; s.busBord = 0; s.busGesamt = 0;
-    this.flug = null; this.heli = null; this.crash = null; this.kistenGefallen = false; s.evakPhase = ''; s.evakRest = 0; this.evakSync();
+    this.flug = null; this.heli = null; this.crash = null; this.kistenGefallen = false; s.evakPhase = ''; s.evakRest = 0; this.absturzFeuerWeg(); this.evakSync();
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.ausgestiegen.clear(); this.folgenId = null;
     this.basis = s.besiegt;
@@ -906,16 +907,19 @@ export class Aufgaben {
     return { drinnen, draussen, sieg };
   }
 
-  // ---------- Königsdorf ('absturz'): der A400M landet auf der Landebahn und fängt erst im Stand Feuer ----------
-  // Ablauf: Anflug auf die Pistenachse → Aufsetzen am Pistenanfang → Ausrollen mit eigenem Bremsweg (Spieler auf der Piste werden zur Seite gestoßen)
-  // → Stillstand, Triebwerksbrand, Wrack bleibt als Kulisse an der Stillstandsposition → sobald die Fahrt gelingt (Missionsteile erledigt),
-  // kommt der NH90 (Anflug, Landung, Einsteigen/Abflug wie bei der A400M-Evakuierung).
+  // ---------- Königsdorf ('absturz'): Bruchlandung des A400M auf der Landebahn ----------
+  // Ablauf: Anflug auf die Pistenachse → harter Aufprall am Pistenanfang (Triebwerk fängt Feuer) → 3 Hüpfer → Schlittern auf dem Bauch,
+  // seitlich versetzt und quer gestellt (client/evak.mjs: absturzLage, fest je Seed), mit eigenem Bremsweg → Stillstand, Vollbrand.
+  // Wer am Boden im Weg steht, wird zur Seite gestoßen; Zombies werden umgerissen. Die Brandherde sind echte Feuer (state.feuer: Schaden,
+  // Licht, Knistern) und wandern mit. Im Stand fallen die Munitionskisten hinten heraus (neben das Wrack, nicht ins Feuer).
+  // Sobald die Fahrt gelingt (Missionsteile erledigt), kommt der NH90 (Anflug, Landung, Einsteigen/Abflug wie bei der A400M-Evakuierung).
   absturzStart() {
     const s = this.raum.state, p = absturzPlan(this.raum.welt, s.seed);
     if (!p) return;   // kann nicht vorkommen (absturzPlan liefert immer einen Plan), aber nie in eine andere Evakuierungsart ausweichen
     this.busHeute = true;
     const dauer = absturzDauer();
-    this.crash = { rest: dauer, dauer, phase: 'anflug', plan: p };   // rest = verbleibende Sekunden bis zum Stand
+    this.absturzFeuerWeg();
+    this.crash = { rest: dauer, dauer, phase: 'anflug', plan: p, standT: 0 };   // rest = verbleibende Sekunden bis zum Stand
     s.evakArt = 'absturz'; s.evakPhase = 'absturz'; s.evakRest = Math.ceil(dauer);
     s.evakAX = Math.round(p.x); s.evakAY = Math.round(p.y); s.evakW = p.w;
     s.evakX = Math.round(p.heli.x); s.evakY = Math.round(p.heli.y);
@@ -929,43 +933,81 @@ export class Aufgaben {
     if (this.takt <= 0) { this.takt = 0.5; this.aktualisieren(); this.orteSync(); }
     if (c.phase === 'anflug' || c.phase === 'rollen') {
       c.rest -= dt; s.evakRest = Math.max(0, Math.ceil(c.rest));
-      const t = c.dauer - c.rest;
+      const t = Math.min(c.dauer, c.dauer - c.rest);
       if (c.phase === 'anflug' && t >= ABSTURZ.anflug) {
         c.phase = 'rollen';
-        if (!this.kistenGefallen) {   // beim Aufsetzen: je Echtspieler 2 Kisten planen (fallen während der Rollstrecke hinten heraus)
-          this.kistenGefallen = true;
-          c.kisten = { plan: kistenPlan(s.seed, this.echteSpieler(), c.plan, this.raum.welt, (x, y) => this.platzNeben(x, y)), fallend: [] };
-        }
+        const a = c.plan.aufsetz;
+        this.raum.laerm?.(a.x, a.y, 900, true, '');   // der Aufprall lockt Zombies von weit her an
+        this.raum.broadcast('meldung', { text: '💥 Der A400M schlägt hart auf der Piste auf – ein Triebwerk brennt! Weg von der Landebahn!', lang: true });
       }
-      if (c.kisten && !kistenSchritt(this.raum, c.kisten, t - ABSTURZ.anflug, dt)) c.kisten = null;
-      if (c.rest > 0) { if (c.phase === 'rollen') this.absturzRollen(t); return; }
-      c.phase = 'wrack'; s.evakPhase = 'wrack'; s.evakRest = 0;
-      this.raum.broadcast('meldung', { text: '🔥 Der A400M ist gelandet – und ein Triebwerk fängt Feuer! Weg vom Flugzeug, ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
+      if (c.phase === 'rollen') this.absturzRollen(t);
+      if (c.rest > 0) return;
+      c.phase = 'wrack'; s.evakPhase = 'wrack'; s.evakRest = 0; c.standT = 0;
+      this.absturzFeuer(absturzPose(c.plan, c.plan.c, c.plan.s, c.dauer, c.plan.seite));   // Vollbrand an der Endlage
+      if (!this.kistenGefallen) {   // im Stand: je Echtspieler 2 Kisten fallen hinten heraus, neben das Wrack (nicht ins Feuer)
+        this.kistenGefallen = true;
+        c.kisten = { plan: kistenPlan(s.seed, this.echteSpieler(), c.plan, this.raum.welt, (x, y) => this.platzNeben(x, y)), fallend: [] };
+      }
+      this.raum.broadcast('meldung', { text: '🔥 Der A400M ist bruchgelandet und steht im Vollbrand – Abstand vom Feuer! Ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
       return;
     }
-    if (c.kisten && !kistenSchritt(this.raum, c.kisten, Infinity, dt)) c.kisten = null;   // letzte Kisten noch ablegen
+    c.standT += dt;
+    if (c.kisten && !kistenSchritt(this.raum, c.kisten, c.standT, dt)) c.kisten = null;
     if (!this.fahrtGelingt()) return;
-    // die Missionsteile sind erledigt: der NH90 fliegt den Platz an
+    // die Missionsteile sind erledigt: der NH90 fliegt den Platz an (offene Kisten sofort ablegen; das Wrack brennt weiter)
+    if (c.kisten) kistenSchritt(this.raum, c.kisten, Infinity, 1e6);
     this.crash = null; this.heli = { phase: 'anflug', rest: HELI_ANFLUG, art: 'absturz' };
     s.evakPhase = 'heliAnflug'; s.evakRest = HELI_ANFLUG;
     this.raum.broadcast('meldung', { text: `🚁 Funkkontakt steht – ein NH90 landet in ${HELI_ANFLUG} s auf dem markierten Platz`, lang: true });
   }
 
-  // Während der Landerolle: wer im Rumpf-Fußabdruck steht, wird quer zur Piste zur Seite gestoßen (kein Schaden; die Maschine rollt unbeirrt)
+  // Während der Bruchlandung (t = s seit Beginn des Anflugs): Lage berechnen, Brandherde mitführen; am Boden wird, wer im Rumpf-Fußabdruck steht,
+  // quer zum Rumpf zur Seite gestoßen (kein Schaden durch den Stoß), Zombies im Weg werden umgerissen (sterben wie beim Überrollen)
   absturzRollen(t) {
-    const s = this.raum.state, p = this.crash.plan, d = absturzStrecke(t), vor = absturzStrecke(t + 0.1);
-    const tempo = (d - vor) / 0.1;
-    if (tempo < 8) return;
-    const w = p.w, cs = Math.cos(w), sn = Math.sin(w);
-    const fz = { x: p.x - cs * d, y: p.y - sn * d, richtung: w };
+    const s = this.raum.state, c = this.crash, p = c.plan, pose = absturzPose(p, p.c, p.s, t, p.seite);
+    c.pose = pose;
+    this.absturzFeuer(pose);
+    const tempo = (pose.d - absturzStrecke(Math.min(c.dauer, t + 0.1))) / 0.1;
+    if (pose.h > 0.06 || tempo < 8) return;   // in der Luft (Hüpfer) oder schon fast im Stand
+    const cs = Math.cos(pose.richtung), sn = Math.sin(pose.richtung);
+    const fz = { x: pose.x, y: pose.y, richtung: pose.richtung };
     const hl = A400M.laenge / 2, hb = ABSTURZ.rumpfHalbBreite;
     for (const [sid, pl] of s.spieler) {
       if (pl.ebene || pl.anBord || !imFussabdruck(fz, pl.x, pl.y, hl, hb)) continue;
       const quer = -(pl.x - fz.x) * sn + (pl.y - fz.y) * cs, seite = quer >= 0 ? 1 : -1, weite = hb + 26 - Math.abs(quer);
       const q = this.platzNeben(pl.x - sn * seite * weite, pl.y + cs * seite * weite);
       pl.x = q.x; pl.y = q.y;
-      if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, '✈️ Der A400M rollt über die Piste – du wirst zur Seite gestoßen!');
+      if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, '✈️ Der A400M schlittert über die Piste – du wirst zur Seite gestoßen!');
     }
+    if (t - (c.zombieT ?? -1) >= 0.1) {   // Zombies: alle 0,1 s prüfen (wie beim Überrollen)
+      c.zombieT = t;
+      ueberrolleZombies(this.raum, fz, hl, hb + 6, this.absturzSchuetze ??= { name: 'A400M', x: fz.x, y: fz.y, besiegt: 0 });
+    }
+  }
+
+  // Brandherde des A400M als echte Feuer (Schaden, Licht, Knistern über server/feuer.mjs): je Aufprall kommen Herde dazu, sie wandern mit
+  // der Maschine und erlöschen nicht (Wrack brennt bis zum Levelwechsel)
+  absturzFeuer(pose) {
+    const s = this.raum.state, r = this.raum, c = Math.cos(pose.richtung), sn = Math.sin(pose.richtung);
+    this.absturzFeuerIds ??= [];
+    ABSTURZ_HERDE.forEach((hd, i) => {
+      if (hd.ab > pose.herde) return;
+      const id = 'fa400m_' + i, o = herdOrt(hd, pose.x, pose.y, c, sn), x = Math.round(o.x), y = Math.round(o.y);
+      let f = s.feuer.get(id);
+      if (!f) {
+        f = new Feuer(); f.x = x; f.y = y; f.r = hd.r; f.staerke = 0.45; f.art = 'a400m';
+        s.feuer.set(id, f);
+        r.brand?.info.set(id, { ziel: 'a400m:' + i, alter: 3, dauer: 1e12 });   // wächst in ~12 s zum vollen Brand, erlischt nie
+        this.absturzFeuerIds.push(id);
+      }
+      if (f.x !== x) f.x = x;
+      if (f.y !== y) f.y = y;
+    });
+  }
+  absturzFeuerWeg() {
+    const s = this.raum.state;
+    for (const id of this.absturzFeuerIds ?? []) { s.feuer?.delete(id); this.raum.brand?.info.delete(id); }
+    this.absturzFeuerIds = [];
   }
 
   // Hubschrauber: Anflug → gelandet und wartet (Einsteigen wie beim Bus) → Abflug und Levelwechsel; ohne alle fliegt er ab und kommt später wieder
