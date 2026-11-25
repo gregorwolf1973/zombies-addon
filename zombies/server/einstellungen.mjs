@@ -224,6 +224,10 @@ export function bereinigeAuto(au = {}) {
   return {
     tempo: Math.round(zahl(au.tempo, 10, 160, V.tempo, { max: 300 })),                  // Höchsttempo in km/h
     lenkung: Math.round(zahl(au.lenkung, 20, 120, V.lenkung, { min: 5, max: 360 })),   // Lenkung in Grad je Sekunde
+    lenkWeich: Math.round(zahl(au.lenkWeich, 0.1, 2, V.lenkWeich, { min: 0.05, max: 5 }) * 10) / 10,   // s: weich lenken (Abweichung / lenkWeich = Drehrate)
+    lenkTempo: Math.round(zahl(au.lenkTempo, 10, 100, V.lenkTempo, { min: 5, max: 100 })),   // % der Lenkung bei Höchsttempo
+    lenkTotzone: Math.round(zahl(au.lenkTotzone, 0, 15, V.lenkTotzone, { min: 0, max: 30 })),   // Grad Totzone um die Fahrtrichtung (alle Fahrzeuge)
+    spurhilfe: typeof au.spurhilfe === 'boolean' ? au.spurhilfe : V.spurhilfe,   // Spurhilfe auf Straßen (alle Fahrzeuge)
     leben: Math.round(zahl(au.leben, 10, 1000, V.leben, { min: 1 })),       // Lebenspunkte des Autos
     plaetze: Math.round(zahl(au.plaetze, 1, 9, V.plaetze, { min: 1, max: 20 })),     // Sitzplätze (Fahrer + Mitfahrer, auch Bots)
     crashAb: Math.round(zahl(au.crashAb, 0, 79, V.crashAb)),                // km/h: ab hier kostet ein Aufprall Lebensenergie
@@ -408,6 +412,8 @@ export function bereinige(e = {}, alt = {}) {
       boxerTempo: Math.round(zahl(bw.boxerTempo, 10, 120, 60)),                                          // … Höchsttempo beim Fahren in km/h
       pumaTempo: Math.round(zahl(bw.pumaTempo, 10, 120, 60)),                                            // fahrbarer Puma (Superuser/Schießstand): Höchsttempo in km/h
       leopardTempo: Math.round(zahl(bw.leopardTempo, 10, 120, 60)),                                      // fahrbarer Leopard (Superuser/Schießstand): Höchsttempo in km/h
+      panzerLenkWeich: Math.round(zahl(bw.panzerLenkWeich, 0.1, 2, 0.6, { min: 0.05, max: 5 }) * 10) / 10,   // Boxer/Puma/Leopard: weich lenken (s, Abweichung / Wert = Drehrate)
+      panzerLenkTempo: Math.round(zahl(bw.panzerLenkTempo, 10, 100, 50, { min: 5, max: 100 })),          // … % der Lenkrate bei Höchsttempo
     },
     polizei: {
       aktiv: typeof e.polizei?.aktiv === 'boolean' ? e.polizei.aktiv : (typeof a.polizei?.aktiv === 'boolean' ? a.polizei.aktiv : true),   // Polizisten und Streifenwagen an den Straßensperren
@@ -444,7 +450,7 @@ export function grundwerte() {
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
     faehigkeiten: { an: true, xpFaktor: 100 },
     tueren: { frei: 50, raetsel: 25, schluessel: 25 },
-    bundeswehr: { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, kistenMunChance: 50, kistenMunMin: 5, kistenMunMax: 15, kistenVerbandChance: 15, kistenGranateChance: 5, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60, pumaTempo: 60, leopardTempo: 60, mgMunition: 400, pumaMunition: 200 },
+    bundeswehr: { aktiv: true, falltage: 3, versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true, kistenMunChance: 50, kistenMunMin: 5, kistenMunMax: 15, kistenVerbandChance: 15, kistenGranateChance: 5, pumaPause: 2.5, leopardReichweite: 29, leopardPause: 0.4, leopardSchaden: 100, leopardUeberrollen: true, leopardKanone: true, leopardKanonePause: 8, leopardKanoneMin: 10, boxerHordeSek: 120, boxerHordeMin: 20, boxerHordeMax: 50, boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60, pumaTempo: 60, leopardTempo: 60, panzerLenkWeich: 0.6, panzerLenkTempo: 50, mgMunition: 400, pumaMunition: 200 },
     polizei: { aktiv: true, anzahl: 3, munition: 30 },
     nebel: { ...NEBEL_VORGABE },
     zombieSicht: { ...SICHT_VORGABE },

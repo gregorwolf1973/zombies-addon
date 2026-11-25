@@ -10,7 +10,7 @@ import { frei, bewege, kmhZuPx, WERTE as W } from '../client/welt.mjs';
 import { fzRechtecke, kreisImRechteck, aufParkAuto } from '../client/fzkollision.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
 import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden, istStreife, streifeBei, fahrberechtigt } from '../client/pkw.mjs';
-import { Fahrbar, FAHRWERK, PX } from './fahrbar.mjs';
+import { Fahrbar, FAHRWERK, PX, lenkWerte } from './fahrbar.mjs';
 import { stammBei, RUECK_ANTEIL } from '../client/walze.mjs';
 import { LAENGE, BREITE_FZ } from './verkehr.mjs';
 
@@ -50,8 +50,10 @@ export class FahrbarPkw extends Fahrbar {
   plaetze() { return Math.max(1, Math.round(Number(this.einstAuto().plaetze) || PKW_VORGABE.plaetze)); }
   fahrwerk() {
     const kmh = Number(this.einstAuto().tempo);
-    return { ...FAHRWERK, beschleunigung: 6 * PX, bremse: 12 * PX, drehrate: lenkRad(this.einstAuto().lenkung), drehrateStand: lenkRad(this.einstAuto().lenkung) * 0.4, drehrateVmax: lenkRad(this.einstAuto().lenkung) * 0.55, rueckwaerts: RUECK_ANTEIL, vmax: kmhZuPx(Number.isFinite(kmh) && kmh > 0 ? kmh : PKW_VORGABE.tempo) };
+    return { ...FAHRWERK, beschleunigung: 6 * PX, bremse: 12 * PX, drehrate: lenkRad(this.einstAuto().lenkung), drehrateStand: lenkRad(this.einstAuto().lenkung) * 0.4, rueckwaerts: RUECK_ANTEIL, vmax: kmhZuPx(Number.isFinite(kmh) && kmh > 0 ? kmh : PKW_VORGABE.tempo) };
   }
+  // weich lenken (server/fahrbar.mjs): Werte aus auto.lenkWeich/lenkTempo/lenkTotzone/spurhilfe
+  lenkEinst() { const a = this.einstAuto(); return lenkWerte(a.lenkWeich, a.lenkTempo, a.lenkTotzone, a.spurhilfe); }
   // Fahrer ist der erste Mensch mit Autoschlüssel; ohne ihn rollt das Auto aus
   get fahrer() {
     for (const sid of this.insassen) if (!this.istBot(sid) && fahrberechtigt(this.bid, this.spieler(sid))) return sid;
@@ -157,10 +159,9 @@ export class FahrbarPkw extends Fahrbar {
     const e = fahrer && this.letzteEingabe ? this.letzteEingabe : { dx: 0, dy: 0 };
     if (!fahrer) this.letzteEingabe = { dx: 0, dy: 0 };
     this.andere = this.andereFahrzeuge();
-    const v0 = Math.abs(this.v);
     this.letzteFrei = true;
     this.fahren(e, dt);
-    if (v0 > 0 && this.v === 0 && this.letzteFrei === false && this.uhr >= this.crashBis) this.aufprall(kmhVon(v0));
+    if (this.anstoss > 0 && this.uhr >= this.crashBis) this.aufprall(kmhVon(this.anstoss));   // Tempo quer zur Kante (frontal: alles, schräg: Gleiten kostet wenig)
     if (!this.f) return;
     for (const sid of this.insassen) { const p = s.spieler.get(sid); if (p) { p.x = f.x; p.y = f.y; p.richtung = f.richtung; } }
     f.haelt = Math.abs(this.v) < 1;
