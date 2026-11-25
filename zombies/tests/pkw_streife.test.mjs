@@ -18,10 +18,14 @@ after(async () => { await server.gracefullyShutdown(false); setzeKartengroesse(6
 const warte = ms => new Promise(r => setTimeout(r, ms));
 async function bis(bed, ms = 4000) { const e = Date.now() + ms; while (Date.now() < e) { if (bed()) return true; await warte(20); } return bed(); }
 
+const SEED = 7;   // Welt mit Straßensperre samt freiem Einstiegsplatz (geprüft)
 async function beitreten(name) {
   const alt = SpielRaum.einstellungen;
   SpielRaum.einstellungen = { ...alt, bots: 0, polizei: { aktiv: false }, auto: { ...PKW_VORGABE, ...(alt.auto ?? {}) } };
-  const c = await new Client(`ws://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name, spielerId: crypto.randomBytes(16).toString('hex') });
+  // feste Welt (Seed): die Straßensperren hängen vom Zufall der Welt ab – nicht jede hat eine mit freiem Einstiegsplatz
+  assert.ok(await bis(() => !SpielRaum.aktiv, 3000), 'alter Raum lebt noch');
+  SpielRaum.speicher.loescheWelt();
+  const c = await new Client(`ws://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name, spielerId: crypto.randomBytes(16).toString('hex'), seed: SEED });
   const raum = matchMaker.getLocalRoomById(c.roomId);
   raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear(); raum.state.phase = 'spiel';
   const nachrichten = [];

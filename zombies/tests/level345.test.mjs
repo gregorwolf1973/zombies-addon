@@ -114,7 +114,8 @@ const mitFinale = fn => async () => {
 test('Finale: Countdown startet mit der Vorgabe, läuft nur mit echtem Spieler, SU-Befehl setzt ihn neu', mitFinale(async ({ raum, s, f, ag }) => {
   assert.equal(s.karte, 'andermatt');
   assert.equal(ag.evakArt(), 'bunker');
-  assert.equal(s.finaleRest, 1800);
+  // Vorgabe 1800 s; zwischen Beitritt und Testbeginn kann der echte Simulationstakt schon ein paar Sekunden gezählt haben (unter Last)
+  assert.ok(f.rest <= 1800 && f.rest > 1790 && s.finaleRest === Math.ceil(f.rest), 'Countdown beginnt nicht mit 1800 s: ' + f.rest);
   assert.ok(f.aktiv());
   const vorher = f.rest;
   raum.schritt(1); raum.schritt(1);
@@ -166,10 +167,14 @@ test('Finale: Countdown bei 0 → bunkerEnde; Sieg (drin): Abspann, nach 20 s fr
   assert.equal(s.finaleRest, 0);
   assert.equal(s.evakPhase, 'sieg');
   assert.equal(s.phase, 'finale', 'Welt steht nicht still');
+  assert.ok(f.abspann && f.abspann.rest > ABSPANN_SEKUNDEN - 1 && f.abspann.rest <= ABSPANN_SEKUNDEN, 'Abspann dauert ABSPANN_SEKUNDEN: ' + f.abspann?.rest);
   assert.ok(await bis(() => ende.length === 1 && ende[0].sieg === true && ende[0].drinnen.includes(c.sessionId)), 'bunkerEnde nicht angekommen');
   assert.ok(await bis(() => meldungen.some(m => m.includes('Geschafft') && m.includes('Bunker'))));
   assert.equal(neustarts.length, 0);
-  raum.schritt(ABSPANN_SEKUNDEN - 1);
+  // Während der Wartezeiten oben läuft der echte Simulationstakt weiter und zählt den Abspann schon herunter (unter Last spürbar):
+  // darum nur die verbleibende Zeit simulieren, nicht pauschal ABSPANN_SEKUNDEN − 1
+  assert.ok(f.abspann.rest > 1, 'Abspann schon fast vorbei: ' + f.abspann.rest);
+  raum.schritt(f.abspann.rest - 0.5);
   assert.equal(neustarts.length, 0, 'Neustart zu früh');
   raum.schritt(1.5);
   assert.equal(neustarts.length, 1, 'kein Neustart nach dem Abspann');
