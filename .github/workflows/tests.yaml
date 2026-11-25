@@ -26,4 +26,5 @@ jobs:
           cache-dependency-path: zombies/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npm run test:schnell
+      # nacheinander: GitHub-Runner haben nur 2 Kerne, parallele Testdateien verfälschen die Zeitmessungen
+      - run: node --test --test-concurrency=1 $(cat tests/schnell.txt)

@@ -19,11 +19,13 @@ function workerStarten() {
   w.on('message', ({ id, welt, fehler }) => {
     const a = offen.get(id); offen.delete(id); if (!a) return;
     if (fehler) a.nein(new Error(fehler)); else a.ja(welt);
-    if (!offen.size) { clearTimeout(leerlauf); leerlauf = setTimeout(workerBeenden, LEERLAUF_MS); leerlauf.unref?.(); }
+    if (!offen.size) { w.unref(); clearTimeout(leerlauf); leerlauf = setTimeout(workerBeenden, LEERLAUF_MS); leerlauf.unref?.(); }
   });
   const aus = e => { for (const a of offen.values()) a.nein(e instanceof Error ? e : new Error('Worker beendet')); offen.clear(); if (worker === w) worker = null; };
   w.on('error', aus); w.on('exit', () => aus(new Error('Worker beendet')));
   w.unref();   // erst nach den Listenern: ein 'message'-Listener holt den Port sonst wieder in die Ereignisschleife (Prozess wartete bis zum Leerlauf-Ende)
+  // Solange Aufträge offen sind, hält der Worker den Prozess am Leben (imWorker: ref, letzte Antwort: unref). Sonst endete z. B. ein
+  // Skript/Testlauf ohne Server mitten im Aufbau – Node 22 meldet dann „Promise resolution is still pending“ (Node 26 hält den Testlauf selbst offen).
   worker = w;
   return w;
 }
@@ -34,7 +36,7 @@ function imWorker(karte, seed, autos) {
   return new Promise((ja, nein) => {
     const id = naechsteId++;
     offen.set(id, { ja, nein });
-    try { workerStarten().postMessage({ id, karte, seed, autos }); } catch (e) { offen.delete(id); nein(e); }
+    try { const w = workerStarten(); w.postMessage({ id, karte, seed, autos }); w.ref(); } catch (e) { offen.delete(id); nein(e); }
   });
 }
 

@@ -165,12 +165,20 @@ test('Simulation läuft in Echtzeit (Patch-Takt bremst die Zeitschritte nicht)',
   a.onMessage('*', () => {});
   try {
     const raum = matchMaker.getLocalRoomById(a.roomId);
-    let summe = 0; const alt = raum.schritt.bind(raum);
-    raum.schritt = dt => { summe += dt; return alt(dt); };
-    const t0 = Date.now(); await warte(1500);
-    const echt = (Date.now() - t0) / 1000;
+    // Gemessen ab dem ersten Schritt im Fenster: dessen dt enthält noch Zeit davor (auf langsamen Rechnern, z. B. GitHub-Runnern
+    // mit 2 Kernen, nach Beitritt/Weltaufbau leicht 250 ms und mehr) und wird deshalb nicht mitgezählt.
+    let summe = 0, erster = null, letzter = null, schritte = 0; const alt = raum.schritt.bind(raum);
+    raum.schritt = dt => {
+      const jetzt = performance.now();
+      if (erster === null) erster = jetzt; else { summe += dt; schritte++; }
+      letzter = jetzt;
+      return alt(dt);
+    };
+    await warte(1500);
     raum.schritt = alt;
-    assert.ok(summe > echt * 0.85 && summe < echt * 1.15, `Simulationszeit ${summe.toFixed(2)} s in ${echt.toFixed(2)} s`);
+    const echt = (letzter - erster) / 1000;
+    assert.ok(schritte >= 10 && echt > 0.9, `zu wenige Simulationsschritte: ${schritte} in ${echt.toFixed(2)} s`);
+    assert.ok(summe > echt * 0.9 && summe < echt * 1.1, `Simulationszeit ${summe.toFixed(2)} s in ${echt.toFixed(2)} s`);
     // und etwa 10 Zustände je Sekunde
     let n = 0; const takt0 = a.state.takt; a.onStateChange(() => n++);
     await warte(1000);

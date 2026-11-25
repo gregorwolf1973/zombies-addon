@@ -131,7 +131,9 @@ test('Barrikade hält zuerst, dann die Tür selbst; mehrere Zombies sind schnell
     // zu zweit: doppelt so schnell (Barrikade + Tür zusammen gemessen)
     raum.state.zombies.clear(); raum.zombieInfo.clear();
     st.kaputt = false; st.hp = 100; raum.setzeTuer(key, false); raum.setzeBarrikade(key, 0);
-    const z1 = zombieDraussen(raum, vorDerTuer(h, 2)), z2 = zombieDraussen(raum, vorDerTuer(h, 2.7));
+    // nebeneinander statt hintereinander: der hintere kam je nach Zufallsversatz nicht am vorderen vorbei an die Tür (dann nur einer am Hämmern)
+    const r = h.raus ?? { dx: 0, dy: 1 }, neben = s => { const v = vorDerTuer(h, 2); return { x: v.x - r.dy * KACHEL * 0.45 * s, y: v.y + r.dx * KACHEL * 0.45 * s }; };
+    const z1 = zombieDraussen(raum, neben(1)), z2 = zombieDraussen(raum, neben(-1));
     for (const q of [z1, z2]) { q.info.punkt = mitteK(h.tuer); q.info.tempo = 1; }   // gemessen wird das Aufbrechen, nicht das (zufällige) Lauftempo
     let zu2 = 0;
     for (; zu2 < 3000 && !st.kaputt; zu2++) { for (const q of [z1, z2]) { q.info.punkt ??= mitteK(h.tuer); q.info.steht = false; q.info.schlaeft = false; raum.zombieSchritt(q.id, q.z, 0.05); } }   // Ziel erneuern: nach dem Ankommen verliert der Zombie sonst den Punkt (Bewegungsklassen)
