@@ -189,7 +189,8 @@ test('Soldaten an ihren Posten schießen mit dem Gewehr auf Zombies in der Nähe
   assert.ok(ziel, 'keine freie Stelle neben einem Soldaten');
   const id = raum.setzeZombie(ziel.x, ziel.y, ''); ruhig(raum, id);
   assert.ok(await bis(() => !stehtDa(raum, id), 6000), 'Soldaten schießen nicht');
-  assert.ok(nachrichten.bwschuss.some(m => m.art === 'gewehr' && Number.isInteger(m.n)), 'keine Gewehrschüsse gemeldet');
+  // Der Zombie fällt schon beim ersten Treffer im Server-Tick; die Nachricht „bwschuss“ kommt erst danach über die Verbindung an
+  assert.ok(await bis(() => nachrichten.bwschuss.some(m => m.art === 'gewehr' && Number.isInteger(m.n)), 2000), 'keine Gewehrschüsse gemeldet');
   // im Kampf bleiben sie in Stellung (höchstens ein paar Schritte Ausweichen um den Posten, nie aus dem Lager)
   const posten = sp.teile.filter(t => t.art === 'posten' && t.rolle === 'soldat');
   assert.ok(sch.every(q => posten.some(t => Math.hypot(t.x - q.x, t.y - q.y) < 90)), 'ein Soldat hat seinen Posten verlassen');
@@ -245,6 +246,7 @@ function beobachten(raum) {
     b.drehMax = Math.max(b.drehMax, diffWinkel(raum.state.bwW, b.w0));
     if (raum.stuetzpunkt.puma.rueckwaerts) b.rueck++;
   }, 50);
+  t.unref();   // scheitert ein Test vor b.ende(), hält das Intervall den Lauf nicht bis zum Timeout am Leben
   b.ende = () => clearInterval(t);
   return b;
 }

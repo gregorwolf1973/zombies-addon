@@ -42,6 +42,7 @@ test('Werte: Reichweite 25 m (Vorgabe 25, Backend einstellbar)', () => {
 
 test('Granatwerfer: mehrere Schüsse hintereinander mit automatischem Nachladen, Granaten werden verbraucht, Explosion am Ziel', async () => {
   const s = await spieler('Serie');
+  let halte = null;
   try {
     s.raum.state.uhr = 12 * 60;
     SU.waffeSetzen(s.raum, s.p, s.x, 'granatwerfer');
@@ -54,15 +55,17 @@ test('Granatwerfer: mehrere Schüsse hintereinander mit automatischem Nachladen,
       const n = s.fluege.length;
       assert.ok(await bis(() => s.fluege.length > n, 9000), `Schuss ${i + 1} fehlt (Magazin ${s.p.magazin}, Vorrat ${s.p.granaten}, Nachladen ${s.p.nachladen})`);
       assert.equal(s.fluege[n].werfer, true);
-      const halte = setInterval(() => { const z = s.raum.state.zombies.get(id); if (z) { z.x = s.fluege[n].x2; z.y = s.fluege[n].y2; } }, 5);
+      halte = setInterval(() => { const z = s.raum.state.zombies.get(id); if (z) { z.x = s.fluege[n].x2; z.y = s.fluege[n].y2; } }, 5);
       assert.ok(await bis(() => !s.raum.state.zombies.has(id) || s.raum.state.zombies.get(id).hp <= 0, 2500), `Zombie ${i + 1} nicht getroffen`);
-      clearInterval(halte);
+      clearInterval(halte); halte = null;
       s.raum.state.zombies.clear(); s.raum.zombieInfo.clear();
     }
-    assert.equal(s.fluege.length, 3); assert.ok(s.explosionen.length >= 3);
+    // Der Zombie fällt im Server-Tick; die Nachricht „explosion“ kommt erst danach über die Verbindung an
+    assert.ok(await bis(() => s.explosionen.length >= 3, 2000), 'Explosionen gemeldet: ' + s.explosionen.length);
+    assert.equal(s.fluege.length, 3);
     assert.equal(s.explosionen[0].r, GRANATE.radius, 'Radius wie Handgranate');
     assert.equal(s.p.hp, 100, 'Schütze bleibt unverletzt');
-  } finally { await s.c.leave(); }
+  } finally { clearInterval(halte); await s.c.leave(); }   // Intervall auch nach einem Fehlschlag beenden (sonst hängt der Lauf)
 });
 
 test('Granatwerfer: Reichweite 25 m – 220 px kein Schuss, Mindestabstand 4,5 m – nur ein naher Zombie kein Schuss', async () => {
