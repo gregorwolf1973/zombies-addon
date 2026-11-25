@@ -13,9 +13,9 @@ const PARK = { hl: 18, hb: 8 };                   // geparkter Pkw 4,5 × 2,0 m
 export const FZ_LAENGE = { auto: 36, laster: 72, bus: 96, polizei: 39, feuerwehr: 76, krankenwagen: 47, wrack: 36 };
 export const FZ_BREITE = { auto: 16, laster: 23, bus: 22, polizei: 16, feuerwehr: 22, krankenwagen: 19, wrack: 16 };
 
-// Maße (halbe Länge, halbe Breite) einer Fahrzeugart; null = nicht als Hindernis (Evakuierungsfahrzeug: Einstieg bleibt frei)
+// Maße (halbe Länge, halbe Breite) einer Fahrzeugart; null = nicht als Hindernis (Evakuierungsfahrzeug: Einstieg bleibt frei; plattes Wrack)
 export function fzMasse(art) {
-  if (art === 'evakuierung') return null;
+  if (art === 'evakuierung' || art === 'platt') return null;   // plattgewalztes Wrack (server/panzercrash.mjs): flach, man läuft darüber
   const fb = FAHRBAR[art];
   if (fb) return { hl: fb.laenge / 2, hb: fb.breite / 2 };
   return { hl: (FZ_LAENGE[art] ?? 36) / 2, hb: (FZ_BREITE[art] ?? 16) / 2 };

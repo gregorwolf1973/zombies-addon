@@ -13,7 +13,7 @@ import { querfeldVon, querfeldKosten } from './querfeld.mjs';
 export const Fahrzeug = schema({
   x: t.int16(), y: t.int16(),   // übertragen in ganzen Pixeln (server/netzfeld.mjs; der Server rechnet genau)
   rq: t.uint8(),            // Fahrtrichtung in 256 Stufen (f.richtung im Bogenmaß bleibt Server-Eigenschaft, siehe SpielRaum.netzAbgleich)
-  art: t.string(),          // 'bus' | 'auto' | 'laster' | 'polizei' | 'feuerwehr' | 'wrack' | 'evakuierung' (stehender Bus am Tor, server/aufgaben.mjs)
+  art: t.string(),          // 'bus' | 'auto' | 'laster' | 'polizei' | 'feuerwehr' | 'wrack' | 'platt' (vom Panzer plattgewalztes Wrack, server/panzercrash.mjs) | 'evakuierung' (stehender Bus am Tor, server/aufgaben.mjs)
   farbe: t.uint8(),
   haelt: t.boolean(),
   rauch: t.boolean(),       // Unfallfahrzeug raucht (server/unfall.mjs; der Client zeichnet Rauch darüber)
@@ -482,7 +482,7 @@ export class Verkehr {
     const c = Math.cos(f.richtung), sn = Math.sin(f.richtung), lf = LAENGE[f.art] ?? 46, bf = (BREITE_FZ[f.art] ?? 18) / 2;
     let best = null;
     for (const [oid, o] of this.raum.state.fahrzeuge) {
-      if (oid === id) continue;
+      if (oid === id || o.art === 'platt') continue;   // plattgewalztes Wrack (server/panzercrash.mjs): darüber fahren
       const rx = o.x - f.x, ry = o.y - f.y;
       if (rx * rx + ry * ry > 40000) continue;
       const vor = rx * c + ry * sn, quer = -rx * sn + ry * c;

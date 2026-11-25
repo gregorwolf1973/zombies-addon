@@ -42,8 +42,9 @@ export class Brandstifter {
       if (inf.alter >= t0) { this.erloschen(id, f, inf); continue; }
       // Schaden in der Nähe
       const r = f.r * (0.6 + f.staerke * 0.4);
-      for (const p of s.spieler.values()) {
+      for (const [sid, p] of s.spieler) {
         if (p.ebene || p.unten || p.zombie > 0 || this.raum.unsterblich?.(p)) continue;
+        if (p.imBoxer && this.imPanzer(sid)) continue;   // Panzerbesatzung (Boxer/Puma/Leopard) ist vor dem Feuer geschützt (server/panzercrash.mjs)
         if (Math.hypot(p.x - f.x, p.y - f.y) < r) { p.hp = Math.max(0, p.hp - SCHADEN_SPIELER * f.staerke * dt); if (p.hp === 0) this.raum.liegtAmBoden(p); }
       }
       for (const [zid, z] of s.zombies) {
@@ -53,6 +54,8 @@ export class Brandstifter {
       }
     }
   }
+
+  imPanzer(sid) { const b = this.raum.fahrbare?.von?.(sid); return !!b && b.art !== 'pkw'; }
 
   // Ziel in der Nähe eines Spielers wählen, damit man den Brand mitbekommt
   entfachen() {
