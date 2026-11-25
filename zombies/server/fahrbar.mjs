@@ -49,6 +49,8 @@ export function fahrbarFrei(welt, art, x, y, w) {
 }
 
 const norm = w => Math.atan2(Math.sin(w), Math.cos(w));
+const LENK_TAU = 0.5;      // s: Autos drehen mit Abweichung/LENK_TAU (höchstens die Lenkrate) – 30° Abweichung ≈ 60°/s, 5° ≈ 10°/s
+const LENK_AUFBAU = 0.3;   // s: so schnell baut sich der Lenkeinschlag auf bzw. ab
 
 export class Fahrbar {
   // opt: { id, besitzer (Sitzungs-ID des Superusers/Spielers, der es gesetzt hat) }
@@ -195,7 +197,12 @@ export class Fahrbar {
       const ziel = rueck ? Math.atan2(-uy, -ux) : Math.atan2(uy, ux), d = winkelDiff(f.richtung, ziel), c = Math.cos(d);
       let rate = fw.drehrateStand + (fw.drehrate - fw.drehrateStand) * Math.min(1, Math.abs(this.v) / (VM * 0.3));
       if (fw.drehrateVmax !== undefined) { const t = Math.max(0, Math.min(1, (Math.abs(this.v) / VM - 0.5) / 0.5)); rate += (fw.drehrateVmax - rate) * t; }   // Autos: bei hohem Tempo weicher lenken
-      const schritt = Math.max(-rate * dt, Math.min(rate * dt, d));
+      let schritt = Math.max(-rate * dt, Math.min(rate * dt, d));
+      if (fw.drehrateVmax !== undefined) {   // Autos: weich lenken – Drehrate wächst mit der Abweichung (kleine Stickbewegung = kleiner Einschlag) und baut sich in ~0,3 s auf
+        const zielRate = Math.max(-rate, Math.min(rate, d / LENK_TAU));
+        this.lenkW = (this.lenkW ?? 0) + (zielRate - (this.lenkW ?? 0)) * Math.min(1, dt / LENK_AUFBAU);
+        schritt = Math.abs(this.lenkW * dt) > Math.abs(d) ? d : this.lenkW * dt;
+      }
       const w = f.richtung + schritt;
       this.drehBlock = false;
       if (Math.abs(schritt) > 1e-6) {
@@ -208,6 +215,7 @@ export class Fahrbar {
         if (this.drehBlock && c < 0.2) soll = -VM * fw.rueckwaerts * len;   // festgefahren: rückwärts freisetzen
       }
     }
+    if (len <= 0.1) this.lenkW = 0;
     // Beschleunigen / Bremsen
     if (soll > this.v) this.v = Math.min(soll, this.v + (this.v < 0 ? fw.bremse : fw.beschleunigung) * dt);
     else this.v = Math.max(soll, this.v - (this.v > 0 ? fw.bremse : fw.beschleunigung) * dt);
