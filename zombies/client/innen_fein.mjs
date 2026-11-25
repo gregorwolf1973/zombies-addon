@@ -33,7 +33,8 @@ for (const a of GROSS_BEHAELTER) BEHAELTER.add(a);
 export const MOEBEL_MASSE = M;
 
 // ---------- Grundriss aus dem OSM-Umriss ----------
-function grundriss(haus) {
+const MAXZ = 840;                  // größte Kantenlänge in Zellen (210 m); größere Gebäude bleiben im groben Raster
+function grundriss(haus, kasten = false) {
   let p = haus?.umriss;
   if (!(p?.length >= 6)) p = [haus.x, haus.y, haus.x + haus.b, haus.y, haus.x + haus.b, haus.y + haus.h, haus.x, haus.y + haus.h];
   const n = p.length / 2, pm = p.map(v => v * MPK);
@@ -53,7 +54,7 @@ function grundriss(haus) {
     const ur = Math.round(u * 100) / 100, vr = Math.round(v * 100) / 100;
     uv.push(ur, vr); if (ur < u0) u0 = ur; if (ur > u1) u1 = ur; if (vr < v0) v0 = vr; if (vr > v1) v1 = vr;
   }
-  const W = Math.min(400, Math.ceil((u1 - u0) * ZM)), H = Math.min(400, Math.ceil((v1 - v0) * ZM));
+  const W = Math.min(MAXZ, Math.ceil((u1 - u0) * ZM)), H = Math.min(MAXZ, Math.ceil((v1 - v0) * ZM));
   const GB = W + 2 * RAND, GH = H + 2 * RAND;
   const mask = new Uint8Array(GB * GH);
   const imPoly = (x, y) => {
@@ -64,18 +65,28 @@ function grundriss(haus) {
     return drin;
   };
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-    if (imPoly(u0 + (i + 0.5) / ZM, v0 + (j + 0.5) / ZM)) mask[(j + RAND) * GB + i + RAND] = 1;
+    if (kasten || imPoly(u0 + (i + 0.5) / ZM, v0 + (j + 0.5) / ZM)) mask[(j + RAND) * GB + i + RAND] = 1;
   }
   // Lage der Außentür im Raster (für die Wahl der Haustür-Stelle)
   const [tu, tv] = rot((haus.tuer.x + 0.5) * MPK, (haus.tuer.y + 0.5) * MPK);
-  return { zuGross: (u1 - u0) * ZM > 400 || (v1 - v0) * ZM > 400, GB, GH, mask, tuer: { x: Math.round((tu - u0) * ZM) + RAND, y: Math.round((tv - v0) * ZM) + RAND }, breiteM: (u1 - u0), hoeheM: (v1 - v0), abb: { c, s, u0, v0 } };
+  return { zuGross: (u1 - u0) * ZM > MAXZ || (v1 - v0) * ZM > MAXZ, GB, GH, mask, tuer: { x: Math.round((tu - u0) * ZM) + RAND, y: Math.round((tv - v0) * ZM) + RAND }, breiteM: (u1 - u0), hoeheM: (v1 - v0), abb: { c, s, u0, v0 } };
 }
 
 // ---------- Generator ----------
+// Maßstäblich bauen; scheitert die Plausibilitätsprüfung (verwinkelter Umriss, unglückliche Zimmeraufteilung), wird mit anderem Zufall (Salz) neu
+// aufgeteilt, zuletzt mit dem umhüllenden Rechteck des Umrisses. Alles deterministisch (Server und Client kommen zum selben Ergebnis).
+// Null nur bei Gebäuden über 210 m Kantenlänge.
 export function baueInnenFein(seed, nr, stock, haus, laden = false, seite = 'unten', safe = false, halle = '') {
-  const rng = zufall(seed ^ Math.imul(nr + 1, 7919) ^ (stock === 'eg' ? 0 : stock === 'keller' ? 0x51ed : 0xa77e) ^ 0x1f1e);
-  const g = grundriss(haus), GB = g.GB, GH = g.GH;
-  if (g.zuGross) return null;   // über 100 m: passt nicht in das Raster (400 × 400 Zellen), das Haus bleibt im groben Raster
+  for (let versuch = 0; versuch < 12; versuch++) {
+    const w = baueInnenFein1(seed, nr, stock, haus, laden, seite, safe, halle, versuch < 8 ? versuch : 0, versuch >= 8);
+    if (w || (versuch === 0 && grundriss(haus).zuGross)) return w;
+  }
+  return null;
+}
+function baueInnenFein1(seed, nr, stock, haus, laden, seite, safe, halle, salz, kasten) {
+  const rng = zufall(seed ^ Math.imul(nr + 1, 7919) ^ (stock === 'eg' ? 0 : stock === 'keller' ? 0x51ed : 0xa77e) ^ 0x1f1e ^ Math.imul(salz, 0x9e3779b1));
+  const g = grundriss(haus, kasten), GB = g.GB, GH = g.GH;
+  if (g.zuGross) return null;   // über 210 m: passt nicht in das Raster, das Haus bleibt im groben Raster
   const k = new Uint8Array(GB * GH).fill(T.LEER);
   const idx = (x, y) => y * GB + x;
   const hole = (x, y) => (x < 0 || y < 0 || x >= GB || y >= GH) ? T.LEER : k[y * GB + x];
