@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.90.2 – 25.11.2026
+
+- A400M Königsdorf: Bruchlandung statt Landung – hartes Aufsetzen mit brennendem Triebwerk, drei Hüpfer mit Staub und Funken, Schlittern auf dem Bauch quer zur Piste mit Furche und Funkenspur, Explosion und Vollbrand mit sieben Feuern und schwarzer Rauchsäule im Wind. Die Feuer schaden, leuchten und knistern; wer im Weg steht, wird weggestoßen, Zombies werden umgerissen. Die Kisten fallen erst im Stand hinter das Wrack.
+
 ## 0.90.1 – 24.11.2026
 
 - Granatwerfer: schießt automatisch auf Zombies bis 25 m (Mindestabstand 4,5 m – steht einer näher, nimmt er das nächste Ziel dahinter), Explosion wie Handgranate, lädt automatisch nach. Ein gefundener Granatwerfer bringt 2 Granaten mit; die eigene Granate verletzt den Schützen nicht mehr.
