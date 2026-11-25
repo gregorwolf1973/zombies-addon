@@ -32,7 +32,7 @@ Der Quellcode steht unter der MIT-Lizenz (siehe LICENSE). Sie gilt **nur für de
 
 - Musik „Overdrive“ von MAITTRE und „Dominion“ von Hriday Talur, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) (über breakingcopyright.com).
 - Musik und Geräusche von [Pixabay](https://pixabay.com) unter der [Pixabay Content License](https://pixabay.com/service/license-summary/). Alle übrigen Töne sind selbst erzeugt.
-- Radio-Eilmeldung: gesprochen mit der freien Text-to-Speech-Software [Piper](https://github.com/rhasspy/piper).
+- Radio-Eilmeldung: gesprochen mit der freien Text-to-Speech-Software [Piper](https://github.com/rhasspy/piper), Stimme „Thorsten“ (de_DE-thorsten-medium, Thorsten Müller) – CC0 1.0.
 - Live-Radio: Es ist kein Sender voreingestellt; wer einen Sender einträgt, ist für dessen Nutzungsbedingungen selbst verantwortlich.
 
 ## Quizfragen
