@@ -42,7 +42,11 @@ test('16 Zombies entdecken gleichzeitig: Startzeiten, Tempo und Kurs streuen', a
       Z.push({ id, z, info, start: null, kurs: [] });
     }
     const spanneVon = a => { const m = a.reduce((u, v) => u + v) / a.length; return (Math.max(...a) - Math.min(...a)) / m; };
-    assert.ok(spanneVon(Z.map(q => q.info.tempo)) >= 0.15, 'Tempo-Streuung zu klein');
+    // Tempofaktor seit 0.84.4 gewollt 0,85–1,0 (eingestelltes Tempo = Höchsttempo): relative Spanne höchstens 0,16. Die alte Schwelle 0,15
+    // erreichten 16 Zufallswerte nur in ~1/3 der Läufe; 0,08 = halbe mögliche Spanne (Fehlalarm-Wahrscheinlichkeit ~0,03 %).
+    const tempi = Z.map(q => q.info.tempo);
+    assert.ok(tempi.every(v => v >= 0.85 && v <= 1), 'Tempofaktor außerhalb 0,85–1,0: ' + tempi);
+    assert.ok(spanneVon(tempi) >= 0.08, 'Tempo-Streuung zu klein: ' + spanneVon(tempi).toFixed(3));
     let t = 0;
     for (let k = 0; k < 40; k++) {
       t += 0.05; raum.uhr = t;
