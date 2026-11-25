@@ -2198,13 +2198,13 @@ class Ort extends Phaser.Scene {
       if (b.art === 'bw_kiste' || b.art === 'sanikiste' || b.art === 'bw_container') {
         if (!(b.art === 'bw_kiste' ? this.leereKisten?.has(b.id) : s.behaelter.get(b.id)?.rest === 0)) continue;
         const t = this.welt.stuetzpunkt?.teile.find(q => (q.art === 'kiste' || q.art === 'container') && Math.hypot(q.x - b.x, q.y - b.y) < 3);
-        const hw = (t ? t.w : 20) / 2, hd = (t ? t.d : 16) / 2, wi = t ? t.winkel : (b.winkel ?? 0), cs = Math.cos(wi), sn = Math.sin(wi);
+        const hw = (t ? t.w : b.art === 'sanikiste' ? 6.8 : 10) / 2, hd = (t ? t.d : b.art === 'sanikiste' ? 5.4 : 6.5) / 2, wi = t ? t.winkel : (b.winkel ?? 0), cs = Math.cos(wi), sn = Math.sin(wi);
         const pkt = (u, v) => ({ x: b.x + u * cs - v * sn, y: b.y + u * sn + v * cs });
         const flaeche = (a, f, al) => { const q = [pkt(-a * hw, -a * hd), pkt(a * hw, -a * hd), pkt(a * hw, a * hd), pkt(-a * hw, a * hd)]; gk.fillStyle(f, al).fillPoints(q, true); return q; };
         flaeche(1, 0x8a8a84, 0.55);        // ausgegraut
         flaeche(0.72, 0x1c1c1a, 0.7);      // offener, leerer Kasten
-        const k = (x0, y0, x1, y1) => { const p0 = pkt(x0, y0), p1 = pkt(x1, y1); gk.lineStyle(1.5, 0xbdbdbd, 0.8).lineBetween(p0.x, p0.y, p1.x, p1.y); };
-        k(-5, -4, 5, 4); k(5, -4, -5, 4);  // kleines Leer-Kreuz
+        const ei = Math.min(1.5, hw * 0.2, hd * 0.2), k = (x0, y0, x1, y1) => { const p0 = pkt(x0, y0), p1 = pkt(x1, y1); gk.lineStyle(1.5, 0xbdbdbd, 0.8).lineBetween(p0.x, p0.y, p1.x, p1.y); };
+        k(-hw + ei, -hd + ei, hw - ei, hd - ei); k(hw - ei, -hd + ei, -hw + ei, hd - ei);   // Kreuz über die ganze Kiste/den ganzen Container (Ecke zu Ecke)
         continue;
       }
       const z = s.behaelter.get(b.id);
@@ -2229,13 +2229,36 @@ class Ort extends Phaser.Scene {
             g.lineStyle(w.kachel ? 0.35 : 1.5, 0xffd54f, 0.6).strokeRect(x0, y0, bw, bh);
           }
         } else {
-          g.lineStyle(2, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokeRect(b.x - 12, b.y - 12, 24, 24);
-          g.fillStyle(0x111111, 0.55).fillRect(b.x - 9, b.y - 9, 18, 18);
-          if (leer) g.lineStyle(2, 0xbdbdbd, 0.9).lineBetween(b.x - 6, b.y - 6, b.x + 6, b.y + 6).lineBetween(b.x + 6, b.y - 6, b.x - 6, b.y + 6);
+          // kein Möbelrechteck (draußen: Mülltonnen, Container, Einkaufswagen): Umriss der gezeichneten Grafik, X von Ecke zu Ecke
+          const f = this.behaelterUmriss(b, w), cs = Math.cos(f.wi), sn = Math.sin(f.wi);
+          const pkt = (u, v) => ({ x: b.x + u * cs - v * sn, y: b.y + u * sn + v * cs });
+          const ecken = a => [pkt(-f.hw - a, -f.hh - a), pkt(f.hw + a, -f.hh - a), pkt(f.hw + a, f.hh + a), pkt(-f.hw - a, f.hh + a)];
+          const q = ecken(1);
+          g.fillStyle(0x111111, leer ? 0.3 : 0.45).fillPoints(q, true);
+          g.lineStyle(1.5, leer ? 0x9e9e9e : 0xffd54f, 0.9).strokePoints(q, true);
+          if (leer) {
+            const e = Math.min(1.5, f.hw * 0.25, f.hh * 0.25), p0 = pkt(-f.hw + e, -f.hh + e), p1 = pkt(f.hw - e, f.hh - e), p2 = pkt(f.hw - e, -f.hh + e), p3 = pkt(-f.hw + e, f.hh - e);
+            g.lineStyle(1.5, 0xbdbdbd, 0.9).lineBetween(p0.x, p0.y, p1.x, p1.y).lineBetween(p2.x, p2.y, p3.x, p3.y);
+          }
         }
       }
     }
     g.setDepth(this.aktEbene ? 0.45 : 1.08);
+  }
+
+  // Größe und Drehung der gezeichneten Grafik eines Behälters ohne Möbelrechteck (Halbmaße hw entlang, hh quer zur Drehung wi), Maße wie in aussehen.mjs/einkaufswagen.mjs
+  behaelterUmriss(b, w) {
+    if (b.art === 'container') {
+      if (b.typ === 'glas') return { hw: 6.6, hh: 6.6, wi: 0 };
+      if (b.typ === 'gross') return { hw: 5.6, hh: 4.3, wi: b.winkel ?? 0 };
+      return { hw: 19, hh: 10.5, wi: b.winkel ?? 0 };   // Mulde samt Haken
+    }
+    if (b.art === 'einkaufswagen') return { hw: 8, hh: 6.2, wi: b.winkel ?? 0 };
+    if (b.art === 'muelltonne') {
+      const g = (w.muell ?? this.welt.muell)?.tonnen?.find(q => Math.hypot(q.x - b.x, q.y - b.y) < 1);
+      if (g) return { hw: 2.9, hh: g.farben.length * 3.125, wi: g.winkel };   // u = vom Haus weg, v = entlang der Wand
+    }
+    return { hw: 6, hh: 6, wi: b.winkel ?? 0 };
   }
 
   // kleines Symbol über Behältern in der Nähe (< 2 Kacheln): 📦 = noch etwas drin bzw. noch nicht durchsucht, ∅ = leer.
