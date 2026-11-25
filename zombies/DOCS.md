@@ -70,3 +70,87 @@ Welt, Safe Rooms und Spieler werden in `/data/zombies.db` gespeichert und sind d
 HA-Backups enthalten. Jeder Browser bekommt einen geheimen Spieler-Schlüssel; wer Browserdaten
 löscht, beginnt neu. Abmelden geht nur in einem Safe Room – wer draußen geht, wartet 2 Minuten
 und taucht beim nächsten Mal im letzten Safe Room auf.
+
+## Hinweis zu Tönen
+
+Aus Lizenzgründen werden keine Ton- oder Musikdateien mitgeliefert; ohne eigene Dateien erzeugt das Spiel seine Töne selbst.
+Eigene Töne lassen sich in der Verwaltung hochladen oder unter `/share/zombies/toene` ablegen.
+
+Quellen und Lizenzen der Grafiken, Karten und Bibliotheken: siehe `CREDITS.md` im Repository.
+Das Spiel enthält Gewalt gegen Zombies und Waffen – empfohlen ab 16 Jahren.
+
+---
+
+# Zombies in Oberbayern (English)
+
+Cooperative zombie survival for 1–10 players in the phone or PC browser. This add-on is the game server: it serves
+the game and is authoritative for movement, zombies and hits. The game itself is in German.
+Content warning: zombie violence and firearms, recommended for ages 16 and up.
+
+## How to join
+
+- **Via the sidebar** ("Zombies"): the settings open there; "▶ Hier spielen" starts the game (no access code needed,
+  you are already signed in to Home Assistant).
+- **Via port 8775** on your home network, e.g. `http://homeassistant.local:8775`.
+- **From outside** through a reverse proxy or Cloudflare tunnel to port 8775 (WebSockets must be passed through).
+  Always set an access code (`zugangscode`) if the game is reachable from the internet.
+
+Everybody ends up in the same game. The microphone (voice chat) needs https: set your https address as `externe_adresse`.
+
+## Settings
+
+Most things are set in the sidebar panel "Zombies" and apply immediately, without a restart:
+
+- **Zombies:** amount outside and inside houses (10 = normal), speed in percent
+- **Game:** map (`level1` = level sequence, or a single map), bots (simulated teammates while only one human plays),
+  "start every round with a fresh world", access code for outside players
+- **Item frequency** per item (10 = normal, 0 = never, 20 = double)
+- **Test tools:** invulnerability, time lapse (until the next add-on restart)
+- **Day and night:** length of a game day (default 48 minutes), extra zombies at night, set the time of day.
+  By day about 70 % of the houses are lit, at night everything is dark – only a torch helps, indoors and outdoors.
+- **Parked cars:** amount (10 = normal); applies to new worlds. Car boots only open with a crowbar.
+- **Sounds:** upload audio files (MP3, OGG, WAV, M4A up to 8 MB) and assign them to events. With several files one is
+  picked at random; without an assignment the game synthesises a sound. Bundled sounds live in `/share/zombies/toene`
+  (a `zuordnung.json` there can serve as the initial assignment), uploaded ones in `/data/toene`. **No audio files are
+  shipped with the add-on.**
+- **Restart world:** the town starts over (chests, doors, zombies); backpacks stay if you like.
+
+Settings are stored in `/data/einstellungen.json`. The add-on options (`karte`, `zombies`, `funde`, `zugangscode`,
+`bots`) are only initial values for the very first start. `wiki_adresse` (address of a DokuWiki used for the links after
+each quiz) and `externe_adresse` (https address of the game from outside; shown as a "play with microphone" link when the
+page was opened over http) remain add-on options. `stun_server` and `turn_*` configure the voice chat servers; the
+default STUN server is a public Google one – leave it empty to disable it.
+
+## Puzzles
+
+The gate at the edge of town has three locks. The questions are read from the DokuWiki page `krisenvorsorge:spielfragen`
+if `wiki_adresse` and a DokuWiki share are available; otherwise the bundled questions are used. Format: a table
+`^ Topic ^ Question ^ Correct ^ Wrong 1 ^ Wrong 2 ^ Page ^`, one row per question.
+
+## Controls
+
+- Phone: touch and drag on the screen; dragging a little means sneaking.
+- PC: WASD or arrow keys, Shift to sneak, mouse wheel to zoom.
+- Attacks are automatic: with a pistol from a distance, otherwise shoving.
+- Action button (bottom right) or **E**: search, barricade, open the supply chest, enter/leave a vehicle.
+- Backpack at the bottom: tap to use or drop, on PC keys 1–8.
+- In a vehicle (as driver): the speed button 🐢 30 / 50 / 🚀 max next to the inventory or the **T** key cycles through the
+  top-speed steps; on PC holding Shift drives slowly (30 km/h).
+- A downed player gets up when a teammate stays next to them (3 seconds with a first-aid kit, 8 seconds without).
+
+## Houses
+
+All houses except the safe rooms can be entered. Inside there are several rooms, furniture to search, sometimes a
+cellar and an attic. Locked doors open with the key ring, loudly with the crowbar, or with a correctly answered question.
+Zombies lurk behind closed doors. It is dark inside – a torch in your backpack lights the way.
+
+## Saving
+
+The world, safe rooms and players are saved in `/data/zombies.db` and are therefore included in Home Assistant backups.
+Every browser receives a secret player key; clearing browser data starts you over. You can only log out in a safe room;
+if you leave outside, your character waits 2 minutes and appears in the last safe room next time.
+
+## System requirements
+
+amd64 or aarch64 with roughly 400 MB of free RAM (measured 325–420 MB with one player and about 40 zombies) and one to
+two CPU cores.
