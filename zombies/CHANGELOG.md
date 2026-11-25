@@ -588,7 +588,7 @@
 - Neue Evakuierungsart A400M (Vorbereitung für ein späteres Level, in keiner Karte fest eingestellt): Das Flugzeug landet auf einer langen freien Fläche der Karte, die Spieler steigen an der Heckrampe ein, dann fällt Triebwerk 3 aus (Brand, Rauch, Start abgebrochen). Alle müssen raus und zu Fuß zum markierten Hubschrauber-Landeplatz; dort landet ein Hubschrauber und holt die Gruppe ab (Levelwechsel). Kommt niemand rechtzeitig, fliegt er ab und kehrt nach einer Minute zurück.
 - Verwaltung (Karte „Aufgaben & Evakuierung“): Evakuierungsart für die aktuelle Karte erzwingen (Bus / Panzer / Flugzeug), Vorgabe aus.
 - Evakuierungsart je Karte jetzt als Zustand `evakArt` statt der festen Isarauen-Abfrage (client/evak.mjs); neue Dateien client/evakdarstellung.mjs, server/flugplatz.mjs.
-- Grafik: Leopard 2A7 „Leopard 2A7 Trophy MBT – Bundeswehr (WARNO)“ von rran81 (Sketchfab „Free Standard“, nur Draufsichten im Repo) und A400M „Airbus+A400M“ von CloudHub (CC-BY 4.0); Hubschrauber selbst gezeichnet. Quellen in client/grafik/LIZENZ.txt.
+- Grafik: A400M „Airbus+A400M“ von CloudHub (CC-BY 4.0); Hubschrauber selbst gezeichnet. Quellen in client/grafik/LIZENZ.txt.
 
 ## 0.48.3 – 20.11.2026
 
