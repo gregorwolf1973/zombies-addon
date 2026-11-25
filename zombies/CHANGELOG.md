@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.90.3 – 25.11.2026
+
+- Waffen: Langwaffen liegen mit dem Kolben an der Schulter und zeigen nach vorn, Pistole beidhändig vor der Brust.
+- Blut: tote Zombies liegen in einer Blutlache (läuft in 2 s aus) oder zwischen Spritzern; MG-Nester schwenken jedes im eigenen Takt.
+- Mehr laufende Zombies: Vorgabe Kriecher/Schlurfer/Läufer 5/45/50, nur noch 10 % „nicht ganz tot“, losgerissene Draht-Zombies kriechen nicht mehr; ist eine S-Draht-Rolle voll (4 Hängende), steigen weitere mit 70 % Tempo drüber.
+- Innenräume: alle betretbaren Gebäude aller Karten maßstäblich (auch große und verwinkelte).
+- Kollision: Zäune und Hecken sperren genau die gezeichnete Linie, auch neben der Straße (kein Hängenbleiben am Straßenende mehr); Mülltonnen und Container nur noch ihr Umriss; Autos halten keinen Abstand mehr vor Wänden; Superuser-Schalter „Kollision zeigen“.
+- Autos walzen Zäune und Hecken platt (bremst 40 %, 15 LP bei 80 km/h, einstellbar).
+- Fahrzeuge lenken weich (bei Tempo deutlich ruhiger, Totzone), gleiten schräg an Hindernissen entlang statt hängenzubleiben (Streifen kostet weniger Lebenspunkte), Spurhilfe auf der Straße (abschaltbar).
+- Puma, Boxer und Leopard schießen nicht mehr durch Gebäude, Flächenschaden endet an Wänden; Sichtprüfung in maßstäblichen Räumen genauer.
+- Durchsucht-Kreuz geht über den ganzen Behälter (Container, Mülltonnen, Einkaufswagen, Bundeswehr-Kisten).
+- Verkehr und Polizei fahren nachts mit Scheinwerfern.
+
 ## 0.90.2 – 25.11.2026
 
 - A400M Königsdorf: Bruchlandung statt Landung – hartes Aufsetzen mit brennendem Triebwerk, drei Hüpfer mit Staub und Funken, Schlittern auf dem Bauch quer zur Piste mit Furche und Funkenspur, Explosion und Vollbrand mit sieben Feuern und schwarzer Rauchsäule im Wind. Die Feuer schaden, leuchten und knistern; wer im Weg steht, wird weggestoßen, Zombies werden umgerissen. Die Kisten fallen erst im Stand hinter das Wrack.
