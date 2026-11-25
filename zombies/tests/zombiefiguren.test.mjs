@@ -147,3 +147,12 @@ test('Kein Rutschen: Weg je Bildzyklus = gemessene Schrittlänge der Mixamo-Clip
   const m = { walk: 1.37, walk2: 0.78, walk3: 1.37, run: 1.91, run2: 1.57, crawl: 0.43 };   // tools/mixamo/seite.html ?nur=tempo (Mittel aus romero/warzombie)
   for (const [c, meter] of Object.entries(m)) assert.ok(Math.abs(ZF_SCHRITT[c] - meter * 16.44 * ZF_REF) < 1, c + ' ' + ZF_SCHRITT[c]);
 });
+
+test('zfBlut: je Leiche fest aus der Id, Lache und Spritzer kommen beide vor', async () => {
+  const { zfBlut } = await import('../client/zombiefiguren.mjs');
+  const a = Array.from({ length: 200 }, (_, i) => zfBlut('l' + i));
+  assert.deepEqual(zfBlut('l7'), zfBlut('l7'));
+  const lachen = a.filter(q => q.art === 'lache').length;
+  assert.ok(lachen > 60 && lachen < 140, 'Verteilung ' + lachen);
+  for (const q of a) assert.ok(q.nr >= 0 && q.nr <= 2 && q.groesse >= 0.85 && q.groesse <= 1.15);
+});

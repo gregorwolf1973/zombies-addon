@@ -14,6 +14,12 @@ const SOLDAT_PAUSE = 1.3, SOLDAT_SCHADEN = 100, SOLDAT_TREFFER = 0.75, SOLDAT_LA
 export const MG_SCHADEN = WAFFEN.gewehr.schaden;   // MG-Nester treffen wie bisher mit Gewehrschaden; wirksam ist die Einstellung waffen.gewehr.schaden
 const SALVE = 3, SALVE_TAKT = 0.15, SALVE_PAUSE = 1.1;   // kurze Feuerstöße: 3 Schuss, dann gut eine Sekunde Pause
 export const MG_DREH = Math.PI / 2, MG_SCHWENK = 0.3, MG_FELD_COS = 0.5, MG_AUSRICHT = 0.995;   // MG-Nest: Drehtempo max. 90°/s, Schwenk ohne Ziel 0,3 rad/s im Feld ±60° um die Blickrichtung; Schuss erst bei Ausrichtung (cos ≥ 0,995 ≈ 5,7°)
+// Eigener Schwenktakt je Nest (deterministisch aus der Nest-Nummer): Startwinkel im Feld (Phasenversatz), Startrichtung, Tempo 0,8..1,25
+export function nestTakt(n, blick) {
+  let h = Math.imul((n + 1) ^ 0x9e3779b9, 2654435761) >>> 0; h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = (h ^ (h >>> 16)) >>> 0;
+  const off = ((h % 1000) / 1000 * 2 - 1) * 0.9, w = blick + off;   // innerhalb ±52° (Feld ±60°)
+  return { ax: Math.cos(w), ay: Math.sin(w), richt: (h >>> 10) & 1 ? 1 : -1, tempo: 0.8 + ((h >>> 11) % 1000) / 1000 * 0.45 };
+}
 const PUMA_PAUSE = 3.5, PUMA_DREH = 2.4;        // alle 3,5 s ein Schuss; Turm dreht 2,4 rad/s
 // Puma fährt frei im Innenbereich des Lagers (Fahrfläche: fahrFlaeche in client/stuetzpunkt.mjs, Mitte mit Abstand zu Draht, Sandsäcken,
 // Zelten, Fahrzeugen, MG-Nestern und der Einfahrt). Ziel ist der Hotspot: die Zelle (96 px) mit den meisten Zombies im Umkreis von
@@ -61,7 +67,7 @@ export class Stuetzpunkt {
     this.nester = []; this.puma = null; this.schuetzen = []; this.sHot = { hotZelle: null }; this.hotT = 0; this.ruheT = 0; this.sendT = 0; this.nahT = 0; this.rufUhr = 0; this.rufSp = new Map(); this.rufZombie = 0;
     if (!sp) return;
     sp.teile.forEach((t, n) => {
-      if (t.art === 'mgnest') this.nester.push({ n, x: t.x, y: t.y, blick: t.blick, bx: Math.cos(t.blick), by: Math.sin(t.blick), ax: Math.cos(t.blick), ay: Math.sin(t.blick), richt: 1, kuehl: 0, salve: 0, takt: 0, scan: 0, ziel: null, muni: this.einst().mgMunition });
+      if (t.art === 'mgnest') this.nester.push({ n, x: t.x, y: t.y, blick: t.blick, bx: Math.cos(t.blick), by: Math.sin(t.blick), ...nestTakt(n, t.blick), kuehl: 0, salve: 0, takt: 0, scan: 0, ziel: null, muni: this.einst().mgMunition });
       else if (t.art === 'puma') this.puma = { n, x: t.turm.x, y: t.turm.y, muni: this.einst().pumaMunition, kuehl: PUMA_PAUSE / 2, scan: 0, ziel: null, u: planKoord(sp, t.x, t.y).u, v: planKoord(sp, t.x, t.y).v, weg: [], hot: null, hotZelle: null, scanU: 0, rueckwaerts: false };
       // jeder Soldat an seinem Posten schießt mit (er bleibt dabei stehen)
       else if (t.art === 'posten' && t.rolle === 'soldat') this.schuetzen.push({ n, x: t.x, y: t.y, hx: t.x, hy: t.y, blick: t.blick ?? 0, w0: t.blick ?? 0, hp: SOLDAT_HP, tot: false, modus: 'post', weg: [], kuehl: 0.5 + (n % 5) * 0.2, scan: 0, ziel: null, kampfT: 99, deckT: DECKUNG_TAKT + (n % 4) });
@@ -475,7 +481,7 @@ export class Stuetzpunkt {
     const punkt = nest.ax * nest.bx + nest.ay * nest.by, kreuz = nest.bx * nest.ay - nest.by * nest.ax;
     if (punkt < MG_FELD_COS - 0.02) { this.nestDrehen(nest, nest.bx, nest.by, dt); return; }
     if (punkt <= MG_FELD_COS + 1e-3 && kreuz * nest.richt > 0) nest.richt = -nest.richt;   // Wendepunkt erreicht
-    const th = MG_SCHWENK * dt, c = 1 - th * th / 2, sn = th - th ** 3 / 6, v = nest.richt;
+    const th = MG_SCHWENK * (nest.tempo ?? 1) * dt, c = 1 - th * th / 2, sn = th - th ** 3 / 6, v = nest.richt;
     const nx = nest.ax * c - v * sn * nest.ay, ny = nest.ay * c + v * sn * nest.ax, l = Math.hypot(nx, ny);
     nest.ax = nx / l; nest.ay = ny / l;
   }
