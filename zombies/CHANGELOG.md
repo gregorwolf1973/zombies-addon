@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.90.5 – 25.11.2026
+
+- Einstellungsseite: „Laden fehlgeschlagen … checked“ behoben – die Gruppe „🔑 Autos fahren“ (Schlüssel, Tempo, Lenkung, Spurhilfe, Zäune walzen) war keinem Reiter zugeordnet und wurde beim Aufbau gelöscht; sie steht jetzt unter „Welt“.
+
 ## 0.90.4 – 25.11.2026
 
 - Panzer gegen fahrende Autos: Boxer, Puma oder Leopard rammen ein Verkehrsauto – Ruck, das Auto wird weggeschleudert und brennt, ein Mensch flieht; Überfahren walzt jedes Autowrack platt und löscht das Feuer. Panzerbesatzung nimmt keinen Feuerschaden.
