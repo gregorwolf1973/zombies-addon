@@ -180,16 +180,42 @@ test('Zimmertüren: öffnen, schließen, mehrzellig; Zombie hämmert gegen die g
     raum.setzeTuer(key, false);
     raum.extra.get(c.sessionId).tuerSperre = { key, ebene: w.ebene, tuer: t };   // sonst öffnet die Tür-Automatik (0,5 s davorstehen) sie wieder: der Zombie liefe hindurch statt zu hämmern
     // Zombie auf der anderen Seite, Spieler hinter der Tür: er hämmert
-    // Hänger (z. B. ein erster teurer orteSync ~0,25 s oder Last) ergeben einen großen Zeitschritt; mit ~13 px je Schritt springt der
-    // jagende Zombie durch die 2 px dünne Tür (bewege() teilt nicht auf – offenes Spielproblem). Hier deshalb in Stücken ≤ 50 ms rechnen.
-    const schrittAlt = raum.schritt;
-    raum.schritt = function (dt) { for (let rest = dt; rest > 1e-6; rest -= 0.05) schrittAlt.call(this, Math.min(rest, 0.05)); };
     const zid = raum.setzeZombie(b.x, b.y, w.ebene, false), z = raum.state.zombies.get(zid), info = raum.zombieInfo.get(zid);
     info.ziel = c.sessionId; z.jagt = true; info.tempo = 1;
     const hp0 = raum.state.tueren.get(key).hp;
     assert.ok(await bis(() => raum.state.tueren.get(key).hp < hp0 || raum.state.tueren.get(key).barrikade < 0, 25000), 'Zombie hämmert nicht gegen die Tür');   // Bewegungsklassen: er zögert mal Sekunden vor dem Hämmern
     raum.state.zombies.delete(zid); raum.zombieInfo.delete(zid);
-  } finally { if (Object.hasOwn(raum, 'schritt')) delete raum.schritt; await c.leave(); }
+  } finally { await c.leave(); }
+});
+
+test('Großer Zeitschritt (dt = 0,4 s): jagender Zombie springt nicht durch die geschlossene, 2 px dünne Zimmertür', async () => {
+  const { c, raum, p } = await beitreten('Dahinter');
+  try {
+    raum.state.tuerFrei = 100; raum.state.tuerRaetsel = 0; raum.state.tuerSchluessel = 0;
+    const seiten = (w, t, n) => (t.senkrecht ? [[-n, 0], [n, 0]] : [[0, -n], [0, n]]).map(([dx, dy]) => zellMitte(w, [t.x + dx, t.y + dy]));
+    const passt = (w, t) => { if (t.zellen.length < 4) return false; const [a, b] = seiten(w, t, 3), [na, nb] = seiten(w, t, 1); return frei(w, a.x, a.y, 7) && frei(w, b.x, b.y, 7) && sichtfrei(w, a.x, a.y, na.x, na.y) && sichtfrei(w, b.x, b.y, nb.x, nb.y); };
+    const { w } = hausMit(raum, w => w.tueren.some(t => passt(w, t)));
+    w.behaelter = [];
+    const t = w.tueren.find(t => passt(w, t)), key = `${w.ebene}:${t.x},${t.y}`;
+    const [a, b] = seiten(w, t, 3), m = zellMitte(w, [t.x, t.y]);
+    p.ebene = w.ebene; Object.assign(p, a);
+    raum.state.tueren.get(key) ?? raum.baueEbene?.(w.ebene);
+    raum.setzeTuer(key, false);
+    raum.extra.get(c.sessionId).tuerSperre = { key, ebene: w.ebene, tuer: t };   // Tür-Automatik aus: sie bleibt zu
+    const seite = q => Math.sign(t.senkrecht ? q.x - m.x : q.y - m.y), soll = seite(b);
+    assert.notEqual(soll, seite(a));
+    for (const abst of [3, 2]) {   // Start drei bzw. zwei Zellen vor der Tür
+      const s0 = seiten(w, t, abst)[1];
+      const zid = raum.setzeZombie(s0.x, s0.y, w.ebene, false), z = raum.state.zombies.get(zid), info = raum.zombieInfo.get(zid);
+      info.ziel = c.sessionId; z.jagt = true; info.tempo = 1;
+      for (let i = 0; i < 12; i++) {
+        raum.schritt(0.4);   // z. B. erster teurer orteSync: ein Takt bringt 0,4 s mit
+        if (raum.state.tueren.get(key).offen || !raum.state.zombies.has(zid)) break;
+        assert.equal(seite(z), soll, `Zombie ist durch die geschlossene Tür gesprungen (Start ${abst} Zellen, Schritt ${i})`);
+      }
+      raum.state.zombies.delete(zid); raum.zombieInfo.delete(zid);
+    }
+  } finally { await c.leave(); }
 });
 
 test('Zimmertür öffnet automatisch: 0,5 s davorstehen (nicht früher), auch im Feinraster', async () => {

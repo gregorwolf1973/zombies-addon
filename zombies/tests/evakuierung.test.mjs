@@ -130,6 +130,7 @@ test('Leopard-MG: Reichweite und Schaden aus den Einstellungen, Schuss mit Turmw
     const z = raum.state.zombies.get(nah);
     assert.ok(await bis(() => z.hp < 100 || !raum.state.zombies.has(nah)), 'schießt nicht');
     assert.equal(z.hp, 60, 'Schaden nicht aus den Einstellungen (40)');
+    await bis(() => schuesse.some(q => q.evak === 'panzer'), 2000);   // die Nachricht kommt erst nach dem Treffer beim Client an (Node 22: oft erst nach der Prüfung)
     const m = schuesse.find(q => q.evak === 'panzer');
     assert.ok(m && Number.isFinite(m.tw), 'Turmwinkel fehlt');
     assert.ok(Math.hypot(m.x1 - f.x, m.y1 - f.y) < 30);
@@ -356,6 +357,41 @@ test('Bus (Straße): liegt die nächste Straße weit vom Ortsausgang, wandert de
     for (let i = 0; i < 20000 && !inf.angekommen; i++) raum.verkehr.schritt(0.1);   // Fahrt im Zeitraffer
     assert.ok(inf.angekommen, 'Bus kommt nicht an');
     assert.ok(Math.hypot(f.x - s.evakX, f.y - s.evakY) < 40, 'Bus hält nicht am Abholpunkt');
+  } finally { await beenden(a.c); }
+}));
+
+test('Bus (Straße): Evakuierung hat Vorrang – ein Linienbus frontal im Weg wird geschoben oder springt zur nächsten Haltestelle', mitArt('bus', async () => {
+  await frisch();
+  const a = await beitreten('Vorrang');
+  const { raum, p } = a;
+  try {
+    const s = raum.state, ag = raum.aufgaben, v = raum.verkehr;
+    assert.ok(await bis(() => (v?.graph?.knoten?.length ?? 0) > 0 && s.evakX > 0, 4000));
+    nurFunk(raum);
+    ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
+    s.uhr = 18 * 60 + 0.1;
+    assert.ok(await bis(() => busVon(raum), 4000), 'kein Bus');
+    const [bid, f] = busVon(raum), inf = v.info.get(bid);
+    stehendeMenschenWeg(raum);
+    for (let i = 0; i < 30; i++) v.schritt(0.1);   // ein Stück auf der Straße
+    assert.ok(!inf.angekommen && inf.weg, 'Bus schon da');
+    const lid = v.busId, lb = s.fahrzeuge.get(lid), li = v.info.get(lid);
+    assert.ok(lb && li?.linie, 'kein Linienbus');
+    // Linienbus steht frontal vor dem Evakuierungsbus und will genau auf ihn zu
+    const c = Math.cos(f.richtung), sn = Math.sin(f.richtung);
+    lb.x = f.x + c * 100; lb.y = f.y + sn * 100; lb.richtung = f.richtung + Math.PI;
+    Object.assign(li, { weg: [{ x: lb.x, y: lb.y }, { x: f.x - c * 200, y: f.y - sn * 200 }], pos: 0, halt: 0, steht: 0, gewendet: true });
+    let wendet = 0; const wendenAlt = v.wenden; v.wenden = function (id, ...rest) { if (id === bid) wendet++; return wendenAlt.call(this, id, ...rest); };
+    let vorbei = -1;
+    for (let i = 0; i < 20000 && !inf.angekommen; i++) {
+      v.schritt(0.1);
+      if (vorbei < 0 && Math.hypot(lb.x - f.x, lb.y - f.y) > 150) vorbei = i;
+    }
+    v.wenden = wendenAlt;
+    assert.ok(vorbei >= 0 && vorbei < 100, 'Linienbus macht nicht binnen 10 s Platz: ' + vorbei);   // Vorrang: Schieben ab 2 s, aus dem Weg nach 6 s Blockade
+    assert.equal(wendet, 0, 'Evakuierungsbus musste wenden, statt Vorrang zu haben');
+    assert.ok(inf.angekommen, 'Evakuierungsbus kommt nicht an');
+    assert.ok(s.fahrzeuge.has(lid) && v.info.get(lid)?.linie, 'Linienbus verschwunden (Mitfahrer gingen verloren)');
   } finally { await beenden(a.c); }
 }));
 

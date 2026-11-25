@@ -927,8 +927,19 @@ export function poolFaktor(welt, x, y) {
   return 1;
 }
 
-// Bewegen mit Gleiten an Wänden: erst x, dann y getrennt
+// Bewegen mit Gleiten an Wänden: erst x, dann y getrennt.
+// Große Schritte (Hänger im Servertakt, gesammeltes dt ferner Zombies, Wegschleudern) in Teilstrecken: je Achse höchstens BEWEGE_MAX_INNEN
+// (drinnen im Feinraster: 2 Zellen = 4 px < Wand 2 px + Figur 2 × 3 px) bzw. ein Feinfeld (draußen, 8 px; Zäune/Hecken + Figur sind ≥ 20 px).
+// Sonst springt eine Figur durch eine dünne Wand oder geschlossene Tür. Normale Takte und die Client-Vorhersage (Teilschritte ≤ 4 px)
+// bleiben darunter und laufen unverändert in einem Stück – Server und Client rechnen mit derselben Funktion.
+export const BEWEGE_MAX_INNEN = 2;   // Zellen
 export function bewege(welt, obj, dx, dy, rad, frei = freiStandard) {
+  const max = welt.kachel ? welt.kachel * BEWEGE_MAX_INNEN : FEIN_PX, l = Math.max(Math.abs(dx), Math.abs(dy));
+  if (!(l > max)) { bewegeStueck(welt, obj, dx, dy, rad, frei); return; }
+  const n = Math.ceil(l / max);
+  for (let i = 0; i < n; i++) bewegeStueck(welt, obj, dx / n, dy / n, rad, frei);
+}
+function bewegeStueck(welt, obj, dx, dy, rad, frei) {
   const gehtX = dx && frei(welt, obj.x + dx, obj.y, rad);
   if (gehtX) obj.x += dx;
   const gehtY = dy && frei(welt, obj.x, obj.y + dy, rad);
