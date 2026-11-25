@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.91.1 – 25.11.2026
+
+- Spenden-Knöpfe (Buy Me a Coffee, Liberapay) auf der Startseite, in der Anleitung und als GitHub-Sponsor-Knopf.
+- Add-on-Konfiguration aufgeräumt: dort nur noch öffentliche Adresse und STUN/TURN; alles andere auf der Einstellungsseite. Die Wiki-Adresse steht jetzt auf der Einstellungsseite (Zugang & Test), ein vorhandener Wert wird übernommen.
+- Qualität: Tests laufen bei jedem Push auf GitHub (Abzeichen im README), ESLint prüft auf echte Fehler; mehrere zeitabhängige Tests robust gemacht (Magazin, Granatwerfer, Boxer-Horde, Soldaten, Level 3–5, Streifenwagen, Leopard-Fahrt, Zombie-Streuung).
+
 ## 0.91.0 – 25.11.2026
 
 - Vorbereitung zur Veröffentlichung: Credits & Lizenzen (CREDITS.md, Link auf der Startseite, OpenStreetMap-Hinweis), LICENSE stellt klar: MIT nur für den Code.
