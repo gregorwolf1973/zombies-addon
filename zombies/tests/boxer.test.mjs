@@ -188,8 +188,9 @@ test('Einstellung bundeswehr.boxerTempo begrenzt das Höchsttempo', mitRaum(asyn
   a.c.send('aktion');
   assert.ok(await bis(() => a.p.imBoxer));
   raum.extra.get(a.sid).eingabe = { dx: 1, dy: 0, s: false };
-  let vmax = 0; const t0 = Date.now();
-  while (Date.now() - t0 < 3500) { vmax = Math.max(vmax, boxer.v); await warte(10); }
+  // 3,5 s Spielzeit (Server-Uhr) statt Wanduhr: unter Last laufen in 3,5 s echter Zeit weniger Ticks, der Boxer beschleunigte nicht aus
+  let vmax = 0; const z0 = raum.state.zeit, t0 = Date.now();
+  while (raum.state.zeit - z0 < 3.5 && Date.now() - t0 < 20000) { vmax = Math.max(vmax, boxer.v); await warte(10); }
   assert.ok(vmax > kmhZuPx(30) * 0.9 && vmax <= kmhZuPx(30) + 0.5, 'Tempo ' + vmax);
 }, { bundeswehr: { boxerTempo: 30 } }));
 
@@ -260,9 +261,12 @@ test('Horde: alle boxerHordeSek Sekunden 20–50 Zombies 80–100 m voraus, nur 
   await warte(700);
   assert.equal(raum.state.zombies.size, 0, 'Horde ohne Insassen');
   assert.ok(!raum.welle.horden.some(h => h.boxer));
+  // Uhr direkt beim Einsteigen ablesen: bis der Test wieder dran ist, kann schon ein Tick (0,05 s) weitergezählt haben
+  const ein = boxer.eingestiegen.bind(boxer); let uhrBeimEinstieg = null;
+  boxer.eingestiegen = (...x) => { const r = ein(...x); uhrBeimEinstieg ??= boxer.hordeT; return r; };
   a.c.send('aktion');
   assert.ok(await bis(() => a.p.imBoxer));
-  assert.equal(boxer.hordeT, 0, 'Uhr startet nicht beim ersten Insassen');
+  assert.equal(uhrBeimEinstieg, 0, 'Uhr startet nicht beim ersten Insassen');
   boxer.hordeT = 119.9;
   assert.ok(await bis(() => raum.welle.horden.some(h => h.boxer), 3000), 'keine Horde nach boxerHordeSek');
   const h = raum.welle.horden.find(q => q.boxer);
