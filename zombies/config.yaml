@@ -21,58 +21,10 @@ ports:
 ports_description:
   2567/tcp: "Spielzugang für Mitspieler (HTTP + WebSockets), z. B. hinter Reverse Proxy oder Cloudflare-Tunnel"
 options:
-  karte: level1
-  zombies: 10
-  funde:
-    wasser: 10
-    essen: 10
-    verband: 10
-    bretter: 10
-    pistole: 10
-    schlaeger: 10
-    munition: 10
-    spritze: 10
-    schluessel: 10
-    brechstange: 10
-    messer: 10
-    kleidung: 10
-    seil: 10
-    taschenlampe: 10
-    schokoriegel: 10
-    tasche: 10
-    trekking: 10
-  zugangscode: ""
-  wiki_adresse: ""
   externe_adresse: ""
-  bots: 0
   stun_server: "stun:stun.l.google.com:19302"
 schema:
-  karte: list(level1|geretsried|geretsried2|isarauen|koenigsdorf|kochel|andermatt|dorf)
-  zombies: int(0,50)
-  zombie_faktor: float(0.1,5)?
-  funde:
-    wasser: int(0,50)?
-    essen: int(0,50)?
-    verband: int(0,50)?
-    bretter: int(0,50)?
-    pistole: int(0,50)?
-    schlaeger: int(0,50)?
-    munition: int(0,50)?
-    spritze: int(0,50)?
-    schluessel: int(0,50)?
-    brechstange: int(0,50)?
-    messer: int(0,50)?
-    kleidung: int(0,50)?
-    seil: int(0,50)?
-    taschenlampe: int(0,50)?
-    schokoriegel: int(0,50)?
-    tasche: int(0,50)?
-    trekking: int(0,50)?
-    funkgeraet: int(0,50)?
-  zugangscode: str?
-  wiki_adresse: str?
   externe_adresse: str?
-  bots: int(0,9)
   stun_server: str?
   turn_server: str?
   turn_username: str?

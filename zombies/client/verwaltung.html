@@ -844,6 +844,12 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       <p class="hinweis">Leer = kein Code nötig.</p>
     </div>
 
+    <div class="feld" id="wikiFeld">
+      <label for="wikiAdresse">Wiki-Adresse</label>
+      <input type="text" id="wikiAdresse" autocomplete="off" placeholder="https://wiki.example.org">
+      <p class="hinweis">Optional: Adresse eines DokuWiki für die Links „Mehr dazu im Wiki“ nach den Rätseln. Leer = keine Links.</p>
+    </div>
+
     <div class="feld" id="suFeld">
       <label for="suPasswort">Superuser-Passwort (Testzugang)</label>
       <div class="pass-feld">
@@ -3574,6 +3580,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     if (!zeitGeber["zugangscode"] && !istFokussiert(code)) {
       code.value = e.zugangscode || "";
     }
+    var wiki = $("wikiAdresse");
+    if (!zeitGeber["wikiAdresse"] && !istFokussiert(wiki)) wiki.value = e.wikiAdresse || "";
   }
 
   function aktualisiereKarteHinweis(d, gewaehlt) {
@@ -3745,6 +3753,14 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       zeitGeber["zugangscode"] = setTimeout(function () {
         zeitGeber["zugangscode"] = null;
         sendenTeil("zugangscode", null, code.value);
+      }, 600);
+    });
+    var wikiEl = $("wikiAdresse");
+    wikiEl.addEventListener("input", function () {
+      clearTimeout(zeitGeber["wikiAdresse"]);
+      zeitGeber["wikiAdresse"] = setTimeout(function () {
+        zeitGeber["wikiAdresse"] = null;
+        sendenTeil("wikiAdresse", null, wikiEl.value);
       }, 600);
     });
     $("augeKnopf").addEventListener("click", function () {
@@ -4628,6 +4644,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var zug = el('section', 'karte'); zug.id = 'zugangKarte'; zug.appendChild(el('h2', '', '🔑 Zugang'));
   var zc = $('zugangscode'), suF = $('suFeld');
   if (zc && zc.closest('.feld')) zug.appendChild(zc.closest('.feld'));
+  var wkF = $('wikiFeld'); if (wkF) zug.appendChild(wkF);
   if (suF) zug.appendChild(suF);
   rein('zugang', zug);
   var dgs = $('diagnoseSchalter'); if (dgs) zug.appendChild(dgs);

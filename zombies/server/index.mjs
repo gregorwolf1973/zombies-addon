@@ -344,7 +344,7 @@ export async function starte({
   app.get('/info', (req, res) => res.json({
     code: !!SpielRaum.einstellungen.zugangscode && !req.get('x-ingress-path'),
     version: paketVersion,                     // Client vergleicht mit der Version beim Laden der Seite (alter Code im Speicher → neu laden)
-    wiki: String(optionen.wiki_adresse ?? '').trim(),
+    wiki: datei.werte.wikiAdresse || '',
     extern: String(optionen.externe_adresse ?? '').trim(),   // https-Adresse, unter der das Mikrofon geht
     diagnose: datei.werte.diagnose !== false,   // Client schickt Fehler/Kennzahlen nur, wenn an
     zombieSicht: datei.werte.zombieSicht,   // Client: Sichtkegel-Anzeige
