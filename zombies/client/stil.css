@@ -102,6 +102,10 @@ button:disabled { opacity: .6; }
 #granatenfeld .gz { font-size: 22px; line-height: 1; }
 .autoknopf { width: calc(var(--wf) * .86); height: calc(var(--wf) * .86); font-size: 26px; }   /* Autoradio und Blaulicht (nur im Auto) */
 .autoknopf.an { border-color: #ffd54f; background: #ffd54f66; }
+#tempoknopf { width: calc(var(--wf) * 1.1); }
+#tempoknopf .gz { font-size: 15px; font-weight: 800; line-height: 1.1; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+#tempoknopf.langsam { border-color: #66bb6a; background: #66bb6a66; }
+#tempoknopf.schnell { border-color: #ffd54f; background: #ffd54f55; }
 #blauknopf.an { border-color: #2979ff; background: #2979ff80; }
 #granatenfeld #granatenzahl { font-size: 13px; font-weight: 800; line-height: 1.1; text-shadow: 0 1px 2px #000; }
 @media (pointer: coarse) { #waffenzeile { --wf: 60px; } }

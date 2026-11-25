@@ -28,6 +28,7 @@ const VERKEHR_LICHT = { auto: [36, 16], polizei: [39, 16], krankenwagen: [47, 18
 import { fetzen, fetzenBeiSchuss, fetzenBeiExplosion, BwLicht, BLUT_GROESSE } from './effekte.mjs';
 import { fahrbarNah, FAHRBAR, FAHRBAR_PLAETZE } from './fahrbar.mjs';
 import { istFahrbar, fahrbarBild, fahrbarFahrzeug, fahrbarRueckstoss, pumaFahrbarSchuss } from './fahrbardarstellung.mjs';
+import { tempoNaechste, tempoKnopfText, TEMPO_STUFE_MAX } from './fahrtempo.mjs';
 import { pkwKontext, PKW, istStreife, pkwBehaelterId } from './pkw.mjs';
 import { radioUmschalten, radioAbgleich, radioFaktor, radioText } from './pkwradio.mjs';
 import { tastenFahrzeug } from './walze.mjs';
@@ -1161,7 +1162,8 @@ class Ort extends Phaser.Scene {
     this.tasten.Q.on('down', () => this.granateWerfen());
     this.tasten.C.on('down', () => this.alleSuchen());
     this.tasten.R.on('down', () => { if (this.meinPkw()) this.autoRadioUmschalten(); else raum.send('nachladen'); });   // Nachladen von Hand; im Auto: Autoradio an/aus
-    this.tasten.H.on('down', () => this.blaulichtUmschalten());   // im Streifenwagen: Blaulicht + Sirene
+    this.tasten.H.on('down', () => this.blaulichtUmschalten());
+    this.input.keyboard.on('keydown-T', () => { if (!document.activeElement || !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) this.tempoUmschalten(); });   // im Fahrzeug: Fahrtempo 30 / 50 / Höchsttempo   // im Streifenwagen: Blaulicht + Sirene
     this.tasten.F.on('down', () => raum.send('waffenplatz', { weiter: true }));   // nächster Waffenplatz
     this.tasten.X.on('down', () => raum.send('faust'));   // Faust: nichts in der Hand (nochmal = zurück)
     this.tasten.SPACE.on('down', () => { if (this.kontext?.art !== 'aussteigen') this.aktion(); });   // Leertaste steigt nie versehentlich aus (E oder Knopf)
@@ -3791,6 +3793,23 @@ class Ort extends Phaser.Scene {
     this.autoKnoepfeZeigen(raum.state?.spieler?.get(meineId));
     if (this.autoRadioAn && !this.autoRadioSpielt) meldung('📻 Kein Sender eingestellt (Backend: Autoradio/Live-Radio) oder Autoradio im Zahnrad aus', false);
   }
+  // Fahrtempo-Stufe (client/fahrtempo.mjs): nur im Fahrzeug; geht beim Umschalten als eigene kleine Nachricht an den Server
+  tempoUmschalten() {
+    if (!raum.state?.spieler?.get(meineId)?.imBoxer) return;
+    this.tempoStufeWahl = tempoNaechste(this.tempoStufeWahl ?? TEMPO_STUFE_MAX);
+    raum.send('tempo', this.tempoStufeWahl);
+    this.tempoKnopfZeigen(raum.state.spieler.get(meineId));
+  }
+  tempoKnopfZeigen(ich) {
+    const k = $('tempoknopf'); if (!k) return;
+    const drin = !!ich?.imBoxer && !ich.ebene;
+    if (!drin) this.tempoStufeWahl = TEMPO_STUFE_MAX;   // der Server setzt beim Einsteigen ebenfalls auf Höchsttempo
+    const d = drin ? 'flex' : 'none'; if (k.style.display !== d) k.style.display = d;
+    if (!k.__an) { k.__an = true; k.onclick = e => { e.stopPropagation(); this.tempoUmschalten(); }; k.addEventListener('pointerdown', e => e.stopPropagation()); }
+    const st = this.tempoStufeWahl ?? TEMPO_STUFE_MAX;
+    textSetzen('tempotext', tempoKnopfText(st));
+    k.classList.toggle('langsam', st === 0); k.classList.toggle('schnell', st === TEMPO_STUFE_MAX);
+  }
   blaulichtUmschalten() { if (this.meinPkw() && istStreife(pkwBehaelterId(this.meinPkw()[0]))) raum.send('blaulicht'); }
   // Knöpfe 📻 (in jedem Auto) und 🚨 (nur im Streifenwagen) im HUD; Radio spielt nur im Auto, bei Sirene leiser
   autoKnoepfeZeigen(ich) {
@@ -3799,6 +3818,7 @@ class Ort extends Phaser.Scene {
     if (!rk || !bk) return;
     const sicht = (k, an) => { const d = an ? 'flex' : 'none'; if (k.style.display !== d) k.style.display = d; };
     sicht(rk, !!pk); sicht(bk, streife);
+    this.tempoKnopfZeigen(ich);
     if (!rk.__an) { rk.__an = true; rk.onclick = e => { e.stopPropagation(); this.autoRadioUmschalten(); }; bk.onclick = e => { e.stopPropagation(); this.blaulichtUmschalten(); }; }
     const ab = radioAbgleich(!!this.autoRadioAn, !!pk, !!this.autoRadioSpielt);
     this.autoRadioAn = ab.an;

@@ -55,6 +55,7 @@ Wer das Spiel aus dem Internet erreichbar macht, sollte einen Zugangscode setzen
   (mit Verbandskasten 3 Sekunden, ohne 8 Sekunden).
 - Aktionsknopf unten rechts oder Taste E: durchsuchen, verbarrikadieren, Vorratskiste öffnen.
 - Rucksack unten: antippen zum Benutzen oder Wegwerfen, am PC Tasten 1–8.
+- Im Fahrzeug (als Fahrer): Tempo-Knopf 🐢 30 / 50 / 🚀 max neben dem Inventar oder Taste T schaltet das Höchsttempo reihum (wie ein Tempomat-Deckel); am PC Umschalt gedrückt = langsam (30 km/h).
 
 ## Häuser
 

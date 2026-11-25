@@ -3,6 +3,7 @@
 // Server ist maßgeblich (Fahren, Kollision, Schießen); der Client zeichnet nur (client/fahrbardarstellung.mjs, client/boxerdarstellung.mjs).
 // Es können mehrere Fahrzeuge verschiedener Art gleichzeitig stehen: der Boxer am Flugfeld (server/boxer.mjs, mit Horde) und beliebig viele
 // Superuser-/Schießstand-Fahrzeuge (`Fahrbare`, ohne Horde). Die Spielerfelder anBord/imBoxer gelten für alle Arten („sitzt in einem Fahrzeug“).
+import { tempoDeckelKmh, tempoStufe, TEMPO_STUFE_MAX } from '../client/fahrtempo.mjs';
 import { frei, kmhZuPx, sichtfrei, WERTE as W } from '../client/welt.mjs';
 import { FAHRBAR, FAHRBAR_EINSTIEG, FAHRBAR_PLAETZE, fahrbarNah } from '../client/fahrbar.mjs';
 import { Fahrzeug } from './verkehr.mjs';
@@ -136,6 +137,7 @@ export class Fahrbar {
     if (!this.kannEinsteigen(sid)) return false;
     const p = this.spieler(sid), n = this.m.name;
     this.insassen.push(sid);
+    const xe = this.raum.extra.get(sid); if (xe) xe.tempoStufe = TEMPO_STUFE_MAX;   // beim Einsteigen: Höchsttempo
     p.anBord = true; p.imBoxer = true; p.x = this.f.x; p.y = this.f.y;
     this.eingestiegen(sid);
     this.sendeAn(sid, this.fahrer === sid ? `🛡️ Du fährst den ${n} (Gehen-Taste lenkt, E steigt aus). Der Turm schießt von selbst.` : `🛡️ Du sitzt im ${n} – ${this.spieler(this.fahrer)?.name ?? 'jemand'} fährt.`);
@@ -175,7 +177,8 @@ export class Fahrbar {
   sendeAn(sid, text) { this.raum.clients?.find(c => c.sessionId === sid)?.send('meldung', { text, lang: true }); }
 
   // Eingabe des Fahrers (raum.spielerSchritt): { dx, dy } wie beim Gehen
-  fahrerEingabe(sid, e) { if (sid === this.fahrer) this.letzteEingabe = { dx: Number(e?.dx) || 0, dy: Number(e?.dy) || 0 }; }
+  // s = Umschalt (PC): langsam fahren; die Tempostufe (Knopf/Taste T) steht in raum.extra[sid].tempoStufe
+  fahrerEingabe(sid, e) { if (sid === this.fahrer) this.letzteEingabe = { dx: Number(e?.dx) || 0, dy: Number(e?.dy) || 0, s: !!e?.s, stufe: tempoStufe(this.raum.extra.get(sid)?.tempoStufe ?? TEMPO_STUFE_MAX) }; }
 
   // ein Takt: Insassen prüfen, fahren, überrollen, schießen
   schritt(dt) {
@@ -223,7 +226,9 @@ export class Fahrbar {
   // und lenkt wie im Rückwärtsgang: das Heck dreht zur Wunschrichtung. Zäune/Hecken/Bäume/Autos unter der Wanne: server/walze.mjs (raum.walze).
   // Hindernis: schräg (> 25° zur Normalen) gleitet das Fahrzeug an der Kante entlang und verliert Tempo nach dem Winkel, frontal bleibt es stehen.
   fahren(e, dt) {
-    const f = this.f, welt = this.raum.welt, fw = this.fahrwerk(), VM = fw.vmax * (this.ueberAuto ?? 1), le = this.lenkEinst();
+    const f = this.f, welt = this.raum.welt, fw = this.fahrwerk(), le = this.lenkEinst();
+    // Tempomat-Deckel (Tempostufe 30/50/Höchsttempo, Umschalt = 30 km/h): nie schneller als gewählt, nie über das Höchsttempo des Fahrzeugs
+    const VM = Math.min(fw.vmax * (this.ueberAuto ?? 1), kmhZuPx(tempoDeckelKmh(e.stufe ?? TEMPO_STUFE_MAX, e.s)));
     const roh = Math.hypot(e.dx, e.dy), len = Math.min(1, roh);
     let soll = 0;
     this.rueck = false; this.spur = false;

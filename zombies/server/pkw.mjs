@@ -9,6 +9,7 @@
 import { frei, bewege, kmhZuPx, WERTE as W } from '../client/welt.mjs';
 import { fzRechtecke, kreisImRechteck, aufParkAuto } from '../client/fzkollision.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
+import { TEMPO_STUFE_MAX } from '../client/fahrtempo.mjs';
 import { PKW, PKW_ART, PKW_ID, PKW_VORGABE, SCHLUESSEL_MOEBEL, parkAutoBei, parkWinkel, parkAutoWeg, pkwNah, hatSchluessel, pkwEinsteigbar, crashAnteil, crashAutoSchaden, zaunAutoSchaden, zaunTempoFaktor, istStreife, streifeBei, fahrberechtigt } from '../client/pkw.mjs';
 import { Fahrbar, FAHRWERK, PX, lenkWerte } from './fahrbar.mjs';
 import { stammBei, RUECK_ANTEIL } from '../client/walze.mjs';
@@ -124,6 +125,7 @@ export class FahrbarPkw extends Fahrbar {
   zusteigen(sid) {
     const p = this.spieler(sid);
     this.insassen.push(sid);
+    const xe = this.raum.extra.get(sid); if (xe) xe.tempoStufe = TEMPO_STUFE_MAX;   // beim Einsteigen: Höchsttempo
     p.anBord = true; p.imBoxer = true; p.x = this.f.x; p.y = this.f.y; p.aktion = ''; p.fortschritt = 0;
   }
 
