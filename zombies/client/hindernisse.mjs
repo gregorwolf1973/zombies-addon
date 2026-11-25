@@ -62,7 +62,7 @@ export function hindernisPixel(codes, ziel) {
 // als Feldkanten, Zäune/Hecken als die Linienstücke in den noch stehenden Zaunfeldern (Halbdicke je Art, zaunImFeld), Zaunfelder ohne Linie
 // als Feldkanten; dazu geparkte Autos (Klettern, 50 % Tempo) und Baumstämme (sperren nur Fahrzeuge). Reine Rechnung, spiel.mjs zeichnet.
 // Rückgabe: { fest, flandern, zaunFeld: [[x1, y1, x2, y2] …], zaun: [{ ax, ay, bx, by, h }], autos: [{ x, y, c, s, hl, hb }], staemme: [{ x, y, r }] }
-export const K_FARBEN = { fest: 0xff3b3b, flandern: 0xd04cff, zaunFeld: 0xffe14d, zaun: 0xff9a1a, auto: 0x3ad0ff, stamm: 0x5cff6a, figur: 0xffffff };
+export const K_FARBEN = { fest: 0xff3b3b, flandern: 0xd04cff, zaunFeld: 0xffe14d, zaun: 0xff9a1a, auto: 0x3ad0ff, fahrzeug: 0xff4dd2, stamm: 0x5cff6a, figur: 0xffffff };
 export function kollisionsUmrisse(welt, x0, y0, x1, y1) {
   const aus = { fest: [], flandern: [], zaunFeld: [], zaun: [], autos: [], staemme: [] };
   const f = welt?.fein;
@@ -74,7 +74,7 @@ export function kollisionsUmrisse(welt, x0, y0, x1, y1) {
   const kl = (fx, fy) => {
     if (fx < 0 || fy < 0 || fx >= fb || fy >= fh) return 1;
     const i = fy * fb + fx, v = f[i];
-    return !v ? 0 : v === 4 ? 2 : v === 2 ? (zi?.map.get(i) ? 0 : 3) : 1;
+    return !v || v === 5 ? 0 : v === 4 ? 2 : v === 2 ? (zi?.map.get(i) ? 0 : 3) : 1;   // 5 = Container: Umriss unten genau
   };
   const ziel = [null, aus.fest, aus.flandern, aus.zaunFeld];
   // waagrechte Kanten (oben/unten je Feld) zeilenweise zusammenfassen, senkrechte spaltenweise
@@ -114,6 +114,7 @@ export function kollisionsUmrisse(welt, x0, y0, x1, y1) {
       raus();
     }
   }
+  for (const k of welt.kaesten ?? []) if (k.x1 >= x0 && k.x0 <= x1 && k.y1 >= y0 && k.y0 <= y1) aus.fest.push([k.x0, k.y0, k.x1, k.y0], [k.x1, k.y0, k.x1, k.y1], [k.x1, k.y1, k.x0, k.y1], [k.x0, k.y1, k.x0, k.y0]);
   for (const r of parkRechteckeIn(welt, x0, y0, x1, y1)) aus.autos.push({ x: r.x, y: r.y, c: r.c, s: r.s, hl: r.hl, hb: r.hb });
   for (const b of staemmeIn(welt, x0, y0, x1, y1)) aus.staemme.push({ x: b.x, y: b.y, r: STAMM_R });
   return aus;

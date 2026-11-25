@@ -6,7 +6,7 @@
 //    Restzaun → Wiese, welt.zaunPlatt für die Zeichnung). Parkende Autos: Leopard drückt sie platt (state.platt), Puma fährt mit 40 %,
 //    Boxer mit 30 % Tempo darüber. Bäume: der Leopard walzt kleine Bäume um (welt.baeumeWeg), sonst blockieren Stämme. Hauswände blockieren alle.
 // Der Server entscheidet und schickt die Änderungen (Nachricht 'walze'); beide Seiten wenden sie mit walzeAnwenden() gleich an.
-import { KACHEL, BREITE, HOEHE, T, FEIN, FEIN_PX } from './welt.mjs';
+import { KACHEL, BREITE, HOEHE, T, FEIN, FEIN_PX, zaunIndex, zaunImFeld, ZAUN_HALB_MAX } from './welt.mjs';
 import { baumVon, baumGruppe, echtGr, echtDeckt } from './aussehen.mjs';
 
 export const STAMM_R = 4;               // Stammradius (px, 0,5 m) für die Kollision der Fahrzeuge
@@ -87,13 +87,22 @@ export function zaunWalzbar(welt, fi) {
   if (kx <= 0 || ky <= 0 || kx >= BREITE - 1 || ky >= HOEHE - 1) return false;   // Kartenrand bleibt zu
   return (welt.details?.zaunart?.[ky * BREITE + kx] ?? 'z') !== 'w';
 }
-// walzbare Zaunfelder unter einem Kreis (x, y, rad) in die Menge `aus`
+// walzbare Zaunfelder unter einem Kreis (x, y, rad) in die Menge `aus`. Mit Zaunlinien (welt.details.zaeune) nur Felder, deren Linienstück
+// den Kreis wirklich berührt (Halbdicke je Art, welt.mjs zaunImFeld) – sonst walzte ein Auto, das nur neben einem Zaun parkt, bei jedem
+// Rangieren Felder platt und bremste dabei; ohne Linien (Testwelten) alle Zaunfelder unter dem Kreis.
 export function zaunZellen(welt, x, y, rad, aus = new Set()) {
   if (!welt?.fein || welt.kachel || welt.ebene) return aus;
-  const fb = BREITE * FEIN, fh = HOEHE * FEIN;
-  const x0 = Math.max(0, Math.floor((x - rad) / FEIN_PX)), x1 = Math.min(fb - 1, Math.floor((x + rad) / FEIN_PX));
-  const y0 = Math.max(0, Math.floor((y - rad) / FEIN_PX)), y1 = Math.min(fh - 1, Math.floor((y + rad) / FEIN_PX));
-  for (let fy = y0; fy <= y1; fy++) for (let fx = x0; fx <= x1; fx++) { const i = fy * fb + fx; if (welt.fein[i] === 2 && zaunWalzbar(welt, i)) aus.add(i); }
+  const fb = BREITE * FEIN, fh = HOEHE * FEIN, zi = welt.details?.zaeune ? zaunIndex(welt) : null, r = zi ? rad + ZAUN_HALB_MAX : rad;
+  const x0 = Math.max(0, Math.floor((x - r) / FEIN_PX)), x1 = Math.min(fb - 1, Math.floor((x + r) / FEIN_PX));
+  const y0 = Math.max(0, Math.floor((y - r) / FEIN_PX)), y1 = Math.min(fh - 1, Math.floor((y + r) / FEIN_PX));
+  for (let fy = y0; fy <= y1; fy++) for (let fx = x0; fx <= x1; fx++) {
+    const i = fy * fb + fx;
+    if (welt.fein[i] !== 2 || !zaunWalzbar(welt, i)) continue;
+    const l = zi?.map.get(i);
+    if (zi && l && !zaunImFeld(zi.seg, l, fx, fy, x, y, rad)) continue;
+    if (zi && !l && (fx * FEIN_PX > x + rad || (fx + 1) * FEIN_PX < x - rad || fy * FEIN_PX > y + rad || (fy + 1) * FEIN_PX < y - rad)) continue;
+    aus.add(i);
+  }
   return aus;
 }
 

@@ -1660,8 +1660,11 @@ class Ort extends Phaser.Scene {
       const dx = z.bx - z.ax, dy = z.by - z.ay, L = Math.hypot(dx, dy) || 1, nx = -dy / L * z.h, ny = dx / L * z.h;
       g.strokePoints([{ x: z.ax + nx, y: z.ay + ny }, { x: z.bx + nx, y: z.by + ny }, { x: z.bx - nx, y: z.by - ny }, { x: z.ax - nx, y: z.ay - ny }], true);
     }
-    g.lineStyle(1.2, K_FARBEN.auto, 0.95);
+    // Fahrzeuge (Verkehr, Wracks, gefahrene Autos/Panzer) wie client/fzkollision.mjs fzRechtecke: magenta
+    const fz = fzRechtecke(raum.state.fahrzeuge, fzRichtung);
+    for (const r of [...fz.steht, ...fz.faehrt]) if (r.x > v.x - rand && r.x < v.x + v.width + rand && r.y > v.y - rand && r.y < v.y + v.height + rand) u.autos.push({ ...r, fz: true });
     for (const r of u.autos) {
+      g.lineStyle(1.2, r.fz ? K_FARBEN.fahrzeug : K_FARBEN.auto, 0.95);
       const e = [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([a, b]) => ({ x: r.x + r.c * a * r.hl - r.s * b * r.hb, y: r.y + r.s * a * r.hl + r.c * b * r.hb }));
       g.strokePoints(e, true);
     }

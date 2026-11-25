@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { setzeKartengroesse, BREITE, HOEHE, FEIN, FEIN_PX, KACHEL, T, frei, freiBewegung, zaunHalb, zaunIndex, zaunUeberstieg } from '../client/welt.mjs';
-import { baueWeltAusKarte } from '../client/osmwelt.mjs';
+import { baueWeltAusKarte, kastenHalb } from '../client/osmwelt.mjs';
 import { strassenFlaechen, strassenTiefe, MIT_ZUFAHRT } from '../client/zaunstrasse.mjs';
 import { fahrbahnBreite } from '../client/vektor.mjs';
 import { walzeAnwenden } from '../client/walze.mjs';
@@ -94,7 +94,7 @@ function linie(w, a, x0, x1, y) {
     const cx = (fx + 0.5) * FEIN_PX, cy = (fy + 0.5) * FEIN_PX, qx = Math.max(x0, Math.min(x1, cx)) - cx, qy = y - cy;
     if (qx * qx + qy * qy <= d * d) w.fein[fy * fb + fx] = 2;
   }
-  w._zaunIdx = undefined;
+  w.details.zaeune = [...w.details.zaeune];   // neues Feld → Index baut sich neu
 }
 
 test('freiBewegung: Kreis gegen die Linie (Halbdicke je Art), runde Enden, plattgewalzte Felder offen, Felder ohne Linie ganz zu', () => {
@@ -117,7 +117,7 @@ test('freiBewegung: Kreis gegen die Linie (Halbdicke je Art), runde Enden, platt
   // Index ist beim Kopieren (Worker, IndexedDB) nicht dabei und baut sich neu
   zaunIndex(w);
   const k = weltKopieren(w);
-  assert.equal(k._zaunIdx, undefined);
+  assert.ok(!Object.keys(k).some(n => n.startsWith('_zaun')), 'Index als Welt-Eigenschaft');
   assert.equal(freiBewegung(k, 500, 300 - R - 3, R), freiBewegung(w, 500, 300 - R - 3, R));
 });
 
@@ -143,4 +143,24 @@ test('Kollision zeigen: Umrisse wie die Bewegung (feste Felder, Zaunstücke mit 
   const g = kollisionsUmrisse(welt, 5000, 5000, 6000, 6000);
   assert.ok(g.zaun.length > 20 && g.fest.length > 20, 'zu wenig Umrisse in der Stadtmitte');
   assert.ok(g.zaun.every(z => [3.5, 1, 0.75, 5].includes(z.h)));
+});
+
+test('Container/Mülltonnen: nur der gezeichnete Umriss sperrt (Großtonne 1,4 × 1,1 m statt 4 × 4 m), Figur kommt bis auf ihren Radius heran', () => {
+  setzeKartengroesse(karte.breite, karte.hoehe);
+  const cont = welt.behaelter.filter(b => b.art === 'container');
+  assert.ok(cont.length > 20 && welt.kaesten.length === cont.length, 'Container ohne Umriss');
+  for (const typ of ['gross', 'glas', 'mulde']) {
+    const c = cont.find(q => q.typ === typ), k = welt.kaesten.find(q => q.id === c.id);
+    assert.ok(c && k, 'kein Container ' + typ);
+    const [hx, hy] = kastenHalb(c);
+    assert.ok(Math.abs(k.x1 - k.x0 - 2 * hx) < 1e-9 && Math.abs(k.y1 - k.y0 - 2 * hy) < 1e-9);
+    for (const [dx, dy, h] of [[1, 0, hx], [-1, 0, hx], [0, 1, hy], [0, -1, hy]]) {
+      assert.ok(!freiBewegung(welt, c.x + dx * (h + R - 0.2), c.y + dy * (h + R - 0.2), R), `${typ}: Figur steckt im Container`);
+      const x = c.x + dx * (h + R + 0.2), y = c.y + dy * (h + R + 0.2);
+      if (feld(x, y) !== 1 && freiBewegung(welt, x + dx * 6, y + dy * 6, R)) assert.ok(freiBewegung(welt, x, y, R), `${typ}: Sperrfläche größer als die Grafik`);
+    }
+  }
+  // höchstens so viele Felder wie der Umriss überdeckt (früher je Container die ganze 4-m-Kachel = 16 Felder, Mulden decken bis 20)
+  let n = 0; for (const v of welt.fein) if (v === 5) n++;
+  assert.ok(n < cont.length * 14, 'zu viele Container-Felder: ' + n);
 });

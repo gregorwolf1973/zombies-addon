@@ -108,3 +108,26 @@ test('Schaden wächst mit dem Tempo; Pause zwischen zwei Durchbrüchen; Einstell
   fz.uhr += ZAUN_PAUSE + 0.01; fz.gewalzt(3);
   assert.ok(fz.leben < lp1 && fz.v < v1);
 });
+
+test('Auto an Zaun/Hecke entlang (Ausparken): seitliches Schrammen kostet nichts, Haltabstand an Zaun und geparktem Auto 1 px (Karosserie, nicht Schatten)', () => {
+  // Zaunlinie mit echten Linien (details.zaeune) längs neben dem Auto
+  const w = welt(); w.details.zaeune = [{ a: 'z', p: [600 / KACHEL, 709 / KACHEL, 1400 / KACHEL, 709 / KACHEL] }];
+  for (let fx = Math.floor(600 / FEIN_PX); fx <= Math.floor(1400 / FEIN_PX); fx++) w.fein[Math.floor(709 / FEIN_PX) * fb + fx] = 2;
+  const r = raum(w), fz = auto(r, 700, 700);
+  fz.startBlock = fz.startBlockVon(w, fz.f);
+  fahre(fz, 3);
+  assert.ok(fz.f.x > 800, 'Auto kommt nicht los: ' + fz.f.x);
+  assert.equal(fz.leben, 100, 'seitliches Schrammen kostet Lebenspunkte');
+  // geparktes Auto quer voraus: Halt mit ≤ 1,5 px Lücke zwischen den Karosserien
+  const w2 = welt(); w2.behaelter.push({ id: 'p1', art: 'auto', x: 1000, y: 700, winkel: Math.PI / 2 });
+  const r2 = raum(w2, { tempo: 15 }), f2 = auto(r2, 850, 700);
+  fahre(f2, 8);
+  const luecke = (1000 - 8) - (f2.f.x + 18);
+  assert.ok(luecke >= 0 && luecke <= 1.5, 'Lücke zum geparkten Auto: ' + luecke);
+  // Mauer: ebenso dicht (früher 3 px Polster)
+  const w3 = welt(); for (let fy = 0; fy < HOEHE * FEIN; fy++) w3.fein[fy * fb + Math.floor(1000 / FEIN_PX)] = 1;
+  const r3 = raum(w3, { tempo: 15 }), f3 = auto(r3, 850, 700);
+  fahre(f3, 8);
+  const l3 = Math.floor(1000 / FEIN_PX) * FEIN_PX - (f3.f.x + 18);
+  assert.ok(l3 >= 0 && l3 <= 1.5, 'Lücke zur Mauer: ' + l3);
+});

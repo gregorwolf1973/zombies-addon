@@ -629,11 +629,14 @@ export function feinWert(welt, x, y) {
 export const ZAUN_HALB = { h: 3.5, z: 1, m: 0.75, w: 5 };   // px (8 px = 1 m): Hecke 7 px breit, Latten-/Drahtzaun mit Pfosten ~2 px, Mauer 10 px
 export const zaunHalb = a => ZAUN_HALB[a] ?? ZAUN_HALB.z;
 export const ZAUN_HALB_MAX = 5;
+// Zwischenspeicher je Welt-Objekt (WeakMap statt Eigenschaft: Kopien per structuredClone, Vergleiche und Fingerabdrücke sehen ihn nicht;
+// gültig, solange welt.details.zaeune dasselbe Feld ist)
+const ZAUN_IDX = new WeakMap();
 // Index Feinfeld → Linienstücke in seiner Nähe (aus welt.details.zaeune, einmal je Welt; seg = [ax, ay, bx, by, halb] in px)
 export function zaunIndex(welt) {
-  const zl = welt.details?.zaeune, f = welt.fein, alt = welt._zaunIdx;
-  if (alt !== undefined && (alt === null ? !zl?.length : alt.quelle === zl && alt.breite === BREITE)) return alt;
-  if (!zl?.length || !f) return (welt._zaunIdx = null);
+  const zl = welt.details?.zaeune, f = welt.fein, alt = ZAUN_IDX.get(welt);
+  if (alt && alt.quelle === zl && alt.fl === f?.length) return alt.idx;
+  if (!zl?.length || !f) { ZAUN_IDX.set(welt, { quelle: zl, fl: f?.length, idx: null }); return null; }
   const fb = BREITE * FEIN, fh = HOEHE * FEIN, seg = [], m = new Map();
   for (const z of zl) {
     const h = zaunHalb(z.a);
@@ -659,7 +662,9 @@ export function zaunIndex(welt) {
   // nah[k] = 1: Feld k oder ein Nachbar hat Linienstücke (freiBewegung prüft den Ring um den Kreis nur dann)
   const nah = new Uint8Array(fb * fh);
   for (const k of m.keys()) { const fx = k % fb, fy = (k - fx) / fb; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = fx + dx, y = fy + dy; if (x >= 0 && y >= 0 && x < fb && y < fh) nah[y * fb + x] = 1; } }
-  return (welt._zaunIdx = { seg, map: m, nah, quelle: zl, breite: BREITE });
+  const idx = { seg, map: m, nah };
+  ZAUN_IDX.set(welt, { quelle: zl, fl: f.length, idx });
+  return idx;
 }
 // Teil der Strecke A→B im Feld (fx, fy) als Parameter [t0, t1] oder null (Liang-Barsky)
 function stueckImFeld(ax, ay, bx, by, fx, fy) {
@@ -687,6 +692,16 @@ export function zaunImFeld(seg, liste, fx, fy, x, y, rad) {
     if (u < t[0]) u = t[0]; else if (u > t[1]) u = t[1];
     const qx = ax + dx * u - x, qy = ay + dy * u - y;
     if (qx * qx + qy * qy < g * g) return true;
+  }
+  return false;
+}
+
+// Container (welt.kaesten, osmwelt.mjs Schritt 1c): Kreis gegen achsparallele Rechtecke; Feinwert 5 markiert nur, wo eins liegt
+export function imKasten(welt, x, y, rad) {
+  for (const k of welt.kaesten ?? []) {
+    if (x + rad <= k.x0 || x - rad >= k.x1 || y + rad <= k.y0 || y - rad >= k.y1) continue;
+    const qx = Math.max(k.x0, Math.min(k.x1, x)) - x, qy = Math.max(k.y0, Math.min(k.y1, y)) - y;
+    if (qx * qx + qy * qy < rad * rad) return true;
   }
   return false;
 }
@@ -720,6 +735,7 @@ export function freiBewegung(welt, x, y, rad) {
       if (zn && zn[i]) nah = true;
       const v = f[i];
       if (!v) continue;
+      if (v === 5) { if (imKasten(welt, x, y, rad)) return false; continue; }   // Container: genau der gezeichnete Umriss
       if (v !== 2) return false;
       // Zaun/Hecke: genau gegen die gezeichnete Linie (Stück in diesem Feld, Halbdicke je Art); Felder ohne Linie sperren ganz
       const l = zi?.map.get(i);
