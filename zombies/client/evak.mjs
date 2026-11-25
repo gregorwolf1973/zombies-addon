@@ -23,9 +23,15 @@ export const A400M = {
   landeStrecke: 720, landeBreite: 170, rollweg: 320,                      // freie Fläche (Länge × Breite) und Weg der Landerolle
 };
 
-// Königsdorf: Der A400M landet auf der Landebahn und fängt erst im Stand Feuer. Anflug mit gleichbleibendem Tempo (`anflug` s vor dem Aufsetzen),
-// Aufsetzen mit `tempo` (px/s) an `aufsetz` px (Rumpfmitte) hinter dem Pistenanfang, gleichmäßig gebremst auf `rollweg` px bis zum Stillstand.
-export const ABSTURZ = { anflug: 14, tempo: 300, rollweg: 1200, aufsetz: 200, rumpfHalbBreite: 34 };
+// Königsdorf: Bruchlandung des A400M. Anflug mit gleichbleibendem Tempo (`anflug` s vor dem Aufsetzen), hartes Aufsetzen mit `tempo` (px/s)
+// an `aufsetz` px (Rumpfmitte) hinter dem Pistenanfang, gleichmäßig gebremst auf `rollweg` px bis zum Stillstand. Nach dem ersten Aufprall
+// springt er noch `huepfer` mal hoch (Dauer s, Höhe als Anteil der Anflughöhe), dann schlittert er auf dem Bauch, versetzt sich dabei um
+// `quer` px zur Seite und stellt sich um `gier` rad quer (Seite je Seed). Er brennt ab dem ersten Aufprall, im Stand Vollbrand (ABSTURZ_HERDE).
+export const ABSTURZ = {
+  anflug: 14, tempo: 300, rollweg: 1200, aufsetz: 200, rumpfHalbBreite: 34,
+  huepfer: [[1.25, 0.42], [0.85, 0.22], [0.55, 0.09]],
+  quer: 56, gier: 0.42, pendel: 0.07,
+};
 export const absturzRollDauer = () => 2 * ABSTURZ.rollweg / ABSTURZ.tempo;   // Sekunden vom Aufsetzen bis zum Stand
 export const absturzDauer = () => ABSTURZ.anflug + absturzRollDauer();       // gesamter Ablauf bis zum Brand
 // Ort des A400M (Abstand `d` px vom Stillstandspunkt rückwärts entlang der Piste, <0 = noch vor dem Aufsetzen) zur Zeit t (s) seit Beginn des Anflugs
@@ -35,6 +41,53 @@ export function absturzStrecke(t) {
   const tr = Math.min(t - anflug, rd), a = tempo * tempo / (2 * rollweg);
   return rollweg - (tempo * tr - a * tr * tr / 2);                              // auf der Piste: Rest bis zum Stand
 }
+
+// Seite, zu der er ausbricht (1 = rechts der Flugrichtung, -1 = links): fest je Seed, Server und Client gleich
+export const absturzSeite = seed => ((Math.abs(Math.round(Number(seed) || 0)) >>> 3) % 2 ? 1 : -1);
+// Zeitpunkte der Aufpralle (s seit Beginn des Anflugs): erstes Aufsetzen, dann das Ende jedes Hüpfers; ab dem letzten schlittert er
+export function absturzAufpralle() {
+  const l = [ABSTURZ.anflug];
+  let t = ABSTURZ.anflug;
+  for (const [dauer] of ABSTURZ.huepfer) l.push(t += dauer);
+  return l;
+}
+// Lage zur Zeit t: d = Abstand zum Stillstandspunkt entlang der Piste (wie absturzStrecke), q = seitlicher Versatz (px, + = rechts),
+// gier = Querstellung (rad, + = im Uhrzeigersinn), h = Höhe (1 = Beginn des Anflugs, 0 = am Boden), phase, herde = Zahl der Aufpralle bisher
+// (bestimmt, welche Brandherde schon brennen). Nur Grundrechenarten (kein sin/cos): überall gleich.
+export function absturzLage(t, seite = 1) {
+  const { anflug, rollweg, huepfer, quer, gier, pendel } = ABSTURZ, d = absturzStrecke(t), ende = absturzDauer();
+  let h = 0, phase = 'schlittern', wipp = 0, herde = 0;
+  if (t < anflug) { h = 1 - Math.max(0, t) / anflug; phase = 'anflug'; }
+  else {
+    let t0 = anflug; herde = 1;
+    for (let k = 0; k < huepfer.length; k++) {
+      const [dauer, hoehe] = huepfer[k];
+      if (t < t0 + dauer) { const u = (t - t0) / dauer; h = 4 * hoehe * u * (1 - u); phase = 'huepfen'; wipp = (k % 2 ? -1 : 1) * pendel * 4 * u * (1 - u); break; }
+      t0 += dauer; herde++;
+    }
+    if (t >= ende) { phase = 'stand'; herde = huepfer.length + 2; }
+  }
+  const s = t <= anflug ? 0 : Math.max(0, Math.min(1, (rollweg - d) / rollweg)), glatt = s * s * (3 - 2 * s);
+  return { d, q: seite * quer * glatt, gier: seite * (gier * glatt + wipp), h, phase, herde };
+}
+// Lage in Weltkoordinaten. p = { x, y, w } (Stillstandspunkt auf der Pistenachse, Pistenrichtung), c/s = cos/sin(w) (einmal gerechnet)
+export function absturzPose(p, c, s, t, seite = 1) {
+  const l = absturzLage(t, seite);
+  return { ...l, x: p.x - c * l.d - s * l.q, y: p.y - s * l.d + c * l.q, richtung: p.w + l.gier };
+}
+// Brandherde im Rumpf-Rahmen (x nach vorn, y nach rechts, px), r = Radius (Server: Feuer mit Schaden/Licht/Knistern), ab = ab dem wievielten
+// Aufprall er brennt (1 = erstes Aufsetzen, 5 = Stillstand/Vollbrand). Triebwerke sitzen hinter den Propellernaben (A400M.naben).
+export const ABSTURZ_HERDE = [
+  { x: 64, y: 55, r: 44, ab: 1 },     // Triebwerk 3 (rechts innen) – fängt beim ersten Aufprall Feuer
+  { x: 18, y: -38, r: 46, ab: 2 },    // linke Tragflächenwurzel (Tank)
+  { x: 64, y: -56, r: 44, ab: 3 },    // Triebwerk 2
+  { x: 52, y: 102, r: 40, ab: 4 },    // Triebwerk 4 (außen rechts), schleift beim Schlittern
+  { x: 52, y: -103, r: 40, ab: 5 },   // Triebwerk 1
+  { x: 0, y: 6, r: 78, ab: 5 },       // Rumpfmitte – Vollbrand im Stand
+  { x: -78, y: -8, r: 56, ab: 5 },    // hinterer Rumpf
+];
+// Weltort eines Brandherds bei Rumpfmitte (x, y) und Richtung über c = cos, s = sin der Richtung
+export const herdOrt = (hd, x, y, c, s) => ({ x: x + c * hd.x - s * hd.y, y: y + s * hd.x + c * hd.y });
 
 // Liegt der Punkt im Fußabdruck eines Fahrzeugs (Mitte f.x/f.y, Richtung f.richtung, halbe Länge hl, halbe Breite hb, Zuschlag zu)?
 export function imFussabdruck(f, x, y, hl, hb, zu = 0) {

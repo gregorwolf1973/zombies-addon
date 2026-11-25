@@ -2095,6 +2095,7 @@ class Ort extends Phaser.Scene {
       d.fillStyle = v; d.beginPath(); d.moveTo(12, 0); d.bezierCurveTo(23, 18, 23, 36, 12, 47); d.bezierCurveTo(1, 36, 1, 18, 12, 0); d.fill(); z.refresh();
     }
     for (const [id, f] of s.feuer ?? []) {
+      if (f.art === 'a400m') continue;   // A400M-Bruchlandung: Flammen und Rauch zeichnet evakdarstellung.mjs (wandern mit, Rauchsäule)
       let o = this.feuerObj.get(id);
       if (!o) {
         // Häuser brennen auf der ganzen Dachfläche, Fahrzeuge kompakt

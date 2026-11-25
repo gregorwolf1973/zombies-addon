@@ -1,6 +1,8 @@
 // Darstellung der Evakuierungsarten (Phaser): Leopard 2A7 mit drehendem Turm und Lader-MG (Level 2), A400M mit drehenden Propellern
 // und der Hubschrauber (Evakuierung per Flugzeug). Logik und Zahlen kommen vom Server (server/aufgaben.mjs, client/evak.mjs).
-import { LEOPARD, A400M, HELI, heliStand, TANKLASTER, evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke } from './evak.mjs';
+import { LEOPARD, A400M, HELI, heliStand, TANKLASTER, evakArtFuer, ABSTURZ, absturzDauer, absturzStrecke, absturzSeite, absturzPose, absturzAufpralle, ABSTURZ_HERDE, herdOrt } from './evak.mjs';
+import { AbsturzFx } from './absturzfx.mjs';
+import { weichTextur, weichKreis } from './weichkreis.mjs';
 import { fetzen } from './effekte.mjs';
 import * as ton from './ton.mjs';
 import { kettenSpur } from './ketten.mjs';
@@ -215,7 +217,7 @@ export function evakHudText(s, an, uhrText) {
   }
   if (art === 'heli') return ph === 'heli' ? `🚁 NH90 steht bereit · ${s.busBord}/${s.busGesamt} an Bord${an ? ' · 🚁 du bist an Bord' : ''} – Abflug, sobald alle Aufgaben erledigt sind` : (ph === 'abflug' ? '🚁 Der Hubschrauber hebt ab …' : null);
   if (art === 'absturz' && ph === 'absturz') return '✈️ Ein A400M kommt im Landeanflug …';
-  if (art === 'absturz' && ph === 'wrack') return '🔥 A400M gelandet, Triebwerk in Flammen – ein NH90 kommt, sobald alle Aufgaben erledigt sind';
+  if (art === 'absturz' && ph === 'wrack') return '🔥 A400M bruchgelandet, Wrack in Flammen – ein NH90 kommt, sobald alle Aufgaben erledigt sind';
   if (art === 'absturz' && !['heliAnflug', 'heli', 'abflug'].includes(ph)) return s.funk && s.busAnkunft >= 0 ? `✈️ Der A400M kommt um ${uhrText(s.busAnkunft)}` : '📻 Funkspruch fehlt – ohne ihn kommt keine Maschine';
   if (art !== 'flugzeug' && art !== 'absturz') return null;
   if (ph === 'landung') return '✈️ Ein A400M setzt zur Landung an – einsteigen geht an der Heckrampe, sobald er steht';
@@ -227,69 +229,152 @@ export function evakHudText(s, an, uhrText) {
   return '📻 Funkspruch fehlt – ohne ihn kommt keine Maschine';
 }
 
-// ---------- Königsdorf: A400M landet auf der Piste, rollt aus und fängt dann Feuer (Wrack als bleibende Kulisse) ----------
+// ---------- Königsdorf: Bruchlandung des A400M (Hüpfer, Schlittern, Brand) – das Wrack bleibt als brennende Kulisse ----------
+// Lage und Zeitplan rechnet client/evak.mjs (absturzPose, fest je Seed, wie im Server); Feuer/Rauch/Funken/Staub aus client/absturzfx.mjs.
+// Die Brandherde sind zusätzlich echte Feuer des Servers (state.feuer, Art 'a400m': Licht, Knistern, Schaden) – gezeichnet werden sie nur hier.
+const SPUR_SCHRITT = 0.1;                      // s zwischen zwei Stücken der Bodenspur
+const FX_WEITE = 2600;                         // weiter weg von der Kamera ruht die Teilchenwolke (Leistung)
+function absturzLoesen(scene) {
+  const a = scene.absturzObj;
+  if (!a) return;
+  a.box.destroy(); a.fx?.zerstoeren(); scene.absturzObj = null;
+}
+// Bodenspur bis zur Zeit t: Krater an den Aufprallstellen, im Schlittern eine Furche unter dem Rumpf, Kratzer und eine Schleifspur der Tragfläche
+function spurBis(a, s, t) {
+  const g = a.boden, P = { x: s.evakAX, y: s.evakAY, w: s.evakW }, c = a.c, sn = a.sn, prallen = a.prallen;
+  while (a.spurK < prallen.length && prallen[a.spurK] <= t) {   // Aufprall: dunkle, aufgerissene Stelle
+    const p = absturzPose(P, c, sn, prallen[a.spurK], a.seite), pc = Math.cos(p.richtung), ps = Math.sin(p.richtung), gross = a.spurK === 0 ? 1.3 : 1 - a.spurK * 0.15;
+    g.fillStyle(0x2a2016, 0.22);
+    for (let k = -5; k <= 5; k++) g.fillCircle(p.x + pc * k * 9 * gross, p.y + ps * k * 9 * gross, (19 - Math.abs(k) * 2.2) * gross);   // längliche Mulde
+    g.fillStyle(0x5a4a38, 0.5).fillCircle(p.x - pc * 30 + (a.spurK % 2 ? 1 : -1) * ps * 18, p.y - ps * 30, 9 * gross);
+    a.spurK++;
+  }
+  const ab = prallen[prallen.length - 1];
+  while (a.spurT + SPUR_SCHRITT <= t) {
+    const t0 = a.spurT, t1 = a.spurT + SPUR_SCHRITT;
+    a.spurT = t1;
+    if (t0 < ab) continue;
+    const p0 = absturzPose(P, c, sn, t0, a.seite), p1 = absturzPose(P, c, sn, t1, a.seite);
+    const linie = (p, ox, oy) => { const pc = Math.cos(p.richtung), ps = Math.sin(p.richtung); return [p.x + pc * ox - ps * oy, p.y + ps * ox + pc * oy]; };
+    const strich = (b, farbe, al, ox, oy) => { const [x0, y0] = linie(p0, ox, oy), [x1, y1] = linie(p1, ox, oy); g.lineStyle(b, farbe, al).lineBetween(x0, y0, x1, y1); };
+    strich(16, 0x2b2117, 0.42, -20, 0);                              // Furche unter dem Bauch
+    strich(2, 0x9a9187, 0.55, -20, -9); strich(2, 0x9a9187, 0.5, -20, 8);   // helle Kratzer im Belag
+    strich(5, 0x231b14, 0.45, 40, a.seite * 104);                    // Triebwerk 1 bzw. 4 schleift mit
+    strich(3, 0x231b14, 0.35, 0, a.seite * 166);                     // Flügelspitze
+  }
+}
 export function absturzAktualisieren(scene, s, dt, aktEbene) {
   const ph = s.evakPhase, aktiv = evakArtVon(s) === 'absturz' && ['absturz', 'wrack', 'heliAnflug', 'heli', 'abflug'].includes(ph) && s.evakAX > 0 && scene.textures.exists('a400m-rumpf');
   let a = scene.absturzObj;
-  if (!aktiv) { if (a) { a.box.destroy(); scene.absturzObj = null; } return; }
-  const dx = Math.cos(s.evakW), dy = Math.sin(s.evakW), jetzt = scene.time.now;
+  if (!aktiv) { if (a) absturzLoesen(scene); return; }
+  const jetzt = scene.time.now, ende = absturzDauer();
+  if (a && (a.ax !== s.evakAX || a.ay !== s.evakAY || a.w !== s.evakW || (a.wrack && ph === 'absturz'))) { absturzLoesen(scene); a = null; }   // neue Absturzstelle bzw. neuer Anflug
   if (!a) {
+    weichTextur(scene);
     const bild = scene.add.image(0, 0, 'a400m-rumpf').setScale(A400M.skala), licht = scene.add.graphics();
+    const glut = ABSTURZ_HERDE.map(hd => [weichKreis(scene, hd.x, hd.y, hd.r * 1.6, 0xff4a00, 0).setBlendMode('ADD'), weichKreis(scene, hd.x, hd.y, hd.r * 0.6, 0xffc040, 0).setBlendMode('ADD')]).flat();
     const props = A400M.naben.map(([x, y]) => scene.add.image(x, y, 'a400m-prop').setScale(A400M.skala));
     const boden = scene.add.graphics().setDepth(4.3);
+    const schatten = (scene.fahrzeugSchattenTextur ? scene.add.image(0, 0, scene.fahrzeugSchattenTextur('a400m-rumpf')) : scene.add.image(0, 0, 'a400m-rumpf').setTintFill(0x000000)).setScale(A400M.skala).setAlpha(0.3).setDepth(4.4);
     // wer mitten im Anflug dazukommt, sieht die Maschine dort, wo sie nach der Serveruhr gerade ist (evakRest = Rest bis zum Stand)
-    const schon = ph === 'absturz' ? Math.max(0, absturzDauer() - s.evakRest) * 1000 : 0;
-    a = scene.absturzObj = { box: scene.add.container(s.evakAX, s.evakAY, [bild, ...props, licht]).setDepth(4.6), bild, props, licht, boden, t0: jetzt - schon, wrack: ph !== 'absturz', spin: 0, rauch: 0, schon: false };
-    a.box.on('destroy', () => boden.destroy());
+    const schon = ph === 'absturz' ? Math.max(0, ende - s.evakRest) * 1000 : (ende + 10) * 1000;   // Wrack steht schon: kein Knall beim Dazukommen
+    a = scene.absturzObj = {
+      box: scene.add.container(s.evakAX, s.evakAY, [bild, ...props, licht, ...glut]).setDepth(4.6), bild, props, licht, glut, boden, schatten,
+      t0: jetzt - schon, wrack: false, spin: 0, ax: s.evakAX, ay: s.evakAY, w: s.evakW, c: Math.cos(s.evakW), sn: Math.sin(s.evakW), seite: absturzSeite(s.seed),
+      prallen: absturzAufpralle(), prallT: -1, spurT: ABSTURZ.anflug, spurK: 0, takte: new Array(ABSTURZ_HERDE.length).fill(0), blechT: 0, fxT: 0,
+      fx: new AbsturzFx(scene),
+    };
+    a.box.on('destroy', () => { boden.destroy(); schatten.destroy(); });
+    a.prallT = a.prallen.findIndex(z => z > (jetzt - a.t0) / 1000);   // schon vergangene Aufpralle nicht nachholen
+    if (a.prallT < 0) a.prallT = a.prallen.length;
   }
-  a.box.setVisible(aktEbene === ''); a.boden.setVisible(aktEbene === '');
+  const draussen = aktEbene === '';
+  a.box.setVisible(draussen); a.boden.setVisible(draussen); a.schatten.setVisible(draussen);
   a.licht.clear();
-  if (ph === 'absturz' && !a.wrack) {
-    // Anflug auf die Pistenachse, Aufsetzen, Ausrollen bis zum Stillstand (Strecke und Zeit wie im Server: client/evak.mjs)
-    const t = Math.min(absturzDauer(), (jetzt - a.t0) / 1000), d = absturzStrecke(t), luft = Math.max(0, 1 - t / ABSTURZ.anflug);
-    a.box.setPosition(s.evakAX - dx * d, s.evakAY - dy * d).setRotation(s.evakW + Math.sin(t * 2.2) * 0.03 * luft).setScale(1 + luft * 0.3);
-    const rollt = t > ABSTURZ.anflug, tempo = d > 0 ? Math.abs(absturzStrecke(Math.min(absturzDauer(), t + 0.1)) - d) / 0.1 : 0;
-    a.spin += dt * (rollt ? 8 + 9 * Math.min(1, tempo / ABSTURZ.tempo) : 17);
+  const steht = ph !== 'absturz';
+  const t = steht ? ende : Math.min(ende, (jetzt - a.t0) / 1000);
+  const P = { x: s.evakAX, y: s.evakAY, w: s.evakW }, pose = absturzPose(P, a.c, a.sn, t, a.seite);
+  const pc = Math.cos(pose.richtung), ps = Math.sin(pose.richtung);
+  const tempo = steht ? 0 : (pose.d - absturzStrecke(Math.min(ende, t + 0.1))) / 0.1;
+  const kaputt = t >= ABSTURZ.anflug;
+  // Rumpf, Schatten (je höher, desto weiter versetzt), Größe (näher an der Kamera = größer)
+  a.box.setPosition(pose.x, pose.y).setRotation(pose.richtung + (pose.phase === 'anflug' ? Math.sin(t * 2.2) * 0.03 * pose.h : 0)).setScale(1 + pose.h * 0.3);
+  a.schatten.setPosition(pose.x + 10 + pose.h * 70, pose.y + 8 + pose.h * 46).setRotation(pose.richtung).setScale(A400M.skala * (1 - pose.h * 0.08)).setAlpha(0.32 - pose.h * 0.14);
+  // Propeller: drehen im Anflug, beim ersten Aufprall zerschellt (stehen schief, verrußt)
+  if (!kaputt) {
+    a.spin += dt * 17;
     a.props.forEach((p, i) => p.setScale(A400M.skala, A400M.skala * (0.35 + 0.65 * Math.abs(Math.cos(a.spin + i * 1.3)))));
-    if (rollt && !a.aufgesetzt) {   // Aufsetzen: Reifenqualm
-      a.aufgesetzt = true;
-      for (const q of [-1, 1]) for (let i = 0; i < 5; i++) {
-        const r = scene.add.circle(a.box.x - dx * 30 - dy * 22 * q, a.box.y - dy * 30 + dx * 22 * q, 8 + Math.random() * 6, 0xdddddd, 0.55).setDepth(6.4);
-        scene.tweens.add({ targets: r, x: r.x - dx * (40 + 30 * i), y: r.y - dy * (40 + 30 * i) - 20, alpha: 0, scale: 2.4, duration: 1800, onComplete: () => r.destroy() });
+  } else if (!a.propsKaputt) {
+    a.propsKaputt = true;
+    a.props.forEach((p, i) => p.setTint(0x3a3633).setScale(A400M.skala * (i === 2 ? 0.6 : 0.85)).setRotation(0.4 + i * 0.9));
+  }
+  // Rumpf verrußt mit der Zeit, im Stand ausgebrannt
+  a.bild.setTint(steht ? 0x3d3a38 : kaputt ? (pose.phase === 'huepfen' ? 0xb8b0a8 : 0x8a8480) : 0xffffff);
+  // Aufpralle: Staubwolke, Funkenregen, Krach; der erste mit Explosion am Triebwerk
+  const lokal = scene.lokal, nah = lokal ? Math.hypot(lokal.x - pose.x, lokal.y - pose.y) : 0;
+  while (a.prallT < a.prallen.length && a.prallen[a.prallT] <= t) {
+    const k = a.prallT++, st = 1 - k * 0.2;
+    if (draussen) {
+      a.fx.pool.staub(pose.x - pc * 20, pose.y - ps * 20, Math.round(26 * st * a.fx.anteil), 1.2 * st);
+      a.fx.pool.funken(pose.x - pc * 40, pose.y - ps * 40, pc, ps, Math.round(34 * st * a.fx.anteil), 1.1);
+      if (k === 0) {
+        const hd = ABSTURZ_HERDE[0], o = herdOrt(hd, pose.x, pose.y, pc, ps);
+        scene.explosion?.(o.x, o.y, 70, 1.0);
       }
     }
-    return;
+    if (!ton.ereignis('krach', pose.x, pose.y)) { ton.schuss(pose.x, pose.y, 1.8 * st); ton.stoss(pose.x, pose.y, false); }
+    if (lokal && nah < 900) scene.cameras.main.shake(260 * st, 0.007 * st * (1 - nah / 900));
   }
-  // Stillstand: Brand und Explosion einmal, danach bleibt das Wrack
-  if (!a.wrack) {
+  // Schlittern: Funkenspur unter dem Bauch und am schleifenden Triebwerk, Staubfahnen, Blech kreischt
+  if (kaputt && !steht && pose.phase === 'schlittern' && tempo > 6 && draussen) {
+    const v = Math.min(1, tempo / ABSTURZ.tempo);
+    a.fxT += dt * a.fx.anteil;
+    while (a.fxT > 0.03) {
+      a.fxT -= 0.03;
+      if (Math.random() < 0.3 + v) a.fx.pool.funken(pose.x - pc * 30 - ps * (Math.random() - 0.5) * 30, pose.y - ps * 30 + pc * (Math.random() - 0.5) * 30, pc, ps, 2, 0.4 + v);
+      const o = herdOrt({ x: 40, y: a.seite * 104 }, pose.x, pose.y, pc, ps);
+      if (Math.random() < 0.6 * v + 0.1) a.fx.pool.funken(o.x, o.y, pc, ps, 1, 0.3 + v);
+      if (Math.random() < 0.25 + 0.3 * v) a.fx.pool.staub(pose.x - pc * 90, pose.y - ps * 90, 1, 0.6 + 0.6 * v);
+    }
+    a.blechT -= dt;
+    if (a.blechT <= 0) { a.blechT = 0.45; if (!ton.ereignis('blech', pose.x, pose.y)) ton.stoss(pose.x, pose.y, false); }
+  }
+  // Bodenspur
+  if (kaputt) spurBis(a, s, t);
+  // Stillstand: Explosion einmal, Brandfleck, danach brennt das Wrack bis zum Levelwechsel
+  if (steht && !a.wrack) {
     a.wrack = true;
-    scene.explosion?.(s.evakAX, s.evakAY, 90, 1.3);
-    if (scene.lokal && Math.hypot(scene.lokal.x - s.evakAX, scene.lokal.y - s.evakAY) < 700) scene.cameras.main.shake(300, 0.006);
+    if (draussen && (jetzt - a.t0) / 1000 < ende + 2) scene.explosion?.(pose.x, pose.y, 90, 1.3);   // nur wer es miterlebt (kein Knall beim Dazukommen)
+    if (lokal && nah < 700) scene.cameras.main.shake(300, 0.006);
+    for (const hd of ABSTURZ_HERDE) {   // Ruß und verbranntes Gras um die Brandherde (mehrere blasse Flecken statt einer Scheibe)
+      const o = herdOrt(hd, pose.x, pose.y, pc, ps);
+      for (let k = 0; k < 4; k++) a.boden.fillStyle(0x0d0b09, 0.13).fillCircle(o.x + ((k * 37 + hd.x) % 23 - 11) * hd.r / 30, o.y + ((k * 53 + hd.y) % 19 - 9) * hd.r / 30, hd.r * (0.7 + k * 0.22));
+    }
   }
-  a.box.setPosition(s.evakAX, s.evakAY).setRotation(s.evakW).setScale(1);
-  a.bild.setTint(0x3d3a38);
-  a.props.forEach((p, i) => p.setTint(0x222222).setScale(A400M.skala).setRotation(i * 0.7));
-  if (!a.fertig) {   // Brandfleck und Bremsspuren einmal zeichnen
-    a.fertig = true;
-    const g = a.boden, r = Math.random, lang = ABSTURZ.rollweg;
-    g.fillStyle(0x0d0b09, 0.5).fillEllipse(s.evakAX, s.evakAY, 400, 190);
-    for (const q of [-1, 1]) { g.lineStyle(5, 0x151412, 0.55).lineBetween(s.evakAX - dx * lang - dy * 26 * q, s.evakAY - dy * lang + dx * 26 * q, s.evakAX - dx * 30 - dy * 26 * q, s.evakAY - dy * 30 + dx * 26 * q); }   // Reifenspuren vom Aufsetzen bis zum Stand
-    for (let i = 0; i < 10; i++) { const t = (i / 10 - 0.5) * 360, sw = (r() - 0.5) * 120; g.fillStyle(i % 3 ? 0x4a4743 : 0x6b6560, 0.9).fillRect(s.evakAX - dx * (20 + t) - dy * sw, s.evakAY - dy * (20 + t) + dx * sw, 3 + r() * 7, 2 + r() * 5); }
+  if (steht) {   // Bruchstelle im Rumpf
+    a.licht.fillStyle(0x0b0a09, 0.85).fillRect(-14, -26, 28, 52);
+    a.licht.fillStyle(0x0b0a09, 0.85).fillTriangle(-14, -26, -6, -40, 4, -26).fillTriangle(14, 26, 8, 42, -2, 26);
   }
-  // Wrack brennt und qualmt dauerhaft; Bruchstelle im Rumpf
-  a.licht.fillStyle(0x0b0a09, 0.85).fillRect(-14, -26, 28, 52);
-  a.licht.fillStyle(0x0b0a09, 0.85).fillTriangle(-14, -26, -6, -40, 4, -26).fillTriangle(14, 26, 8, 42, -2, 26);
-  for (const [fx, fy, fr] of [[0, 0, 26], [A400M.naben[1][0] + 14, A400M.naben[1][1], 16], [-60, 14, 14]]) {
-    const f = 0.65 + 0.35 * Math.sin(jetzt / 80 + fx);
-    a.licht.fillStyle(0xff3d00, 0.4 * f).fillCircle(fx, fy, fr * 1.6 * f).fillStyle(0xff9100, 0.85).fillCircle(fx, fy, fr * 0.7 * f).fillStyle(0xffee58, 1).fillCircle(fx, fy, fr * 0.3 * f);
-  }
-  a.rauch -= dt;
-  if (a.rauch <= 0) {
-    a.rauch = 0.18;
-    const px = s.evakAX + (Math.random() - 0.5) * 120, py = s.evakAY + (Math.random() - 0.5) * 40;
-    const r = scene.add.circle(px, py, 12 + Math.random() * 8, 0x262626, 0.6).setDepth(6.4);
-    scene.tweens.add({ targets: r, x: px + 30 + Math.random() * 30, y: py - 90, alpha: 0, scale: 3.2, duration: 3600, onComplete: () => r.destroy() });
-  }
+  // Brandherde: Glut (flackernd, im Rumpf-Rahmen), Flammen, Glutfunken und Rauch (Weltkoordinaten, bleiben hinter der Maschine zurück)
+  const kamera = scene.cameras.main.worldView, imBild = Math.abs(pose.x - kamera.centerX) < FX_WEITE && Math.abs(pose.y - kamera.centerY) < FX_WEITE;
+  const brennt = Math.min(1, Math.max(0, t - ABSTURZ.anflug) / 8 + 0.45);   // Feuer wächst nach dem Aufprall, im Stand Vollbrand
+  ABSTURZ_HERDE.forEach((hd, i) => {
+    if (hd.ab > pose.herde) return;
+    const fl = 0.6 + 0.25 * Math.sin(jetzt / 90 + i * 1.7) + 0.15 * Math.sin(jetzt / 37 + i);
+    const st = steht ? 1 : brennt * (hd.ab === 1 ? 1 : 0.75);
+    a.glut[i * 2].setAlpha(0.32 * fl * st); a.glut[i * 2 + 1].setAlpha(0.6 * fl * st);   // Feuerschein und Glutkern (additiv, weich)
+    if (!draussen || !imBild) return;
+    const o = herdOrt(hd, pose.x, pose.y, pc, ps), anteil = a.fx.anteil;
+    a.takte[i] += dt * anteil;
+    const flammenTakt = 1 / (16 + hd.r * 0.25), rauchTakt = steht ? 0.42 : 0.3, glutTakt = 0.35;
+    while (a.takte[i] > flammenTakt) {   // Flammen; Rauch und Glut über Zufall im selben Takt (spart Zähler)
+      a.takte[i] -= flammenTakt;
+      a.fx.pool.flamme(o.x, o.y, hd.r, st);
+      if (Math.random() < flammenTakt / rauchTakt) a.fx.pool.rauch(o.x, o.y - 6, st);
+      if (Math.random() < flammenTakt / glutTakt) a.fx.pool.glut(o.x, o.y);
+    }
+  });
+  a.fx.zeichne(dt, draussen && imBild);
 }
 
 // ---------- Finale: Bunkertor (Evakuierungspunkt, Einsteigen = hineingehen) ----------

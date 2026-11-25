@@ -1,7 +1,7 @@
 // Flugplan für die A400M-Evakuierung: eine lange freie Fläche zum Landen (aus dem feinen Raster) und ein Hubschrauber-Landeplatz
 // in einiger Entfernung, zu Fuß erreichbar. Deterministisch aus dem Seed; das Ergebnis hängt an der Welt (`welt._flugplan`).
 import { BREITE, HOEHE, KACHEL, frei, findeWeg, zufall } from '../client/welt.mjs';
-import { A400M, ABSTURZ } from '../client/evak.mjs';
+import { A400M, ABSTURZ, absturzSeite, absturzPose, absturzDauer } from '../client/evak.mjs';
 
 const SCHRITT = 128;        // Rasterweite der Suche (Pixel)
 const HELI_RAD = 70;        // freier Platz für den Hubschrauber (Radius)
@@ -76,8 +76,9 @@ export function bunkerPlan(welt, seed = welt.seed ?? 1) {
   return welt._bunkerplan = { tor: { x: st.x + 300, y: st.y } };
 }
 
-// Landung des A400M in Königsdorf (Art 'absturz'): auf der Achse der Landebahn aufsetzen, ausrollen, danach Triebwerksbrand.
-// x/y = Rumpfmitte im Stillstand (Wrackposition, state.evakAX/AY), w = Pistenrichtung, aufsetz = Rumpfmitte beim Aufsetzen, heli = NH90-Platz.
+// Bruchlandung des A400M in Königsdorf (Art 'absturz'): auf der Achse der Landebahn hart aufsetzen, hüpfen, schlittern, brennen.
+// x/y = Stillstandspunkt auf der Pistenachse (state.evakAX/AY), w = Pistenrichtung, aufsetz = Rumpfmitte beim Aufsetzen, heli = NH90-Platz,
+// seite = Ausbruchseite (absturzSeite), c/s = cos/sin(w), ende = Lage des Wracks im Stand { x, y, richtung } (seitlich versetzt, quer gestellt).
 export function absturzPlan(welt, seed = welt.seed ?? 1) {
   if (welt._absturzplan !== undefined) return welt._absturzplan;
   const W = BREITE * KACHEL, H = HOEHE * KACHEL, hp = heliPlan(welt, seed);
@@ -90,9 +91,12 @@ export function absturzPlan(welt, seed = welt.seed ?? 1) {
   let ay = welt.landebahn ? welt.landebahn.y : fp ? fp.start.y - Math.sin(fp.w) * ABSTURZ.aufsetz : hp.heli.y;
   if (!welt.landebahn) { ax = klemme(ax, W); ay = klemme(ay, H); }
   const c = Math.cos(w), s = Math.sin(w), bis = ABSTURZ.aufsetz + ABSTURZ.rollweg;
-  return welt._absturzplan = {
-    x: ax + c * bis, y: ay + s * bis, w, aufsetz: { x: ax + c * ABSTURZ.aufsetz, y: ay + s * ABSTURZ.aufsetz }, heli: hp.heli,
+  const p = {
+    x: ax + c * bis, y: ay + s * bis, w, c, s, seite: absturzSeite(seed), aufsetz: { x: ax + c * ABSTURZ.aufsetz, y: ay + s * ABSTURZ.aufsetz }, heli: hp.heli,
   };
+  const e = absturzPose(p, c, s, absturzDauer(), p.seite);
+  p.ende = { x: e.x, y: e.y, richtung: e.richtung };
+  return welt._absturzplan = p;
 }
 
 function hubschrauberPlatz(welt, rampe, rnd) {
