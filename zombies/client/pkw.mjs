@@ -20,6 +20,10 @@ export const pkwBehaelterId = id => (String(id).startsWith('pkw_') ? String(id).
 export const PKW_VORGABE = {
   tempo: 80,               // Höchsttempo in km/h
   lenkung: 60,             // Lenkung in Grad je Sekunde (bei mittlerem Tempo; im Stand und bei Höchsttempo langsamer)
+  lenkWeich: 0.5,          // s: weich lenken – Drehrate = Abweichung zur Wunschrichtung / lenkWeich (höchstens die Lenkung)
+  lenkTempo: 40,           // % der Lenkung bei Höchsttempo (ab 30 % Tempo fällt sie dorthin ab)
+  lenkTotzone: 3,          // Grad: so kleine Stickabweichungen um die Fahrtrichtung gelten als geradeaus (alle Fahrzeuge)
+  spurhilfe: true,         // auf Straßen sanft in Straßenrichtung ziehen, wenn man ungefähr in Straßenrichtung fährt (alle Fahrzeuge)
   leben: 100,              // Lebenspunkte des Autos
   plaetze: 4,              // Sitzplätze (Fahrer + Mitfahrer)
   crashAb: 20,             // km/h: ab hier kostet ein Aufprall Lebensenergie

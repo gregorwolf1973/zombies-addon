@@ -9,6 +9,7 @@ import { Fahrzeug } from './verkehr.mjs';
 import { Leopard, leopardEinst, turmDrehen, winkelDiff } from './leopard.mjs';
 import { ueberrolleZombies, UEBERROLLEN_PAUSE } from './ueberrollen.mjs';
 import { stammBei, rueckwaerts, RUECK_ANTEIL } from '../client/walze.mjs';
+import { strassenRichtung } from './spurhilfe.mjs';
 
 export const PX = 8;                             // Pixel je Meter
 export { FAHRBAR_PLAETZE };
@@ -28,7 +29,7 @@ export const ART = {
   leopard: { tempoEinst: 'leopardTempo', fahrwerk: { ...FAHRWERK, drehrate: 1.1 } },
 };
 // Einstellungen, die der Rest braucht, falls die Verwaltung sie nicht kennt
-export const EINST_BASIS = { boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60, pumaTempo: 60, leopardTempo: 60, pumaPause: 2.5, leopardUeberrollen: true };
+export const EINST_BASIS = { boxerSchussPause: 0.25, boxerReichweite: 40, boxerTempo: 60, pumaTempo: 60, leopardTempo: 60, pumaPause: 2.5, leopardUeberrollen: true, panzerLenkWeich: 0.6, panzerLenkTempo: 50 };
 
 const KOLL_R = 5;
 const punkteVon = art => {
@@ -49,8 +50,32 @@ export function fahrbarFrei(welt, art, x, y, w) {
 }
 
 const norm = w => Math.atan2(Math.sin(w), Math.cos(w));
-const LENK_TAU = 0.5;      // s: Autos drehen mit Abweichung/LENK_TAU (höchstens die Lenkrate) – 30° Abweichung ≈ 60°/s, 5° ≈ 10°/s
+const GRAD = Math.PI / 180;
 const LENK_AUFBAU = 0.3;   // s: so schnell baut sich der Lenkeinschlag auf bzw. ab
+// Lenkvorgaben (Backend: auto.lenkWeich/lenkTempo/lenkTotzone/spurhilfe, Panzer bundeswehr.panzerLenkWeich/panzerLenkTempo)
+export const LENK_VORGABE = { lenkWeich: 0.5, lenkTempo: 40, lenkTotzone: 3, spurhilfe: true };
+export const LENK_PANZER = { lenkWeich: 0.6, lenkTempo: 50 };
+// Lenkwerte aus Einstellungen: weich (s, Abweichung/weich = Drehrate), tempo (Anteil der Lenkrate bei Höchsttempo), totzone (rad), spurhilfe
+export function lenkWerte(weich, tempo, totzone, spurhilfe, vorgabe = LENK_VORGABE) {
+  const zahl = (v, d, lo, hi) => { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+  return {
+    weich: zahl(weich, vorgabe.lenkWeich, 0.05, 5),
+    tempo: zahl(tempo, vorgabe.lenkTempo, 5, 100) / 100,
+    totzone: zahl(totzone, LENK_VORGABE.lenkTotzone, 0, 30) * GRAD,
+    spurhilfe: spurhilfe !== false,
+  };
+}
+const SPUR_AB = 0.15;               // Spurhilfe erst ab 15 % des Höchsttempos (vorwärts)
+const SPUR_WINKEL = 20 * GRAD;      // Fangbereich: Fahrzeug und Wunschrichtung weniger als 20° von der Straßenrichtung
+const SPUR_STAERKE = 0.9;           // so stark zieht die Wunschrichtung in der Mitte des Fangbereichs zur Straße
+const GLEIT_WINKEL = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65].map(g => g * GRAD);   // Bewegung so weit gedreht zum Gleiten versuchen; > 65° = frontal (< 25° zur Normalen)
+const GLEIT_SONST = 120 * GRAD;     // Seite ohne freie Gleitrichtung bis 65°: so gerechnet
+const GLEIT_FRONTAL = 25 * GRAD;    // Kante weniger als 25° schräg zur Bewegung = frontal: stehen bleiben
+const ECKE = [1.5, 3, 4.5];         // px seitlicher Versatz, um eine Ecke/einen Pfahl am Rand zu umrunden
+const ECKE_VOR = 6;                 // px: nach dem Versatz muss der Weg so weit voraus frei sein
+const ECKE_DEV = 45 * GRAD;         // so zählt das Umrunden beim Tempoverlust höchstens
+const GLEIT_DREHEN = 0.5;           // rad/s: beim Gleiten richtet sich das Fahrzeug leicht an der Kante aus
+const FREIDREHEN = [[0, 2], [0, -2], [-2, 0], [2, 0], [-1.5, 1.5], [-1.5, -1.5], [1.5, 1.5], [1.5, -1.5]];   // Versatz (längs, quer) px beim Freidrehen
 
 export class Fahrbar {
   // opt: { id, besitzer (Sitzungs-ID des Superusers/Spielers, der es gesetzt hat) }
@@ -183,32 +208,40 @@ export class Fahrbar {
     this.hordeSchritt?.(dt);
   }
 
-  // Lenken wie bei der Figur: Eingabe {dx, dy} gibt die Wunschrichtung; das Fahrzeug dreht mit begrenzter Rate dorthin und fährt vorwärts.
+  // Lenkwerte: weich (Sekunden bis zur Wunschrichtung), Lenkrate bei Höchsttempo (Anteil), Totzone (rad), Spurhilfe an/aus.
+  // Panzer: bundeswehr.panzerLenkWeich/panzerLenkTempo; Totzone und Spurhilfe gelten für alle Fahrzeuge (auto.lenkTotzone/auto.spurhilfe).
+  lenkEinst() {
+    const bw = this.einst(), au = { ...LENK_VORGABE, ...(this.raum.einstellungen?.()?.auto ?? {}) };
+    return lenkWerte(bw.panzerLenkWeich, bw.panzerLenkTempo, au.lenkTotzone, au.spurhilfe, LENK_PANZER);
+  }
+
+  // Lenken wie bei der Figur: Eingabe {dx, dy} gibt die Wunschrichtung; das Fahrzeug dreht weich dorthin und fährt vorwärts.
+  // Weich: Drehrate = Abweichung / Weichheit (kleine Stickbewegung = kleiner Einschlag), höchstens die Lenkrate, Einschlag baut sich in
+  // LENK_AUFBAU auf; die Lenkrate fällt ab 30 % Tempo bis zum Höchsttempo auf lenkTempo (Vorgabe Autos 40 %); Abweichungen unter der
+  // Totzone gelten als geradeaus. Spurhilfe: fährt man ungefähr in Straßenrichtung (< 20°), zieht die Wunschrichtung sanft zur Straße.
   // Liegt die Wunschrichtung mehr als ~135° hinter der Achse (Skalarprodukt, client/walze.mjs rueckwaerts), fährt es rückwärts (höchstens 1/3 Tempo)
   // und lenkt wie im Rückwärtsgang: das Heck dreht zur Wunschrichtung. Zäune/Hecken/Bäume/Autos unter der Wanne: server/walze.mjs (raum.walze).
+  // Hindernis: schräg (> 25° zur Normalen) gleitet das Fahrzeug an der Kante entlang und verliert Tempo nach dem Winkel, frontal bleibt es stehen.
   fahren(e, dt) {
-    const f = this.f, welt = this.raum.welt, fw = this.fahrwerk(), VM = fw.vmax * (this.ueberAuto ?? 1);
+    const f = this.f, welt = this.raum.welt, fw = this.fahrwerk(), VM = fw.vmax * (this.ueberAuto ?? 1), le = this.lenkEinst();
     const roh = Math.hypot(e.dx, e.dy), len = Math.min(1, roh);
     let soll = 0;
-    this.rueck = false;
+    this.rueck = false; this.spur = false;
     if (len > 0.1) {
       const hx = Math.cos(f.richtung), hy = Math.sin(f.richtung), ux = e.dx / roh, uy = e.dy / roh;
       const rueck = this.rueck = rueckwaerts(hx * ux + hy * uy, this.v);
-      const ziel = rueck ? Math.atan2(-uy, -ux) : Math.atan2(uy, ux), d = winkelDiff(f.richtung, ziel), c = Math.cos(d);
+      let ziel = rueck ? Math.atan2(-uy, -ux) : Math.atan2(uy, ux), tz = le.totzone;
+      if (le.spurhilfe && !rueck && this.v > fw.vmax * SPUR_AB) { ziel = this.spurZiel(welt, ziel, tz); if (this.spur) tz = 0; }
+      const d = winkelDiff(f.richtung, ziel), c = Math.cos(d);
+      const vAnteil = Math.min(1, Math.abs(this.v) / fw.vmax);
       let rate = fw.drehrateStand + (fw.drehrate - fw.drehrateStand) * Math.min(1, Math.abs(this.v) / (VM * 0.3));
-      if (fw.drehrateVmax !== undefined) { const t = Math.max(0, Math.min(1, (Math.abs(this.v) / VM - 0.5) / 0.5)); rate += (fw.drehrateVmax - rate) * t; }   // Autos: bei hohem Tempo weicher lenken
-      let schritt = Math.max(-rate * dt, Math.min(rate * dt, d));
-      if (fw.drehrateVmax !== undefined) {   // Autos: weich lenken – Drehrate wächst mit der Abweichung (kleine Stickbewegung = kleiner Einschlag) und baut sich in ~0,3 s auf
-        const zielRate = Math.max(-rate, Math.min(rate, d / LENK_TAU));
-        this.lenkW = (this.lenkW ?? 0) + (zielRate - (this.lenkW ?? 0)) * Math.min(1, dt / LENK_AUFBAU);
-        schritt = Math.abs(this.lenkW * dt) > Math.abs(d) ? d : this.lenkW * dt;
-      }
-      const w = f.richtung + schritt;
+      rate *= 1 - (1 - le.tempo) * Math.max(0, Math.min(1, (vAnteil - 0.3) / 0.7));   // bei hohem Tempo weicher lenken
+      const dw = Math.sign(d) * Math.max(0, Math.abs(d) - tz);                           // kleine Abweichungen um die Fahrtrichtung: geradeaus
+      const zielRate = Math.max(-rate, Math.min(rate, dw / le.weich));
+      this.lenkW = (this.lenkW ?? 0) + (zielRate - (this.lenkW ?? 0)) * Math.min(1, dt / LENK_AUFBAU);
+      const schritt = Math.abs(this.lenkW * dt) > Math.abs(d) ? d : this.lenkW * dt;
       this.drehBlock = false;
-      if (Math.abs(schritt) > 1e-6) {
-        this.raum.walze?.walzen(this, f.x, f.y, w);
-        if (this.frei(welt, f.x, f.y, w)) f.richtung = w; else this.drehBlock = true;
-      }
+      if (Math.abs(schritt) > 1e-6 && !this.drehen(welt, f.richtung + schritt)) this.drehBlock = true;
       if (rueck) soll = c > 0 ? -VM * fw.rueckwaerts * len * c * c : 0;
       else {
         soll = c > 0 ? VM * len * c * c : 0;   // quer zur Wunschrichtung: langsam
@@ -221,14 +254,92 @@ export class Fahrbar {
     else this.v = Math.max(soll, this.v - (this.v > 0 ? fw.bremse : fw.beschleunigung) * dt);
     if (Math.abs(this.v) < 0.5 && soll === 0) this.v = 0;
     this.v = Math.max(-VM * fw.rueckwaerts, Math.min(VM, this.v));   // über einem geparkten Auto sofort langsam (Puma 40 %, Boxer 30 %)
-    // Vorrücken in kleinen Teilschritten; Hindernis: stehen bleiben
-    const weg = this.v * dt, n = Math.max(1, Math.ceil(Math.abs(weg) / fw.schrittPx));
-    for (let i = 0; i < n; i++) {
-      const nx = f.x + Math.cos(f.richtung) * weg / n, ny = f.y + Math.sin(f.richtung) * weg / n;
-      this.raum.walze?.walzen(this, nx, ny, f.richtung);
-      if (!this.frei(welt, nx, ny, f.richtung)) { this.v = 0; break; }
-      f.x = nx; f.y = ny;
+    this.vorruecken(welt, fw, VM, dt);
+  }
+
+  // Spurhilfe: Wunschrichtung `ziel` sanft zur Straßenrichtung ziehen, wenn Fahrzeug und Wunsch ungefähr in Straßenrichtung zeigen
+  // (die Totzone tz gilt dann für den Stick gegenüber der Straße: kleine Abweichungen = genau die Straße entlang)
+  spurZiel(welt, ziel, tz = 0) {
+    const f = this.f, sr = strassenRichtung(welt, f.x, f.y);
+    if (sr === null) return ziel;
+    const rw = Math.cos(f.richtung - sr) >= 0 ? sr : sr + Math.PI;
+    const dz = winkelDiff(rw, ziel), df = winkelDiff(rw, f.richtung);
+    if (Math.abs(dz) >= SPUR_WINKEL || Math.abs(df) >= SPUR_WINKEL) return ziel;
+    this.spur = true;
+    const q = Math.abs(dz) / SPUR_WINKEL, rest = Math.sign(dz) * Math.max(0, Math.abs(dz) - tz);
+    return rw + rest * (1 - SPUR_STAERKE * (1 - q * q));   // Mitte: stark zur Straße, zum Rand des Fangbereichs hin ausklingend
+  }
+
+  // auf Winkel w drehen; stößt die Wanne dabei an, darf sie sich leicht freidrehen (bis 2 px vom Hindernis weg). true = gedreht
+  drehen(welt, w) {
+    const f = this.f;
+    this.raum.walze?.walzen(this, f.x, f.y, w);
+    if (this.frei(welt, f.x, f.y, w)) { f.richtung = w; return true; }
+    const c = Math.cos(f.richtung), s = Math.sin(f.richtung);
+    for (const [u, v] of FREIDREHEN) {
+      const x = f.x + c * u - s * v, y = f.y + s * u + c * v;
+      if (this.frei(welt, x, y, w)) { f.x = x; f.y = y; f.richtung = w; return true; }
     }
+    return false;
+  }
+
+  // Gleiten am Hindernis: { dev (Abweichung von der Bewegungsrichtung `basis`, für den Tempoverlust), x, y (neue Lage) } oder null = frontal/fest.
+  // Je Seite die kleinste freie Abweichung a+ / a− (keine bis 65°: als 120° gerechnet); die Kante steht dann um (a− − a+)/2 schräg zur
+  // Bewegung – unter 25° (frontal, Pfahl mittig) stehen. Ohne freie Richtung: Ecke umrunden (bis 4,5 px seitlich versetzt, nur auf einer Seite frei).
+  gleiten(welt, basis, ds, letzte, seite) {
+    const f = this.f, ux = Math.cos(basis), uy = Math.sin(basis);
+    const lage = (dev, q = 0) => {
+      const x = q ? f.x + ux * ds - uy * q : f.x + Math.cos(basis + dev) * ds, y = q ? f.y + uy * ds + ux * q : f.y + Math.sin(basis + dev) * ds;
+      if (!this.frei(welt, x, y, f.richtung)) return null;
+      return !q || this.frei(welt, x + ux * ECKE_VOR, y + uy * ECKE_VOR, f.richtung) ? { dev, x, y } : null;   // Ecke: dahinter muss der Weg frei sein (keine Wand)
+    };
+    if (letzte) { const l = lage(letzte); if (l) return l; }
+    let ap = null, am = null;
+    for (const a of GLEIT_WINKEL) {
+      if (!ap) ap = lage(a * seite);
+      if (!am) am = lage(-a * seite);
+      if (ap && am) break;
+    }
+    if (ap || am) {
+      if (Math.abs((am ? Math.abs(am.dev) : GLEIT_SONST) - (ap ? Math.abs(ap.dev) : GLEIT_SONST)) / 2 < GLEIT_FRONTAL) return null;
+      return ap && (!am || Math.abs(ap.dev) <= Math.abs(am.dev)) ? ap : am;
+    }
+    for (const q of ECKE) {
+      const p = lage(Math.min(Math.atan2(q, ds), ECKE_DEV) * seite, q * seite), m = lage(-Math.min(Math.atan2(q, ds), ECKE_DEV) * seite, -q * seite);
+      if (p && m) return null;   // mittig getroffen
+      if (p || m) return p ?? m;
+    }
+    return null;
+  }
+
+  // Vorrücken in kleinen Teilschritten. Hindernis: Gleitrichtung suchen (Bewegung um 5°…65° gedreht, bevorzugt zur Lenkseite);
+  // gleiten = Tempo × cos(Winkel) beim Anstoß, danach höchstens Höchsttempo × cos²; keine Gleitrichtung (frontal, < 25° zur Normalen) = stehen.
+  // this.anstoss = Aufprall-Tempo (px/s, für den Aufprallschaden der Autos): frontal das ganze Tempo, streifend Tempo × sin²(Winkel)
+  vorruecken(welt, fw, VM, dt) {
+    const f = this.f, weg = this.v * dt;
+    this.anstoss = 0;
+    if (!weg) { this.gleitet = false; return; }
+    const n = Math.max(1, Math.ceil(Math.abs(weg) / fw.schrittPx)), ds = Math.abs(weg) / n, basis = f.richtung + (weg < 0 ? Math.PI : 0);
+    const seite = (this.lenkW ?? 0) * (weg < 0 ? -1 : 1) < 0 ? -1 : 1;
+    let devMax = 0, gestoppt = false, letzte = 0;
+    for (let i = 0; i < n; i++) {
+      const nx = f.x + Math.cos(basis) * ds, ny = f.y + Math.sin(basis) * ds;
+      this.raum.walze?.walzen(this, nx, ny, f.richtung);
+      if (this.frei(welt, nx, ny, f.richtung)) { f.x = nx; f.y = ny; continue; }
+      const g = this.gleiten(welt, basis, ds, letzte, seite);
+      if (!g) { gestoppt = true; break; }
+      f.x = g.x; f.y = g.y;
+      letzte = g.dev; devMax = Math.max(devMax, Math.abs(g.dev));
+    }
+    if (gestoppt) { this.anstoss = Math.abs(this.v); this.v = 0; this.gleitet = false; return; }
+    if (!devMax) { this.gleitet = false; return; }
+    const c = Math.cos(devMax), vz = Math.sign(this.v);
+    if (!this.gleitet) { this.anstoss = Math.abs(this.v) * Math.sin(devMax) ** 2; this.v *= c; }   // streifend: Aufprallschaden nach sin² (gnädiger als der reine Queranteil)
+    else this.v = vz * Math.min(Math.abs(this.v), VM * (vz < 0 ? fw.rueckwaerts : 1) * c * c);
+    this.gleitet = true;
+    // leicht zur Kante hin ausrichten (nicht weiter dagegen fahren)
+    const w = f.richtung + Math.sign(letzte) * Math.min(Math.abs(letzte), GLEIT_DREHEN * dt);
+    if (this.frei(welt, f.x, f.y, w)) f.richtung = w;
   }
 
   // Turmmitte (Drehpunkt) in der Welt; mit Winkel w: Punkt `vorn`/`rechts` im Turmrahmen
