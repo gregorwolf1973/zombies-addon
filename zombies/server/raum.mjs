@@ -1,5 +1,6 @@
 // Spielraum: der Server entscheidet über Bewegung, Zombies, Treffer, Gegenstände und Safe Rooms.
 import crypto from 'node:crypto';
+import { tempoStufe } from '../client/fahrtempo.mjs';
 import { holeFragen } from './fragenquelle.mjs';
 import { mischeAntworten, waehleFrage } from './raetsel.mjs';
 import { botSchritt, BOT_NAMEN, botGegenangebot, botEinverstanden } from './bots.mjs';
@@ -599,6 +600,8 @@ export class SpielRaum extends Room {
       const r = this.eingabeEmpfangen(client, m);
       if (r?.bewegt) this.ruehrt(client.sessionId);
     });
+    // Fahrtempo-Stufe (0 = 30, 1 = 50, 2 = Höchsttempo km/h; client/fahrtempo.mjs): nur beim Umschalten gesendet, gilt für das Fahrzeug, das man fährt
+    this.onMessage('tempo', (client, a) => { const x = this.extra.get(client.sessionId); if (x) x.tempoStufe = tempoStufe(a); });
     // Blickrichtung im Stand (Drehzone des Laufsticks: Figur und Taschenlampe drehen, ohne zu laufen): [Richtung in 256 Stufen, letzte gesendete Eingabe-Nummer].
     // Gilt erst, wenn der Server alle Bewegungsstücke bis zu dieser Nummer abgearbeitet hat (sonst überschriebe die alte Laufrichtung sie).
     this.onMessage('blick', (client, a) => this.blickEmpfangen(client, a));
