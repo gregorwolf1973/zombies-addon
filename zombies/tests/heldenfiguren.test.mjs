@@ -141,3 +141,19 @@ test('Gesamtgröße der Atlanten bleibt im Rahmen (Mobilgeräte: Speicher je Hel
   assert.ok(datei < 4.5 * 1048576, `alle Held-Atlanten ${(datei / 1048576).toFixed(1)} MB`);
   assert.ok(fs.statSync(new URL('helden_neu.json', dir)).size < 200 * 1024);
 });
+
+test('Waffenlage: Langwaffen liegen mit dem Kolben an der rechten Schulter und zeigen nach vorn, Pistole steht vor der Brust', () => {
+  for (const fig of HF_FIGUREN) for (const clip of ['gewehr_stehen', 'gewehr_gehen', 'gewehr_rennen', 'gewehr_schiessen']) {
+    for (const w of ['gewehr', 'mp', 'mg', 'scharfschuetze', 'granatwerfer', 'armbrust', 'schrotflinte']) {
+      const m = j.waffen[w];
+      for (const p of j.pos[fig][clip][w]) {
+        const kolben = p[0] - m.laenge * m.griff * p[3];   // Kolbenende in Atlas-px ab Bildmitte
+        assert.ok(Math.abs(kolben) < 8, `${fig}/${clip}/${w}: Kolben x=${kolben}`);
+        assert.ok(p[1] > 4 && p[1] < 18, `${fig}/${clip}/${w}: y=${p[1]}`);
+        assert.equal(p[2], 0, `${fig}/${clip}/${w}: zeigt nicht nach vorn`);
+      }
+    }
+  }
+  for (const fig of HF_FIGUREN) for (const clip of ['pistole_stehen', 'pistole_gehen', 'pistole_rennen'])
+    for (const p of j.pos[fig][clip].pistole) assert.ok(p[0] > 8 && p[1] > 0 && p[1] < 24, `${fig}/${clip}: Pistole ${p}`);
+});
