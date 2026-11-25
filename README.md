@@ -11,6 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fgregorwolf1973%2Fzombies-addon%2Fmain%2Fzombies%2Fconfig.yaml&amp;query=%24.version&amp;label=version&amp;color=03a9f4" alt="Version">
+  <a href="https://github.com/gregorwolf1973/zombies-addon/actions/workflows/tests.yaml"><img src="https://github.com/gregorwolf1973/zombies-addon/actions/workflows/tests.yaml/badge.svg" alt="Tests"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5?logo=homeassistant&amp;logoColor=white" alt="Home Assistant add-on">
   <img src="https://img.shields.io/badge/arch-aarch64%20%7C%20amd64-green" alt="Architectures">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
