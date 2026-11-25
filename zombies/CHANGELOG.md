@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.91.0 – 25.11.2026
+
+- Vorbereitung zur Veröffentlichung: Credits & Lizenzen (CREDITS.md, Link auf der Startseite, OpenStreetMap-Hinweis), LICENSE stellt klar: MIT nur für den Code.
+- Puma und Leopard 2 sind jetzt eigene, selbst gebaute Modelle (tools/panzer_modell/), keine fremden 3D-Modelle mehr.
+- Festes Safehouse in Geretsried 2 ist jetzt die Kirche Hl. Familie.
+- Neue Installationen: Live-Radio ohne voreingestellten Sender (eigene Stream-Adresse im Backend), allgemeine Eilmeldung ohne Ortsnamen (Piper-Stimme „Thorsten“, CC0). Bestehende Einstellungen bleiben unverändert.
+- Add-on-Store: README und Anleitung auf Deutsch und Englisch mit Bildschirmfotos, Übersetzungen der Optionen, GitHub-Actions-Bau der Images.
+
 ## 0.90.5 – 25.11.2026
 
 - Einstellungsseite: „Laden fehlgeschlagen … checked“ behoben – die Gruppe „🔑 Autos fahren“ (Schlüssel, Tempo, Lenkung, Spurhilfe, Zäune walzen) war keinem Reiter zugeordnet und wurde beim Aufbau gelöscht; sie steht jetzt unter „Welt“.
