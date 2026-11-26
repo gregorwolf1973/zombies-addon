@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.91.4 – 26.11.2026
+
+- Geretsried 1 und Geretsried 2 sind jetzt zwei eigene Level (kein Zufall mehr), einzeln an- und abwählbar und verschiebbar – sechs Level insgesamt. Bestehende Einstellungen werden übernommen: Geretsried 2 erbt die Werte von Geretsried, die übrigen Level behalten ihre.
+- Add-on-Store: fertige Images (ghcr.io) für amd64 und aarch64.
+
 ## 0.91.3 – 26.11.2026
 
 - Impressum und Datenschutz: eigene Felder auf der Einstellungsseite (Zugang & Test); die Texte bleiben auf dem eigenen Server, Links auf der Startseite erscheinen nur, wenn sie ausgefüllt sind.
