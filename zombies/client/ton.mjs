@@ -1,11 +1,11 @@
 // Geräusche – alles im Browser erzeugt (WebAudio), keine Tondateien.
 // Lautstärke und Stereo-Seite richten sich nach der Entfernung zum eigenen Spieler.
 
-import { stimmeZuweisen } from './tonlogik.mjs';
+import { stimmeZuweisen, zuordnungInSprache } from './tonlogik.mjs';
 import { hordeEinstellung, zaehleHoerbare, hordeSchritt, einzelschreiOk, akzentSchritt, PIXEL_JE_METER } from './hordenlogik.mjs';
 import { musikSchritt, naechstesStueck } from './musiklogik.mjs';
 import { anAusLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
-import { t as tr } from './i18n.mjs';
+import { t as tr, sprache as spielSprache, beiSprachwechsel } from './i18n.mjs';
 let ctx = null, haupt = null, rauschPuffer = null, stufe = 1;
 const BASIS = 0.72;                          // Grundpegel (0.36 → 0.72 mit den gemessenen Lautstärken je Ereignis; früher 0.8)
 const EFFEKT_FAKTOR = 0.75;                  // Spielgeräusche 25 % leiser als zuvor (Stimmen kommen besser durch); Musik behält ihren Pegel
@@ -66,7 +66,11 @@ const puffer = new Map();           // Datei → AudioBuffer | Promise | null (f
 let drinnenJetzt = false, nachtJetzt = null;   // null = Tageszeit noch unbekannt
 const hintergrund = { stadt: null, streuTimer: 0, krankTimer: 0 };
 
-export function toeneZuordnen(z) { zuordnung = z && typeof z === 'object' ? z : {}; if (ctx) vorladen(); }
+// Englische Spieler: Ansagen mit „_en“-Variante (z. B. eilmeldung_allgemein_en.mp3) statt der deutschen Aufnahme, falls vorhanden
+let zuordnungRoh = {}, toeneEn = new Set();
+export function toeneZuordnen(z) { zuordnungRoh = z && typeof z === 'object' ? z : {}; zuordnung = zuordnungInSprache(zuordnungRoh, spielSprache(), toeneEn); if (ctx) vorladen(); }
+export function toeneSprachvarianten(liste) { toeneEn = new Set(Array.isArray(liste) ? liste : []); toeneZuordnen(zuordnungRoh); }
+beiSprachwechsel(() => toeneZuordnen(zuordnungRoh));
 
 // Musikdatei? (bleibt Stereo; Effekte werden räumlich gemischt und dürfen Mono sein)
 const istMusik = datei => Object.entries(zuordnung).some(([id, t]) => id.startsWith('musik') && t?.dateien?.includes(datei));
@@ -188,6 +192,7 @@ let hordeEin = hordeEinstellung(), musikEin = { laut: 35, blende: 3 };
 let hordeSt = { aktiv: false, pegel: 0, halb: false, nur: false, n: 0 }, akzentSt = null, hordeLoop = null, letzterNah = -1e9;
 export const hordeAktiv = () => hordeSt.aktiv;
 export function toneEinstellungen(i) {
+  if (Array.isArray(i?.toeneEn)) toeneSprachvarianten(i.toeneEn);
   hordeEin = hordeEinstellung(i?.toeneHorde);
   if (i && 'geraeuschPause' in i) geraeuschPauseSetzen(i.geraeuschPause);
   const r = i?.radioStream ?? {}, rl = Number(r.laut);

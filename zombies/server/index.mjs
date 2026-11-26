@@ -14,6 +14,7 @@ Encoder.BUFFER_SIZE = 256 * 1024;
 import { SpielRaum } from './raum.mjs';
 import { LEVEL_KATALOG } from '../client/levelkatalog.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
+import { verwaltungTexteSkript } from './verwaltung_texte.mjs';
 import { Speicher } from './speicher.mjs';
 import { clientAuslieferung, auslieferungsVersion } from './statisch.mjs';
 import { Diagnose, DIAG_MAX_BYTES } from './diagnose.mjs';
@@ -309,6 +310,8 @@ export async function starte({
     else { SpielRaum.speicher?.loescheWelt(); if (req.body?.spielerLoeschen) SpielRaum.speicher?.loescheSpieler(); }
     res.json({ ok: true });
   });
+  // Texte der Verwaltungsseite (de/en) als klassisches Skript, vor allen Skripten der Seite geladen (server/verwaltung_texte.mjs)
+  app.get('/verwaltung_texte.js', (req, res) => res.set('Cache-Control', 'no-cache').type('text/javascript; charset=utf-8').send(verwaltungTexteSkript()));
   // In der Seitenleiste erscheint die Verwaltung; gespielt wird über die normale Adresse (oder ?spielen)
   app.get('/', (req, res, next) => req.get('x-ingress-path') && !('spielen' in req.query)
     ? res.set('Cache-Control', 'no-cache').sendFile(path.join(hier, '..', 'client', 'verwaltung.html')) : next());
@@ -349,6 +352,7 @@ export async function starte({
     zombieSicht: datei.werte.zombieSicht,   // Client: Sichtkegel-Anzeige
     helden: { neu: datei.werte.heldenFigurenNeu !== false, aktive: hfAktive(datei.werte.helden?.figuren) },   // Startwahl: neue Mixamo-Helden an/aus und welche wählbar sind (Kennbuchstaben)
     toene: datei.werte.toene,
+    toeneEn: toeneListe().map(t => t.datei).filter(n => /_en\.\w+$/i.test(n)),   // englische Sprachvarianten (Client: tonlogik.mjs sprachVariante)
     geraeuschPause: datei.werte.geraeuschPause,   // Mindestpause (s) zwischen zwei Zombie-Hintergrundgeräuschen
     toeneHorde: datei.werte.toeneHorde,   // Hordengeräusch: Schwellen und Hörweite (client/hordenlogik.mjs)
     musik: datei.werte.musik,             // Musik: laut (%), blende (s)

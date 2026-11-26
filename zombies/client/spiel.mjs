@@ -46,7 +46,7 @@ import { KUL_SCHLUESSEL, schattenFaktor } from './kulisse_regeln.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
 import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
-import { t as tr, textAus, beiSprachwechsel, sprachUmschalter } from './i18n.mjs';
+import { t as tr, textAus, beiSprachwechsel, sprachUmschalter, sprache as spielSprache } from './i18n.mjs';
 import { ortName, feldText } from './servertext.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
@@ -289,6 +289,10 @@ async function freigabenAbfragen() {
   } finally { freigabenFertig = true; installAnbieten(); }
 }
 $('fgMikroKnopf').onclick = () => freigabenAbfragen();
+// App-Beschreibung (manifest) in der Spielsprache – der Eigenname „Zombies in Oberbayern“ bleibt in beiden gleich
+const manifestSprache = () => { const l = document.querySelector('link[rel="manifest"]'); if (l) l.setAttribute('href', spielSprache() === 'en' ? 'manifest_en.json' : 'manifest.json'); };
+manifestSprache(); beiSprachwechsel(manifestSprache);
+beiSprachwechsel(s => { try { raum?.send('spielSprache', { sprache: s }); } catch { /* nicht verbunden */ } });   // Quizfragen u. a. in der neuen Sprache
 // Sprache: Umschalter auf der Startseite und im ⚙️-Menü; beim Wechsel die selbst gesetzten Starttexte nachziehen
 sprachUmschalter($('sprachwahlStart'));
 sprachUmschalter($('eg-sprache'));
@@ -512,7 +516,7 @@ async function mitspielen() {
     try { token = sessionStorage.getItem('zob_token'); } catch {}
     const testpw = ($('testpw')?.value ?? '').slice(0, 200);   // Testzugang: nur beim Beitritt gesendet, nirgends gespeichert
     if (token && !TUT.an && !testpw) { try { r = await client.reconnect(token); } catch { r = null; } }   // mit Testzugang kein reconnect (dort läuft kein onAuth)
-    const beitritt = { name, code, ...(testpw ? { testzugang: testpw } : {}), spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst };
+    const beitritt = { name, code, ...(testpw ? { testzugang: testpw } : {}), spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst, sprache: spielSprache() };
     if (!r) r = TUT.an ? await client.create('schiessstand', beitritt) : await client.joinOrCreate('zombies', beitritt);   // Schießstand: eigener Raum, nichts für die Hauptwelt
     raum = r;
     ladenZeigen(15, tr('laden.verbunden'));

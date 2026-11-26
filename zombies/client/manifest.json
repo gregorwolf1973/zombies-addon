@@ -2,6 +2,7 @@
   "name": "Zombies in Oberbayern",
   "short_name": "Zombies",
   "description": "Koop-Zombiespiel in Geretsried",
+  "lang": "de",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
