@@ -1,5 +1,16 @@
 # Zweisprachigkeit – Servertexte (Liste für Phase 2)
 
+**Stand Phase 2 (Zweig `i18n-server`): umgesetzt.** Der Server schickt alle Spieltexte als Schlüssel + Werte (`server/texte.mjs`:
+`M('gruppe.schluessel', { … }, L)` → `{ k: 'srv.gruppe.schluessel', w, lang }`; Gegenstände `D(id)`, Orte `ortK(name)`, Listen `[…]` bzw. `{ l: […], s: ' · ' }`).
+Die Texte stehen in `client/i18n/de.mjs` + `en.mjs` im Abschnitt `srv`; jeder Client übersetzt in seiner Sprache (`textAus`), Bots sprechen im Chat
+so in der Sprache des Empfängers und verstehen auch englische Befehle („Resi, get water“). Schemafelder (Aufgabentext, Missionsort) tragen `{ k, w }` als JSON
+(`alsFeld`/`feldText`, `client/servertext.mjs`), Safe-Room-Gattungsnamen übersetzt `ortName()`, Eigennamen bleiben. Alte reine Texte zeigt der Client weiter an.
+Prüfung: `node tools/i18n_pruefen.mjs` (Client + Server, 0 Treffer; Ausnahmen per `i18n-ok`, Verwaltung/Logs bleiben deutsch), Test `tests/i18n.test.mjs`
+(auch: jeder gesendete Schlüssel existiert in de und en). Servertests vergleichen über `textAus(m)` (deutsch, unverändert streng).
+Offen für Phase 3: Verwaltung (`einstellungen.mjs`, `index.mjs`-API), Rätselfragen, gesprochene Ansagen.
+
+Die Liste unten ist der Stand aus Phase 1 (Zeilennummern veraltet).
+
 Stand Phase 1 (Zweig `i18n`): Der **Client** zeigt alle eigenen Texte über `client/i18n.mjs` (`t()`, Dateien `client/i18n/de.mjs` und `en.mjs`).
 Der **Server** schickt dagegen noch fertigen deutschen Text. Diese Liste sammelt die Stellen, die in Phase 2 auf Schlüssel umgestellt werden.
 

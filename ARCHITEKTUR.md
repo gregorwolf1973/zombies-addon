@@ -37,6 +37,7 @@ Wichtige Dateien:
 - `panzercrash.mjs` – gefahrener Boxer/Puma/Leopard rammt Verkehrsauto (`auto`/`polizei`) oder Spielerauto: Ruck (Tempo × 0,45, Nachricht `krach` mit `ruck`),
   Wrack rutscht seitlich weg und dreht sich, brennt über `raum.brand` (keine Explosion), Unfallszene (`unfallTuer`), Spielerauto: Insassen steigen unverletzt aus.
   Panzer über einem Wrack → `Fahrzeug.art = 'platt'` (kein Hindernis, Feuer aus, Darstellung `client/plattwrack.mjs`). Eingehängt in `Fahrbare` (`crash`), kein Schemafeld.
+- `texte.mjs` – Zweisprachigkeit: Texte an Clients nur als Schlüssel `M('gruppe.x', werte)` → `{ k: 'srv.gruppe.x', w }` (Texte in `client/i18n/de.mjs`/`en.mjs`, Abschnitt `srv`), nie fertigen deutschen Text senden; Prüfung `node tools/i18n_pruefen.mjs`. Details `docs/i18n-server.md`.
 - `speicher.mjs` (Spielstand), `superuser.mjs` (Testmenü, Zugangscode-Hash), `radio.mjs`, `raetsel.mjs`/`spielfragen.txt`, `nebel.mjs`.
 
 ### Schema und Sichtfilter
