@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.5 – 26.11.2026
+
+- Spenden-Knöpfe (Buy Me a Coffee, Liberapay) jetzt gut sichtbar unter „Mitspielen“, im ⚙️-Menü der Spieler-Einstellungen und im Abspann nach dem Finale.
+
 ## 0.91.4 – 26.11.2026
 
 - Geretsried 1 und Geretsried 2 sind jetzt zwei eigene Level (kein Zufall mehr), einzeln an- und abwählbar und verschiebbar – sechs Level insgesamt. Bestehende Einstellungen werden übernommen: Geretsried 2 erbt die Werte von Geretsried, die übrigen Level behalten ihre.
