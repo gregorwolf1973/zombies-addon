@@ -1,4 +1,5 @@
 // Radio als Lockmittel, Bundeswehr-Lager als Safe House (4 Vorratskisten), Munitionsnachschub der Soldaten
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -158,7 +159,7 @@ test('Munitionsnachschub: leeres MG-Nest und leerer Puma – zwei Soldaten holen
   assert.ok(minAbstand < 70, 'Soldaten kamen nicht zum Container: ' + minAbstand);
   assert.ok(weg > 40, 'Soldaten haben ihren Posten nicht verlassen');
   await warte(100);
-  assert.ok(nachrichten.meldung.some(m => m.text.includes('Soldaten holen Munition')), 'keine Meldung');
+  assert.ok(nachrichten.meldung.some(m => textAus(m).includes('Soldaten holen Munition')), 'keine Meldung');
   for (let i = 0; i < 400; i++) st.schritt(0.25);   // zurück auf den Posten
   for (const q of st.schuetzen) if (!q.tot) { assert.equal(q.modus, 'post'); assert.ok(Math.hypot(q.x - posten.get(q.n)[0], q.y - posten.get(q.n)[1]) < 3, 'nicht auf dem Posten'); }
   // Puma ebenso

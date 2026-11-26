@@ -15,7 +15,7 @@ export function entkoppeln(klass, felder) {
   proto[ORIG] = { ...(proto[ORIG] ?? {}) };
   for (const feld of felder) {
     const orig = Object.getOwnPropertyDescriptor(proto, feld);
-    if (!orig?.set || !orig.get) throw new Error('entkoppeln: kein Schema-Feld ' + feld);
+    if (!orig?.set || !orig.get) throw new Error('entkoppeln: kein Schema-Feld ' + feld);   // i18n-ok: Entwicklerfehler
     proto[ORIG][feld] = orig;
     const s = roh(feld);
     Object.defineProperty(proto, feld, {

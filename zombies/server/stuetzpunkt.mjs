@@ -3,6 +3,7 @@
 // Zustand in state.stuetzpunkt: '' = kein Stützpunkt auf der Karte, 'steht', 'gefallen' (wird mit der Welt gespeichert) oder
 // 'aus' (Schalter „Stützpunkt aktiv“ aus: Figuren weg, nichts schießt, kein Handel – ohne Zombies und ohne Fall).
 import { ueberrolleZombies, UEBERROLLEN_PAUSE } from './ueberrollen.mjs';
+import { M, D, L } from './texte.mjs';
 import { entferne, fuegeHinzu, kannAufnehmen, blockGrund } from '../client/stapel.mjs';
 import { KACHEL, WAFFEN, sichtfrei, HANDEL, HANDEL_ABSTAND, HANDEL_RAETSEL, bezahlung, MUNITION_MAX, DINGE } from '../client/welt.mjs';
 import { imLager, planKoord, handelPartner, zeltWandImWeg, rahmen, fahrFlaeche, FAHR_SCHRITT, PUMA_PARK, SP_BREITE, SP_TIEFE, SP_PK } from '../client/stuetzpunkt.mjs';
@@ -43,6 +44,9 @@ const KAMPF_RUHE = 8, KAMPF_RUHE_STREU = 7, DECKUNG_WEITE = 44, DECKUNG_TAKT = 3
 const diffWinkel = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
 
 const RUF_WEITE = 120;   // px vor dem Zaun, ab denen ein Spieler angerufen wird
+// Gegenwert eines Handels als Text-Wert: Munition „🧰 n Schuss“, sonst Zeichen + Gegenstandsname (Schlüssel)
+const handelWas = a => (a.gibt === 'munition' ? M('handel.schuss', { n: a.menge }) : { s: ' ', l: [DINGE[a.gibt].zeichen, D(a.gibt)] });
+
 export class Stuetzpunkt {
   constructor(raum) {
     this.raum = raum;
@@ -106,16 +110,16 @@ export class Stuetzpunkt {
     this.verteidigen(dt);
     this.soldatenLeben(dt);
     // alle Soldaten tot: das Lager ist verloren (gleicher Fall wie nach N Tagen, nur früher)
-    if (s.stuetzpunkt === 'steht' && this.schuetzen.length && this.schuetzen.every(q => q.tot)) return this.faellt('Alle Soldaten sind gefallen');
+    if (s.stuetzpunkt === 'steht' && this.schuetzen.length && this.schuetzen.every(q => q.tot)) return this.faellt(M('lager.alleTot'));
     this.heilen(dt);
   }
 
   // ---------- Fall ----------
-  faellt(grund = '') {
+  faellt(grund = null) {   // grund: { k, w } (z. B. srv.lager.alleTot) oder nichts
     const r = this.raum;
     r.state.stuetzpunkt = 'gefallen';
     this.zombiesErzeugen();
-    r.broadcast('meldung', { text: `📻 ${grund ? grund + ' – d' : 'D'}er Bundeswehr-Stützpunkt ist gefallen! Soldaten, Ärzte und Verwundete sind verloren – in den Zelten und hinter dem Draht lauern jetzt Zombies. Die Kisten sind noch voll.`, lang: true });
+    r.broadcast('meldung', grund ? M('lager.gefallenGrund', { grund }, L) : M('lager.gefallen', null, L));
     r.speichereWelt?.();
   }
 
@@ -145,7 +149,7 @@ export class Stuetzpunkt {
     this.fallIds = [];
     this.start(null, false);
     this.keinZeitFall = true;
-    r.broadcast('meldung', { text: '📻 Der Bundeswehr-Stützpunkt ist wieder besetzt.', lang: true });
+    r.broadcast('meldung', M('lager.besetzt', null, L));
     r.speichereWelt?.();
   }
 
@@ -428,7 +432,7 @@ export class Stuetzpunkt {
     if (!frei.length) return;
     this.nachschub = { ziel, traeger: frei, phase: 'hin', t: 0 };
     frei.forEach((q, i) => { q.modus = 'nachschub'; q.ziel = null; q.weg = this.anlaufen(q, cont, i, 42); });
-    this.raum.broadcast('meldung', { text: '📦 Soldaten holen Munition' });
+    this.raum.broadcast('meldung', M('lager.nachschub'));
     this.sendT = 0;
   }
 
@@ -687,35 +691,34 @@ export class Stuetzpunkt {
   // Nachricht 'handel' { wer: 'arzt' | 'soldat', angebot: id }: der Server prüft alles und bezahlt selbst aus dem Rucksack
   handel(client, m) {
     const r = this.raum, p = r.state.spieler.get(client.sessionId);
-    const sag = text => client.send('handel', { ok: false, text });
+    const sag = text => client.send('handel', { ok: false, text });   // text: { k, w }
     if (!p || p.unten || p.zombie > 0 || p.ebene) return;
-    if (!this.steht()) return sag('Der Stützpunkt ist gefallen – hier tauscht niemand mehr');
+    if (!this.steht()) return sag(M('handel.gefallen'));
     const wer = String(m?.wer ?? ''), h = HANDEL[wer], a = h?.angebote.find(q => q.id === m?.angebot);
     if (!h || !a) return;
-    if (!handelPartner(this.sp, p.x, p.y, HANDEL_ABSTAND, wer)) return sag(`Hier ist kein ${h.name} in der Nähe`);
+    if (!handelPartner(this.sp, p.x, p.y, HANDEL_ABSTAND, wer)) return sag(M(wer === 'arzt' ? 'handel.keinArzt' : 'handel.keinSoldat'));
     const zahl = bezahlung(p.rucksack, a.kostet);
-    if (!zahl) return sag('Dafür fehlt dir etwas im Rucksack');
+    if (!zahl) return sag(M('handel.fehlt'));
     if (a.gibt === 'munition') {
-      if (p.munition >= MUNITION_MAX) return sag('Deine Munition ist schon voll');
+      if (p.munition >= MUNITION_MAX) return sag(M('handel.munVoll'));
     } else {
       const probe = [...p.rucksack];   // passt es, nachdem bezahlt wurde?
       for (const d of zahl) entferne(probe, d, 1);
-      if (!kannAufnehmen(probe, p.plaetze, a.gibt, a.menge)) return sag('Dein Rucksack ist zu voll');
+      if (!kannAufnehmen(probe, p.plaetze, a.gibt, a.menge)) return sag(M('handel.zuVoll'));
     }
     for (const d of zahl) entferne(p.rucksack, d, 1);
     if (a.gibt === 'munition') p.munition = Math.min(MUNITION_MAX, p.munition + a.menge);
     else fuegeHinzu(p.rucksack, p.plaetze, a.gibt, a.menge);
-    const was = a.gibt === 'munition' ? `🧰 ${a.menge} Schuss` : `${DINGE[a.gibt].zeichen} ${DINGE[a.gibt].name}`;
-    client.send('handel', { ok: true, text: `${h.zeichen} Getauscht: ${was}` });
+    client.send('handel', { ok: true, text: M('handel.getauscht', { z: h.zeichen, was: handelWas(a) }) });
   }
 
-  // Gegenwert prüfen und übergeben (für die Rätsel-Bezahlung): null = ok, sonst Fehltext
+  // Gegenwert prüfen und übergeben (für die Rätsel-Bezahlung): null = ok, sonst Fehltext { k }
   uebergeben(p, a) {
     if (a.gibt === 'munition') {
-      if (p.munition >= MUNITION_MAX) return 'Deine Munition ist schon voll';
+      if (p.munition >= MUNITION_MAX) return M('handel.munVoll');
       p.munition = Math.min(MUNITION_MAX, p.munition + a.menge);
     } else {
-      if (!kannAufnehmen(p.rucksack, p.plaetze, a.gibt, a.menge)) return 'Dein Rucksack ist zu voll';
+      if (!kannAufnehmen(p.rucksack, p.plaetze, a.gibt, a.menge)) return M('handel.zuVoll');
       fuegeHinzu(p.rucksack, p.plaetze, a.gibt, a.menge);
     }
     return null;
@@ -724,14 +727,14 @@ export class Stuetzpunkt {
   // Nachricht 'handel_raetsel' { wer, angebot, weiter }: statt Gegenständen HANDEL_RAETSEL Rätsel in Folge richtig beantworten
   handelRaetsel(client, m) {
     const r = this.raum, p = r.state.spieler.get(client.sessionId);
-    const sag = text => client.send('handel', { ok: false, text });
+    const sag = text => client.send('handel', { ok: false, text });   // text: { k, w }
     if (!p || p.unten || p.zombie > 0 || p.ebene || !this.steht()) return;
     const wer = String(m?.wer ?? ''), h = HANDEL[wer], a = h?.angebote.find(q => q.id === m?.angebot);
     if (!h || !a || !handelPartner(this.sp, p.x, p.y, HANDEL_ABSTAND, wer)) return;
     this.serien ??= new Map();
     const alt = this.serien.get(client.sessionId);
     const nr = m?.weiter && alt && alt.wer === wer && alt.angebot === a.id ? alt.nr : 0;
-    if (a.gibt === 'munition' ? p.munition >= MUNITION_MAX : !kannAufnehmen(p.rucksack, p.plaetze, a.gibt, a.menge)) return sag(a.gibt === 'munition' ? 'Deine Munition ist schon voll' : 'Dein Rucksack ist zu voll');
+    if (a.gibt === 'munition' ? p.munition >= MUNITION_MAX : !kannAufnehmen(p.rucksack, p.plaetze, a.gibt, a.menge)) return sag(M(a.gibt === 'munition' ? 'handel.munVoll' : 'handel.zuVoll'));
     this.serien.set(client.sessionId, { wer, angebot: a.id, nr });
     r.stelleRaetsel(client, { art: 'handel', nr, von: HANDEL_RAETSEL });
   }
@@ -745,14 +748,14 @@ export class Stuetzpunkt {
       this.serien?.delete(client.sessionId);
     } else if (!richtig) {
       this.serien.delete(client.sessionId);
-      text = 'Falsch – die Serie beginnt von vorn';
+      text = M('handel.falsch');
     } else {
       serie.nr++; nr = serie.nr;
       if (nr >= HANDEL_RAETSEL) {
         const fehler = this.uebergeben(p, a);
         this.serien.delete(client.sessionId);
         fertig = true;
-        text = fehler ?? `${h.zeichen} Getauscht (Rätsel): ${a.gibt === 'munition' ? `🧰 ${a.menge} Schuss` : `${DINGE[a.gibt].zeichen} ${DINGE[a.gibt].name}`}`;
+        text = fehler ?? M('handel.getauschtRaetsel', { z: h.zeichen, was: handelWas(a) });
         client.send('handel', { ok: !fehler, text });
       }
     }

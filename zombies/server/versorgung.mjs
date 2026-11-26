@@ -3,6 +3,7 @@
 // nächsten Durchsuchen einer Munitionskiste (die Kisten waren schon immer je Spieler getrennt). Ist die Bundeswehr gefallen,
 // kommt nichts Neues mehr (bereits bereitliegende Pakete bleiben abholbar). Der Stand (letzter Versorgungstag, offene Pakete
 // je Spieler-ID) steht im Weltstand (`versorgung`), damit ein Neustart nichts doppelt oder gar nicht ausgibt.
+import { M, L } from './texte.mjs';
 export const VERSORGUNG_VORGABE = { versorgungTage: 2, versorgungMunition: 50, versorgungVerband: 3, versorgungSpritze: 1, versorgungWaffe: true,
   kistenMunChance: 50, kistenMunMin: 5, kistenMunMax: 15, kistenVerbandChance: 15, kistenGranateChance: 5 };   // kleine Zufallsbeute je Kiste, Spieler und Spieltag
 // Nur gewöhnliche Feuerwaffen (kein MG, Scharfschützengewehr, Granatwerfer, keine MP): Die Versorgung kommt alle 2 Tage – stärkere Waffen
@@ -44,7 +45,7 @@ export class Versorgung {
     let n = 0;
     for (const id of this.offen.keys()) { this.offen.set(id, Math.min(MAX_OFFEN, this.offen.get(id) + 1)); n++; }
     if (n) {
-      this.raum.broadcast('meldung', { text: '🪖 Die Bundeswehr hat neue Versorgung in die Munitionskisten im Lager gelegt: Munition, Waffe, Verbandszeug, Spritze', lang: true });
+      this.raum.broadcast('meldung', M('vers.neu', null, L));
       this.raum.broadcast('versorgung', {});   // Clients blenden „für mich leere“ Kisten wieder ein
     }
     this.raum.speichereWelt?.();
@@ -98,10 +99,10 @@ export class Versorgung {
     return { tag, uhr: m, text: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` };
   }
 
-  // Meldung bei „für mich nichts drin“
+  // Meldung bei „für mich nichts drin“ ({ k, w })
   leerText() {
     const n = this.naechsteLieferung();
-    if (!n) return 'Keine Lieferungen mehr – die Bundeswehr hat das Lager aufgegeben';
-    return `Leer – nächste Lieferung am Tag ${n.tag}, ca. ${n.text} Uhr`;
+    if (!n) return M('vers.keine');
+    return M('vers.leer', { tag: n.tag, zeit: n.text });
   }
 }

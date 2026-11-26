@@ -1,4 +1,5 @@
 // Bundeswehr-Lager: Munitionskiste durchsuchen (alte Eingabe `eingabe` und neue `e`, mit und ohne Zombie in der Nähe)
+import { textAus } from '../server/texte.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -43,7 +44,7 @@ for (const karte of ['geretsried', 'geretsried2']) {
         raum.starteAktion(cl);
         assert.equal(p.aktion, 'durchsuchen', 'Aktion nicht gestartet');
         for (let i = 0; i < 20 && (p.aktion || !nachr.some(q => q[0] === 'gefunden')); i++) { sende(); await warte(80); }
-        const log = JSON.stringify(nachr.map(q => q[1]?.text ?? q[0]));
+        const log = JSON.stringify(nachr.map(q => (q[1]?.text || q[1]?.k ? textAus(q[1]?.text ?? q[1]) : q[0])));
         { assert.ok(nachr.some(q => q[0] === 'gefunden'), 'hängt, p.aktion=' + p.aktion + ' fortschritt=' + p.fortschritt + ' ' + log); assert.equal(p.aktion, ''); }
       } finally { await server.gracefullyShutdown(false); setzeKartengroesse(64, 48); }
     });

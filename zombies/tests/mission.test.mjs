@@ -1,4 +1,5 @@
 // Missionsgegenstände quer über die Karte, Suchkreise, Schwierigkeit (server/mission.mjs, schwierigkeit.mjs, aufgaben.mjs)
+import { textAus, feldText } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -75,8 +76,8 @@ test('Position exakt: Kreismitte = Behälter (Gegenstandsort), Hinweisfeld nennt
       assert.match(m.ort, /, Erdgeschoss$/);
       assert.equal(kreisSchrumpfen(m), false, 'Kreis darf nicht mehr schrumpfen');
     }
-    assert.equal(ortText({ art: 'hardware', name: 'Bauhaus' }), 'Baumarkt Bauhaus, Erdgeschoss');
-    assert.equal(ortText({ art: 'car_repair' }), 'Autowerkstatt, Erdgeschoss');
+    assert.equal(textAus(ortText({ art: 'hardware', name: 'Bauhaus' })), 'Baumarkt Bauhaus, Erdgeschoss');
+    assert.equal(textAus(ortText({ art: 'car_repair' })), 'Autowerkstatt, Erdgeschoss');
   } finally { setzeKartengroesse(64, 48); }
 });
 
@@ -192,7 +193,7 @@ test('Missionsposition im Zustand exakt, keine Hinweise mehr; Schwierigkeit im R
     assert.ok(ag.mission.length <= 3);
     assert.equal(q.x, Math.round(m.x)); assert.equal(q.y, Math.round(m.y), 'Position nicht exakt');
     assert.equal(q.behaelter, m.behaelter); assert.match(q.ort, /Erdgeschoss/);
-    assert.match(raum.state.aufgaben.get('mission').text, /Erdgeschoss/, 'Aufgabentext ohne Ortshinweis');
+    assert.match(feldText(raum.state.aufgaben.get('mission').text), /Erdgeschoss/, 'Aufgabentext ohne Ortshinweis');
     const r0 = q.r;
     assert.equal(raum.missionHinweis(m.ding), null);
     assert.equal(raum.missionHinweis(), null);

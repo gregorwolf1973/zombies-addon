@@ -1,4 +1,5 @@
 // Bundeswehr-Stützpunkt, Teil 2: MG-Nester und Puma, Überrennen, Handgranate, MP/MG, Handel, Ärzte, Feldbetten, Funkzelt
+import { textAus } from '../server/texte.mjs';
 import { flach } from '../client/stapel.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -334,7 +335,7 @@ test('Überrennen: nach N Spieltagen fällt der Stützpunkt – Zombies an den P
   const alle = [...raum.state.zombies.values()];
   const postenOrte = sp.teile.filter(t => t.art === 'mgnest' || (t.art === 'posten' && ['soldat', 'arzt', 'verwundet'].includes(t.rolle)));
   assert.ok(postenOrte.every(t => alle.some(z => abstand(z, t) < 110)), 'ein Posten ohne Zombie in der Nähe');
-  assert.ok(await bis(() => nachrichten.meldung.some(m => m.lang && /Der Bundeswehr-Stützpunkt ist gefallen!/.test(m.text)), 10000), 'keine lange Meldung');   // Nachricht kommt über das Netz: darauf warten, nicht sofort prüfen
+  assert.ok(await bis(() => nachrichten.meldung.some(m => m.lang && /Der Bundeswehr-Stützpunkt ist gefallen!/.test(textAus(m))), 10000), 'keine lange Meldung');   // Nachricht kommt über das Netz: darauf warten, nicht sofort prüfen
   // MG und Puma schweigen
   nachrichten.bwschuss.length = 0;
   for (const id of [...raum.state.zombies.keys()]) { raum.state.zombies.delete(id); raum.zombieInfo.delete(id); }
@@ -554,7 +555,7 @@ test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, M
   p.x = arzt.x + 18; p.y = arzt.y;
   rucksack('essen', 'essen', 'wasser', 'bretter');
   let r = await sende('arzt', 'verband');
-  assert.equal(r.ok, true, r.text);
+  assert.equal(r.ok, true, textAus(r.text));
   assert.deepEqual(hat(), ['bretter', 'verband', 'wasser'], 'zwei Konserven bezahlt (davon hatte er am meisten)');
   rucksack('bretter', 'verband', 'wasser', 'schokoriegel');   // Bretter zahlen nicht mehr (höchstens 3 Gegenstandstypen)
   r = await sende('arzt', 'spritze');
@@ -567,7 +568,7 @@ test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, M
   // Rucksack voll: nach Bezahlung muss das Neue hineinpassen
   rucksack(...Array(p.plaetze).fill('essen'));
   r = await sende('arzt', 'verband');
-  assert.equal(r.ok, true, 'Platz wird durch die Bezahlung frei: ' + r.text);
+  assert.equal(r.ok, true, 'Platz wird durch die Bezahlung frei: ' + textAus(r.text));
   assert.equal(p.rucksack.length, p.plaetze - 1);
   // Soldat ist hier nicht in der Nähe (Arzt-Platz): abgelehnt
   rucksack('essen', 'essen', 'essen', 'essen');
@@ -576,7 +577,7 @@ test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, M
   // Soldat im Lager: 1 Handgranate für 2 Konserven
   p.x = soldat.x + 18; p.y = soldat.y;
   r = await sende('soldat', 'granate');
-  assert.equal(r.ok, true, r.text);
+  assert.equal(r.ok, true, textAus(r.text));
   assert.deepEqual(hat(), ['essen', 'essen', 'granate']);
   r = await sende('soldat', 'granate');
   assert.equal(r.ok, true); assert.deepEqual(hat(), ['granate', 'granate']);
@@ -586,7 +587,7 @@ test('Handel mit Arzt und Soldat: Bezahlung, Ablehnung ohne Mittel/ohne Nähe, M
   rucksack('wasser', 'bretter', 'verband', 'essen');
   p.munition = 10;
   r = await sende('soldat', 'munition');
-  assert.equal(r.ok, true, r.text);
+  assert.equal(r.ok, true, textAus(r.text));
   assert.equal(p.munition, 40); assert.equal(p.rucksack.length, 1);
   rucksack('wasser', 'wasser', 'wasser');
   p.munition = 140;
@@ -704,7 +705,7 @@ test('Handel per Rätsel: 6 richtige in Folge zahlen, eine falsche setzt zurück
   }
   assert.equal(a.handel.fertig, true);
   assert.deepEqual([...p.rucksack], ['verband']);
-  assert.ok(nachrichten.handel.some(m => m.ok && /Rätsel/.test(m.text)));
+  assert.ok(nachrichten.handel.some(m => m.ok && /Rätsel/.test(textAus(m.text))));
   await beenden(c);
 });
 

@@ -1,11 +1,14 @@
 // Zweisprachigkeit: de/en vollständig und gleich aufgebaut, Platzhalter passen, Sprachwahl nach Browser,
-// keine deutschen Oberflächentexte mehr im Client (Heuristik tools/i18n_pruefen.mjs, Phase 1).
+// keine deutschen Oberflächentexte mehr im Client (Heuristik tools/i18n_pruefen.mjs, Phase 1) und keine deutschen Servertexte an Clients (Phase 2).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import de from '../client/i18n/de.mjs';
 import en from '../client/i18n/en.mjs';
 import { flach, spracheAus, einsetzen, t, tIn, textAus, sprache, setzeSprache, beiSprachwechsel } from '../client/i18n.mjs';
-import { pruefeClient, pruefeQuelle } from '../tools/i18n_pruefen.mjs';
+import { pruefeClient, pruefeServer, pruefeQuelle, jsLiterale } from '../tools/i18n_pruefen.mjs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DINGE, BEHAELTER_NAME, HANDEL, ZAUN_NAME } from '../client/welt.mjs';
 import { HF_LISTE } from '../client/heldenfiguren.mjs';
 
@@ -122,4 +125,53 @@ test('Prüfwerkzeug erkennt deutsche Oberflächentexte und lässt Ausnahmen durc
 test('Phase 1: keine deutschen Oberflächentexte mehr in client/*.mjs und index.html', () => {
   const treffer = pruefeClient();
   assert.deepEqual(treffer.map(t => `${t.datei}:${t.zeile}: ${t.wert}`), []);
+});
+
+// ---------- Phase 2: Servertexte als Schlüssel ----------
+test('Phase 2: keine deutschen Texte an Clients mehr in server/*.mjs (Logs, Verwaltung und i18n-ok ausgenommen)', () => {
+  const treffer = pruefeServer();
+  assert.deepEqual(treffer.map(t => `${t.datei}:${t.zeile}: ${t.wert}`), []);
+});
+
+test('Phase 2: jeder Schlüssel, den der Server schickt, steht in de und en (srv.*)', () => {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'server');
+  const gruppen = new Set(Object.keys(D).filter(k => k.startsWith('srv.')).map(k => k.split('.')[1]));
+  const fehlt = [];
+  for (const f of readdirSync(dir).filter(f => f.endsWith('.mjs'))) {
+    for (const { wert } of jsLiterale(readFileSync(join(dir, f), 'utf8'))) {
+      if (!/^[a-z]+\.[\w.]*$/i.test(wert) || !gruppen.has(wert.split('.')[0])) continue;
+      const k = 'srv.' + wert;
+      const ok = /[._]$/.test(wert) ? Object.keys(D).some(x => x.startsWith(k)) : k in D;   // 'himmel.' + w: Vorsilbe
+      if (!ok) fehlt.push(`${f}: ${wert}`);
+    }
+  }
+  assert.deepEqual(fehlt, []);
+});
+
+test('Phase 2: Servernachrichten in beiden Sprachen (Listen, verschachtelte Schlüssel, Schemafelder)', async () => {
+  const { M, D: Ding, ortK, alsFeld, feldText, nachricht } = await import('../server/texte.mjs');
+  assert.deepEqual(M('tuer.blockiert'), { k: 'srv.tuer.blockiert' });
+  assert.equal(textAus(M('tuer.blockiert')), '🚪 Tür blockiert');
+  assert.equal(textAus(M('inv.inHand', { ding: Ding('pistole') })), 'Pistole in der Hand');
+  assert.equal(textAus(M('alle.tueren', { n: 1 })), '🔓 1 Tür geöffnet');
+  assert.equal(textAus(M('alle.tueren', { n: 3 })), '🔓 3 Türen geöffnet');
+  assert.equal(textAus(M('auf.funkFehlt', { fehlt: [Ding('m_batterie'), Ding('m_antenne')] })), '📻 Der Funkspruch geht noch nicht – es fehlt: Batterie, Antenne (in die Safe-Room-Kiste legen)');
+  assert.equal(textAus(M('auf.warnung', { z: '🚌', n: 15, fz: M('fz.bus.der'), fehlt: { s: ' · ', l: ['a', { s: ' ', l: ['📻', M('auf.t.funk')] }] } })),
+    '⏳ 🚌 Noch 15 s, dann fährt der Evakuierungsbus OHNE Erfolg ab und setzt alle ab. Es fehlt: a · 📻 Funkspruch absetzen (Funktisch im Safe Room)');
+  assert.equal(textAus(M('sp.erwacht', { grund: M('sp.verwandlungNach'), name: 'Sepp', ort: ortK('Feuerwehrhaus') })), 'Die Verwandlung lässt nach: Sepp wacht im Feuerwehrhaus wieder als Mensch auf');
+  assert.equal(ortK('Kirche Maria Hilf'), 'Kirche Maria Hilf', 'Eigennamen bleiben');
+  assert.equal(ortK('Unbekannt'), 'Unbekannt');
+  assert.equal(Ding('gibtsnicht'), 'gibtsnicht');
+  assert.equal(feldText(alsFeld(M('auf.t.zombies', { n: 15 }))), 'Zombies erledigen: zusammen 15');
+  assert.equal(feldText('alter Text'), 'alter Text', 'alte Stände ohne Schlüssel');
+  assert.deepEqual(nachricht('roh', { lang: true }), { text: 'roh', lang: true });
+  assert.deepEqual(nachricht(M('tuer.blockiert'), { lang: true }), { k: 'srv.tuer.blockiert', lang: true });
+  try {
+    setzeSprache('en', { merken: false });
+    assert.equal(textAus(M('inv.inHand', { ding: Ding('pistole') })), 'Pistol in hand');
+    assert.equal(textAus(M('sp.erwacht', { grund: M('sp.verwandlungNach'), name: 'Sepp', ort: ortK('Feuerwehrhaus') })), 'The transformation wears off: Sepp wakes up human again (fire station)');
+    assert.equal(textAus(M('alle.tueren', { n: 3 })), '🔓 3 doors opened');
+    assert.equal(textAus(M('auf.kommtUm', { z: '🚌', fz: M('fz.bus.Der'), zeit: '18:00' })), '🚌 The evacuation bus will reach the town exit at 18:00!');
+    assert.equal(textAus({ text: 'alt' }), 'alt', 'alte Form geht weiter');
+  } finally { setzeSprache('de', { merken: false }); }
 });

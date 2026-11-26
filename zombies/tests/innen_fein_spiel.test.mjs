@@ -2,6 +2,7 @@
 // Betreten/Treppen/Hinaus, Tempo drinnen wie draußen im Maßstab, Reichweiten, Türen, Safe Room (Kiste, Barrikade, Tür unzerstörbar),
 // schlafende Zombies, Bots, Hund, Missionsbehälter auf der Karte, Umschalten im laufenden Spiel und Spielstand mit anderem Modus.
 process.env.ZOMBIES_INNEN1M = '1';
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -282,7 +283,7 @@ test('Zimmertür schließen: Standpunkt neben der offenen Tür, auch mit Schrank
     const zid = raum.setzeZombie(rand.x, rand.y, w.ebene, false);
     assert.ok(raum.tuerBlockiert(raum.tuerKontext(p, 'zu'), p), 'Zombie in der Tür: Schließen müsste gesperrt sein');
     {   // Aktion wird mit Meldung verweigert
-      const msgs = []; const cl = raum.clients.find(q => q.sessionId === c.sessionId), alt2 = cl.send; cl.send = (t, m) => { if (t === 'meldung') msgs.push(m.text); };
+      const msgs = []; const cl = raum.clients.find(q => q.sessionId === c.sessionId), alt2 = cl.send; cl.send = (t, m) => { if (t === 'meldung') msgs.push(textAus(m)); };
       raum.starteAktion(cl);
       cl.send = alt2;
       assert.equal(p.aktion, '', 'Aktion trotz blockierter Tür gestartet');

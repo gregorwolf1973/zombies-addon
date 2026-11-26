@@ -1,4 +1,5 @@
 // Phase B: Ebenen, Betreten/Verlassen, Treppen, Türen, schlafende Zombies, Bots im Haus
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -71,7 +72,7 @@ test('Türen: öffnen/schließen, Schlüssel, Brechstange, Rätsel; schlafender 
   try {
     const fragen = [], meld = [];
     c.onMessage('raetsel', m => fragen.push(m));
-    c.onMessage('meldung', m => meld.push(m.text));
+    c.onMessage('meldung', m => meld.push(textAus(m)));
     const art = (frei, raetsel, schluessel) => Object.assign(raum.state, { tuerFrei: frei, tuerRaetsel: raetsel, tuerSchluessel: schluessel });
     art(0, 0, 100);   // alle verschlossenen Türen: nur mit Schlüssel
     // Haus mit verschlossener Tür und Zombieplatz suchen

@@ -2,6 +2,7 @@
 // - munitionGeben: füllt den Zähler; Überschuss wird gesammelt, je 30 Schuss wandern als Kiste in den Rucksack (wenn Platz)
 // - munitionPruefen (jeden Tick): fällt der Zähler auf MUNITION_KISTE_AB oder weniger, wird automatisch eine Kiste geöffnet
 // - kisteOeffnen: auch von Hand („Benutzen“ im Rucksack)
+import { M } from './texte.mjs';
 import { MUNITION_MAX, MUNITIONSKISTE_SCHUSS, MUNITION_KISTE_AB } from '../client/welt.mjs';
 import { fuegeHinzu, entferne, hat } from '../client/stapel.mjs';
 
@@ -29,10 +30,10 @@ export function kisteOeffnen(p) {
   return true;
 }
 
-// Jeden Tick: Zähler ≤ MUNITION_KISTE_AB → eine Kiste öffnen (genau eine je Aufruf). send(text) optional für die Meldung.
+// Jeden Tick: Zähler ≤ MUNITION_KISTE_AB → eine Kiste öffnen (genau eine je Aufruf). send({ k, w }) optional für die Meldung.
 export function munitionPruefen(p, send) {
   if ((p.munition ?? 0) > MUNITION_KISTE_AB || !hat(p.rucksack, 'munitionskiste')) return false;
   if (!kisteOeffnen(p)) return false;
-  send?.(`📦 Munitionskiste geöffnet: +${MUNITIONSKISTE_SCHUSS} Schuss`);
+  send?.(M('inv.kisteAuf', { n: MUNITIONSKISTE_SCHUSS }));
   return true;
 }

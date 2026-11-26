@@ -83,13 +83,19 @@ export function tIn(s, schluessel, werte) {
   return werte ? einsetzen(roh, werte) : roh;
 }
 
-// Servernachricht → Anzeigetext: neue Form { k, w } (Werte, die selbst Schlüssel sind, als { k } verschachtelt), alte Form { text }
+// Servernachricht → Anzeigetext: neue Form { k, w } (Werte, die selbst Schlüssel sind, als { k } verschachtelt), alte Form { text }.
+// Werte dürfen auch Listen sein: [a, b] → „a, b“, { l: [a, b], s: ' · ' } → „a · b“ (Elemente wieder Text oder { k, w }).
+function wertAus(v) {
+  if (Array.isArray(v)) return v.map(wertAus).join(', ');
+  if (v && typeof v === 'object') return v.l ? v.l.map(wertAus).join(v.s ?? ', ') : textAus(v);
+  return v;
+}
 export function textAus(m) {
   if (m == null) return '';
   if (typeof m === 'string') return m;
   if (m.k) {
     const w = {};
-    for (const [n, v] of Object.entries(m.w ?? {})) w[n] = v && typeof v === 'object' && v.k ? textAus(v) : v;
+    for (const [n, v] of Object.entries(m.w ?? {})) w[n] = wertAus(v);
     return t(m.k, w);
   }
   return m.text ?? '';

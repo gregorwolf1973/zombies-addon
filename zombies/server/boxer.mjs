@@ -2,6 +2,7 @@
 // (gemeinsam mit den fahrbaren Superuser-Fahrzeugen Puma und Leopard); hier kommen Standort am Flugfeld und die Horde dazu: Solange jemand
 // drin sitzt, kommt in festen Abständen eine Horde von vorn auf den Boxer zu (nur der echte Boxer, nie die Superuser-Fahrzeuge).
 // Server ist maßgeblich; der Client zeichnet nur (client/boxerdarstellung.mjs).
+import { M } from './texte.mjs';
 import { KACHEL, frei, kmhZuPx } from '../client/welt.mjs';
 import { FahrbarBoxer, ART, PX, FAHRBAR_PLAETZE, fahrbarFrei } from './fahrbar.mjs';
 import { WELLE_MAX } from './welle.mjs';
@@ -108,7 +109,7 @@ export class Boxer extends FahrbarBoxer {
       if (!ids) continue;
       const h = w.horden[w.horden.length - 1];
       h.boxer = true; h.zielName = 'Boxer'; this.horden.push(h);
-      for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, `🧟 Eine Horde (${ids.length}) kommt auf den Boxer zu!`);
+      for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, M('fz.hordeBoxer', { n: ids.length }));
       return true;
     }
     return false;

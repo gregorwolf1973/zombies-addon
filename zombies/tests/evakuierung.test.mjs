@@ -1,5 +1,6 @@
 // Evakuierungsarten: Leopard 2A7 (Isarauen) überrollt Zombies, schießt mit dem Lader-MG und überrollt nie Spieler;
 // A400M mit Fehlschlag und Hubschrauber (server/aufgaben.mjs, server/flugplatz.mjs)
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -197,7 +198,7 @@ test('A400M: landet, einsteigen, Triebwerk fällt aus, alle raus, zu Fuß zum Hu
     assert.ok(plan, 'kein Flugplan in der Isarauen-Welt');
     assert.ok(s.evakX > 0 && Math.hypot(s.evakX - plan.rampe.x, s.evakY - plan.rampe.y) < 2, 'Abholpunkt (Heckrampe) nicht gesetzt');
     nurFunk(raum);
-    const meldungen = []; a.c.onMessage('meldung', m => meldungen.push(m.text));
+    const meldungen = []; a.c.onMessage('meldung', m => meldungen.push(textAus(m)));
     let gewechselt = false; ag.levelWechsel = () => { gewechselt = true; };
     ag.funkAbsetzen(a.p, raum.welt.safeRooms[0]);
     s.uhr = 18 * 60 + 0.1;
@@ -308,7 +309,7 @@ test('Leopard (Isarauen): Anfahrt von weit weg über die Straße vom Kartenrand,
     const vorlauf = ag.panzerVorlauf();
     assert.ok(vorlauf > 20, 'Vorlauf zu kurz: ' + vorlauf);
     const meldungen = [];
-    raum.broadcast = (typ, m) => { if (typ === 'meldung') meldungen.push(m.text); };
+    raum.broadcast = (typ, m) => { if (typ === 'meldung') meldungen.push(textAus(m)); };
     nurFunk(raum);
     ag.funkAbsetzen(p, raum.welt.safeRooms[0]);
     s.uhr = 18 * 60 - vorlauf + 1;   // knapp nach dem spätesten Abfahrtszeitpunkt am Kartenrand

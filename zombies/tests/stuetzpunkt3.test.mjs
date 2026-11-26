@@ -1,4 +1,5 @@
 // Bundeswehr-Stützpunkt, Teil 3: Soldaten sterben, laufen bei Angriffen zum Hotspot; Evakuierungsfahrzeug fährt ein
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -84,7 +85,7 @@ test('Soldaten sterben im Nahkampf; sind alle tot, fällt das Lager', async () =
   const nachlegen = setInterval(() => { for (const q of st.schuetzen) if (!q.tot && ![...raum.state.zombies.values()].some(z => Math.hypot(z.x - q.x, z.y - q.y) < 20)) zombieBei(raum, sp, ...Object.values(planKoord(sp, q.x, q.y))); }, 200);
   assert.ok(await bis(() => raum.state.stuetzpunkt === 'gefallen', 25000), 'Lager fällt nicht ' + JSON.stringify(st.schuetzen.map(q => [q.tot, Math.round(q.hp)])));
   clearInterval(nachlegen);
-  assert.ok(await bis(() => nachrichten.meldung.some(m => m.text.includes('Alle Soldaten sind gefallen')), 5000), 'keine Meldung „Alle Soldaten sind gefallen“');   // kommt über das Netz
+  assert.ok(await bis(() => nachrichten.meldung.some(m => textAus(m).includes('Alle Soldaten sind gefallen')), 5000), 'keine Meldung „Alle Soldaten sind gefallen“');   // kommt über das Netz
   await beenden(c);
 });
 

@@ -1,6 +1,7 @@
 // Autos mit Autoschlüssel im echten Raum (Karte geretsried mit geparkten Autos): Schlüssel in Schrank/Kofferraum/Leiche, Einsteigen per
 // Aktionstaste nur mit Schlüssel (sonst Kofferraum), das gemalte Auto verschwindet bei allen ('autosWeg'), Fahren/Aussteigen, Schlüssel bleibt;
 // Unfallszene: Unfallauto der Verkehrssimulation → Tür auf, Mensch flieht, Zombie verfolgt ihn (Einstellung unfallTuer).
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -77,7 +78,7 @@ test('Einsteigen: ohne Schlüssel nur Kofferraum, mit Schlüssel fahren; Auto ve
     c.send('aktion');
     await warte(300);
     assert.ok(!p.imBoxer && !p.anBord, 'ohne Schlüssel eingestiegen');
-    assert.ok(nachrichten.some(([t, m]) => t === 'meldung' && /Kofferraum/.test(m.text)), 'kein Kofferraum-Hinweis');
+    assert.ok(nachrichten.some(([t, m]) => t === 'meldung' && /Kofferraum/.test(textAus(m))), 'kein Kofferraum-Hinweis');
     assert.ok(!raum.fahrbare.liste.length);
     p.rucksack.push('autoschluessel');
     c.send('aktion');
@@ -87,7 +88,7 @@ test('Einsteigen: ohne Schlüssel nur Kofferraum, mit Schlüssel fahren; Auto ve
     assert.equal(raum.state.fahrzeuge.get(fz.id)?.art, 'pkw');
     assert.ok(raum.welt.autosWeg.has(ort.b.id) && !aufParkAuto(raum.welt, ort.b.x, ort.b.y, 2));
     assert.ok(await bis(() => nachrichten.some(([t, m]) => t === 'autosWeg' && m.ids.includes(ort.b.id))), 'Nachricht autosWeg fehlt');
-    assert.ok(await bis(() => nachrichten.some(([t, m]) => t === 'meldung' && /fährst das Auto/.test(m.text))));
+    assert.ok(await bis(() => nachrichten.some(([t, m]) => t === 'meldung' && /fährst das Auto/.test(textAus(m)))));
     // fahren: Eingabe über die normale Eingabe des Spielers (wie beim Gehen)
     const x0 = fz.f.x, y0 = fz.f.y;
     raum.extra.get(c.sessionId).eingabe = { dx: Math.cos(fz.f.richtung), dy: Math.sin(fz.f.richtung), s: false };

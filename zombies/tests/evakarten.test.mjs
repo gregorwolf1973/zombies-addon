@@ -1,4 +1,5 @@
 // Evakuierungsarten der Level 3–5: Absturz (Königsdorf) → NH90 nach den Missionen, Kochel (NH90 von Anfang an), Bunker (Finale)
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -37,7 +38,7 @@ const mitArt = (art, fn, extra = {}) => async () => {
   const raum = matchMaker.getLocalRoomById(c.roomId);
   try {
     raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
-    const meldungen = []; c.onMessage('meldung', m => meldungen.push(m.text));
+    const meldungen = []; c.onMessage('meldung', m => meldungen.push(textAus(m)));
     c.onMessage('bunkerEnde', () => {});
     const ag = raum.aufgaben, s = raum.state;
     ag.alleBordSek = 0.3;   // sonst 10 s Restwartezeit, wenn alle an Bord sind
@@ -96,7 +97,7 @@ test('Königsdorf: erst wenn das Wrack steht, fallen je Echtspieler 2 Munitionsk
   assert.equal([...s.boden.values()].filter(b => KISTEN[b.ding]).length, 2, 'Kisten verfallen wie weggeworfene Dinge');
   // Aufheben: fester Inhalt (50 + 30 Schuss, 3 Handgranaten), keine weitere Kiste
   const meldungenK = []; p.munition = 0; p.handgranaten = 0;
-  for (const [id, b] of kisten) { p.ebene = ''; p.x = b.x; p.y = b.y; raum.nimmAuf({ send: (t, m) => meldungenK.push(m?.text) }, p, id, b); }
+  for (const [id, b] of kisten) { p.ebene = ''; p.x = b.x; p.y = b.y; raum.nimmAuf({ send: (t, m) => meldungenK.push(textAus(m)) }, p, id, b); }
   assert.equal(p.munition, 80, 'Schuss: ' + p.munition);
   assert.ok(meldungenK.some(t => t?.includes('+50 Schuss')) && meldungenK.some(t => t?.includes('+30 Schuss')), 'Meldung fehlt');
   const granaten = (p.handgranaten ?? 0) + zaehle(p.rucksack, 'granate') + [...s.boden.values()].filter(b => b.ding === 'granate').length;

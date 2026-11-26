@@ -16,6 +16,7 @@ export function innenLesen(seed, welt, ebene) {
   return m.get(k);
 }
 import { waehleOrte } from './mission_orte.mjs';
+import { M } from './texte.mjs';
 
 export const MISSION_MAX = 3;      // höchstens so viele Missionsgegenstände je Level (Gregor: nicht zu langwierig)
 export const SUCH_RADIUS = 150;    // Auffindkreis um den Gegenstand (~19 m, zentriert, pulsiert auf der Karte)
@@ -61,11 +62,12 @@ export function missionsBehaelter(seed, welt, nr) {
 const ART_NAMEN = { electronics: 'Elektrogeschäft', hardware: 'Baumarkt', doityourself: 'Baumarkt', car_repair: 'Autowerkstatt', police: 'Polizei', fire_station: 'Feuerwehr', school: 'Schule', sports: 'Sportgeschäft', motorcycle: 'Motorradhändler', car: 'Autohaus',
   variety_store: 'Gemischtwaren', department_store: 'Kaufhaus', car_wash: 'Waschanlage', caravan: 'Wohnwagenhändler', townhall: 'Rathaus', bank: 'Bank', social_facility: 'Sozialeinrichtung', place_of_worship: 'Kirche', fuel: 'Tankstelle',
   recycling: 'Wertstoffhof', public_building: 'Amtsgebäude', post_office: 'Post', kindergarten: 'Kindergarten', wholesale: 'Großhandel', fast_food: 'Imbiss', kitchen: 'Küchenstudio', furniture: 'Möbelhaus', events_venue: 'Veranstaltungshalle', stationery: 'Schreibwaren' };
-// „Autohaus Müller, Erdgeschoss“ bzw. „Baumarkt, Erdgeschoss“ (nur das Erdgeschoss, siehe missionsBehaelter)
+// „Autohaus Müller, Erdgeschoss“ bzw. „Baumarkt, Erdgeschoss“ (nur das Erdgeschoss, siehe missionsBehaelter) – als Schlüssel { k, w }
+// (Art des Geschäfts übersetzt der Client: srv.art.*, Eigennamen bleiben); ART_NAMEN (deutsch) nur für den Namensvergleich
 export function ortText(haus) {
-  const art = ART_NAMEN[haus?.art];
-  const wo = haus?.name ? (art && !haus.name.toLowerCase().includes(art.toLowerCase()) ? `${art} ${haus.name}` : haus.name) : art ?? 'größeres Gebäude';
-  return `${wo}, Erdgeschoss`;
+  const art = ART_NAMEN[haus?.art], artK = art ? M('art.' + haus.art) : null;
+  const wo = haus?.name ? (art && !haus.name.toLowerCase().includes(art.toLowerCase()) ? { s: ' ', l: [artK, haus.name] } : haus.name) : artK ?? M('art.gross');
+  return M('ort.eg', { wo });
 }
 
 // Position des Behälters auf der Karte: Der Innenraum hat eigene Maße (nicht deckungsgleich mit dem Grundriss), also wird die relative

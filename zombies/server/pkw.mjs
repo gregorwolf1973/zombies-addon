@@ -6,6 +6,7 @@
 // (ab auto.crashAb km/h, auto.crashSchaden % bei 80 km/h). Bei 0 Lebenspunkten steigen alle aus, das Auto wird zum Wrack und brennt
 // (Rauch → Feuer → ggf. Explosion wie ein Verkehrsunfall, server/unfall.mjs). Fahren darf nur, wer einen Autoschlüssel hat; Mitfahrer
 // (auch Bots) brauchen keinen. Der Schlüssel bleibt im Rucksack. Fahrzeuge der Verkehrssimulation sind nie Ziel.
+import { M } from './texte.mjs';
 import { frei, bewege, kmhZuPx, WERTE as W } from '../client/welt.mjs';
 import { fzRechtecke, kreisImRechteck, aufParkAuto } from '../client/fzkollision.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
@@ -102,7 +103,7 @@ export class FahrbarPkw extends Fahrbar {
       const x = this.raum.extra.get(sid); if (x) x.schonT = 3;   // 3 s lang beißen Zombies nicht
     }
     const jetzt = this.fahrer;
-    if (jetzt && jetzt !== vorher) this.sendeAn(jetzt, '🚗 Du fährst jetzt das Auto.');
+    if (jetzt && jetzt !== vorher) this.sendeAn(jetzt, M('fz.jetztAuto'));
     return true;
   }
 
@@ -119,7 +120,7 @@ export class FahrbarPkw extends Fahrbar {
     if (!this.kannEinsteigen(sid)) return false;
     this.zusteigen(sid);
     const f = this.fahrer;
-    this.sendeAn(sid, f === sid ? (this.streife ? '🚓 Du fährst den Streifenwagen (Gehen-Taste lenkt, E steigt aus, H = Blaulicht + Sirene, R = Radio). Die Sirene lockt Zombies an.' : '🚗 Du fährst das Auto (Gehen-Taste lenkt, E steigt aus, R = Radio). Zombies überfahren kostet Blech, Aufprall kostet Leben.') : `🚗 Du fährst mit – ${this.spieler(f)?.name ?? 'niemand'} fährt.`);
+    this.sendeAn(sid, f === sid ? M(this.streife ? 'fz.streife' : 'fz.auto') : M('fz.mitfahrt', { name: this.spieler(f)?.name ?? M('fz.niemand') }));
     return true;
   }
   zusteigen(sid) {
@@ -230,7 +231,7 @@ export class FahrbarPkw extends Fahrbar {
     r.broadcast('krach', { x: f.x, y: f.y, ebene: '', pkw: 1 });
     r.laerm(f.x, f.y, 450, true, '');
     const rest = Math.max(0, Math.round(this.leben / this.lebenMax * 100));
-    for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, `💥 Aufprall mit ${Math.round(kmh)} km/h${minus ? ` – −${minus} ❤️` : ''} · Auto ${rest} %`);
+    for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, M(minus ? 'fz.aufprallMinus' : 'fz.aufprall', { kmh: Math.round(kmh), minus, rest }));
     for (const sid of [...this.insassen]) { const p = s.spieler.get(sid); if (p?.unten) this.aussteigen(sid); }
   }
 
@@ -242,7 +243,7 @@ export class FahrbarPkw extends Fahrbar {
     const e = this.einstAuto(), kmh = kmhVon(Math.abs(this.v));
     this.leben -= zaunAutoSchaden(kmh, e);
     this.v *= zaunTempoFaktor(e);
-    this.zaunMeldung ??= (() => { for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, '🌿 Durch Zaun und Hecke – das bremst und kostet Blech.'); return true; })();
+    this.zaunMeldung ??= (() => { for (const sid of this.insassen) if (!this.istBot(sid)) this.sendeAn(sid, M('fz.zaun')); return true; })();
   }
 
   // Zombies im Fußabdruck: schnell = tot, langsam = Schaden ∝ Tempo und weggeschleudert; jeder Treffer bremst und kostet das Auto Blech
@@ -275,7 +276,7 @@ export class FahrbarPkw extends Fahrbar {
     const r = this.raum, f = this.f; if (!f) return;
     const wer = [...this.insassen];
     for (const sid of wer) this.aussteigen(sid);
-    for (const sid of wer) if (!this.istBot(sid)) this.sendeAn(sid, '🔥 Das Auto ist hinüber – alle raus!');
+    for (const sid of wer) if (!this.istBot(sid)) this.sendeAn(sid, M('fz.autoHin'));
     f.art = 'wrack'; f.haelt = true; f.rauch = true; f.leben = 0; f.blau = false;
     r.broadcast('krach', { x: f.x, y: f.y, ebene: '', pkw: 1 });
     r.verkehr?.unfaelle?.liste.set(this.id, { phase: 'rauch', t: 0, rauchBis: 6 + r.rnd() * 6 });   // Rauch → Feuer → ggf. Explosion (server/unfall.mjs)

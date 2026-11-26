@@ -1,4 +1,5 @@
 // Team-Planer der Bots (server/botplan.mjs): Rollen, Sammeln, Funkspruch, Chat-Befehle, Bus, Kiste
+import { textAus } from '../server/texte.mjs';
 import { zaehle } from '../client/stapel.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -142,7 +143,7 @@ test('Sammler setzt den Funkspruch ab, wenn ihn niemand hat – und meldet es im
     assert.equal(raum.state.funk, false);
     assert.ok(await bis(() => raum.state.funk === true, 45000), `Funkspruch nicht abgesetzt (Aufträge ${bots.map(b => b[2].bot.plan?.auftrag?.art)})`);
     assert.ok(raum.state.aufgaben.get('funk').erledigt);
-    assert.ok(await bis(() => chat.some(m => /Funkspruch ist raus/.test(m.text) && /🤖/.test(m.name)), 3000), 'keine Chat-Meldung: ' + JSON.stringify(chat.map(m => m.text)));
+    assert.ok(await bis(() => chat.some(m => /Funkspruch ist raus/.test(textAus(m.text)) && /🤖/.test(m.name)), 3000), 'keine Chat-Meldung: ' + JSON.stringify(chat.map(m => textAus(m.text))));
   } finally { await beenden(c); }
 });
 
@@ -158,7 +159,7 @@ test('Chat-Befehle: „Resi, hol wasser“ ändert den Auftrag und wird bestäti
     c.onMessage('chat', m => chat.push(m));
     c.send('chat', { text: `${BOT_NAMEN[0]}, hol wasser` });
     assert.ok(await bis(() => resi[2].bot.plan?.auftrag?.art === 'holen' && resi[2].bot.plan.auftrag.was === 'wasser', 3000), 'Auftrag nicht geändert');
-    assert.ok(await bis(() => chat.some(m => m.name === resi[1].name && /Wasser/.test(m.text)), 3000), 'keine Bestätigung: ' + JSON.stringify(chat.map(m => m.name + ': ' + m.text)));
+    assert.ok(await bis(() => chat.some(m => m.name === resi[1].name && /Wasser/.test(textAus(m.text))), 3000), 'keine Bestätigung: ' + JSON.stringify(chat.map(m => m.name + ': ' + textAus(m.text))));
     assert.equal(vroni[2].bot.befehl, undefined, 'falscher Bot angesprochen');
     c.send('chat', { text: `${BOT_NAMEN[1].toUpperCase()} bleib hier` });
     assert.ok(await bis(() => vroni[2].bot.plan?.auftrag?.art === 'wache', 3000));

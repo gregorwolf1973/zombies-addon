@@ -1,4 +1,5 @@
 // Level 3–5: Königsdorf (Absturz), Kochel (NH90), Andermatt (Bunker, Finale mit Atomschlag-Countdown)
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -105,7 +106,7 @@ const mitFinale = fn => async () => {
   const raum = matchMaker.getLocalRoomById(c.roomId);
   try {
     raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
-    const meldungen = [], ende = []; c.onMessage('meldung', m => meldungen.push(m.text)); c.onMessage('bunkerEnde', m => ende.push(m));
+    const meldungen = [], ende = []; c.onMessage('meldung', m => meldungen.push(textAus(m))); c.onMessage('bunkerEnde', m => ende.push(m));
     // Neustart abfangen, statt die Welt wirklich zu verwerfen
     const neustarts = []; raum.weltNeuStarten = (...a) => neustarts.push(a);
     await fn({ c, raum, p: raum.state.spieler.get(c.sessionId), s: raum.state, ag: raum.aufgaben, f: raum.finale, meldungen, ende, neustarts, gewechselt });
@@ -203,10 +204,10 @@ test('Superuser: Befehl level wechselt die Karte, countdown setzt den Zähler', 
   const SU = await import('../server/superuser.mjs');
   const x = raum.extra.get(c.sessionId); x.superuser = true;
   const antworten = []; const client = { sessionId: c.sessionId, send: (t, m) => antworten.push([t, m]) };
-  assert.match(SU.befehl(raum, client, { befehl: 'countdown', sekunden: 60 }), /60 s/);
+  assert.match(textAus(SU.befehl(raum, client, { befehl: 'countdown', sekunden: 60 })), /60 s/);
   assert.equal(s.finaleRest, 60);
-  assert.match(SU.befehl(raum, client, { befehl: 'level', level: 9 }), /Unbekannt/);
-  assert.match(SU.befehl(raum, client, { befehl: 'level', level: 4 }), /Level 4/);
+  assert.match(textAus(SU.befehl(raum, client, { befehl: 'level', level: 9 })), /Unbekannt/);
+  assert.match(textAus(SU.befehl(raum, client, { befehl: 'level', level: 4 })), /Level 4/);
   assert.ok(await bis(() => neustarts.length === 1, 4000), 'kein Wechsel');
   assert.deepEqual(gewechselt, ['koenigsdorf']);
   assert.equal(neustarts[0][1].level, 4);

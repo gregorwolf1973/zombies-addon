@@ -1,4 +1,5 @@
 // Lager-Welle: sind alle Menschen (keine Bots) im Bundeswehr-Lager, kommt eine Welle aus mehreren Richtungen
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -43,7 +44,7 @@ test('Lager-Welle: 200 Zombies, nur wenn alle Menschen drin sind (Bot draußen e
   p.waffe = ''; p.munition = 0; raum.extra.get(c.sessionId).pause = 1e6;
   const drin = q => { [q.x, q.y] = planOrt(sp, 15, 12); q.ebene = ''; };
   const draussen = q => { [q.x, q.y] = planOrt(sp, 15, -8); q.ebene = ''; };
-  const meldungen = []; c.onMessage('meldung', m => meldungen.push(m.text));
+  const meldungen = []; c.onMessage('meldung', m => meldungen.push(textAus(m)));
   // ein zweiter Spieler, zunächst Bot (draußen): zählt nicht mit
   const c2 = await new Client(URL_).joinOrCreate('zombies', { name: 'Bot', spielerId: neueId(), seed: 7 });
   const p2 = raum.state.spieler.get(c2.sessionId), x2 = raum.extra.get(c2.sessionId);

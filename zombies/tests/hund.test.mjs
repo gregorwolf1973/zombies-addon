@@ -1,5 +1,6 @@
 // Begleiter-Hund: Zulaufen (höchstens einer je Spieler, nie bei Bots), Folgen, Teleport, Ablenkung von Zombies,
 // Bellen vor der Haustür (ohne Lärm), Wegschicken, Speichern/Laden
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -22,7 +23,7 @@ const warte = ms => new Promise(r => setTimeout(r, ms));
 async function beitreten(name, id = crypto.randomBytes(16).toString('hex')) {
   const c = await new Client(`http://127.0.0.1:${PORT}`).joinOrCreate('zombies', { name, spielerId: id, seed: 7 });
   const raum = matchMaker.getLocalRoomById(c.roomId);
-  const meld = []; c.onMessage('meldung', m => meld.push(m.text));
+  const meld = []; c.onMessage('meldung', m => meld.push(textAus(m)));
   return { c, raum, meld, id, sid: c.sessionId };
 }
 // Raum beruhigen: keine Zombies, keine Streuner, Spiel läuft nicht von selbst weiter

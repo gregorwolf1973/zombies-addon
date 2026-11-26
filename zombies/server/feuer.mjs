@@ -1,6 +1,7 @@
 // Brände in der Anfangsphase des Ausbruchs: etwa jede Minute (einstellbar) fängt ein Haus, ein geparktes oder
 // fahrendes Auto oder ein Bus Feuer. Feuer wächst, brennt eine Weile, verletzt alles in der Nähe und erlischt.
 // Autos und Busse bleiben als Wrack stehen, Häuser als ausgebrannte Ruine.
+import { M } from './texte.mjs';
 import { schema, t } from '@colyseus/schema';
 import { KACHEL } from '../client/welt.mjs';
 
@@ -99,7 +100,7 @@ export class Brandstifter {
     // Knall und Lärm locken Zombies an; die Feuerwehr rückt aus
     this.raum.laerm(f.x, f.y, ziel.art === 'haus' ? 380 : 520, true, '');
     this.raum.broadcast('feuer', { x: f.x, y: f.y, art: ziel.art, ebene: '' });
-    this.raum.broadcast('meldung', { text: ziel.art === 'haus' ? '🔥 Ein Haus brennt!' : '🔥 Ein Fahrzeug ist in Flammen aufgegangen!' });
+    this.raum.broadcast('meldung', M(ziel.art === 'haus' ? 'welt.hausBrennt' : 'welt.fzBrennt'));
     // Feuerwehr rückt aus: bei „selten“ nur zu etwa 30 %, bei „normal“ zu 60 %, bei „aus“ nie
     const modus = this.raum.einstellungen?.().blaulicht ?? 'selten';
     if (this.raum.rnd() < (modus === 'normal' ? 0.6 : modus === 'selten' ? 0.3 : 0)) this.raum.verkehr?.blaulicht({ x: f.x, y: f.y });

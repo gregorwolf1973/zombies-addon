@@ -8,6 +8,7 @@
 // 'platt', kein Hindernis mehr, Darstellung client/plattwrack.mjs) und sein Feuer geht aus. Der rammende Panzer walzt sein Wrack erst,
 // nachdem er einmal ganz von ihm herunter ist (sonst wäre es sofort platt). Kein neues Schemafeld: Lage über x/y/rq, Zustand über art/rauch.
 // Reine Serverlogik (keine Weltdaten), Zufall nur über raum.rnd.
+import { M } from './texte.mjs';
 import { frei } from '../client/welt.mjs';
 import { imFussabdruck } from '../client/evak.mjs';
 import { kreisImRechteck } from '../client/fzkollision.mjs';
@@ -123,8 +124,8 @@ export class Panzercrash {
     b.v *= CRASH_BREMSE;   // Ruck: der Panzer bremst stark, bleibt aber heil
     r.broadcast('krach', { x: o.x, y: o.y, ebene: '', ruck: b.id });
     r.laerm(o.x, o.y, 650, true, '');
-    r.verkehr?.unfaelle?.melden(o.x, o.y, pkw ? '💥 Ein Panzer hat das Auto gerammt!' : '💥 Zusammenstoß mit dem Panzer!');
-    for (const sid of pkw?.insassen ?? []) if (!pkw.istBot(sid)) pkw.sendeAn(sid, '💥 Vom Panzer gerammt – alle raus!');
+    r.verkehr?.unfaelle?.melden(o.x, o.y, M(pkw ? 'fz.panzerRammt' : 'fz.panzerStoss'));
+    for (const sid of pkw?.insassen ?? []) if (!pkw.istBot(sid)) pkw.sendeAn(sid, M('fz.gerammt'));
   }
 
   // Spielerauto nach dem Rutschen: alle steigen unverletzt aus (Platz neben dem Wrack, server/pkw.mjs aussteigen)

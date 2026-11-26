@@ -1,4 +1,5 @@
 // Safe Rooms als Notlager: Möblierung (Dorf und Geretsried) und Ruhen auf dem Feldbett
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -101,7 +102,7 @@ test('Safe-Room-Kühlschrank: nur unter 30 %, höchstens einer je Spielstunde', 
   const raum = matchMaker.getLocalRoomById(c.roomId);
   raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
   const p = raum.state.spieler.get(c.sessionId);
-  const meldungen = []; c.onMessage('meldung', m => meldungen.push(m.text));
+  const meldungen = []; c.onMessage('meldung', m => meldungen.push(textAus(m)));
   try {
     const s = raum.welt.safeRooms.find(q => raum.wv(q.ebene).kuehlschrank), w = raum.wv(s.ebene);
     assert.ok(s, 'kein Safe Room mit Kühlschrank');

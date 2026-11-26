@@ -3,6 +3,7 @@
 // Sieg (mindestens ein echter Spieler im Bunker) → nach dem Abspann beginnt eine frische Runde in Level 1 (Geretsried);
 // Niederlage (keiner drin) → nach dem Abspann Level 5 von vorn. Die Welt steht während des Abspanns still (state.phase 'finale').
 // Der Countdown läuft nur, solange mindestens ein echter Spieler verbunden ist.
+import { M, L } from './texte.mjs';
 
 export const ABSPANN_SEKUNDEN = 20;
 export const ANSAGEN = [600, 300, 60, 30];   // verbleibende Sekunden, bei denen eine Meldung kommt
@@ -68,7 +69,7 @@ export class Finale {
     for (const t of ANSAGEN) {
       if (this.rest > t || this.gemeldet.has(t)) continue;
       this.gemeldet.add(t);
-      r.broadcast('meldung', { text: `☢️ Atomschlag in ${t >= 60 ? (t === 60 ? '1 Minute' : `${t / 60} Minuten`) : `${t} Sekunden`} – ${r.aufgaben.fahrtGelingt() ? 'ab in den Bunker!' : 'erst die Missionen, dann das Bunkertor!'}`, lang: true });
+      r.broadcast('meldung', M(r.aufgaben.fahrtGelingt() ? 'finale.ansageBunker' : 'finale.ansageMission', { zeit: t >= 60 ? M('finale.min', { n: t / 60 }) : M('finale.sek', { n: t }) }, L));
     }
     if (this.rest <= 0) this.ende();
     return false;
@@ -83,7 +84,7 @@ export class Finale {
       if (p.ebene || p.unten || p.anBord || Math.hypot(p.x - s.evakX, p.y - s.evakY) > TOR_RADIUS) continue;
       if ((this.hinweisT.get(sid) ?? 0) > 0) continue;
       this.hinweisT.set(sid, HINWEIS_PAUSE);
-      a.sendeAn(sid, `☢️ Das Bunkertor ist verschlossen – es fehlt: ${a.fehlt().join(' · ') || 'noch etwas'}`);
+      a.sendeAn(sid, M('finale.torZu', { fehlt: a.fehlt().length ? { s: ' · ', l: a.fehlt() } : M('finale.nochEtwas') }));
     }
   }
 
@@ -94,9 +95,7 @@ export class Finale {
     r.aufgaben.wechselLaeuft = true;
     for (const sid of res.draussen) { const p = s.spieler.get(sid); if (p) { p.unten = true; p.hilfe = 0; p.aktion = ''; } }   // draußen: tot
     s.phase = 'finale';
-    r.broadcast('meldung', res.sieg
-      ? { text: '☢️ Geschafft – ihr habt im Bunker überlebt!', lang: true }
-      : { text: '☢️ Game over – niemand hat den Bunker erreicht …', lang: true });
+    r.broadcast('meldung', M(res.sieg ? 'finale.sieg' : 'finale.niederlage', null, L));
     this.abspann = { rest: ABSPANN_SEKUNDEN, sieg: res.sieg };
   }
 

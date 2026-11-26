@@ -3,6 +3,7 @@
 // Je Echtspieler zwei Kisten mit festem Inhalt (kein Zufall): Kiste A 50 Schuss + 2 Handgranaten, Kiste B 30 Schuss + 1 Handgranate
 // (zusammen je Spieler 80 Schuss und 3 Handgranaten). Sie liegen als Bodengegenstände (state.boden, verschwinden nie), der Client zeigt den Fall
 // (Nachricht 'kistenFall'), die Karte zeigt gelbe Punkte (fundorte.mjs), der Spielstand merkt sie sich (aufgaben.speichern/start).
+import { M } from './texte.mjs';
 import { A400M, ABSTURZ_HERDE, herdOrt } from '../client/evak.mjs';
 import { frei, zufall } from '../client/welt.mjs';
 
@@ -66,7 +67,7 @@ export function kisteNehmen(raum, client, p, ding) {
   const gr = Array.from({ length: k.granaten }, () => 'granate');
   raum.einpacken(p, gr);
   for (const g of gr) raum.legeHin(g, p.x, p.y, p.ebene);
-  client?.send('meldung', { text: `📦 Munitionskiste geöffnet: +${k.schuss} Schuss, +${k.granaten} Handgranate${k.granaten > 1 ? 'n' : ''}` });
+  client?.send('meldung', M('inv.kisteAufHg', { n: k.schuss, hg: k.granaten }));
   return true;
 }
 

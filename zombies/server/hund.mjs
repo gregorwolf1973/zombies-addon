@@ -1,6 +1,7 @@
 // Begleiter-Hund: Streuner laufen Spielern zu (je Spieler höchstens einer), folgen ihnen durch Türen und Treppen,
 // lenken Zombies ab und bellen, wenn ein Zombie vor der Haustür steht. Der Hund ist unverwundbar, braucht nichts
 // und wird mit dem Spieler gespeichert (extra.hund -> speichereSpieler). Maße in Pixeln (8 px = 1 m).
+import { M } from './texte.mjs';
 import { schema, t } from '@colyseus/schema';
 import { entkoppeln } from './netzfeld.mjs';
 import { BREITE, HOEHE, KACHEL, tempoVon, T, WERTE as W, bewege, frei, findeWeg, sichtfrei } from '../client/welt.mjs';
@@ -141,7 +142,7 @@ export class Hunde {
       inf.fluchtW = p ? Math.atan2(h.y - p.y, h.x - p.x) : h.richtung;
       inf.bogen = this.raum.rnd() < 0.5 ? -0.5 : 0.5;
     }
-    this.raum.clients.find(c => c.sessionId === sid)?.send('meldung', { text: '🐕 Der Hund läuft davon' });
+    this.raum.clients.find(c => c.sessionId === sid)?.send('meldung', M('hund.weg'));
     return true;
   }
 
@@ -206,7 +207,7 @@ export class Hunde {
       if (!x || x.bot || x.hund || p.verbunden === false || p.unten || p.anBord || p.zombie > 0 || (p.ebene ?? '') !== (h.ebene ?? '')) continue;
       if (Math.hypot(p.x - h.x, p.y - h.y) > ZULAUF) continue;
       x.hund = true; h.besitzer = sid; inf.modus = 'folgt'; inf.weg = null; inf.pruefT = 0.5;
-      this.raum.clients.find(c => c.sessionId === sid)?.send('meldung', { text: '🐕 Ein Hund läuft dir zu!' });
+      this.raum.clients.find(c => c.sessionId === sid)?.send('meldung', M('hund.zu'));
       break;
     }
   }

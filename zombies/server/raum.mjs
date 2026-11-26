@@ -52,6 +52,7 @@ import { sichtPx } from '../client/zombiesicht.mjs';
 import { schema, t, StateView } from '@colyseus/schema';
 import { einstellungenBereinigen } from '../client/einstellungen_regeln.mjs';
 import { feinDurchgang, feldZielpunkt } from './wegfeld.mjs';
+import { M, D, L, ortK, nachricht, chatOrt, textAus, schuetzeK } from './texte.mjs';
 import {
   KACHEL, BREITE, HOEHE, kachelVon, breiteVon, hoeheVon, tempoVon, tempoWerteSetzen, reichVon, abstandBehaelter, abstandTuer, setzeTuerKacheln, tuerAnZelle, T, WERTE as W, baueWelt, bewege, frei, sichtfrei, sichtGuete, drinnen, istNacht, hausHell, aktiveWaffe, zaunUeberstieg, baumFaktor, durchsuchDauer, freiTier, tierGelaende,
   bewaffnetSoll, zufall, schlossArt, safeRoomVon, WELT_VERSION, INNEN_FEIN, setzeInnenFein, setzeInnenTempo, setzeTageszeiten,
@@ -104,7 +105,7 @@ export const Spieler = schema({
   su: t.boolean(),          // Superuser (Testzugang): zeigt nur ⭐ neben dem Namen
   spricht: t.boolean(),     // spricht gerade ins Mikrofon (Sprachübertragung, zeigt 🔊 über der Figur)
   seq: t.uint16(),          // Nummer der letzten ganz verarbeiteten Eingabe (Client gleicht seine Vorhersage damit ab)
-}, 'Spieler');
+}, 'Spieler');   // i18n-ok: Schemaname
 entkoppeln(Spieler, ['durst', 'hunger']);   // rechnet genau, geht nur bei Änderung der ganzen Zahl in den Patch (netzAbgleich)
 
 // Positionen als int16 (Karte < 32768 px): der Server rechnet weiter mit Kommazahlen, übertragen werden ganze Pixel.
@@ -629,7 +630,7 @@ export class SpielRaum extends Room {
     this.onMessage('durchsuche_alle', (client, m) => this.starteAlle(client, !!m?.weiter));
     this.onMessage('fund_nimm', (client, m) => this.fundNimm(client, m));
     this.onMessage('wurf', (client, m) => this.granaten.werfen(client, m));
-    this.onMessage('blaulicht', client => { const b = this.fahrbare?.von(client.sessionId); if (b?.blaulichtSchalten?.(client.sessionId)) client.send('meldung', { text: b.f?.blau ? '🚨 Blaulicht und Sirene an – Zombies hören dich weithin!' : '🚨 Blaulicht und Sirene aus' }); });   // Streifenwagen (server/pkw.mjs)
+    this.onMessage('blaulicht', client => { const b = this.fahrbare?.von(client.sessionId); if (b?.blaulichtSchalten?.(client.sessionId)) client.send('meldung', M(b.f?.blau ? 'fz.blaulichtAn' : 'fz.blaulichtAus')); });   // Streifenwagen (server/pkw.mjs)
     this.onMessage('nachladen', client => { const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId); if (p && x && !p.unten && p.zombie <= 0 && this.state.phase === 'spiel') WP.startNachladen(this, p, x, SpielRaum.einstellungen); });
     this.onMessage('waffenplatz', (client, m) => {
       const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
@@ -678,7 +679,7 @@ export class SpielRaum extends Room {
     this.onMessage('_$bsprachDaten', (client, m) => this.sprachDaten(client, m));   // Binärnachrichten (sendBytes) kommen mit Vorsatz _$b
     this.onMessage('su', (client, m) => {
       const text = SU.befehl(this, client, m);
-      if (text) client.send('meldung', { text });
+      if (text) client.send('meldung', nachricht(text));
       if (this.extra.get(client.sessionId)?.superuser) client.send('suStatus', SU.status(this, client));   // Zustand der Umschalter für das Testmenü
     });
     this.onMessage('ping', (client, m) => client.send('pong', m));
@@ -812,7 +813,7 @@ export class SpielRaum extends Room {
     client.send('chatVerlauf', { nachrichten: this.chatVerlauf });
     client.send('baumTempo', SpielRaum.einstellungen.baumTempo ?? 25); client.send('tempoWerte', this.tempoWerte()); this.pkw?.beitritt(client); this.walze?.beitritt(client);
     this.einstellungenSenden(client, spielerId, p.aussehen, gewaehlt);
-    this.broadcast('meldung', { text: `${p.name} ist dabei` }, { except: client });
+    this.broadcast('meldung', M('sp.dabei', { name: p.name }), { except: client });
     this.botsAnpassen();
     this.sprachStart(client); this.sprachPartner();
   }
@@ -994,15 +995,9 @@ export class SpielRaum extends Room {
     if (!text) return;
     const jetzt = Date.now();
     const zeiten = (this.chatZeiten.get(client.sessionId) ?? []).filter(z => jetzt - z < CHAT_FENSTER);
-    if (zeiten.length >= CHAT_ANZAHL) { this.chatZeiten.set(client.sessionId, zeiten); client.send('meldung', { text: 'Langsam – zu viele Nachrichten' }); return; }
+    if (zeiten.length >= CHAT_ANZAHL) { this.chatZeiten.set(client.sessionId, zeiten); client.send('meldung', M('chat.langsam')); return; }
     zeiten.push(jetzt); this.chatZeiten.set(client.sessionId, zeiten);
-    let ort = 'draußen';
-    const safe = safeRoomVon(this.welt, p);
-    if (safe) ort = '🛡 ' + safe.name;
-    else if (p.ebene) {
-      const e = EBENE_MUSTER.exec(p.ebene);
-      ort = (e && this.welt.haeuser?.[Number(e[1])]?.name) || 'in einem Haus';
-    }
+    const ort = chatOrt(this.welt, p, safeRoomVon, EBENE_MUSTER);   // { k, w } oder Hausname
     const nachricht = { id: this.naechsteChatId++, von: this.chatKennung(client.sessionId), name: p.name, farbe: p.farbe, zeit: jetzt, text, ort };
     this.chatVerlauf.push(nachricht);
     if (this.chatVerlauf.length > CHAT_VERLAUF) this.chatVerlauf.splice(0, this.chatVerlauf.length - CHAT_VERLAUF);
@@ -1019,7 +1014,7 @@ export class SpielRaum extends Room {
       x.afkBot = null; x.eingabe = { dx: 0, dy: 0, s: false };
       const p = this.state.spieler.get(sid);
       if (p) this.eingabeVerwerfen(p, x);   // während der Bot steuerte, lief die Warteschlange voll (Stand-Stücke): sonst hängt der Server danach bis 4 s hinterher
-      if (p) { p.afk = false; this.broadcast('meldung', { text: `${p.name} ist wieder da` }); }
+      if (p) { p.afk = false; this.broadcast('meldung', M('sp.wiederDa', { name: p.name })); }
     }
   }
 
@@ -1034,7 +1029,7 @@ export class SpielRaum extends Room {
     x.afkBot = { nr: 0, afk: true, plan: { rolle: 'begleiter', auftrag: null, pause: 0 } };
     this.eingabeVerwerfen(p, x);
     p.afk = true; p.spricht = false;
-    this.broadcast('meldung', { text: `🤖 ${p.name} ist untätig – ein Bot übernimmt die Figur` });
+    this.broadcast('meldung', M('sp.afk', { name: p.name }));
   }
 
   // Simulierte Mitspieler: bei einem Menschen so viele wie eingestellt, jeder weitere Mensch ersetzt einen
@@ -1169,8 +1164,7 @@ export class SpielRaum extends Room {
     const p = this.state.spieler.get(client.sessionId);
     if (!p) return;
     this.speichereSpieler(client.sessionId);
-    const text = p.sicher ? `${p.name} ruht sich aus` : `${p.name} hat sich versteckt`;
-    this.broadcast('meldung', { text });
+    this.broadcast('meldung', M(p.sicher ? 'sp.ruht' : 'sp.versteckt', { name: p.name }));
     this.state.spieler.delete(client.sessionId);
     this.sprachNeu(client.sessionId);
     this.extra.delete(client.sessionId);
@@ -1224,7 +1218,7 @@ export class SpielRaum extends Room {
     if (q !== s.nebel) {
       const kam = s.nebel < 0.05 && q >= 0.05;
       s.nebel = q;
-      if (kam && q < 0.2) this.broadcast('meldung', { text: '🌫 Nebel zieht auf – die Sicht wird schlecht', lang: true });
+      if (kam && q < 0.2) this.broadcast('meldung', M('welt.nebel', null, L));
     }
   }
 
@@ -1300,7 +1294,7 @@ export class SpielRaum extends Room {
     }
     // Aufgaben-Plan (Missionsorte hängen von den Behältern der Erdgeschosse ab) neu berechnen, Abgaben und Hinweise bleiben
     if (this.aufgaben?.planKey) { this.aufgaben.planen(this.aufgaben.speichern()?.mission ?? null); }
-    this.broadcast('meldung', { text: an ? '🏠 Innenräume jetzt maßstäblich' : '🏠 Innenräume wieder im alten Maßstab' });
+    this.broadcast('meldung', M(an ? 'welt.innenNeu' : 'welt.innenAlt'));
   }
 
   einstellungenGeaendert() {
@@ -1330,7 +1324,7 @@ export class SpielRaum extends Room {
   // Testzugang: Anmeldung ins Protokoll (nie das Passwort), Rückmeldung nur an den Spieler selbst
   suAnmeldung(client, p, auth) {
     if (auth?.su) { console.log(`[Superuser] ${p.name} hat sich angemeldet`); client.send('su', { an: true }); }
-    else if (auth?.grund) { console.log(`[Superuser] Anmeldung von ${p.name} abgelehnt: ${auth.grund}`); client.send('meldung', { text: '🔒 ' + auth.grund }); }
+    else if (auth?.grund) { console.log(`[Superuser] Anmeldung von ${p.name} abgelehnt: ${textAus(auth.grund)}`); client.send('meldung', M('su.abgelehnt', { grund: auth.grund })); }
   }
 
   // von der Verwaltungsseite: alle bekommen Bescheid, die Welt wird verworfen und beim nächsten Beitritt neu gebaut
@@ -1372,7 +1366,7 @@ export class SpielRaum extends Room {
     const neu = FK.gebeXp(x.fk, menge, e.xpFaktor / 100);
     if (neu > 0) {
       const c = this.clients.find(k => k.sessionId === sid);
-      c?.send('meldung', { text: `⭐ Level ${FK.levelAus(x.fk.xp)} – ${FK.freiePunkte(x.fk)} Punkt${FK.freiePunkte(x.fk) === 1 ? '' : 'e'} frei (Taste K)`, lang: true });
+      c?.send('meldung', M('fk.level', { level: FK.levelAus(x.fk.xp), n: FK.freiePunkte(x.fk) }, L));
       this.speichereSpieler(sid);
     }
     this.fkSenden(sid);
@@ -1404,7 +1398,7 @@ export class SpielRaum extends Room {
     this.speichereSpieler(client.sessionId);
     this.fkSenden(client.sessionId);
     client.send('startwahl_ok', { zufall });
-    client.send('meldung', { text: `🎲 Zufall: ${DINGE[zufall]?.zeichen ?? ''} ${DINGE[zufall]?.name ?? zufall}`, lang: true });
+    client.send('meldung', M('fk.zufall', { z: DINGE[zufall]?.zeichen ?? '', ding: D(zufall) }, L));
   }
   // zwei gewählte Gegenstände + ein zufälliger; gibt den Zufallsgegenstand zurück
   startAusruestung(p, x, items) {
@@ -1698,7 +1692,7 @@ export class SpielRaum extends Room {
       if (!x.bot && !this.tuerEintritt(p, x, h, dt)) return;
       // brennende Häuser kann man nicht betreten
       if ([...this.brand?.info.values() ?? []].some(i => i.ziel === 'haus:' + h.nr)) {
-        if (!x.bot) this.clients.find(c => c.sessionId === id)?.send('meldung', { text: '🔥 Das Haus brennt – da kommst du nicht rein' });
+        if (!x.bot) this.clients.find(c => c.sessionId === id)?.send('meldung', M('tuer.hausBrennt'));
         bewege(welt, p, h.raus.dx * 20, h.raus.dy * 20, W.spielerRadius); return;
       }
       this.haustuerOeffnen(h.nr);   // Menschen gehen durch geschlossene Haustüren hindurch (Barrikaden halten nur Zombies auf)
@@ -1997,7 +1991,7 @@ export class SpielRaum extends Room {
   }
 
   sageDrin(key, text) {
-    for (const [sid] of this.spielerHinterTuer(key)) this.clients.find(c => c.sessionId === sid)?.send('meldung', { text });
+    for (const [sid] of this.spielerHinterTuer(key)) this.clients.find(c => c.sessionId === sid)?.send('meldung', nachricht(text));
   }
 
   // Gehört die Tür zu einem Safehouse (Haustür oder Tür innen)? Dann hält sie geschlossen/verbarrikadiert immer
@@ -2018,7 +2012,7 @@ export class SpielRaum extends Room {
       if (st.hp <= 0) {
         st.kaputt = true; st.verschlossen = false; st.hp = 0;
         this.setzeTuer(key, true);
-        this.sageDrin(key, '💥 Die Tür ist zerbrochen!');
+        this.sageDrin(key, M('tuer.zerbrochen'));
         this.laerm(z.x, z.y, 300, true, z.ebene ?? '', z);
         return;
       }
@@ -2027,7 +2021,7 @@ export class SpielRaum extends Room {
     const jetzt = Date.now(), u = this.tuerUhr?.get(key) ?? { laerm: 0, meldung: 0 };
     if (!this.tuerUhr) this.tuerUhr = new Map();
     if (jetzt - u.laerm > 1000) { u.laerm = jetzt; this.laerm(z.x, z.y, 220, true, z.ebene ?? '', z); }
-    if (jetzt - u.meldung > 6000) { u.meldung = jetzt; this.sageDrin(key, '🧟 Zombies hämmern gegen die Tür!'); }
+    if (jetzt - u.meldung > 6000) { u.meldung = jetzt; this.sageDrin(key, M('tuer.haemmern')); }
     this.tuerUhr.set(key, u);
   }
 
@@ -2040,7 +2034,7 @@ export class SpielRaum extends Room {
     const p = this.state.spieler.get(ich), q = this.state.spieler.get(du);
     if (!p || !q || ich === du || this.tausche.has(ich) || this.tausche.has(du)) return;
     if (p.unten || q.unten || p.zombie > 0 || q.zombie > 0 || p.ebene !== q.ebene) return;
-    if (Math.hypot(p.x - q.x, p.y - q.y) > reichVon(this.wv(p.ebene), TAUSCH_ABSTAND + 8)) return client.send('meldung', { text: 'Zum Tauschen musst du direkt neben ihm stehen' });
+    if (Math.hypot(p.x - q.x, p.y - q.y) > reichVon(this.wv(p.ebene), TAUSCH_ABSTAND + 8)) return client.send('meldung', M('tausch.nah'));
     const t = { seiten: [ich, du], angebot: { [ich]: [], [du]: [] }, ok: { [ich]: false, [du]: false } };
     this.tausche.set(ich, t); this.tausche.set(du, t);
     this.tauschGeaendert(t);
@@ -2097,16 +2091,16 @@ export class SpielRaum extends Room {
     if (!(t.ok[a] && t.ok[b])) {
       const bs = t.seiten.find(q => this.istBot(q) && !t.ok[q]);
       if (bs) {
-        const bot = this.state.spieler.get(bs), name = bot?.name ?? 'Der Bot';
+        const bot = this.state.spieler.get(bs), name = bot?.name ?? M('tausch.derBot');
         const H = t.angebot[t.seiten.find(q => q !== bs)] ?? [], B = t.angebot[bs] ?? [];
         const voll = bot && !this.tauschPasst(bot, H);
-        this.clients.find(k => k.sessionId === client.sessionId)?.send('meldung', { text: voll ? `${name}: Mein Rucksack ist voll` : `${name} will das so nicht tauschen` });
+        this.clients.find(k => k.sessionId === client.sessionId)?.send('meldung', M(voll ? 'tausch.botVoll' : 'tausch.botNein', { name }));
       }
       return this.tauschSenden(t);
     }
     const pa = this.state.spieler.get(a), pb = this.state.spieler.get(b);
     if (!this.tauschPasst(pa, t.angebot[b]) || !this.tauschPasst(pb, t.angebot[a])) {
-      for (const s of t.seiten) this.clients.find(k => k.sessionId === s)?.send('meldung', { text: 'Für den Tausch ist im Rucksack nicht genug Platz' });
+      for (const s of t.seiten) this.clients.find(k => k.sessionId === s)?.send('meldung', M('tausch.platz'));
       return this.tauschGeaendert(t);
     }
     for (const d of t.angebot[b]) fuegeHinzu(pa.rucksack, pa.plaetze, d);
@@ -2162,16 +2156,16 @@ export class SpielRaum extends Room {
     if (!k) return;
     if (k.art === 'raetsel') return this.stelleRaetsel(client);
     if (k.art === 'schlossraetsel') return this.stelleRaetsel(client, { art: 'tuer', key: k.key, tuer: k.tuer, ebene: k.ebene });
-    if (k.art === 'schluessel_noetig') return client.send('meldung', { text: '🔑 Diese Tür braucht einen Schlüssel' });
+    if (k.art === 'schluessel_noetig') return client.send('meldung', M('tuer.schluessel'));
     if (k.art === 'funk') {   // Funkspruch braucht Funkgerät, Batterie und Antenne (in einer Safe-Room-Kiste abgegeben)
       const fehlt = this.aufgaben?.funkFehlt() ?? [];
-      if (fehlt.length) return client.send('meldung', { text: `📻 Der Funkspruch geht noch nicht – es fehlt: ${fehlt.join(', ')} (in die Safe-Room-Kiste legen)`, lang: true });
+      if (fehlt.length) return client.send('meldung', M('auf.funkFehlt', { fehlt }, L));
     }
     // Kofferräume gehen nur mit Brechstange auf
     if (k.art === 'durchsuchen' && k.behaelter?.art === 'auto' && !hat(p.rucksack, 'brechstange')) {
-      return client.send('meldung', { text: '🔒 Der Kofferraum ist zu – dafür brauchst du eine ⚒️ Brechstange' });
+      return client.send('meldung', M('tuer.kofferraum'));
     }
-    if (k.art === 'tuer_zu' && this.tuerBlockiert(k, p)) return client.send('meldung', { text: '🚪 Tür blockiert' });
+    if (k.art === 'tuer_zu' && this.tuerBlockiert(k, p)) return client.send('meldung', M('tuer.blockiert'));
     p.aktion = k.art; p.fortschritt = 0;
     x.aktionZiel = k;
     x.laermUhr = 0;
@@ -2200,11 +2194,11 @@ export class SpielRaum extends Room {
     else if (k.art === 'durchsuchen_alle') this.alleDurchsucht(client, p, k.ids);
     else if (k.art === 'tuer_auf' || k.art === 'aufschliessen' || k.art === 'aufbrechen') {
       this.setzeTuer(k.key, true);
-      if (k.art === 'aufbrechen') client?.send('meldung', { text: '⚒️ Tür aufgebrochen – das war laut!' });
+      if (k.art === 'aufbrechen') client?.send('meldung', M('tuer.aufgebrochen'));
     }
     else if (k.art === 'funk') this.aufgaben?.funkAbsetzen(p, k.safe);
     else if (k.art === 'tuer_zu') {
-      if (this.tuerBlockiert(k, p)) { client?.send('meldung', { text: '🚪 Tür blockiert' }); return; }
+      if (this.tuerBlockiert(k, p)) { client?.send('meldung', M('tuer.blockiert')); return; }
       this.tuerSchieben(k, p);
       this.setzeTuer(k.key, false);
       // von Hand geschlossen: die Auto-Öffnung greift für diese Tür erst wieder, wenn man sich > 80 px entfernt hat
@@ -2225,15 +2219,15 @@ export class SpielRaum extends Room {
       const tx = (a.x + 0.5) * kachelVon(sw), ty = (a.y + 0.5) * kachelVon(sw), w = Math.atan2(sw.start.y - ty, sw.start.x - tx);
       const ziel = this.freierPlatz({ x: tx + Math.cos(w) * kachelVon(sw) * (sw.kachel ? 12 : 2.2), y: ty + Math.sin(w) * kachelVon(sw) * (sw.kachel ? 12 : 2.2) }, 0, k.safe.ebene);
       l.x = ziel.x; l.y = ziel.y;
-      client?.send('meldung', { text: 'Den toten Zombie aus der Tür gezogen' });
+      client?.send('meldung', M('tuer.leicheWeg'));
     }
     else if (k.art === 'barrikade') {
-      if (k.safe && this.leicheInTuer(k.safe)) return client?.send('meldung', { text: 'Ein toter Zombie liegt in der Tür – erst wegziehen' });
+      if (k.safe && this.leicheInTuer(k.safe)) return client?.send('meldung', M('tuer.leiche'));
       if (!hat(p.rucksack, 'bretter')) return;
       if (this.tuerBarrikade(k.key) >= 100) return;
       entferne(p.rucksack, 'bretter', 1);
       this.setzeBarrikade(k.key, this.tuerBarrikade(k.key) + BRETT_STAERKE);
-      client?.send('meldung', { text: `Tür verbarrikadiert (${Math.round(this.tuerBarrikade(k.key))} %)` });
+      client?.send('meldung', M('tuer.barrikade', { n: Math.round(this.tuerBarrikade(k.key)) }));
     }
   }
 
@@ -2245,7 +2239,7 @@ export class SpielRaum extends Room {
     const p = this.state.spieler.get(client.sessionId), x = this.extra.get(client.sessionId);
     if (!p || !x || p.aktion || p.anBord || p.unten || p.zombie > 0 || this.state.phase !== 'spiel') return;
     if (!p.ebene) return this.beginneAlle(client, p, x);
-    if ((x.alleSperre ?? 0) > Date.now()) return void client.send('meldung', { text: `⏳ Alles durchsuchen: noch ${Math.ceil((x.alleSperre - Date.now()) / 1000)} s gesperrt` });
+    if ((x.alleSperre ?? 0) > Date.now()) return void client.send('meldung', M('alle.gesperrt', { n: Math.ceil((x.alleSperre - Date.now()) / 1000) }));
     if (!weiter) x.alleQuiz = { nr: 0 };
     else if (!x.alleQuiz) return;
     this.stelleRaetsel(client, { art: 'alle', nr: x.alleQuiz.nr + 1 });
@@ -2253,7 +2247,7 @@ export class SpielRaum extends Room {
 
   beginneAlle(client, p, x) {
     const { liste, dauer, autoZu } = alleKandidaten(this.wv(p.ebene), this.state.behaelter, this.state.leichen, p, hat(p.rucksack, 'brechstange'));
-    if (!liste.length) return void client.send('meldung', { text: autoZu ? '🔒 Die Kofferräume sind zu – dafür brauchst du eine ⚒️ Brechstange' : 'Hier gibt es nichts mehr zu durchsuchen' });
+    if (!liste.length) return void client.send('meldung', M(autoZu ? 'alle.kofferraeume' : 'alle.nichts'));
     p.aktion = 'durchsuchen'; p.fortschritt = 0;
     x.aktionZiel = { art: 'durchsuchen_alle', ids: liste.map(e => e.id), dauer };
     x.laermUhr = 0;
@@ -2276,7 +2270,7 @@ export class SpielRaum extends Room {
     const basis = { loesung: offen.richtig, seite: offen.seite };
     if (!richtig || !x) {
       if (x) { x.alleQuiz = null; x.alleSperre = Date.now() + ALLE_SPERRE * 1000; }
-      client.send('meldung', { text: `❌ Falsch – erst in ${ALLE_SPERRE} s wieder` });
+      client.send('meldung', M('alle.falsch', { n: ALLE_SPERRE }));
       client.send('alle_sperre', { sek: ALLE_SPERRE });
       return client.send('aufloesung', { richtig: false, ...basis, alle: { nr: nr - 1, von: ALLE_FRAGEN, weiter: false } });
     }
@@ -2285,7 +2279,7 @@ export class SpielRaum extends Room {
     client.send('aufloesung', { richtig: true, ...basis, alle: { nr, von: ALLE_FRAGEN, fertig, weiter: !fertig } });
     if (!fertig || p.aktion || p.unten) return;
     const n = this.oeffneAlleTueren(p);
-    if (n) client.send('meldung', { text: `🔓 ${n} Tür${n === 1 ? '' : 'en'} geöffnet` });
+    if (n) client.send('meldung', M('alle.tueren', { n }));
     this.beginneAlle(client, p, x);
   }
 
@@ -2436,7 +2430,7 @@ export class SpielRaum extends Room {
       z.jagt = true; z.richtung = Math.atan2(p.y - y, p.x - x);
       info.ziel = client?.sessionId ?? null; info.steht = false; info.schlaeft = false; info.verloren = 0;
       this.broadcast('entdeckt', { x, y, ebene: p.ebene ?? '' });
-      client?.send('meldung', { text: '🧟 Ein Zombie springt heraus!' });
+      client?.send('meldung', M('fund.zombie'));
       return true;
     }
     return false;   // kein Platz: nichts passiert
@@ -2478,7 +2472,7 @@ export class SpielRaum extends Room {
       (this.zettelBei ??= new Set()).add(id);
       if (this.rnd() < ZETTEL_CHANCE) {
         const d = this.missionHinweis();
-        if (d) client?.send('meldung', { text: `📝 Ein Zettel in der Tasche: Hinweis auf ${DINGE[d].zeichen} ${DINGE[d].name} – der Suchkreis auf der Karte ist kleiner geworden`, lang: true });
+        if (d) client?.send('meldung', M('fund.zettel', { z: DINGE[d].zeichen, ding: D(d) }, L));
       }
     }
   }
@@ -2558,7 +2552,7 @@ export class SpielRaum extends Room {
   // Munition aufnehmen: in den Zähler, Überschuss als Munitionskisten (server/munition.mjs)
   munitionNehmen(p, n, client = null) {
     const { kisten } = munitionGeben(p, n);
-    if (kisten > 0) client?.send('meldung', { text: `📦 Munition voll – ${kisten} Munitionskiste${kisten > 1 ? 'n' : ''} eingepackt` });
+    if (kisten > 0) client?.send('meldung', M('inv.kisten', { n: kisten }));
   }
 
   benutze(client, m) {
@@ -2567,40 +2561,40 @@ export class SpielRaum extends Room {
     if (!p || p.unten || p.zombie > 0 || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
     const d = dingId(p.rucksack[i]);
     if (d === 'spritze') return this.spritze(client, p, i);
-    if (d === 'radio') { if (!this.radios.aufstellen(client, i)) client.send('meldung', { text: '📻 Das Radio geht jetzt nicht an' }); return; }
-    if (d === 'granate') { if (!this.granaten.werfen(client)) client.send('meldung', { text: '💣 Jetzt geht kein Wurf' }); return; }
+    if (d === 'radio') { if (!this.radios.aufstellen(client, i)) client.send('meldung', M('inv.radioNicht')); return; }
+    if (d === 'granate') { if (!this.granaten.werfen(client)) client.send('meldung', M('inv.keinWurf')); return; }
     if (d === 'wasser') { p.durst = Math.min(100, p.durst + 45); nimmEins(p.rucksack, i); }
     else if (d === 'essen') { p.hunger = Math.min(100, p.hunger + 45); nimmEins(p.rucksack, i); }
     else if (d === 'schokoriegel') { p.hunger = Math.min(100, p.hunger + 20); nimmEins(p.rucksack, i); }
     else if (DINGE[d]?.plaetze) {
       const bonus = this.fkRucksack(p);
-      if (DINGE[d].plaetze <= p.plaetze - bonus) return client.send('meldung', { text: 'Dein Rucksack ist schon so groß' });
+      if (DINGE[d].plaetze <= p.plaetze - bonus) return client.send('meldung', M('inv.schonGross'));
       p.plaetze = DINGE[d].plaetze + bonus; nimmEins(p.rucksack, i);
-      client.send('meldung', { text: `${DINGE[d].zeichen} Umgepackt – jetzt ${p.plaetze} Plätze` });
+      client.send('meldung', M('inv.umgepackt', { z: DINGE[d].zeichen, n: p.plaetze }));
     }
     else if (d === 'kleidung') {
-      if (p.kleidung >= 100) return client.send('meldung', { text: 'Du trägst schon feste Kleidung' });
+      if (p.kleidung >= 100) return client.send('meldung', M('inv.kleidungSchon'));
       p.kleidung = 100; nimmEins(p.rucksack, i);
-      client.send('meldung', { text: '🧥 Feste Kleidung angezogen – Bisse gehen seltener durch' });
+      client.send('meldung', M('inv.kleidung'));
     }
-    else if (d === 'seil') { client.send('meldung', { text: '🪢 Ein Seil – brauchst du später am Fluss' }); }
-    else if (d === 'taschenlampe') { client.send('meldung', { text: '🔦 Schaltet sich in Häusern von selbst ein (hält etwa eine Stunde)' }); }
-    else if (d === 'funkgeraet') { client.send('meldung', { text: '📻 Mit einem zweiten Funkgerät im Rucksack hörst du die Mitspieler überall' }); }
+    else if (d === 'seil') { client.send('meldung', M('inv.seil')); }
+    else if (d === 'taschenlampe') { client.send('meldung', M('inv.lampe')); }
+    else if (d === 'funkgeraet') { client.send('meldung', M('inv.funk')); }
     else if (d === 'verband') {
-      if (p.hp >= 100) return client.send('meldung', { text: 'Du bist nicht verletzt' });
+      if (p.hp >= 100) return client.send('meldung', M('inv.unverletzt'));
       p.hp = Math.min(100, p.hp + 45 * this.fkWert(p, 'heilen')); nimmEins(p.rucksack, i);
     } else if (DINGE[d]?.waffe) {
       const alt = WP.inDieHand(this, client, p, this.extra.get(client.sessionId), d, SpielRaum.einstellungen);   // freier Waffenplatz, sonst Tausch mit der Hand
       // Hand ↔ Rucksack: ein Messer vom Stapel nehmen; die bisherige Waffe kommt in den Rucksack (nicht auf den Stapel, wenn dort kein Platz frei ist)
       nimmEins(p.rucksack, i);
       if (alt && fuegeHinzu(p.rucksack, p.plaetze, alt) < 1) this.legeHin(alt, p.x, p.y, p.ebene);
-      client.send('meldung', { text: `${DINGE[d].name} in der Hand` });
+      client.send('meldung', M('inv.inHand', { ding: D(d) }));
     } else if (d === 'munitionskiste') {
-      if (p.munition >= MUNITION_MAX) return client.send('meldung', { text: '📦 Deine Munition ist schon voll' });
+      if (p.munition >= MUNITION_MAX) return client.send('meldung', M('inv.munVoll'));
       kisteOeffnen(p);
-      client.send('meldung', { text: `📦 Munitionskiste geöffnet: +${MUNITIONSKISTE_SCHUSS} Schuss` });
+      client.send('meldung', M('inv.kisteAuf', { n: MUNITIONSKISTE_SCHUSS }));
     } else if (d === 'bretter') {
-      client.send('meldung', { text: 'Bretter: an einer Tür verbarrikadieren (Taste an der Tür)' });
+      client.send('meldung', M('inv.bretter'));
     }
   }
 
@@ -2615,12 +2609,10 @@ export class SpielRaum extends Room {
         if (d < bd) { bd = d; ziel = o; }
       }
     }
-    if (!ziel) return client.send('meldung', { text: 'Niemand hier ist infiziert – hebe die Spritze auf' });
+    if (!ziel) return client.send('meldung', M('inv.keinInfizierter'));
     nimmEins(p.rucksack, i);
     ziel.infektion = 0;
-    this.broadcast('meldung', {
-      text: ziel === p ? `💉 ${p.name} hat sich die Rettungsspritze gesetzt` : `💉 ${p.name} hat ${ziel.name} die Rettungsspritze gesetzt`,
-    });
+    this.broadcast('meldung', ziel === p ? M('inv.spritzeSelbst', { name: p.name }) : M('inv.spritze', { name: p.name, ziel: ziel.name }));
   }
 
   // Bodengegenstand einsammeln (Rucksack muss Platz haben, wenn er dort landet)
@@ -2637,11 +2629,11 @@ export class SpielRaum extends Room {
     else if (d === 'kleidung' && !(p.kleidung > 0)) p.kleidung = 100;
     else {
       const grund = blockGrund(p.rucksack, p.plaetze, d);
-      if (grund) return client?.send('meldung', { text: '🎒 Rucksack voll' });
+      if (grund) return client?.send('meldung', M('inv.voll'));
       fuegeHinzu(p.rucksack, p.plaetze, d);
     }
     this.state.boden.delete(id);
-    client?.send('meldung', { text: `Aufgehoben: ${DINGE[d]?.zeichen ?? ''} ${DINGE[d]?.name ?? d}` });
+    client?.send('meldung', M('inv.aufgehoben', { z: DINGE[d]?.zeichen ?? '', ding: D(d) }));
   }
 
   // Aufheben mit Auswahl: { id, platz? } – bei vollem Rucksack räumt "platz" den Platz frei (Gegenstand fällt zu Boden)
@@ -2655,8 +2647,8 @@ export class SpielRaum extends Room {
     if (this.bodenBrauchtPlatz(p, d)) {
       if (!kannAufnehmen(p.rucksack, p.plaetze, d)) {
         const i = Number(m.platz);
-        if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return client.send('meldung', { text: '🎒 Rucksack voll – wähle, was du ablegst' });
-        if (DINGE[dingId(p.rucksack[i])]?.mission) return client.send('meldung', { text: '🧩 Missionsgegenstände lassen sich nur in die Safe-Room-Kiste legen' });
+        if (!Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return client.send('meldung', M('inv.vollWaehlen'));
+        if (DINGE[dingId(p.rucksack[i])]?.mission) return client.send('meldung', M('inv.missionKiste'));
         // ein volles Fach wird zum Platzmachen ganz geleert (ein Stück allein würde das Fach nicht freigeben)
         const alt = nimmStapel(p.rucksack, i);
         for (let k = 0; k < alt.n; k++) this.legeHin(alt.id, p.x, p.y, p.ebene);
@@ -2677,7 +2669,7 @@ export class SpielRaum extends Room {
     const i = Number(m?.platz);
     if (!p || !Number.isInteger(i) || i < 0 || i >= p.rucksack.length) return;
     const dd = dingId(p.rucksack[i]);
-    if (DINGE[dd]?.mission) return client.send('meldung', { text: `${DINGE[dd].zeichen} ${DINGE[dd].name} ist für die Mission wichtig – nur in die Safe-Room-Kiste legen` });
+    if (DINGE[dd]?.mission) return client.send('meldung', M('inv.missionWichtig', { z: DINGE[dd].zeichen, ding: D(dd) }));
     const ding = nimmEins(p.rucksack, i);
     this.legeHin(ding, p.x, p.y, p.ebene);
   }
@@ -2707,20 +2699,20 @@ export class SpielRaum extends Room {
     if (!p || p.unten || p.zombie > 0) return;
     const s = safeRoomVon(this.welt, p), k = s && this.wv(s.ebene).kuehlschrank;
     if (!k || Math.hypot(k.x - p.x, k.y - p.y) > reichVon(this.wv(p.ebene), AKTION_ABSTAND + 24)) return;
-    const sage = text => client.send('meldung', { text });
+    const sage = m => client.send('meldung', m);
     const stunde = (SpielRaum.einstellungen.tagMinuten || 48) * 60 / 24;
     const schluessel = this.extra.get(client.sessionId)?.spielerId ?? client.sessionId;
     this.kuehlLetzte ??= new Map();
     const letzte = this.kuehlLetzte.get(schluessel);
     if (letzte !== undefined && this.state.zeit - letzte < stunde) {
-      return sage(`🧊 Du hast gerade erst etwas genommen – in ${Math.ceil((stunde - (this.state.zeit - letzte)) / 60)} Min. wieder`);
+      return sage(M('kuehl.warten', { n: Math.ceil((stunde - (this.state.zeit - letzte)) / 60) }));
     }
-    if (p.durst >= 30 && p.hunger >= 30) return sage('🧊 Der Kühlschrank ist für den Notfall: erst bei unter 30 % Wasser oder Hunger');
+    if (p.durst >= 30 && p.hunger >= 30) return sage(M('kuehl.notfall'));
     const ding = p.durst <= p.hunger ? 'wasser' : 'essen';
-    if (!kannAufnehmen(p.rucksack, p.plaetze, ding)) return sage('Dein Rucksack ist voll');
+    if (!kannAufnehmen(p.rucksack, p.plaetze, ding)) return sage(M('kuehl.voll'));
     fuegeHinzu(p.rucksack, p.plaetze, ding);
     this.kuehlLetzte.set(schluessel, this.state.zeit);
-    sage(`🧊 Aus dem Kühlschrank: ${DINGE[ding].zeichen} ${DINGE[ding].name}`);
+    sage(M('kuehl.genommen', { z: DINGE[ding].zeichen, ding: D(ding) }));
   }
 
   // Das Bundeswehr-Lager zählt als Safe House, solange es steht: Ausruhen, Abmelden/Speichern, Infektion ruht, Vorratskisten
@@ -2773,7 +2765,7 @@ export class SpielRaum extends Room {
     if (offen && offen.bis > Date.now()) return;   // schon eine Frage offen
     const fragen = holeFragen();
     const f = waehleFrage(fragen, this.gestellt, this.rnd);
-    if (!f) return client.send('meldung', { text: 'Das Schloss klemmt – keine Rätsel gefunden' });
+    if (!f) return client.send('meldung', M('raetsel.keine'));
     this.gestellt.add(f.id);
     const { antworten, richtigIndex } = mischeAntworten(f, this.rnd);
     this.offeneRaetsel.set(client.sessionId, { id: f.id, richtigIndex, seite: f.seite, richtig: f.richtig, bis: Date.now() + 120000, zweck });
@@ -2796,7 +2788,7 @@ export class SpielRaum extends Room {
     if (offen.zweck?.art === 'alle') return this.alleAntwort(client, p, offen, richtig);
     if (offen.zweck?.art === 'tuer') {
       const z = offen.zweck;
-      if (richtig) { this.setzeTuer(z.key, true); this.xpGeben(client.sessionId, 'raetsel'); client.send('meldung', { text: '🔓 Das Schloss springt auf' }); }
+      if (richtig) { this.setzeTuer(z.key, true); this.xpGeben(client.sessionId, 'raetsel'); client.send('meldung', M('raetsel.auf')); }
       else this.laerm((z.tuer.x + 0.5) * KACHEL, (z.tuer.y + 0.5) * KACHEL, 300, true, z.ebene);
       client.send('aufloesung', { richtig, loesung: offen.richtig, seite: offen.seite });
       return;
@@ -2806,22 +2798,20 @@ export class SpielRaum extends Room {
     if (richtig && this.state.torGeloest < TOR_RAETSEL) {
       this.state.torGeloest++;
       const offenJetzt = this.state.torGeloest >= TOR_RAETSEL;
-      this.broadcast('meldung', {
-        text: offenJetzt ? `🔓 ${p.name} hat das letzte Schloss geknackt – das Tor ist offen!`
-          : `🔐 ${p.name} hat ein Schloss geknackt (${this.state.torGeloest}/${TOR_RAETSEL})`, lang: true,
-      });
+      this.broadcast('meldung', offenJetzt ? M('raetsel.torOffen', { name: p.name }, L)
+        : M('raetsel.schloss', { name: p.name, nr: this.state.torGeloest, von: TOR_RAETSEL }, L));
       if (offenJetzt) this.broadcast('tor', {});
     } else if (!richtig) {
       // falsche Antwort: das Schloss klappert laut
       this.laerm((tor.x + 1) * KACHEL, (tor.y + 1) * KACHEL, 420, true);
-      this.broadcast('meldung', { text: `${p.name}: falsche Antwort – das Schloss klappert laut!` }, { except: client });
+      this.broadcast('meldung', M('raetsel.falsch', { name: p.name }), { except: client });
     }
     client.send('aufloesung', { richtig, loesung: offen.richtig, seite: offen.seite });
   }
 
   ausruhen(client) {
     const p = this.state.spieler.get(client.sessionId);
-    if (!p || !p.sicher) return client.send('meldung', { text: 'Abmelden geht nur in einem Safe Room' });
+    if (!p || !p.sicher) return client.send('meldung', M('sp.abmelden'));
     this.speichereSpieler(client.sessionId);
     this.speichereWelt();
     client.send('ausgeruht', {});
@@ -2872,7 +2862,7 @@ export class SpielRaum extends Room {
     const raffer = this.aufgaben?.warteRaffer?.() ?? 1;   // Warten am Abholpunkt: nur die Uhr läuft schneller
     s.uhr = (s.uhr + dt * zr * raffer * 1440 / ((SpielRaum.einstellungen.tagMinuten || 48) * 60)) % 1440;
     this.nebelSchritt();
-    if (istNacht(s.uhr) !== vorher) this.broadcast('meldung', { text: istNacht(s.uhr) ? '🌙 Die Nacht bricht herein – Zombies werden mehr. Taschenlampe bereit?' : '🌅 Es wird Tag', lang: true });
+    if (istNacht(s.uhr) !== vorher) this.broadcast('meldung', M(istNacht(s.uhr) ? 'welt.nacht' : 'welt.tag', null, L));
     this.feldZeit -= dt; this.feldAlter = (this.feldAlter ?? 0) + dt;
     if (this.feldZeit <= 0) {
       this.feldZeit = 0.4;
@@ -2963,7 +2953,7 @@ export class SpielRaum extends Room {
     if (echte.length > 0 && stehend.length === 0) {
       s.phase = 'erwischt';
       this.erwischtSeit = 0;
-      this.broadcast('meldung', { text: 'Alle erwischt! Ihr schleppt euch in die Safe Rooms …', lang: true });
+      this.broadcast('meldung', M('sp.alleErwischt', null, L));
     }
   }
 
@@ -3054,7 +3044,7 @@ export class SpielRaum extends Room {
     const client = x.bot ? null : this.clients.find(c => c.sessionId === id);
     // Magazin, Nachladen und Waffenwechsel bei leerer Waffe (Server ist maßgeblich; Bots wie Spieler)
     WP.schritt(this, client, p, x, dt, SpielRaum.einstellungen);
-    if (p.munition <= MUNITION_KISTE_AB) munitionPruefen(p, x.bot ? null : t => client?.send('meldung', { text: t }));   // Reserve-Kiste öffnen
+    if (p.munition <= MUNITION_KISTE_AB) munitionPruefen(p, x.bot ? null : m => client?.send('meldung', nachricht(m)));   // Reserve-Kiste öffnen
     const reich = welt.reich ?? 1, nahR = 24 * reich;   // „nah“ = 3 m
     x.feuerSchuldT = Math.max(0, (x.feuerSchuldT ?? 0) - dt);
     // Kommt ein Zombie (jagt dich innerhalb 6 m oder steht innerhalb 3 m in Sicht), bricht jede Aktion ab: erst kämpfen
@@ -3065,7 +3055,7 @@ export class SpielRaum extends Room {
         const d = Math.hypot(z.x - p.x, z.y - p.y);
         if ((d <= nahR && sichtfrei(welt, p.x, p.y, z.x, z.y)) || (d <= 48 * reich && this.zombieInfo.get(zid)?.ziel === id)) { gefahr = true; break; }
       }
-      if (gefahr) { p.aktion = ''; p.fortschritt = 0; x.aktionZiel = null; client?.send('meldung', { text: 'Abgebrochen – Zombie!' }); }
+      if (gefahr) { p.aktion = ''; p.fortschritt = 0; x.aktionZiel = null; client?.send('meldung', M('sp.abgebrochen')); }
     }
     let pause = x.pause - dt;
     if (pause > 0.5 && x.pauseFern && this.naechsterZombie(p.x, p.y, nahR, p)) pause = 0.5;   // langer Schussabstand nach fernem Ziel: nahem Zombie nicht ausliefern
@@ -3214,7 +3204,7 @@ export class SpielRaum extends Room {
     if (p.zombie > 0) {
       p.ruht = false;
       p.zombie = Math.max(0, p.zombie - dt);
-      if (p.zombie === 0) this.zurueckverwandeln(p, x, 'Die Verwandlung lässt nach');
+      if (p.zombie === 0) this.zurueckverwandeln(p, x, M('sp.verwandlungNach'));
       return;
     }
     // Infektion läuft nur draußen
@@ -3241,7 +3231,7 @@ export class SpielRaum extends Room {
 
   verwandeln(p) {
     p.zombie = ZOMBIE_ZEIT; p.hp = 100; p.unten = false; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0;
-    this.broadcast('meldung', { text: `🧟 ${p.name} hat sich verwandelt! Lauft!`, lang: true });
+    this.broadcast('meldung', M('sp.verwandelt', { name: p.name }, L));
     this.broadcast('verwandelt', { name: p.name });
   }
 
@@ -3250,12 +3240,12 @@ export class SpielRaum extends Room {
     const pos = this.safePlatz(safe);
     p.x = pos.x; p.y = pos.y; p.ebene = pos.ebene;
     p.zombie = 0; p.infektion = 0; p.hp = 50; p.unten = false; p.hilfe = 0;
-    this.broadcast('meldung', { text: `${grund}: ${p.name} wacht im ${safe.name} wieder als Mensch auf`, lang: true });
+    this.broadcast('meldung', M('sp.erwacht', { grund, name: p.name, ort: ortK(safe.name) }, L));
   }
 
   liegtAmBoden(p) {
     p.unten = true; p.hilfe = 0; p.aktion = ''; p.fortschritt = 0;
-    this.broadcast('meldung', { text: `${p.name} liegt am Boden – hilf ihm auf!`, lang: true });
+    this.broadcast('meldung', M('sp.amBoden', { name: p.name }, L));
   }
 
   // Ziel für die automatische Waffe: Bäume verdecken nicht ganz (Güte), Wand/Innentür/Leer vollständig; Ergebnis [id, z, guete]
@@ -3290,7 +3280,7 @@ export class SpielRaum extends Room {
   schaden(id, z, menge, von, vonSid = null) {
     if (id.startsWith('spieler:')) {
       z.hp = Math.max(0, z.hp - menge);
-      if (z.hp === 0) this.zurueckverwandeln(z, this.extra.get(id.slice(8)), `${von.name} hat den Zombie erledigt`);
+      if (z.hp === 0) this.zurueckverwandeln(z, this.extra.get(id.slice(8)), M('sp.zombieErledigt', { name: schuetzeK(von.name) }));
       return;
     }
     z.hp = Math.max(0, z.hp - menge);
@@ -3578,7 +3568,7 @@ export class SpielRaum extends Room {
           if (schutz) ziel.kleidung = Math.max(0, ziel.kleidung - dt * 4);
           if (!(ziel.infektion > 0) && this.rnd() < (SpielRaum.einstellungen.bissSpielerLevel?.[levelSchluessel(this.state.karte)] ?? SpielRaum.einstellungen.bissSpieler ?? BISS_CHANCE) * dt * (schutz ? 0.5 : 1)) {
             ziel.infektion = INFEKTION_DAUER;
-            this.broadcast('meldung', { text: `🦠 ${ziel.name} wurde gebissen! Eine Rettungsspritze hilft.`, lang: true });
+            this.broadcast('meldung', M('sp.gebissen', { name: ziel.name }, L));
           }
           if (ziel.hp <= 0) this.liegtAmBoden(ziel);
         }
@@ -3652,8 +3642,8 @@ export class SpielRaum extends Room {
     const info = [...this.zombieInfo.entries()].find(([id]) => this.state.zombies.get(id) === z)?.[1];
     if (info) { info.ziel = null; info.punkt = null; info.schlaeft = false; info.steht = false; }
     const s = this.safeVonHaus(h.nr);
-    if (s) this.broadcast('meldung', { text: `🧟 Ein Zombie ist in den ${s.name} eingedrungen!`, lang: true });
-    else this.sageDrin(key, '🧟 Ein Zombie ist ins Haus eingedrungen!');
+    if (s) this.broadcast('meldung', M('tuer.zombieSafe', { ort: ortK(s.name) }, L));
+    else this.sageDrin(key, M('tuer.zombieHaus'));
     return true;
   }
 
@@ -3768,9 +3758,7 @@ export class SpielRaum extends Room {
           if (mitVerband) entferne(h.rucksack, 'verband', 1);
           p.unten = false; p.hp = mitVerband ? 70 : 25; p.hilfe = 0;
           this.xpGeben(helfer[0], 'wiederbelebt');
-          this.broadcast('meldung', {
-            text: mitVerband ? `${h.name} hat ${p.name} verbunden und aufgeholfen` : `${h.name} hat ${p.name} notdürftig aufgeholfen`,
-          });
+          this.broadcast('meldung', M(mitVerband ? 'sp.verbunden' : 'sp.aufgeholfen', { h: h.name, name: p.name }));
         }
       } else p.hilfe = Math.max(0, p.hilfe - dt / 6);
     }
@@ -3897,6 +3885,6 @@ export class SpielRaum extends Room {
     }
     for (const info of this.zombieInfo.values()) { info.ziel = null; info.punkt = null; }
     s.phase = 'spiel';
-    this.broadcast('meldung', { text: 'Ihr seid im Safe Room aufgewacht – mit Kopfweh, aber lebendig.', lang: true });
+    this.broadcast('meldung', M('sp.aufgewacht', null, L));
   }
 }

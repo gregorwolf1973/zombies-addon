@@ -1,6 +1,7 @@
 // Abschnitt 4: Menschen in der Stadt und der Ausbruch.
 // Menschen gehen von zu Hause zum Einkaufen, zum Platz und zur Bushaltestelle, ein Bus fährt die Haltestellen ab.
 // Zombies wittern Menschen und beißen sie; Gebissene werden nach einer einstellbaren Zeit selbst zu Zombies.
+import { M, D, L } from './texte.mjs';
 import { schema, t } from '@colyseus/schema';
 import { entkoppeln } from './netzfeld.mjs';
 import { parkAutoFrei, parkWinkel } from '../client/pkw.mjs';
@@ -252,11 +253,11 @@ export class Stadtleben {
     const m = this.raum.state.menschen.get(mid), inf = this.info.get(mid);
     const client = this.raum.clients.find(c => c.sessionId === sid);
     if (!m || !inf || m.infiziert || inf.folgt || (m.ebene ?? '') !== (p.ebene ?? '')) return false;
-    if ([...this.info.values()].filter(i => i.folgt === sid).length >= 2) { client?.send('meldung', { text: '🙋 Du hast schon zwei Begleiter' }); return false; }
+    if ([...this.info.values()].filter(i => i.folgt === sid).length >= 2) { client?.send('meldung', M('mensch.zwei')); return false; }
     this.gruppeVerlassen(mid, inf);
     inf.folgt = sid; inf.modus = 'folgt'; inf.weg = null; inf.steckt = 0;
     m.folgt = true; m.versteckt = false; m.flieht = false;
-    client?.send('meldung', { text: '🙋 „Bitte bring mich in Sicherheit!“ – Er folgt dir, bring ihn in einen Safe Room.' });
+    client?.send('meldung', M('mensch.folgt'));
     return true;
   }
 
@@ -306,16 +307,16 @@ export class Stadtleben {
     s.menschen.delete(id); this.info.delete(id);
     s.gerettet = Math.min(65535, (s.gerettet ?? 0) + 1); this.gerettet++;
     this.raum.xpGeben?.(sid, 'rettung');
-    this.raum.broadcast('meldung', { text: `🙋 ${p.name} hat einen Menschen in Sicherheit gebracht!`, lang: true });
+    this.raum.broadcast('meldung', M('mensch.gerettet', { name: p.name }, L));
     // Belohnung: mit 60 % ein Hinweis auf einen offenen Missionsgegenstand, sonst ein nützlicher Gegenstand
     // (raum.missionHinweis liefert den Gegenstand und verkleinert dessen Suchkreis, oder null)
     const hinweis = this.raum.rnd() < 0.6 ? this.raum.missionHinweis?.('') : null;
-    if (hinweis) { client?.send('meldung', { text: `🗺 Der Gerettete verrät dir etwas über ${DINGE[hinweis]?.zeichen ?? ''} ${DINGE[hinweis]?.name ?? hinweis} – der Suchkreis auf der Karte ist kleiner geworden`, lang: true }); return 'hinweis'; }
+    if (hinweis) { client?.send('meldung', M('mensch.hinweis', { z: DINGE[hinweis]?.zeichen ?? '', ding: D(hinweis) }, L)); return 'hinweis'; }
     const ding = RETTUNG_BELOHNUNG[Math.floor(this.raum.rnd() * RETTUNG_BELOHNUNG.length)];
     const genommen = this.raum.einpacken(p, [ding]);
-    if (!genommen.length) { p.munition = Math.min(999, (p.munition ?? 0) + 20); client?.send('meldung', { text: '🎁 Zum Dank: 20 Schuss (Rucksack voll)' }); return 'munition'; }
+    if (!genommen.length) { p.munition = Math.min(999, (p.munition ?? 0) + 20); client?.send('meldung', M('mensch.dankSchuss')); return 'munition'; }
     client?.send('gefunden', { dinge: genommen, rest: 0 });
-    client?.send('meldung', { text: `🎁 Zum Dank: ${DINGE[ding]?.name ?? ding}` });
+    client?.send('meldung', M('mensch.dank', { ding: D(ding) }));
     return ding;
   }
 
@@ -665,7 +666,7 @@ export class Stadtleben {
     this.raum.zombieInfo.get(zid).bleibt = true;
     this.zuletztVerwandelt = zid;
     s.verwandelt = Math.min(65535, (s.verwandelt ?? 0) + 1);
-    this.raum.broadcast('meldung', { text: '🧟 Ein gebissener Mensch hat sich verwandelt' });
+    this.raum.broadcast('meldung', M('mensch.verwandelt'));
   }
 
   // Zombies ohne Ziel gehen auf sichtbare Menschen los und beißen bei Berührung

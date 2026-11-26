@@ -1,4 +1,5 @@
 // Gemeinsame Aufgaben, Funkspruch und Evakuierungsbus (server/aufgaben.mjs)
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -100,7 +101,7 @@ test('Funkspruch am Funktisch: Aktion dauert, ist laut und setzt die Aufgabe auf
     assert.ok(m, 'kein Funktisch im Safe Room');
     p.x = (m.x + m.b / 2) * KACHEL; p.y = (m.y + m.h) * KACHEL + 14;
     const meldungen = [];
-    c.onMessage('meldung', x => meldungen.push(x.text));
+    c.onMessage('meldung', x => meldungen.push(textAus(x)));
     assert.equal(raum.kontext(p)?.art, 'funk');
     // weit weg vom Tisch: keine Funk-Aktion
     const x0 = p.x; p.x = w.start.x; p.y = w.start.y;
@@ -206,7 +207,7 @@ test('Evakuierungsbus: nur mit Funkspruch, wartet, wer nahe steht ist an Bord', 
   try {
     setzeAufgaben(raum, ['funk', 'tor', 'zombies', 'lampen']);
     const meldungen = [];
-    a.c.onMessage('meldung', x => meldungen.push(x.text));
+    a.c.onMessage('meldung', x => meldungen.push(textAus(x)));
     // Warnung 30 Spielminuten vorher – nur mit Funkspruch
     raum.state.uhr = 17 * 60 + 40;
     await warte(300);
@@ -315,7 +316,7 @@ test('Levelwechsel: mit erfüllten Aufgaben fährt der Bus los, die Karte wechse
     setzeAufgaben(raum, ['funk', 'tor', 'zombies', 'lampen']);
     raum.aufgaben.wechselVerzoegerung = 100;
     const meldungen = [];
-    a.c.onMessage('meldung', x => meldungen.push(x.text));
+    a.c.onMessage('meldung', x => meldungen.push(textAus(x)));
     a.p.rucksack.clear(); a.p.rucksack.push('verband', 'wasser');
     raum.aufgaben.funkAbsetzen(a.p, raum.welt.safeRooms[0]);
     // drei von vier plus Pflicht reichen (Tor-Aufgabe fehlt)

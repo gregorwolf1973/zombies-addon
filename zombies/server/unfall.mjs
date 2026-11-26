@@ -1,6 +1,7 @@
 // Verkehrsunfälle: hin und wieder kommt ein fahrendes Auto von der Spur ab und kracht in ein anderes Fahrzeug oder eine Hauswand.
 // Danach raucht es, nach 10–20 s brennt es (Brandmechanik aus server/feuer.mjs) und explodiert mit einstellbarer Wahrscheinlichkeit.
 // Einstellungen (Verwaltung → Verkehr): unfall (Spielminuten im Mittel, 0 = aus), unfallExplosion (%), unfallSchaden (Lebenspunkte Spieler).
+import { M, nachricht } from './texte.mjs';
 import { frei } from '../client/welt.mjs';
 import { LAENGE } from './verkehr.mjs';
 import { unfallSzene } from './unfallszene.mjs';
@@ -136,7 +137,7 @@ export class Unfaelle {
     }
     this.raum.broadcast('krach', { x: f.x, y: f.y, ebene: '' });
     this.raum.laerm(f.x, f.y, 650, true, '');
-    this.melden(f.x, f.y, '💥 Unfall!');
+    this.melden(f.x, f.y, M('fz.unfall'));
     this.liste.set(id, { phase: 'rauch', t: 0, rauchBis: 10 + this.raum.rnd() * 10 });
     unfallSzene(this.raum, f);   // manchmal: Tür auf, ein Mensch flieht, ein Zombie verfolgt ihn (server/unfallszene.mjs)
   }
@@ -145,7 +146,7 @@ export class Unfaelle {
     const s = this.raum.state;
     for (const c of this.raum.clients ?? []) {
       const p = s.spieler.get(c.sessionId);
-      if (p && !p.ebene && Math.hypot(p.x - x, p.y - y) < MELDE_WEITE) { try { c.send('meldung', { text }); } catch { /* Verbindung weg */ } }
+      if (p && !p.ebene && Math.hypot(p.x - x, p.y - y) < MELDE_WEITE) { try { c.send('meldung', nachricht(text)); } catch { /* Verbindung weg */ } }
     }
   }
 

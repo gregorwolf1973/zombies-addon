@@ -6,13 +6,13 @@ export const MAX_STUFE = 5;
 export const MAX_LEVEL = 50;
 
 export const FAEHIGKEITEN = [
-  { id: 'zielen', name: 'Zielen', symbol: '🎯', text: 'Chance je Stufe, beim Schießen keine Munition zu verbrauchen' },
-  { id: 'tempo', name: 'Tempo', symbol: '🏃', text: 'Lauftempo +4 % je Stufe' },
-  { id: 'leben', name: 'Lebensenergie', symbol: '❤️', text: 'Du hältst je Stufe ca. 10 % mehr aus (Bisse wirken schwächer)' },
-  { id: 'ausdauer', name: 'Ausdauer', symbol: '🥫', text: 'Durst und Hunger sinken je Stufe 10 % langsamer' },
-  { id: 'leise', name: 'Leise', symbol: '🤫', text: 'Zombies hören dich je Stufe 8 % weniger weit' },
-  { id: 'sanitaeter', name: 'Sanitäter', symbol: '🩺', text: 'Aufhelfen und Verbandszeug wirken je Stufe 15 % besser' },
-  { id: 'tragen', name: 'Tragen', symbol: '🎒', text: '+1 Rucksackplatz bei Stufe 3 und noch einer bei Stufe 5' },
+  { id: 'zielen', name: 'Zielen', symbol: '🎯', text: 'Chance je Stufe, beim Schießen keine Munition zu verbrauchen' },   // i18n-ok: nur serverintern, Anzeige im Client über fk.*
+  { id: 'tempo', name: 'Tempo', symbol: '🏃', text: 'Lauftempo +4 % je Stufe' },   // i18n-ok: nur serverintern, Anzeige im Client über fk.*
+  { id: 'leben', name: 'Lebensenergie', symbol: '❤️', text: 'Du hältst je Stufe ca. 10 % mehr aus (Bisse wirken schwächer)' },   // i18n-ok: nur serverintern, Anzeige im Client über fk.*
+  { id: 'ausdauer', name: 'Ausdauer', symbol: '🥫', text: 'Durst und Hunger sinken je Stufe 10 % langsamer' },   // i18n-ok: nur serverintern, Anzeige im Client über fk.*
+  { id: 'leise', name: 'Leise', symbol: '🤫', text: 'Zombies hören dich je Stufe 8 % weniger weit' },   // i18n-ok: nur serverintern, Anzeige im Client über fk.*
+  { id: 'sanitaeter', name: 'Sanitäter', symbol: '🩺', text: 'Aufhelfen und Verbandszeug wirken je Stufe 15 % besser' },   // i18n-ok: nur serverintern, Anzeige im Client über fk.*
+  { id: 'tragen', name: 'Tragen', symbol: '🎒', text: '+1 Rucksackplatz bei Stufe 3 und noch einer bei Stufe 5' },   // i18n-ok: nur serverintern, Anzeige im Client über fk.*
 ];
 const IDS = new Set(FAEHIGKEITEN.map(f => f.id));
 

@@ -1,4 +1,5 @@
 // Bundeswehr-Versorgung über die Munitionskisten (server/versorgung.mjs), Funk-Ansage, Faust-Feld
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -141,7 +142,7 @@ test('Funk-Ansage: Ereignis registriert, vorbelegt mit funk_abholung.mp3, Server
   const a = await beitreten('Funker'), b = await beitreten('Zuhörer');
   const erhalten = { a: 0, b: 0 }, texte = [];
   a.c.onMessage('funkAnsage', () => erhalten.a++); b.c.onMessage('funkAnsage', () => erhalten.b++);
-  a.c.onMessage('meldung', m => texte.push(m.text));
+  a.c.onMessage('meldung', m => texte.push(textAus(m)));
   try {
     a.raum.aufgaben.funkAbsetzen(a.p, a.raum.welt.safeRooms[0]);
     assert.ok(await bis(() => erhalten.a === 1 && erhalten.b === 1), 'funkAnsage nicht bei allen');
@@ -168,7 +169,7 @@ test('Kisten: immer durchsuchbar, bei „leer“ Meldung mit nächster Lieferung
   kisteDurchsuchen(raum, c, p);   // Erstpaket
   const e = kisteDurchsuchen(raum, c, p).antwort.at(-1)[1];
   assert.equal(e.rest, 0);
-  assert.match(e.text, /^Leer – nächste Lieferung am Tag 3, ca. \d\d:\d\d/);
+  assert.match(textAus(e.text), /^Leer – nächste Lieferung am Tag 3, ca. \d\d:\d\d/);
   // Aktionswahl überspringt die leere Kiste nicht mehr
   const x = raum.extra.get(c.sessionId);
   const b = raum.welt.behaelter.find(q => q.art === 'bw_kiste');
@@ -176,7 +177,7 @@ test('Kisten: immer durchsuchbar, bei „leer“ Meldung mit nächster Lieferung
   const wahl = raum.kontext(p, x);
   assert.equal(wahl?.art, 'durchsuchen'); assert.equal(wahl.behaelter.art, 'bw_kiste');
   raum.state.stuetzpunkt = 'gefallen';
-  assert.equal(kisteDurchsuchen(raum, c, p).antwort.at(-1)[1].text, 'Keine Lieferungen mehr – die Bundeswehr hat das Lager aufgegeben');
+  assert.equal(textAus(kisteDurchsuchen(raum, c, p).antwort.at(-1)[1].text), 'Keine Lieferungen mehr – die Bundeswehr hat das Lager aufgegeben');
   await beenden(c);
 });
 

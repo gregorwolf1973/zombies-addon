@@ -6,7 +6,8 @@ import { KACHEL, BREITE, HOEHE, T, frei, WERTE as W, MUNITION_MAX, PFEILE_MAX, G
 import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { Nebel } from './nebel.mjs';
-import { KARTEN_NAMEN } from './aufgaben.mjs';
+import { kartenK } from './aufgaben.mjs';
+import { M, D, L } from './texte.mjs';
 import { aktiveFolge } from '../client/levelkatalog.mjs';
 import { FAHRBAR, FAHRBAR_ARTEN } from '../client/fahrbar.mjs';
 
@@ -37,11 +38,11 @@ export const fehlversuch = schluessel => { for (const k of schluessel) if (k) ve
 // Anmeldung prüfen: { su: bool, grund? }; versucht wird nur, wenn der Client ein Passwort mitschickt
 export function anmelden(hash, passwort, schluessel) {
   if (typeof passwort !== 'string' || !passwort) return { su: false };
-  if (!hashGueltig(hash)) return { su: false, grund: 'Testzugang ist nicht eingerichtet' };
-  if (gesperrt(schluessel)) return { su: false, grund: 'Zu viele Versuche – bitte eine Minute warten' };
+  if (!hashGueltig(hash)) return { su: false, grund: M('su.nichtEingerichtet') };
+  if (gesperrt(schluessel)) return { su: false, grund: M('su.zuViele') };
   if (pruefe(passwort, hash) || (passwort.trim() !== passwort && pruefe(passwort.trim(), hash))) return { su: true };   // Handy-Tastaturen hängen gern ein Leerzeichen an
   fehlversuch(schluessel);
-  return { su: false, grund: 'Testzugang abgelehnt' };
+  return { su: false, grund: M('su.abgelehntCode') };
 }
 
 // ---------- Befehle ----------
@@ -139,27 +140,27 @@ export function status(raum, client) {
   };
 }
 
-// führt einen Befehl aus; Rückgabe = Meldung an den Superuser. Wer nicht Superuser ist, bekommt nichts (null).
+// führt einen Befehl aus; Rückgabe = Meldung an den Superuser als Schlüssel { k, w } (server/texte.mjs). Wer nicht Superuser ist, bekommt nichts (null).
 export function befehl(raum, client, m) {
   const x = raum.extra.get(client.sessionId), p = raum.state.spieler.get(client.sessionId);
   if (!x?.superuser || !p || !m || typeof m !== 'object') return null;
   const b = String(m.befehl ?? '');
-  if (!SU_BEFEHLE.includes(b)) return 'Unbekannter Befehl';
+  if (!SU_BEFEHLE.includes(b)) return M('su.unbekannt');
   if (b === 'status') return null;   // nur Zustand abfragen (der Raum schickt ihn nach jedem Befehl)
   if (b !== 'kamerapos') console.log(`[Superuser] ${p.name}: ${b}${m.groesse ? ' ' + Number(m.groesse) : ''}${m.stunde ? ' ' + Number(m.stunde) : ''}${m.zustand ? ' ' + String(m.zustand).slice(0, 12) : ''}`);
   const s = raum.state;
   switch (b) {
     case 'bw': {
       const pos = lagerPlatz(raum);
-      if (!pos) return 'Kein Bundeswehr-Lager auf dieser Karte';
+      if (!pos) return M('su.keinLager');
       springen(raum, p, x, pos);
-      return '🎖 Du bist im Bundeswehr-Lager' + (s.stuetzpunkt === 'gefallen' ? ' (es ist gefallen)' : '');
+      return M(s.stuetzpunkt === 'gefallen' ? 'su.imLagerGefallen' : 'su.imLager');
     }
     case 'evak': {
       const pos = evakPunkt(raum);
-      if (!pos) return 'Kein Evakuierungspunkt gefunden';
+      if (!pos) return M('su.keinEvak');
       springen(raum, p, x, { ...pos, ebene: '' });
-      return '📍 Du bist am Evakuierungspunkt' + (s.busDa ? ' (Fahrzeug ist da)' : ' (noch kein Fahrzeug)');
+      return M(s.busDa ? 'su.amEvakFz' : 'su.amEvak');
     }
     case 'bots': {
       let n = 0;
@@ -172,35 +173,35 @@ export function befehl(raum, client, m) {
         bx.eingabe = { dx: 0, dy: 0, s: false }; bx.aktionZiel = null;
         n++;
       }
-      return n ? `🤖 ${n} Bot${n === 1 ? '' : 's'} bei dir, voll geheilt` : 'Keine Bots im Spiel';
+      return n ? M('su.bots', { n }) : M('su.keineBots');
     }
     case 'horde_hin': {
       const a = raum.welle?.aktiv;
-      if (!a?.mitte) return 'Gerade keine Horde';
+      if (!a?.mitte) return M('su.keineHorde');
       let dx = (a.ziel?.x ?? a.mitte.x) - a.mitte.x, dy = (a.ziel?.y ?? a.mitte.y) - a.mitte.y;
       const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const pos = platzSuchen(raum, a.mitte.x + dx * 400, a.mitte.y + dy * 400);
-      if (!pos) return 'Gerade keine Horde';
+      if (!pos) return M('su.keineHorde');
       springen(raum, p, x, { ...pos, ebene: '' });
-      return '🧟 Du stehst ca. 50 m vor der Horde';
+      return M('su.vorHorde');
     }
     case 'horde': {
       const n = [50, 200, 500].includes(Number(m.groesse)) ? Number(m.groesse) : 50;
       const w = raum.welle;
-      if (!w) return 'Keine Wellenlogik';
-      if (w.ansage) return 'Eine Horde wird gerade angesagt';
+      if (!w) return M('su.keineWelle');
+      if (w.ansage) return M('su.ansage');
       const seite = w.ansagen();
       w.ansage = null;
       const ids = w.erzeugen(seite, n);
-      if (!ids) return 'Kein Platz für die Horde gefunden';
-      return `🧟 Horde mit ${ids.length} Zombies gestartet`;
+      if (!ids) return M('su.keinPlatzHorde');
+      return M('su.hordeGestartet', { n: ids.length });
     }
     case 'hordeanzeige': {
       const sid = client.sessionId, alle = !!raum.welle?.einst?.().hordeZieleZeigen;
       const an = !raum.hordeAus.has(sid) && (alle || raum.hordeDebug.has(sid));
       if (an) { raum.hordeAus.add(sid); raum.hordeDebug.delete(sid); try { client.send('hordeInfo', { aktiv: false }); } catch { /* egal */ } }
       else { raum.hordeAus.delete(sid); raum.hordeDebug.add(sid); raum.welle?.infoSenden?.(0, true); }
-      return an ? 'Horden-Anzeige: aus' : '🧟 Horden-Anzeige: an';
+      return M(an ? 'su.hordeAnzeigeAus' : 'su.hordeAnzeigeAn');
     }
     case 'kamera': {   // Kameraflug: Figur steht, unverwundbar und für Zombies unsichtbar; die Kamera meldet ihre Position (Sichtmittelpunkt)
       const an = !!m.an;
@@ -208,7 +209,7 @@ export function befehl(raum, client, m) {
       x.eingabe = { dx: 0, dy: 0, s: false }; raum.eingabeVerwerfen(p, x); raum.ruehrt?.(client.sessionId);
       if (an) { x.aktionZiel = null; x.kameraPos = { x: kameraZahl(m.x, p.x, BREITE * KACHEL), y: kameraZahl(m.y, p.y, HOEHE * KACHEL) }; }
       else x.kameraPos = null;
-      return an ? '🎥 Kameraflug: an (Figur unsichtbar und unverwundbar)' : 'Kameraflug beendet';
+      return M(an ? 'su.kameraAn' : 'su.kameraAus');
     }
     case 'kamerapos': {   // gedrosselt vom Client, ohne Meldung
       if (p.kamera) { x.kameraPos = { x: kameraZahl(m.x, x.kameraPos?.x ?? p.x, BREITE * KACHEL), y: kameraZahl(m.y, x.kameraPos?.y ?? p.y, HOEHE * KACHEL) }; raum.ruehrt?.(client.sessionId); }
@@ -216,118 +217,118 @@ export function befehl(raum, client, m) {
     }
     case 'unsterblich': {
       x.suUnsterblich = !x.suUnsterblich;
-      return x.suUnsterblich ? '⭐ Unsterblich: an' : 'Unsterblich: aus';
+      return M(x.suUnsterblich ? 'su.unsterblichAn' : 'su.unsterblichAus');
     }
     case 'zeit': {
       const h = Number(m.stunde) === 23 ? 23 : 12;
       s.uhr = h * 60;
-      return h === 12 ? '☀️ Es ist 12:00 Uhr' : '🌙 Es ist 23:00 Uhr';
+      return M(h === 12 ? 'su.mittag' : 'su.nacht');
     }
     case 'nebel': {
       const an = !(raum.nebel?.erzwungen || s.nebel > 0.05);   // schaltet um: ist Nebel da, geht er aus
       raum.nebel ??= new Nebel();
       s.nebel = raum.nebel.schalte(an);
-      return an ? '🌫 Nebel: an (volle Dichte)' : 'Nebel: aus';
+      return M(an ? 'su.nebelAn' : 'su.nebelAus');
     }
     case 'unfall': {
-      if (p.ebene) return 'Geh erst nach draußen, dann kann ein Unfall passieren';
+      if (p.ebene) return M('su.unfallDraussen');
       return raum.verkehr?.unfaelle?.ausloesen({ x: p.x, y: p.y }, { erzeugen: true, nah: true })
-        ? '💥 Ein Auto verunglückt in deiner Nähe' : 'Kein Platz für einen Unfall gefunden (keine Straße in der Nähe)';
+        ? M('su.unfall') : M('su.keinUnfall');
     }
     case 'waffe': {
       const name = String(m.name ?? '');
-      if (!waffeSetzen(raum, p, x, name)) return 'Unbekannte Waffe';
-      return `🔫 ${DINGE[name]?.name ?? name} in der Hand, Munition voll`;
+      if (!waffeSetzen(raum, p, x, name)) return M('su.unbekannteWaffe');
+      return M('su.waffe', { ding: D(name) });
     }
     case 'ding': {
       const name = String(m.name ?? '');
-      if (!SU_DINGE.includes(name)) return 'Unbekannter Gegenstand';
-      const dn = `${DINGE[name]?.zeichen ?? ''} ${DINGE[name]?.name ?? name}`;
-      if (p.rucksack.includes(name)) return `${dn} hast du schon im Rucksack`;
-      if (p.rucksack.length >= p.plaetze) return 'Rucksack voll – erst etwas ablegen';
+      if (!SU_DINGE.includes(name)) return M('su.unbekannterDing');
+      const dn = { s: ' ', l: [DINGE[name]?.zeichen ?? '', D(name)] };
+      if (p.rucksack.includes(name)) return M('su.dingSchon', { ding: dn });
+      if (p.rucksack.length >= p.plaetze) return M('su.rucksackVoll');
       p.rucksack.push(name);
-      return `${dn} liegt im Rucksack`;
+      return M('su.dingDa', { ding: dn });
     }
     case 'fahrzeug': {
       const art = String(m.art ?? '');
-      if (!FAHRBAR_ARTEN.includes(art) || art === 'bus') return 'Unbekanntes Fahrzeug';
-      if (p.ebene) return 'Geh erst nach draußen, dann kannst du ein Fahrzeug setzen';
-      if (p.anBord || p.unten || p.kamera) return 'Steig erst aus, dann kannst du ein Fahrzeug setzen';
+      if (!FAHRBAR_ARTEN.includes(art) || art === 'bus') return M('su.unbekanntesFz');
+      if (p.ebene) return M('su.fzDraussen');
+      if (p.anBord || p.unten || p.kamera) return M('su.fzAussteigen');
       const fb = raum.fahrbare?.setzen(client.sessionId, art, p);
-      if (!fb) return 'Kein Platz für das Fahrzeug – such eine freie Fläche';
-      return `🛡️ ${FAHRBAR[art].name} steht neben dir (E zum Einsteigen, lenken wie beim Gehen, der Turm schießt von selbst)`;
+      if (!fb) return M('su.fzKeinPlatz');
+      return M('su.fzDa', { fz: FAHRBAR[art].name });
     }
     case 'fahrzeug_weg':
-      return raum.fahrbare?.entfernen(client.sessionId) ? 'Fahrzeug entfernt' : 'Du hast gerade kein Fahrzeug gesetzt';
+      return M(raum.fahrbare?.entfernen(client.sessionId) ? 'su.fzWeg' : 'su.fzKeins');
     case 'auffuellen':
       auffuellen(raum, p, x);
-      return '🎒 Alles aufgefüllt';
+      return M('su.aufgefuellt');
     case 'evakrufen': {
       const a = raum.aufgaben;
-      if (!a.an()) return 'Aufgaben/Evakuierung sind ausgeschaltet';
-      if (s.busDa || a.heli || a.flug) return 'Das Fahrzeug ist schon da';
+      if (!a.an()) return M('su.aufgabenAus');
+      if (s.busDa || a.heli || a.flug) return M('su.fzSchonDa');
       if (!s.funk) a.funkAbsetzen(p, null);
       a.busHeute = false;
       a.ankunft(a.einst().wartezeit);
-      return '🚌 Evakuierung gerufen – das Fahrzeug kommt (übrige Aufgaben bleiben offen)';
+      return M('su.evakGerufen');
     }
     case 'alleaufgaben': {
       const a = raum.aufgaben;
-      if (!a.an()) return 'Aufgaben/Evakuierung sind ausgeschaltet';
+      if (!a.an()) return M('su.aufgabenAus');
       if (!s.funk) a.funkAbsetzen(p, null);   // meldet die Evakuierung an wie der echte Funkspruch
       for (const mi of a.mission) { a.abgegeben.add(mi.id); const q = s.missionen.get(mi.id); if (q) q.abgegeben = true; }
       s.missionOffen = 0;
       for (const q of s.aufgaben.values()) { q.erledigt = true; q.fortschritt = q.ziel; }
       a.aktualisieren(false);
-      return '✅ Alle Aufgaben erledigt – die Evakuierung kann gerufen werden';
+      return M('su.alleAufgaben');
     }
     case 'hin': {
       if (typeof m.ebene === 'string' && /^h\d+(eg|keller|dach)$/.test(m.ebene)) {   // Prüfhilfe: direkt in ein Haus (Start der Ebene bzw. Pixelort x/y dort)
         const w = raum.wv(m.ebene), ox = Number.isFinite(Number(m.x)) ? Number(m.x) : w.start.x, oy = Number.isFinite(Number(m.y)) ? Number(m.y) : w.start.y;
         springen(raum, p, x, { x: ox, y: oy, ebene: m.ebene });
-        return '📍 Du bist im Haus';
+        return M('su.imHaus');
       }
       const px = Number(m.x), py = Number(m.y);
-      if (!Number.isFinite(px) || !Number.isFinite(py)) return 'Ungültiger Ort';
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return M('su.ungueltigerOrt');
       const pos = platzSuchen(raum, Math.max(0, Math.min(px, BREITE * KACHEL)), Math.max(0, Math.min(py, HOEHE * KACHEL)));
-      if (!pos) return 'Dort ist kein freier Platz';
+      if (!pos) return M('su.keinFreierPlatz');
       springen(raum, p, x, { ...pos, ebene: '' });
-      return '📍 Du bist dort';
+      return M('su.dort');
     }
     case 'zeitraffer': {
       const f = [1, 5, 10, 60].includes(Number(m.faktor)) ? Number(m.faktor) : 1;
       const SR = raum.constructor;
       if (SR.testSetzen) SR.testSetzen({ zeitraffer: f }); else SR.einstellungen.zeitraffer = f;
-      raum.broadcast('meldung', { text: `⏩ Zeitraffer ${f}×`, lang: true });
-      return `⏩ Zeitraffer ${f}×`;
+      raum.broadcast('meldung', M('su.zeitraffer', { f }, L));
+      return M('su.zeitraffer', { f });
     }
     case 'level': {
       const n = Math.round(Number(m.level));
       const folge = aktiveFolge(raum.constructor.einstellungen?.levelFolge);   // Level n = n-tes aktives Level der eingestellten Reihenfolge
-      if (!(n >= 1 && n <= folge.length)) return 'Unbekanntes Level';
+      if (!(n >= 1 && n <= folge.length)) return M('su.unbekanntesLevel');
       const a = raum.aufgaben, karte = folge[n - 1];   // jedes Level hat genau eine Karte (Geretsried 1 und 2 sind eigene Level)
-      if (a.wechselLaeuft) return 'Ein Levelwechsel läuft schon';
+      if (a.wechselLaeuft) return M('su.wechselLaeuft');
       a.wechselLaeuft = true;
-      raum.broadcast('meldung', { text: `🧪 Testsprung: Level ${n} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
+      raum.broadcast('meldung', M('su.testsprung', { n, karte: kartenK(karte) }, L));
       raum.clock.setTimeout(() => a.levelWechsel({ karte, level: n }), 1500);
-      return `🧪 Wechsel zu Level ${n} (${KARTEN_NAMEN[karte] ?? karte}) …`;
+      return M('su.wechsel', { n, karte: kartenK(karte) });
     }
     case 'countdown': {
-      if (!raum.finale?.setzen(Number(m.sekunden) || 60)) return 'Kein Atomschlag-Countdown auf dieser Karte (nur Andermatt)';
-      return `☢️ Countdown steht jetzt auf ${Math.round(Number(m.sekunden) || 60)} s`;
+      if (!raum.finale?.setzen(Number(m.sekunden) || 60)) return M('su.keinCountdown');
+      return M('su.countdown', { n: Math.round(Number(m.sekunden) || 60) });
     }
     case 'lager': {
       const sp = raum.stuetzpunkt;
-      if (!raum.welt.stuetzpunkt || !sp) return 'Kein Bundeswehr-Lager auf dieser Karte';
+      if (!raum.welt.stuetzpunkt || !sp) return M('su.keinLager');
       if (m.zustand === 'steht') {
-        if (s.stuetzpunkt === 'steht') return 'Das Lager steht schon';
+        if (s.stuetzpunkt === 'steht') return M('su.lagerSteht');
         sp.aufbauen();
-        return '🎖 Lager wieder aufgebaut';
+        return M('su.lagerAufgebaut');
       }
-      if (s.stuetzpunkt === 'gefallen') return 'Das Lager ist schon gefallen';
-      if (s.stuetzpunkt !== 'steht') return 'Das Lager ist ausgeschaltet';
-      sp.faellt('Testbefehl');
-      return '💥 Lager ist gefallen';
+      if (s.stuetzpunkt === 'gefallen') return M('su.lagerSchonGefallen');
+      if (s.stuetzpunkt !== 'steht') return M('su.lagerAus');
+      sp.faellt(M('lager.test'));
+      return M('su.lagerGefallen');
     }
   }
   return null;

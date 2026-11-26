@@ -1,8 +1,9 @@
 // Sucht in Client-Dateien nach verbliebenen deutschen Oberflächentexten (Heuristik für die Zweisprachigkeit).
-// Aufruf (aus zombies/): node tools/i18n_pruefen.mjs [datei …]   – ohne Angabe: client/*.mjs und client/index.html
+// Aufruf (aus zombies/): node tools/i18n_pruefen.mjs [datei …]   – ohne Angabe: client/*.mjs, client/index.html und server/*.mjs
 // Treffer = Zeichenkette (JS-Literal bzw. HTML-Text/Attribut) mit Umlaut/ß oder häufigem deutschem Wort.
 // Ausgenommen: Kommentare, Kartendaten, Zeilen mit dem Marker `i18n-ok`, Werte aus AUSNAHMEN (Ortsnamen, Schlüssel …)
-// und – in Phase 1 – Dateien/Bereiche, die erst später übersetzt werden (DATEI_AUSNAHMEN).
+// und Dateien/Bereiche, die eigene Wege gehen (DATEI_AUSNAHMEN, SERVER_AUSNAHMEN).
+// Server (Phase 2): Texte an Clients gehen als Schlüssel ({ k, w }, server/texte.mjs); Konsolenausgaben und Logs dürfen deutsch bleiben.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +34,9 @@ export const DATEI_AUSNAHMEN = new Set([
   'levelkatalog.mjs', 'zombiefiguren.mjs', 'sw.js', 'diagnose.mjs',
 ]);
 
+// Server: nicht geprüft – Verwaltung/Backend (Phase 3: Einstellungsnamen, Rätsel-Upload) und Diagnose
+export const SERVER_AUSNAHMEN = new Set(['einstellungen.mjs', 'raetsel.mjs', 'diagnose.mjs', 'fragenquelle.mjs', 'rechtstext.mjs']);
+
 function istDeutsch(s) {
   const t = s.replace(/\$\{[^}]*\}/g, ' ').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').trim();
   if (!t || !/\p{L}{2}/u.test(t)) return false;
@@ -40,6 +44,7 @@ function istDeutsch(s) {
   if (/[#.]?[\w-]+\s*\{[^}]*:[^}]*;/.test(s) || /@media|@keyframes/.test(s)) return false;   // CSS-Block
   if (AUSNAHMEN.slice(0, -1).some(re => re.test(t)) && !WORT_RE.test(t.replace(AUSNAHMEN[0], ''))) return false;
   if (/^[a-z0-9_.\-/#:[\]=>"' ,()*]+$/.test(t)) return false;     // CSS-Selektoren, Pfade, Schlüssel
+  if (/^\w+(\.\w+)+$/.test(t)) return false;                        // i18n-Schlüssel wie 'auf.funkFehlt'
   return UMLAUT_RE.test(t) || WORT_RE.test(t);
 }
 
@@ -132,9 +137,14 @@ export function pruefeClient(dir = join(dirname(fileURLToPath(import.meta.url)),
   return dateien.flatMap(f => pruefeQuelle(readFileSync(join(dir, f), 'utf8'), f));
 }
 
+export function pruefeServer(dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'server')) {
+  const dateien = readdirSync(dir).filter(f => f.endsWith('.mjs') && !SERVER_AUSNAHMEN.has(f));
+  return dateien.flatMap(f => pruefeQuelle(readFileSync(join(dir, f), 'utf8'), 'server/' + f));
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const args = process.argv.slice(2);
-  const treffer = args.length ? args.flatMap(p => pruefeQuelle(readFileSync(p, 'utf8'), basename(p))) : pruefeClient();
+  const treffer = args.length ? args.flatMap(p => pruefeQuelle(readFileSync(p, 'utf8'), basename(p))) : [...pruefeClient(), ...pruefeServer()];
   for (const t of treffer) console.log(`${t.datei}:${t.zeile}: ${t.wert}`);
   console.log(`${treffer.length} Treffer`);
   process.exit(treffer.length ? 1 : 0);

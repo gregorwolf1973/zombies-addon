@@ -198,7 +198,7 @@ export async function starte({
   // ---------- Verwaltung: nur über die HA-Seitenleiste (Ingress, schon bei HA angemeldet) ----------
   // (ZOMBIES_VERWALTUNG_LOKAL=1 erlaubt sie zum Testen auch von diesem Rechner aus)
   const lokal = req => process.env.ZOMBIES_VERWALTUNG_LOKAL === '1' && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress);
-  const nurIngress = (req, res, next) => req.get('x-ingress-path') || lokal(req) ? next() : res.status(403).json({ fehler: 'Nur über die Home-Assistant-Seitenleiste' });
+  const nurIngress = (req, res, next) => req.get('x-ingress-path') || lokal(req) ? next() : res.status(403).json({ fehler: 'Nur über die Home-Assistant-Seitenleiste' });   // i18n-ok: Verwaltung/HTTP (Phase 3)
   let paketVersion = '';
   // Version aus config.yaml (Add-on-Version); package.json bleibt fest, damit HA beim Einspielen den npm-Schritt aus dem Docker-Zwischenspeicher nimmt
   try { paketVersion = /^version:\s*"?([^"\s]+)"?/m.exec(fs.readFileSync(path.join(hier, '..', 'config.yaml'), 'utf8'))?.[1] ?? ''; } catch { /* egal */ }
@@ -244,12 +244,12 @@ export async function starte({
       const v = ohneGeheimnisse(datei.werte);
       if (!eigenePfad) eigeneImSpeicher = v;
       else try { fs.mkdirSync(path.dirname(eigenePfad), { recursive: true }); fs.writeFileSync(eigenePfad + '.neu', JSON.stringify(v, null, 2)); fs.renameSync(eigenePfad + '.neu', eigenePfad); }
-      catch (e) { return res.status(500).json({ fehler: 'Nicht gespeichert: ' + e.message }); }
+      catch (e) { return res.status(500).json({ fehler: 'Nicht gespeichert: ' + e.message }); }   // i18n-ok: Verwaltung/HTTP (Phase 3)
       return res.json({ ...lage(), eigeneVorlage: true });
     }
     if (aktion === 'laden') {
       const v = quelle === 'eigen' ? eigeneLesen() : ohneGeheimnisse(vorgaben());
-      if (!v) return res.status(404).json({ fehler: 'Keine eigene Vorlage gespeichert' });
+      if (!v) return res.status(404).json({ fehler: 'Keine eigene Vorlage gespeichert' });   // i18n-ok: Verwaltung/HTTP (Phase 3)
       const neu = datei.aendern(ohneGeheimnisse(v));   // Zugangscode und Superuser bleiben, wie sie sind
       anwenden(neu);
       return res.json({ ...lage(), eigeneVorlage: !!eigeneLesen() });
@@ -281,8 +281,8 @@ export async function starte({
     let name = '';
     try { name = decodeURIComponent(req.get('x-dateiname') ?? ''); } catch { /* unten */ }
     name = path.basename(name).replace(/[^\w.()+\- ]/g, '_');
-    if (!hochladeOrdner) return res.status(400).json({ fehler: 'Hochladen hier nicht möglich' });
-    if (!TON_DATEI.test(name)) return res.status(400).json({ fehler: 'Nur MP3, OGG, WAV oder M4A' });
+    if (!hochladeOrdner) return res.status(400).json({ fehler: 'Hochladen hier nicht möglich' });   // i18n-ok: Verwaltung/HTTP (Phase 3)
+    if (!TON_DATEI.test(name)) return res.status(400).json({ fehler: 'Nur MP3, OGG, WAV oder M4A' });   // i18n-ok: Verwaltung/HTTP (Phase 3)
     if (!req.body?.length) return res.status(400).json({ fehler: 'Leere Datei' });
     try {
       fs.mkdirSync(hochladeOrdner.pfad, { recursive: true });
@@ -297,7 +297,7 @@ export async function starte({
   app.delete('/verwaltung/ton/:datei', nurIngress, (req, res) => {
     const name = req.params.datei;
     if (!hochladeOrdner || !TON_DATEI.test(name)) return res.status(400).json({ fehler: 'Unbekannte Datei' });
-    try { fs.unlinkSync(path.join(hochladeOrdner.pfad, path.basename(name))); } catch { return res.status(404).json({ fehler: 'Nur hochgeladene Dateien lassen sich löschen' }); }
+    try { fs.unlinkSync(path.join(hochladeOrdner.pfad, path.basename(name))); } catch { return res.status(404).json({ fehler: 'Nur hochgeladene Dateien lassen sich löschen' }); }   // i18n-ok: Verwaltung/HTTP (Phase 3)
     // aus allen Zuordnungen entfernen
     const toene = Object.fromEntries(Object.entries(datei.werte.toene).map(([id, t]) => [id, { ...t, dateien: t.dateien.filter(d => d !== name) }]));
     anwenden(datei.aendern({ toene, toeneNamen: { [name]: '' } }));   // auch ihr Anzeigename fällt weg
@@ -332,7 +332,7 @@ export async function starte({
   for (const [pfad, feld, titel] of [['/impressum', 'impressum', 'Impressum'], ['/datenschutz', 'datenschutz', 'Datenschutz']]) {
     app.get(pfad, (req, res) => {
       const t = String(datei.werte[feld] ?? '').trim();
-      if (!t) return res.status(404).type('text/plain').send('Nicht vorhanden');
+      if (!t) return res.status(404).type('text/plain').send('Nicht vorhanden');   // i18n-ok: Verwaltung/HTTP (Phase 3)
       res.set('Cache-Control', 'no-cache').type('html').send(rechtsseite(titel, t));
     });
   }

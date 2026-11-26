@@ -1,3 +1,4 @@
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@colyseus/sdk';
@@ -32,7 +33,7 @@ test('Chat: Nachrichten, Kürzung, leer, Flutbremse, Verlauf', async () => {
     assert.ok(await bis(() => c.length === 1), 'Chat kam nicht an');
     assert.equal(c[0].name, 'Sepp');
     assert.equal(c[0].text, 'Hallo Vroni');
-    assert.equal(c[0].ort, 'draußen');
+    assert.equal(textAus(c[0].ort), 'draußen');
     assert.ok(Number.isInteger(c[0].id) && c[0].zeit > 0 && Number.isInteger(c[0].farbe));
     assert.ok(await bis(() => aChat.length === 1), 'Absender bekommt seine Nachricht auch');
 

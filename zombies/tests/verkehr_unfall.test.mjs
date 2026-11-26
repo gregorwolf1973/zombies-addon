@@ -1,4 +1,5 @@
 // Paket F: Verkehr ohne Überlappung (Abstand, Kreuzungsvorrang, Festgefahren) und Verkehrsunfälle (Rauch → Feuer → Explosion)
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -223,7 +224,7 @@ test('Superuser-Befehl „unfall“ löst einen Unfall in der Nähe aus', async 
     let antwort = null;
     for (const n of raum.verkehr.graph.knoten.filter((_, i) => i % 9 === 0)) {
       p.x = n.x; p.y = n.y;
-      antwort = befehl(raum, client, { befehl: 'unfall' });
+      antwort = textAus(befehl(raum, client, { befehl: 'unfall' }));
       if (antwort?.startsWith('💥')) break;
     }
     assert.match(antwort, /^💥/);

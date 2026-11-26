@@ -3,6 +3,7 @@
 // Server ist maßgeblich (Fahren, Kollision, Schießen); der Client zeichnet nur (client/fahrbardarstellung.mjs, client/boxerdarstellung.mjs).
 // Es können mehrere Fahrzeuge verschiedener Art gleichzeitig stehen: der Boxer am Flugfeld (server/boxer.mjs, mit Horde) und beliebig viele
 // Superuser-/Schießstand-Fahrzeuge (`Fahrbare`, ohne Horde). Die Spielerfelder anBord/imBoxer gelten für alle Arten („sitzt in einem Fahrzeug“).
+import { M, L, nachricht } from './texte.mjs';
 import { tempoDeckelKmh, tempoStufe, TEMPO_STUFE_MAX } from '../client/fahrtempo.mjs';
 import { frei, kmhZuPx, sichtfrei, WERTE as W } from '../client/welt.mjs';
 import { FAHRBAR, FAHRBAR_EINSTIEG, FAHRBAR_PLAETZE, fahrbarNah } from '../client/fahrbar.mjs';
@@ -141,7 +142,7 @@ export class Fahrbar {
     const xe = this.raum.extra.get(sid); if (xe) xe.tempoStufe = TEMPO_STUFE_MAX;   // beim Einsteigen: Höchsttempo
     p.anBord = true; p.imBoxer = true; p.x = this.f.x; p.y = this.f.y;
     this.eingestiegen(sid);
-    this.sendeAn(sid, this.fahrer === sid ? `🛡️ Du fährst den ${n} (Gehen-Taste lenkt, E steigt aus). Der Turm schießt von selbst.` : `🛡️ Du sitzt im ${n} – ${this.spieler(this.fahrer)?.name ?? 'jemand'} fährt.`);
+    this.sendeAn(sid, this.fahrer === sid ? M('fz.faehrstPanzer', { fz: n }) : M('fz.sitztPanzer', { fz: n, name: this.spieler(this.fahrer)?.name ?? M('fz.jemand') }));
     return true;
   }
   eingestiegen() {}   // Haken für Unterklassen (Boxer: Hordenuhr)
@@ -155,7 +156,7 @@ export class Fahrbar {
     const q = this.platzNeben();
     p.x = q.x; p.y = q.y; p.anBord = false; p.imBoxer = false; p.ebene = '';
     const x = this.raum.extra.get(sid); if (x) x.schonT = 3;   // 3 s lang beißen Zombies nicht
-    if (this.fahrer && !this.istBot(this.fahrer)) this.sendeAn(this.fahrer, `🛡️ Du fährst jetzt den ${this.m.name}.`);
+    if (this.fahrer && !this.istBot(this.fahrer)) this.sendeAn(this.fahrer, M('fz.jetztPanzer', { fz: this.m.name }));
     return true;
   }
 
@@ -175,7 +176,7 @@ export class Fahrbar {
     return { x: f.x, y: f.y + r };
   }
 
-  sendeAn(sid, text) { this.raum.clients?.find(c => c.sessionId === sid)?.send('meldung', { text, lang: true }); }
+  sendeAn(sid, m) { this.raum.clients?.find(c => c.sessionId === sid)?.send('meldung', nachricht(m, L)); }
 
   // Eingabe des Fahrers (raum.spielerSchritt): { dx, dy } wie beim Gehen
   // s = Umschalt (PC): langsam fahren; die Tempostufe (Knopf/Taste T) steht in raum.extra[sid].tempoStufe

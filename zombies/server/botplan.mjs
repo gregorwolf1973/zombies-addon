@@ -8,6 +8,7 @@ import { hat, zaehle, flach, indexVon, entferne, nimmEins, fuegeHinzu, kannAufne
 import { WERTE as W, findeWeg, KACHEL, kachelVon, reichVon, AKTION_ABSTAND, BUS_ABSTAND, BEUTE, WAFFEN, KISTE_PLAETZE, istNacht, frei, ladenArt, durchsuchDauer, safeRoomVon, munitionGesamt } from '../client/welt.mjs';
 import { EBENE_MUSTER } from '../client/innen.mjs';
 import { hhmm } from './aufgaben.mjs';
+import { M, D, chatOrt, ortK } from './texte.mjs';
 
 // Einstellungen des Planers (Vorschlag: später in die Einstellungsseite, bis dahin hier)
 export const BOTPLAN = {
@@ -25,9 +26,14 @@ export const BOTPLAN = {
 const RAD = W.spielerRadius;
 const abstand = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const anz = (liste, d) => zaehle(liste, d);   // zählt Stück in flachen Listen und in Stapel-Listen (Rucksack, Kiste)
-const NAMEN = { wasser: 'Wasser', essen: 'Konserven', spritze: 'eine Spritze', bretter: 'Bretter', taschenlampe: 'eine Taschenlampe', alles: 'Vorräte', verband: 'Verbandszeug' };
+// Bots sprechen im Chat in Schlüsseln (srv.bot.*): jeder Empfänger liest sie in seiner Sprache
+const NAMEN = new Set(['wasser', 'essen', 'spritze', 'bretter', 'taschenlampe', 'alles', 'verband']);
+const wasK = was => (NAMEN.has(was) ? M('bot.was.' + was) : D(was));
 const WAS_WORT = { wasser: 'wasser', trinken: 'wasser', essen: 'essen', konserven: 'essen', konserve: 'essen', medizin: 'spritze', spritze: 'spritze',
-  bretter: 'bretter', brett: 'bretter', holz: 'bretter', lampe: 'taschenlampe', taschenlampe: 'taschenlampe', lampen: 'taschenlampe' };
+  bretter: 'bretter', brett: 'bretter', holz: 'bretter', lampe: 'taschenlampe', taschenlampe: 'taschenlampe', lampen: 'taschenlampe',
+  // englisch („Resi, get water“)
+  water: 'wasser', drink: 'wasser', food: 'essen', cans: 'essen', can: 'essen', medicine: 'spritze', syringe: 'spritze', syringes: 'spritze',
+  planks: 'bretter', plank: 'bretter', wood: 'bretter', boards: 'bretter', flashlight: 'taschenlampe', flashlights: 'taschenlampe', torch: 'taschenlampe', lamp: 'taschenlampe' };
 // so viel behält ein Bot für sich, der Rest geht in die Kiste
 const RESERVE = { wasser: 1, essen: 1, verband: 2, spritze: 0, bretter: 0 };
 
@@ -68,10 +74,7 @@ function sagt(raum, sid, p, text, erzwingen = false) {
   const jetzt = Date.now();
   if (!erzwingen && jetzt - (b.chatT ?? 0) < BOTPLAN.chatPause * 1000) return;
   b.chatT = jetzt;
-  let ort = 'draußen';
-  const safe = safeRoomVon(raum.welt, p);
-  if (safe) ort = '🛡 ' + safe.name;
-  else if (p.ebene) { const e = EBENE_MUSTER.exec(p.ebene); ort = (e && raum.welt.haeuser?.[Number(e[1])]?.name) || 'in einem Haus'; }
+  const ort = chatOrt(raum.welt, p, safeRoomVon, EBENE_MUSTER);
   const nachricht = { id: raum.naechsteChatId++, von: raum.chatKennung(sid), name: p.name, farbe: p.farbe, zeit: jetzt, text, ort };
   raum.chatVerlauf.push(nachricht);
   if (raum.chatVerlauf.length > 100) raum.chatVerlauf.splice(0, raum.chatVerlauf.length - 100);
@@ -176,10 +179,10 @@ function planer(raum, menschen) {
     const j = jagdZiel(raum, p, menschen, bots, sid);
     if (j) { pl.auftrag = { art: 'jagen', zombie: j, bis: jetzt + 8 }; continue; }
     // 2. Funkspruch (Pflicht): ein Bot
-    if (raum.aufgaben?.an() && !s.funk && s.aufgaben.get('funk') && !funkBot && !gesperrt(bp, 'funk:' + sid, jetzt)) { pl.auftrag = { art: 'funk' }; funkBot = sid; bp.funkSid = sid; sagt(raum, sid, p, 'Ich setz den Funkspruch ab'); continue; }
+    if (raum.aufgaben?.an() && !s.funk && s.aufgaben.get('funk') && !funkBot && !gesperrt(bp, 'funk:' + sid, jetzt)) { pl.auftrag = { art: 'funk' }; funkBot = sid; bp.funkSid = sid; sagt(raum, sid, p, M('bot.funk')); continue; }
     // 3. Barrikade am Funk-Safe-Room
     if (ctx.bedarf.bretter > 0 && !bots.some(([o, , ox]) => o !== sid && (ox.bot.plan.auftrag?.art === 'barrikade' || (ox.bot.plan.auftrag?.art === 'holen' && ox.bot.plan.auftrag.was === 'bretter')))) {
-      pl.auftrag = { art: 'barrikade' }; sagt(raum, sid, p, 'Ich verbarrikadier den Safe Room'); continue;
+      pl.auftrag = { art: 'barrikade' }; sagt(raum, sid, p, M('bot.barrikade')); continue;
     }
     // 4. Vorräte, Medizin, Lampen: nach der Reihenfolge der Aufgaben, dann der Bedarf
     const reihe = [];
@@ -194,7 +197,7 @@ function planer(raum, menschen) {
     // 5. sonst: nahe Behälter durchsuchen (Vorrat für später)
     if (p.rucksack.length < p.plaetze - 2) pl.auftrag = neuHolen('alles');
   }
-  if (meldeBus.wer) { const p = raum.state.spieler.get(meldeBus.wer); sagt(raum, meldeBus.wer, p, 'Der Bus ist da – kommt, wir steigen ein!'); }
+  if (meldeBus.wer) { const p = raum.state.spieler.get(meldeBus.wer); sagt(raum, meldeBus.wer, p, M('bot.busDa')); }
   const ms = performance.now() - t0; bp.stat.n++; bp.stat.summe += ms; bp.stat.max = Math.max(bp.stat.max, ms);
   raum.messen?.('botplan', t0);
 }
@@ -435,8 +438,8 @@ function zielGueltig(raum, bp, z, p, was) {
   return passt(raum, bp, z.b, was, p) && z.ebene === (p.ebene ?? '');
 }
 function zielText(z) {
-  if (z.art === 'haus') return z.name ? `aus dem ${z.name}` : 'aus einem Haus';
-  return z.b.art === 'auto' ? 'aus einem Kofferraum' : z.b.art === 'container' ? 'aus einem Container' : 'von hier';
+  if (z.art === 'haus') return z.name ? M('bot.wo.ausDem', { name: z.name }) : M('bot.wo.haus');
+  return M(z.b.art === 'auto' ? 'bot.wo.kofferraum' : z.b.art === 'container' ? 'bot.wo.container' : 'bot.wo.hier');
 }
 
 function holenAusfuehren(raum, sid, p, x, H, a, menschen, bots) {
@@ -461,7 +464,7 @@ function holenAusfuehren(raum, sid, p, x, H, a, menschen, bots) {
       if (liste.length || (was === 'bretter' && hat(p.rucksack, 'bretter'))) return holenAusfuehren(raum, sid, p, x, H, a, menschen, bots);
       fertig(raum, b, a); return false;
     }
-    if (!a.angesagt) { a.angesagt = true; sagt(raum, sid, p, `Ich hol ${NAMEN[was] ?? was} ${zielText(a.ziel)}`.replace('Ich hol Vorräte', 'Ich schau mich nach Vorräten um')); }
+    if (!a.angesagt) { a.angesagt = true; sagt(raum, sid, p, was === 'alles' ? M('bot.vorraete', { wo: zielText(a.ziel) }) : M('bot.hol', { was: wasK(was), wo: zielText(a.ziel) })); }
   }
   const z = a.ziel;
   if (z.art === 'haus') {
@@ -485,7 +488,7 @@ function liefern(raum, sid, p, x, H, a, liste) {
     const was = a.was === 'alles' ? null : a.was;
     if (was && a.abgegeben) {
       const k = raum.state.safes.get(s.id).kiste, n = anz(k, was);
-      sagt(raum, sid, p, `${n} ${NAMEN[was].replace('eine ', '').replace('Konserven', n === 1 ? 'Konserve' : 'Konserven')} ${n === 1 ? 'liegt' : 'liegen'} jetzt in der Kiste im ${s.name}`);
+      sagt(raum, sid, p, M('bot.inKiste', { n, was: NAMEN.has(was) ? M('bot.stk.' + was, { n }) : D(was), ort: ortK(s.name) }));
     }
     fertig(raum, b, a); return false;
   }
@@ -518,7 +521,7 @@ function lampeAusfuehren(raum, sid, p, x, H, a, menschen) {
     entferne(p.rucksack, 'taschenlampe', 1);
     const id = raum.legeHin('taschenlampe', m.x, m.y, m.ebene ?? '');
     (b.verschmaeht ??= new Set()).add(id);
-    sagt(raum, sid, p, `${m.name}, hier liegt eine Taschenlampe für dich`);
+    sagt(raum, sid, p, M('bot.lampeFuer', { name: m.name }));
     fertig(raum, b, a); return false;
   }
   // suchen wie bei „holen“, aber ohne Abliefern in die Kiste
@@ -527,7 +530,7 @@ function lampeAusfuehren(raum, sid, p, x, H, a, menschen) {
   if (!a.ziel) {
     a.ziel = sucheZiel(raum, bp, p, x, 'taschenlampe', menschen, botListe(raum), sid);
     if (!a.ziel) { fertig(raum, b, a); return false; }
-    if (!a.angesagt) { a.angesagt = true; sagt(raum, sid, p, `Ich such eine Taschenlampe ${zielText(a.ziel)}`); }
+    if (!a.angesagt) { a.angesagt = true; sagt(raum, sid, p, M('bot.suchLampe', { wo: zielText(a.ziel) })); }
   }
   return zielAnsteuern(raum, sid, p, x, H, a);
 }
@@ -574,7 +577,7 @@ export function planSchritt(raum, sid, p, x, H) {
     // Funkspruch ist raus: der Bot, der dafür losging, meldet es genau einmal (unabhängig vom aktuellen Auftrag)
     if (raum.state.funk && !bp.funkGemeldet && (bp.funkSid === sid || b.plan?.auftrag?.art === 'funk')) {
       bp.funkGemeldet = true;
-      sagt(raum, sid, p, `Funkspruch ist raus – der Bus kommt um ${hhmm(raum.state.busAnkunft)} Uhr!`, true);
+      sagt(raum, sid, p, M('bot.funkRaus', { zeit: hhmm(raum.state.busAnkunft) }), true);
       if (b.befehl?.art === 'funk') b.befehl = null;
       if (b.plan?.auftrag?.art === 'funk') b.plan.auftrag = null;
     }
@@ -608,31 +611,32 @@ export function botBefehl(raum, sid, text) {
   if (!t.length) return;
   const name = p => p.name.replace(/\s*🤖\s*/, '').toLowerCase();
   let ziele = null, rest = t;
-  const i = t.slice(0, 2).findIndex(w => w === 'alle' || w === 'bots' || bots.some(([, p]) => name(p) === w));
+  const alle = w => w === 'alle' || w === 'bots' || w === 'all' || w === 'everyone';
+  const i = t.slice(0, 2).findIndex(w => alle(w) || bots.some(([, p]) => name(p) === w));
   if (i >= 0) {
     const w = t[i];
-    ziele = w === 'alle' || w === 'bots' ? bots : bots.filter(([, p]) => name(p) === w);
+    ziele = alle(w) ? bots : bots.filter(([, p]) => name(p) === w);
     rest = t.filter((_, j) => j !== i);
-  } else if (/^(folgt|kommt)$/.test(t[0])) { ziele = bots; }
+  } else if (/^(folgt|kommt|follow)$/.test(t[0])) { ziele = bots; }
   if (!ziele || !rest.length) return;
-  const wort = rest[0], was = WAS_WORT[rest[1]] ?? WAS_WORT[rest[2]];
+  const wort = rest[0], was = WAS_WORT[rest[1]] ?? WAS_WORT[rest[2]] ?? WAS_WORT[rest[3]];   // „get some water“
   let art = null;
-  if (/^(komm|kommt|folg|folge|folgt)$/.test(wort)) art = 'komm';
-  else if (/^(hol|holt|hole|bring|bringt)$/.test(wort) && was) art = 'hol';
-  else if (/^(bleib|bleibt|warte|wartet|wache)$/.test(wort)) art = 'wache';
-  else if (/^(funk|funke|funkt|funkspruch)$/.test(wort)) art = 'funk';
-  else if (/^(frei|selbst|selbstaendig|selbständig)$/.test(wort)) art = 'frei';
+  if (/^(komm|kommt|folg|folge|folgt|come|follow)$/.test(wort)) art = 'komm';
+  else if (/^(hol|holt|hole|bring|bringt|get|fetch)$/.test(wort) && was) art = 'hol';
+  else if (/^(bleib|bleibt|warte|wartet|wache|stay|wait|guard)$/.test(wort)) art = 'wache';
+  else if (/^(funk|funke|funkt|funkspruch|radio|call)$/.test(wort)) art = 'funk';
+  else if (/^(frei|selbst|selbstaendig|selbständig|free|yourself|auto)$/.test(wort)) art = 'frei';
   if (!art) return;
   for (const [bid, p, x] of ziele) {
     const b = x.bot, pl = b.plan;
     let antwort;
-    if (art === 'komm') { b.befehl = { art: 'komm' }; pl.auftrag = null; pl.pause = 0; antwort = 'Alles klar, ich bleib bei dir'; }
-    else if (art === 'hol') { b.befehl = { art: 'hol', was }; pl.auftrag = { art: 'holen', was, befehl: true, phase: 'suchen', ziel: null }; antwort = `Mach ich – ich hol ${NAMEN[was]}`; }
-    else if (art === 'wache') { b.befehl = { art: 'wache', x: p.x, y: p.y, ebene: p.ebene ?? '' }; pl.auftrag = { art: 'wache', ...b.befehl }; antwort = 'Ich bleib hier und pass auf'; }
+    if (art === 'komm') { b.befehl = { art: 'komm' }; pl.auftrag = null; pl.pause = 0; antwort = M('bot.komm'); }
+    else if (art === 'hol') { b.befehl = { art: 'hol', was }; pl.auftrag = { art: 'holen', was, befehl: true, phase: 'suchen', ziel: null }; antwort = M('bot.holBefehl', { was: wasK(was) }); }
+    else if (art === 'wache') { b.befehl = { art: 'wache', x: p.x, y: p.y, ebene: p.ebene ?? '' }; pl.auftrag = { art: 'wache', ...b.befehl }; antwort = M('bot.wache'); }
     else if (art === 'funk') {
-      if (raum.state.funk) antwort = 'Der Funkspruch ist schon raus';
-      else { b.befehl = { art: 'funk' }; pl.auftrag = { art: 'funk', befehl: true }; antwort = 'Ich funk gleich'; }
-    } else { b.befehl = null; pl.auftrag = null; pl.pause = 0; antwort = 'Okay, ich schau selbst, was zu tun ist'; }
+      if (raum.state.funk) antwort = M('bot.funkSchon');
+      else { b.befehl = { art: 'funk' }; pl.auftrag = { art: 'funk', befehl: true }; antwort = M('bot.funkGleich'); }
+    } else { b.befehl = null; pl.auftrag = null; pl.pause = 0; antwort = M('bot.frei'); }
     sagt(raum, bid, p, antwort, true);
   }
   raum.botplan && (raum.botplan.naechster = 0);

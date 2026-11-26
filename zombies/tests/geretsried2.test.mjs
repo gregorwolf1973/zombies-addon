@@ -1,4 +1,5 @@
 // Geretsried 2: eigenes Level (Level 2 der Vorgabe-Reihenfolge, früher Zufallswahl in Level 1) – Aufbau, Missionen, Evakuierung (Bus), Anzeigenamen
+import { textAus } from '../server/texte.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -60,22 +61,22 @@ test('Superuser „Level 1“ = Geretsried 1, „Level 2“ = Geretsried 2, „L
   const gesendet = [];
   const a = { wechselLaeuft: false, levelWechsel: z => ziele.push(z) };
   const raum = { aufgaben: a, extra: new Map([['s', { superuser: true }]]), state: { spieler: new Map([['s', { name: 'Su' }]]) },
-    broadcast: (t, m) => gesendet.push(m.text), clock: { setTimeout: f => f() } };
+    broadcast: (t, m) => gesendet.push(textAus(m)), clock: { setTimeout: f => f() } };
   const client = { sessionId: 's' };
   for (let i = 0; i < 10; i++) {
     a.wechselLaeuft = false;
-    assert.match(String(befehl(raum, client, { befehl: 'level', level: 1 })), /Level 1 \(Geretsried 1\)/);
+    assert.match(textAus(befehl(raum, client, { befehl: 'level', level: 1 })), /Level 1 \(Geretsried 1\)/);
   }
   assert.ok(ziele.every(z => z.level === 1 && z.karte === 'geretsried'));
   assert.ok(gesendet.every(t => /Geretsried 1/.test(t)));
   ziele.length = 0; a.wechselLaeuft = false;
-  assert.match(String(befehl(raum, client, { befehl: 'level', level: 2 })), /Level 2 \(Geretsried 2\)/);
+  assert.match(textAus(befehl(raum, client, { befehl: 'level', level: 2 })), /Level 2 \(Geretsried 2\)/);
   assert.deepEqual(ziele[0], { karte: 'geretsried2', level: 2 });
   ziele.length = 0; a.wechselLaeuft = false;
   befehl(raum, client, { befehl: 'level', level: 3 });
   assert.equal(ziele[0].karte, 'isarauen');
   a.wechselLaeuft = false;
-  assert.match(String(befehl(raum, client, { befehl: 'level', level: 7 })), /Unbekannt/);
+  assert.match(textAus(befehl(raum, client, { befehl: 'level', level: 7 })), /Unbekannt/);
 });
 
 test('Geretsried 2: Welt baut deterministisch, Start frei, Safe Rooms und Haustüren vom Start erreichbar', () => {

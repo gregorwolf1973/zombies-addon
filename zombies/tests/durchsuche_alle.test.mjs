@@ -1,4 +1,5 @@
 // „Alles durchsuchen“: Auswahl, Dauer (60 %), Fundliste, Alles nehmen; schnellere Einzeldauern
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -59,7 +60,7 @@ test('Alles durchsuchen: Raum-Auswahl, 60 % Dauer, Fundliste und Alles nehmen', 
   // falsch: 30 s Sperre, kein Start
   { const o = raum.offeneRaetsel.get(c.sessionId); raum.antwort(cl, { id: o.id, index: (o.richtigIndex + 1) % 4 }); }
   assert.ok(x.alleSperre > Date.now() + 25000);
-  assert.ok(nachr.some(n => n[0] === 'meldung' && /erst in 30 s wieder/.test(n[1].text)));
+  assert.ok(nachr.some(n => n[0] === 'meldung' && /erst in 30 s wieder/.test(textAus(n[1]))));
   raum.starteAlle(cl);
   assert.equal(raum.offeneRaetsel.get(c.sessionId), undefined, 'gesperrt: keine neue Frage');
   x.alleSperre = 0;

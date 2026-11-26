@@ -1,4 +1,5 @@
 // Warten am Abholpunkt rafft die Uhr (server/aufgaben.mjs warteRaffer) – nur wenn alle Lebenden dort sind
+import { textAus } from '../server/texte.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Aufgaben } from '../server/aufgaben.mjs';
@@ -17,7 +18,7 @@ function aufbau() {
     state: { funk: true, busDa: false, spieler, aufgaben: new Map([['m', { pflicht: true, erledigt: true }]]) },
     welt: { tor, name: 'geretsried' }, karte: 'geretsried',
     einstellungen: () => ({ aufgaben: { an: true, warteRaffer: 5 } }),
-    broadcast: (_, m) => meldungen.push(m.text),
+    broadcast: (_, m) => meldungen.push(textAus(m)),
   };
   const a = Object.create(Aufgaben.prototype); a.raum = raum;
   return { a, raum, spieler, meldungen, ax, ay };

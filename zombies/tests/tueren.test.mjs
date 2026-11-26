@@ -1,4 +1,5 @@
 // Haustüren und Zimmertüren: Zombies kommen hinein, hämmern Türen und Barrikaden auf; Verbarrikadieren überall
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -34,7 +35,7 @@ async function beitreten(name, spielerId = neueId()) {
   const raum = matchMaker.getLocalRoomById(c.roomId);
   raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
   const meldungen = [];
-  c.onMessage('meldung', m => meldungen.push(m.text));
+  c.onMessage('meldung', m => meldungen.push(textAus(m)));
   return { c, raum, p: raum.state.spieler.get(c.sessionId), meldungen, spielerId };
 }
 

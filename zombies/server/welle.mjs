@@ -11,6 +11,7 @@
 // und taumelt, leichte Schwarmregeln (Abstand, schwache Kohäsion, lockere Ausrichtung) ergeben einen langgezogenen Haufen.
 // Kommt die Horde in Reichweite von Spielern/Bots/Soldaten/Menschen, löst sich ein Angriffstrupp und jagt sein Ziel mit der
 // normalen Jagdlogik (info.ziel / info.mensch / info.punkt); danach kehrt er zurück oder streunt.
+import { M, L, ortK, textAus } from './texte.mjs';
 import { feinDurchgang } from './wegfeld.mjs';
 import { KACHEL, BREITE, HOEHE, WERTE as W, T, BLOCKIERT, frei, drinnen, ladenArt } from '../client/welt.mjs';
 
@@ -144,9 +145,9 @@ export class Zombiewelle {
       gruppen.push({ t: ANSAGE + (i / g) * LAGER_STAFFEL + r.rnd() * 2, n: Math.round(rest / (g - i)), winkel: richtungen[i % richtungen.length] + (r.rnd() - 0.5) * 0.3 });
     }
     this.lagerPlan = { t: 0, gruppen, richtungen, ziel, feld, mitte, d0, erzeugt: 0 };
-    const NAME = ['Osten ▶', 'Süden', '◀ Westen', 'Norden'];
+    const NAME = ['ost', 'sued', 'west', 'nord'];   // Schlüssel srv.horde.von_*
     const himmel = [...new Set(richtungen.map(w => NAME[Math.round((((w % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 2)) % 4]))];
-    r.broadcast('meldung', { text: `🧟 Eine Zombiehorde kommt von ${himmel.join(', ')}!`, lang: true });
+    r.broadcast('meldung', M('horde.kommt', { von: himmel.map(h => M('horde.von_' + h)) }, L));
     return true;
   }
 
@@ -182,7 +183,7 @@ export class Zombiewelle {
       else if (ref.draussen && ref.x + ABSTAND > (BREITE - 2) * KACHEL) seite = 'west';
     }
     this.ansage = { t: ANSAGE, seite };
-    this.raum.broadcast('meldung', { text: `🧟 Eine Zombiehorde kommt von ${seite === 'west' ? '◀ Westen' : 'Osten ▶'}!`, lang: true });
+    this.raum.broadcast('meldung', M('horde.kommt', { von: M(seite === 'west' ? 'horde.von_west' : 'horde.von_ost') }, L));
     return seite;
   }
 
@@ -400,16 +401,10 @@ export class Zombiewelle {
       return best;
     };
     switch (art) {
-      case 'safe': { const q = (welt.safeRooms ?? []).find(q => Math.hypot(q.vorTuer.x - ziel.x, q.vorTuer.y - ziel.y) < 40); return q?.name ? `Safe Room ${q.name}` : 'Safe Room'; }
-      case 'laden': { const h = haus(); return h?.name ? `Laden ${h.name}` : `Laden${h?.art ? ' (' + h.art + ')' : ''}`; }
-      case 'haus': { const h = haus(); return h?.name ? `Haus ${h.name}` : 'Haus'; }
-      case 'stuetzpunkt': return 'Stützpunkt';
-      case 'laerm': return 'Lärm';
-      case 'kreuzung': return 'Kreuzung';
-      case 'spieler': return 'Spieler-Nähe';
-      case 'menschen': return 'Menschen';
-      case 'zufall': return 'Zufallspunkt';
-      case 'start': return 'Gegenseite';
+      case 'safe': { const q = (welt.safeRooms ?? []).find(q => Math.hypot(q.vorTuer.x - ziel.x, q.vorTuer.y - ziel.y) < 40); return q?.name ? M('horde.z_safeName', { name: ortK(q.name) }) : M('horde.z_safe'); }
+      case 'laden': { const h = haus(); return h?.name ? M('horde.z_ladenName', { name: h.name }) : h?.art ? M('horde.z_ladenArt', { art: h.art }) : M('horde.z_laden'); }
+      case 'haus': { const h = haus(); return h?.name ? M('horde.z_hausName', { name: h.name }) : M('horde.z_haus'); }
+      case 'stuetzpunkt': case 'laerm': case 'kreuzung': case 'spieler': case 'menschen': case 'zufall': case 'start': return M('horde.z_' + art);
     }
     return art;
   }
@@ -419,7 +414,7 @@ export class Zombiewelle {
     a.wechsel.push({ zeit: Math.round(this.raum.state?.uhr ?? 0), art, name, grund });
     if (a.wechsel.length > WECHSEL_MAX) a.wechsel.splice(0, a.wechsel.length - WECHSEL_MAX);
     const GRUND = { zeit: 'Zeit', angekommen: 'angekommen', festgefahren: 'festgefahren', laerm: 'Lärm', start: 'Start', dauer: 'Hordendauer um' };
-    console.log(`Horde (${a.ids.size}): neues Ziel ${name} – Grund: ${GRUND[grund] ?? grund}`);
+    console.log(`Horde (${a.ids.size}): neues Ziel ${textAus(name)} – Grund: ${GRUND[grund] ?? grund}`);
   }
 
   // Zustand der Horden an Clients, die ihn sehen wollen (Einstellung hordeZieleZeigen oder Client mit ?debug); sonst nichts senden.
@@ -736,7 +731,7 @@ export class Zombiewelle {
       this.entfernen(a);
       return;
     }
-    a.abzug = true; a.abzugT = 0; a.ziel = rand; a.feld = feld; a.zielArt = 'abzug'; a.zielName = 'Abzug zum Kartenrand';
+    a.abzug = true; a.abzugT = 0; a.ziel = rand; a.feld = feld; a.zielArt = 'abzug'; a.zielName = M('horde.z_abzug');
     a.ziele++; a.seitZiel = 0; a.zielUhr = Infinity; a.umwegBis = 0; a.feldHaupt = null; a.klemmStufe = 0;
     a.pruef = { t: 0, x: m.x, y: m.y };
     this.wechselMerken(a, 'abzug', 'dauer');

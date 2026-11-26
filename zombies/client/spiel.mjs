@@ -47,6 +47,7 @@ import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
 import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
 import { t as tr, textAus, beiSprachwechsel, sprachUmschalter } from './i18n.mjs';
+import { ortName, feldText } from './servertext.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const SCHATTEN_ZELLE = 4, SCHATTEN_DUNKEL = 0.35;   // Raster der Schattenprüfung (px) und Abdunklung der Figuren im Schatten
@@ -907,11 +908,11 @@ function chatZeile(n) {
     d.appendChild(a);
   }
   const t = document.createElement('div');
-  t.textContent = n.text;
+  t.textContent = textAus(n.text);   // Spieler: Text; Bots: { k, w } in der eigenen Sprache
   const f = document.createElement('div');
   f.className = 'fuss';
   const z = new Date(n.zeit);
-  f.textContent = String(z.getHours()).padStart(2, '0') + ':' + String(z.getMinutes()).padStart(2, '0') + (n.ort ? ' · ' + n.ort : '');
+  f.textContent = String(z.getHours()).padStart(2, '0') + ':' + String(z.getMinutes()).padStart(2, '0') + (n.ort ? ' · ' + textAus(n.ort) : '');
   d.append(t, f);
   return d;
 }
@@ -987,7 +988,7 @@ function chatAnschliessen(raum) {
     try { navigator.vibrate?.([120, 60, 120]); } catch { /* nicht verfügbar */ }
     if (chatOffen()) return;
     chatUngelesen++; chatZaehler();
-    const kurz = n.text.length > 60 ? n.text.slice(0, 59) + '…' : n.text;
+    const txt = textAus(n.text), kurz = txt.length > 60 ? txt.slice(0, 59) + '…' : txt;
     meldung(`💬 ${n.name}: ${kurz}`);
   });
 }
@@ -1305,7 +1306,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('radios', m => this.radioAnz.alle(m));
     raum.onMessage('radioWeg', m => this.radioAnz.weg(m));
     raum.onMessage('explosion', m => { this.explosion(m.x, m.y, m.r, 1, m.ebene ?? ''); if (!m.ebene) fetzenBeiExplosion(this, zombieKarte().values(), m.x, m.y, m.r ?? 40); });
-    raum.onMessage('handel', m => { meldung(m.text); if (m.ok) ton.aufheben(); });
+    raum.onMessage('handel', m => { meldung(m.text ?? ''); if (m.ok) ton.aufheben(); });   // m.text: { k, w } oder Text
     raum.onMessage('stoss', m => { const eigen = eigeneTreffer(m.x, m.y); const fs = eigen ?? naechsteFigur(m.x, m.y); if (fs) { fs.schlagBis = this.time.now + 400; if (typeof m.w === 'number') { fs.zielW = m.w; fs.zielBis = this.time.now + 400; } } if (eigen) m = { ...m, x: this.lokal.x, y: this.lokal.y }; this.stoss(m); if (istEigen(m, meineId)) ton.stoss(null, null, m.messer); else if (hoertEbene(m)) ton.stoss(m.x, m.y, m.messer); });
     raum.onMessage('feuer', m => { if (hoertEbene(m)) if (!ton.ereignis('feuer', m.x, m.y)) ton.schuss(m.x, m.y, 1.4); });
     raum.onMessage('autosWeg', m => autosWegEmpfangen(m));   // mit Autoschlüssel weggefahrene Autos (client/pkwdarstellung.mjs)
@@ -1582,7 +1583,7 @@ class Ort extends Phaser.Scene {
     this.hausTueren = new Map();
     for (const s of this.welt.safeRooms) {
       const h = s.haus;
-      this.add.text((h.x + h.b / 2) * KACHEL, (h.y + h.h / 2) * KACHEL, '🛡 ' + s.name, {
+      this.add.text((h.x + h.b / 2) * KACHEL, (h.y + h.h / 2) * KACHEL, '🛡 ' + ortName(s.name), {
         fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
       }).setOrigin(0.5).setDepth(6);
     }
@@ -1651,14 +1652,14 @@ class Ort extends Phaser.Scene {
 
   hordeInfoEmpfangen(m) {
     this.hordeInfo = m?.aktiv ? { ...m, ab: performance.now() } : null;
-    if (this.uebersicht) this.uebersicht.horde = this.hordeInfo ? { mitte: { x: m.mitte.x / KACHEL, y: m.mitte.y / KACHEL }, ziel: { x: m.ziel.x / KACHEL, y: m.ziel.y / KACHEL }, name: `🎯 ${m.name}` } : null;
+    if (this.uebersicht) this.uebersicht.horde = this.hordeInfo ? { mitte: { x: m.mitte.x / KACHEL, y: m.mitte.y / KACHEL }, ziel: { x: m.ziel.x / KACHEL, y: m.ziel.y / KACHEL }, name: `🎯 ${textAus(m.name)}` } : null;
     if (!this.hordeInfo) { this.hordeGfx.clear(); this.hordeFahne.setVisible(false); this.hordeListe.style.display = 'none'; return; }
     const grund = g => (['zeit', 'angekommen', 'festgefahren', 'laerm', 'start', 'dauer'].includes(g) ? tr('horde.grund_' + g) : g);
     // Hordenliste: je Horde Größe, Restzeit und nächstes Ziel (Zielwechsel in …)
     const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     const horden = m.horden?.length ? m.horden : [m];
-    this.hordeListe.textContent = horden.map((h, i) => `${tr('horde.zeile', { nr: i + 1, n: h.n })} · ${h.abzug ? tr('horde.abzug') : tr('horde.noch', { zeit: mmss(h.restDauer ?? 0) })}\n  → ${h.name}${h.abzug ? '' : ` (${tr('horde.in', { zeit: mmss(h.rest) })})`}`).join('\n')
-      + `\n${tr('horde.letzteZiele')}\n` + [...m.wechsel].reverse().map(w => `${uhrText(w.zeit)} ${w.name} (${grund(w.grund)})`).join('\n');
+    this.hordeListe.textContent = horden.map((h, i) => `${tr('horde.zeile', { nr: i + 1, n: h.n })} · ${h.abzug ? tr('horde.abzug') : tr('horde.noch', { zeit: mmss(h.restDauer ?? 0) })}\n  → ${textAus(h.name)}${h.abzug ? '' : ` (${tr('horde.in', { zeit: mmss(h.rest) })})`}`).join('\n')
+      + `\n${tr('horde.letzteZiele')}\n` + [...m.wechsel].reverse().map(w => `${uhrText(w.zeit)} ${textAus(w.name)} (${grund(w.grund)})`).join('\n');
     this.hordeListe.style.display = 'block';
   }
 
@@ -1767,7 +1768,7 @@ class Ort extends Phaser.Scene {
     this.aufgabenBekannt = new Set(kennung);
     const zeilen = liste.map(a => {
       const zahl = a.ziel > 1 && !a.erledigt ? ` <span class="ag-zahl">${Math.round(a.fortschritt)}/${Math.round(a.ziel)}</span>` : '';
-      return `<li class="${a.erledigt ? 'fertig' : ''}">${a.erledigt ? '✓' : a.pflicht ? '★' : '•'} ${a.symbol} <span class="ag-text">${escapeHtml(a.text)}</span>${zahl}</li>`;
+      return `<li class="${a.erledigt ? 'fertig' : ''}">${a.erledigt ? '✓' : a.pflicht ? '★' : '•'} ${a.symbol} <span class="ag-text">${escapeHtml(feldText(a.text))}</span>${zahl}</li>`;
     }).join('');
     if ($('aufgabenliste').innerHTML !== zeilen) $('aufgabenliste').innerHTML = zeilen;
     let bus = '';
@@ -2472,7 +2473,7 @@ class Ort extends Phaser.Scene {
     // Safe Room: Vorratskiste (Kistenbild) und Bretter an der Eingangstür
     const safe = w.kiste && !w.kachel ? this.add.image(w.kiste.x, w.kiste.y, 'kiste').setScale(0.62).setDepth(0.45) : null;   // maßstäblich: Vorratskiste ist ein gezeichnetes Möbelstück
     const bretter = this.add.graphics().setDepth(0.46);
-    const schild = w.safe ? this.add.text(X + B / 2, Y - 14, '🛡 ' + (w.safeName ?? 'Safe Room'), {
+    const schild = w.safe ? this.add.text(X + B / 2, Y - 14, '🛡 ' + ortName(w.safeName ?? 'Safe Room'), {
       fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#263238', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(9.6).setScale(w.kachel ? 0.3 : 1) : null;   // maßstäblich: Schild nicht mit dem Innenzoom aufblasen
     a = { w, bild, tueren, symbole, dunkel, nebel, safe, bretter, schild, X, Y, B, H, stand: '', bekannt: new Set(), nebelStand: -1, bretterWert: -1 };
@@ -4212,7 +4213,7 @@ class Ort extends Phaser.Scene {
       if (safe?.lager) textSetzen('sichername', tr('hud.safeBewacht', { name: safe.name }));
       else if (safe) {
         const bar = Math.round(s.safes.get(safe.id)?.barrikade ?? 0);
-        textSetzen('sichername', tr('hud.safeBarrikade', { name: safe.name, n: bar }));
+        textSetzen('sichername', tr('hud.safeBarrikade', { name: ortName(safe.name), n: bar }));
       }
       this.rucksackZeigen(ich);
       const gruen = ich.zombie > 0 ? 0.35 : ich.infektion > 0 ? 0.08 + 0.3 * (1 - ich.infektion / INFEKTION_DAUER) : 0;
@@ -4564,7 +4565,7 @@ function kisteZeigen(ich, safe) {
   const schluessel = [...kiste].join(',') + '|' + [...ich.rucksack].join(',');
   if (schluessel === kisteSchluessel) return;
   kisteSchluessel = schluessel;
-  $('kistetitel').textContent = tr('kiste.titelIn', { name: safe.name });
+  $('kistetitel').textContent = tr('kiste.titelIn', { name: safe.lager ? safe.name : ortName(safe.name) });
   const fuellen = (el, liste, max, richtung, titel) => {
     el.innerHTML = `<div class="kopf">${titel} (${liste.length}/${max}) – ${tr(richtung === 'raus' ? 'kiste.nehmen' : 'kiste.ablegen')}</div>`;
     const raster = document.createElement('div'); raster.className = 'raster';
@@ -4688,7 +4689,7 @@ function zeigeAufloesung(m) {
   const hd = m.handel;
   const al = m.alle;
   const loesung = escapeHtml(m.loesung);
-  $('raetselergebnis').innerHTML = (al ? (m.richtig ? (al.fertig ? tr('raetsel.alleRichtig') : tr('raetsel.richtigNr', { nr: al.nr, von: al.von })) : tr('raetsel.falschWarten', { loesung, n: 30 })) : hd ? (m.richtig ? tr('raetsel.richtigNr', { nr: hd.nr, von: hd.von }) + (hd.text ? ' ' + escapeHtml(hd.text) : '') : tr('raetsel.falschSerie', { loesung })) : m.richtig ? tr('raetsel.richtigSchloss') : tr('raetsel.falschLaut', { loesung })) + link;
+  $('raetselergebnis').innerHTML = (al ? (m.richtig ? (al.fertig ? tr('raetsel.alleRichtig') : tr('raetsel.richtigNr', { nr: al.nr, von: al.von })) : tr('raetsel.falschWarten', { loesung, n: 30 })) : hd ? (m.richtig ? tr('raetsel.richtigNr', { nr: hd.nr, von: hd.von }) + (hd.text ? ' ' + escapeHtml(textAus(hd.text)) : '') : tr('raetsel.falschSerie', { loesung })) : m.richtig ? tr('raetsel.richtigSchloss') : tr('raetsel.falschLaut', { loesung })) + link;
   if (m.richtig) {
     // kurze Bestätigung, dann von selbst weiter: nächste Frage am Tor (falls noch Schlösser offen) oder Fenster zu
     const id = raetselId;

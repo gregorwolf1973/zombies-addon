@@ -1,4 +1,5 @@
 // Zombiewellen, Tempofaktoren und seltenere Blaulicht-Fahrten
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -97,7 +98,7 @@ test('Zombiewelle: Meldung, Gruppe außerhalb des Bildes, zieht zur Gegenseite, 
     p.ebene = ''; p.x = BREITE * KACHEL / 2; p.y = HOEHE * KACHEL / 2;
     const meldungen = [];
     const alt = raum.broadcast.bind(raum);
-    raum.broadcast = (typ, m, ...r) => { if (typ === 'meldung') meldungen.push(m.text); return alt(typ, m, ...r); };
+    raum.broadcast = (typ, m, ...r) => { if (typ === 'meldung') meldungen.push(textAus(m)); return alt(typ, m, ...r); };
     const seite = raum.welle.ansagen('west');
     assert.equal(seite, 'west');
     assert.ok(meldungen.some(m => /Zombiehorde kommt von .*Westen/.test(m)), 'Meldung fehlt');

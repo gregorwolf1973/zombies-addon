@@ -16,6 +16,7 @@ import { DINGE } from '../client/welt.mjs';
 import { weltVorbereiten } from './weltcache.mjs';
 import { kistenPlan, kistenSchritt, kistenSpeichern, kistenLaden } from './a400m_kisten.mjs';
 import { gesuchteDinge, fundorteListe, missionsOrt, aufgabenFundePlan, aufgabenBedarf } from './fundorte.mjs';
+import { M, D, L, alsFeld, ausFeld, nachricht } from './texte.mjs';
 import { LEVEL_KATALOG, levelSchluessel as katalogSchluessel, aktiveFolge, naechsterEintrag } from '../client/levelkatalog.mjs';
 
 // Missionsgegenstand für die Clients (Karte): exakte Position (x, y), Radius des animierten Auffindkreises, abgegeben, Ortsbeschreibung
@@ -37,7 +38,9 @@ export const Aufgabe = schema({
 export const LEVEL_KARTEN = LEVEL_KATALOG.map(k => k.id);
 // Schlüssel je Level (Tabellen je Karte wie bissSpielerLevel) = Katalog-id = Kartenname
 export const levelSchluessel = katalogSchluessel;
-export const KARTEN_NAMEN = { geretsried: 'Geretsried 1', geretsried2: 'Geretsried 2', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };
+// Kartennamen (Server-Logs, Tests); an Clients geht kartenK() als Schlüssel srv.karte.*
+export const KARTEN_NAMEN = { geretsried: 'Geretsried 1', geretsried2: 'Geretsried 2', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };   // i18n-ok
+export const kartenK = karte => (KARTEN_NAMEN[karte] ? M('karte.' + karte) : karte);
 
 export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
 const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
@@ -56,44 +59,44 @@ const vorrat = n => Math.min(VORRAT_MAX, 2 + n);
 const ARTEN = {
   funk: {
     symbol: '📻', pflicht: true,
-    text: () => 'Funkspruch absetzen (Funktisch im Safe Room)', ziel: () => 1,
+    text: () => M('auf.t.funk'), ziel: () => 1,
     stand: a => a.raum.state.funk ? 1 : 0,
   },
   vorraete: {
     symbol: '📦',
-    text: n => `Vorräte sichern: ${vorrat(n)} Wasser + ${vorrat(n)} Essen in Safe-Room-Kisten`, ziel: n => 2 * vorrat(n),
+    text: n => M('auf.t.vorraete', { n: vorrat(n) }), ziel: n => 2 * vorrat(n),
     stand: (a, n) => { const k = kisten(a.raum); return Math.min(anzahl(k, 'wasser'), vorrat(n)) + Math.min(anzahl(k, 'essen'), vorrat(n)); },
   },
   medizin: {
     symbol: '💊',
-    text: () => 'Medizin holen: eine Spritze aus der Apotheke', ziel: () => 1,
+    text: () => M('auf.t.medizin'), ziel: () => 1,
     stand: a => a.medizin || kisten(a.raum).includes('spritze') ? 1 : 0,
   },
   zombies: {
     symbol: '🧟',
-    text: n => `Zombies erledigen: zusammen ${15 + 3 * (n - 1)}`, ziel: n => 15 + 3 * (n - 1),
+    text: n => M('auf.t.zombies', { n: 15 + 3 * (n - 1) }), ziel: n => 15 + 3 * (n - 1),
     stand: a => Math.max(0, a.raum.state.besiegt - a.basis),
   },
   tor: {
     symbol: '🔓',
-    text: () => 'Tor am Ortsausgang öffnen (alle Schlösser)', ziel: () => TOR_SCHLOESSER,
+    text: () => M('auf.t.tor'), ziel: () => TOR_SCHLOESSER,
     stand: a => a.raum.state.torGeloest,
   },
   lampen: {
     symbol: '🔦',
-    text: () => 'Taschenlampen: jeder hat eine', ziel: n => n,
+    text: () => M('auf.t.lampen'), ziel: n => n,
     stand: a => [...a.raum.state.spieler.values()].filter(p => p.lampe > 0 || hat(p.rucksack, 'taschenlampe')).length,
   },
   // Missionsgegenstände (server/mission.mjs): jeder liegt in einem weit entfernten Gebäude und wird in eine Safe-Room-Kiste gelegt
   mission: {
     symbol: '🧩', pflicht: true,
-    text: (n, a) => 'Missionsgegenstände finden und in die Safe-Room-Kiste legen: ' + a.mission.map(m => `${a.abgegeben.has(m.id) ? '✅' : `⬜`} ${a.missionName(m)}${a.abgegeben.has(m.id) || !m.ort ? '' : ` – ${m.ort}`}`).join(' · '),
+    text: (n, a) => M('auf.t.mission', { liste: { s: ' · ', l: a.mission.map(m => ({ s: ' ', l: [a.abgegeben.has(m.id) ? '✅' : '⬜', a.missionName(m), ...(a.abgegeben.has(m.id) || !m.ort ? [] : ['–', m.ort])] })) } }),
     ziel: (n, a) => Math.max(1, a.mission.length),
     stand: a => a.abgegeben.size,
   },
   bretter: {
     symbol: '🪵',
-    text: () => 'Den Funk-Safe-Room zu 100 % verbarrikadieren', ziel: () => 100,
+    text: () => M('auf.t.bretter'), ziel: () => 100,
     // kam der Funkspruch vom Bundeswehr-Stützpunkt, gilt er als gesichert (die Soldaten halten das Lager): Aufgabe erfüllt
     stand: a => a.funkSafe === STUETZPUNKT ? 100 : a.funkSafe ? Math.round(a.raum.state.safes.get(a.funkSafe)?.barrikade ?? 0) : 0,
   },
@@ -238,7 +241,7 @@ export class Aufgaben {
   neu(id, erledigt) {
     const art = ARTEN[id], a = new Aufgabe(), n = this.spielerZahl();
     a.id = id; a.symbol = art.symbol; a.pflicht = !!art.pflicht;
-    a.text = art.text(n, this); a.ziel = art.ziel(n, this); a.fortschritt = erledigt ? a.ziel : 0; a.erledigt = erledigt;
+    a.text = alsFeld(art.text(n, this)); a.ziel = art.ziel(n, this); a.fortschritt = erledigt ? a.ziel : 0; a.erledigt = erledigt;
     this.raum.state.aufgaben.set(id, a);
   }
 
@@ -262,12 +265,12 @@ export class Aufgaben {
     for (const [id, a] of this.raum.state.aufgaben) {
       const art = ARTEN[id];
       if (!art || a.erledigt) continue;
-      a.ziel = art.ziel(n, this); a.text = art.text(n, this);
+      a.ziel = art.ziel(n, this); a.text = alsFeld(art.text(n, this));
       const f = art.stand(this, n);
       a.fortschritt = Math.min(f, a.ziel);
       if (f >= a.ziel) {
         a.erledigt = true; a.fortschritt = a.ziel;
-        if (melden) { this.raum.broadcast('meldung', { text: `✅ Aufgabe erledigt: ${a.symbol} ${a.text}`, lang: true }); this.raum.xpAlle?.('aufgabe'); }
+        if (melden) { this.raum.broadcast('meldung', M('auf.erledigt', { sym: a.symbol, text: ausFeld(a.text) }, L)); this.raum.xpAlle?.('aufgabe'); }
       }
     }
   }
@@ -300,14 +303,13 @@ export class Aufgaben {
     for (let i = 0; i < h; i++) kreisSchrumpfen(m);
     this.hinweise[m.id] = h;
     const q = new Mission(); q.id = m.id; q.ding = m.ding; q.nummer = m.nummer ?? 0; q.von = m.von ?? 0;
-    q.x = Math.round(m.x); q.y = Math.round(m.y); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.id); q.getragen = false; q.ort = m.ort ?? ''; q.behaelter = m.behaelter ?? '';
+    q.x = Math.round(m.x); q.y = Math.round(m.y); q.r = Math.round(m.r); q.abgegeben = this.abgegeben.has(m.id); q.getragen = false; q.ort = alsFeld(m.ort ?? ''); q.behaelter = m.behaelter ?? '';
     s.missionen?.set(m.id, q);
   }
 
   // Anzeigename: „Landefeuer 2/3“ bei mehreren Landefeuern
   missionName(m) {
-    const n = DINGE[m.ding].name;
-    return m.nummer && this.landefeuer > 1 ? `${n} ${m.nummer}/${this.landefeuer}` : n;
+    return m.nummer && this.landefeuer > 1 ? M('auf.missionNr', { ding: D(m.ding), nr: m.nummer, von: this.landefeuer }) : D(m.ding);
   }
 
   // Kommen echte Spieler dazu, kommen weitere Landefeuer an neuen Orten dazu (bis 5, nie weniger); nur bis der Funkspruch raus ist
@@ -326,7 +328,7 @@ export class Aufgaben {
       if (!da.has(m.id)) { this.mission.push(m); this.missionEintragen(m); }
     }
     s.missionOffen = this.mission.length - this.abgegeben.size;
-    const a = s.aufgaben.get('mission'); if (a && !a.erledigt) { a.ziel = this.mission.length; a.text = ARTEN.mission.text(0, this); }
+    const a = s.aufgaben.get('mission'); if (a && !a.erledigt) { a.ziel = this.mission.length; a.text = alsFeld(ARTEN.mission.text(0, this)); }
   }
 
   missionFertig() { return !this.raum.state.aufgaben.has('mission') || this.mission.every(m => this.abgegeben.has(m.id)); }
@@ -356,7 +358,7 @@ export class Aufgaben {
   // Fehlende Teile für den Funkspruch (Namen); leer = Funkspruch möglich
   funkFehlt() {
     if (!this.raum.state.aufgaben.has('mission')) return [];
-    return FUNK_TEILE.filter(d => this.mission.some(m => m.id === d) && !this.abgegeben.has(d)).map(d => DINGE[d].name);
+    return FUNK_TEILE.filter(d => this.mission.some(m => m.id === d) && !this.abgegeben.has(d)).map(d => D(d));
   }
 
   // Missionsgegenstand in einer Safe-Room-Kiste: abgegeben (zählt für alle, wird aus der Kiste genommen)
@@ -372,7 +374,7 @@ export class Aufgaben {
         this.abgegeben.add(m.id);
         const q = s.missionen.get(m.id); if (q) q.abgegeben = true;
         s.missionOffen = this.mission.length - this.abgegeben.size;
-        if (melden) this.raum.broadcast('meldung', { text: `${DINGE[m.ding].zeichen} ${this.missionName(m)} abgegeben (${this.abgegeben.size}/${this.mission.length})`, lang: true });
+        if (melden) this.raum.broadcast('meldung', M('auf.abgegeben', { z: DINGE[m.ding].zeichen, name: this.missionName(m), n: this.abgegeben.size, von: this.mission.length }, L));
         break;
       }
     }
@@ -446,7 +448,7 @@ export class Aufgaben {
     s.busAnkunft = this.einst().stunde * 60;
     this.aktualisieren(false);
     const a = s.aufgaben.get('funk'); if (a) { a.erledigt = true; a.fortschritt = a.ziel; this.raum.xpAlle?.('aufgabe'); }
-    this.raum.broadcast('meldung', { text: `📻 ${p.name} hat den Funkspruch abgesetzt – ${this.fz().der} kommt um ${hhmm(s.busAnkunft)} zum Ortsausgang!`, lang: true });
+    this.raum.broadcast('meldung', M('auf.funk', { name: p.name, fz: this.fz().der, zeit: hhmm(s.busAnkunft) }, L));
     // Sprachansage (ohne Uhrzeit) an ALLE: Der Funkspruch betrifft die ganze Gruppe, und nur der Absender hat das Funkgerät – die anderen müssen sich ebenfalls bereithalten
     this.raum.broadcast('funkAnsage', {});
     this.aktualisieren();
@@ -481,8 +483,7 @@ export class Aufgaben {
     if (!this.abholMeldung && s.funk && [...s.aufgaben.values()].every(a => !a.pflicht || a.erledigt)) {
       this.abholMeldung = true;
       const art = this.fz().art;
-      this.raum.broadcast('meldung', { text: art === 'flugzeug' ? '📍 Landeplatz steht fest – der A400M landet dort, er ist auf der Karte markiert'
-        : art === 'panzer' ? '📍 Abholstelle am Ortsausgang steht fest – der Panzer holt euch dort ab, sie ist auf der Karte markiert' : '📍 Abholstelle am Ortsausgang steht fest – sie ist auf der Karte markiert', lang: true });
+      this.raum.broadcast('meldung', M(art === 'flugzeug' ? 'auf.landeplatz' : art === 'panzer' ? 'auf.abholPanzer' : 'auf.abhol', null, L));
     }
     if (this.wechselLaeuft) { this.mitnehmen(); return; }
     const { stunde, wartezeit } = this.einst();
@@ -499,7 +500,7 @@ export class Aufgaben {
         if (!vorlauf) this.busHeute = false;            // Zeitfenster vorbei: morgen kommt ein neuer Bus
         if (bis > 0 && bis <= WARNUNG_MIN && !this.ankGemeldet) {
           this.ankGemeldet = true;
-          this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} kommt um ${hhmm(A)} zum Ortsausgang!`, lang: true });
+          this.raum.broadcast('meldung', M('auf.kommtUm', { z: this.fz().zeichen, fz: this.fz().Der, zeit: hhmm(A) }, L));
         } else if (bis > WARNUNG_MIN) this.ankGemeldet = false;
       }
       return;
@@ -540,7 +541,7 @@ export class Aufgaben {
     if (this.alleBordGemeldet) return;
     this.alleBordGemeldet = true;
     const n = Math.round(this.alleBordSek);
-    this.raum.broadcast('meldung', { text: bunker ? (n > 0 ? `☢️ Alle im Bunker – Tor schließt in ${n} s` : '☢️ Alle im Bunker – Tor schließt!') : (n > 0 ? `${this.fz().zeichen} Alle an Bord – Abfahrt in ${n} s` : `${this.fz().zeichen} Alle an Bord – Abfahrt!`), lang: true });
+    this.raum.broadcast('meldung', M(bunker ? (n > 0 ? 'auf.bunkerZu' : 'auf.bunkerZuJetzt') : (n > 0 ? 'auf.bordAb' : 'auf.bordAbJetzt'), { z: this.fz().zeichen, n }, L));
   }
 
   // Bus (Gewehre aus den Fenstern) und Panzer (Turm-MG) schießen vom Erscheinen bis zur Abfahrt auf Zombies in der Nähe;
@@ -625,7 +626,7 @@ export class Aufgaben {
     }
     if (an !== !!this.raffAn) {
       this.raffAn = an;
-      this.raum.broadcast('meldung', { text: an ? `⏩ Alle warten am Abholpunkt – die Zeit vergeht schneller, bis ${this.fz().der} kommt` : '⏸️ Nicht mehr alle am Abholpunkt – die Zeit läuft wieder normal' });
+      this.raum.broadcast('meldung', an ? M('auf.raffAn', { fz: this.fz().der }) : M('auf.raffAus'));
     }
     return an ? Math.max(1, Number(this.einst().warteRaffer) || 6) : 1;
   }
@@ -644,9 +645,9 @@ export class Aufgaben {
     const z = s.evakX > 0 ? { x: s.evakX, y: s.evakY } : plan.ziel;
     const dx = (f?.x ?? plan.start.x) - z.x, dy = (f?.y ?? plan.start.y) - z.y;
     const m = Math.round(Math.hypot(dx, dy) / 8 / 10) * 10, weg = Math.round(v.panzerLaenge(plan) / 8 / 10) * 10;
-    const w = Math.abs(dx) > Math.abs(dy) * 2.4 ? (dx > 0 ? 'Osten' : 'Westen') : Math.abs(dy) > Math.abs(dx) * 2.4 ? (dy > 0 ? 'Süden' : 'Norden')
-      : (dy > 0 ? 'Süd' : 'Nord') + (dx > 0 ? 'osten' : 'westen');
-    this.raum.broadcast('meldung', { text: `${this.fz().zeichen} Panzer im Anmarsch aus ${w}: ${m} m Luftlinie (${weg} m Fahrt), er trifft um ${hhmm(s.busAnkunft)} an der Abholstelle ein!`, lang: true });
+    const w = Math.abs(dx) > Math.abs(dy) * 2.4 ? (dx > 0 ? 'o' : 'w') : Math.abs(dy) > Math.abs(dx) * 2.4 ? (dy > 0 ? 's' : 'n')
+      : (dy > 0 ? 's' : 'n') + (dx > 0 ? 'o' : 'w');
+    this.raum.broadcast('meldung', M('auf.anmarsch', { z: this.fz().zeichen, w: M('himmel.' + w), m, weg, zeit: hhmm(s.busAnkunft) }, L));
   }
 
   // Bus erscheint am Ortsausgang (auf der nächsten Straße, sonst dahinter im Ort) und wartet
@@ -674,24 +675,22 @@ export class Aufgaben {
     this.busHeute = true; this.busRest = 0; s.busDa = true; this.busAbSetzen(); this.busGemeldet = false;
     s.busSteht = v.evakuierungDa(this.busId);
     if (s.busSteht) { this.restSetzen(); this.stehtMeldung(); }
-    else this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} fährt zum Ortsausgang vor!`, lang: true });
+    else this.raum.broadcast('meldung', M('auf.vorfahrt', { z: this.fz().zeichen, fz: this.fz().Der }, L));
   }
 
   // Evakuierungsart je Karte (Einstellung aufgaben.evakArt erzwingt eine): Bus, Panzer (Leopard 2A7, Isarauen) oder A400M mit Hubschrauber
   fz() {
     const art = this.laufendeArt ?? this.evakArt();
-    return art === 'panzer' ? { art, zeichen: '🪖', Der: 'Der Evakuierungspanzer', der: 'der Evakuierungspanzer', name: 'Evakuierungspanzer', neu: 'einen neuen Panzer' }
-      : art === 'flugzeug' || art === 'absturz' ? { art, zeichen: '✈️', Der: 'Der A400M', der: 'der A400M', name: 'A400M', neu: 'eine neue Maschine' }
-      : art === 'heli' ? { art, zeichen: '🚁', Der: 'Der NH90', der: 'der NH90', name: 'NH90', neu: 'einen neuen Hubschrauber' }
-      : art === 'bunker' ? { art, zeichen: '☢️', Der: 'Der Bunker', der: 'der Bunker', name: 'Bunker', neu: 'einen neuen Bunker' }
-      : { art, zeichen: '🚌', Der: 'Der Evakuierungsbus', der: 'der Evakuierungsbus', name: 'Evakuierungsbus', neu: 'einen neuen Bus' };
+    const k = art === 'panzer' || art === 'heli' || art === 'bunker' ? art : art === 'flugzeug' || art === 'absturz' ? 'flugzeug' : 'bus';
+    const zeichen = { panzer: '🪖', flugzeug: '✈️', heli: '🚁', bunker: '☢️', bus: '🚌' }[k];
+    // Namen als Schlüssel (srv.fz.<k>.Der/der/neu) – der Client setzt sie in seiner Sprache ein
+    return { art, zeichen, Der: M(`fz.${k}.Der`), der: M(`fz.${k}.der`), neu: M(`fz.${k}.neu`) };
   }
 
   stehtMeldung() {
     const s = this.raum.state;
     this.busGemeldet = true;
-    this.raum.broadcast('meldung', { text: this.fz().art === 'flugzeug' ? `✈️ Der A400M ist gelandet! Einsteigen an der Heckrampe – Abflug um ${hhmm(s.busAb)}`
-      : `${this.fz().zeichen} ${this.fz().Der} steht am Ortsausgang! Abfahrt um ${hhmm(s.busAb)}`, lang: true });
+    this.raum.broadcast('meldung', M(this.fz().art === 'flugzeug' ? 'auf.gelandet' : 'auf.steht', { z: this.fz().zeichen, fz: this.fz().Der, zeit: hhmm(s.busAb) }, L));
   }
 
   busWeg(behalten = false) {
@@ -750,9 +749,9 @@ export class Aufgaben {
 
   // was für eine erfolgreiche Abfahrt noch fehlt (Pflichtaufgaben, Mindestzahl erledigter Aufgaben)
   fehlt() {
-    const l = [...this.raum.state.aufgaben.values()].filter(a => a.pflicht && !a.erledigt).map(a => `${a.symbol} ${a.text}`);
+    const l = [...this.raum.state.aufgaben.values()].filter(a => a.pflicht && !a.erledigt).map(a => ({ s: ' ', l: [a.symbol, ausFeld(a.text)] }));
     const n = this.noetig(), e = this.erledigtZahl();
-    if (e < n) l.push(`weitere Aufgaben (${e}/${n} erledigt)`);
+    if (e < n) l.push(M('auf.weitere', { e, n }));
     return l;
   }
 
@@ -761,7 +760,7 @@ export class Aufgaben {
     const s = this.raum.state, p = s.spieler.get(sid);
     if (!p || !this.eingestiegen.has(sid)) return false;
     if (Date.now() - (this.einstiegT.get(sid) ?? 0) < 2500) return false;   // gerade erst eingestiegen: ein versehentlicher Tastendruck wirft niemanden raus
-    if (!s.busSteht || this.wechselLaeuft) { this.sendeAn(sid, '🚪 Aussteigen geht erst, wenn das Fahrzeug steht.'); return false; }
+    if (!s.busSteht || this.wechselLaeuft) { this.sendeAn(sid, M('auf.aussteigenNicht')); return false; }
     const f = this.einstiegsPunkt() ?? p, fz = s.fahrzeuge.get(this.busId), w = (fz?.richtung ?? 0) + Math.PI / 2;
     const r = (this.heli ? HELI_ABSTAND : BUS_ABSTAND) + 14;
     const q = this.platzNeben(f.x + Math.cos(w) * r, f.y + Math.sin(w) * r);
@@ -769,18 +768,16 @@ export class Aufgaben {
     if (this.heli?.art === 'bunker') this.raum.bunker?.verlassen?.(sid);
     this.eingestiegen.delete(sid); this.ausgestiegen.add(sid);
     const x = this.raum.extra.get(sid); if (x) x.schonT = 3;   // 3 s lang beißen Zombies nicht
-    this.sendeAn(sid, '🚪 Du bist ausgestiegen. Steig wieder ein, indem du erneut zum Fahrzeug gehst.');
+    this.sendeAn(sid, M('auf.ausgestiegen'));
     return true;
   }
 
-  sendeAn(sid, text) { this.raum.clients?.find(c => c.sessionId === sid)?.send('meldung', { text, lang: true }); }
+  sendeAn(sid, m) { this.raum.clients?.find(c => c.sessionId === sid)?.send('meldung', nachricht(m, L)); }
 
   einsteigMeldung(sid) {
-    if (this.heli?.art === 'bunker') return this.sendeAn(sid, '☢️ Du bist im Bunker – hier überstehst du den Schlag. Zum Verlassen: Taste E oder Knopf „Aussteigen“.');
-    const fz = this.heli ? { zeichen: '🚁', der: 'der Hubschrauber' } : this.fz(), fehlt = this.fehlt();
-    this.sendeAn(sid, fehlt.length
-      ? `${fz.zeichen} Du bist an Bord. ${fz.der[0].toUpperCase() + fz.der.slice(1)} kann aber noch nicht abfliegen/abfahren – es fehlt: ${fehlt.join(' · ')}. Zum Aussteigen: Taste E oder Knopf „Aussteigen“ (sonst fährt er nach der Wartezeit ohne Erfolg ab und setzt alle ab).`
-      : `${fz.zeichen} Du bist an Bord – es geht los, sobald alle da sind (oder die Wartezeit abläuft).`);
+    if (this.heli?.art === 'bunker') return this.sendeAn(sid, M('auf.imBunker'));
+    const fz = this.heli ? { zeichen: '🚁', Der: M('fz.hubschrauber.Der') } : this.fz(), fehlt = this.fehlt();
+    this.sendeAn(sid, fehlt.length ? M('auf.anBordFehlt', { z: fz.zeichen, fz: fz.Der, fehlt: { s: ' · ', l: fehlt } }) : M('auf.anBord', { z: fz.zeichen }));
   }
 
   // alle an Bord steigen aus (Platz neben dem Fahrzeug bzw. Einstiegspunkt) – Abfahrt ohne sie oder Ende der Evakuierung
@@ -806,7 +803,7 @@ export class Aufgaben {
     if (stufe <= (this.warnStufe ?? 0)) return;
     this.warnStufe = stufe;
     const fz = this.fz();
-    for (const sid of this.eingestiegen) if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, `⏳ ${fz.zeichen} Noch ${stufe === 2 ? 15 : 60} s, dann fährt ${fz.der} OHNE Erfolg ab und setzt alle ab. Es fehlt: ${this.fehlt().join(' · ') || '–'}`);
+    for (const sid of this.eingestiegen) if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, M('auf.warnung', { z: fz.zeichen, n: stufe === 2 ? 15 : 60, fz: fz.der, fehlt: this.fehlt().length ? { s: ' · ', l: this.fehlt() } : '–' }));
   }
 
   // Pflichtaufgaben und Mindestzahl erledigt: wer einsteigt, kann tatsächlich mitfahren
@@ -825,7 +822,7 @@ export class Aufgaben {
     this.busHeute = true; this.busRest = 0; s.busDa = true; s.busSteht = false; this.busGemeldet = false; this.busAbSetzen();
     this.flug = { von: { ...p.start }, bis: { ...p.mitte }, w, t: 0 };
     s.evakArt = 'flugzeug'; s.evakPhase = 'landung'; s.evakX = Math.round(p.rampe.x); s.evakY = Math.round(p.rampe.y);
-    this.raum.broadcast('meldung', { text: '✈️ Ein A400M setzt zur Landung an – der Landeplatz ist auf der Karte markiert!', lang: true });
+    this.raum.broadcast('meldung', M('auf.landung', null, L));
   }
 
   // Landerolle: bremst vom Aufsetztempo bis zum Stand an `bis`, dann beginnt das Einsteigen (evakuierungDa)
@@ -862,8 +859,8 @@ export class Aufgaben {
     }
     this.heli = { phase: 'anflug', rest: HELI_ANFLUG };
     s.evakX = Math.round(p.heli.x); s.evakY = Math.round(p.heli.y); s.evakPhase = 'heliAnflug'; s.evakRest = HELI_ANFLUG;
-    r.broadcast('meldung', { text: '🔥 Triebwerk 3 des A400M fängt Feuer – Start abgebrochen! Alle raus!', lang: true });
-    r.broadcast('meldung', { text: `🚁 Zu Fuß zum Hubschrauber-Landeplatz (auf der Karte markiert) – er landet in ${HELI_ANFLUG} s`, lang: true });
+    r.broadcast('meldung', M('auf.triebwerk', null, L));
+    r.broadcast('meldung', M('auf.zuFussHeli', { n: HELI_ANFLUG }, L));
   }
 
   // nächster freier Punkt um (x, y) (für das Aussteigen)
@@ -899,8 +896,8 @@ export class Aufgaben {
     const echt = sid => !r.extra.get(sid)?.bot && s.spieler.get(sid)?.verbunden !== false;
     const sieg = drinnen.some(echt);
     s.evakPhase = sieg ? 'sieg' : 'niederlage';
-    for (const sid of drinnen) if (echt(sid)) this.sendeAn(sid, '☢️ Der Bunker hält – ihr habt den Schlag überlebt!');
-    for (const sid of draussen) if (echt(sid)) this.sendeAn(sid, '☢️ Der Schlag erwischt euch draußen …');
+    for (const sid of drinnen) if (echt(sid)) this.sendeAn(sid, M('auf.bunkerHaelt'));
+    for (const sid of draussen) if (echt(sid)) this.sendeAn(sid, M('auf.bunkerDraussen'));
     r.broadcast('bunkerEnde', { drinnen, draussen, sieg });
     return { drinnen, draussen, sieg };
   }
@@ -921,7 +918,7 @@ export class Aufgaben {
     s.evakArt = 'absturz'; s.evakPhase = 'absturz'; s.evakRest = Math.ceil(dauer);
     s.evakAX = Math.round(p.x); s.evakAY = Math.round(p.y); s.evakW = p.w;
     s.evakX = Math.round(p.heli.x); s.evakY = Math.round(p.heli.y);
-    this.raum.broadcast('meldung', { text: '✈️ Ein A400M kommt im Landeanflug auf die Landebahn …', lang: true });
+    this.raum.broadcast('meldung', M('auf.anflug', null, L));
   }
 
   absturzSchritt(dt) {
@@ -936,7 +933,7 @@ export class Aufgaben {
         c.phase = 'rollen';
         const a = c.plan.aufsetz;
         this.raum.laerm?.(a.x, a.y, 900, true, '');   // der Aufprall lockt Zombies von weit her an
-        this.raum.broadcast('meldung', { text: '💥 Der A400M schlägt hart auf der Piste auf – ein Triebwerk brennt! Weg von der Landebahn!', lang: true });
+        this.raum.broadcast('meldung', M('auf.aufprall', null, L));
       }
       if (c.phase === 'rollen') this.absturzRollen(t);
       if (c.rest > 0) return;
@@ -946,7 +943,7 @@ export class Aufgaben {
         this.kistenGefallen = true;
         c.kisten = { plan: kistenPlan(s.seed, this.echteSpieler(), c.plan, this.raum.welt, (x, y) => this.platzNeben(x, y)), fallend: [] };
       }
-      this.raum.broadcast('meldung', { text: '🔥 Der A400M ist bruchgelandet und steht im Vollbrand – Abstand vom Feuer! Ein Hubschrauber kommt erst, wenn alles erledigt ist', lang: true });
+      this.raum.broadcast('meldung', M('auf.vollbrand', null, L));
       return;
     }
     c.standT += dt;
@@ -956,7 +953,7 @@ export class Aufgaben {
     if (c.kisten) kistenSchritt(this.raum, c.kisten, Infinity, 1e6);
     this.crash = null; this.heli = { phase: 'anflug', rest: HELI_ANFLUG, art: 'absturz' };
     s.evakPhase = 'heliAnflug'; s.evakRest = HELI_ANFLUG;
-    this.raum.broadcast('meldung', { text: `🚁 Funkkontakt steht – ein NH90 landet in ${HELI_ANFLUG} s auf dem markierten Platz`, lang: true });
+    this.raum.broadcast('meldung', M('auf.nh90', { n: HELI_ANFLUG }, L));
   }
 
   // Während der Bruchlandung (t = s seit Beginn des Anflugs): Lage berechnen, Brandherde mitführen; am Boden wird, wer im Rumpf-Fußabdruck steht,
@@ -975,7 +972,7 @@ export class Aufgaben {
       const quer = -(pl.x - fz.x) * sn + (pl.y - fz.y) * cs, seite = quer >= 0 ? 1 : -1, weite = hb + 26 - Math.abs(quer);
       const q = this.platzNeben(pl.x - sn * seite * weite, pl.y + cs * seite * weite);
       pl.x = q.x; pl.y = q.y;
-      if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, '✈️ Der A400M schlittert über die Piste – du wirst zur Seite gestoßen!');
+      if (!this.raum.extra.get(sid)?.bot) this.sendeAn(sid, M('auf.schlittert'));
     }
     if (t - (c.zombieT ?? -1) >= 0.1) {   // Zombies: alle 0,1 s prüfen (wie beim Überrollen)
       c.zombieT = t;
@@ -1017,7 +1014,7 @@ export class Aufgaben {
       if (s.evakRest !== rest) s.evakRest = rest;
       if (h.rest > 0) return;
       h.phase = 'wartet'; s.busDa = true; s.busSteht = true; s.evakPhase = 'heli'; this.restSetzen();
-      this.raum.broadcast('meldung', { text: `🚁 Der Hubschrauber ist gelandet! Einsteigen – Abflug um ${hhmm(s.busAb)}`, lang: true });
+      this.raum.broadcast('meldung', M('auf.heliGelandet', { zeit: hhmm(s.busAb) }, L));
       return;
     }
     this.takt -= dt;
@@ -1041,7 +1038,7 @@ export class Aufgaben {
     // niemand da: er fliegt ab und kommt nach einer Weile wieder
     s.busDa = false; s.busSteht = false; s.busBord = 0; s.busGesamt = 0; this.ausladen();
     this.heli = { phase: 'anflug', rest: HELI_NEU }; s.evakPhase = 'heliAnflug'; s.evakRest = HELI_NEU;
-    this.raum.broadcast('meldung', { text: `🚁 Der Hubschrauber ist ohne euch abgeflogen – er kommt in ${HELI_NEU} s noch einmal`, lang: true });
+    this.raum.broadcast('meldung', M('auf.heliWeg', { n: HELI_NEU }, L));
   }
 
   // Punkt, an dem man einsteigt: Bus/Panzer = Fahrzeugmitte, A400M = Heckrampe, Hubschrauber = Landeplatz (Einstellung evakX/evakY)
@@ -1059,13 +1056,13 @@ export class Aufgaben {
     const geschafft = pflichtOk && this.erledigtZahl() >= this.noetig() && this.echteDa >= 1;
     const nichtDa = s.busGesamt > s.busBord;
     if (geschafft && this.fz().art === 'flugzeug') { this.flugFehlschlag(); return; }   // die Maschine schafft es nicht in die Luft
-    const fehltText = this.fehlt().join(' · ');
-    if (!geschafft) this.ausladen(`${this.fz().zeichen} ${this.fz().Der} fährt ohne Erfolg ab – ihr steigt aus. Es fehlte: ${fehltText || 'jemand an Bord'}`);
+    const f = this.fehlt(), fehlt = f.length ? { s: ' · ', l: f } : M('auf.jemandAnBord');
+    if (!geschafft) this.ausladen(M('auf.ohneErfolg', { z: this.fz().zeichen, fz: this.fz().Der, fehlt }));
     else this.folgenId = this.busId;   // wer an Bord ist, fährt bis zum Levelwechsel mit
     this.busWeg(geschafft);
     this.busHeute = true;
     if (!geschafft) {
-      this.raum.broadcast('meldung', { text: `${this.fz().zeichen} ${this.fz().Der} ist ohne euch ${this.fz().art === 'flugzeug' ? 'abgeflogen' : 'abgefahren'} (es fehlte: ${fehltText || 'jemand an Bord'}) – morgen gibt es ${this.fz().neu}`, lang: true });
+      this.raum.broadcast('meldung', M('auf.ohneEuch', { z: this.fz().zeichen, fz: this.fz().Der, weg: M(this.fz().art === 'flugzeug' ? 'auf.abgeflogen' : 'auf.abgefahren'), fehlt, neu: this.fz().neu }, L));
       return;
     }
     this.erfolg(nichtDa);
@@ -1076,8 +1073,8 @@ export class Aufgaben {
     const s = this.raum.state;
     const karte = this.naechsteKarte();
     this.raum.xpAlle?.('evakuierung');
-    this.raum.broadcast('meldung', { text: `🎉 Geschafft! Weiter nach Level ${s.level + 1} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
-    if (nichtDa) this.raum.broadcast('meldung', { text: `${zeichen} Wer nicht an Bord war, kommt trotzdem mit – ihr seid eine Gruppe` });
+    this.raum.broadcast('meldung', M('auf.geschafft', { n: s.level + 1, karte: kartenK(karte) }, L));
+    if (nichtDa) this.raum.broadcast('meldung', M('auf.mitGruppe', { z: zeichen }));
     this.wechselLaeuft = true;
     this.levelVorplanen();
     this.raum.clock.setTimeout(() => this.levelWechsel(), this.wechselVerzoegerung);

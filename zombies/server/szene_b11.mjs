@@ -5,6 +5,7 @@
 // streifen (server/szene_b11_fahrt.mjs), Zombies und geparkte Autos überrollen (Autos: state.platt) und mit Turm/Kanone schießen. Gefallene lassen einen Munitionshaufen liegen und
 // stehen nach der Verwandlungszeit als Zombie (Tarn-Typ 0) wieder auf. Sind alle Infanteristen tot, schweigen Puma und Leopard.
 // Darstellung: client/szene_b11.mjs (Nachrichten 'b11' = Zustand jede Sekunde, 'b11schuss' = Schüsse).
+import { M, L } from './texte.mjs';
 import { Fahrzeug } from './verkehr.mjs';
 import { Feuer } from './feuer.mjs';
 import { sichtfrei, frei } from '../client/welt.mjs';
@@ -235,7 +236,7 @@ export class SzeneB11 {
   // alle Infanteristen tot: Posten aufgegeben
   aufgeben() {
     this.aufgegeben = true;
-    this.raum.broadcast('meldung', { text: '📻 Der Bundeswehr-Posten an der B 11 ist gefallen – Puma und Leopard schweigen.', lang: true });
+    this.raum.broadcast('meldung', M('lager.b11', null, L));
     this.sendT = 0;
   }
 

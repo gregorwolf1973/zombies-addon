@@ -1,5 +1,6 @@
 // Einsteigen in Evakuierungsfahrzeuge: wer an Bord ist, sitzt im Fahrzeug (Position folgt, Zombies lassen ihn in Ruhe), Meldung was fehlt,
 // Aussteigen mit Meldung bei Abfahrt ohne Erfolg, Mitfahren bis zum Levelwechsel; Bots ebenso (server/aufgaben.mjs)
+import { textAus } from '../server/texte.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -38,7 +39,7 @@ const mitBus = (aufgaben, fn, extra = {}) => async () => {
   const raum = matchMaker.getLocalRoomById(c.roomId);
   try {
     raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
-    const meldungen = []; c.onMessage('meldung', m => meldungen.push(m.text));
+    const meldungen = []; c.onMessage('meldung', m => meldungen.push(textAus(m)));
     const ag = raum.aufgaben; ag.alleBordSek = 0.3;   // sonst 10 s Restwartezeit, wenn alle an Bord sind
     raum.state.aufgaben.clear(); for (const id of aufgaben) ag.neu(id, false); ag.aktualisieren(false);
     const p = raum.state.spieler.get(c.sessionId);
