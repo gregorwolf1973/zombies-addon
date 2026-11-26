@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.91.3 – 26.11.2026
+
+- Impressum und Datenschutz: eigene Felder auf der Einstellungsseite (Zugang & Test); die Texte bleiben auf dem eigenen Server, Links auf der Startseite erscheinen nur, wenn sie ausgefüllt sind.
+- Wiki-Adresse wird nur noch auf der Einstellungsseite eingetragen (die Übernahme aus der alten Add-on-Option entfällt).
+- Kein 404 mehr für fehlende Luftbild-Kulissen (alte Geretsried-Karte); neue Bildschirmfotos im README.
+
 ## 0.91.2 – 26.11.2026
 
 - Evakuierung hängt nicht mehr: Das Evakuierungsfahrzeug hat Vorrang – Verkehr wird zur Seite geschoben oder verschwindet, ein blockierender Linienbus fährt zur nächsten Haltestelle; Vorfahrt an Kreuzungen.
