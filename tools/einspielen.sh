@@ -84,6 +84,8 @@ if [ "$nur_pruefen" = 1 ]; then echo; echo "Nur geprüft, nichts eingespielt."; 
 schritt "(c) Archiv ins Add-on-Verzeichnis"
 git archive --format=tar HEAD zombies | gzip \
   | fern "cd $ZOMBIES_ADDON_DIR/.. && sudo rm -rf $ZOMBIES_ADDON_DIR && sudo tar -xzf -"
+# lokales Add-on immer aus dem Quellcode bauen: image: (fertige Images für den öffentlichen Store) im lokalen Ordner entfernen
+fern "sudo sed -i '/^image:/d' $ZOMBIES_ADDON_DIR/config.yaml"
 echo "Hochgeladen nach $ZOMBIES_ADDON_DIR"
 
 # (d) Supervisor: Store neu laden, Update, warten
