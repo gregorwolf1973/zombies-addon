@@ -40,19 +40,11 @@ const spieler = () => js(`(() => { const p = window.raum.state.spieler.get(windo
 console.log('Start', await spieler());
 await su({ befehl: 'zeit', stunde: 12 }); await su({ befehl: 'hordeanzeige' }); await aufraeumen();
 
-// 1) Straße: Evakuierungspunkt (liegt an Straße), Zombies in der Nähe
-await su({ befehl: 'evak' }); await warte(5000);
+// 1) Straße mit Horde: Horde starten, 50 m davor springen, warten bis sie heran ist
+await su({ befehl: 'horde', groesse: 50 }); await warte(3000);
+await su({ befehl: 'horde_hin' }); await warte(Number(process.env.WARTE_HORDE || 9000));
 await foto('03-strasse.webp');
-// 2) Lager
-await su({ befehl: 'bw' }); await warte(5000);
-await foto('04-lager.webp');
-// 3) Fahrzeug (Boxer): neben dem Evakuierungspunkt setzen, einsteigen
-await su({ befehl: 'evak' }); await warte(2000);
-await su({ befehl: 'fahrzeug', art: 'boxer' }); await warte(1500);
-await js(`window.raum.send('aktion')`); await warte(2500);
-await foto('05-fahrzeug.webp');
-await js(`window.raum.send('aussteigen')`); await warte(1000);
 // 4) Nacht mit Taschenlampe
-await su({ befehl: 'zeit', stunde: 23 }); await su({ befehl: 'ding', name: 'taschenlampe' }); await warte(6000);
+await su({ befehl: 'horde', groesse: 50 }); await warte(3000); await su({ befehl: 'zeit', stunde: 23 }); await su({ befehl: 'horde_hin' }); await warte(Number(process.env.WARTE_HORDE || 9000));
 await foto('07-nacht.webp');
 ws.close(); process.exit(0);
