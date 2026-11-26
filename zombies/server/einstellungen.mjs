@@ -280,6 +280,8 @@ export function bereinige(e = {}, alt = {}) {
     superuserHash: suHash,
     zugangscode: String(e.zugangscode ?? a.zugangscode ?? '').trim().slice(0, 40),
     wikiAdresse: bereinigeUrl(e.wikiAdresse ?? a.wikiAdresse ?? ''),
+    impressum: String(e.impressum ?? a.impressum ?? '').slice(0, 20000),
+    datenschutz: String(e.datenschutz ?? a.datenschutz ?? '').slice(0, 20000),
     karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
     levelFolge: bereinigeFolge(e.levelFolge, a.levelFolge),   // Reihenfolge und Schalter der Level [{ karte, aktiv }]; Schwierigkeit/Tabellen hängen an der Position, Karten-Besonderheiten an der Karte
     bots: Math.round(zahl(e.bots ?? a.bots, 0, 9, 2, { max: 30 })),
@@ -447,7 +449,7 @@ export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
 
 export function grundwerte() {
   return {
-    superuserHash: '', zugangscode: '', wikiAdresse: '', karte: 'level1', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, fahrzeugStoss: 15, geraeuschPause: 5, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, zombieFigurenNeu: true, heldenFigurenNeu: true, innenMassstab: true, innenTempo: 50, schussDunkel: 30, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, tempoSchlurferJagen: 7, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, unfallTuer: 60, auto: { ...PKW_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', wikiAdresse: '', impressum: '', datenschutz: '', karte: 'level1', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, fahrzeugStoss: 15, geraeuschPause: 5, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, zombieFigurenNeu: true, heldenFigurenNeu: true, innenMassstab: true, innenTempo: 50, schussDunkel: 30, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, tempoSchlurferJagen: 7, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, unfallTuer: 60, auto: { ...PKW_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     helden: { figuren: hfFigurenEinst() }, zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, anteilKriecher: 5, anteilSchlurfer: 45, anteilLaeufer: 50, drahtVoll: 4, drahtUeber: 70, figuren: zfFigurenEinst(), typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
@@ -479,7 +481,7 @@ export function bereinigeUrl(w) {
 export function ausOptionen(o = {}) {
   const dichte = o.zombies !== undefined && o.zombies !== null ? Number(o.zombies) : (Number(o.zombie_faktor) || 1) * 10;
   return bereinige({
-    zugangscode: o.zugangscode, wikiAdresse: o.wiki_adresse, karte: o.karte ?? 'level1', bots: o.bots ?? 0,
+    zugangscode: o.zugangscode, karte: o.karte ?? 'level1', bots: o.bots ?? 0,
     zombies: { dichte }, funde: o.funde ?? {},
   });
 }
@@ -490,13 +492,8 @@ export class EinstellungsDatei {
     let gespeichert = null;
     try { if (datei) gespeichert = JSON.parse(fs.readFileSync(datei, 'utf8')); } catch { /* erster Start */ }
     this.werte = gespeichert ? bereinige(gespeichert) : ausOptionen(optionen);
-    // Einmalige Übernahme der früheren Option wiki_adresse in die Spiel-Einstellungen
-    const altWiki = bereinigeUrl(optionen?.wiki_adresse);
-    const migriert = !!gespeichert && gespeichert.wikiAdresse === undefined && !!altWiki;
-    if (migriert) this.werte.wikiAdresse = altWiki;
     // Testschalter gelten nie über einen Neustart hinaus
     this.werte.test = { zeitraffer: 1, unsterblich: this.werte.test.unsterblich };
-    if (migriert) this.aendern({});   // Migration dauerhaft speichern
     if (gespeichert?.superuserPasswort) this.aendern({});   // Klartext aus der Datei: sofort als Hash zurückschreiben
   }
 

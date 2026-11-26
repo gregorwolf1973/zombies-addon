@@ -850,6 +850,18 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       <p class="hinweis">Optional: Adresse eines DokuWiki für die Links „Mehr dazu im Wiki“ nach den Rätseln. Leer = keine Links.</p>
     </div>
 
+    <div class="feld" id="impressumFeld">
+      <label for="impressum">Impressum</label>
+      <textarea id="impressum" rows="6" maxlength="20000" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;font:inherit"></textarea>
+      <p class="hinweis">Erscheint unter „/impressum“ und als Link auf der Startseite; leer = kein Link. Auszeichnung: Leerzeile = Absatz, <code>#</code> Überschrift, <code>**fett**</code>, <code>[Text](https://…)</code>. HTML wird nicht ausgeführt.</p>
+    </div>
+
+    <div class="feld" id="datenschutzFeld">
+      <label for="datenschutz">Datenschutzerklärung</label>
+      <textarea id="datenschutz" rows="6" maxlength="20000" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;font:inherit"></textarea>
+      <p class="hinweis">Erscheint unter „/datenschutz“ und als Link auf der Startseite; leer = kein Link. Gleiche Auszeichnung wie beim Impressum.</p>
+    </div>
+
     <div class="feld" id="suFeld">
       <label for="suPasswort">Superuser-Passwort (Testzugang)</label>
       <div class="pass-feld">
@@ -3582,6 +3594,10 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     }
     var wiki = $("wikiAdresse");
     if (!zeitGeber["wikiAdresse"] && !istFokussiert(wiki)) wiki.value = e.wikiAdresse || "";
+    ["impressum", "datenschutz"].forEach(function (k) {
+      var t = $(k);
+      if (t && !zeitGeber[k] && !istFokussiert(t)) t.value = e[k] || "";
+    });
   }
 
   function aktualisiereKarteHinweis(d, gewaehlt) {
@@ -3762,6 +3778,13 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
         zeitGeber["wikiAdresse"] = null;
         sendenTeil("wikiAdresse", null, wikiEl.value);
       }, 600);
+    });
+    ["impressum", "datenschutz"].forEach(function (k) {
+      var t = $(k);
+      t.addEventListener("input", function () {
+        clearTimeout(zeitGeber[k]);
+        zeitGeber[k] = setTimeout(function () { zeitGeber[k] = null; sendenTeil(k, null, t.value); }, 800);
+      });
     });
     $("augeKnopf").addEventListener("click", function () {
       var anzeigen = code.type === "password";
@@ -4645,6 +4668,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   var zc = $('zugangscode'), suF = $('suFeld');
   if (zc && zc.closest('.feld')) zug.appendChild(zc.closest('.feld'));
   var wkF = $('wikiFeld'); if (wkF) zug.appendChild(wkF);
+  ['impressumFeld', 'datenschutzFeld'].forEach(function (i) { var f = $(i); if (f) zug.appendChild(f); });
   if (suF) zug.appendChild(suF);
   rein('zugang', zug);
   var dgs = $('diagnoseSchalter'); if (dgs) zug.appendChild(dgs);

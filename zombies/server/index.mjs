@@ -21,6 +21,7 @@ import { Diagnose, DIAG_MAX_BYTES } from './diagnose.mjs';
 import { EinstellungsDatei, oeffentlich, ohneGeheimnisse, vorgaben, KARTEN, ZEITRAFFER, EREIGNISSE, TON_GRUPPEN, tonKategorien, TON_DATEI, TON_STANDARD, ZOMBIE_TYPEN } from './einstellungen.mjs';
 import { DINGE } from '../client/welt.mjs';
 import { hfAktive } from '../client/heldenfiguren.mjs';
+import { rechtsseite } from './rechtstext.mjs';
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -267,7 +268,7 @@ export async function starte({
   app.get('/verwaltung/export', nurIngress, (req, res) => {
     res.set('Content-Disposition', 'attachment; filename="zombies-einstellungen.json"').type('application/json').send(JSON.stringify(ohneGeheimnisse(datei.werte), null, 2));
   });
-  app.post('/verwaltung/api', nurIngress, express.json({ limit: '20kb' }), (req, res) => {
+  app.post('/verwaltung/api', nurIngress, express.json({ limit: '100kb' }), (req, res) => {
     const vorher = datei.werte.karte, ersteVorher = aktiveFolge(datei.werte.levelFolge)[0];
     const neu = datei.aendern(req.body ?? {});
     if (aktiveFolge(neu.levelFolge)[0] !== ersteVorher) level1Gewuerfelt = null;   // anderes erstes Level: Karte von Level 1 neu bestimmen
@@ -340,11 +341,22 @@ export async function starte({
   app.use('/diag', (err, req, res, next) => res.status(err?.status === 413 ? 413 : 400).end());
 
   app.get('/gesund', (req, res) => res.json({ ok: true }));
+  // Impressum/Datenschutz: Text steht nur in den Einstellungen des jeweiligen Servers; leer = 404
+  for (const [pfad, feld, titel] of [['/impressum', 'impressum', 'Impressum'], ['/datenschutz', 'datenschutz', 'Datenschutz']]) {
+    app.get(pfad, (req, res) => {
+      const t = String(datei.werte[feld] ?? '').trim();
+      if (!t) return res.status(404).type('text/plain').send('Nicht vorhanden');
+      res.set('Cache-Control', 'no-cache').type('html').send(rechtsseite(titel, t));
+    });
+  }
+  const kulissenListe = () => { try { return fs.readdirSync(path.join(hier, '..', 'client', 'karten', 'kulisse'), { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name); } catch { return []; } };
   // sagt dem Client, ob er nach dem Zugangscode fragen muss
   app.get('/info', (req, res) => res.json({
     code: !!SpielRaum.einstellungen.zugangscode && !req.get('x-ingress-path'),
     version: paketVersion,                     // Client vergleicht mit der Version beim Laden der Seite (alter Code im Speicher → neu laden)
     wiki: datei.werte.wikiAdresse || '',
+    impressum: !!String(datei.werte.impressum ?? '').trim(), datenschutz: !!String(datei.werte.datenschutz ?? '').trim(),   // Fußzeilen-Links der Startseite
+    kulissen: kulissenListe(),   // Karten mit Kulisse-Daten (der Client fragt nur diese an)
     extern: String(optionen.externe_adresse ?? '').trim(),   // https-Adresse, unter der das Mikrofon geht
     diagnose: datei.werte.diagnose !== false,   // Client schickt Fehler/Kennzahlen nur, wenn an
     zombieSicht: datei.werte.zombieSicht,   // Client: Sichtkegel-Anzeige

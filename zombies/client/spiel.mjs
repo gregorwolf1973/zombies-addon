@@ -40,7 +40,7 @@ import { heliStand } from './evak.mjs';
 import { baueWeltAusKarte } from './osmwelt.mjs';
 import { sichtPx } from './zombiesicht.mjs';
 import { weltBeschaffen, weltVorrechnen } from './weltladen.mjs';
-import { ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulFoto, kulHatGezeichnet, kulSchatten, fotoStatus, fotoWunsch } from './kulisse.mjs';
+import { setzeKulissen, ladeKulisse, kulisseVorhanden, kulHatFoto, kulHatDaecher, kulisse, kulBoden, kulFoto, kulHatGezeichnet, kulSchatten, fotoStatus, fotoWunsch } from './kulisse.mjs';
 import { KUL_SCHLUESSEL, schattenFaktor } from './kulisse_regeln.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
@@ -228,7 +228,12 @@ let zombieSichtEinst = null;   // Backend „Zombie-Sicht“ (Kegel-Anzeige), au
 // Startwahl mit den neuen Helden (Näheres bei heldenwahlEinrichten)
 const heldenwahl = { neu: false, aktive: [], bild: new Image(), kachel: 160 };
 heldenwahl.bild.onload = () => { heldenwahlKacheln(); vorschauZeichnen(); };
-fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); zombieSichtEinst = i.zombieSicht; heldenwahlEinrichten(i.helden); }).catch(() => {});
+function rechtsLinks(i) {   // Impressum/Datenschutz in der Fußzeile nur, wenn auf dem Server hinterlegt
+  const z = $('rechtslinks'); if (!z) return;
+  const teile = [i.impressum && '<a href="impressum" target="_blank" rel="noopener">Impressum</a>', i.datenschutz && '<a href="datenschutz" target="_blank" rel="noopener">Datenschutz</a>'].filter(Boolean);
+  z.innerHTML = teile.join(' · '); z.hidden = !teile.length;
+}
+fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; setzeKulissen(i.kulissen); rechtsLinks(i); externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); zombieSichtEinst = i.zombieSicht; heldenwahlEinrichten(i.helden); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 tutorialKnopf(() => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });   // „🎯 Schießstand / Tutorial“ unter „Mitspielen“
 

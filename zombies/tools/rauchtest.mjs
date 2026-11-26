@@ -1,5 +1,5 @@
 // Rauchtest: lädt das Spiel in einem Headless-Chrome (per CDP), wartet auf den Spielstart und meldet Konsolenfehler.
-// Aufruf: node tools/rauchtest.mjs <cdp-port> <spiel-url> <bild.png>
+// Aufruf: node tools/rauchtest.mjs <cdp-port> <spiel-url> <bild.png>   (Spielername: Umgebungsvariable ZOMBIES_NAME, Vorgabe „Rauchtest“)
 // Chrome vorher starten: google-chrome --headless=new --remote-debugging-port=<cdp-port> --user-data-dir=<tmp> --window-size=1400,900 about:blank
 // Server und Chrome immer mit Speicherdeckel starten (systemd-run --user --scope -p MemoryMax=4G -p MemorySwapMax=0 …).
 import { writeFileSync } from 'node:fs';
@@ -33,7 +33,7 @@ const ziel_url = url + (url.includes('?') ? '&' : '?') + 'spielen&debug';
 await cdp('Page.navigate', { url: ziel_url });
 await warte(4000);
 // Anmeldeseite: Namen eintragen, „Mitspielen“
-await js(`(() => { const n = document.getElementById('name'), l = document.getElementById('los'); if (n) { n.value = 'Rauchtest'; n.dispatchEvent(new Event('input', { bubbles: true })); } if (l) l.click(); return !!l; })()`);
+await js(`(() => { const n = document.getElementById('name'), l = document.getElementById('los'); if (n) { n.value = ${JSON.stringify(process.env.ZOMBIES_NAME || 'Rauchtest')}; n.dispatchEvent(new Event('input', { bubbles: true })); } if (l) l.click(); return !!l; })()`);
 await warte(5000);
 // Startdialog (Heldenwahl) bestätigen, falls vorhanden
 await js(`(() => { const k = document.querySelector('#swfenster button.los, #swfenster button[type=submit], #swfenster .start, #swfenster button'); if (k) k.click(); return !!k; })()`);
@@ -50,7 +50,7 @@ const waffen = await js(`document.querySelectorAll('.waffenfeld, [data-waffenpla
 const shot = await cdp('Page.captureScreenshot', { format: 'png' });
 if (shot.result?.data) writeFileSync(bild, Buffer.from(shot.result.data, 'base64'));
 console.log(`Bereit: ${bereit ? 'ja' : 'nein'} Canvas: ${canvas} Waffenfelder: ${waffen}`);
-const echte = fehler.filter(f => !/favicon|ERR_ABORTED|net::ERR_FAILED.*stream|\/toene\/.*404|404.*\/toene\/|429.*\/diag/i.test(f));   // Töne fehlen im Testordner absichtlich
+const echte = fehler.filter(f => !/favicon|ERR_ABORTED|net::ERR_FAILED.*stream|\/toene\/.*404|404.*\/toene\/|429.*\/diag|navigator.vibrate/i.test(f));   // Töne fehlen im Testordner absichtlich
 console.log(echte.length ? 'Fehler:\n  ' + echte.slice(0, 20).join('\n  ') : 'Fehler: keine');
 ws.close();
 process.exit(echte.length || !bereit ? 1 : 0);

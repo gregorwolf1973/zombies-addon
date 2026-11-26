@@ -11,6 +11,8 @@ import { KUL_SCHLUESSEL, schalterLesen, bodenArt, indexLesen, kachelName, kachel
   SCHATTEN_JE_M, STANDARD_HAUSHOEHE, baumHoehe } from './kulisse_regeln.mjs';
 
 let kul = null;
+let kulissenBekannt = null;   // Karten mit Kulisse-Daten laut /info (null = unbekannt → anfragen)
+export function setzeKulissen(liste) { kulissenBekannt = Array.isArray(liste) ? liste : null; }
 
 export function kulisse() { return kul; }
 export const kulisseVorhanden = () => !!kul;
@@ -27,6 +29,7 @@ export const kulHatDaecher = () => !!kul?.daecher;
 
 export async function ladeKulisse(karte) {
   kul = null;
+  if (kulissenBekannt && !kulissenBekannt.includes(karte)) return null;   // keine Daten → keine Anfrage (kein 404)
   const lies = k => { try { return localStorage.getItem(k); } catch { return null; } };
   const basis = `${ASSETS}karten/kulisse/${karte}/`;
   let index = null;

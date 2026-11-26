@@ -35,9 +35,8 @@ Alles Wichtige stellst du bequem in der Seitenleiste „Zombies“ ein. Änderun
 Gespeichert wird in `/data/einstellungen.json`. Im Konfigurations-Reiter des Add-ons stehen nur noch die `externe_adresse`
 (https-Adresse des Spiels von außen; wird auf der Startseite als Link „Mit Mikrofon spielen“ gezeigt, wenn die Seite per
 http:// geöffnet wurde, weil das Mikrofon https braucht) und `stun_server` bzw. optional `turn_*` (Sprachfunk). Alles andere,
-auch die Wiki-Adresse (Links nach den Rätseln, Gruppe „Zugang & Test“), wird auf der Einstellungsseite des Spiels
-vorgenommen. Alte Optionen (`karte`, `zombies`, `funde`, `zugangscode`, `bots`) wirken nur noch beim allerersten Start;
-eine frühere `wiki_adresse` wird einmalig in die Spiel-Einstellungen übernommen.
+auch die Wiki-Adresse (Links nach den Rätseln), Impressum und Datenschutz, wird auf der Einstellungsseite des Spiels
+unter „Zugang & Test“ eingetragen. Alte Optionen (`karte`, `zombies`, `funde`, `zugangscode`, `bots`) wirken nur noch beim allerersten Start.
 
 ## Rätsel
 
@@ -124,9 +123,8 @@ Most things are set in the sidebar panel "Zombies" and apply immediately, withou
 Settings are stored in `/data/einstellungen.json`. The add-on's Configuration tab only holds `externe_adresse` (https
 address of the game from outside; shown as a "play with microphone" link when the page was opened over http) and
 `stun_server` / optional `turn_*` (voice chat servers; the default STUN server is a public Google one – leave it empty to
-disable it). Everything else, including the wiki address (links after each quiz, group "Zugang & Test"), is set on the
-game's settings page. Old options (`karte`, `zombies`, `funde`, `zugangscode`, `bots`) only act on the very first start; a
-former `wiki_adresse` is adopted once into the game settings.
+disable it). Everything else, including the wiki address (links after each quiz), imprint and privacy notice, is entered on the
+game's settings page under "Zugang & Test". Old options (`karte`, `zombies`, `funde`, `zugangscode`, `bots`) only act on the very first start.
 
 ## Puzzles
 

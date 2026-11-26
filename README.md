@@ -98,7 +98,7 @@ dienen nur als Startwerte beim allerersten Start:
 | `externe_adresse` | https-Adresse von außen (Mikrofon) |
 | `stun_server`, `turn_*` | Sprachfunk-Server (STUN, optional TURN-Relais) |
 
-Alle anderen Einstellungen (Karte, Zombies, Funde, Zugangscode, Bots, Wiki-Adresse …) stehen auf der Einstellungsseite des Spiels (Seitenleiste).
+Alle anderen Einstellungen (Karte, Zombies, Funde, Zugangscode, Bots, Wiki-Adresse, Impressum, Datenschutz …) stehen auf der Einstellungsseite des Spiels (Seitenleiste, Gruppe „Zugang & Test“).
 
 Mehr dazu im Reiter „Dokumentation“ des Add-ons (`zombies/DOCS.md`).
 
@@ -194,7 +194,7 @@ initial values for the very first start:
 | `externe_adresse` | External https address (needed for the microphone) |
 | `stun_server`, `turn_*` | Voice chat servers (STUN, optional TURN relay) |
 
-All other settings (map, zombies, finds, access code, bots, wiki address …) are on the game's settings page (sidebar).
+All other settings (map, zombies, finds, access code, bots, wiki address, imprint, privacy notice …) are on the game's settings page (sidebar).
 
 More details are in the add-on's "Documentation" tab (`zombies/DOCS.md`).
 

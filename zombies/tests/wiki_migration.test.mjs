@@ -12,18 +12,12 @@ test('bereinigeUrl: nur http(s) oder leer', () => {
   assert.equal(bereinigeUrl('javascript:alert(1)'), '');
   assert.equal(bereinigeUrl(undefined), '');
 });
-test('erster Start übernimmt wiki_adresse; alte Optionen fehlen tolerant', () => {
-  assert.equal(ausOptionen({ wiki_adresse: 'https://w.example' }).wikiAdresse, 'https://w.example');
-  assert.equal(ausOptionen({}).wikiAdresse, '');
-});
-test('Migration: gespeicherte Einstellungen ohne wikiAdresse übernehmen den Wert einmalig und speichern ihn', () => {
+test('Wiki-Adresse: ohne Angabe leer, Optionen werden nicht mehr migriert', () => {
+  assert.equal(ausOptionen({ wiki_adresse: 'https://w.example' }).wikiAdresse, '');
   const f = tmp();
   fs.writeFileSync(f, JSON.stringify({ karte: 'level1' }));
   const d = new EinstellungsDatei(f, { wiki_adresse: 'https://wiki.biker633.org' });
-  assert.equal(d.werte.wikiAdresse, 'https://wiki.biker633.org');
-  assert.equal(JSON.parse(fs.readFileSync(f, 'utf8')).wikiAdresse, 'https://wiki.biker633.org');
-  // später geleert: bleibt leer, wird nicht erneut aus den Optionen geholt
-  d.aendern({ wikiAdresse: '' });
-  const d2 = new EinstellungsDatei(f, { wiki_adresse: 'https://wiki.biker633.org' });
-  assert.equal(d2.werte.wikiAdresse, '');
+  assert.equal(d.werte.wikiAdresse, '');
+  d.aendern({ wikiAdresse: 'https://wiki.example.org' });
+  assert.equal(new EinstellungsDatei(f).werte.wikiAdresse, 'https://wiki.example.org');
 });
