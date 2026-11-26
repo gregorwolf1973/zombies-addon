@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.91.2 – 26.11.2026
+
+- Evakuierung hängt nicht mehr: Das Evakuierungsfahrzeug hat Vorrang – Verkehr wird zur Seite geschoben oder verschwindet, ein blockierender Linienbus fährt zur nächsten Haltestelle; Vorfahrt an Kreuzungen.
+- Kein Durchrutschen durch geschlossene Türen mehr bei kurzen Server-Rucklern: große Bewegungsschritte werden in kleine Teilschritte zerlegt (Zombies, Menschen, Hunde, Bots).
+- Node 22 (wie im Add-on-Image): Welt-Worker hält den Prozess nur bei offenen Aufträgen; Tests laufen auf GitHub unter Node 22 nacheinander und sind grün.
+
 ## 0.91.1 – 25.11.2026
 
 - Spenden-Knöpfe (Buy Me a Coffee, Liberapay) auf der Startseite, in der Anleitung und als GitHub-Sponsor-Knopf.
