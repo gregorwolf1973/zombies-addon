@@ -505,7 +505,11 @@ body.feuerknopf-an #rucksack { padding-left: calc(var(--fk, 56px) + 16px + env(s
 .credits-dialog a { color: #9ecbff; }
 
 /* Spenden-Knöpfe auf der Startseite (Buy Me a Coffee, Liberapay) */
-.spenden { font-size: 12px; opacity: .85; margin-top: 10px; text-align: center; line-height: 2; }
-.spenden .spende { display: inline-block; margin: 0 4px; padding: 3px 10px; border-radius: 6px; font-weight: 600; text-decoration: none; color: #1b1b1b; }
+.spenden { text-align: center; line-height: 1.4; margin-top: 10px; }
+.spenden .spenden-text { display: block; font-size: 12px; opacity: .8; margin-bottom: 6px; }
+.spenden .spende { display: inline-block; margin: 3px 4px; padding: 9px 14px; min-height: 20px; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; color: #1b1b1b; pointer-events: auto; }
+.spenden-klein .spende { padding: 5px 10px; font-size: 12px; }
+.spenden-start { opacity: .9; }
 .spenden .bmc { background: #ffdd00; }
 .spenden .lp { background: #f6c915; }
+#abspann .spenden { margin-top: 18px; }

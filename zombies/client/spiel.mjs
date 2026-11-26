@@ -3,6 +3,7 @@ import { kartenNr, LEVEL_KATALOG } from './levelkatalog.mjs';
 import { fzPx } from './masse.mjs';
 import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from './fzkollision.mjs';
 import { ASSETS } from './basis.mjs';
+import { spendenFuellen } from './spenden.mjs';
 import { groesse } from './groessen.mjs';
 import { HF_LISTE, HF_FIGUREN, HF_GROESSE, ALT_FAKTOR, SCHULTER_NEU_PX, soldatSkala, HF_SCHUSS_MS, HF_NAHKAMPF_MS, HF_WURF_MS, HF_TOD_MS, hfGruppe, hfClip, hfBild, hfName, hfMuendung, hfWaffeSprite, hfLage, hfLampeAmLauf, hfFigurVon, hfSkala } from './heldenfiguren.mjs';
 import { ZF_FIGUREN, ZF_CLIPS, ZF_BILDER, ZF_GROESSE, ZF_DAUER, zfFigur, zfClip, zfAngriff, zfBild, zfName, zfLeiche, zfBlut, zfZerrBild, zfGang, ZF_OPTIONAL, ZF_REF, ZK_LAEUFER } from './zombiefiguren.mjs';
@@ -85,6 +86,7 @@ import { Kameraflug, radEinrichten, ZOOM_MIN, ZOOM_MAX, FLUG_ZOOM_MIN } from './
 import { b11Registrieren, b11Animieren } from './szene_b11.mjs';
 import { polizeiRegistrieren, polizeiAnimieren } from './polizei.mjs';
 
+spendenFuellen();   // Spendenknöpfe auf Startseite und im Einstellungsfenster
 const EBENE_MUSTER = /^h(\d+)(eg|keller|dach)$/;
 const INNEN_ZOOM = 1.6;
 // Seit 0.69.4 ist der Grundzoom ×1,4 näher: Ring und Kegel draußen auf die frühere Bildschirmgröße zurückrechnen

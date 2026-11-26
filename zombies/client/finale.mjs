@@ -1,4 +1,5 @@
 // Finale in Andermatt: Atomschlag-Countdown im HUD und Abspann nach dem Schlag (Nachricht 'bunkerEnde' vom Server)
+import { spendenFuellen } from './spenden.mjs';
 const $ = id => document.getElementById(id);
 let letzter = -1;
 
@@ -30,7 +31,9 @@ export function finaleAbspann(szene, m, meineId, ton, ort) {
   box.innerHTML = '';
   const h = document.createElement('div'); h.className = 'abspann-titel'; h.textContent = titel;
   const p = document.createElement('div'); p.className = 'abspann-text'; p.textContent = text;
-  box.append(h, p);
+  const sp = document.createElement('div'); sp.className = 'spenden'; sp.dataset.spenden = 'abspann';
+  box.append(h, p, sp);
+  spendenFuellen(box);
   box.classList.add('an');
   box.classList.toggle('verloren', !m.sieg || !drinnen);
 }
