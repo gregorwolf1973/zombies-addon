@@ -600,7 +600,7 @@ test('Horde: festgefahren wechselt nicht vor 30 s (erst Umweg), hordeInfo mit Zi
     raum.extra.get(raum.clients[0].sessionId).superuser = true;
     w.infoSenden(0, true);
     const m = info.at(-1);
-    assert.ok(m?.aktiv && m.ziel && m.mitte && typeof m.name === 'string' && m.name && typeof m.rest === 'number', 'hordeInfo unvollständig');
+    assert.ok(m?.aktiv && m.ziel && m.mitte && textAus(m.name) && typeof m.rest === 'number', 'hordeInfo unvollständig');
     assert.ok(m.wechsel.length >= 1 && m.wechsel.every(x => x.grund && x.name && x.art));
     for (let i = 0; i < 10; i++) { a.zielName = 'X' + i; w.wechselMerken(a, 'laden', 'zeit'); }
     assert.equal(a.wechsel.length, 5);

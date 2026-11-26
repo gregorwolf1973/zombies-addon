@@ -73,7 +73,7 @@ test('Position exakt: Kreismitte = Behälter (Gegenstandsort), Hinweisfeld nennt
       assert.deepEqual([m.x, m.y], behaelterAufKarte(11, w, m.nr, bh), 'Position nicht die des Behälters');
       assert.ok(m.x >= h.x * KACHEL && m.x <= (h.x + h.b) * KACHEL && m.y >= h.y * KACHEL && m.y <= (h.y + h.h) * KACHEL, 'Behälterposition außerhalb des Hauses');
       assert.equal(m.r, SUCH_MIN);
-      assert.match(m.ort, /, Erdgeschoss$/);
+      assert.match(textAus(m.ort), /, Erdgeschoss$/);
       assert.equal(kreisSchrumpfen(m), false, 'Kreis darf nicht mehr schrumpfen');
     }
     assert.equal(textAus(ortText({ art: 'hardware', name: 'Bauhaus' })), 'Baumarkt Bauhaus, Erdgeschoss');
@@ -192,7 +192,7 @@ test('Missionsposition im Zustand exakt, keine Hinweise mehr; Schwierigkeit im R
     const ag = raum.aufgaben, m = ag.mission[1], q = raum.state.missionen.get(m.ding);
     assert.ok(ag.mission.length <= 3);
     assert.equal(q.x, Math.round(m.x)); assert.equal(q.y, Math.round(m.y), 'Position nicht exakt');
-    assert.equal(q.behaelter, m.behaelter); assert.match(q.ort, /Erdgeschoss/);
+    assert.equal(q.behaelter, m.behaelter); assert.match(feldText(q.ort), /Erdgeschoss/);
     assert.match(feldText(raum.state.aufgaben.get('mission').text), /Erdgeschoss/, 'Aufgabentext ohne Ortshinweis');
     const r0 = q.r;
     assert.equal(raum.missionHinweis(m.ding), null);
