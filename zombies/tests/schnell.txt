@@ -56,3 +56,4 @@ tests/kanonenrauch.test.mjs
 tests/pkw_radio.test.mjs
 tests/pkw_streife.test.mjs
 tests/impressum.test.mjs
+tests/level_geretsried_migration.test.mjs

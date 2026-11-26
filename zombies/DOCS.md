@@ -107,7 +107,7 @@ Everybody ends up in the same game. The microphone (voice chat) needs https: set
 Most things are set in the sidebar panel "Zombies" and apply immediately, without a restart:
 
 - **Zombies:** amount outside and inside houses (10 = normal), speed in percent
-- **Game:** map (`level1` = level sequence, or a single map), bots (simulated teammates while only one human plays),
+- **Game:** current map (the game then follows the level sequence: Geretsried 1, Geretsried 2, Isarauen, Königsdorf, Kochel, Andermatt – each can be moved or switched off), bots (simulated teammates while only one human plays),
   "start every round with a fresh world", access code for outside players
 - **Item frequency** per item (10 = normal, 0 = never, 20 = double)
 - **Test tools:** invulnerability, time lapse (until the next add-on restart)

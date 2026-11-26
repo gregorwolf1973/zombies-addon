@@ -12,7 +12,7 @@ import { zfFigurenEinst } from '../client/zombiefiguren.mjs';
 import { hfFigurenEinst } from '../client/heldenfiguren.mjs';
 import { zahl, fest } from '../client/zahl.mjs';
 import { PKW_VORGABE } from '../client/pkw.mjs';
-import { LEVEL_KATALOG, bereinigeFolge, folgeVorgabe } from '../client/levelkatalog.mjs';
+import { LEVEL_KATALOG, bereinigeFolge, folgeVorgabe, aktiveFolge } from '../client/levelkatalog.mjs';
 
 // Vorlage: im Backend eingestellte Werte, die als Vorgabe übernommen wurden (Stand 22.11.2026) – überschreibt die Grundwerte unten.
 // Arrays werden ganz ersetzt. Neu erzeugen: aktuelle /data/einstellungen.json gegen die Grundwerte vergleichen (ohne Hash, Zugangscode, Test).
@@ -22,11 +22,11 @@ function mischen(a, b) {
   const o = { ...a }; for (const k of Object.keys(b)) o[k] = mischen(a[k], b[k]); return o;
 }
 
-// 'level1' = Zufallswahl für Level 1: bei jedem Start/Levelwechsel auf Level 1 wird Geretsried oder Geretsried 2 gewürfelt (server/aufgaben.mjs, level1Karte)
-// Kartenliste kommt aus dem Katalog (client/levelkatalog.mjs): neue Level-Karte = Eintrag dort, sie erscheint hier und in der Level-Reihenfolge
-export const KARTEN = ['level1', ...LEVEL_KATALOG.flatMap(k => k.karten), 'dorf'];
+// Kartenliste kommt aus dem Katalog (client/levelkatalog.mjs): neue Level-Karte = Eintrag dort, sie erscheint hier und in der Level-Reihenfolge.
+// Die frühere Wahl 'level1' (Zufall Geretsried/Geretsried 2) gibt es nicht mehr: gespeichert wird sie zum ersten aktiven Level (bereinige).
+export const KARTEN = [...LEVEL_KATALOG.map(k => k.id), 'dorf'];
 export const LEVEL_WELTEN = LEVEL_KATALOG.map(k => k.id);
-export const BISS_LEVEL_VORGABE = { geretsried: 12, isarauen: 12, koenigsdorf: 14, kochel: 16, andermatt: 18 };   // Ansteckung der Spieler in % je Sekunde Biss, steigend   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
+export const BISS_LEVEL_VORGABE = { geretsried: 12, geretsried2: 12, isarauen: 12, koenigsdorf: 14, kochel: 16, andermatt: 18 };   // Ansteckung der Spieler in % je Sekunde Biss, steigend   // Karten der Level (wie LEVEL_KARTEN in aufgaben.mjs)
 export const EVAK_ARTEN = ['bus', 'panzer', 'flugzeug', 'absturz', 'heli', 'bunker'];   // Evakuierungsarten (server/aufgaben.mjs); '' in den Einstellungen = je Karte
 export const SCHWIERIGKEITEN = ['leicht', 'normal', 'schwer'];
 export const ZEITRAFFER = [1, 5, 10, 60];
@@ -67,9 +67,12 @@ export function bereinigeToeneNamen(neu, alt = {}) {
   return aus;
 }
 
+// Musik und Radio-Durchsage „Level n“ gehören zur Karte (Katalog-Nr., Geretsried 1 und 2 teilen sich Nr. 1): Namen der Karten mit dieser Nummer
+const nrNamen = (n, trenner = ' + ') => LEVEL_KATALOG.filter(k => k.nr === n).map(k => k.name.replace(/ \(.*\)$/, '')).join(trenner) || `Level ${n}`;
+
 // Hintergrundmusik im Spiel: je Situation eine Dateiliste (nach Ende das nächste Stück, abwechselnd); Auswahl siehe client/musiklogik.mjs
 export const MUSIK_EREIGNISSE = [
-  ...[1, 2, 3, 4, 5].map(n => ({ id: 'musikLevel' + n, name: `Level ${n} – Hauptlied`, beschreibung: (n === 1 ? 'Hauptlied in Level 1 (beide Geretsried-Karten)' : `Hauptlied in Level ${n}`) + ' – gehört zur Karte und wandert mit, wenn die Level-Reihenfolge geändert wird', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 })),
+  ...[1, 2, 3, 4, 5].map(n => ({ id: 'musikLevel' + n, name: `Hauptlied ${nrNamen(n)}`, beschreibung: `Hauptlied auf ${nrNamen(n, ' und ')} – gehört zur Karte und wandert mit, wenn die Level-Reihenfolge geändert wird`, art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 })),
   { id: 'musikLager', name: 'Im Bundeswehr-Lager', beschreibung: 'Solange du im Bundeswehr-Lager bist', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
   { id: 'musikHorde', name: 'Kampf gegen Horde', beschreibung: 'Solange das Hordengeräusch läuft (bleibt danach noch 10 s)', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
   { id: 'musikSafe', name: 'Im Safehouse', beschreibung: 'Solange du in einem Safe Room bist', art: 'schleife', gruppe: 'spielmusik', kategorien: ['musik'], lautVorgabe: 100 },
@@ -106,7 +109,7 @@ export const EREIGNISSE = [
   { id: 'tuerZu', name: 'Tür fällt zu', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
   { id: 'autoMotor', name: 'Auto: Motor (selbst gefahren)', beschreibung: 'Motorgeräusch eines Autos, das ein Spieler mit dem Autoschlüssel fährt (Schleife, die Tonhöhe folgt dem Tempo); ohne Datei bleibt es still', art: 'schleife', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
   { id: 'autoVorbei', name: 'Auto fährt vorbei', beschreibung: 'Wenn ein fahrendes Auto oder der Bus dicht vorbeifährt', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
-  ...[1, 2, 3, 4, 5].map(n => ({ id: 'durchsageLevel' + n, name: `Radio-Durchsage Level ${n}`, beschreibung: 'Nachrichtensprecher im Live-Radio (allgemeine Zombie-Eilmeldung); unterbricht den Sender, kommt aus dem Autoradio', art: 'einmal', gruppe: 'musik', kategorien: ['musik'], lautVorgabe: 100 })),
+  ...[1, 2, 3, 4, 5].map(n => ({ id: 'durchsageLevel' + n, name: `Radio-Durchsage ${nrNamen(n)}`, beschreibung: `Nachrichtensprecher im Live-Radio (allgemeine Zombie-Eilmeldung) auf ${nrNamen(n, ' und ')}; unterbricht den Sender, kommt aus dem Autoradio – gehört zur Karte`, art: 'einmal', gruppe: 'musik', kategorien: ['musik'], lautVorgabe: 100 })),
   { id: 'autoradio', name: 'Autoradio', beschreibung: 'Läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
   { id: 'startmusik', name: 'Startmusik', beschreibung: 'Auf der Startseite (nach dem ersten Antippen), blendet beim Spielbeginn aus', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
   { id: 'funkAnsage', name: 'Funk-Ansage Abholung', beschreibung: 'Sprachansage nach dem Funkspruch: „Alles klar, sichern Sie die notwendigen Gegenstände und halten Sie sich bereit, wir holen Sie da raus.“ (ohne Uhrzeit; ohne Datei bleibt es still)', art: 'einmal', gruppe: 'bundeswehr', kategorien: ['bundeswehr'] },
@@ -208,6 +211,30 @@ export function bereinigeMusik(m = {}) {
   return { laut: Math.round(fest(m.laut, 0, 100, MUSIK_VORGABE.laut)), blende: Math.round(zahl(m.blende, 1, 10, MUSIK_VORGABE.blende) * 2) / 2 };
 }
 
+// Alte Tabelle „Zombies je Level“ (5 Zeilen, als Geretsried 1 und 2 noch ein Level mit Zufallswahl waren): Geretsried 2 steht jetzt als eigenes
+// Level direkt hinter Geretsried (migriereFolge in client/levelkatalog.mjs) – dort kommt eine Kopie der Geretsried-Zeile dazu, die Zeilen dahinter
+// rücken eine Position nach, damit Isarauen usw. ihre Werte behalten. Ist Geretsried abgeschaltet, ändern sich die Positionen nicht: Kopie der letzten Zeile hinten.
+// folge = Level-Reihenfolge, zu der die Tabelle gehört (alte Liste ohne geretsried2 oder schon umgestellte); fehlt sie, gilt die Vorgabe.
+export function migriereLevelTabelle(tab, folge) {
+  if (!Array.isArray(tab) || tab.length !== LEVEL_VORGABE.length - 1) return tab;
+  const aktive = aktiveFolge(Array.isArray(folge) ? folge : folgeVorgabe()), p = aktive.indexOf('geretsried');
+  const i = p >= 0 && aktive[p + 1] === 'geretsried2' ? p : tab.length - 1;
+  return [...tab.slice(0, i + 1), { ...tab[i] }, ...tab.slice(i + 1)];
+}
+// Eingabe vor dem Bereinigen auf die Level-Aufteilung Geretsried 1 + 2 umstellen (alte Datei, alter Export, alte Vorlage)
+// (alte Tabelle mit 5 Zeilen oder alte Reihenfolge ohne geretsried2): Tabelle verschieben, Biss von Geretsried für Geretsried 2 übernehmen
+export function migriereGeretsried(e = {}, alt = {}) {
+  const tab = e?.zombies?.level, f = e?.levelFolge, id = x => (typeof x === 'string' ? x : x?.karte);
+  const alteTabelle = Array.isArray(tab) && tab.length === LEVEL_VORGABE.length - 1;
+  const alteFolge = Array.isArray(f) && f.some(x => id(x) === 'geretsried') && !f.some(x => id(x) === 'geretsried2');
+  if (!alteTabelle && !alteFolge) return e;
+  const n = { ...e };
+  if (alteTabelle) n.zombies = { ...e.zombies, level: migriereLevelTabelle(tab, f ?? alt?.levelFolge) };
+  const b = e.bissSpielerLevel;
+  if (b && typeof b === 'object' && b.geretsried !== undefined && b.geretsried2 === undefined) n.bissSpielerLevel = { ...b, geretsried2: b.geretsried };
+  return n;
+}
+
 // Tabelle „Zombies je Level“: fehlende oder ungültige Werte kommen aus der bisherigen Tabelle bzw. der Vorgabe
 function bereinigeLevel(neu, alt) {
   return LEVEL_VORGABE.map((v, i) => Object.fromEntries(Object.entries(v).map(([k, vorgabe]) => {
@@ -247,7 +274,7 @@ export function bereinigeAuto(au = {}) {
 
 // aus beliebiger Eingabe gültige Einstellungen machen (unbekannte Felder fallen weg)
 export function bereinige(e = {}, alt = {}) {
-  e = migriereZombies(e ?? {});
+  e = migriereGeretsried(migriereZombies(e ?? {}), alt);
   const a = { ...vorgaben(), ...alt };
   const z = { ...a.zombies, ...(e.zombies ?? {}) };
   const t = { ...a.test, ...(e.test ?? {}) };
@@ -282,7 +309,7 @@ export function bereinige(e = {}, alt = {}) {
     wikiAdresse: bereinigeUrl(e.wikiAdresse ?? a.wikiAdresse ?? ''),
     impressum: String(e.impressum ?? a.impressum ?? '').slice(0, 20000),
     datenschutz: String(e.datenschutz ?? a.datenschutz ?? '').slice(0, 20000),
-    karte: KARTEN.includes(e.karte) ? e.karte : a.karte,
+    karte: KARTEN.includes(e.karte) ? e.karte : e.karte === 'level1' || !KARTEN.includes(a.karte) ? aktiveFolge(bereinigeFolge(e.levelFolge, a.levelFolge))[0] : a.karte,   // alte Wahl 'level1' (Zufall Geretsried 1/2) = erstes aktives Level
     levelFolge: bereinigeFolge(e.levelFolge, a.levelFolge),   // Reihenfolge und Schalter der Level [{ karte, aktiv }]; Schwierigkeit/Tabellen hängen an der Position, Karten-Besonderheiten an der Karte
     bots: Math.round(zahl(e.bots ?? a.bots, 0, 9, 2, { max: 30 })),
     frischerStart: typeof e.frischerStart === 'boolean' ? e.frischerStart : !!a.frischerStart,
@@ -299,8 +326,8 @@ export function bereinige(e = {}, alt = {}) {
     menschen: Math.round(zahl(e.menschen ?? a.menschen, 0, 200, 50, { max: 2000 })),         // Bewohner zu Beginn einer Welt
     verwandlung: Math.round(zahl(e.verwandlung ?? a.verwandlung, 1, 240, 30)),   // Menschen: Spielminuten vom Biss bis zur Verwandlung in einen Zombie
     bissSpieler: Math.round(fest(e.bissSpieler ?? a.bissSpieler, 0, 100, 12)),   // Spieler: Ansteckungschance in % je Sekunde Biss (alter globaler Wert, Vorgabe für die Level)
-    // Spieler: Ansteckungschance je Level (Karte); fehlt ein Wert, gilt der alte globale Wert
-    bissSpielerLevel: Object.fromEntries(LEVEL_WELTEN.map(k => [k, Math.round(fest(e.bissSpielerLevel?.[k] ?? alt.bissSpielerLevel?.[k] ?? (BISS_LEVEL_VORGABE[k] > 12 ? BISS_LEVEL_VORGABE[k] : (e.bissSpieler ?? alt.bissSpieler)), 0, 100, BISS_LEVEL_VORGABE[k] ?? 12))])),
+    // Spieler: Ansteckungschance je Level (Karte); fehlt ein Wert, gilt der alte globale Wert (Geretsried 2 erbt den Wert von Geretsried 1)
+    bissSpielerLevel: Object.fromEntries(LEVEL_WELTEN.map(k => [k, Math.round(fest(e.bissSpielerLevel?.[k] ?? alt.bissSpielerLevel?.[k] ?? (k === 'geretsried2' ? e.bissSpielerLevel?.geretsried ?? alt.bissSpielerLevel?.geretsried : undefined) ?? (BISS_LEVEL_VORGABE[k] > 12 ? BISS_LEVEL_VORGABE[k] : (e.bissSpieler ?? alt.bissSpieler)), 0, 100, BISS_LEVEL_VORGABE[k] ?? 12))])),
     biss: Math.round(fest(e.biss ?? a.biss, 0, 100, 100)),                   // Stadtbewohner: Chance in % je Bissversuch (einmal pro Sekunde bei Berührung)
     feuer: zahl(e.feuer ?? a.feuer, 0, 30, 1),                                 // Minuten zwischen zwei Bränden (0 = keine)
     feuerPhase: Math.round(zahl(e.feuerPhase ?? a.feuerPhase, 0, 240, 20)),  // so lange (Spielminuten ab Weltbeginn) brennt es immer wieder
@@ -449,7 +476,7 @@ export function mitVorlage() { return mischen(grundwerte(), VORLAGE); }
 
 export function grundwerte() {
   return {
-    superuserHash: '', zugangscode: '', wikiAdresse: '', impressum: '', datenschutz: '', karte: 'level1', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, fahrzeugStoss: 15, geraeuschPause: 5, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, zombieFigurenNeu: true, heldenFigurenNeu: true, innenMassstab: true, innenTempo: 50, schussDunkel: 30, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, tempoSchlurferJagen: 7, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, unfallTuer: 60, auto: { ...PKW_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
+    superuserHash: '', zugangscode: '', wikiAdresse: '', impressum: '', datenschutz: '', karte: 'geretsried', levelFolge: folgeVorgabe(), bots: 2, frischerStart: false, autos: 10, tagMinuten: 48, tagAb: 420, nachtAb: 1290, nachtDunkel: 92, menschenGroesse: 100, zombieGroesse: 100, groesseGesamt: 70, baumTempo: 25, zombieLeben: 100, menschen: 50, verwandlung: 30, bissSpieler: 12, bissSpielerLevel: { ...BISS_LEVEL_VORGABE }, biss: 100, feuer: 1, feuerPhase: 20, verkehr: 30, verkehrDichte: 2000, verkehrPhase: 25, unfall: 10, unfallExplosion: 50, unfallSchaden: 30, fahrzeugStoss: 15, geraeuschPause: 5, blaulicht: 'selten', schwierigkeit: 'normal', sichtkegel: false, diagnose: true, zombieFigurenNeu: true, heldenFigurenNeu: true, innenMassstab: true, innenTempo: 50, schussDunkel: 30, tempoHeldGehen: 20, tempoHeldSchleichen: 9, tempoZombieJagen: 15, tempoZombieWandern: 4, tempoSchlurferJagen: 7, toeneVorbelegt: [], reichweite: { ...REICHWEITE_VORGABE }, unfallTuer: 60, auto: { ...PKW_VORGABE }, waffen: JSON.parse(JSON.stringify(WAFFEN_VORGABE)),
     helden: { figuren: hfFigurenEinst() }, zombies: { level: LEVEL_VORGABE.map(v => ({ ...v })), tempo: 100, nacht: 15, hordeZiel: 3.5, hordeZieleZeigen: false, hordeTrupp: 10, hordeReichweite: 18, lagerWelle: 200, lagerWellePause: 10, ueberraschung: 3, anteilKriecher: 5, anteilSchlurfer: 45, anteilLaeufer: 50, drahtVoll: 4, drahtUeber: 70, figuren: zfFigurenEinst(), typen: Object.fromEntries(ZOMBIE_TYPEN.map(k => [k, true])) },
     funde: Object.fromEntries(Object.keys(DINGE).map(k => [k, 10])),
     aufgaben: { an: true, stunde: 18, wartezeit: 60, wartenEchtMin: 10, anzahl: 4, evakArt: '', finaleMinuten: 30 },
@@ -481,7 +508,7 @@ export function bereinigeUrl(w) {
 export function ausOptionen(o = {}) {
   const dichte = o.zombies !== undefined && o.zombies !== null ? Number(o.zombies) : (Number(o.zombie_faktor) || 1) * 10;
   return bereinige({
-    zugangscode: o.zugangscode, karte: o.karte ?? 'level1', bots: o.bots ?? 0,
+    zugangscode: o.zugangscode, karte: o.karte, bots: o.bots ?? 0,
     zombies: { dichte }, funde: o.funde ?? {},
   });
 }

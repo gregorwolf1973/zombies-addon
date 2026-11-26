@@ -11,6 +11,7 @@
  "bissSpieler": 10,
  "bissSpielerLevel": {
   "geretsried": 50,
+  "geretsried2": 50,
   "isarauen": 25,
   "koenigsdorf": 20
  },
@@ -123,6 +124,15 @@
  ],
  "zombies": {
   "level": [
+   {
+    "grund": 50,
+    "jeSpieler": 5,
+    "horde": 22,
+    "dauer": 10,
+    "pause": 5,
+    "gleichzeitig": 1,
+    "haeuser": 10
+   },
    {
     "grund": 50,
     "jeSpieler": 5,

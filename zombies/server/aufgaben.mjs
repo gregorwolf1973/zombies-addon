@@ -16,7 +16,7 @@ import { DINGE } from '../client/welt.mjs';
 import { weltVorbereiten } from './weltcache.mjs';
 import { kistenPlan, kistenSchritt, kistenSpeichern, kistenLaden } from './a400m_kisten.mjs';
 import { gesuchteDinge, fundorteListe, missionsOrt, aufgabenFundePlan, aufgabenBedarf } from './fundorte.mjs';
-import { LEVEL_KATALOG, levelSchluessel as katalogSchluessel, aktiveFolge, naechsterEintrag, karteAufloesen, katalogEintrag } from '../client/levelkatalog.mjs';
+import { LEVEL_KATALOG, levelSchluessel as katalogSchluessel, aktiveFolge, naechsterEintrag } from '../client/levelkatalog.mjs';
 
 // Missionsgegenstand für die Clients (Karte): exakte Position (x, y), Radius des animierten Auffindkreises, abgegeben, Ortsbeschreibung
 export const Mission = schema({ id: t.string(), nummer: t.uint8(), von: t.uint8(), ding: t.string(), x: t.number(), y: t.number(), r: t.number(), abgegeben: t.boolean(), getragen: t.boolean(), ort: t.string(), behaelter: t.string() }, 'Mission');
@@ -33,13 +33,11 @@ export const Aufgabe = schema({
 
 // Standard-Reihenfolge der Karten von Level zu Level (Katalog client/levelkatalog.mjs); die eingestellte Reihenfolge (Einstellung levelFolge,
 // Verwaltung) steht in raum.constructor.einstellungen.levelFolge, Level 1 = erstes aktives Level
+// Geretsried 1 und Geretsried 2 sind eigene Level (früher ein Level mit Zufallswahl); jeder Katalogeintrag = genau eine Karte
 export const LEVEL_KARTEN = LEVEL_KATALOG.map(k => k.id);
-// Der Katalogeintrag 'geretsried' hat zwei Karten; die Wahl fällt per Zufall (50/50), außer das Backend legt eine fest
-export const LEVEL1_KARTEN = katalogEintrag('geretsried').karten;
-export const level1Karte = (zufall = Math.random) => LEVEL1_KARTEN[zufall() < 0.5 ? 0 : 1];
-// Schlüssel je Level (Tabellen je Karte): beide Geretsried-Karten teilen sich die Werte von 'geretsried'
+// Schlüssel je Level (Tabellen je Karte wie bissSpielerLevel) = Katalog-id = Kartenname
 export const levelSchluessel = katalogSchluessel;
-export const KARTEN_NAMEN = { geretsried: 'Geretsried (Level 1)', geretsried2: 'Geretsried 2 (Level 1)', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };
+export const KARTEN_NAMEN = { geretsried: 'Geretsried 1', geretsried2: 'Geretsried 2', isarauen: 'die Isarauen', koenigsdorf: 'der Flugplatz Königsdorf', kochel: 'Kochel am See', andermatt: 'Andermatt', dorf: 'das Dorf' };
 
 export const STUETZPUNKT = 'stuetzpunkt';   // funkSafe, wenn der Funkspruch im Funkzelt des Bundeswehr-Stützpunkts abgesetzt wurde
 const TOR_SCHLOESSER = 3;   // wie TOR_RAETSEL in raum.mjs
@@ -1090,7 +1088,7 @@ export class Aufgaben {
   levelVorplanen() {
     try {
       const r = this.raum, s = r.state;
-      const karte = this.aufloesen(this.naechsteKarte());
+      const karte = this.naechsteKarte();
       const seed = Math.floor(Math.random() * 2 ** 31);
       const autos = Math.max(0, Math.min(250, Math.round((r.constructor.einstellungen?.autoFaktor ?? 1) * 10)));   // wie SpielRaum.onCreate für neue Level
       this.plan = { von: s.karte, karte, seed, autos };
@@ -1111,17 +1109,13 @@ export class Aufgaben {
   // erstes aktives Level der Reihenfolge (Level 1)
   erstesLevel() { return naechsterEintrag(this.raum.constructor.einstellungen?.levelFolge, ''); }
 
-  // konkrete Karte eines Levels: mehrere Karten (Geretsried) = feste Wahl aus dem Backend (level1Wahl), sonst Zufall
-  aufloesen(id) { return karteAufloesen(id, this.raum.constructor.level1Wahl, Math.random); }
-
   // neue Karte einstellen und die Welt mit neuem Level neu starten; Rucksack und Werte der Spieler bleiben
   // ziel (optional): { karte, level, frisch } – Testbefehl und Finale; frisch = ganz neue Runde (Level 1, Fähigkeiten und Startwahl von vorn)
   levelWechsel(ziel = null) {
     const r = this.raum, s = r.state;
     const plan = !ziel && this.plan?.von === s.karte ? this.plan : null;   // in erfolg() vorgeplant (Karte + Seed, Welt ist schon im Bau)
     this.plan = null;
-    let karte = ziel?.karte ?? plan?.karte ?? this.naechsteKarte();
-    if (!plan && !ziel?.fest) karte = this.aufloesen(karte);   // Karte mit mehreren Varianten (Geretsried): feste Wahl aus dem Backend, sonst Zufall
+    const karte = ziel?.karte ?? plan?.karte ?? this.naechsteKarte();
     r.constructor.kartenWechsel?.(karte);
     for (const p of s.spieler.values()) p.anBord = false;
     this.eingestiegen.clear(); this.folgenId = null;

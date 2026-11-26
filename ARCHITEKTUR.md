@@ -19,7 +19,7 @@ Wichtige Dateien:
 - `raum.mjs` – `SpielRaum` (Room): Schema, Tick, alle Nachrichten, Spieler/Zombies/Türen/Durchsuchen/Tausch.
 - `netzfeld.mjs` – `entkoppeln`/`netzKopie`: genaue Position intern, ganzzahlig und gedrosselt ins Schema.
 - `einstellungen.mjs` + `vorlage.json` – Einstellungen (Grundwerte, Vorlage, Datei `/data/einstellungen.json`).
-- `aufgaben.mjs` (Level, Missionen, Evakuierung, `level1Karte`), `mission*.mjs`, `finale.mjs`, `schwierigkeit.mjs`, `welle.mjs`.
+- `aufgaben.mjs` (Level, Missionen, Evakuierung; Level-Reihenfolge aus `client/levelkatalog.mjs`, je Level genau eine Karte, Migration alter Stände `migriereFolge`/`migriereGeretsried`), `mission*.mjs`, `finale.mjs`, `schwierigkeit.mjs`, `welle.mjs`.
 - `weltcache.mjs` + `weltworker.mjs` – Welt im Worker-Thread bauen, nächstes Level vorbauen.
 - `zielwahl.mjs`, `botplan.mjs`, `bots.mjs` – Bots und Zielwahl; `menschen.mjs` (Bewohner), `hund.mjs`, `verkehr.mjs`, `unfall.mjs`, `feuer.mjs`.
 - `waffenplaetze.mjs`, `munition*.mjs`, `granaten.mjs`, `baumschuss.mjs`, `ueberrollen.mjs`, `faehigkeiten.mjs` – Kampf und Ausrüstung.

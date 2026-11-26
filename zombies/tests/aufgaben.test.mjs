@@ -336,8 +336,8 @@ test('Levelwechsel: mit erfüllten Aufgaben fährt der Bus los, die Karte wechse
     assert.ok(await bis(() => meldungen.some(t => t.includes('trotzdem mit')), 10000), 'keine Mitkommen-Meldung');
     const stand = SpielRaum.speicher.ladeWelt();
     assert.equal(stand.level, 2);
-    assert.ok(['geretsried', 'geretsried2'].includes(stand.karte), 'Level-1-Karte: ' + stand.karte);   // Level 1 = Zufall aus beiden Geretsried-Karten
-    assert.ok(['geretsried', 'geretsried2', 'level1'].includes(SpielRaum.einstellungen.karte?.name));
+    assert.equal(stand.karte, 'geretsried', 'erstes aktives Level (kein Zufall mehr)');
+    assert.equal(SpielRaum.einstellungen.karte?.name, 'geretsried');
     assert.ok(SpielRaum.speicher.ladeSpieler(a.spielerId).rucksack.includes('wasser'), 'Rucksack nicht gespeichert');
     assert.equal(SpielRaum.speicher.ladeSpieler(a.spielerId).x, null, 'Platz wird in der neuen Welt neu bestimmt');
   } finally { await beenden(a.c, b.c); }

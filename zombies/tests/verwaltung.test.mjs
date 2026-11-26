@@ -48,7 +48,7 @@ test('Verwaltung: ändern gilt sofort und wird gespeichert', async () => {
 
 test('Einstellungen bereinigen: Unsinn wird zu gültigen Werten', () => {
   const e = bereinige({ karte: 'mond', bots: -3, zombies: { level: [{ grund: 'viel' }] }, test: { zeitraffer: 7, unsterblich: 'x' } });
-  assert.equal(e.karte, 'level1'); assert.equal(e.bots, 0); assert.equal(e.zombies.level[0].grund, 8);
+  assert.equal(e.karte, 'geretsried'); assert.equal(e.bots, 0); assert.equal(e.zombies.level[0].grund, 8);
   assert.equal(e.test.zeitraffer, 1); assert.deepEqual(e.test.unsterblich, []);
 });
 

@@ -12,8 +12,7 @@ import { Encoder } from '@colyseus/schema';
 // Große Horden (bis 1000 Zombies): Zustandspuffer gleich groß genug anlegen, statt bei jedem Wachsen zu warnen
 Encoder.BUFFER_SIZE = 256 * 1024;
 import { SpielRaum } from './raum.mjs';
-import { LEVEL1_KARTEN } from './aufgaben.mjs';
-import { LEVEL_KATALOG, aktiveFolge, eintragVon, karteAufloesen } from '../client/levelkatalog.mjs';
+import { LEVEL_KATALOG } from '../client/levelkatalog.mjs';
 import { SchiessstandRaum } from './schiessstand.mjs';
 import { Speicher } from './speicher.mjs';
 import { clientAuslieferung, auslieferungsVersion } from './statisch.mjs';
@@ -83,21 +82,13 @@ export async function starte({
   const datei = new EinstellungsDatei(einstellungsDatei, optionen);
   // Levelwechsel (Evakuierungsbus): die nächste Karte einstellen, die Welt startet der Raum selbst neu
   // (die in der Verwaltung erzwungene Evakuierungsart gilt nur für die aktuelle Karte und wird beim Kartenwechsel zurückgesetzt – sonst käme z. B. der Leopard auch in Königsdorf)
-  // Level 1 hat zwei Karten: Backend-Wahl 'level1' = Zufall (bei jedem Start und Levelwechsel auf Level 1 neu gewürfelt), 'geretsried'/'geretsried2' = fest
-  let level1Gewuerfelt = null;   // aufgelöste Karte der laufenden Zufallswahl
-  const level1Merken = k => { SpielRaum.level1Wahl = LEVEL1_KARTEN.includes(k) ? k : ''; };   // '' = Zufall (auch nach Wechsel in andere Level)
-  level1Merken(datei.werte.karte);
-  SpielRaum.kartenWechsel = karte => {
-    const zufall = !SpielRaum.level1Wahl;
-    if (zufall && eintragVon(karte)?.id === aktiveFolge(datei.werte.levelFolge)[0]) { level1Gewuerfelt = karte; anwenden(datei.aendern({ karte: 'level1', aufgaben: { evakArt: '' } })); }   // Zufallswahl bleibt gespeichert
-    else anwenden(datei.aendern({ karte, aufgaben: { evakArt: '' } }));
-  };
+  // Jedes Level hat genau eine Karte (Geretsried 1 und 2 sind eigene Level der Reihenfolge, keine Zufallswahl mehr)
+  SpielRaum.kartenWechsel = karte => { anwenden(datei.aendern({ karte, aufgaben: { evakArt: '' } })); };
   SpielRaum.karteVon = ladeKarte;   // für das Vorbauen der nächsten Welt (weltcache.mjs)
   SpielRaum.testSetzen = test => { anwenden(datei.aendern({ test })); return datei.werte.test; };   // Testmenü (Superuser): wie die Verwaltung speichern und für alle Räume übernehmen
   let geladeneKarte = null;
   const anwenden = w => {
-    if (w.karte === 'level1' && !level1Gewuerfelt) level1Gewuerfelt = karteAufloesen(aktiveFolge(w.levelFolge)[0], SpielRaum.level1Wahl);   // Level 1 = erstes aktives Level der Reihenfolge
-    const wahl = w.karte === 'level1' ? level1Gewuerfelt : w.karte;
+    const wahl = w.karte;
     if (!geladeneKarte || geladeneKarte.wahl !== wahl) geladeneKarte = { wahl, karte: ladeKarte(wahl) };
     SpielRaum.einstellungen = {
       zugangscode: w.zugangscode,
@@ -269,10 +260,7 @@ export async function starte({
     res.set('Content-Disposition', 'attachment; filename="zombies-einstellungen.json"').type('application/json').send(JSON.stringify(ohneGeheimnisse(datei.werte), null, 2));
   });
   app.post('/verwaltung/api', nurIngress, express.json({ limit: '100kb' }), (req, res) => {
-    const vorher = datei.werte.karte, ersteVorher = aktiveFolge(datei.werte.levelFolge)[0];
     const neu = datei.aendern(req.body ?? {});
-    if (aktiveFolge(neu.levelFolge)[0] !== ersteVorher) level1Gewuerfelt = null;   // anderes erstes Level: Karte von Level 1 neu bestimmen
-    if (neu.karte !== vorher) { level1Merken(neu.karte); level1Gewuerfelt = null; }   // Backend-Wahl geändert: Zufall neu würfeln bzw. feste Karte
     anwenden(neu);
     // Ton-Einstellungen sofort an laufende Spiele (sonst erst nach Neuladen der Seite)
     if ('zombieSicht' in (req.body ?? {})) { try { SpielRaum.aktiv?.broadcast('tonEinst', { zombieSicht: neu.zombieSicht }); } catch { /* kein Raum */ } }
@@ -317,7 +305,6 @@ export async function starte({
   });
   app.post('/verwaltung/neustart', nurIngress, express.json({ limit: '2kb' }), (req, res) => {
     const raum = SpielRaum.aktiv;
-    if (datei.werte.karte === 'level1') { level1Gewuerfelt = null; anwenden(datei.werte); }   // neue Welt in Level 1: Zufallskarte neu würfeln
     if (raum) raum.weltNeuStarten(!!req.body?.spielerLoeschen);
     else { SpielRaum.speicher?.loescheWelt(); if (req.body?.spielerLoeschen) SpielRaum.speicher?.loescheSpieler(); }
     res.json({ ok: true });

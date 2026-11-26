@@ -23,10 +23,10 @@ import { freierPort } from './hilfe.mjs';
 
 const NEU = { koenigsdorf: 3, kochel: 4, andermatt: 5 };
 
-test('Karten registriert, Reihenfolge 1→2→3→4→5, Namen, Einstellungen', () => {
-  assert.deepEqual(LEVEL_KARTEN, ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt']);
+test('Karten registriert, Reihenfolge 1→2→3→4→5→6, Namen, Einstellungen', () => {
+  assert.deepEqual(LEVEL_KARTEN, ['geretsried', 'geretsried2', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt']);
   const naechste = k => Aufgaben.prototype.naechsteKarte.call({ raum: { state: { karte: k } } });
-  for (let i = 0; i < 4; i++) assert.equal(naechste(LEVEL_KARTEN[i]), LEVEL_KARTEN[i + 1]);
+  for (let i = 0; i < LEVEL_KARTEN.length - 1; i++) assert.equal(naechste(LEVEL_KARTEN[i]), LEVEL_KARTEN[i + 1]);
   for (const k of Object.keys(NEU)) {
     assert.ok(KARTEN.includes(k) && LEVEL_WELTEN.includes(k), k);
     assert.ok(KARTEN_NAMEN[k]);
@@ -42,9 +42,10 @@ test('Karten registriert, Reihenfolge 1→2→3→4→5, Namen, Einstellungen', 
   assert.ok(SU_BEFEHLE.includes('level') && SU_BEFEHLE.includes('countdown'));
 });
 
-test('Schwierigkeit steigt von Level 1 bis 5, darüber wie 5', () => {
-  let vor = schwierigkeit({ level: 1, tage: 0 });
-  for (let l = 2; l <= 5; l++) {
+test('Schwierigkeit: Level 1 und 2 gleich (Geretsried 1 und 2), steigt bis 6, darüber wie 6', () => {
+  let vor = schwierigkeit({ level: 2, tage: 0 });
+  assert.deepEqual(vor, schwierigkeit({ level: 1, tage: 0 }));
+  for (let l = 3; l <= 6; l++) {
     const j = schwierigkeit({ level: l, tage: 0 });
     assert.ok(j.schnell > vor.schnell && j.nacht > vor.nacht && j.beute < vor.beute, 'Level ' + l);
     vor = j;
@@ -183,7 +184,7 @@ test('Finale: Countdown bei 0 → bunkerEnde; Sieg (drin): Abspann, nach 20 s fr
   assert.equal(neustarts.length, 1, 'doppelter Neustart');
 }));
 
-test('Finale: Niederlage (keiner drin): Atomblitz, Game over, nach 20 s Level 5 neu', mitFinale(async ({ c, raum, p, s, f, ende, neustarts, gewechselt, meldungen }) => {
+test('Finale: Niederlage (keiner drin): Atomblitz, Game over, nach 20 s Andermatt (Level 6) neu', mitFinale(async ({ c, raum, p, s, f, ende, neustarts, gewechselt, meldungen }) => {
   f.rest = 0.5; raum.schritt(1);
   assert.equal(s.evakPhase, 'niederlage');
   assert.equal(p.unten, true, 'draußen überlebt');
@@ -194,7 +195,7 @@ test('Finale: Niederlage (keiner drin): Atomblitz, Game over, nach 20 s Level 5 
   assert.deepEqual(gewechselt, ['andermatt']);
   const [spielerLoeschen, stand] = neustarts[0];
   assert.equal(spielerLoeschen, false);
-  assert.equal(stand.level, 5);
+  assert.equal(stand.level, 6);
   assert.equal(stand.karte, 'andermatt');
 }));
 
@@ -205,10 +206,10 @@ test('Superuser: Befehl level wechselt die Karte, countdown setzt den Zähler', 
   assert.match(SU.befehl(raum, client, { befehl: 'countdown', sekunden: 60 }), /60 s/);
   assert.equal(s.finaleRest, 60);
   assert.match(SU.befehl(raum, client, { befehl: 'level', level: 9 }), /Unbekannt/);
-  assert.match(SU.befehl(raum, client, { befehl: 'level', level: 3 }), /Level 3/);
+  assert.match(SU.befehl(raum, client, { befehl: 'level', level: 4 }), /Level 4/);
   assert.ok(await bis(() => neustarts.length === 1, 4000), 'kein Wechsel');
   assert.deepEqual(gewechselt, ['koenigsdorf']);
-  assert.equal(neustarts[0][1].level, 3);
+  assert.equal(neustarts[0][1].level, 4);
   assert.equal(neustarts[0][1].karte, 'koenigsdorf');
   assert.ok(p && f);
 }));

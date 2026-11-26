@@ -2,8 +2,9 @@
 // Schwierigkeitsberechnung für ein Koop-Zombiespiel
 // Reines ES-Modul ohne Importe.
 
-// Level-Tabelle: Index 0 = Level 1 ... Index 4 = Level 5
+// Level-Tabelle: Index 0 = Level 1 ... Index 5 = Level 6 (Level 1 und 2 gleich: Geretsried 1 und 2, früher ein Level mit Zufallswahl)
 export const LEVEL_TABELLE = [
+  { schnell: 0.0,  beute: 1.0,  munition: 1.0,  nacht: 1.0 },
   { schnell: 0.0,  beute: 1.0,  munition: 1.0,  nacht: 1.0 },
   { schnell: 0.095, beute: 0.925, munition: 0.9, nacht: 1.1 },
   { schnell: 0.19, beute: 0.85,  munition: 0.8, nacht: 1.2 },
@@ -11,11 +12,12 @@ export const LEVEL_TABELLE = [
   { schnell: 0.38, beute: 0.7,   munition: 0.6, nacht: 1.4 }
 ];
 
-// Zombies und Horden je Level (Vorgabe der Einstellung zombies.level, im Backend änderbar); Index 0 = Level 1
+// Zombies und Horden je Level (Vorgabe der Einstellung zombies.level, im Backend änderbar); Index 0 = Level 1, Level 1 und 2 gleich (Geretsried 1 und 2)
 //   grund/jeSpieler: Zombies draußen = grund + jeSpieler × Spielerzahl (echte Spieler + 0,5 × Bots)
 //   horde: Hordengröße je Spieler; dauer: Minuten, die eine Horde zusammenbleibt; pause: Minuten bis zur nächsten Horde
 //   gleichzeitig: so viele Horden höchstens zugleich (0 = keine Horden); haeuser: schlafende Zombies je Zombieplatz in Häusern (10 = 1)
 export const LEVEL_VORGABE = [
+  { grund: 8,  jeSpieler: 5,  horde: 12, dauer: 10, pause: 5, gleichzeitig: 1, haeuser: 10 },
   { grund: 8,  jeSpieler: 5,  horde: 12, dauer: 10, pause: 5, gleichzeitig: 1, haeuser: 10 },
   { grund: 10, jeSpieler: 6,  horde: 15, dauer: 12, pause: 4, gleichzeitig: 1, haeuser: 11 },
   { grund: 12, jeSpieler: 7,  horde: 20, dauer: 12, pause: 3, gleichzeitig: 2, haeuser: 12 },
@@ -41,10 +43,10 @@ function runde3(n) {
 
 // Hauptfunktion: berechnet alle Schwierigkeitswerte
 export function schwierigkeit({ level, tage, regler = 'normal' } = {}) {
-  // Level validieren: ganze Zahl >= 1, über 5 wie 5 behandeln
+  // Level validieren: ganze Zahl >= 1, über dem letzten Level wie das letzte behandeln
   let lvl = Number(level);
   if (!Number.isFinite(lvl) || !Number.isInteger(lvl) || lvl < 1) lvl = 1;
-  if (lvl > 5) lvl = 5;
+  if (lvl > LEVEL_TABELLE.length) lvl = LEVEL_TABELLE.length;
   const tab = LEVEL_TABELLE[lvl - 1];
 
   // Tage validieren: ungültig oder negativ = 0

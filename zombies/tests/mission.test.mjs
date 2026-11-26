@@ -82,15 +82,16 @@ test('Position exakt: Kreismitte = Behälter (Gegenstandsort), Hinweisfeld nennt
 
 test('Schwierigkeit: steigt je Level und je Spieltag (gedeckelt), Regler multipliziert, Vorgabe und Bereinigung', () => {
   const s = (level, tage, regler) => schwierigkeit({ level, tage, regler });
-  assert.equal(LEVEL_TABELLE.length, 5);
+  assert.equal(LEVEL_TABELLE.length, 6);
   assert.deepEqual([s(1, 0).dichte, s(1, 0).horde, s(1, 0).schnell, s(1, 0).beute, s(1, 0).nacht], [1, 1, 0, 1, 1]);
-  for (let l = 1; l < 5; l++) {
+  assert.deepEqual(s(2, 0), s(1, 0), 'Level 2 (Geretsried 2) wie Level 1 (Geretsried 1)');
+  for (let l = 2; l < 6; l++) {
     const a = s(l, 0), b = s(l + 1, 0);
     assert.ok(b.schnell > a.schnell && b.nacht > a.nacht, 'Level ' + (l + 1) + ' nicht schwerer');
     assert.equal(b.dichte, a.dichte, 'Zombiemengen je Level stehen in der Level-Tabelle (zombies.level), nicht hier');
     assert.ok(b.beute < a.beute && b.munition < a.munition, 'Beute/Munition Level ' + (l + 1));
   }
-  assert.deepEqual(s(9, 0), s(5, 0), 'über Level 5 wie Level 5');
+  assert.deepEqual(s(9, 0), s(6, 0), 'über Level 6 wie Level 6');
   assert.deepEqual(s(0, 0), s(1, 0));
   assert.ok(s(2, 3).dichte > s(2, 2).dichte && s(2, 1).dichte > s(2, 0).dichte, 'je Tag +8 %');
   assert.equal(s(1, 1).bonus, 0.08);

@@ -1,28 +1,40 @@
 // Katalog der Level-Karten (gemeinsam für Server, Verwaltung und Client). Neue Karte = ein Eintrag hier (plus Kartendatei in karten/).
-//   id: Schlüssel des Levels (Tabellen je Karte wie bissSpielerLevel, Missionen, Evakuierungsart hängen an der Karte)
-//   nr: ursprüngliche Levelnummer der Karte (Musik- und Durchsage-Zuordnung „Level n“ wandert mit der Karte)
-//   karten: Kartendateien des Eintrags; mehrere = Zufallswahl (Level 1: Geretsried oder Geretsried 2)
+//   id: Schlüssel des Levels = Name der Kartendatei (Tabellen je Karte wie bissSpielerLevel, Missionen, Evakuierungsart hängen an der Karte)
+//   nr: ursprüngliche Levelnummer der Karte (Musik- und Durchsage-Zuordnung „Level n“ wandert mit der Karte; Geretsried 2 teilt sich Nr. 1 mit Geretsried 1)
+// Jeder Eintrag ist ein eigenes Level mit genau einer Karte (früher: 'geretsried' = Zufall aus Geretsried und Geretsried 2, siehe migriereFolge).
 export const LEVEL_KATALOG = [
-  { id: 'geretsried', nr: 1, name: 'Geretsried (zufällig 1 oder 2)', karten: ['geretsried', 'geretsried2'] },
-  { id: 'isarauen', nr: 2, name: 'Isarauen', karten: ['isarauen'] },
-  { id: 'koenigsdorf', nr: 3, name: 'Flugplatz Königsdorf', karten: ['koenigsdorf'] },
-  { id: 'kochel', nr: 4, name: 'Kochel am See', karten: ['kochel'] },
-  { id: 'andermatt', nr: 5, name: 'Andermatt (Finale)', karten: ['andermatt'] },
+  { id: 'geretsried', nr: 1, name: 'Geretsried 1' },
+  { id: 'geretsried2', nr: 1, name: 'Geretsried 2' },
+  { id: 'isarauen', nr: 2, name: 'Isarauen' },
+  { id: 'koenigsdorf', nr: 3, name: 'Flugplatz Königsdorf' },
+  { id: 'kochel', nr: 4, name: 'Kochel am See' },
+  { id: 'andermatt', nr: 5, name: 'Andermatt (Finale)' },
 ];
 
 export const katalogEintrag = id => LEVEL_KATALOG.find(k => k.id === id) ?? null;
-// Eintrag, zu dem eine konkrete Kartendatei gehört (geretsried2 → geretsried); unbekannt (z. B. 'dorf') = null
-export const eintragVon = karte => LEVEL_KATALOG.find(k => k.id === karte || k.karten.includes(karte)) ?? null;
+// Eintrag einer Kartendatei; unbekannt (z. B. 'dorf') = null
+export const eintragVon = karte => katalogEintrag(karte);
 export const levelSchluessel = karte => eintragVon(karte)?.id ?? karte;
 // Levelnummer der Karte im ursprünglichen Katalog (für Musik/Durchsage); unbekannt = fallback
 export const kartenNr = (karte, fallback = 1) => eintragVon(karte)?.nr ?? fallback;
 
 export const folgeVorgabe = () => LEVEL_KATALOG.map(k => ({ karte: k.id, aktiv: true }));
 
+// Alte Reihenfolge (bis 5 Einträge, 'geretsried' = Zufall aus Geretsried 1 und 2): steht 'geretsried', aber noch nicht 'geretsried2' in der
+// Liste, kommt 'geretsried2' direkt dahinter mit demselben aktiv-Wert dazu. Andere Listen bleiben unverändert.
+export function migriereFolge(roh) {
+  if (!Array.isArray(roh)) return roh;
+  const id = x => (typeof x === 'string' ? x : x?.karte);
+  const i = roh.findIndex(x => id(x) === 'geretsried');
+  if (i < 0 || roh.some(x => id(x) === 'geretsried2')) return roh;
+  const x = roh[i], aktiv = typeof x === 'object' && x !== null ? x.aktiv !== false : true;
+  return [...roh.slice(0, i + 1), { karte: 'geretsried2', aktiv }, ...roh.slice(i + 1)];
+}
+
 // Reihenfolge der Level: [{ karte: id, aktiv }] – unbekannte und doppelte fallen weg, fehlende Karten des Katalogs kommen hinten (aktiv) dazu,
 // mindestens ein Level bleibt aktiv. roh = neue Eingabe, alt = bisherige Liste (wenn roh keine Liste ist)
 export function bereinigeFolge(roh, alt) {
-  const quelle = Array.isArray(roh) ? roh : Array.isArray(alt) ? alt : [];
+  const quelle = migriereFolge(Array.isArray(roh) ? roh : Array.isArray(alt) ? alt : []);
   const gesehen = new Set(), aus = [];
   for (const x of quelle) {
     const id = typeof x === 'string' ? x : x?.karte;
@@ -40,11 +52,4 @@ export const aktiveFolge = folge => bereinigeFolge(folge).filter(x => x.aktiv).m
 export function naechsterEintrag(folge, karte) {
   const liste = aktiveFolge(folge), i = liste.indexOf(levelSchluessel(karte));
   return liste[i < 0 ? 0 : (i + 1) % liste.length];
-}
-// konkrete Karte eines Eintrags: mehrere Karten = fest gewählte (pin, wenn sie zum Eintrag gehört), sonst Zufall
-export function karteAufloesen(id, pin = '', zufall = Math.random) {
-  const k = katalogEintrag(id);
-  if (!k) return id;
-  if (pin && k.karten.includes(pin)) return pin;
-  return k.karten[Math.min(k.karten.length - 1, Math.floor(zufall() * k.karten.length))];
 }

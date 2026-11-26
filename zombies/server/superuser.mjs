@@ -7,7 +7,7 @@ import { rahmen, imLager } from '../client/stuetzpunkt.mjs';
 import * as WP from './waffenplaetze.mjs';
 import { Nebel } from './nebel.mjs';
 import { KARTEN_NAMEN } from './aufgaben.mjs';
-import { aktiveFolge, karteAufloesen } from '../client/levelkatalog.mjs';
+import { aktiveFolge } from '../client/levelkatalog.mjs';
 import { FAHRBAR, FAHRBAR_ARTEN } from '../client/fahrbar.mjs';
 
 // ---------- Hash ----------
@@ -305,11 +305,11 @@ export function befehl(raum, client, m) {
       const n = Math.round(Number(m.level));
       const folge = aktiveFolge(raum.constructor.einstellungen?.levelFolge);   // Level n = n-tes aktives Level der eingestellten Reihenfolge
       if (!(n >= 1 && n <= folge.length)) return 'Unbekanntes Level';
-      const a = raum.aufgaben, karte = karteAufloesen(folge[n - 1], raum.constructor.level1Wahl);   // Geretsried: feste Wahl oder zufällig Geretsried/Geretsried 2
+      const a = raum.aufgaben, karte = folge[n - 1];   // jedes Level hat genau eine Karte (Geretsried 1 und 2 sind eigene Level)
       if (a.wechselLaeuft) return 'Ein Levelwechsel läuft schon';
       a.wechselLaeuft = true;
       raum.broadcast('meldung', { text: `🧪 Testsprung: Level ${n} – ${KARTEN_NAMEN[karte] ?? karte}`, lang: true });
-      raum.clock.setTimeout(() => a.levelWechsel({ karte, level: n, fest: true }), 1500);
+      raum.clock.setTimeout(() => a.levelWechsel({ karte, level: n }), 1500);
       return `🧪 Wechsel zu Level ${n} (${KARTEN_NAMEN[karte] ?? karte}) …`;
     }
     case 'countdown': {

@@ -1,4 +1,4 @@
-// Level 1, zweite Karte „Geretsried 2“: Aufbau, Missionen, Evakuierung (Bus), Zufallswahl Geretsried/Geretsried 2, Anzeigenamen
+// Geretsried 2: eigenes Level (Level 2 der Vorgabe-Reihenfolge, früher Zufallswahl in Level 1) – Aufbau, Missionen, Evakuierung (Bus), Anzeigenamen
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +7,7 @@ import path from 'node:path';
 import { KACHEL, setzeKartengroesse, frei, findeWeg, weltFingerabdruck } from '../client/welt.mjs';
 import { baueWeltAusKarte } from '../client/osmwelt.mjs';
 import { evakArtFuer } from '../client/evak.mjs';
-import { LEVEL_KARTEN, LEVEL1_KARTEN, KARTEN_NAMEN, Aufgaben, level1Karte, levelSchluessel } from '../server/aufgaben.mjs';
+import { LEVEL_KARTEN, KARTEN_NAMEN, Aufgaben, levelSchluessel } from '../server/aufgaben.mjs';
 import { KARTEN, bereinige, vorgaben } from '../server/einstellungen.mjs';
 import { ladeKarte, starte } from '../server/index.mjs';
 import { SpielRaum } from '../server/raum.mjs';
@@ -16,72 +16,66 @@ import { befehl } from '../server/superuser.mjs';
 
 const karte = JSON.parse(fs.readFileSync(new URL('../client/karten/geretsried2.json', import.meta.url)));
 
-test('Geretsried 2: Karte registriert, Name, Bus-Evakuierung, Level-1-Schlüssel', () => {
+test('Geretsried 2: Karte registriert, Name, Bus-Evakuierung, eigener Level-Schlüssel', () => {
   assert.ok(karte.quelle.includes('OpenStreetMap'));
-  assert.ok(KARTEN.includes('geretsried2') && KARTEN.includes('level1'));
+  assert.ok(KARTEN.includes('geretsried2') && !KARTEN.includes('level1'));
   assert.equal(ladeKarte('geretsried2').name, 'geretsried2');
-  assert.equal(KARTEN_NAMEN.geretsried, 'Geretsried (Level 1)');
-  assert.equal(KARTEN_NAMEN.geretsried2, 'Geretsried 2 (Level 1)');
+  assert.equal(KARTEN_NAMEN.geretsried, 'Geretsried 1');
+  assert.equal(KARTEN_NAMEN.geretsried2, 'Geretsried 2');
   assert.equal(KARTEN_NAMEN.isarauen, 'die Isarauen');   // andere Karten unverändert
   assert.equal(evakArtFuer('geretsried2'), 'bus');
-  assert.equal(levelSchluessel('geretsried2'), 'geretsried');
-  assert.deepEqual(LEVEL_KARTEN, ['geretsried', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt']);
-  // Standard im Backend = Zufall; „level1“ und die beiden Karten sind gültige Auswahlwerte
-  assert.equal(vorgaben().karte, 'level1');
-  for (const k of ['level1', 'geretsried', 'geretsried2']) assert.equal(bereinige({ karte: k }).karte, k);
-  // nach Level 1 folgt Level 2, auch von Geretsried 2 aus
+  assert.equal(levelSchluessel('geretsried2'), 'geretsried2');
+  assert.deepEqual(LEVEL_KARTEN, ['geretsried', 'geretsried2', 'isarauen', 'koenigsdorf', 'kochel', 'andermatt']);
+  // Standard im Backend = Geretsried 1 (erstes Level); die alte Zufallswahl „level1“ wird zum ersten aktiven Level
+  assert.equal(vorgaben().karte, 'geretsried');
+  for (const k of ['geretsried', 'geretsried2']) assert.equal(bereinige({ karte: k }).karte, k);
+  assert.equal(bereinige({ karte: 'level1' }).karte, 'geretsried');
+  assert.equal(bereinige({ karte: 'level1', levelFolge: [{ karte: 'geretsried', aktiv: false }, { karte: 'geretsried2', aktiv: true }] }).karte, 'geretsried2');
+  // Reihenfolge: Geretsried 1 → Geretsried 2 → Isarauen
+  assert.equal(Aufgaben.prototype.naechsteKarte.call({ raum: { state: { karte: 'geretsried' } } }), 'geretsried2');
   assert.equal(Aufgaben.prototype.naechsteKarte.call({ raum: { state: { karte: 'geretsried2' } } }), 'isarauen');
 });
 
-test('Zufallswahl Level 1: 50/50 zwischen Geretsried und Geretsried 2', () => {
-  assert.deepEqual(LEVEL1_KARTEN, ['geretsried', 'geretsried2']);
-  assert.equal(level1Karte(() => 0.1), 'geretsried');
-  assert.equal(level1Karte(() => 0.9), 'geretsried2');
-  const n = { geretsried: 0, geretsried2: 0 };
-  for (let i = 0; i < 2000; i++) n[level1Karte()]++;
-  assert.ok(n.geretsried > 800 && n.geretsried2 > 800, JSON.stringify(n));
-});
-
 // Aufgaben.levelWechsel mit Attrappe: welche Karte wird eingestellt?
-function wechsel(ziel, level1Wahl, zustandKarte = 'andermatt') {
+function wechsel(ziel, zustandKarte = 'andermatt') {
   const eingestellt = [];
-  const SR = function () {}; SR.level1Wahl = level1Wahl; SR.kartenWechsel = k => eingestellt.push(k);
+  const SR = function () {}; SR.kartenWechsel = k => eingestellt.push(k);
   const raum = { constructor: SR, state: { karte: zustandKarte, level: 5, besiegt: 0, spieler: new Map() }, chatVerlauf: [], weltNeuStarten: () => {} };
   const ag = Object.assign(Object.create(Aufgaben.prototype), { raum, eingestiegen: new Set(), folgenId: null });
   ag.levelWechsel(ziel);
   return eingestellt[0];
 }
 
-test('Levelwechsel auf Level 1: Zufall, außer das Backend legt eine Karte fest; Superuser „Level 1“ immer Zufall', () => {
-  const gesehen = new Set();
-  for (let i = 0; i < 60; i++) gesehen.add(wechsel({ karte: 'geretsried', level: 1, frisch: true }, ''));
-  assert.deepEqual([...gesehen].sort(), ['geretsried', 'geretsried2']);
-  for (let i = 0; i < 20; i++) assert.equal(wechsel({ karte: 'geretsried', level: 1, frisch: true }, 'geretsried2'), 'geretsried2');
-  for (let i = 0; i < 20; i++) assert.equal(wechsel({ karte: 'geretsried', level: 1, frisch: true }, 'geretsried'), 'geretsried');
-  assert.equal(wechsel({ karte: 'isarauen', level: 2 }, ''), 'isarauen');   // andere Level unverändert
-  assert.equal(wechsel({ karte: 'geretsried2', level: 1, fest: true }, 'geretsried'), 'geretsried2');   // schon gewürfelt (Superuser)
-  assert.equal(wechsel(null, '', 'koenigsdorf'), 'kochel');
+test('Levelwechsel: kein Zufall mehr, jede Karte ist ein eigenes Level', () => {
+  for (let i = 0; i < 20; i++) assert.equal(wechsel({ karte: 'geretsried', level: 1, frisch: true }), 'geretsried');
+  for (let i = 0; i < 20; i++) assert.equal(wechsel({ karte: 'geretsried2', level: 2 }), 'geretsried2');
+  assert.equal(wechsel({ karte: 'isarauen', level: 3 }), 'isarauen');
+  assert.equal(wechsel(null, 'koenigsdorf'), 'kochel');
+  assert.equal(wechsel(null, 'andermatt'), 'geretsried', 'nach dem letzten Level wieder von vorn');
+  assert.equal(wechsel(null, 'geretsried'), 'geretsried2');
 });
 
-test('Superuser „Level 1“ würfelt zwischen Geretsried und Geretsried 2, Level 2 bleibt Isarauen', () => {
+test('Superuser „Level 1“ = Geretsried 1, „Level 2“ = Geretsried 2, „Level 3“ = Isarauen', () => {
   const ziele = [];
   const gesendet = [];
   const a = { wechselLaeuft: false, levelWechsel: z => ziele.push(z) };
   const raum = { aufgaben: a, extra: new Map([['s', { superuser: true }]]), state: { spieler: new Map([['s', { name: 'Su' }]]) },
     broadcast: (t, m) => gesendet.push(m.text), clock: { setTimeout: f => f() } };
   const client = { sessionId: 's' };
-  const gesehen = new Set();
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 10; i++) {
     a.wechselLaeuft = false;
-    const antwort = befehl(raum, client, { befehl: 'level', level: 1 });
-    assert.match(String(antwort), /Level 1 \(Geretsried( 2)? \(Level 1\)\)/);
+    assert.match(String(befehl(raum, client, { befehl: 'level', level: 1 })), /Level 1 \(Geretsried 1\)/);
   }
-  for (const z of ziele) { assert.equal(z.level, 1); gesehen.add(z.karte); }
-  assert.deepEqual([...gesehen].sort(), ['geretsried', 'geretsried2']);
-  assert.ok(gesendet.every(t => /Geretsried( 2)? \(Level 1\)/.test(t)));
+  assert.ok(ziele.every(z => z.level === 1 && z.karte === 'geretsried'));
+  assert.ok(gesendet.every(t => /Geretsried 1/.test(t)));
   ziele.length = 0; a.wechselLaeuft = false;
-  befehl(raum, client, { befehl: 'level', level: 2 });
+  assert.match(String(befehl(raum, client, { befehl: 'level', level: 2 })), /Level 2 \(Geretsried 2\)/);
+  assert.deepEqual(ziele[0], { karte: 'geretsried2', level: 2 });
+  ziele.length = 0; a.wechselLaeuft = false;
+  befehl(raum, client, { befehl: 'level', level: 3 });
   assert.equal(ziele[0].karte, 'isarauen');
+  a.wechselLaeuft = false;
+  assert.match(String(befehl(raum, client, { befehl: 'level', level: 7 })), /Unbekannt/);
 });
 
 test('Geretsried 2: Welt baut deterministisch, Start frei, Safe Rooms und Haustüren vom Start erreichbar', () => {
@@ -108,18 +102,15 @@ test('Geretsried 2: Welt baut deterministisch, Start frei, Safe Rooms und Haust�
   } finally { setzeKartengroesse(64, 48); }
 });
 
-test('Server: Backend „level1“ würfelt eine Level-1-Karte, feste Wahl gilt', async () => {
+test('Server: alte Backend-Wahl „level1“ startet das erste aktive Level, feste Wahl gilt', async () => {
   const mitKarte = async optionen => {
     const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'zombies-g2-'));
     const server = await starte({ port: 28500 + Math.floor(Math.random() * 400), optionen, leise: true, datenbank: path.join(ordner, 'spiel.db') });
-    const name = SpielRaum.einstellungen.karte?.name, wahl = SpielRaum.level1Wahl;
+    const name = SpielRaum.einstellungen.karte?.name;
     await server.gracefullyShutdown(false); fs.rmSync(ordner, { recursive: true, force: true });
-    return { name, wahl };
+    return name;
   };
-  const z = await mitKarte({ karte: 'level1' });
-  assert.ok(LEVEL1_KARTEN.includes(z.name), String(z.name)); assert.equal(z.wahl, '');
-  const fest = await mitKarte({ karte: 'geretsried2' });
-  assert.deepEqual(fest, { name: 'geretsried2', wahl: 'geretsried2' });
-  const alt = await mitKarte({ karte: 'geretsried' });
-  assert.deepEqual(alt, { name: 'geretsried', wahl: 'geretsried' });
+  assert.equal(await mitKarte({ karte: 'level1' }), 'geretsried');
+  assert.equal(await mitKarte({ karte: 'geretsried2' }), 'geretsried2');
+  assert.equal(await mitKarte({ karte: 'geretsried' }), 'geretsried');
 });

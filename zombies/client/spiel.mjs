@@ -1,5 +1,5 @@
 // Browser-Client: zeigt den Zustand vom Server, schickt nur Eingaben und Wünsche.
-import { kartenNr } from './levelkatalog.mjs';
+import { kartenNr, LEVEL_KATALOG } from './levelkatalog.mjs';
 import { fzPx } from './masse.mjs';
 import { fzRechtecke, autoTempo, aufAuto, bewegeFz, STOSS_TAUMEL_FAKTOR } from './fzkollision.mjs';
 import { ASSETS } from './basis.mjs';
@@ -802,7 +802,7 @@ function suMenueEinrichten(szene) {
       ${b('evakrufen', '🚌 Evakuierung sofort rufen')}${b('alleaufgaben', '✅ Alle Aufgaben erledigt')}
       <div class="zeile">${b('lager', '💥 Lager fallen', { zustand: 'gefallen' })}${b('lager', '🎖 Lager aufbauen', { zustand: 'steht' })}</div>
       <div class="titel">Level springen (Test)</div>
-      <div class="zeile">${[1, 2, 3, 4, 5].map(n => b('level', `Level ${n}`, { level: n })).join('')}</div>
+      <div class="zeile">${LEVEL_KATALOG.map((_, i) => b('level', `Level ${i + 1}`, { level: i + 1 })).join('')}</div>
       ${b('countdown', '☢️ Countdown auf 60 s (nur Andermatt)', { sekunden: 60 })}</div>`;
     document.body.appendChild(fenster);
     const zu = () => fenster.classList.remove('offen');

@@ -36,15 +36,16 @@ const streuung = werte => { const m = werte.reduce((a, b) => a + b, 0) / werte.l
 test('Einstellungen: Blaulicht und Level-Tabelle werden bereinigt', () => {
   const v = vorgaben();
   assert.equal(v.blaulicht, 'selten');
-  assert.equal(v.zombies.level.length, 5);
+  assert.equal(v.zombies.level.length, 6);   // Geretsried 1 und 2 eigene Level
   assert.deepEqual(v.zombies.level[0], { grund: 8, jeSpieler: 5, horde: 12, dauer: 10, pause: 5, gleichzeitig: 1, haeuser: 10 });
-  assert.deepEqual(v.zombies.level[4], { grund: 16, jeSpieler: 10, horde: 30, dauer: 15, pause: 1, gleichzeitig: 2, haeuser: 16 });
+  assert.deepEqual(v.zombies.level[1], v.zombies.level[0]);   // Level 2 (Geretsried 2) wie Level 1
+  assert.deepEqual(v.zombies.level[5], { grund: 16, jeSpieler: 10, horde: 30, dauer: 15, pause: 1, gleichzeitig: 2, haeuser: 16 });
   assert.equal(bereinige({ blaulicht: 'quatsch' }).blaulicht, 'selten');
   assert.equal(bereinige({ blaulicht: 'aus' }).blaulicht, 'aus');
   // Teilwerte ändern nur das Genannte, nur technisch begrenzt (Sicherheitsgrenze)
   const l = bereinige({ zombies: { level: [{ pause: 0.1, horde: 5000, grund: 'viel' }, { gleichzeitig: 0, dauer: 7.4 }] } }).zombies.level;
   assert.equal(l[0].pause, 0.5); assert.equal(l[0].horde, 2000); assert.equal(l[0].grund, 8); assert.equal(l[0].jeSpieler, 5);
-  assert.equal(l[1].gleichzeitig, 0); assert.equal(l[1].dauer, 7); assert.equal(l[1].haeuser, 11);
+  assert.equal(l[1].gleichzeitig, 0); assert.equal(l[1].dauer, 7); assert.equal(l[1].haeuser, 10);   // Level 2 = Geretsried 2 (Vorgabe wie Level 1)
   // frühere Werte der Tabelle bleiben bei späteren Teiländerungen erhalten
   const alt = bereinige({ zombies: { level: [{ grund: 20 }] } });
   assert.equal(bereinige({ zombies: { level: [{ horde: 7 }] } }, alt).zombies.level[0].grund, 20);
@@ -53,7 +54,7 @@ test('Einstellungen: Blaulicht und Level-Tabelle werden bereinigt', () => {
 test('Einstellungen: alte Werte (dichte, haeuser, welle*, Min/Max-Paare) werden übernommen', () => {
   const z = bereinige({ zombies: { dichte: 20, haeuser: 5, welle: 20, welleMin: 35, welleMax: 35, hordeZielMin: 2, hordeZielMax: 4, hordeTruppMin: 6, hordeTruppMax: 14 } }).zombies;
   assert.equal(z.level[0].grund, 16); assert.equal(z.level[0].jeSpieler, 10); assert.equal(z.level[0].haeuser, 5); assert.equal(z.level[0].horde, 12);
-  assert.equal(z.level[4].haeuser, 8); assert.equal(z.level[0].gleichzeitig, 1);
+  assert.equal(z.level[5].haeuser, 8); assert.equal(z.level[0].gleichzeitig, 1);
   assert.equal(z.hordeZiel, 3); assert.equal(z.hordeTrupp, 10);
   for (const k of ['dichte', 'haeuser', 'welle', 'welleMin', 'welleMax', 'hordeZielMin', 'hordeZielMax', 'hordeTruppMin', 'hordeTruppMax']) assert.ok(!(k in z), k + ' sollte wegfallen');
   assert.equal(bereinige({ zombies: { welle: 0 } }).zombies.level[2].gleichzeitig, 0, 'welle 0 = keine Horden');
@@ -222,9 +223,9 @@ test('Zombies draußen = (Grund + je Spieler × Spielerzahl) × Nacht × Regler'
     einst({ nachtFaktor: 1.5, schwierigkeit: 'schwer', zombiesLevel: ebenen({ grund: 10, jeSpieler: 6 }) });
     assert.equal(raum.zombieSollJetzt(), Math.round(16 * 1.3));
     SpielRaum.einstellungen = { ...alteEinst, nachtFaktor: 1.5, schwierigkeit: 'normal', zombiesLevel: LEVEL_VORGABE };
-    raum.state.level = 3;
-    assert.equal(raum.zombieSollJetzt(), 12 + 7);   // Vorgabe Level 3
-    raum.state.level = 5;
+    raum.state.level = 4;
+    assert.equal(raum.zombieSollJetzt(), 12 + 7);   // Vorgabe Level 4 (Isarauen-Nachfolger Königsdorf; Level 1 und 2 = Geretsried 1 und 2)
+    raum.state.level = 6;
     assert.equal(raum.zombieSollJetzt(), 16 + 10);
   } finally { await c.leave(); SpielRaum.einstellungen = alteEinst; }
 });
