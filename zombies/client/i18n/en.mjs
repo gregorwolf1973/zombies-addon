@@ -6,6 +6,8 @@ export default {
     schliessen: 'Close',
     abbrechen: 'Cancel',
     zurueck: 'Back',
+    an: 'On',
+    aus: 'Off',
     leer: 'empty',
   },
   start: {

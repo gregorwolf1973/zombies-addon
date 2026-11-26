@@ -24,7 +24,7 @@ export const AUSNAHMEN = [
   /^[\p{L}_]+$/u,                // einzelnes Wort ohne Leerzeichen → meist Schlüssel/Bezeichner (z. B. 'tür', 'schlüssel'); UI-Wörter erkennt WORT_RE nicht hier
 ];
 // Einzelwörter, die trotz /^\w+$/ als UI-Text gelten, wenn sie großgeschrieben sind und im WORT_RE stehen
-const EINZEL_UI = new Set(['Schließen', 'Abbrechen', 'Mitspielen', 'Einstellungen', 'Rucksack', 'Tauschen', 'Benutzen', 'Wegwerfen', 'Ablegen',
+const EINZEL_UI = new Set(['An', 'Aus', 'Zurück', 'Gegenstand', 'Spieler', 'Karte', 'Tauschen', 'Werfen', 'Einschalten', 'Fehler', 'Schließen', 'Abbrechen', 'Mitspielen', 'Einstellungen', 'Rucksack', 'Tauschen', 'Benutzen', 'Wegwerfen', 'Ablegen',
   'Ausruhen', 'Durchsuchen', 'Öffnen', 'Hoch', 'Mittel', 'Niedrig', 'Luftbild', 'Blass', 'Deckend', 'Leer', 'Ja', 'Nein']);
 
 // Phase 1: Dateien, die nicht geprüft werden (Weltdaten, Backend, Servertexte erst Phase 2/3)
