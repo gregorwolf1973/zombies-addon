@@ -275,6 +275,8 @@ test('Anschleichen: von hinten schleichend unbemerkt, erster Schlag mit Überras
   const { c, raum, p } = await beitreten('Pirscher');
   try {
     raum.zombieFaktor = 0; raum.state.zombies.clear(); raum.zombieInfo.clear();
+    // Zufalls-Hunde (lenken Zombies ab, drehen sie zum Spieler: Ursache des seltenen „Überraschungsschlag nicht tödlich“) und Verkehr weg
+    raum.state.hunde.clear(); raum.hunde.info.clear(); raum.hunde.schritt = () => {}; raum.verkehr = null; raum.state.fahrzeuge.clear();
     p.ebene = ''; p.waffe = 'messer'; p.munition = 0;
     const welt = raum.welt;
     // freie Stelle draußen suchen
@@ -300,7 +302,7 @@ test('Anschleichen: von hinten schleichend unbemerkt, erster Schlag mit Überras
     c.send('eingabe', { dx: 0.4, dy: 0, s: true });     // schleichen
     try { assert.ok(await bis(() => z.hp < 100 || !raum.state.zombies.has(zid), 6000), 'kein Schlag'); } finally { clearInterval(halten); }
     // Messer von hinten: 30 × 4 = tödlich
-    assert.ok(!raum.state.zombies.has(zid) || z.kriecht, 'Überraschungsschlag nicht tödlich');
+    assert.ok(!raum.state.zombies.has(zid) || z.kriecht, 'Überraschungsschlag nicht tödlich: ' + JSON.stringify({ hp: z.hp, jagt: z.jagt, info: raum.zombieInfo.get(zid), abstand: Math.hypot(z.x - p.x, z.y - p.y) }));
   } finally { c.send('eingabe', { dx: 0, dy: 0 }); await c.leave(); }
 });
 

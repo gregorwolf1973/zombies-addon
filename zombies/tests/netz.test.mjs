@@ -43,6 +43,8 @@ test('Eingabe-Stücke: Server läuft genau die gemeldete Dauer, bestätigt die N
     const ort = freieStrecke(raum, 260);
     assert.ok(ort, 'keine freie Strecke');
     raum.state.zombies.clear(); raum.zombieInfo.clear();
+    // Zufalls-Verkehr weg: ein stehendes Auto/Wrack auf der Strecke halbiert das Tempo (Auto-Klettern 50 %), ein fahrendes stößt
+    raum.verkehr = null; raum.state.fahrzeuge.clear();
     p.x = ort.x; p.y = ort.y; p.ebene = ''; p.infektion = 0; p.zombie = 0; p.unten = false; p.waffe = ''; p.rucksack.clear();
     await warte(800);   // Zeitguthaben für 0,5 s Eingabe ansparen (langsame CI-Rechner: 150 ms reichten nicht)
     const x0 = p.x;
