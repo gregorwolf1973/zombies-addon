@@ -2,6 +2,7 @@
 import { DINGE, BEHAELTER_NAME } from './welt.mjs';
 import { dingIcon } from './dingbild.mjs';
 import { NIMM_WEITE, nimmWeite } from './durchsuche_alle.mjs';
+import { t } from './i18n.mjs';
 
 let feld = null, ursprung = null;
 function escZu(e) { if (e.key === 'Escape') fundZu(); }
@@ -17,14 +18,14 @@ const sicher = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt
 // raum: Colyseus-Raum; m: { eintraege: [{ id, art, dinge }] }; lok: eigene Position
 export function fundZeigen(raum, m, lok, meldung) {
   const liste = (m?.eintraege ?? []).filter(e => e.dinge?.length);
-  if (!liste.length) { fundZu(); if (m?.neu) meldung?.('Nichts Brauchbares gefunden'); return; }
+  if (!liste.length) { fundZu(); if (m?.neu) meldung?.(t('fund.nichts')); return; }
   if (!feld) { ursprung = lok ? { x: lok.x, y: lok.y } : null; }
   const alt = feld;
   feld = document.createElement('div');
   feld.id = 'aufheben-wahl';
   feld.classList.add('fundliste');
   alt?.remove();
-  const titel = document.createElement('div'); titel.className = 'aufh-titel'; titel.textContent = '🔍 Gefunden';
+  const titel = document.createElement('div'); titel.className = 'aufh-titel'; titel.textContent = t('fund.titel');
   feld.append(titel);
   for (const e of liste) {
     const z = document.createElement('div'); z.className = 'fund-zeile';
@@ -39,9 +40,9 @@ export function fundZeigen(raum, m, lok, meldung) {
     z.append(n, r); feld.append(z);
   }
   const fuss = document.createElement('div'); fuss.className = 'aufh-reihe'; fuss.style.marginTop = '8px';
-  const alle = document.createElement('button'); alle.className = 'aufh-knopf'; alle.innerHTML = '<span class="z">🎒</span><span class="t">Alles nehmen</span>';
+  const alle = document.createElement('button'); alle.className = 'aufh-knopf'; alle.innerHTML = `<span class="z">🎒</span><span class="t">${t('fund.allesNehmen')}</span>`;
   alle.onclick = ev => { ev.stopPropagation(); raum.send('fund_nimm', { alle: true }); };
-  const zu = document.createElement('button'); zu.className = 'aufh-knopf zweit'; zu.innerHTML = '<span class="z">✖</span><span class="t">Schließen</span>';
+  const zu = document.createElement('button'); zu.className = 'aufh-knopf zweit'; zu.innerHTML = `<span class="z">✖</span><span class="t">${t('allgemein.schliessen')}</span>`;
   zu.onclick = ev => { ev.stopPropagation(); fundZu(); };
   fuss.append(alle, zu); feld.append(fuss);
   feld.addEventListener('pointerdown', e => e.stopPropagation());

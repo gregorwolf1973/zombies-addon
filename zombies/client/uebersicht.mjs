@@ -3,6 +3,7 @@
 import { ASSETS } from './basis.mjs';
 import { KACHEL, BREITE, HOEHE, T } from './welt.mjs';
 import { kartenbildLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
+import { t as tr } from './i18n.mjs';
 
 const S = 4;   // Pixel je Kachel im Grundbild
 
@@ -215,7 +216,7 @@ export class Uebersicht {
     const a = this.letzteAnsicht; if (!a || !this.hinSpringen) return;
     const wx = (a.x0 + lokalPos.x / a.m) * KACHEL, wy = (a.y0 + lokalPos.y / a.m) * KACHEL;
     this.hinWeg();
-    const b = document.createElement('button'); b.type = 'button'; b.id = 'hinknopf'; b.textContent = '📍 Hierhin springen';
+    const b = document.createElement('button'); b.type = 'button'; b.id = 'hinknopf'; b.textContent = tr('su.hierhin');
     b.style.cssText = `position:fixed;z-index:60;left:${Math.max(4, Math.min(innerWidth - 170, cx))}px;top:${Math.max(4, Math.min(innerHeight - 44, cy))}px;padding:8px 12px;font-size:14px;background:#1e2a1e;color:#fff;border:1px solid #fff6;border-radius:8px;box-shadow:0 2px 8px #0008`;
     b.addEventListener('pointerdown', e => e.stopPropagation());
     b.onclick = e => { e.stopPropagation(); this.hinWeg(); this.hinSpringen(wx, wy); };
@@ -271,7 +272,7 @@ export class Uebersicht {
       c.font = `${Math.round((this.gross ? 26 : 18) * dpr * (1 + 0.12 * puls))}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
       c.fillText('📍', x, y + 3 * dpr);
       c.font = `bold ${Math.round((this.gross ? 12 : 9) * dpr)}px sans-serif`; c.textBaseline = 'middle'; c.lineWidth = 3.5 * dpr; c.strokeStyle = '#000';
-      c.strokeText('Abholung', x, y + 10 * dpr); c.fillStyle = '#ff8a80'; c.fillText('Abholung', x, y + 10 * dpr);
+      const ab = tr('karte.abholungKurz'); c.strokeText(ab, x, y + 10 * dpr); c.fillStyle = '#ff8a80'; c.fillText(ab, x, y + 10 * dpr);
     }
     if (this.bus) {
       // Evakuierungsbus: großes, pulsierendes gelb-rotes Symbol mit Ring

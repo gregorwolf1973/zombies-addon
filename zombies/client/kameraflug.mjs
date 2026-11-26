@@ -2,6 +2,7 @@
 // Kameraflug: die Figur steht (unverwundbar, für Zombies unsichtbar – das erledigt der Server nach der Nachricht su/kamera),
 // die Kamera löst sich von ihr und fliegt mit WASD/Pfeilen (Umschalt = schneller), Ziehen, Mausrad und Klick auf die Karte.
 // Mausrad: ein Fensterhörer (nicht nur Phaser-Canvas), damit auch durchlässige HUD-Flächen zoomen; Menüs, Fenster und Eckkarte nicht.
+import { t } from './i18n.mjs';
 
 export const FLUG_TEMPO = 60 * 8, FLUG_TEMPO_SCHNELL = 200 * 8;   // Pixel/s (8 px = 1 m): 60 m/s bzw. 200 m/s
 export const ZOOM_MIN = 0.4, ZOOM_MAX = 2.5, FLUG_ZOOM_MIN = 0.12;   // ZOOM_MAX größer: näher heran an die kleineren Figuren
@@ -145,7 +146,7 @@ export class Kameraflug {
     if (el) return;
     el = document.createElement('div'); el.id = 'kameraleiste';
     el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:29;display:flex;gap:8px;align-items:center;background:#000b;color:#fff;border:1px solid #fff4;border-radius:10px;padding:5px 10px;font:600 13px system-ui,sans-serif';
-    el.innerHTML = '<span>🎥 Kameraflug · WASD/Pfeile (Umschalt schneller) · Rad zoomt · Karte anklicken springt</span><button type="button" style="width:auto;margin:0;padding:5px 12px;font-size:14px">Zurück (Esc)</button>';
+    el.innerHTML = `<span>${t('su.flugLeiste')}</span><button type="button" style="width:auto;margin:0;padding:5px 12px;font-size:14px">${t('su.flugZurueck')}</button>`;
     el.querySelector('button').onclick = () => this.beenden();
     document.body.appendChild(el);
   }

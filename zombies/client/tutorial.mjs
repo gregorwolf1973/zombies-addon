@@ -3,18 +3,18 @@
 import { DINGE, WAFFEN } from './welt.mjs';
 import { dingIcon } from './dingbild.mjs';
 import { SS_START, SS_MARKEN, PX_PRO_METER } from './schiessstand_welt.mjs';
+import { t, sprache, beiSprachwechsel } from './i18n.mjs';
 
 export const TUT = { an: false };   // true, sobald der Schießstand gewählt wurde (spiel.mjs baut dann die Übungswelt und tritt dem Raum bei)
 
 const ZEICHEN = { granatwerfer: '🧨', faust: '✊', handgranate: '💣' };
-const NAMEN = { faust: 'Faust', handgranate: 'Handgranate' };
-const KURZ = { pistole: 'Pistole', mp: 'MP', gewehr: 'Gewehr', schrotflinte: 'Schrot', mg: 'MG', scharfschuetze: 'Scharfschütze', armbrust: 'Armbrust', granatwerfer: 'Granatwerfer', messer: 'Messer', schlaeger: 'Schläger', faust: 'Faust', handgranate: 'Handgranate' };
+// Kurznamen der Waffen in der Tabelle: Schlüssel ss.kurz_<waffe> (client/i18n)
+const KURZ = new Proxy({}, { get: (o, n) => t('ss.kurz_' + String(n)) });
 const zeichen = n => dingIcon(n, 22, ZEICHEN[n] ?? DINGE[n]?.zeichen ?? '•');   // Gegenstands-Icon, sonst Emoji
-const name = n => NAMEN[n] ?? DINGE[n]?.name ?? n;
+const name = n => (n === 'faust' || n === 'handgranate' ? t('ss.kurz_' + n) : DINGE[n]?.name ?? n);
 const WAFFEN_LISTE = ['pistole', 'mp', 'gewehr', 'schrotflinte', 'mg', 'scharfschuetze', 'armbrust', 'granatwerfer', 'messer', 'schlaeger', 'faust'];
 const ZEILEN = [...WAFFEN_LISTE, 'handgranate'];
-const MEHRZAHL = { Schuss: 'Schüsse', Schlag: 'Schläge', Wurf: 'Würfe' };
-const komma = (z, n = 1) => z.toLocaleString('de-DE', { minimumFractionDigits: n, maximumFractionDigits: n });
+const komma = (z, n = 1) => z.toLocaleString(sprache() === 'de' ? 'de-DE' : 'en-GB', { minimumFractionDigits: n, maximumFractionDigits: n });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const CSS = `
@@ -55,8 +55,9 @@ export function tutorialKnopf(start) {
   const los = document.getElementById('los');
   if (!los || document.getElementById('ssknopf')) return;
   const b = document.createElement('button');
-  b.id = 'ssknopf'; b.type = 'button'; b.textContent = '🎯 Schießstand / Tutorial';
-  b.title = 'Waffen üben, ohne die Spielwelt zu berühren: eigener Übungsplatz, unsterblich, unbegrenzte Munition';
+  b.id = 'ssknopf'; b.type = 'button';
+  const texte = () => { b.textContent = t('ss.knopf'); b.title = t('ss.knopfTitel'); };
+  texte(); beiSprachwechsel(texte);
   b.onclick = () => { TUT.an = true; start(); };
   los.insertAdjacentElement('afterend', b);
 }
@@ -76,7 +77,7 @@ export function marken(szene) {
   // kleine Striche alle 5 m an der Mittellinie
   g.lineStyle(2, 0xffffff, 0.45);
   for (let m = 5; m < SS_MARKEN[SS_MARKEN.length - 1]; m += 5) { const y = SS_START.y + m * PX_PRO_METER; g.lineBetween(SS_START.x - 8, y, SS_START.x + 8, y); }
-  szene.add.text(SS_START.x, SS_START.y - 36, '🎯 Schießstand', { fontSize: '13px', fontStyle: 'bold', color: '#c5e1a5', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(1.4);
+  szene.add.text(SS_START.x, SS_START.y - 36, t('ss.titel'), { fontSize: '13px', fontStyle: 'bold', color: '#c5e1a5', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(1.4);
   return g;
 }
 
@@ -88,45 +89,50 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
   marken(szene);
   szene.zoomWahl = Math.min(szene.zoomWahl ?? 1, 0.6); szene.cameras.main.setZoom(szene.zielZoom());   // weiter heraus: die Marken bis 75 m sollen ins Bild (nicht gespeichert)
   const box = document.createElement('div');
-  box.id = 'ssbox'; box.setAttribute('aria-label', 'Schießstand');
+  box.id = 'ssbox'; box.setAttribute('aria-label', t('ss.titelKurz'));
   const schmal = Math.min(window.innerWidth, window.innerHeight) < 560;
   box.className = 'an' + (schmal ? ' zu' : '');
-  box.innerHTML = `
-    <div class="ss-kopf" id="ss-kopf"><b>🎯 Schießstand</b><button type="button" id="ss-zu" aria-label="Ein- oder ausklappen">▾</button></div>
-    <div class="ss-koerper">
-      <div class="ss-titel">Waffe wählen</div>
-      <div class="ss-gitter" id="ss-waffen">${WAFFEN_LISTE.map(n => `<button class="ss-b" type="button" data-w="${n}" title="${esc(name(n))}"><span class="z">${zeichen(n)}</span>${esc(KURZ[n])}</button>`).join('')}
-        <button class="ss-b" type="button" id="ss-wurf" title="Handgranate werfen (Taste Q)"><span class="z">💣</span>Werfen</button></div>
-      <div class="ss-titel">Zombies</div>
-      <div class="ss-reihe">${[5, 20, 50].map(n => `<button class="ss-b" type="button" data-z="${n}">🧟 ${n} starten</button>`).join('')}</div>
-      <div class="ss-titel">Fahrzeug am Lager</div>
-      <div class="ss-reihe" id="ss-fahrzeuge">${[['', '🚫 Keins'], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard']].map(([a, t]) => `<button class="ss-b" type="button" data-f="${a}">${t}</button>`).join('')}</div>
-      <div class="ss-titel">Selbst fahren (E: ein-/aussteigen)</div>
-      <div class="ss-reihe" id="ss-fahrbar">${[['boxer', '🛡 Boxer'], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard']].map(([a, t]) => `<button class="ss-b" type="button" data-fb="${a}" title="Fahrzeug neben dir aufstellen (nochmal drücken: entfernen)">${t}</button>`).join('')}</div>
-      <div class="ss-reihe" style="margin-top:4px"><button class="ss-b" type="button" id="ss-reset">↺ Zurücksetzen</button></div>
-      <div id="ss-info"></div>
-      <div class="ss-titel">Auswertung je Waffe</div>
-      <table><thead><tr><th>Waffe</th><th title="Schüsse, Schläge bzw. Würfe">Schuss</th><th title="Schüsse mit mindestens einem Treffer">Treffer</th><th>%</th><th title="getötete Zombies">Tote</th><th title="Schüsse je toter Zombie">Sch./Z.</th><th title="verbrauchte Munition">Muni</th></tr></thead><tbody id="ss-tab"></tbody></table>
-      <div id="ss-text"></div>
-      <div class="ss-reihe" style="margin-top:8px"><button class="ss-b ende" type="button" id="ss-ende">⬅ Zurück zum Start</button></div>
-    </div>`;
-  document.body.append(box);
   const $ = id => box.querySelector('#' + id);
-  const umschalten = () => box.classList.toggle('zu');
-  $('ss-kopf').onclick = umschalten;
-  box.querySelectorAll('[data-w]').forEach(b => { b.onclick = e => { e.stopPropagation(); raum.send('ss_waffe', { name: b.dataset.w }); }; });
-  box.querySelectorAll('[data-z]').forEach(b => { b.onclick = () => raum.send('ss_zombies', { n: Number(b.dataset.z) }); });
-  $('ss-wurf').onclick = () => raum.send('wurf');
   let daten = null;
-  box.querySelectorAll('[data-f]').forEach(b => { b.onclick = () => raum.send('ss_fahrzeug', { art: b.dataset.f }); });
-  box.querySelectorAll('[data-fb]').forEach(b => { b.onclick = () => raum.send('ss_fahrbar', { art: b.dataset.fb }); });
-  $('ss-reset').onclick = () => raum.send('ss_reset');
-  $('ss-ende').onclick = async () => {
-    ctx.abmelden?.();
-    clearInterval(takt);
-    try { await raum.leave(true); } catch { /* egal */ }
-    location.reload();
+  // Inhalt des Bedienfelds (beim Sprachwechsel neu aufgebaut)
+  const aufbauen = () => {
+    box.setAttribute('aria-label', t('ss.titelKurz'));
+    box.innerHTML = `
+    <div class="ss-kopf" id="ss-kopf"><b>${t('ss.titel')}</b><button type="button" id="ss-zu" aria-label="${t('ss.klappen')}">▾</button></div>
+    <div class="ss-koerper">
+      <div class="ss-titel">${t('ss.waffeWaehlen')}</div>
+      <div class="ss-gitter" id="ss-waffen">${WAFFEN_LISTE.map(n => `<button class="ss-b" type="button" data-w="${n}" title="${esc(name(n))}"><span class="z">${zeichen(n)}</span>${esc(KURZ[n])}</button>`).join('')}
+        <button class="ss-b" type="button" id="ss-wurf" title="${t('ss.wurfTitel')}"><span class="z">💣</span>${t('ss.werfen')}</button></div>
+      <div class="ss-titel">${t('ss.zombies')}</div>
+      <div class="ss-reihe">${[5, 20, 50].map(n => `<button class="ss-b" type="button" data-z="${n}">${t('ss.starten', { n })}</button>`).join('')}</div>
+      <div class="ss-titel">${t('ss.fahrzeugLager')}</div>
+      <div class="ss-reihe" id="ss-fahrzeuge">${[['', t('ss.keins')], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard']].map(([a, txt]) => `<button class="ss-b" type="button" data-f="${a}">${txt}</button>`).join('')}</div>
+      <div class="ss-titel">${t('ss.selbstFahren')}</div>
+      <div class="ss-reihe" id="ss-fahrbar">${[['boxer', '🛡 Boxer'], ['puma', '🛡 Puma'], ['leopard', '🪖 Leopard']].map(([a, txt]) => `<button class="ss-b" type="button" data-fb="${a}" title="${t('ss.fahrbarTitel')}">${txt}</button>`).join('')}</div>
+      <div class="ss-reihe" style="margin-top:4px"><button class="ss-b" type="button" id="ss-reset">${t('ss.zuruecksetzen')}</button></div>
+      <div id="ss-info"></div>
+      <div class="ss-titel">${t('ss.auswertung')}</div>
+      <table><thead><tr><th>${t('ss.spWaffe')}</th><th title="${t('ss.spSchussTitel')}">${t('ss.spSchuss')}</th><th title="${t('ss.spTrefferTitel')}">${t('ss.spTreffer')}</th><th>%</th><th title="${t('ss.spToteTitel')}">${t('ss.spTote')}</th><th title="${t('ss.spJeTitel')}">${t('ss.spJe')}</th><th title="${t('ss.spMuniTitel')}">${t('ss.spMuni')}</th></tr></thead><tbody id="ss-tab"></tbody></table>
+      <div id="ss-text"></div>
+      <div class="ss-reihe" style="margin-top:8px"><button class="ss-b ende" type="button" id="ss-ende">${t('ss.ende')}</button></div>
+    </div>`;
+    $('ss-kopf').onclick = () => box.classList.toggle('zu');
+    box.querySelectorAll('[data-w]').forEach(b => { b.onclick = e => { e.stopPropagation(); raum.send('ss_waffe', { name: b.dataset.w }); }; });
+    box.querySelectorAll('[data-z]').forEach(b => { b.onclick = () => raum.send('ss_zombies', { n: Number(b.dataset.z) }); });
+    $('ss-wurf').onclick = () => raum.send('wurf');
+    box.querySelectorAll('[data-f]').forEach(b => { b.onclick = () => raum.send('ss_fahrzeug', { art: b.dataset.f }); });
+    box.querySelectorAll('[data-fb]').forEach(b => { b.onclick = () => raum.send('ss_fahrbar', { art: b.dataset.fb }); });
+    $('ss-reset').onclick = () => raum.send('ss_reset');
+    $('ss-ende').onclick = async () => {
+      ctx.abmelden?.();
+      clearInterval(takt);
+      try { await raum.leave(true); } catch { /* egal */ }
+      location.reload();
+    };
   };
+  aufbauen();
+  document.body.append(box);
+  beiSprachwechsel(() => { if (box.isConnected) { aufbauen(); zeichnen(); } });
 
   const zeichnen = () => {
     const ich = raum.state.spieler.get(meineId);
@@ -135,7 +141,7 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
     if (!daten) return;
     box.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('an', b.dataset.f === (daten.fahrzeug ?? (daten.panzer ? 'puma' : ''))));
     box.querySelectorAll('[data-fb]').forEach(b => b.classList.toggle('an', b.dataset.fb === (daten.fahrbar ?? '')));
-    $('ss-info').textContent = `🧟 ${daten.zombies}${daten.warten ? ` (+${daten.warten} kommen noch)` : ''} Zombies auf dem Platz`;
+    $('ss-info').textContent = t(daten.warten ? 'ss.infoWarten' : 'ss.info', { n: daten.zombies, warten: daten.warten });
     const zeilen = ZEILEN.filter(n => daten.stat[n]?.schuesse > 0 || n === aktiv);
     $('ss-tab').innerHTML = zeilen.map(n => {
       const s = daten.stat[n] ?? { schuesse: 0, treffer: 0, kills: 0, munition: 0 };
@@ -154,20 +160,20 @@ export function tutorialStart(szene, raum, meineId, ctx = {}) {
 // Kurzerklärung zum Munitionsverbrauch (aus der Auswertung und den echten Waffenwerten des Servers)
 export function erklaerung(daten, aktiv) {
   const teile = [];
-  const wort = n => n === 'handgranate' ? 'Wurf' : WAFFEN[n]?.fern ? 'Schuss' : 'Schlag';
+  const art = n => n === 'handgranate' ? 'wurf' : WAFFEN[n]?.fern ? 'schuss' : 'schlag';   // Zählwort: ss.<art> mit Mehrzahl
   const w = daten.werte?.[aktiv];
   if (w) {
     const treffer = Math.ceil(daten.zombieLeben / Math.max(1, w.schaden));
-    const eigen = w.fern ? `Magazin ${w.magazin}, Nachladen ${komma(w.nachlade)} s, ` : '';
-    teile.push(`<p><b>${zeichen(aktiv)} ${esc(name(aktiv))}</b>: Schaden ${komma(w.schaden, 0)}, alle ${komma(w.pause, 2)} s, Reichweite ${komma(w.reichweite, 0)} m, ${eigen}Zombie hat ${daten.zombieLeben} Leben → mindestens ${treffer} Treffer je Zombie.</p>`);
+    const eigen = w.fern ? t('ss.werteFern', { magazin: w.magazin, nachlade: komma(w.nachlade) }) : '';
+    teile.push(`<p><b>${zeichen(aktiv)} ${esc(name(aktiv))}</b>: ${t('ss.werte', { schaden: komma(w.schaden, 0), pause: komma(w.pause, 2), weite: komma(w.reichweite, 0), fern: eigen, leben: daten.zombieLeben, n: treffer })}</p>`);
   }
   for (const n of ZEILEN) {
     const s = daten.stat[n];
     if (!s?.schuesse) continue;
-    if (s.kills) teile.push(`<p>${zeichen(n)} ${esc(KURZ[n])}: im Schnitt ${komma(s.schuesse / s.kills)} ${wort(n)} je Zombie${WAFFEN[n]?.fern || n === 'handgranate' ? ` (${s.munition} Munition verbraucht)` : ''}.</p>`);
-    else teile.push(`<p>${zeichen(n)} ${esc(KURZ[n])}: ${s.schuesse} ${s.schuesse === 1 ? wort(n) : MEHRZAHL[wort(n)]}, noch kein Zombie erledigt.</p>`);
+    if (s.kills) teile.push(`<p>${zeichen(n)} ${esc(KURZ[n])}: ${t('ss.schnitt', { zahl: komma(s.schuesse / s.kills), wort: t('ss.' + art(n), { n: s.schuesse === s.kills ? 1 : 2 }) })}${WAFFEN[n]?.fern || n === 'handgranate' ? t('ss.verbraucht', { n: s.munition }) : ''}.</p>`);
+    else teile.push(`<p>${zeichen(n)} ${esc(KURZ[n])}: ${t('ss.keinKill', { n: s.schuesse, wort: t('ss.' + art(n), { n: s.schuesse }) })}</p>`);
   }
-  if (daten.panzerKills) teile.push(`<p>🛡 Das Fahrzeug hat ${daten.panzerKills} Zombie${daten.panzerKills === 1 ? '' : 's'} erledigt (zählt nicht in der Waffen-Auswertung).</p>`);
-  teile.push('<p class="klein">Treffer = Schüsse, die mindestens einen Zombie trafen. Granaten treffen im Umkreis, Schrot im Kegel, Schüsse auf mehrere Ziele zählen einmal. Kriecher brauchen einen zweiten Treffer. Zurücksetzen löscht die Auswertung.</p>');
+  if (daten.panzerKills) teile.push(`<p>${t('ss.fahrzeugKills', { n: daten.panzerKills })}</p>`);
+  teile.push(`<p class="klein">${t('ss.legende')}</p>`);
   return teile.join('');
 }

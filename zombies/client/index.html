@@ -9,72 +9,67 @@
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" href="favicon-48.png" type="image/png" sizes="48x48">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Zombies in Oberbayern</title>
+<title data-i18n="sonst.dokTitel">Zombies in Oberbayern</title><!-- i18n-ok: Vorgabe bis zum Laden der Module -->
 <link rel="stylesheet" href="stil.css">
 </head>
 <body>
 <div id="start" class="schirm">
   <div class="karte">
-    <h1>🧟 Zombies in<br>Oberbayern</h1>
-    <p>Die Zombies sind über die Isar gekommen. Haltet zusammen und überlebt!</p>
-    <label for="name">Dein Name</label>
-    <input id="name" maxlength="16" autocomplete="nickname" placeholder="z. B. Sepp">
-    <label>Deine Figur</label>
+    <div id="sprachwahlStart" class="sprachwahl-start"></div>
+    <h1 data-i18n-html="start.titel"></h1>
+    <p data-i18n="start.untertitel"></p>
+    <label for="name" data-i18n="start.name"></label>
+    <input id="name" maxlength="16" autocomplete="nickname" data-i18n-placeholder="start.namePlatzhalter">
+    <label data-i18n="start.figur"></label>
     <div id="figurwahl">
-      <canvas id="figurvorschau" width="160" height="160" aria-label="Vorschau deiner Figur"></canvas>
+      <canvas id="figurvorschau" width="160" height="160" data-i18n-aria-label="start.figurVorschau"></canvas>
       <div class="figurknoepfe">
-        <div id="heldenwahl" hidden><div id="heldentafeln" class="heldentafeln" role="group" aria-label="Held wählen"></div><div id="heldenname" class="farbtitel"></div></div>
-        <div class="geschlecht" role="group" aria-label="Mann oder Frau">
-          <button type="button" data-g="h">Held</button><button type="button" data-g="f">Heldin</button><button type="button" data-g="s">Survivor</button>
+        <div id="heldenwahl" hidden><div id="heldentafeln" class="heldentafeln" role="group" data-i18n-aria-label="start.heldWaehlen"></div><div id="heldenname" class="farbtitel"></div></div>
+        <div class="geschlecht" role="group" data-i18n-aria-label="start.geschlecht">
+          <button type="button" data-g="h" data-i18n="start.held"></button><button type="button" data-g="f" data-i18n="start.heldin"></button><button type="button" data-g="s" data-i18n="start.survivor"></button>
         </div>
-        <div class="farbtitel farbwahl">Haare</div><div id="haarwahl" class="farben" role="group" aria-label="Haarfarbe"></div>
-        <div class="farbtitel farbwahl">Kleidung</div><div id="kleidwahl" class="farben" role="group" aria-label="Kleidungsfarbe"></div>
+        <div class="farbtitel farbwahl" data-i18n="start.haare"></div><div id="haarwahl" class="farben" role="group" data-i18n-aria-label="start.haarfarbe"></div>
+        <div class="farbtitel farbwahl" data-i18n="start.kleidung"></div><div id="kleidwahl" class="farben" role="group" data-i18n-aria-label="start.kleidfarbe"></div>
       </div>
     </div>
     <div id="codeblock" hidden>
-      <label for="code">Zugangscode</label>
-      <input id="code" maxlength="40" autocomplete="off" placeholder="vom Gastgeber">
+      <label for="code" data-i18n="start.code"></label>
+      <input id="code" maxlength="40" autocomplete="off" data-i18n-placeholder="start.codePlatzhalter">
     </div>
-    <details id="testzugang" class="testzugang"><summary>Testzugang (Superuser-Passwort hier eingeben)</summary>
-      <input id="testpw" type="password" maxlength="200" autocomplete="off" placeholder="Passwort">
+    <details id="testzugang" class="testzugang"><summary data-i18n="start.testzugang"></summary>
+      <input id="testpw" type="password" maxlength="200" autocomplete="off" data-i18n-placeholder="start.passwort">
     </details>
-    <button id="los">Mitspielen</button>
+    <button id="los" data-i18n="start.los"></button>
     <div class="spenden spenden-start" data-spenden="start"></div>
     <div id="freigaben" class="freigaben">
-      <div class="fg-zeile">🎤 Mikrofon: <span id="fgMikro">wird geprüft …</span> <button type="button" id="fgMikroKnopf" class="fg-knopf" hidden>Erlauben</button></div>
-      <div id="fgRahmen" class="fg-hinweis" hidden>In der Home-Assistant-Seitenleiste erlaubt der Browser kein Mikrofon.
-        <a id="fgEigen" href="./" target="_blank" rel="noopener">Spiel im eigenen Fenster öffnen</a></div>
-      <button type="button" id="installieren" class="fg-installieren" hidden>📲 Als App installieren</button>
-      <div id="fgIos" class="fg-hinweis" hidden>📲 Als App: unten auf „Teilen“ <b>⬆</b> tippen, dann „Zum Home-Bildschirm“.</div>
+      <div class="fg-zeile"><span data-i18n="start.mikrofon"></span> <span id="fgMikro" data-i18n="start.mikroPruefen"></span> <button type="button" id="fgMikroKnopf" class="fg-knopf" hidden data-i18n="start.erlauben"></button></div>
+      <div id="fgRahmen" class="fg-hinweis" hidden><span data-i18n="start.rahmen"></span>
+        <a id="fgEigen" href="./" target="_blank" rel="noopener" data-i18n="start.eigenesFenster"></a></div>
+      <button type="button" id="installieren" class="fg-installieren" hidden data-i18n="start.installieren"></button>
+      <div id="fgIos" class="fg-hinweis" hidden data-i18n-html="start.ios"></div>
     </div>
-    <p class="klein">
-      <b>Steuerung:</b> Am Handy links auf den Bildschirm tippen und ziehen – wenig ziehen heißt schleichen.
-      Am PC WASD oder Pfeiltasten, Umschalt zum Schleichen. Angegriffen wird automatisch.<br>
-      Wer am Boden liegt, braucht Hilfe: daneben stehen bleiben, bis er wieder aufsteht.<br>
-      <b>Überleben:</b> Schränke, Kühlschränke und Autos durchsuchen (Knopf unten rechts oder Taste E).
-      Gespeichert und abgemeldet wird nur in einem 🛡 Safe Room.
-    </p>
+    <p class="klein" data-i18n-html="start.hilfe"></p>
     <p id="fehler" class="fehler"></p>
-    <p class="grafiknachweis">Grafiken: Kenney (CC0), Riley Gombart (CC-BY 3.0 / OGA-BY 3.0 / CC0), KonitaTutorials (CC-BY 3.0), „Survivor Spine“ von Riley Gombart (CC-BY 3.0), Autos: Unlucky Studio, looneybits, „Red Car“ (CC0), TRBRY, Cliipso (CC-BY 3.0), Hund: harrison-lord (CC-BY 3.0) – Details in grafik/LIZENZ.txt</p>
-    <p class="grafiknachweis">Luftbild, Höhenmodelle, 3D-Gebäude (LoD2), Hausumringe, Einzelbäume, ATKIS Basis-DLM, ALKIS Parzellarkarte und Tatsächliche Nutzung (gezeichneter Boden): © Bayerische Vermessungsverwaltung (<a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener">CC BY 4.0</a>), © swisstopo (SWISSIMAGE).</p>
-    <p class="grafiknachweis">Musik: „Overdrive“ von MAITTRE und „Dominion“ von Hriday Talur (beide <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>, über breakingcopyright.com); weitere Musik und Geräusche von Pixabay (Pixabay-Lizenz), Sonilo und Freesound; Radio-Eilmeldung mit Piper, Stimme „Thorsten“ von Thorsten Müller (CC0).</p>
-    <p class="grafiknachweis osm">Kartendaten © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a>, <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>. <a href="#" id="creditsLink">Credits &amp; Lizenzen</a></p>
+    <p class="grafiknachweis" data-i18n-html="credits.grafik"></p>
+    <p class="grafiknachweis" data-i18n-html="credits.bayern"></p>
+    <p class="grafiknachweis" data-i18n-html="credits.musik"></p>
+    <p class="grafiknachweis osm"><span data-i18n-html="credits.osm"></span> <a href="#" id="creditsLink" data-i18n="credits.titel"></a></p>
     <p class="grafiknachweis" id="rechtslinks" hidden></p>
     <dialog id="creditsDialog" class="credits-dialog">
-      <h3>Credits &amp; Lizenzen</h3>
-      <p>Der Quellcode steht unter der MIT-Lizenz. Grafiken, Karten, Texte und Töne haben eigene Lizenzen. Die Handlung ist frei erfunden. Die vollständige Liste steht in <b>CREDITS.md</b> im Projekt-Repository.</p>
+      <h3 data-i18n="credits.titel"></h3>
+      <p data-i18n-html="credits.einleitung"></p>
       <ul>
-        <li><b>Karten:</b> © OpenStreetMap-Mitwirkende, ODbL 1.0 (openstreetmap.org/copyright). Die Spielkarten sind eine abgeleitete Datenbank.</li>
-        <li><b>Bayern:</b> Luftbild (DOP40), Höhenmodelle, LoD2, Hausumringe, Einzelbäume, ATKIS, ALKIS: © Bayerische Vermessungsverwaltung, geodaten.bayern.de, CC BY 4.0, verändert.</li>
-        <li><b>Schweiz:</b> SWISSIMAGE © swisstopo, verändert.</li>
-        <li><b>Grafiken:</b> Kenney (CC0); Riley Gombart (auch „Survivor Spine“), KonitaTutorials, harrison-lord (Hund), TRBRY, Cliipso (CC BY 3.0); Unlucky Studio, looneybits (CC0).</li>
-        <li><b>3D-Modelle (als Draufsicht gerendert, verändert, CC BY 4.0):</b> Boxer CRV von ScurvyWoof, NH90 von Waroxed, Fuel Truck von simonthedigger (Sketchfab). Puma und Leopard sind eigene Modelle.</li>
-        <li><b>Figuren:</b> Mixamo (Adobe), nur als gerenderte Bilder im Spiel verwendet; Waffenmodelle von Quaternius, CreativeTrio, Pichuliru (CC0). Einige Bilder wurden mit KI erzeugt.</li>
-        <li><b>Töne:</b> selbst erzeugt oder von Pixabay (Pixabay-Lizenz); Eilmeldung mit Piper-Stimme.</li>
-        <li><b>Quizfragen:</b> aus dem Wiki des Spielautors.</li>
-        <li><b>Software:</b> Phaser, Colyseus, Express (MIT).</li>
+        <li data-i18n-html="credits.karten"></li>
+        <li data-i18n-html="credits.bayernKurz"></li>
+        <li data-i18n-html="credits.schweiz"></li>
+        <li data-i18n-html="credits.grafiken"></li>
+        <li data-i18n-html="credits.modelle"></li>
+        <li data-i18n-html="credits.figuren"></li>
+        <li data-i18n-html="credits.toene"></li>
+        <li data-i18n-html="credits.quiz"></li>
+        <li data-i18n-html="credits.software"></li>
       </ul>
-      <form method="dialog"><button>Schließen</button></form>
+      <form method="dialog"><button data-i18n="allgemein.schliessen"></button></form>
     </dialog>
     <script>(function () { var l = document.getElementById('creditsLink'), d = document.getElementById('creditsDialog'); if (l && d) l.addEventListener('click', function (e) { e.preventDefault(); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }); })();</script>
   </div>
@@ -87,19 +82,19 @@
   </div>
   <div class="zeile">
     <div class="anzeigen">
-      <div class="anzeige" title="Gesundheit"><span>❤️</span><div id="hp" class="bar rot"><div></div></div></div>
-      <div class="anzeige" title="Durst"><span>💧</span><div id="durst" class="bar blau"><div></div></div></div>
-      <div class="anzeige" title="Hunger"><span>🍖</span><div id="hunger" class="bar orange"><div></div></div></div>
+      <div class="anzeige" data-i18n-title="hud.gesundheit"><span>❤️</span><div id="hp" class="bar rot"><div></div></div></div>
+      <div class="anzeige" data-i18n-title="hud.durst"><span>💧</span><div id="durst" class="bar blau"><div></div></div></div>
+      <div class="anzeige" data-i18n-title="hud.hunger"><span>🍖</span><div id="hunger" class="bar orange"><div></div></div></div>
     </div>
   </div>
-  <button id="listeknopf" type="button" aria-expanded="false" aria-controls="liste" title="Spielerliste ein-/ausklappen"><span id="punkte"></span></button>
+  <button id="listeknopf" type="button" aria-expanded="false" aria-controls="liste" data-i18n-title="hud.spielerliste"><span id="punkte"></span></button>
   <ul id="liste"></ul>
   <div id="waffenzeile">
-    <div id="waffenplaetze" aria-label="Waffenplätze"></div>
-    <button id="granatenfeld" type="button" title="Handgranate werfen (Q)" aria-label="Handgranate werfen"><span class="gz">💣</span><span id="granatenzahl"></span></button>
-    <button id="radioknopf" class="autoknopf" type="button" title="Autoradio an/aus (R)" aria-label="Autoradio" style="display:none"><span class="gz">📻</span></button>
-    <button id="tempoknopf" class="autoknopf" type="button" title="Fahrtempo: 30 / 50 / Höchsttempo (Taste T, Umschalt = langsam)" aria-label="Fahrtempo" style="display:none"><span class="gz" id="tempotext">🚀 max</span></button>
-    <button id="blauknopf" class="autoknopf" type="button" title="Blaulicht und Sirene (H)" aria-label="Blaulicht und Sirene" style="display:none"><span class="gz">🚨</span></button>
+    <div id="waffenplaetze" data-i18n-aria-label="hud.waffenplaetze"></div>
+    <button id="granatenfeld" type="button" data-i18n-title="hud.granateTitel" data-i18n-aria-label="hud.granate"><span class="gz">💣</span><span id="granatenzahl"></span></button>
+    <button id="radioknopf" class="autoknopf" type="button" data-i18n-title="hud.radioTitel" data-i18n-aria-label="hud.radio" style="display:none"><span class="gz">📻</span></button>
+    <button id="tempoknopf" class="autoknopf" type="button" data-i18n-title="hud.tempoTitel" data-i18n-aria-label="hud.tempo" style="display:none"><span class="gz" id="tempotext">🚀 max</span></button>
+    <button id="blauknopf" class="autoknopf" type="button" data-i18n-title="hud.blaulichtTitel" data-i18n-aria-label="hud.blaulicht" style="display:none"><span class="gz">🚨</span></button>
   </div>
   <div id="aufgaben" style="display:none">
     <button id="aufgabenknopf" type="button" aria-expanded="true" aria-controls="aufgabenkoerper">📋 <span id="aufgabenkopf"></span></button>
@@ -111,123 +106,125 @@
 </div>
 <div id="rechts">
 <div id="leiste">
-<button id="chatknopf" title="Chat" aria-label="Chat">💬<span id="chatzaehler"></span></button>
-<button id="sprachknopf" title="Mikrofon" aria-label="Mikrofon an/aus">🎤</button>
-<button id="einstellknopf" title="Spieler-Einstellungen" aria-label="Spieler-Einstellungen">⚙️</button>
-<button id="suknopf" title="Testmenü" aria-label="Testmenü">☰</button>
+<button id="chatknopf" data-i18n-title="chat.titel" data-i18n-aria-label="chat.titel">💬<span id="chatzaehler"></span></button>
+<button id="sprachknopf" data-i18n-title="hud.mikrofon" data-i18n-aria-label="hud.mikrofonAnAus">🎤</button>
+<button id="einstellknopf" data-i18n-title="einst.spielerEinstellungen" data-i18n-aria-label="einst.spielerEinstellungen">⚙️</button>
+<button id="suknopf" data-i18n-title="su.testmenue" data-i18n-aria-label="su.testmenue">☰</button>
 </div>
-<div id="kartenbox" title="Übersicht (M)">
+<div id="kartenbox" data-i18n-title="hud.uebersicht">
   <canvas id="karte"></canvas>
   <div id="kartenoben"><span id="zeit">00:00</span></div>
-  <div id="kartenunten"><span id="finale" style="display:none" title="Zeit bis zum Atomschlag" aria-live="off"></span><span id="zombiezahl"></span><span id="besiegt"></span><span id="verwandelt"></span></div>
-  <div class="kartenknoepfe"><button class="mich" aria-label="Auf mich zentrieren">⌖</button></div>
+  <div id="kartenunten"><span id="finale" style="display:none" data-i18n-title="hud.finaleZeit" aria-live="off"></span><span id="zombiezahl"></span><span id="besiegt"></span><span id="verwandelt"></span></div>
+  <div class="kartenknoepfe"><button class="mich" data-i18n-aria-label="hud.zentrieren">⌖</button></div>
 </div>
   <div id="sicher">
     <span id="sichername"></span>
-    <button id="ausruhen">💤 Ausruhen &amp; abmelden</button>
+    <button id="ausruhen" data-i18n="hud.ausruhen"></button>
   </div>
 </div>
-<div id="chat" role="dialog" aria-label="Chat">
-  <div class="kopfzeile"><b>💬 Chat</b><button id="chatzu" aria-label="Chat schließen">✕</button></div>
+<div id="chat" role="dialog" data-i18n-aria-label="chat.titel">
+  <div class="kopfzeile"><b data-i18n="chat.kopf"></b><button id="chatzu" data-i18n-aria-label="chat.schliessen">✕</button></div>
   <div id="chatliste"></div>
   <form id="chatform" autocomplete="off">
-    <input id="chattext" type="text" maxlength="300" placeholder="Nachricht …" enterkeyhint="send" aria-label="Nachricht">
-    <button id="chatsenden" type="submit" aria-label="Senden">➤</button>
+    <input id="chattext" type="text" maxlength="300" data-i18n-placeholder="chat.platzhalter" enterkeyhint="send" data-i18n-aria-label="chat.nachricht">
+    <button id="chatsenden" type="submit" data-i18n-aria-label="chat.senden">➤</button>
   </form>
 </div>
-<button id="feuerknopf" type="button" aria-label="Feuer (halten)" title="Feuer: gedrückt halten (Leertaste)">🔫</button>
+<button id="feuerknopf" type="button" data-i18n-aria-label="hud.feuer" data-i18n-title="hud.feuerTitel">🔫</button>
 <div id="unten">
   <div id="aktionen">
     <button id="aktion2" type="button"></button>
     <button id="aktion" type="button"></button>
-    <button id="alleknopf" type="button" title="Alles durchsuchen (C)"></button>
+    <button id="alleknopf" type="button" data-i18n-title="hud.allesTitel"></button>
   </div>
   <div id="rucksack"></div>
 </div>
-<div id="einstellungen" role="dialog" aria-label="Spieler-Einstellungen">
+<div id="einstellungen" role="dialog" data-i18n-aria-label="einst.spielerEinstellungen">
   <div class="fenster">
-    <div class="kopfzeile"><b>⚙️ Einstellungen</b><button id="einstellzu" type="button" aria-label="Schließen">✕</button></div>
-    <div class="eg-titel">🔊 Lautstärke</div>
+    <div class="kopfzeile"><b data-i18n="einst.kopf"></b><button id="einstellzu" type="button" data-i18n-aria-label="allgemein.schliessen">✕</button></div>
+    <div class="eg-titel" data-i18n="einst.sprache"></div>
+    <div class="eg-reihe" id="eg-sprache"></div>
+    <div class="eg-titel" data-i18n="einst.lautstaerke"></div>
     <div class="eg-reihe" id="eg-ton">
-      <button type="button" data-v="1">🔊 100 %</button><button type="button" data-v="0.5">🔉 50 %</button><button type="button" data-v="0.25">🔈 25 %</button><button type="button" data-v="0">🔇 Aus</button>
+      <button type="button" data-v="1">🔊 100 %</button><button type="button" data-v="0.5">🔉 50 %</button><button type="button" data-v="0.25">🔈 25 %</button><button type="button" data-v="0" data-i18n="einst.tonAus"></button>
     </div>
-    <div class="eg-titel">🗺 Eckkarte</div>
+    <div class="eg-titel" data-i18n="einst.eckkarte"></div>
     <div class="eg-reihe" id="eg-karte">
-      <button type="button" data-v="0.35">Sehr blass</button><button type="button" data-v="0.6">Blass</button><button type="button" data-v="1">Deckend</button>
+      <button type="button" data-v="0.35" data-i18n="einst.sehrBlass"></button><button type="button" data-v="0.6" data-i18n="einst.blass"></button><button type="button" data-v="1" data-i18n="einst.deckend"></button>
     </div>
-    <div class="eg-titel">🛰 Kartenbild</div>
+    <div class="eg-titel" data-i18n="einst.kartenbild"></div>
     <div class="eg-reihe" id="eg-kartenbild">
-      <button type="button" data-v="luft">Luftbild</button><button type="button" data-v="karte">Karte</button>
+      <button type="button" data-v="luft" data-i18n="einst.luftbild"></button><button type="button" data-v="karte" data-i18n="einst.karte"></button>
     </div>
-    <div class="eg-titel">🖼 Grafikstufe</div>
-    <div class="eg-reihe" id="eg-grafik"><button type="button" data-v="auto">Auto</button><button type="button" data-v="hoch">Hoch</button><button type="button" data-v="mittel">Mittel</button><button type="button" data-v="niedrig">Niedrig</button></div>
-    <div class="eg-hinweis" id="eg-grafik-hinweis" hidden>Gilt nach dem Neuladen der Seite. Mittel/Niedrig sparen Grafikspeicher (halbe Bildschärfe der Figuren), Niedrig auch Rauch, Luftbild und Schatten.</div>
+    <div class="eg-titel" data-i18n="einst.grafikstufe"></div>
+    <div class="eg-reihe" id="eg-grafik"><button type="button" data-v="auto" data-i18n="einst.grafikAuto"></button><button type="button" data-v="hoch" data-i18n="einst.hoch"></button><button type="button" data-v="mittel" data-i18n="einst.mittel"></button><button type="button" data-v="niedrig" data-i18n="einst.niedrig"></button></div>
+    <div class="eg-hinweis" id="eg-grafik-hinweis" hidden data-i18n="einst.grafikHinweis"></div>
     <div id="eg-kulisse" hidden>
-      <div class="eg-titel" id="eg-kul-boden-z">🛰 Luftbild-Boden</div>
+      <div class="eg-titel" id="eg-kul-boden-z" data-i18n="einst.kulBoden"></div>
       <div class="eg-reihe" id="eg-kul-boden"><button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button></div>
-      <div class="eg-titel" id="eg-kul-gezeichnet-z">🎨 Gezeichneter Boden</div>
+      <div class="eg-titel" id="eg-kul-gezeichnet-z" data-i18n="einst.kulGezeichnet"></div>
       <div class="eg-reihe" id="eg-kul-gezeichnet"><button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button></div>
-      <div class="eg-titel" id="eg-kul-daecher-z">🏠 Echte Dächer</div>
+      <div class="eg-titel" id="eg-kul-daecher-z" data-i18n="einst.kulDaecher"></div>
       <div class="eg-reihe" id="eg-kul-daecher"><button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button></div>
-      <div class="eg-titel">🌗 Schatten</div>
+      <div class="eg-titel" data-i18n="einst.schatten"></div>
       <div class="eg-reihe" id="eg-kul-schatten"><button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button></div>
     </div>
-    <div class="eg-titel">🔫 Schießen</div>
+    <div class="eg-titel" data-i18n="einst.schiessen"></div>
     <div class="eg-reihe" id="eg-schiessen">
-      <button type="button" data-v="auto">Automatisch</button><button type="button" data-v="knopf">Per Knopf</button>
+      <button type="button" data-v="auto" data-i18n="einst.automatisch"></button><button type="button" data-v="knopf" data-i18n="einst.perKnopf"></button>
     </div>
-    <div class="eg-titel">🎙 Stimmen der Mitspieler <span id="eg-stimmen-wert">100 %</span></div>
-    <input type="range" id="eg-stimmen" min="0" max="200" step="10" value="100" aria-label="Stimmen der Mitspieler in Prozent">
-    <div class="eg-titel">🧟 Zombiegeräusche</div>
+    <div class="eg-titel"><span data-i18n="einst.stimmen"></span> <span id="eg-stimmen-wert">100 %</span></div>
+    <input type="range" id="eg-stimmen" min="0" max="200" step="10" value="100" data-i18n-aria-label="einst.stimmenProzent">
+    <div class="eg-titel" data-i18n="einst.zombieton"></div>
     <div class="eg-reihe" id="eg-zombieton">
       <button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button>
     </div>
-    <div class="eg-titel">🎵 Musik</div>
+    <div class="eg-titel" data-i18n="einst.musik"></div>
     <div class="eg-reihe" id="eg-musik">
       <button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button>
     </div>
-    <div class="eg-titel">📻 Autoradio</div>
+    <div class="eg-titel" data-i18n="einst.autoradio"></div>
     <div class="eg-reihe" id="eg-autoradio">
       <button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button>
     </div>
-    <div class="eg-titel">📊 Diagnose anzeigen</div>
+    <div class="eg-titel" data-i18n="einst.diagnose"></div>
     <div class="eg-reihe" id="eg-diagnose">
       <button type="button" data-v="an">An</button><button type="button" data-v="aus">Aus</button>
     </div>
     <div class="spenden spenden-klein" data-spenden="einstellungen"></div>
     <div class="eg-reihe" id="eg-hund" hidden style="margin-top:14px">
-      <button type="button" id="hundweg">🐕 Hund wegschicken</button>
+      <button type="button" id="hundweg" data-i18n="einst.hundWeg"></button>
     </div>
   </div>
 </div>
 <div id="popup"></div>
 <div id="kiste">
   <div class="fenster">
-    <div class="kopfzeile"><b id="kistetitel">📦 Vorräte</b><button id="kistezu">✕</button></div>
+    <div class="kopfzeile"><b id="kistetitel" data-i18n="kiste.titel"></b><button id="kistezu" data-i18n-aria-label="allgemein.schliessen">✕</button></div>
     <div id="kisteinhalt"></div>
     <div id="kisterucksack"></div>
   </div>
 </div>
 <div id="handel">
   <div class="fenster">
-    <div class="kopfzeile"><b id="handeltitel">🩺 Tauschen</b><button id="handelzu" aria-label="Schließen">✕</button></div>
+    <div class="kopfzeile"><b id="handeltitel" data-i18n="handel.titel"></b><button id="handelzu" data-i18n-aria-label="allgemein.schliessen">✕</button></div>
     <div id="handelhabe"></div>
     <div id="handelangebote"></div>
   </div>
 </div>
 <div id="tausch">
-  <div class="kopfzeile"><b id="tauschtitel">🤝 Tausch</b></div>
+  <div class="kopfzeile"><b id="tauschtitel" data-i18n="tausch.titel"></b></div>
   <div class="spalten">
-    <div><div class="kopf">Du gibst (antippen = zurück)</div><div id="tauschgeben" class="raster"></div></div>
-    <div><div class="kopf">Du bekommst</div><div id="tauschbekommen" class="raster"></div></div>
+    <div><div class="kopf" data-i18n="tausch.gibst"></div><div id="tauschgeben" class="raster"></div></div>
+    <div><div class="kopf" data-i18n="tausch.bekommst"></div><div id="tauschbekommen" class="raster"></div></div>
   </div>
-  <div class="kopf">Dein Rucksack (antippen = anbieten)</div><div id="tauschrucksack" class="raster"></div>
+  <div class="kopf" data-i18n="tausch.rucksack"></div><div id="tauschrucksack" class="raster"></div>
   <div id="tauschstatus"></div>
-  <div class="knoepfe"><button id="tauschok">Einverstanden</button><button id="tauschab" class="zweit">Abbrechen</button></div>
+  <div class="knoepfe"><button id="tauschok" data-i18n="tausch.ok"></button><button id="tauschab" class="zweit" data-i18n="allgemein.abbrechen"></button></div>
 </div>
 <div id="raetsel" class="modal">
   <div class="fenster">
-    <div class="kopfzeile"><b id="raetseltitel">🔐 Schloss</b><button id="raetselzu">✕</button></div>
+    <div class="kopfzeile"><b id="raetseltitel" data-i18n="raetsel.schloss"></b><button id="raetselzu" data-i18n-aria-label="allgemein.schliessen">✕</button></div>
     <p id="raetselfrage"></p>
     <div id="raetselantworten"></div>
     <p id="raetselergebnis"></p>
@@ -236,10 +233,10 @@
 <div id="abspann" role="status"></div>
 <div id="meldungen"></div>
 <div id="hinweis"></div>
-<div id="laden" role="status" aria-live="polite"><div class="ladekarte"><div id="ladentitel"></div><div id="ladentext">Generiere Welt …</div><div class="ladebalken"><div id="ladefuell"></div></div><div id="ladeprozent">0 %</div></div></div>
-<div id="verbindung">Verbindung unterbrochen – verbinde neu …</div>
+<div id="laden" role="status" aria-live="polite"><div class="ladekarte"><div id="ladentitel"></div><div id="ladentext" data-i18n="laden.welt"></div><div class="ladebalken"><div id="ladefuell"></div></div><div id="ladeprozent">0 %</div></div></div>
+<div id="verbindung" data-i18n="verbindung.unterbrochen"></div>
 <script>/* Nach automatischem Neuladen (Levelwechsel, Update) sofort die Ladeanzeige statt kurz die Anmeldung zeigen, bis spiel.mjs übernimmt */
-try { if (sessionStorage.getItem('zob_autostart') === '1') { document.getElementById('laden').classList.add('an'); document.getElementById('ladentext').textContent = 'Lade Spiel …'; } } catch (e) {}</script>
+try { if (sessionStorage.getItem('zob_autostart') === '1') { document.getElementById('laden').classList.add('an'); var en = true; try { var sp = localStorage.getItem('zob_sprache') || (navigator.languages && navigator.languages[0]) || navigator.language || ''; en = !/^de/i.test(sp); } catch (e) {} document.getElementById('ladentext').textContent = en ? 'Loading game …' : 'Lade Spiel …'; } } catch (e) {}</script><!-- i18n-ok: läuft vor den Modulen -->
 
 <script src="vendor/phaser.min.js"></script>
 <script src="vendor/colyseus.js"></script>

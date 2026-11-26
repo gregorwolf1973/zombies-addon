@@ -2,6 +2,7 @@
 import { DINGE, AKTION_ABSTAND } from './welt.mjs';
 import { dingIcon, dingHtml } from './dingbild.mjs';
 import { dingId, dingN, kannAufnehmen, blockGrund } from './stapel.mjs';
+import { t } from './i18n.mjs';
 
 // Bodengegenstände im Aufhebe-Radius, nächster zuerst: [{ id, ding, d }]
 export function naheBodenDinge(boden, ich, weite = AKTION_ABSTAND) {
@@ -54,7 +55,7 @@ function hinstellen(titel, knoepfe) {
 // oder auf ✖/Esc.
 function zeichne(ich, dinge) {
   const z = zustand;
-  const abbruch = knopf('✖', 'Abbrechen', auswahlZu, 'zweit');
+  const abbruch = knopf('✖', t('allgemein.abbrechen'), auswahlZu, 'zweit');
   const wahl = () => { z.schritt = 'wahl'; z.sig = null; zeichne(ich, dinge); };
   const gesendet = id => { z.weg.add(id); z.schritt = 'wahl'; z.sig = null; };
   const waehle = it => {   // bei zweiter Tasche antwortet der Server mit einer Meldung
@@ -69,12 +70,12 @@ function zeichne(ich, dinge) {
     const plaetze = [...ich.rucksack].map((e, i) => knopf(dingIcon(dingId(e), 34), (DINGE[dingId(e)]?.name ?? dingId(e)) + (dingN(e) > 1 ? ` ×${dingN(e)}` : ''), () => {
       z.raum.send('aufheben_wahl', { id: it.id, platz: i }); gesendet(it.id); zeichne(ich, dinge.filter(d => d.id !== it.id));
     }));
-    const zurueck = knopf('↩', 'Zurück', wahl, 'zweit');
-    hinstellen(`Rucksack voll – was ablegen für ${dingHtml(it.ding, 22)}?`, [...plaetze, zurueck, abbruch]);
+    const zurueck = knopf('↩', t('allgemein.zurueck'), wahl, 'zweit');
+    hinstellen(t('rucksack.vollAblegen', { ding: dingHtml(it.ding, 22) }), [...plaetze, zurueck, abbruch]);
     return;
   }
   if (!dinge.length) { auswahlZu(); return; }
-  hinstellen('Was aufheben?', [...dinge.map(it => knopf(dingIcon(it.ding, 34), DINGE[it.ding]?.name ?? it.ding, () => waehle(it))), abbruch]);
+  hinstellen(t('rucksack.wasAufheben'), [...dinge.map(it => knopf(dingIcon(it.ding, 34), DINGE[it.ding]?.name ?? it.ding, () => waehle(it))), abbruch]);
 }
 
 // raum: Colyseus-Raum, ich: eigener Spieler, dinge: naheBodenDinge()

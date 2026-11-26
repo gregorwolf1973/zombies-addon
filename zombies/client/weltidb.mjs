@@ -4,7 +4,7 @@ const DB = 'zob_welten', STORE = 'welten', BEHALTEN = 3;
 
 function oeffnen() {
   return new Promise((ja, nein) => {
-    if (typeof indexedDB === 'undefined') return nein(new Error('kein IndexedDB'));
+    if (typeof indexedDB === 'undefined') return nein(new Error('kein IndexedDB'));   // i18n-ok: nur intern
     const q = indexedDB.open(DB, 1);
     q.onupgradeneeded = () => q.result.createObjectStore(STORE);
     q.onsuccess = () => ja(q.result);

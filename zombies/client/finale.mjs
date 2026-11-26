@@ -1,5 +1,6 @@
 // Finale in Andermatt: Atomschlag-Countdown im HUD und Abspann nach dem Schlag (Nachricht 'bunkerEnde' vom Server)
 import { spendenFuellen } from './spenden.mjs';
+import { t } from './i18n.mjs';
 const $ = id => document.getElementById(id);
 let letzter = -1;
 
@@ -24,10 +25,8 @@ export function finaleAbspann(szene, m, meineId, ton, ort) {
   try { ton?.explosion?.(ort?.x ?? 0, ort?.y ?? 0); } catch { /* egal */ }
   const box = $('abspann'); if (!box) return;
   const drinnen = (m.drinnen ?? []).includes(meineId);
-  const titel = m.sieg ? (drinnen ? '☢️ Geschafft – ihr habt im Bunker überlebt' : '☢️ Der Schlag hat dich draußen erwischt')
-    : '☢️ Game over';
-  const text = m.sieg ? (drinnen ? 'Das Tor hielt. Eine neue Runde beginnt gleich in Geretsried …' : 'Deine Gruppe hat es geschafft – eine neue Runde beginnt gleich.')
-    : 'Niemand hat den Bunker erreicht. Level 5 beginnt gleich von vorn …';
+  const titel = t(m.sieg ? (drinnen ? 'finale.siegTitel' : 'finale.draussenTitel') : 'finale.gameOver');
+  const text = t(m.sieg ? (drinnen ? 'finale.siegText' : 'finale.draussenText') : 'finale.niederlageText');
   box.innerHTML = '';
   const h = document.createElement('div'); h.className = 'abspann-titel'; h.textContent = titel;
   const p = document.createElement('div'); p.className = 'abspann-text'; p.textContent = text;

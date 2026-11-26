@@ -2,15 +2,18 @@
 // Diese beiden Farben werden durch die gewählten ersetzt; Schattierung und Umriss bleiben erhalten.
 
 import { HF_BUCHSTABEN } from './heldenfiguren.mjs';
+import { t } from './i18n.mjs';
 
+// Farbnamen: Schlüssel farbe.<name> in client/i18n (Getter: folgt der eingestellten Sprache)
+const farbe = (n, rgb) => ({ rgb, get name() { return t('farbe.' + n); } });
 export const HAARFARBEN = [
-  { name: 'Schwarz', rgb: [40, 34, 32] }, { name: 'Braun', rgb: [110, 66, 34] }, { name: 'Blond', rgb: [226, 186, 102] },
-  { name: 'Rot', rgb: [196, 62, 34] }, { name: 'Grau', rgb: [160, 160, 156] }, { name: 'Lila', rgb: [140, 70, 170] },
+  farbe('schwarz', [40, 34, 32]), farbe('braun', [110, 66, 34]), farbe('blond', [226, 186, 102]),
+  farbe('rot', [196, 62, 34]), farbe('grau', [160, 160, 156]), farbe('lila', [140, 70, 170]),
 ];
 export const KLEIDFARBEN = [
-  { name: 'Blau', rgb: [40, 90, 200] }, { name: 'Rot', rgb: [190, 40, 40] }, { name: 'Grün', rgb: [50, 140, 60] },
-  { name: 'Gelb', rgb: [230, 190, 40] }, { name: 'Schwarz', rgb: [45, 45, 50] }, { name: 'Weiß', rgb: [230, 230, 225] },
-  { name: 'Orange', rgb: [235, 120, 30] }, { name: 'Lila', rgb: [120, 60, 160] },
+  farbe('blau', [40, 90, 200]), farbe('rot', [190, 40, 40]), farbe('gruen', [50, 140, 60]),
+  farbe('gelb', [230, 190, 40]), farbe('schwarz', [45, 45, 50]), farbe('weiss', [230, 230, 225]),
+  farbe('orange', [235, 120, 30]), farbe('lila', [120, 60, 160]),
 ];
 export const WAFFEN_BILD = ['hand', 'pistole', 'schlaeger', 'messer'];
 

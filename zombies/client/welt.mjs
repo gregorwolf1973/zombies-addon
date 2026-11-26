@@ -3,6 +3,7 @@
 // der Server die Karte nicht übertragen.
 
 import { zaehle } from './stapel.mjs';   // nur Hilfsfunktion, Aufruf erst zur Laufzeit (stapel.mjs importiert DINGE zurück)
+import { t } from './i18n.mjs';
 
 export const KACHEL = 32;
 // Kartengröße in Kacheln. Für Karten aus OpenStreetMap wird sie vor dem Bauen der Welt gesetzt
@@ -422,56 +423,58 @@ export const WELT_VERSION = 42;   // 42: festes Safehouse von geretsried2 = öff
 
 // ---------- Gegenstände ----------
 export const DINGE = {
-  wasser: { name: 'Wasser', zeichen: '💧' },
-  essen: { name: 'Konserve', zeichen: '🥫' },
-  verband: { name: 'Verbandskasten', zeichen: '🩹' },
-  bretter: { name: 'Bretter', zeichen: '🪵' },
-  pistole: { name: 'Pistole', zeichen: '🔫', waffe: true },
-  schlaeger: { name: 'Baseballschläger', zeichen: '🏏', waffe: true },
-  munition: { name: 'Munition', zeichen: '🧰' },
-  spritze: { name: 'Rettungsspritze', zeichen: '💉' },
-  schluessel: { name: 'Schlüsselbund', zeichen: '🔑' },
-  autoschluessel: { name: 'Autoschlüssel', zeichen: '🔑' },   // passt in jedes geparkte Auto (client/pkw.mjs, server/pkw.mjs); bleibt nach dem Fahren im Rucksack
-  brechstange: { name: 'Brechstange', zeichen: '⚒️' },
-  messer: { name: 'Messer', zeichen: '🔪', waffe: true },
-  schrotflinte: { name: 'Schrotflinte', zeichen: '💥', waffe: true },
-  gewehr: { name: 'Jagdgewehr', zeichen: '🎯', waffe: true },
+  wasser: { zeichen: '💧' },
+  essen: { zeichen: '🥫' },
+  verband: { zeichen: '🩹' },
+  bretter: { zeichen: '🪵' },
+  pistole: { zeichen: '🔫', waffe: true },
+  schlaeger: { zeichen: '🏏', waffe: true },
+  munition: { zeichen: '🧰' },
+  spritze: { zeichen: '💉' },
+  schluessel: { zeichen: '🔑' },
+  autoschluessel: { zeichen: '🔑' },   // passt in jedes geparkte Auto (client/pkw.mjs, server/pkw.mjs); bleibt nach dem Fahren im Rucksack
+  brechstange: { zeichen: '⚒️' },
+  messer: { zeichen: '🔪', waffe: true },
+  schrotflinte: { zeichen: '💥', waffe: true },
+  gewehr: { zeichen: '🎯', waffe: true },
   // nur bei der Bundeswehr (bw_kiste, bw_container): Handgranate (Wurfgegenstand, keine Waffe in der Hand), Maschinenpistole, Maschinengewehr
-  granate: { name: 'Handgranate', zeichen: '💣', wurf: true },
-  mp: { name: 'Maschinenpistole', zeichen: '🪖', waffe: true },
-  mg: { name: 'Maschinengewehr', zeichen: '🔥', waffe: true },
+  granate: { zeichen: '💣', wurf: true },
+  mp: { zeichen: '🪖', waffe: true },
+  mg: { zeichen: '🔥', waffe: true },
   // Armbrust (leise, braucht Pfeile) und Scharfschützengewehr (nutzt normale Munition; selten bei Bundeswehr und Polizei)
-  armbrust: { name: 'Armbrust', zeichen: '🏹', waffe: true },
-  pfeil: { name: 'Pfeil', zeichen: '➶' },
+  armbrust: { zeichen: '🏹', waffe: true },
+  pfeil: { zeichen: '➶' },
   // Granatwerfer (selten, nur Bundeswehr) und seine Munition: zählt wie Pfeile als Vorrat (p.granaten), nicht im Rucksack
-  granatwerfer: { name: 'Granatwerfer', zeichen: '🔫🧨', waffe: true },   // sieht aus wie ein Gewehr (Haltung gewehr)
+  granatwerfer: { zeichen: '🔫🧨', waffe: true },   // sieht aus wie ein Gewehr (Haltung gewehr)
   // Handgranaten im Waffenplatz (nie am Boden/Rucksack zu finden): Magazin 5, Vorrat p.handgranaten; Wurf per Tippen auf den Zielpunkt
-  handgranate: { name: 'Handgranaten', zeichen: '💣', waffe: true, intern: true },
-  granate40: { name: 'Granate (40 mm)', zeichen: '🧨' },
-  scharfschuetze: { name: 'Scharfschützengewehr', zeichen: '🔭', waffe: true },
-  sense: { name: 'Sense', zeichen: '🌾', waffe: true },
-  kleidung: { name: 'Feste Kleidung', zeichen: '🧥' },
-  seil: { name: 'Seil', zeichen: '🪢' },
-  taschenlampe: { name: 'Taschenlampe', zeichen: '🔦' },
-  radio: { name: 'Radio', zeichen: '📻', radio: true },   // Lockmittel: einschalten und ablegen, spielt ~75 s und macht weithin Lärm (server/radio.mjs)
-  funkgeraet: { name: 'Funkgerät', zeichen: '📻' },   // Sprachfunk: mit zwei Funkgeräten hört man sich überall (client/sprache_regeln.mjs)
-  schokoriegel: { name: 'Schokoriegel', zeichen: '🍫' },
+  handgranate: { zeichen: '💣', waffe: true, intern: true },
+  granate40: { zeichen: '🧨' },
+  scharfschuetze: { zeichen: '🔭', waffe: true },
+  sense: { zeichen: '🌾', waffe: true },
+  kleidung: { zeichen: '🧥' },
+  seil: { zeichen: '🪢' },
+  taschenlampe: { zeichen: '🔦' },
+  radio: { zeichen: '📻', radio: true },   // Lockmittel: einschalten und ablegen, spielt ~75 s und macht weithin Lärm (server/radio.mjs)
+  funkgeraet: { zeichen: '📻' },   // Sprachfunk: mit zwei Funkgeräten hört man sich überall (client/sprache_regeln.mjs)
+  schokoriegel: { zeichen: '🍫' },
   // Reserve-Munition: 30 Schuss; füllt den Munitionszähler automatisch auf, wenn er auf MUNITION_KISTE_AB fällt (server/munition.mjs)
-  munitionskiste: { name: 'Munitionskiste', zeichen: '📦' },
+  munitionskiste: { zeichen: '📦' },
   // Aus dem A400M (Königsdorf) gefallene Munitionskisten: fester Inhalt, am Boden (bleibt = verschwindet nicht), beim Aufheben sofort verbraucht (server/a400m_kisten.mjs)
-  a400m_kiste_a: { name: 'Munitionskiste (voll)', zeichen: '📦', intern: true, bleibt: true },
-  a400m_kiste_b: { name: 'Munitionskiste (angebrochen)', zeichen: '📦', intern: true, bleibt: true },
-  tasche: { name: 'Sporttasche (12 Plätze)', zeichen: '👜', plaetze: 12 },
-  trekking: { name: 'Trekkingrucksack (16 Plätze)', zeichen: '🎒', plaetze: 16 },
+  a400m_kiste_a: { zeichen: '📦', intern: true, bleibt: true },
+  a400m_kiste_b: { zeichen: '📦', intern: true, bleibt: true },
+  tasche: { zeichen: '👜', plaetze: 12 },
+  trekking: { zeichen: '🎒', plaetze: 16 },
   // Missionsgegenstände (server/mission.mjs): nie in Beutetabellen, nicht wegwerfbar (nur in die Safe-Room-Kiste legen), verschwinden nie vom Boden
-  m_funk: { name: 'Funkgerät (Funktisch)', zeichen: '📟', mission: true, intern: true },
-  m_batterie: { name: 'Batterie', zeichen: '🔋', mission: true, intern: true },
-  m_antenne: { name: 'Antenne', zeichen: '📡', mission: true, intern: true },
-  m_schluessel: { name: 'Torschlüssel', zeichen: '🗝️', mission: true, intern: true },
-  m_diesel: { name: 'Dieselkanister', zeichen: '🛢️', mission: true, intern: true },
-  m_treibstoff: { name: 'Treibstoffkanister', zeichen: '⛽', mission: true, intern: true },
-  m_landefeuer: { name: 'Landefeuer', zeichen: '🚨', mission: true, intern: true },
-};
+  m_funk: { zeichen: '📟', mission: true, intern: true },
+  m_batterie: { zeichen: '🔋', mission: true, intern: true },
+  m_antenne: { zeichen: '📡', mission: true, intern: true },
+  m_schluessel: { zeichen: '🗝️', mission: true, intern: true },
+  m_diesel: { zeichen: '🛢️', mission: true, intern: true },
+  m_treibstoff: { zeichen: '⛽', mission: true, intern: true },
+  m_landefeuer: { zeichen: '🚨', mission: true, intern: true },
+};// Anzeigenamen: Schlüssel ding.<id> in client/i18n (Getter: Server und Tests bekommen Deutsch, der Browser die gewählte Sprache)
+for (const k of Object.keys(DINGE)) Object.defineProperty(DINGE[k], 'name', { get: () => t('ding.' + k), enumerable: true });
+
 export const BODEN_DAUER = 180;      // weggeworfene Gegenstände bleiben 3 Minuten liegen
 export const TAUSCH_ABSTAND = 34;    // so nah muss man sich sein (berühren), um zu tauschen
 // Beute bei toten Zombies: selten (etwa jeder 20.) eine Waffe, sonst oft Alltagszeug
@@ -493,9 +496,9 @@ export const KISTE_PLAETZE = 24;
 export const STAPEL_MAX = 5;   // je Platz bis zu 5 Stück derselben Art (client/stapel.mjs); Waffen (außer Messer), Taschen und Missionsgegenstände: 1
 export const MUNITIONSKISTE_SCHUSS = 30;   // Schuss je Munitionskiste
 export const MUNITION_KISTE_AB = 120;      // fällt der Munitionszähler auf diesen Wert oder weniger, wird eine Kiste geöffnet
-export const BEHAELTER_NAME = { bad: 'Toilette / Waschbecken', muelltonne: 'Mülltonnen', container: 'Müllcontainer', schrank: 'Schrank', kuehlschrank: 'Kühlschrank', spind: 'Spind', herd: 'Herd', spuele: 'Spüle', spind_belohnung: 'Spind', auto: 'Kofferraum', einkaufswagen: 'Einkaufswagen', leiche: 'Zombie', bus: 'Bus',
-  vorratsregal: 'Vorratsregal', erstehilfe: 'Erste-Hilfe-Kasten', bw_kiste: 'Munitionskiste', bw_container: 'Bundeswehr-Container', sanikiste: 'Sanitätskiste', laden: 'Regal', laden_lebensmittel: 'Regal', laden_apotheke: 'Regal', laden_kaufhaus: 'Regal', laden_gaststaette: 'Küchenregal', laden_polizei: 'Waffenschrank',
-  aktenschrank: 'Aktenschrank', kuehlregal: 'Kühlregal', wagenecke: 'Einkaufswagen', werkbank: 'Werkbank', werkzeugschrank: 'Werkzeugschrank', ausstellungsschrank: 'Ausstellungsschrank', hochregal: 'Hochregal', kartonstapel: 'Kartons' };
+// Behälternamen: Schlüssel behaelter.<art> in client/i18n
+export const BEHAELTER_NAME = {};
+for (const k of ['bad', 'muelltonne', 'container', 'schrank', 'kuehlschrank', 'spind', 'herd', 'spuele', 'spind_belohnung', 'auto', 'einkaufswagen', 'leiche', 'bus', 'vorratsregal', 'erstehilfe', 'bw_kiste', 'bw_container', 'sanikiste', 'laden', 'laden_lebensmittel', 'laden_apotheke', 'laden_kaufhaus', 'laden_gaststaette', 'laden_polizei', 'aktenschrank', 'kuehlregal', 'wagenecke', 'werkbank', 'werkzeugschrank', 'ausstellungsschrank', 'hochregal', 'kartonstapel']) Object.defineProperty(BEHAELTER_NAME, k, { get: () => t('behaelter.' + k), enumerable: true });
 export const BEUTE = {
   kuehlschrank: ['wasser', 'wasser', 'essen', 'essen', 'essen', null],
   schrank: ['verband', 'bretter', 'bretter', 'essen', 'munition', 'munitionskiste', 'spritze', 'schluessel', 'kleidung', 'brechstange', 'sense', 'funkgeraet', 'pfeil', 'radio', null, null],
@@ -551,14 +554,14 @@ export const MUNITION_MAX = 150;   // so viel Munition trägt man höchstens (Ma
 // kostet: anzahl Dinge aus der Liste 'aus' (beliebig gemischt); gibt: Ding (menge Stück) oder 'munition' (menge Schuss)
 export const HANDEL = {
   arzt: {
-    name: 'Arzt', zeichen: '🩺',
+    get name() { return t('handel.arzt'); }, zeichen: '🩺',
     angebote: [
       { id: 'verband', gibt: 'verband', menge: 1, kostet: { anzahl: 2, aus: ['essen', 'wasser', 'schokoriegel'] } },
       { id: 'spritze', gibt: 'spritze', menge: 1, kostet: { anzahl: 2, aus: ['essen', 'wasser', 'schokoriegel'] } },
     ],
   },
   soldat: {
-    name: 'Soldat', zeichen: '🎖',
+    get name() { return t('handel.soldat'); }, zeichen: '🎖',
     angebote: [
       { id: 'granate', gibt: 'granate', menge: 1, kostet: { anzahl: 2, aus: ['essen'] } },
       { id: 'munition', gibt: 'munition', menge: 30, kostet: { anzahl: 3, aus: ['essen', 'wasser', 'verband'] } },
@@ -1217,7 +1220,7 @@ export function zaunUeberstieg(welt, x, y, richtung, rad, streng = false) {
   }
   return null;
 }
-export const ZAUN_NAME = { h: 'die Hecke', z: 'den Zaun', m: 'den Zaun', w: 'die Mauer' };
+export const ZAUN_NAME = { get h() { return t('zaun.h'); }, get z() { return t('zaun.z'); }, get m() { return t('zaun.z'); }, get w() { return t('zaun.w'); } };   // für „Über … steigen“
 
 // Fingerabdruck der festen Welt (Häuser, Behälter, Stützpunkt-Kisten, Tor, Start): Client und Server bauen die Welt
 // getrennt aus Karte + Seed; weicht ein Gerät ab (alter Code im Speicher, andere Rechengenauigkeit), stehen Kisten

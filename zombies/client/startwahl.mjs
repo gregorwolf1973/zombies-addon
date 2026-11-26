@@ -1,17 +1,10 @@
 // Startbildschirm vor Level 1: 5 Fähigkeitspunkte verteilen und zwei Startgegenstände wählen.
 // Der Server schickt „startwahl“, prüft die Antwort selbst (genau 5 Punkte, genau 2 verschiedene Gegenstände, nur einmal) und bestätigt mit „startwahl_ok“.
 import { LISTE } from './faehigkeiten.mjs';
+import { t } from './i18n.mjs';
 
-const GEGENSTAENDE = [
-  ['messer', '🔪', 'Messer', 'leiser Nahkampf, schnell'],
-  ['funkgeraet', '📻', 'Funkgerät', 'mit zwei Funkgeräten hört man sich überall'],
-  ['taschenlampe', '🔦', 'Taschenlampe', 'leuchtet in dunklen Räumen'],
-  ['armbrust', '🏹', 'Armbrust', 'leise, mit 6 Pfeilen'],
-  ['schlaeger', '🏏', 'Baseballschläger', 'kräftiger Nahkampf'],
-  ['radio', '📻', 'Radio', 'lockt Zombies mit Lärm weg'],
-  ['schluessel', '🔑', 'Schlüsselbund', 'schließt Türen auf'],
-  ['spritze', '💉', 'Rettungsspritze', 'holt einen Gestürzten oder Infizierten zurück'],
-];
+// Startgegenstände: Name = Gegenstandsname (ding.<id>), Beschreibung startwahl.<id> (client/i18n)
+const GEGENSTAENDE = [['messer', '🔪'], ['funkgeraet', '📻'], ['taschenlampe', '🔦'], ['armbrust', '🏹'], ['schlaeger', '🏏'], ['radio', '📻'], ['schluessel', '🔑'], ['spritze', '💉']];
 
 const CSS = `
 #swfenster { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: #000b; }
@@ -38,7 +31,7 @@ export function startwahlStart(raum) {
   for (const id of ['swfenster', 'swstil']) document.getElementById(id)?.remove();   // neue Verbindung: neu aufbauen
   const st = document.createElement('style'); st.id = 'swstil'; st.textContent = CSS; document.head.append(st);
   const fenster = document.createElement('div');
-  fenster.id = 'swfenster'; fenster.setAttribute('role', 'dialog'); fenster.setAttribute('aria-label', 'Startwahl');
+  fenster.id = 'swfenster'; fenster.setAttribute('role', 'dialog'); fenster.setAttribute('aria-label', t('startwahl.titel'));
   document.body.append(fenster);
   window.__startwahlOffen = false;
   let punkte = 5, max = 5, wahl = [], stufen = {};
@@ -47,20 +40,20 @@ export function startwahlStart(raum) {
   const zeichnen = () => {
     const rest = punkte - verteilt();
     fenster.innerHTML = `<div class="sw-box">
-      <h2>🧟 Dein Start</h2>
-      <div class="sw-klein">Verteile ${punkte} Fähigkeitspunkte und wähle genau 2 verschiedene Gegenstände. Dazu gibt es einen Zufallsgegenstand. Das geht nur einmal.</div>
-      <h3>Fähigkeiten</h3>
-      <div class="sw-rest" id="swrest">${rest} Punkt${rest === 1 ? '' : 'e'} übrig</div>
-      ${LISTE.map(([id, sym, name, text]) => {
-        const n = stufen[id] || 0;
-        return `<div class="sw-zeile"><button class="sw-pm" type="button" data-id="${id}" data-d="-1" aria-label="${name} verringern" ${n > 0 ? '' : 'disabled'}>−</button>
+      <h2>${t('startwahl.kopf')}</h2>
+      <div class="sw-klein">${t('startwahl.erklaerung', { n: punkte })}</div>
+      <h3>${t('fk.titel')}</h3>
+      <div class="sw-rest" id="swrest">${t('startwahl.uebrig', { n: rest })}</div>
+      ${LISTE.map(([id, sym]) => {
+        const n = stufen[id] || 0, name = t('fk.' + id), text = t('fk.' + id + 'Text');
+        return `<div class="sw-zeile"><button class="sw-pm" type="button" data-id="${id}" data-d="-1" aria-label="${t('fk.verringern', { name })}" ${n > 0 ? '' : 'disabled'}>−</button>
           <div class="sw-text"><span>${sym}</span> <b>${name}</b> <span class="sw-sterne">${'★'.repeat(n)}${'☆'.repeat(max - n)}</span><div class="sw-klein">${text}</div></div>
-          <button class="sw-pm" type="button" data-id="${id}" data-d="1" aria-label="${name} verbessern" ${rest > 0 && n < max ? '' : 'disabled'}>+</button></div>`;
+          <button class="sw-pm" type="button" data-id="${id}" data-d="1" aria-label="${t('fk.verbessern', { name })}" ${rest > 0 && n < max ? '' : 'disabled'}>+</button></div>`;
       }).join('')}
-      <h3>Startgegenstände (${wahl.length}/2)</h3>
-      ${GEGENSTAENDE.map(([id, sym, name, text]) => `<label class="sw-item${wahl.includes(id) ? ' an' : ''}"><input type="checkbox" name="switem" value="${id}" ${wahl.includes(id) ? 'checked' : ''} ${!wahl.includes(id) && wahl.length >= 2 ? 'disabled' : ''}>
+      <h3>${t('startwahl.gegenstaende', { n: wahl.length })}</h3>
+      ${GEGENSTAENDE.map(([id, sym, name = t('ding.' + id), text = t('startwahl.' + id)]) => `<label class="sw-item${wahl.includes(id) ? ' an' : ''}"><input type="checkbox" name="switem" value="${id}" ${wahl.includes(id) ? 'checked' : ''} ${!wahl.includes(id) && wahl.length >= 2 ? 'disabled' : ''}>
         <span style="font-size:22px">${sym}</span><span><b>${name}</b><div class="sw-klein">${text}</div></span></label>`).join('')}
-      <button class="sw-los" id="swlos" type="button" ${rest === 0 && wahl.length === 2 ? '' : 'disabled'}>${rest !== 0 ? `Noch ${rest} Punkt${rest === 1 ? '' : 'e'} verteilen` : wahl.length !== 2 ? `Noch ${2 - wahl.length} Gegenstand wählen` : 'Los geht’s'}</button>
+      <button class="sw-los" id="swlos" type="button" ${rest === 0 && wahl.length === 2 ? '' : 'disabled'}>${rest !== 0 ? t('startwahl.nochPunkte', { n: rest }) : wahl.length !== 2 ? t('startwahl.nochGegenstand', { n: 2 - wahl.length }) : t('startwahl.los')}</button>
     </div>`;
     fenster.querySelectorAll('.sw-pm').forEach(b => {
       b.onclick = () => { const id = b.dataset.id; stufen[id] = Math.max(0, Math.min(max, (stufen[id] || 0) + Number(b.dataset.d))); zeichnen(); };

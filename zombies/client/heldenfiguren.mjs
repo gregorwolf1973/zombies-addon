@@ -3,6 +3,7 @@
 // Reine Logik (ohne Phaser): Held-Liste, Waffe → Gruppe → Clip → Bildnummer, Waffen-/Lampenlage, Mündungsversatz.
 // Maßstab gemeinsam mit den Zombies: beide Atlanten haben 40 Atlas-Pixel je Welteinheit (Render gross=2), im Spiel gilt ZF_GROESSE für beide.
 import { ZF_GROESSE } from './zombiefiguren.mjs';
+import { t } from './i18n.mjs';
 export const FIG_PX_JE_M = 40;
 // Helden stehen kompakt (Arme am Körper), Zombies strecken die Arme aus: Schulter-/Körperumriss stehend Zombie ~76 px, Held/Heldin ~53 px (Atlas-px) →
 // Heldenbilder ×1,4 größer, damit Menschen und Zombies im Spiel gleich groß wirken (Körpergröße ~1,8 m)
@@ -19,15 +20,17 @@ export const soldatSkala = (mg = 1) => SCHULTER_NEU_PX * mg / SOLDAT_SCHULTER_PX
 // Helden-Liste: EINZIGE Stelle für neue Helden (plus Atlas grafik/helden_<id>.webp, Eintrag in helden_neu.json, Vorschaubild in helden_vorschau.webp).
 // Server (Zufall für Bots, Prüfung der Wahl), Startwahl (Auswahl + Vorschau) und Verwaltung (Zeile mit Häkchen) lesen dieselbe Liste.
 // g = Kennbuchstabe im aussehen-String ('h,0,0'): h = Held, f = Heldin (wie bisher, alte Spielstände gelten weiter), die übrigen sind neu.
+// Anzeigename: Schlüssel held.<id> in client/i18n (Getter: folgt der eingestellten Sprache)
+const held = (id, g, extra = {}) => ({ id, g, ...extra, get name() { return t('held.' + id); } });
 export const HF_LISTE = [
-  { id: 'swatguy', g: 'h', name: 'Einsatzkraft' },      // Tarnanzug mit Schutzweste
-  { id: 'jennifer', g: 'f', name: 'Rote Jacke' },
-  { id: 'remy', g: 'r', name: 'Blondschopf' },          // blonder Mann, graues T-Shirt
-  { id: 'alex', g: 'a', name: 'Schwarzer Anzug' },
-  { id: 'brute', g: 'b', name: 'Muskelmann', k: 0.85 },   // ~1,95 m und sehr breit: etwas kleiner zeichnen (Gregor 25.11.: „bisschen groß der Dicke“)
-  { id: 'swat', g: 't', name: 'SWAT-Polizist' },
-  { id: 'jody', g: 'j', name: 'Rosa Pulli' },
-  { id: 'roth', g: 'o', name: 'Weißes Hemd' },
+  held('swatguy', 'h'),      // Einsatzkraft: Tarnanzug mit Schutzweste
+  held('jennifer', 'f'),     // Rote Jacke
+  held('remy', 'r'),         // Blondschopf: blonder Mann, graues T-Shirt
+  held('alex', 'a'),         // Schwarzer Anzug
+  held('brute', 'b', { k: 0.85 }),   // Muskelmann, ~1,95 m und sehr breit: etwas kleiner zeichnen (Gregor 25.11.: „bisschen groß der Dicke“)
+  held('swat', 't'),         // SWAT-Polizist
+  held('jody', 'j'),         // Rosa Pulli
+  held('roth', 'o'),         // Weißes Hemd
 ];
 export const HF_FIGUREN = HF_LISTE.map(f => f.id);
 export const hfSkala = id => HF_LISTE.find(f => f.id === id)?.k ?? 1;   // eigener Größenfaktor je Held (1 = wie alle)

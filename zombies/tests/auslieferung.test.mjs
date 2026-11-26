@@ -81,7 +81,8 @@ test('alte Wurzelpfade: no-cache, Verwaltung und APIs nicht zwischengespeichert'
   }
   const verw = await hole('/', { 'x-ingress-path': '/api/hassio_ingress/abc' });
   assert.equal(verw.h['cache-control'], 'no-cache');
-  assert.match(verw.body.toString(), /erwaltung/);
+  // Ingress-Kopfzeile von 127.0.0.1 entfernt der Server (entferneFremdenIngress) → es kommt die Spielseite; früher passte /erwaltung/ nur zufällig auf „Vermessungsverwaltung“ im Nachweis
+  assert.match(verw.body.toString(), /<html[\s\S]*id="start"/);
   const info = await hole('/info');
   assert.doesNotMatch(info.h['cache-control'] ?? '', /immutable|max-age=\d{4,}/);
 });

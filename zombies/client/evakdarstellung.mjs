@@ -7,6 +7,7 @@ import { fetzen } from './effekte.mjs';
 import * as ton from './ton.mjs';
 import { kettenSpur } from './ketten.mjs';
 import { RauchZeichner } from './kanonenrauch.mjs';
+import { t } from './i18n.mjs';
 
 const TAU = Math.PI * 2;
 const winkelDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
@@ -211,22 +212,23 @@ export function heliAktualisieren(scene, s, dt, aktEbene) {
 export function evakHudText(s, an, uhrText) {
   const ph = s.evakPhase, art = evakArtVon(s);
   if (art === 'bunker') {
-    if (ph === 'sieg') return '☢️ Der Bunker hat gehalten – ihr habt überlebt!';
-    if (ph === 'niederlage') return '☢️ Der Schlag hat euch draußen erwischt …';
-    return `☢️ Bunker offen · ${s.busBord}/${s.busGesamt} drinnen${an ? ' · ☢️ du bist drin' : ''} – wer beim Ende des Countdowns drin ist, überlebt`;
+    if (ph === 'sieg') return t('flug.bunkerSieg');
+    if (ph === 'niederlage') return t('flug.bunkerNiederlage');
+    return t('flug.bunkerOffen', { bord: s.busBord, gesamt: s.busGesamt, drin: an ? t('flug.duDrin') : '' });
   }
-  if (art === 'heli') return ph === 'heli' ? `🚁 NH90 steht bereit · ${s.busBord}/${s.busGesamt} an Bord${an ? ' · 🚁 du bist an Bord' : ''} – Abflug, sobald alle Aufgaben erledigt sind` : (ph === 'abflug' ? '🚁 Der Hubschrauber hebt ab …' : null);
-  if (art === 'absturz' && ph === 'absturz') return '✈️ Ein A400M kommt im Landeanflug …';
-  if (art === 'absturz' && ph === 'wrack') return '🔥 A400M bruchgelandet, Wrack in Flammen – ein NH90 kommt, sobald alle Aufgaben erledigt sind';
-  if (art === 'absturz' && !['heliAnflug', 'heli', 'abflug'].includes(ph)) return s.funk && s.busAnkunft >= 0 ? `✈️ Der A400M kommt um ${uhrText(s.busAnkunft)}` : '📻 Funkspruch fehlt – ohne ihn kommt keine Maschine';
+  const bord = sym => (an ? t('evak.duAnBord', { sym }) : '');
+  if (art === 'heli') return ph === 'heli' ? t('flug.nh90Bereit', { bord: s.busBord, gesamt: s.busGesamt, du: bord('🚁') }) : (ph === 'abflug' ? t('flug.heliHebtAb') : null);
+  if (art === 'absturz' && ph === 'absturz') return t('flug.landeanflug');
+  if (art === 'absturz' && ph === 'wrack') return t('flug.wrack');
+  if (art === 'absturz' && !['heliAnflug', 'heli', 'abflug'].includes(ph)) return s.funk && s.busAnkunft >= 0 ? t('flug.kommtUm', { zeit: uhrText(s.busAnkunft) }) : t('flug.funkFehlt');
   if (art !== 'flugzeug' && art !== 'absturz') return null;
-  if (ph === 'landung') return '✈️ Ein A400M setzt zur Landung an – einsteigen geht an der Heckrampe, sobald er steht';
-  if (ph === 'einsteigen') return `✈️ A400M wartet bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ' · ✈️ du bist an Bord' : ''}`;
-  if (ph === 'heliAnflug') return `🔥 Triebwerksbrand, Start abgebrochen – zu Fuß zum Hubschrauber-Landeplatz (📍), er landet in ${s.evakRest} s`;
-  if (ph === 'heli') return `🚁 Hubschrauber wartet bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ' · 🚁 du bist an Bord' : ''}`;
-  if (ph === 'abflug') return '🚁 Der Hubschrauber hebt ab …';
-  if (s.funk && s.busAnkunft >= 0) return `✈️ Der A400M landet um ${uhrText(s.busAnkunft)} auf dem markierten Landeplatz`;
-  return '📻 Funkspruch fehlt – ohne ihn kommt keine Maschine';
+  if (ph === 'landung') return t('flug.landung');
+  if (ph === 'einsteigen') return t('flug.wartet', { zeit: uhrText(s.busAb), bord: s.busBord, gesamt: s.busGesamt, du: bord('✈️') });
+  if (ph === 'heliAnflug') return t('flug.triebwerk', { n: s.evakRest });
+  if (ph === 'heli') return t('flug.heliWartet', { zeit: uhrText(s.busAb), bord: s.busBord, gesamt: s.busGesamt, du: bord('🚁') });
+  if (ph === 'abflug') return t('flug.heliHebtAb');
+  if (s.funk && s.busAnkunft >= 0) return t('flug.landetUm', { zeit: uhrText(s.busAnkunft) });
+  return t('flug.funkFehlt');
 }
 
 // ---------- Königsdorf: Bruchlandung des A400M (Hüpfer, Schlittern, Brand) – das Wrack bleibt als brennende Kulisse ----------

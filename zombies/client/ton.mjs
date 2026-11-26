@@ -5,6 +5,7 @@ import { stimmeZuweisen } from './tonlogik.mjs';
 import { hordeEinstellung, zaehleHoerbare, hordeSchritt, einzelschreiOk, akzentSchritt, PIXEL_JE_METER } from './hordenlogik.mjs';
 import { musikSchritt, naechstesStueck } from './musiklogik.mjs';
 import { anAusLesen, GERAET_SCHLUESSEL } from './einstellungen_regeln.mjs';
+import { t as tr } from './i18n.mjs';
 let ctx = null, haupt = null, rauschPuffer = null, stufe = 1;
 const BASIS = 0.72;                          // Grundpegel (0.36 → 0.72 mit den gemessenen Lautstärken je Ereignis; früher 0.8)
 const EFFEKT_FAKTOR = 0.75;                  // Spielgeräusche 25 % leiser als zuvor (Stimmen kommen besser durch); Musik behält ihren Pegel
@@ -998,7 +999,7 @@ export function musikSofort(startseiteSichtbar = () => true) {
   const hinweisZeigen = an => {
     if (an && !hinweis) {
       hinweis = document.createElement('div');
-      hinweis.textContent = '🔊 Tippe irgendwo für Ton';
+      hinweis.textContent = tr('ton.tippen');
       hinweis.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:50;background:rgba(0,0,0,.72);color:#fff;padding:8px 14px;border-radius:18px;font:600 14px system-ui,sans-serif;pointer-events:none;animation:tonPuls 1.6s ease-in-out infinite';
       if (!document.getElementById('tonPulsStil')) { const s = document.createElement('style'); s.id = 'tonPulsStil'; s.textContent = '@keyframes tonPuls{0%,100%{opacity:.55}50%{opacity:1}}'; document.head.appendChild(s); }
       document.body.appendChild(hinweis);

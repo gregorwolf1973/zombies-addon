@@ -513,3 +513,8 @@ body.feuerknopf-an #rucksack { padding-left: calc(var(--fk, 56px) + 16px + env(s
 .spenden .bmc { background: #ffdd00; }
 .spenden .lp { background: #f6c915; }
 #abspann .spenden { margin-top: 18px; }
+
+/* Sprachwahl (client/i18n.mjs sprachUmschalter): klein oben rechts auf der Startkarte, im ⚙️-Menü wie die anderen Reihen */
+.sprachwahl-start { display: flex; justify-content: flex-end; gap: 6px; margin: -4px 0 6px; }
+.sprachwahl-start button { width: auto; margin: 0; padding: 4px 10px; min-height: 32px; font-size: 13px; background: #ffffff1a; color: #fff; border-radius: 8px; }
+.sprachwahl-start button.an { background: #ffd54f; color: #222; }

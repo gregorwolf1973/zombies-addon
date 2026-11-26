@@ -1,15 +1,8 @@
 // Fähigkeiten-Fenster: Level, Erfahrungsbalken, freie Punkte, Fähigkeiten mit „+“. Baut sein Fenster selbst auf;
 // der Server prüft jede Punktevergabe (Nachricht fk_punkt) und schickt den Stand als „fk“.
-// Die Liste muss zu server/faehigkeiten.mjs passen (nur Anzeige).
-export const LISTE = [
-  ['zielen', '🎯', 'Zielen', 'Chance, beim Schuss keine Munition zu verbrauchen (+8 % je Stufe)'],
-  ['tempo', '🏃', 'Tempo', 'Lauftempo +4 % je Stufe'],
-  ['leben', '❤️', 'Lebensenergie', 'Du hältst ca. 10 % je Stufe mehr aus'],
-  ['ausdauer', '🥫', 'Ausdauer', 'Durst und Hunger sinken 10 % je Stufe langsamer'],
-  ['leise', '🤫', 'Leise', 'Zombies hören dich 8 % je Stufe weniger weit'],
-  ['sanitaeter', '🩺', 'Sanitäter', 'Aufhelfen und Verbände wirken 15 % je Stufe besser'],
-  ['tragen', '🎒', 'Tragen', '+1 Rucksackplatz bei Stufe 3, noch einer bei Stufe 5'],
-];
+// Die Liste muss zu server/faehigkeiten.mjs passen (nur Anzeige). Name und Beschreibung: Schlüssel fk.<id> und fk.<id>Text (client/i18n).
+import { t } from './i18n.mjs';
+export const LISTE = [['zielen', '🎯'], ['tempo', '🏃'], ['leben', '❤️'], ['ausdauer', '🥫'], ['leise', '🤫'], ['sanitaeter', '🩺'], ['tragen', '🎒']];
 
 const CSS = `
 #fkknopf { position: fixed; right: 396px; top: max(34px, calc(env(safe-area-inset-top) + 26px)); width: 34px; height: 30px; margin: 0; padding: 0;
@@ -35,23 +28,24 @@ export function fkStart(raum, meldungFn = () => {}) {
   for (const id of ['fkknopf', 'fkfenster', 'fkstil']) document.getElementById(id)?.remove();   // neue Verbindung: neu aufbauen
   const st = document.createElement('style'); st.id = 'fkstil'; st.textContent = CSS; document.head.append(st);
   const knopf = document.createElement('button');
-  knopf.id = 'fkknopf'; knopf.type = 'button'; knopf.title = 'Fähigkeiten (K)'; knopf.setAttribute('aria-label', 'Fähigkeiten'); knopf.textContent = '⭐';
+  knopf.id = 'fkknopf'; knopf.type = 'button'; knopf.title = t('fk.knopf'); knopf.setAttribute('aria-label', t('fk.titel')); knopf.textContent = '⭐';
   const fenster = document.createElement('div');
-  fenster.id = 'fkfenster'; fenster.setAttribute('role', 'dialog'); fenster.setAttribute('aria-label', 'Fähigkeiten');
+  fenster.id = 'fkfenster'; fenster.setAttribute('role', 'dialog'); fenster.setAttribute('aria-label', t('fk.titel'));
   document.body.append(knopf, fenster);
   let stand = null;
 
   const zeichnen = () => {
     if (!stand) return;
     const proz = stand.bis ? Math.min(100, Math.round(100 * stand.im / stand.bis)) : 100;
-    fenster.innerHTML = `<div class="fk-kopf"><b>⭐ Level ${stand.level}</b><button id="fkzu" type="button" aria-label="Schließen">✕</button></div>
+    fenster.innerHTML = `<div class="fk-kopf"><b>${t('fk.level', { n: stand.level })}</b><button id="fkzu" type="button" aria-label="${t('allgemein.schliessen')}">✕</button></div>
       <div class="fk-balken"><div style="width:${proz}%"></div></div>
-      <div class="fk-klein">${stand.bis ? `${stand.im} / ${stand.bis} Erfahrung bis Level ${stand.level + 1}` : 'Höchstes Level erreicht'}</div>
-      <div class="fk-frei">${stand.frei} freie${stand.frei === 1 ? 'r' : ''} Punkt${stand.frei === 1 ? '' : 'e'}</div>
-      ${LISTE.map(([id, sym, name, text]) => {
+      <div class="fk-klein">${stand.bis ? t('fk.erfahrung', { im: stand.im, bis: stand.bis, n: stand.level + 1 }) : t('fk.hoechstes')}</div>
+      <div class="fk-frei">${t('fk.frei', { n: stand.frei })}</div>
+      ${LISTE.map(([id, sym]) => {
+        const name = t('fk.' + id), text = t('fk.' + id + 'Text');
         const n = stand.s[id] || 0;
         return `<div class="fk-zeile"><span>${sym}</span><div class="fk-text"><b>${name}</b> <span class="fk-sterne">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span><div class="fk-klein">${text}</div></div>
-          <button class="fk-plus" type="button" data-id="${id}" aria-label="${name} verbessern" ${stand.frei > 0 && n < 5 ? '' : 'disabled'}>+</button></div>`;
+          <button class="fk-plus" type="button" data-id="${id}" aria-label="${t('fk.verbessern', { name })}" ${stand.frei > 0 && n < 5 ? '' : 'disabled'}>+</button></div>`;
       }).join('')}`;
     fenster.querySelector('#fkzu').onclick = zu;
     fenster.querySelectorAll('.fk-plus').forEach(b => { b.onclick = () => raum.send('fk_punkt', { id: b.dataset.id }); });

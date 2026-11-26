@@ -7,6 +7,7 @@
 import { flach } from './stapel.mjs';
 import { stimmenFaktorLesen } from './einstellungen_regeln.mjs';
 import { lautstaerke, SPRACHE_VORGABE } from './sprache_regeln.mjs';
+import { t as tr } from './i18n.mjs';
 import {
   FORMAT_OPUS, FORMAT_MULAW, OPUS_RATE, OPUS_RAHMEN, MULAW_RATE, MULAW_RAHMEN, paketBauen, paketLesen, neuerAls,
   mulawKodieren, mulawDekodieren, Abtaster, WORKLET_CODE,
@@ -62,25 +63,25 @@ export function starte({ raum, meineId, welt, meldung }) {
   const sende = (an, daten) => { try { raum.send('rtc', { an, daten }); } catch { /* Verbindung weg */ } };
   const sendeSpricht = an => { if (an !== sprichtGesendet) { sprichtGesendet = an; try { raum.send('spricht', { an }); } catch { /* egal */ } } };
 
-  const namen = sid => raum.state?.spieler?.get(sid)?.name ?? 'Mitspieler';
+  const namen = sid => raum.state?.spieler?.get(sid)?.name ?? tr('mikro.mitspieler');
   // ---------- Knopf ----------
   function knopfZeigen() {
     if (!knopf) return;
     knopf.style.display = einst.an && !beendet ? 'block' : 'none';
     const stumm = mikroFehler || !mikroAn;
     knopf.classList.toggle('aus', stumm);
-    knopf.title = (mikroFehler ? 'Kein Mikrofon – du hörst die anderen trotzdem' : mikroAn ? 'Mikrofon an – zum Stummschalten tippen' : 'Mikrofon aus – zum Einschalten tippen')
-      + (serverWeg.size ? ' · 📡 Verbindung zu ' + [...serverWeg].map(namen).join(', ') + ' läuft über den Server' : '');
+    knopf.title = tr(mikroFehler ? 'mikro.keinTitel' : mikroAn ? 'mikro.anTitel' : 'mikro.ausTitel')
+      + (serverWeg.size ? ' · ' + tr('mikro.serverweg', { namen: [...serverWeg].map(namen).join(', ') }) : '');
     knopf.setAttribute('aria-pressed', String(!stumm));
   }
   if (knopf) knopf.onclick = () => {
-    if (mikroFehler) { meldung('🎤 Kein Mikrofon – du hörst die anderen trotzdem'); return; }
+    if (mikroFehler) { meldung(tr('mikro.kein')); return; }
     mikroAn = !mikroAn;
     merke(MIKRO_SCHLUESSEL, mikroAn ? 'an' : 'aus');
     if (spur) spur.enabled = mikroAn;
     if (!mikroAn) { sprechBis = 0; sendeSpricht(false); }
     knopfZeigen();
-    meldung(mikroAn ? '🎤 Mikrofon an' : '🎤 Mikrofon aus');
+    meldung(tr(mikroAn ? 'mikro.an' : 'mikro.aus'));
   };
 
   // ---------- Mikrofon ----------
@@ -88,20 +89,20 @@ export function starte({ raum, meineId, welt, meldung }) {
     if (mikroAnfrage || strom) return;
     mikroAnfrage = true;
     try {
-      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('kein sicherer Kontext');
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('kein sicherer Kontext');   // i18n-ok: nur Konsole
       try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch { /* egal */ }
       strom = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       spur = strom.getAudioTracks()[0] ?? null;
-      if (!spur) throw new Error('keine Tonspur');
+      if (!spur) throw new Error('keine Tonspur');   // i18n-ok: nur Konsole
       spur.enabled = mikroAn;
       mikroFehler = false;
       pegelStarten();
       mikroNachreichen();
       aufnahmePruefen();
-      if (!lies(HINWEIS_SCHLUESSEL)) { merke(HINWEIS_SCHLUESSEL, '1'); meldung('🎙 Sprache ist an – Kopfhörer vermeiden Echo', true); }
+      if (!lies(HINWEIS_SCHLUESSEL)) { merke(HINWEIS_SCHLUESSEL, '1'); meldung(tr('mikro.hinweis'), true); }
     } catch (e) {
       mikroFehler = true; strom = null; spur = null;
-      meldung('🎤 Kein Mikrofon – du hörst die anderen trotzdem');
+      meldung(tr('mikro.kein'));
       console.warn('Mikrofon nicht verfügbar:', e?.message ?? e);
     } finally { mikroFertig = true; mikroAnfrage = false; knopfZeigen(); }
   }
@@ -317,7 +318,7 @@ export function starte({ raum, meineId, welt, meldung }) {
     serverWeg.add(sid);
     peerSchliessen(sid);
     if (melden) { try { raum.send('sprachWeg', { mit: sid, server: true }); } catch { /* egal */ } }
-    meldung(`📡 Verbindung zu ${namen(sid)} läuft über den Server`);
+    meldung('📡 ' + tr('mikro.serverweg', { namen: namen(sid) }));
     knopfZeigen();
     aufnahmePruefen();
   }
@@ -350,7 +351,7 @@ export function starte({ raum, meineId, welt, meldung }) {
   async function aufnahmeStarten() {
     aufnahme.starte = true;
     try {
-      if (!ac.audioWorklet) throw new Error('kein AudioWorklet');
+      if (!ac.audioWorklet) throw new Error('kein AudioWorklet');   // i18n-ok: nur Konsole
       if (!aufnahme.url) aufnahme.url = URL.createObjectURL(new Blob([WORKLET_CODE], { type: 'text/javascript' }));
       if (!aufnahme.geladen) { await ac.audioWorklet.addModule(aufnahme.url); aufnahme.geladen = true; }
       if (!aufnahme.starte || !strom) return;   // inzwischen wieder abgebrochen

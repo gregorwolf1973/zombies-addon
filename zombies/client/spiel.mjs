@@ -46,6 +46,7 @@ import { KUL_SCHLUESSEL, schattenFaktor } from './kulisse_regeln.mjs';
 import { finaleHud, finaleAbspann } from './finale.mjs';
 import { TUT, tutorialKnopf, tutorialStart } from './tutorial.mjs';   // Schießstand / Tutorial (eigener Raum 'schiessstand')
 import { baueSchiessstandWelt, SS_B, SS_H } from './schiessstand_welt.mjs';
+import { t as tr, textAus, beiSprachwechsel, sprachUmschalter } from './i18n.mjs';
 
 let KARTE = null;   // OSM-Karte (z. B. Geretsried), sonst erzeugtes Dorf
 const SCHATTEN_ZELLE = 4, SCHATTEN_DUNKEL = 0.35;   // Raster der Schattenprüfung (px) und Abdunklung der Figuren im Schatten
@@ -189,7 +190,7 @@ function diagAnzeige(an) {
     const t = performance.now(), sek = Math.max(0.2, (t - t0) / 1000), k = diagKontext();
     const fps = (diag.gesamtFrames - f0) / sek, kbs = (diag.gesamtBytes - b0) / 1024 / sek;
     f0 = diag.gesamtFrames; b0 = diag.gesamtBytes; t0 = t;
-    el.textContent = `FPS ${fps.toFixed(0)}  Ping ${diag.ping == null ? '–' : Math.round(diag.ping) + ' ms'}\n${kbs.toFixed(1)} kB/s  Zombies ${k.zombies ?? '–'}\nTon ${k.ton}`;
+    el.textContent = `FPS ${fps.toFixed(0)}  Ping ${diag.ping == null ? '–' : Math.round(diag.ping) + ' ms'}\n${kbs.toFixed(1)} kB/s  Zombies ${k.zombies ?? '–'}\nTon ${k.ton}`;   // i18n-ok: technische Messanzeige
   }, 1000);
 }
 
@@ -232,10 +233,11 @@ const heldenwahl = { neu: false, aktive: [], bild: new Image(), kachel: 160 };
 heldenwahl.bild.onload = () => { heldenwahlKacheln(); vorschauZeichnen(); };
 function rechtsLinks(i) {   // Impressum/Datenschutz in der Fußzeile nur, wenn auf dem Server hinterlegt
   const z = $('rechtslinks'); if (!z) return;
-  const teile = [i.impressum && '<a href="impressum" target="_blank" rel="noopener">Impressum</a>', i.datenschutz && '<a href="datenschutz" target="_blank" rel="noopener">Datenschutz</a>'].filter(Boolean);
+  const teile = [i.impressum && `<a href="impressum" target="_blank" rel="noopener">${tr('start.impressum')}</a>`, i.datenschutz && `<a href="datenschutz" target="_blank" rel="noopener">${tr('start.datenschutz')}</a>`].filter(Boolean);
   z.innerHTML = teile.join(' · '); z.hidden = !teile.length;
 }
-fetch('info').then(r => r.json()).then(i => { diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; setzeKulissen(i.kulissen); rechtsLinks(i); externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); zombieSichtEinst = i.zombieSicht; heldenwahlEinrichten(i.helden); }).catch(() => {});
+let infoDaten = null;
+fetch('info').then(r => r.json()).then(i => { infoDaten = i; diag.setzeAn(i.diagnose !== false); seitenVersion = i.version || null; $('codeblock').hidden = !i.code; wikiAdresse = i.wiki || ''; setzeKulissen(i.kulissen); rechtsLinks(i); externeAdresse = i.extern || ''; if (mikroNurHttps) mikroLink(); ton.toeneZuordnen(i.toene); ton.toneEinstellungen(i); zombieSichtEinst = i.zombieSicht; heldenwahlEinrichten(i.helden); }).catch(() => {});
 $('los').addEventListener('click', () => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });
 tutorialKnopf(() => { ton.tonStarten(); sprache.vorbereiten(); mitspielen(); });   // „🎯 Schießstand / Tutorial“ unter „Mitspielen“
 
@@ -255,37 +257,46 @@ $('installieren').onclick = async () => {
   try { await installEreignis.userChoice; } catch { /* abgebrochen */ }
   installEreignis = null; $('installieren').hidden = true;
 };
-let mikroNurHttps = false;
+let mikroNurHttps = false, mikroSchluessel = null;
 // Ohne sicheren Kontext (http:// außer localhost) geht kein Mikrofon: Link zur https-Adresse anbieten, falls eingestellt
 function mikroLink() {
   const a = /^https:\/\//i.test(externeAdresse) ? externeAdresse : '';
-  const z = $('fgMikro'); z.textContent = 'nur über https:// möglich';
+  const z = $('fgMikro'); mikroSchluessel = 'start.mikroNurHttps'; z.textContent = tr(mikroSchluessel);
   if (!a) return;
-  z.textContent = 'Mit Mikrofon spielen: ';
+  z.textContent = tr('start.mikroMitLink');
   const l = document.createElement('a'); l.href = a; l.textContent = a; l.rel = 'noopener'; z.append(l);
 }
 async function freigabenAbfragen() {
-  const text = t => { $('fgMikro').textContent = t; };
+  const text = k => { mikroSchluessel = k; $('fgMikro').textContent = tr(k); };
   const imRahmen = (() => { try { return window.self !== window.top; } catch { return true; } })();
   if (imRahmen) { $('fgRahmen').hidden = false; $('fgEigen').href = location.href; }
   try {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { mikroNurHttps = true; mikroLink(); return; }
     let stand = 'prompt';
     try { stand = (await navigator.permissions.query({ name: 'microphone' })).state; } catch { /* Safari kennt das nicht überall */ }
-    if (stand === 'granted') { text('erlaubt ✓'); return; }
-    if (stand === 'denied') { text('gesperrt – oben links am Schloss-Symbol erlauben und neu laden'); return; }
-    text('bitte im Browser erlauben …');
+    if (stand === 'granted') { text('start.mikroErlaubt'); return; }
+    if (stand === 'denied') { text('start.mikroGesperrt'); return; }
+    text('start.mikroBitte');
     const strom = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     strom.getTracks().forEach(t => t.stop());   // nur die Erlaubnis holen; das Spiel öffnet das Mikrofon später selbst
-    text('erlaubt ✓');
+    text('start.mikroErlaubt');
     $('fgMikroKnopf').hidden = true;
   } catch (e) {
-    text(imRahmen ? 'nicht möglich (Seitenleiste)' : 'nicht erlaubt – du hörst die anderen trotzdem');
+    text(imRahmen ? 'start.mikroRahmen' : 'start.mikroNein');
     if (!imRahmen) $('fgMikroKnopf').hidden = false;
     console.warn('Mikrofon-Freigabe:', e?.message ?? e);
   } finally { freigabenFertig = true; installAnbieten(); }
 }
 $('fgMikroKnopf').onclick = () => freigabenAbfragen();
+// Sprache: Umschalter auf der Startseite und im ⚙️-Menü; beim Wechsel die selbst gesetzten Starttexte nachziehen
+sprachUmschalter($('sprachwahlStart'));
+sprachUmschalter($('eg-sprache'));
+beiSprachwechsel(() => {
+  if (mikroSchluessel === 'start.mikroNurHttps' && externeAdresse) mikroLink(); else if (mikroSchluessel) $('fgMikro').textContent = tr(mikroSchluessel);
+  if (infoDaten) rechtsLinks(infoDaten);
+  heldenwahlKacheln(); figurWahlMarkieren();
+  for (const [box, farben] of [[$('haarwahl'), HAARFARBEN], [$('kleidwahl'), KLEIDFARBEN]]) [...box.children].forEach((b, i) => { if (farben[i]) { b.title = farben[i].name; b.setAttribute('aria-label', farben[i].name); } });
+});
 freigabenAbfragen();
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service Worker:', e?.message ?? e));
 // Startmusik: sofort beim Öffnen versuchen; blockiert der Browser den Ton, startet sie bei der ersten Berührung/Taste
@@ -331,14 +342,14 @@ function heldenwahlKacheln() {
     b.onclick = () => { meinAussehen.g = f.g; figurWahlMarkieren(true); };
     box.appendChild(b);
   }
-  const sv = document.createElement('button'); sv.type = 'button'; sv.dataset.g = 's'; sv.title = 'Survivor'; sv.setAttribute('aria-label', 'Survivor'); sv.textContent = 'Surv.';
+  const sv = document.createElement('button'); sv.type = 'button'; sv.dataset.g = 's'; sv.title = tr('start.survivor'); sv.setAttribute('aria-label', tr('start.survivor')); sv.textContent = tr('start.survivorKurz');
   sv.onclick = () => { meinAussehen.g = 's'; figurWahlMarkieren(true); };
   box.appendChild(sv);
   figurWahlMarkieren();
 }
 function figurWahlMarkieren(speichern = false) {
   document.querySelectorAll('#heldentafeln button').forEach(b => b.classList.toggle('an', b.dataset.g === meinAussehen.g));
-  const nm = $('heldenname'); if (nm) nm.textContent = meinAussehen.g === 's' ? 'Survivor' : (HF_LISTE.find(f => f.g === meinAussehen.g)?.name ?? '');
+  const nm = $('heldenname'); if (nm) nm.textContent = meinAussehen.g === 's' ? tr('start.survivor') : (HF_LISTE.find(f => f.g === meinAussehen.g)?.name ?? '');
   if (speichern) { aussehenAngefasst = true; try { localStorage.setItem('zob_aussehen', aussehenText(meinAussehen)); } catch {} }
   document.querySelectorAll('.geschlecht button').forEach(b => b.classList.toggle('an', b.dataset.g === meinAussehen.g));
   if (speichern) vorschauZeichnen();
@@ -485,12 +496,12 @@ const einFrame = () => new Promise(ok => requestAnimationFrame(() => setTimeout(
 async function mitspielen() {
   sprache.vorbereiten();   // AudioContext in der Nutzergeste (iOS), auch beim Start mit Enter
   const name = nameFeld.value.trim();
-  if (!name) { $('fehler').textContent = 'Bitte gib einen Namen ein.'; nameFeld.focus(); return; }
+  if (!name) { $('fehler').textContent = tr('start.nameFehlt'); nameFeld.focus(); return; }
   if (await veraltet()) { frischLaden(true); return; }   // Server wurde aktualisiert: erst frischen Code laden
   const code = $('code').value.trim();
   try { localStorage.setItem('zob_name', name); localStorage.setItem('zob_code', code); } catch {}
   $('los').disabled = true;
-  ladenZeigen(5, 'Generiere Welt … verbinde mit dem Server');
+  ladenZeigen(5, tr('laden.verbinde'));
   $('fehler').textContent = '';
   $('fehler').classList.remove('gut');
   try {
@@ -503,7 +514,7 @@ async function mitspielen() {
     const beitritt = { name, code, ...(testpw ? { testzugang: testpw } : {}), spielerId: spielerId(), aussehen: aussehenText(meinAussehen), aussehenGewaehlt: aussehenAngefasst };
     if (!r) r = TUT.an ? await client.create('schiessstand', beitritt) : await client.joinOrCreate('zombies', beitritt);   // Schießstand: eigener Raum, nichts für die Hauptwelt
     raum = r;
-    ladenZeigen(15, 'Generiere Welt … verbunden');
+    ladenZeigen(15, tr('laden.verbunden'));
     ton.musikAusblenden(4);   // Startmusik sanft ausblenden
     meineId = r.sessionId;
     diagStarten(r);
@@ -518,7 +529,7 @@ async function mitspielen() {
       abgeloest = abgemeldet = true;
       try { sessionStorage.removeItem('zob_token'); } catch {}
       const v = $('verbindung');
-      v.textContent = 'In einem anderen Fenster weitergespielt';
+      v.textContent = tr('start.anderesFenster');
       v.style.display = 'block'; v.style.pointerEvents = 'none';
     });
     raum.onLeave(() => {
@@ -527,7 +538,7 @@ async function mitspielen() {
       // In der installierten App gibt es kein Neuladen per Wischen: Hinweis antippen lädt neu,
       // und kommt die App aus dem Hintergrund zurück, lädt sie von selbst neu
       const v = $('verbindung');
-      v.textContent = '🔄 Verbindung beendet – hier tippen zum Weiterspielen';
+      v.textContent = tr('verbindung.beendet');
       v.style.display = 'block'; v.style.pointerEvents = 'auto'; v.style.cursor = 'pointer'; v.style.padding = '14px 8px';
       v.onclick = () => location.reload();
       document.addEventListener('visibilitychange', () => { if (!document.hidden) location.reload(); }, { once: true });
@@ -551,7 +562,7 @@ async function mitspielen() {
       abgemeldet = true;
       try {
         sessionStorage.removeItem('zob_token');
-        sessionStorage.setItem('zob_meldung', 'Gespeichert. Gute Nacht im Safe Room – bis zum nächsten Mal!');
+        sessionStorage.setItem('zob_meldung', tr('start.gespeichert'));
       } catch {}
       await raum.leave(true).catch(() => {});
       location.reload();
@@ -562,9 +573,9 @@ async function mitspielen() {
   } catch (e) {
     console.error(e);
     const text = String(e.message || e);
-    if (/Zugangscode/.test(text)) { $('codeblock').hidden = false; $('fehler').textContent = 'Der Zugangscode stimmt nicht.'; $('code').focus(); }
-    else if (/anderen Fenster/.test(text)) $('fehler').textContent = 'Du spielst schon in einem anderen Fenster oder Tab.';
-    else $('fehler').textContent = 'Verbindung zum Spielserver fehlgeschlagen: ' + text;
+    if (/Zugangscode/.test(text)) { $('codeblock').hidden = false; $('fehler').textContent = tr('start.codeFalsch'); $('code').focus(); }
+    else if (/anderen Fenster/.test(text)) $('fehler').textContent = tr('start.schonOffen');
+    else $('fehler').textContent = tr('start.verbindungFehler', { fehler: text });
     $('los').disabled = false;
     ladenAus();
   }
@@ -606,7 +617,7 @@ function einstellungenEinrichten() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') zu(); });
   for (const b of document.querySelectorAll('#eg-ton button')) b.onclick = () => {
     ton.tonStarten(); ton.lautstaerkeSetzen(Number(b.dataset.v)); markieren();
-    $('einstellknopf').title = `Spieler-Einstellungen (Lautstärke ${ton.lautstaerke() ? Math.round(ton.lautstaerke() * 100) + ' %' : 'aus'})`;
+    $('einstellknopf').title = tr('einst.titelLautstaerke', { wert: ton.lautstaerke() ? Math.round(ton.lautstaerke() * 100) + ' %' : tr('einst.lautAus') });
   };
   const alpha = a => { document.documentElement.style.setProperty('--kartealpha', a); };
   try { alpha(localStorage.getItem('zob_kartealpha') ?? '0.6'); } catch { alpha('0.6'); }
@@ -686,13 +697,13 @@ async function starteSpiel() {
   if (gestartet) return;
   gestartet = true;
   feuerUiAnwenden();
-  ladenZeigen(25, 'Generiere Welt … lade Karte');
+  ladenZeigen(25, tr('laden.ladeKarte'));
   if (raum.state.karte) {
     try { KARTE = await (await fetch(`${ASSETS}karten/${raum.state.karte}.json`)).json(); }
     catch (e) { console.error('Karte nicht geladen', e); }
   }
   if (raum.state.karte) { try { await ladeKulisse(raum.state.karte); } catch (e) { console.error('Kulisse nicht geladen', e); } }   // Luftbild/Dächer/Schatten, falls die Karte Kulisse-Daten hat
-  ladenZeigen(40, 'Generiere Welt … Karte geladen');
+  ladenZeigen(40, tr('laden.karteGeladen'));
   // Welt schon jetzt im Web Worker bauen bzw. aus IndexedDB holen (läuft parallel zum Laden der Bilder und Töne); create() wartet darauf
   if (KARTE && !TUT.an) {
     const seed = raum.state.seed, autos = (raum.state.autos ?? 10) / 10;
@@ -775,37 +786,37 @@ function suMenueEinrichten(szene) {
     fenster = document.createElement('div'); fenster.id = 'sumenue';
     const b = (befehl, text, extra = {}) => `<button type="button" data-su='${JSON.stringify({ befehl, ...extra })}'>${text}</button>`;
     const bs = (befehl, text) => `<button type="button" class="umschalter" data-schalter="${befehl}" data-text="${text}" data-su='${JSON.stringify({ befehl })}'>${text}: …</button>`;   // Umschalter: zeigt AN/AUS vom Server
-    fenster.innerHTML = `<div class="fenster"><div class="kopfzeile"><b>☰ Testmenü</b><button type="button" id="suzu" aria-label="Schließen">✕</button></div>
-      <div class="titel">Springen</div>
-      <button type="button" data-flug="1">🎥 Kameraflug</button>
-      ${b('bw', '🎖 Zur Bundeswehr')}${b('evak', '📍 Zum Evakuierungspunkt')}${b('horde_hin', '🧟 Zur Zombiehorde (50 m davor)')}
-      <div class="titel">Waffe wählen (Munition voll)</div>
+    fenster.innerHTML = `<div class="fenster"><div class="kopfzeile"><b>${tr('su.kopf')}</b><button type="button" id="suzu" aria-label="${tr('allgemein.schliessen')}">✕</button></div>
+      <div class="titel">${tr('su.springen')}</div>
+      <button type="button" data-flug="1">${tr('su.kameraflug')}</button>
+      ${b('bw', tr('su.zurBw'))}${b('evak', tr('su.zumEvak'))}${b('horde_hin', tr('su.zurHorde'))}
+      <div class="titel">${tr('su.waffeWaehlen')}</div>
       <div class="raster">${SU_WAFFEN_LISTE.map(n => b('waffe', `${DINGE[n]?.zeichen ?? ''} ${DINGE[n]?.name ?? n}`, { name: n })).join('')}</div>
-      <div class="titel">Gegenstand in den Rucksack</div>
+      <div class="titel">${tr('su.gegenstand')}</div>
       <div class="zeile">${['brechstange', 'autoschluessel'].map(n => b('ding', `${DINGE[n]?.zeichen ?? ''} ${DINGE[n]?.name ?? n}`, { name: n })).join('')}</div>
-      <div class="titel">Fahrzeug zum Selbstfahren</div>
+      <div class="titel">${tr('su.fahrzeug')}</div>
       <div class="zeile">${['boxer', 'puma', 'leopard'].map(a => b('fahrzeug', `🛡️ ${FAHRBAR[a].name}`, { art: a })).join('')}</div>
-      ${b('fahrzeug_weg', '🗑 Fahrzeug entfernen')}
-      <div class="titel">Bots und Ausrüstung</div>
-      ${b('bots', '🤖 Alle Bots zu mir (heilen)')}${b('auffuellen', '🎒 Ausrüstung auffüllen')}${bs('unsterblich', '⭐ Unsterblich')}
-      <div class="titel">Horde jetzt starten</div>
+      ${b('fahrzeug_weg', tr('su.fahrzeugWeg'))}
+      <div class="titel">${tr('su.botsTitel')}</div>
+      ${b('bots', tr('su.bots'))}${b('auffuellen', tr('su.auffuellen'))}${bs('unsterblich', tr('su.unsterblich'))}
+      <div class="titel">${tr('su.hordeStarten')}</div>
       <div class="zeile">${b('horde', '50', { groesse: 50 })}${b('horde', '200', { groesse: 200 })}${b('horde', '500', { groesse: 500 })}</div>
-      ${bs('hordeanzeige', '🎯 Horden-Ziele anzeigen')}
-      <button type="button" class="umschalter" data-hind="1" data-text="🧱 Hindernisse zeigen">🧱 Hindernisse zeigen: AUS</button>
-      <button type="button" class="umschalter" data-koll="1" data-text="📐 Kollision zeigen">📐 Kollision zeigen: AUS</button>
-      <div class="titel">Tageszeit</div>
+      ${bs('hordeanzeige', tr('su.hordenZiele'))}
+      <button type="button" class="umschalter" data-hind="1" data-text="${tr('su.hindernisse')}">${tr('su.hindernisse')}: ${tr('su.aus')}</button>
+      <button type="button" class="umschalter" data-koll="1" data-text="${tr('su.kollision')}">${tr('su.kollision')}: ${tr('su.aus')}</button>
+      <div class="titel">${tr('su.tageszeit')}</div>
       <div class="zeile">${b('zeit', '☀️ 12:00', { stunde: 12 })}${b('zeit', '🌙 23:00', { stunde: 23 })}</div>
-      ${bs('nebel', '🌫 Nebel')}
-      <div class="titel">Verkehr</div>
-      ${b('unfall', '💥 Unfall in der Nähe auslösen')}
-      <div class="titel">Zeitraffer</div>
+      ${bs('nebel', tr('su.nebel'))}
+      <div class="titel">${tr('su.verkehr')}</div>
+      ${b('unfall', tr('su.unfall'))}
+      <div class="titel">${tr('su.zeitraffer')}</div>
       <div class="zeile">${[1, 5, 10, 60].map(n => b('zeitraffer', `⏩ ${n}×`, { faktor: n }).replace('<button ', `<button data-zr="${n}" `)).join('')}</div>
-      <div class="titel">Evakuierung und Lager</div>
-      ${b('evakrufen', '🚌 Evakuierung sofort rufen')}${b('alleaufgaben', '✅ Alle Aufgaben erledigt')}
-      <div class="zeile">${b('lager', '💥 Lager fallen', { zustand: 'gefallen' })}${b('lager', '🎖 Lager aufbauen', { zustand: 'steht' })}</div>
-      <div class="titel">Level springen (Test)</div>
+      <div class="titel">${tr('su.evakTitel')}</div>
+      ${b('evakrufen', tr('su.evakRufen'))}${b('alleaufgaben', tr('su.alleAufgaben'))}
+      <div class="zeile">${b('lager', tr('su.lagerFallen'), { zustand: 'gefallen' })}${b('lager', tr('su.lagerAufbauen'), { zustand: 'steht' })}</div>
+      <div class="titel">${tr('su.levelSpringen')}</div>
       <div class="zeile">${LEVEL_KATALOG.map((_, i) => b('level', `Level ${i + 1}`, { level: i + 1 })).join('')}</div>
-      ${b('countdown', '☢️ Countdown auf 60 s (nur Andermatt)', { sekunden: 60 })}</div>`;
+      ${b('countdown', tr('su.countdown'), { sekunden: 60 })}</div>`;
     document.body.appendChild(fenster);
     const zu = () => fenster.classList.remove('offen');
     fenster.querySelector('#suzu').onclick = zu;
@@ -832,12 +843,13 @@ function suMenueEinrichten(szene) {
 
 // Zustand der Umschalter im Testmenü anzeigen (AN grün, AUS grau); Werte kommen als 'suStatus' vom Server
 let suStatusRaum = null;
+beiSprachwechsel(() => { if ($('sumenue')) { const offen = $('sumenue').classList.contains('offen'); $('sumenue').remove(); if (suAn) { suMenueEinrichten(szeneRef); if (offen) $('suknopf').click(); } } });
 let hindernisAn = false;   // „Hindernisse zeigen“ (nur lokal, nur Superuser)
 let kollisionAn = false;   // „Kollision zeigen“: Umrisse der Sperrflächen (nur lokal, nur Superuser)
 function hindernisKnopf() {
   for (const [sel, an] of [['button[data-hind]', hindernisAn], ['button[data-koll]', kollisionAn]]) {
     const bt = $('sumenue')?.querySelector(sel); if (!bt) continue;
-    bt.textContent = `${bt.dataset.text}: ${an ? 'AN' : 'AUS'}`;
+    bt.textContent = `${bt.dataset.text}: ${an ? tr('su.an') : tr('su.aus')}`;
     bt.classList.toggle('an', an); bt.setAttribute('aria-pressed', an ? 'true' : 'false');
   }
 }
@@ -846,7 +858,7 @@ function suStatusZeigen(st) {
   hindernisKnopf();
   for (const bt of f.querySelectorAll('button[data-schalter]')) {
     const an = !!st[bt.dataset.schalter];
-    bt.textContent = `${bt.dataset.text}: ${an ? 'AN' : 'AUS'}`;
+    bt.textContent = `${bt.dataset.text}: ${an ? tr('su.an') : tr('su.aus')}`;
     bt.classList.toggle('an', an); bt.setAttribute('aria-pressed', an ? 'true' : 'false');
   }
   for (const bt of f.querySelectorAll('button[data-zr]')) {
@@ -855,7 +867,9 @@ function suStatusZeigen(st) {
   }
 }
 
+// text: fertiger Text oder Servernachricht { k, w } (Phase 2, siehe i18n.mjs textAus)
 function meldung(text, lang = false) {
+  text = typeof text === 'string' ? text : textAus(text);
   const d = document.createElement('div'), box = $('meldungen');
   d.textContent = text;
   box.appendChild(d);
@@ -947,7 +961,7 @@ function chatAnschliessen(raum) {
   const verlaufZeigen = liste => {
     $('chatliste').replaceChildren();
     if (!liste.length) {
-      const l = document.createElement('div'); l.className = 'leer'; l.textContent = 'Noch keine Nachrichten'; $('chatliste').appendChild(l);
+      const l = document.createElement('div'); l.className = 'leer'; l.dataset.i18n = 'chat.leer'; l.textContent = tr('chat.leer'); $('chatliste').appendChild(l);
     }
     for (const n of liste) chatAnhaengen({ ...n, ich: vonMir(n) });
     $('chatliste').scrollTop = $('chatliste').scrollHeight;
@@ -1040,8 +1054,9 @@ const ZOMBIE_TYPEN = ['tarn', 'dirndl', 'feuerwehr', 'hemd', 'lederhose', 'z6', 
   'kaminkehrer', 'bauarbeiter', 'koch', 'holzfaeller', 'mechaniker', 'brandmeister', 'kehrer', 'strassenarbeiter', 'baecker', 'flanell', 'werkstatt', 'vogelscheuche', 'postbote', 'streife', 'wachtmeister', 'landstreicher', 'mantel', 'langhaar'];   // z6/z7 aus figuren2 (Riley Gombart), ab 'kaminkehrer' aus figuren3 (Gemini)
 const GEMINI_TYPEN = new Set(ZOMBIE_TYPEN.slice(7));
 const GEMINI_LEICHEN = ['hemd', 'tarn', 'lederhose', 'dirndl', 'feuerwehr'];   // Sterbebilder: vorhandene Leichen, nach Typ gewählt
-const ZIEL_NAMEN = { pharmacy: 'Apotheke', chemist: 'Drogerie', doctors: 'Arzt', dentist: 'Zahnarzt', medical_supply: 'Sanitätshaus', supermarket: 'Supermarkt', convenience: 'Laden', bakery: 'Bäcker', butcher: 'Metzger', kiosk: 'Kiosk', beverages: 'Getränke', greengrocer: 'Gemüse', department_store: 'Kaufhaus', hardware: 'Baumarkt', doityourself: 'Baumarkt', sports: 'Sport', outdoor: 'Outdoor',
-  apotheke: 'Apotheke', lebensmittel: 'Lebensmittel', kaufhaus: 'Kaufhaus' };
+// Ladenarten (OSM shop/amenity bzw. ladenArt) → Name in der Kartenliste: Schlüssel ziel.<art> in client/i18n
+const ZIEL_ARTEN = new Set(['pharmacy', 'chemist', 'doctors', 'dentist', 'medical_supply', 'supermarket', 'convenience', 'bakery', 'butcher', 'kiosk', 'beverages', 'greengrocer', 'department_store', 'hardware', 'doityourself', 'sports', 'outdoor', 'apotheke', 'lebensmittel', 'kaufhaus']);
+const zielName = art => (ZIEL_ARTEN.has(art) ? tr('ziel.' + art) : null);
 const ZIEL_SYMBOL = { apotheke: '💊', lebensmittel: '🛒', kaufhaus: '🔦' };
 const HELD_HALTUNGEN = ['leer', 'pistole', 'gewehr', 'messer', 'lampe', 'pistole_lampe', 'gewehr_lampe', 'messer_lampe',
   'schrotflinte', 'mp', 'mg', 'armbrust', 'scharfschuetze', 'granatwerfer', 'sense', 'schlaeger', 'handgranate', 'faust'];   // ab 'schrotflinte': eigene Bilder ohne Lampen-Variante
@@ -1053,7 +1068,7 @@ class Ort extends Phaser.Scene {
 
   preload() {
     if (ASSETS) this.load.setBaseURL(ASSETS);   // Grafiken aus dem versionierten Ordner (lange zwischengespeichert)
-    this.load.on('progress', v => { if (!this.ladenFertig) ladenZeigen(40 + 30 * v, 'Generiere Welt … lade Grafiken'); });   // später nachgeladene Bilder (Helden-Atlanten) holen die Ladeanzeige nicht zurück
+    this.load.on('progress', v => { if (!this.ladenFertig) ladenZeigen(40 + 30 * v, tr('laden.grafiken')); });   // später nachgeladene Bilder (Helden-Atlanten) holen die Ladeanzeige nicht zurück
     for (const g of GRAFIK) this.load.image(g, 'grafik/' + g + '.png');
     // Figuren aus den KI-Bögen (tools/figuren_schneiden.py): 160er-Felder, Drehpunkt in der Feldmitte
     this.load.spritesheet('figuren', 'grafik/figuren.png', { frameWidth: 160, frameHeight: 160 });
@@ -1095,7 +1110,7 @@ class Ort extends Phaser.Scene {
   }
 
   create() {
-    ladenZeigen(72, 'Generiere Welt … baue Häuser und Straßen');
+    ladenZeigen(72, tr('laden.haeuser'));
     this.bereit = false;
     // erst einen Frame zeichnen lassen, damit die Anzeige sichtbar ist – das Bauen der Welt blockiert 1–2 s
     einFrame().then(async () => {
@@ -1129,7 +1144,7 @@ class Ort extends Phaser.Scene {
     try { setzeMoebelBilder(this.textures.get('moebel').getSourceImage(), this.cache.json.get('moebelliste')); } catch { setzeMoebelBilder(null, null); }
     figurenVorzeichnen(this);
     try { setzeDingListe(this.cache.json.get('dingeliste')); dingRahmen(this); } catch {}
-    ladenZeigen(85, 'Generiere Welt … zeichne Karte');
+    ladenZeigen(85, tr('laden.zeichne'));
     this.zeichneKarte();
     this.aussenObjekte = this.children.list.slice();   // alles, was zur Außenwelt gehört
     this.uebersichtVorbereiten();
@@ -1309,7 +1324,7 @@ class Ort extends Phaser.Scene {
       ton.ereignis('soldatRuf', m.x, m.y);
       const e = this.stuetzpunktObj?.soldaten.find(q => q.n === m.n);
       if (e?.tot) return;
-      const t = this.add.text(m.x, m.y - 18, m.t ? 'Keine Bewegung!' : 'Halt! Stehen bleiben!', { fontSize: '11px', fontFamily: 'sans-serif', color: '#fff', backgroundColor: '#000a', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(50);
+      const t = this.add.text(m.x, m.y - 18, m.t ? tr('soldat.keineBewegung') : tr('soldat.halt'), { fontSize: '11px', fontFamily: 'sans-serif', color: '#fff', backgroundColor: '#000a', padding: { x: 4, y: 2 } }).setOrigin(0.5).setDepth(50);
       this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, delay: 1500, duration: 700, onComplete: () => t.destroy() });
     });
     raum.onMessage('hilferufe', m => { ton.ereignis('hilferufe', m.x, m.y); });
@@ -1329,12 +1344,12 @@ class Ort extends Phaser.Scene {
     raum.onMessage('tonEinst', m => { if (m?.zombieSicht) zombieSichtEinst = m.zombieSicht; if (m?.toene) ton.toeneZuordnen(m.toene); ton.toneEinstellungen(m); });   // Backend hat Musik/Radio/Horde geändert
     raum.onMessage('funkAnsage', () => { ton.ereignis('funkAnsage'); });   // Sprachansage nach dem Funkspruch (ohne zugeordnete Datei bleibt es still)
     raum.onMessage('versorgung', () => { this.leereKisten?.clear(); });   // neue Bundeswehr-Versorgung: Munitionskisten wieder sichtbar
-    raum.onMessage('meldung', m => { meldung(m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
+    raum.onMessage('meldung', m => { meldung(m.k ? m : m.text, m.lang); if (m.lang) ton.ereignis('funk'); });
     // eigene Welt passt nicht zum Server: einmal neu laden (frischer Code), danach nur noch warnen
     raum.onMessage('weltFalsch', m => {
       let schon = null; try { schon = sessionStorage.getItem('zob_weltneu'); sessionStorage.setItem('zob_weltneu', m.soll); } catch {}
       if (schon !== m.soll) { autostartMerken(); location.reload(); return; }
-      meldung('⚠️ Deine Karte weicht vom Server ab – Kisten und Türen stehen evtl. woanders. Bitte App ganz schließen und neu öffnen.', true);
+      meldung(tr('verbindung.weltFalsch'), true);
     });
     fkStart(raum, meldung);
     startwahlStart(raum);   // Startwahl vor Level 1 (5 Punkte + Gegenstand)
@@ -1342,10 +1357,10 @@ class Ort extends Phaser.Scene {
     raum.onMessage('gefunden', m => {
       // Munitionskisten bleiben immer sichtbar und durchsuchbar (kein Ausgrauen mehr); ist nichts drin, sagt der Server wann die nächste Lieferung kommt
       if (m.dinge.length) ton.aufheben(); else if (m.rest || !ton.ereignis('truheLeer')) ton.suchen();
-      if (m.dinge.length) meldung('Gefunden: ' + m.dinge.map(d => d === 'munition' ? `🧰 ${m.schuss ?? 12} Schuss` : d === 'pfeil' ? '➶ 6 Pfeile' : dingText(d)).join(', '));
-      else if (m.rest) meldung('Rucksack voll – der Rest bleibt hier');
-      else meldung(m.text || 'Nichts Brauchbares gefunden');
-      if (m.dinge.length && m.rest) meldung('Rucksack voll – der Rest bleibt hier');
+      if (m.dinge.length) meldung(tr('fund.gefunden', { liste: m.dinge.map(d => d === 'munition' ? tr('fund.schuss', { n: m.schuss ?? 12 }) : d === 'pfeil' ? tr('fund.pfeile', { n: 6 }) : dingText(d)).join(', ') }));
+      else if (m.rest) meldung(tr('fund.rucksackVoll'));
+      else meldung(m.k ? m : m.text || tr('fund.nichts'));
+      if (m.dinge.length && m.rest) meldung(tr('fund.rucksackVoll'));
     });
     raum.onMessage('kistenFall', m => { if ((this.aktEbene ?? '') === '') kisteFaellt(this, m); });   // A400M: Munitionskiste fällt aus dem Heck
     raum.onMessage('fundorte', m => { this.fundorte = Array.isArray(m?.l) ? m.l : []; });   // gesuchte Dinge in geöffneten Behältern (Karte)
@@ -1356,7 +1371,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('tausch', m => zeigeTausch(m));
     raum.onMessage('tausch_ende', m => {
       tauschZu();
-      meldung(m.grund === 'fertig' ? '🤝 Getauscht!' : 'Tausch abgebrochen');
+      meldung(m.grund === 'fertig' ? tr('tausch.fertig') : tr('tausch.abgebrochen'));
     });
     raum.onMessage('aufloesung', m => zeigeAufloesung(m));
     // Server kündigt das nächste Level an (Karte + Seed): schon jetzt im Worker rechnen und in IndexedDB legen, dann lädt der Levelwechsel sie von dort
@@ -1370,15 +1385,15 @@ class Ort extends Phaser.Scene {
     raum.onMessage('neustart', m => {
       abgemeldet = true;
       sprache.uebergang();   // Levelwechsel: Sprachverbindungen laufen weiter, bis die Seite neu lädt (der Server schließt nur den Raum)
-      if (m?.level) ladenZeigen(30, 'Generiere nächstes Level …', `🎉 Level ${m.level - 1} abgeschlossen!`); else ladenZeigen(30, 'Generiere Welt neu …');
-      setTimeout(() => ladenZeigen(60, m?.level ? 'Generiere nächstes Level … Karte wird vorbereitet' : 'Generiere Welt neu …', m?.level ? `🎉 Level ${m.level - 1} abgeschlossen!` : ''), 1200);
-      meldung(m?.level ? `🚌 Level ${m.level} – die Fahrt geht los, gleich geht es weiter …` : '🔄 Die Welt wird neu gestartet – gleich geht es weiter …', true);
+      if (m?.level) ladenZeigen(30, tr('laden.naechstes'), tr('laden.levelFertig', { n: m.level - 1 })); else ladenZeigen(30, tr('laden.neu'));
+      setTimeout(() => ladenZeigen(60, m?.level ? tr('laden.naechstesKarte') : tr('laden.neu'), m?.level ? tr('laden.levelFertig', { n: m.level - 1 }) : ''), 1200);
+      meldung(m?.level ? tr('level.fahrt', { n: m.level }) : tr('level.neustart'), true);
       autostartMerken();
       setTimeout(() => location.reload(), 2500);
     });
     raum.onMessage('tor', () => meldung(raum.state.aufgaben?.size
-      ? (raum.state.funk ? '🔓 Das Tor ist offen! Der Evakuierungsbus holt euch dort ab.' : '🔓 Das Tor ist offen! Setzt am Funktisch im Safe Room einen 📻 Funkspruch ab – dann kommt der Evakuierungsbus.')
-      : '🔓 Das Tor ist offen!', true));
+      ? (raum.state.funk ? tr('level.torBus') : tr('level.torFunk'))
+      : tr('level.tor'), true));
 
     $('aktion').onclick = () => this.aktion();
     $('aktion2').onclick = () => this.aktion2();
@@ -1419,7 +1434,7 @@ class Ort extends Phaser.Scene {
       const el = document.createElement('div');
       el.style.cssText = 'position:fixed;top:2px;left:50%;transform:translateX(-50%);z-index:99;font:12px monospace;color:#0f0;background:#000a;padding:2px 6px;pointer-events:none';
       document.body.appendChild(el);
-      this.messZeit = setInterval(() => { const m = this.messZombies ?? [0, 0]; el.textContent = `FPS ${Math.round(this.game.loop.actualFps)} | Zombies ${m[0]}/${m[1]}`; }, 500);
+      this.messZeit = setInterval(() => { const m = this.messZombies ?? [0, 0]; el.textContent = `FPS ${Math.round(this.game.loop.actualFps)} | Zombies ${m[0]}/${m[1]}`; }, 500);   // i18n-ok: Messhilfe ?debug
     }
     // Prüfhilfe Horde (nur Superuser): Server schickt 'hordeInfo', wenn hordeZieleZeigen an ist oder im ☰-Menü/mit ?debug eingeschaltet
     this.hordeGfx = this.add.graphics().setDepth(900);
@@ -1433,6 +1448,7 @@ class Ort extends Phaser.Scene {
     raum.onMessage('hordeInfo', m => this.hordeInfoEmpfangen(m));
     if (new URLSearchParams(location.search).has('debug')) raum.send('hordeDebug', { an: true });
     szeneRef = this;
+    beiSprachwechsel(() => { this.waffenplatzSchluessel = null; this.rucksackSchluessel = null; this.aufgabenBekannt = null; popupZu(); });   // HUD-Teile mit Zwischenspeicher neu zeichnen
     // Test-Hilfe: mit ?debug in der Adresse ist die Szene in der Konsole erreichbar
     if (new URLSearchParams(location.search).has('debug')) { window.szene = this; window.raum = raum; window.meineId = meineId; }
   }
@@ -1504,7 +1520,7 @@ class Ort extends Phaser.Scene {
     document.addEventListener('zob-kulisse', () => this.kulisseNeuBauen());
     this.torGrafik = this.add.graphics().setDepth(1.5);
     this.torStand = -1;
-    this.add.text((this.welt.tor.x + (this.welt.tor.x === 0 ? 1 : 0)) * KACHEL + 4, (this.welt.tor.y + (this.welt.tor.y === 0 ? 1 : 0)) * KACHEL + 18, 'Ortsausgang', {
+    this.add.text((this.welt.tor.x + (this.welt.tor.x === 0 ? 1 : 0)) * KACHEL + 4, (this.welt.tor.y + (this.welt.tor.y === 0 ? 1 : 0)) * KACHEL + 18, tr('karte.ortsausgang'), {
       fontSize: '12px', fontStyle: 'bold', color: '#ffe082',
     }).setDepth(1);
 
@@ -1617,7 +1633,7 @@ class Ort extends Phaser.Scene {
       const stab = this.add.graphics().setDepth(5.75);
       stab.fillStyle(0x212121, 1).fillRect(x - 2, y - 10, 4, 14);
       stab.fillStyle(0xff1744, 1).fillRect(x - 3, y - 12, 6, 5);
-      const text = this.add.text(x, y - 48, pkt.bunker ? '📍 Bunker' : pkt.heli ? '📍 Hubschrauber' : '📍 Abholung', {
+      const text = this.add.text(x, y - 48, pkt.bunker ? tr('karte.bunker') : pkt.heli ? tr('karte.hubschrauber') : tr('karte.abholung'), {
         fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#b71c1c', strokeThickness: 5,
       }).setOrigin(0.5).setDepth(6);
       this.abholObj = { kreis, glut, rauch, stab, text, x, y };
@@ -1637,12 +1653,12 @@ class Ort extends Phaser.Scene {
     this.hordeInfo = m?.aktiv ? { ...m, ab: performance.now() } : null;
     if (this.uebersicht) this.uebersicht.horde = this.hordeInfo ? { mitte: { x: m.mitte.x / KACHEL, y: m.mitte.y / KACHEL }, ziel: { x: m.ziel.x / KACHEL, y: m.ziel.y / KACHEL }, name: `🎯 ${m.name}` } : null;
     if (!this.hordeInfo) { this.hordeGfx.clear(); this.hordeFahne.setVisible(false); this.hordeListe.style.display = 'none'; return; }
-    const GRUND = { zeit: 'Zeit', angekommen: 'angekommen', festgefahren: 'festgefahren', laerm: 'Lärm', start: 'Start', dauer: 'Hordendauer um' };
+    const grund = g => (['zeit', 'angekommen', 'festgefahren', 'laerm', 'start', 'dauer'].includes(g) ? tr('horde.grund_' + g) : g);
     // Hordenliste: je Horde Größe, Restzeit und nächstes Ziel (Zielwechsel in …)
     const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     const horden = m.horden?.length ? m.horden : [m];
-    this.hordeListe.textContent = horden.map((h, i) => `Horde ${i + 1}: ${h.n} Zombies · ${h.abzug ? 'Abzug zum Rand' : `noch ${mmss(h.restDauer ?? 0)}`}\n  → ${h.name}${h.abzug ? '' : ` (in ${mmss(h.rest)})`}`).join('\n')
-      + `\nletzte Ziele\n` + [...m.wechsel].reverse().map(w => `${uhrText(w.zeit)} ${w.name} (${GRUND[w.grund] ?? w.grund})`).join('\n');
+    this.hordeListe.textContent = horden.map((h, i) => `${tr('horde.zeile', { nr: i + 1, n: h.n })} · ${h.abzug ? tr('horde.abzug') : tr('horde.noch', { zeit: mmss(h.restDauer ?? 0) })}\n  → ${h.name}${h.abzug ? '' : ` (${tr('horde.in', { zeit: mmss(h.rest) })})`}`).join('\n')
+      + `\n${tr('horde.letzteZiele')}\n` + [...m.wechsel].reverse().map(w => `${uhrText(w.zeit)} ${w.name} (${grund(w.grund)})`).join('\n');
     this.hordeListe.style.display = 'block';
   }
 
@@ -1720,7 +1736,7 @@ class Ort extends Phaser.Scene {
     }
     g.lineStyle(3, 0xffffff, 1).lineBetween(h.ziel.x, h.ziel.y, h.ziel.x, h.ziel.y - 34);
     g.fillStyle(0xff1744, 1).fillTriangle(h.ziel.x, h.ziel.y - 34, h.ziel.x + 22, h.ziel.y - 27, h.ziel.x, h.ziel.y - 20);
-    this.hordeFahne.setText(`🎯 ${h.name}\nZielwechsel in ${min}:${sek}`).setPosition(h.ziel.x, h.ziel.y - 38).setVisible(true);
+    this.hordeFahne.setText(`🎯 ${h.name}\n${tr('horde.zielwechsel', { zeit: `${min}:${sek}` })}`).setPosition(h.ziel.x, h.ziel.y - 38).setVisible(true);
   }
 
   // ---------- Übersichtskarte (client/uebersicht.mjs) ----------
@@ -1739,8 +1755,8 @@ class Ort extends Phaser.Scene {
     if (!n) return;
     const liste = [...s.aufgaben.values()];
     const fertig = liste.filter(a => a.erledigt).length;
-    textSetzen('aufgabenkopf', `${n - fertig} offen · Level ${s.level || 1}`);
-    $('aufgabenknopf').title = `Aufgaben: ${fertig}/${n} erledigt`;
+    textSetzen('aufgabenkopf', tr('aufgaben.kopf', { offen: n - fertig, level: s.level || 1 }));
+    $('aufgabenknopf').title = tr('aufgaben.titel', { fertig, n });
     // neue Aufgabe: Knopf kurz pulsieren lassen statt die Liste aufzuklappen
     const kennung = [...s.aufgaben.keys()];
     if (this.aufgabenBekannt) {
@@ -1762,12 +1778,12 @@ class Ort extends Phaser.Scene {
       const f = [...(s.fahrzeuge?.values() ?? [])].find(v => v.art === 'evakuierung');
       const px = ich && this.lokal ? this.lokal.x : ich?.x, py = ich && this.lokal ? this.lokal.y : ich?.y;
       const an = !!(ich?.anBord && !ich.imBoxer) || (s.busSteht && f && ich && !ich.ebene && Math.hypot(px - f.x, py - f.y) < BUS_ABSTAND);
-      const pz = evakArtVon(s) === 'panzer', sym = pz ? '🪖' : '🚌', fzg = pz ? 'Evakuierungspanzer' : 'Bus';
-      bus = s.busSteht ? `${sym} ${fzg} wartet am Ortsausgang bis ${uhrText(s.busAb)} · ${s.busBord}/${s.busGesamt} an Bord${an ? ` · ${sym} du bist an Bord` : ''}`
-        : `${sym} ${fzg} fährt zum Ortsausgang vor – einsteigen geht, sobald er steht`;
-    } else if (s.funk && s.missionOffen > 0) bus = `🧩 Der ${evakArtVon(s) === 'panzer' ? 'Panzer' : 'Bus'} kommt erst, wenn alle Missionsgegenstände abgegeben sind (noch ${s.missionOffen})`;
-    else if (s.funk && s.busAnkunft >= 0) bus = evakArtVon(s) === 'panzer' ? `🪖 Der Evakuierungspanzer kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang` : `🚌 Der Bus kommt um ${uhrText(s.busAnkunft)} zum Ortsausgang`;
-    else bus = `📻 Funkspruch fehlt – ohne ihn kommt kein ${evakArtVon(s) === 'panzer' ? 'Panzer' : 'Bus'}`;
+      const pz = evakArtVon(s) === 'panzer', sym = pz ? '🪖' : '🚌', fzg = pz ? tr('evak.panzerName') : tr('evak.busName');
+      bus = s.busSteht ? tr('evak.wartet', { sym, fzg, zeit: uhrText(s.busAb), bord: s.busBord, gesamt: s.busGesamt }) + (an ? tr('evak.duAnBord', { sym }) : '')
+        : tr('evak.faehrtVor', { sym, fzg });
+    } else if (s.funk && s.missionOffen > 0) bus = tr(evakArtVon(s) === 'panzer' ? 'evak.missionPanzer' : 'evak.missionBus', { n: s.missionOffen });
+    else if (s.funk && s.busAnkunft >= 0) bus = tr(evakArtVon(s) === 'panzer' ? 'evak.panzerKommt' : 'evak.busKommt', { zeit: uhrText(s.busAnkunft) });
+    else bus = tr(evakArtVon(s) === 'panzer' ? 'evak.funkFehltPanzer' : 'evak.funkFehltBus');
     textSetzen('busanzeige', bus);
   }
 
@@ -1786,7 +1802,7 @@ class Ort extends Phaser.Scene {
     const KAT = { medizin: 'apotheke', vorraete: 'lebensmittel', lampen: 'kaufhaus' };
     const kats = new Set(Object.entries(KAT).filter(([id]) => offen.has(id)).map(([, k]) => k));
     this.uebersicht.ziele = kats.size ? this.welt.haeuser.filter(h => !h.safe && kats.has(ladenArt(h))).map(h => ({
-      x: h.x + h.b / 2, y: h.y + h.h / 2, name: ZIEL_NAMEN[h.art] ?? ZIEL_NAMEN[ladenArt(h)] ?? 'Laden', symbol: ZIEL_SYMBOL[ladenArt(h)] ?? '⭐',
+      x: h.x + h.b / 2, y: h.y + h.h / 2, name: zielName(h.art) ?? zielName(ladenArt(h)) ?? tr('ziel.convenience'), symbol: ZIEL_SYMBOL[ladenArt(h)] ?? '⭐',
     })) : [];
     // offene Missionsgegenstände: exakte Position vom Server (Mitte = Gegenstand), mit Gegenstandsbild, falls vorhanden
     const dTex = this.textures.exists('dinge') ? this.textures.get('dinge') : null;
@@ -3774,18 +3790,18 @@ class Ort extends Phaser.Scene {
     if (!wahl) return null;
     const st = raum.state.tueren.get(wahl.key);
     if (!st && wahl.tuer) return null;
-    const haus = wahl.nr !== undefined, name = haus ? 'Haustür' : 'Tür';
+    const haus = wahl.nr !== undefined;
     const offen = st ? st.offen : true, kaputt = !!st?.kaputt;
     const bar = (wahl.safe ? raum.state.safes.get(wahl.safe)?.barrikade : st?.barrikade) ?? 0;
-    const schliessen = () => kaputt ? null : { art: 'tuer_zu', text: `🚪 ${name} schließen` };
+    const schliessen = () => kaputt ? null : { art: 'tuer_zu', text: tr(haus ? 'aktion.haustuerZu' : 'aktion.tuerZu') };
     const oeffnen = () => {
       const sa = st?.verschlossen && !haus ? this.schlossArtVon(wahl.key) : 'frei';
-      if (sa === 'frei') return { art: 'tuer_auf', text: `🚪 ${name} öffnen` };
-      if (sa === 'raetsel') return { art: 'schlossraetsel', text: '❓ Rätsel lösen' };
-      if (hat(ich.rucksack, 'schluessel')) return { art: 'aufschliessen', text: '🔑 Aufschließen' };
-      return { art: 'schluessel_noetig', text: '🔑 Schlüssel nötig', aus: true };
+      if (sa === 'frei') return { art: 'tuer_auf', text: tr(haus ? 'aktion.haustuerAuf' : 'aktion.tuerAuf') };
+      if (sa === 'raetsel') return { art: 'schlossraetsel', text: tr('aktion.raetselLoesen') };
+      if (hat(ich.rucksack, 'schluessel')) return { art: 'aufschliessen', text: tr('aktion.aufschliessen') };
+      return { art: 'schluessel_noetig', text: tr('aktion.schluesselNoetig'), aus: true };
     };
-    const brett = () => hat(ich.rucksack, 'bretter') && bar < 100 ? { art: 'barrikade', text: `🔨 ${name} verbarrikadieren` } : null;
+    const brett = () => hat(ich.rucksack, 'bretter') && bar < 100 ? { art: 'barrikade', text: tr(haus ? 'aktion.haustuerBarrikade' : 'aktion.tuerBarrikade') } : null;
     if (modus === 'auf') return offen ? null : oeffnen();
     if (modus === 'zu') return offen ? (brett() ?? schliessen()) : null;
     const b = brett();
@@ -3805,7 +3821,7 @@ class Ort extends Phaser.Scene {
     this.autoRadioAn = radioUmschalten(!!this.autoRadioAn, !!pk); this.autoRadioVersucht = false;
     ton.audioFreischalten();
     this.autoKnoepfeZeigen(raum.state?.spieler?.get(meineId));
-    if (this.autoRadioAn && !this.autoRadioSpielt) meldung('📻 Kein Sender eingestellt (Backend: Autoradio/Live-Radio) oder Autoradio im Zahnrad aus', false);
+    if (this.autoRadioAn && !this.autoRadioSpielt) meldung(tr('auto.keinSender'), false);
   }
   // Fahrtempo-Stufe (client/fahrtempo.mjs): nur im Fahrzeug; geht beim Umschalten als eigene kleine Nachricht an den Server
   tempoUmschalten() {
@@ -3844,20 +3860,20 @@ class Ort extends Phaser.Scene {
 
   bestimmeKontext(ich) {
     this.handelKontext = null; this.pkwZweit = null;
-    if (ich?.anBord) return { art: 'aussteigen', text: '🚪 Aussteigen' };   // an Bord eines Evakuierungsfahrzeugs: Taste E/Leertaste und Knopf
+    if (ich?.anBord) return { art: 'aussteigen', text: tr('aktion.aussteigen') };   // an Bord eines Evakuierungsfahrzeugs: Taste E/Leertaste und Knopf
     if (!ich || ich.unten || ich.aktion || ich.zombie > 0 || raum.state.phase !== 'spiel' || !this.lokal) return null;
     const { x, y } = this.lokal;
     // fahrbares Fahrzeug (Boxer, Puma, Leopard) in Reichweite: einsteigen (Vorrang, wie auf dem Server in starteAktion; nicht auf Ebenen)
     if (!ich.ebene) for (const f of raum.state.fahrzeuge?.values() ?? []) {
       if (!istFahrbar(f.art) || !fahrbarNah(f.art, { x: f.x, y: f.y, richtung: fzRichtung(f) }, x, y)) continue;
-      if ([...raum.state.spieler.values()].filter(q => q.imBoxer && Math.hypot(q.x - f.x, q.y - f.y) < 24).length < FAHRBAR_PLAETZE) return { art: 'einsteigen', text: `🛡️ In den ${FAHRBAR[f.art].name} einsteigen` };   // Plätze je Fahrzeug
+      if ([...raum.state.spieler.values()].filter(q => q.imBoxer && Math.hypot(q.x - f.x, q.y - f.y) < 24).length < FAHRBAR_PLAETZE) return { art: 'einsteigen', text: tr('aktion.einsteigenFahrbar', { name: FAHRBAR[f.art].name }) };   // Plätze je Fahrzeug
     }
     // Auto: mit Autoschlüssel fahren bzw. mitfahren (client/pkw.mjs, gleiche Regel wie server/pkw.mjs); zweiter Knopf am geparkten Auto = Kofferraum
     const pk = pkwKontext(this.welt, raum.state, ich, x, y, fzRichtung, pkwPlaetze());
     if (pk) { this.pkwZweit = pk.zweit ?? null; return pk; }
     // Arzt oder Soldat im Lager in Reichweite (nur solange der Stützpunkt steht)
     const hp = !ich.ebene && raum.state.stuetzpunkt === 'steht' ? handelPartner(this.welt.stuetzpunkt, x, y, HANDEL_ABSTAND) : null;
-    if (hp) this.handelKontext = { art: 'handel', wer: hp.wer, text: hp.wer === 'arzt' ? '🩺 Mit dem Arzt tauschen' : '🎖 Mit dem Soldaten tauschen' };
+    if (hp) this.handelKontext = { art: 'handel', wer: hp.wer, text: hp.wer === 'arzt' ? tr('aktion.handelArzt') : tr('aktion.handelSoldat') };
     const w = this.wv(ich.ebene);
     const safe = safeRoomVon(this.welt, ich);
     const tuer = this.tuerKontext(ich, 'auf');
@@ -3867,35 +3883,35 @@ class Ort extends Phaser.Scene {
       const bar = raum.state.safes.get(safe.id)?.barrikade ?? 0;
       if (Math.hypot(x - tx, y - ty) < reichVon(w, 56)) {
         const imWeg = [...raum.state.leichen.values()].some(l => (l.ebene ?? '') === safe.ebene && Math.hypot(l.x - tx, l.y - ty) < reichVon(w, 44));
-        if (imWeg) return { art: 'wegziehen', text: '🧟 Toten Zombie aus der Tür ziehen' };
-        if (hat(ich.rucksack, 'bretter') && bar < 100) return { art: 'barrikade', text: '🔨 Eingangstür verbarrikadieren' };
+        if (imWeg) return { art: 'wegziehen', text: tr('aktion.wegziehen') };
+        if (hat(ich.rucksack, 'bretter') && bar < 100) return { art: 'barrikade', text: tr('aktion.eingangBarrikade') };
       }
       const funkTisch = raum.state.aufgaben?.size && !raum.state.funk ? w.moebel?.find(q => q.art === 'funktisch') : null;
       if (funkTisch) {
         const nx = Math.max(funkTisch.x * KW, Math.min((funkTisch.x + funkTisch.b) * KW, x)), ny = Math.max(funkTisch.y * KW, Math.min((funkTisch.y + funkTisch.h) * KW, y));
-        if (Math.hypot(x - nx, y - ny) < reichVon(w, 44)) return { art: 'funk', text: '📻 Funkspruch absetzen' };
+        if (Math.hypot(x - nx, y - ny) < reichVon(w, 44)) return { art: 'funk', text: tr('aktion.funk') };
       }
       if (w.kuehlschrank && Math.hypot(x - w.kuehlschrank.x, y - w.kuehlschrank.y) < reichVon(w, AKTION_ABSTAND + 20)) {
-        return { art: 'kuehlschrank', text: 'Kühlschrank öffnen (Notvorrat, unter 30 %)' };
+        return { art: 'kuehlschrank', text: tr('aktion.kuehlschrank') };
       }
       if (w.kiste && Math.hypot(x - w.kiste.x, y - w.kiste.y) < reichVon(w, AKTION_ABSTAND + 20)) {
-        return { art: 'kiste', text: 'Vorräte öffnen', safe };
+        return { art: 'kiste', text: tr('aktion.vorraete'), safe };
       }
     }
     // Funkzelt des Bundeswehr-Stützpunkts: Funkspruch wie am Funktisch
     const funkPunkt = !ich.ebene && raum.state.aufgaben?.size && !raum.state.funk ? this.welt.stuetzpunkt?.teile.find(q => q.art === 'funkzelt')?.funkpunkt : null;
-    if (funkPunkt && Math.hypot(x - funkPunkt[0], y - funkPunkt[1]) < 44) return { art: 'funk', text: '📻 Funkspruch absetzen' };
+    if (funkPunkt && Math.hypot(x - funkPunkt[0], y - funkPunkt[1]) < 44) return { art: 'funk', text: tr('aktion.funk') };
     // Vorratskisten des Bundeswehr-Lagers (Safe House, solange es steht): gemeinsame Kisten, Munition darf hinein
     if (!ich.ebene && raum.state.stuetzpunkt === 'steht') {
       // die NÄCHSTE Vorratskiste (vier stehen nebeneinander; der Server nimmt ebenfalls die nächste, sonst zeigt das Fenster eine andere Kiste als die, in die man legt)
       let vk = null, vd = AKTION_ABSTAND + 20;
       for (const q of this.welt.stuetzpunkt?.teile ?? []) { if (q.art !== 'vorratskiste') continue; const dd = Math.hypot(x - q.x, y - q.y); if (dd < vd) { vd = dd; vk = q; } }
-      if (vk) return { art: 'kiste', text: 'Vorratskiste öffnen (Lager)', safe: { id: vk.id, name: 'Bundeswehr-Lager' } };
+      if (vk) return { art: 'kiste', text: tr('aktion.vorratskiste'), safe: { id: vk.id, name: tr('lager.name') } };
     }
     {
       const nah = naheBodenDinge(raum.state.boden, { x, y, ebene: ich.ebene }, reichVon(w, AKTION_ABSTAND));
-      if (nah.length === 1 && (!brauchtPlatz(nah[0].ding, ich) || kannAufnehmen(ich.rucksack, ich.plaetze, nah[0].ding))) return { art: 'aufheben', text: `${DINGE[nah[0].ding]?.name ?? 'Gegenstand'} aufheben` };
-      if (nah.length) return { art: 'aufheben_wahl', text: `Aufheben … (${nah.length})`, nah };
+      if (nah.length === 1 && (!brauchtPlatz(nah[0].ding, ich) || kannAufnehmen(ich.rucksack, ich.plaetze, nah[0].ding))) return { art: 'aufheben', text: tr('aktion.aufheben', { ding: DINGE[nah[0].ding]?.name ?? tr('aktion.gegenstand') }) };
+      if (nah.length) return { art: 'aufheben_wahl', text: tr('aktion.aufhebenWahl', { n: nah.length }), nah };
     }
     // Mensch in der Nähe (versteckt oder verängstigt): ansprechen, dann folgt er dir bis in den Safe Room
     {
@@ -3905,11 +3921,11 @@ class Ort extends Phaser.Scene {
         const dd = Math.hypot(m.x - x, m.y - y);
         if (dd < nd) { nd = dd; nah = m; }
       }
-      if (nah) return { art: 'ansprechen', text: '🙋 Ansprechen' };
+      if (nah) return { art: 'ansprechen', text: tr('aktion.ansprechen') };
     }
     const tor = this.welt.tor;
     if (!ich.ebene && (raum.state.torGeloest ?? 0) < 3 && Math.hypot(x - (tor.x + 1) * KACHEL, y - (tor.y + 1) * KACHEL) < 70) {
-      return { art: 'raetsel', text: `🔐 Schloss knacken (${raum.state.torGeloest ?? 0}/3)` };
+      return { art: 'raetsel', text: tr('aktion.schlossKnacken', { n: raum.state.torGeloest ?? 0 }) };
     }
     let best = null, bd = reichVon(w, AKTION_ABSTAND);
     for (const b of w.behaelter) {
@@ -3924,20 +3940,20 @@ class Ort extends Phaser.Scene {
       const d = Math.hypot(l.x - x, l.y - y);
       if (d < bd && l.rest !== 0) { bd = d; best = { art: 'leiche' }; }
     }
-    if (best?.art === 'auto' && !hat(ich.rucksack, 'brechstange')) return { art: 'durchsuchen', text: 'Kofferraum (Brechstange nötig)' };
-    if (best) return { art: 'durchsuchen', text: `${BEHAELTER_NAME[best.art]} ${best.art === 'auto' ? 'aufbrechen' : OEFFNEN.has(best.art) ? 'öffnen' : 'durchsuchen'}` };
+    if (best?.art === 'auto' && !hat(ich.rucksack, 'brechstange')) return { art: 'durchsuchen', text: tr('aktion.kofferraumNoetig') };
+    if (best) return { art: 'durchsuchen', text: tr(best.art === 'auto' ? 'aktion.behaelterAufbrechen' : OEFFNEN.has(best.art) ? 'aktion.behaelterOeffnen' : 'aktion.behaelterDurchsuchen', { name: BEHAELTER_NAME[best.art] }) };
     const zu = this.tuerKontext(ich, 'zu');
     if (zu) return zu;
     if (!ich.ebene) {
       const z = zaunUeberstieg(this.welt, x, y, ich.richtung, W.spielerRadius);
-      if (z) return { art: 'klettern', text: `🧗 Über ${ZAUN_NAME[z.art] ?? 'den Zaun'} steigen` };
+      if (z) return { art: 'klettern', text: tr('aktion.klettern', { zaun: ZAUN_NAME[z.art] ?? ZAUN_NAME.z }) };
     }
     if (this.handelKontext && !handelOffen) return this.handelKontext;
     // jemanden berühren → tauschen
     if (!tauschOffen) {
       for (const [sid, o] of raum.state.spieler) {
         if (sid === meineId || o.unten || o.zombie > 0 || o.ebene !== ich.ebene) continue;
-        if (Math.hypot(o.x - x, o.y - y) < reichVon(w, TAUSCH_ABSTAND + 6)) return { art: 'tausch', mit: sid, text: `🤝 Tauschen mit ${o.name}` };
+        if (Math.hypot(o.x - x, o.y - y) < reichVon(w, TAUSCH_ABSTAND + 6)) return { art: 'tausch', mit: sid, text: tr('aktion.tauschen', { name: o.name }) };
       }
     }
     return null;
@@ -4086,7 +4102,7 @@ class Ort extends Phaser.Scene {
     this.geraeusche(ich, dt);
     this.karteZeit = (this.karteZeit ?? 0) - dt;
     if (this.karteZeit <= 0 || this.uebersicht?.zeichneNeu) { this.karteZeit = this.uebersicht?.gross ? 0.15 : (this.uebersicht?.bus || this.uebersicht?.abhol || this.uebersicht?.pulsAktiv() || [...raum.state.spieler.values()].some(q => q.unten)) ? 0.12 : 0.4; this.uebersichtZeichnen(); }
-    if (!this.ladenFertig) { this.ladenFertig = true; ladenZeigen(100, 'Generiere Welt … fertig'); setTimeout(ladenAus, 150); }
+    if (!this.ladenFertig) { this.ladenFertig = true; ladenZeigen(100, tr('laden.fertig')); setTimeout(ladenAus, 150); }
   }
 
   // Schritte, Treffer am eigenen Leib, Stöhnen naher Zombies
@@ -4184,19 +4200,19 @@ class Ort extends Phaser.Scene {
       balkenSetzen('hunger', ich.hunger);
       // Die frühere Textzeile „Waffe in der Hand“ (dritte Waffenanzeige) ist weg: Waffen zeigen nur noch die Waffenfelder (Platz 1, Platz 2, Faust).
       // Übrig bleiben Kleidung und Taschenlampe.
-      htmlSetzen('waffe', [ich.kleidung > 0 ? `🧥 ${Math.ceil(ich.kleidung)} %` : '', ich.lampe > 0 ? `🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' an' : ''}` : ''].filter(Boolean).join(' · '));
+      htmlSetzen('waffe', [ich.kleidung > 0 ? `🧥 ${Math.ceil(ich.kleidung)} %` : '', ich.lampe > 0 ? `🔦 ${Math.ceil(ich.lampe / 60)} min${ich.ebene ? ' ' + tr('hud.lampeAn') : ''}` : ''].filter(Boolean).join(' · '));
       this.waffenplaetzeZeigen(ich);   // Waffenfelder (Antippen wechselt, Doppeltippen lädt nach, Taste R lädt auch nach)
       this.granatenfeldZeigen(ich);
       this.autoKnoepfeZeigen(ich);   // Autoradio/Blaulicht-Knöpfe im Auto (client/pkwradio.mjs)
-      textSetzen('besiegt', `besiegt ${ich.besiegt} / ${Math.max(s.besiegt, ich.besiegt)}`); $('besiegt').title = 'besiegt: von dir / gesamt';
+      textSetzen('besiegt', tr('hud.besiegt', { ich: ich.besiegt, alle: Math.max(s.besiegt, ich.besiegt) })); $('besiegt').title = tr('hud.besiegtTitel');
       textSetzen('verwandelt', `🦠 ${s.verwandelt ?? 0} · 🙋 ${s.gerettet ?? 0}`);
       textSetzen('zombiezahl', `🧟 ${s.zombieZahl || zombieKarte().size}`);   // der Client kennt nur die Zombies in seiner Nähe
-      const safe = ich.sicher === 'lager' ? { id: 'lager', name: 'Bundeswehr-Lager', lager: true } : ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
+      const safe = ich.sicher === 'lager' ? { id: 'lager', name: tr('lager.name'), lager: true } : ich.sicher ? this.welt.safeRooms.find(r => r.id === ich.sicher) : null;
       $('sicher').style.display = safe ? 'flex' : 'none';
-      if (safe?.lager) textSetzen('sichername', `🛡 ${safe.name} · bewacht`);
+      if (safe?.lager) textSetzen('sichername', tr('hud.safeBewacht', { name: safe.name }));
       else if (safe) {
         const bar = Math.round(s.safes.get(safe.id)?.barrikade ?? 0);
-        textSetzen('sichername', `🛡 ${safe.name} · Barrikade ${bar} %`);
+        textSetzen('sichername', tr('hud.safeBarrikade', { name: safe.name, n: bar }));
       }
       this.rucksackZeigen(ich);
       const gruen = ich.zombie > 0 ? 0.35 : ich.infektion > 0 ? 0.08 + 0.3 * (1 - ich.infektion / INFEKTION_DAUER) : 0;
@@ -4205,12 +4221,12 @@ class Ort extends Phaser.Scene {
     }
     this.aufgabenZeigen(ich);
     const uhr = s.uhr ?? 480, hellJetzt = helligkeit(uhr);
-    textSetzen('zeit', `${istNacht(uhr) ? '🌙' : hellJetzt < 1 ? '🌅' : '☀️'} ${uhrText(uhr)} · Tag ${s.tag || 1}`);
+    textSetzen('zeit', `${istNacht(uhr) ? '🌙' : hellJetzt < 1 ? '🌅' : '☀️'} ${uhrText(uhr)} · ${tr('hud.tag', { n: s.tag || 1 })}`);
     ton.tageszeit(istNacht(uhr));
     const liste = [...s.spieler.entries()].map(([id, p]) => {
-      const zusatz = p.unten ? ' – am Boden' : !p.verbunden ? ' – Verbindung weg' : p.sicher ? ' 🛡' : '';
+      const zusatz = p.unten ? tr('hud.amBoden') : !p.verbunden ? tr('hud.verbindungWeg') : p.sicher ? ' 🛡' : '';
       const klasse = p.unten ? 'unten' : !p.verbunden ? 'weg' : '';
-      return `<li class="${klasse}"><span class="punkt" style="background:${css(FARBEN[p.farbe % FARBEN.length])}"></span>${p.su ? '⭐ ' : ''}${escapeHtml(p.name)}${p.afk && !p.name.includes('🤖') ? ' 🤖' : ''}${id === meineId ? ' (du)' : ''}${zusatz}</li>`;
+      return `<li class="${klasse}"><span class="punkt" style="background:${css(FARBEN[p.farbe % FARBEN.length])}"></span>${p.su ? '⭐ ' : ''}${escapeHtml(p.name)}${p.afk && !p.name.includes('🤖') ? ' 🤖' : ''}${id === meineId ? tr('hud.du') : ''}${zusatz}</li>`;
     }).join('');
     if ($('liste').innerHTML !== liste) $('liste').innerHTML = liste;
     const punkte = [...s.spieler.entries()].map(([id, p]) => {
@@ -4219,7 +4235,7 @@ class Ort extends Phaser.Scene {
       return `<i class="${kl}" style="background:${css(FARBEN[p.farbe % FARBEN.length])}">${afk ? '🤖' : ''}</i>`;
     }).join('');
     if ($('punkte').innerHTML !== punkte) $('punkte').innerHTML = punkte;
-    $('listeknopf').title = `${s.spieler.size} Spieler – antippen für die Liste`;
+    $('listeknopf').title = tr('hud.listeTitel', { n: s.spieler.size });
 
     // Aktionsknopf
     this.kontext = this.bestimmeKontext(ich);
@@ -4247,7 +4263,7 @@ class Ort extends Phaser.Scene {
       const ak = $('alleknopf'), zeige = !!kand && (kand.drinnen || kand.liste.length >= 2);
       ak.style.display = zeige && suAn ? 'block' : 'none';   // nur für Superuser
       const sperre = Math.ceil(((this.alleSperreBis ?? 0) - Date.now()) / 1000);
-      if (zeige) { const t = sperre > 0 && ich.ebene ? `Alles durchsuchen in ${sperre} s` : kand.drinnen ? 'Alles durchsuchen (3 Rätsel)' : `Alles durchsuchen (${kand.liste.length}, ${Math.round(kand.dauer * 10) / 10} s)`; if (ak.textContent !== t) ak.textContent = t; }
+      if (zeige) { const t = sperre > 0 && ich.ebene ? tr('hud.allesIn', { n: sperre }) : kand.drinnen ? tr('hud.allesRaetsel') : tr('hud.alles', { n: kand.liste.length, s: Math.round(kand.dauer * 10) / 10 }); if (ak.textContent !== t) ak.textContent = t; }
       fundPruefen(this.lokal, this.aktEbene ? this.wv(this.aktEbene) : null);
     }
     if (zweit && knopf2.__text !== zweit.text) { knopf2.__text = zweit.text; knopf2.textContent = nurText(zweit.text); }
@@ -4258,26 +4274,24 @@ class Ort extends Phaser.Scene {
     if (handelOffen) handelZeigen(ich, this.welt.stuetzpunkt);
 
     let hinweis = '';
-    if (s.phase === 'erwischt') hinweis = 'Erwischt! 🧟<br>Ihr schleppt euch in die Safe Rooms …';
-    else if (ich && ich.zombie > 0) hinweis = `🧟 Du bist ein Zombie! Beiß die anderen.<br>Noch ${zeitText(ich.zombie)}, dann wachst du im Safe Room auf.`;
-    else if (ich && ich.unten) hinweis = `Du liegst am Boden.<br>Ein Mitspieler muss dir aufhelfen.${balken(ich.hilfe)}`;
-    else if (ich && ich.aktion) hinweis = `${{ funk: '📻 Funkspruch läuft', barrikade: '🔨 Verbarrikadieren', wegziehen: '🧟 Wegziehen', aufheben: '✋ Aufheben', aufbrechen: '⚒️ Aufbrechen', aufschliessen: '🔑 Aufschließen', tuer_auf: '🚪 Öffnen', tuer_zu: '🚪 Schließen', ansprechen: '🙋 Ansprechen' }[ich.aktion] ?? '🔍 Durchsuchen'} … nicht bewegen${balken(ich.fortschritt)}`;
+    if (s.phase === 'erwischt') hinweis = tr('hinweis.erwischt');
+    else if (ich && ich.zombie > 0) hinweis = tr('hinweis.zombie', { zeit: zeitText(ich.zombie) });
+    else if (ich && ich.unten) hinweis = tr('hinweis.amBoden') + balken(ich.hilfe);
+    else if (ich && ich.aktion) hinweis = tr('hinweis.laeuft', { was: tr(LAUFENDE_AKTIONEN.has(ich.aktion) ? 'laeuft.' + ich.aktion : 'laeuft.durchsuchen') }) + balken(ich.fortschritt);
     else if (ich) {
       for (const p of s.spieler.values()) {
         if (p === ich || !p.unten) continue;
         const d = Math.hypot(p.x - this.lokal.x, p.y - this.lokal.y);
         if (d < 110) {
-          const mit = hat(ich.rucksack, 'verband') ? ' (mit Verbandskasten schneller)' : '';
-          hinweis = `${escapeHtml(p.name)} liegt am Boden – bleib bei ihm stehen${mit}.${balken(p.hilfe)}`;
+          hinweis = tr(hat(ich.rucksack, 'verband') ? 'hinweis.helfenVerband' : 'hinweis.helfen', { name: escapeHtml(p.name) }) + balken(p.hilfe);
           break;
         }
       }
       if (!hinweis && ich.infektion > 0) {
-        const spritze = hat(ich.rucksack, 'spritze') ? ' – du hast eine 💉 im Rucksack!' : ' – du brauchst eine 💉 Rettungsspritze!';
-        hinweis = `🦠 Infiziert: noch ${zeitText(ich.infektion)}${ich.sicher ? ' (ruht im Safe Room)' : ''}${spritze}`;
+        hinweis = tr('hinweis.infiziert', { zeit: zeitText(ich.infektion) }) + (ich.sicher ? tr('hinweis.ruhtSafe') : '') + tr(hat(ich.rucksack, 'spritze') ? 'hinweis.spritzeDa' : 'hinweis.spritzeFehlt');
       }
-      if (!hinweis && ich.ruht) hinweis = '💤 Du ruhst dich aus';
-      if (!hinweis && (ich.durst < 15 || ich.hunger < 15)) hinweis = ich.durst < ich.hunger ? '💧 Du hast großen Durst!' : '🥫 Du hast großen Hunger!';
+      if (!hinweis && ich.ruht) hinweis = tr('hinweis.ruht');
+      if (!hinweis && (ich.durst < 15 || ich.hunger < 15)) hinweis = ich.durst < ich.hunger ? tr('hinweis.durst') : tr('hinweis.hunger');
     }
     const h = $('hinweis');
     h.style.display = hinweis ? 'block' : 'none';
@@ -4289,7 +4303,7 @@ class Ort extends Phaser.Scene {
   // Ohne Waffe in der Hand (leer oder Faust) kämpft die Figur mit der Faust.
   waffenplaetzeZeigen(ich) {
     const leiste = $('waffenplaetze');
-    const namen = ['Platz 1', 'Platz 2'], waffen = [ich.wp0, ich.wp1], akt = ich.wplatz ?? 0;
+    const namen = [tr('waffen.platz', { n: 1 }), tr('waffen.platz', { n: 2 })], waffen = [ich.wp0, ich.wp1], akt = ich.wplatz ?? 0;
     if (!ich.faust) waffen[akt] = ich.waffe;
     const mg = [ich.mg0, ich.mg1], mx = [ich.mx0, ich.mx1];
     if (!ich.faust) mg[akt] = ich.magazin ?? 0;
@@ -4309,7 +4323,7 @@ class Ort extends Phaser.Scene {
         b.className = (i === akt && !ich.faust ? 'aktiv ' : '') + (z.w ? '' : 'leer ') + (leer ? 'rot' : '');
         const zahl = z.wf?.fern ? `<span class="mag">${z.m}/${z.max}</span>` : '';
         b.innerHTML = `<span class="zz">${z.d ? dingIcon(z.w, 40) : ''}</span>${zahl}<i class="lad"></i>`;
-        b.title = `${namen[i]}: ${z.d ? z.d.name : 'leer'}${z.wf?.fern ? ` – Magazin ${z.m}/${z.max}, Vorrat ${z.vorrat}` : ''} (Taste F wechselt, R lädt nach)`;
+        b.title = `${namen[i]}: ${z.d ? z.d.name : tr('allgemein.leer')}${z.wf?.fern ? tr('waffen.magazin', { m: z.m, max: z.max, vorrat: z.vorrat }) : ''} ${tr('waffen.tasten')}`;
         b.setAttribute('aria-label', b.title);
         // Antippen = in die Hand, zweimal schnell = nachladen; gedrückt halten (Handy) bzw. Rechtsklick (PC) = Menü (Rucksack, Fallen lassen, Tauschen)
         let lang = false, timer = 0;
@@ -4332,7 +4346,7 @@ class Ort extends Phaser.Scene {
       fb.type = 'button'; fb.id = 'faustfeld';
       fb.className = 'faust' + (ich.faust ? ' aktiv' : '');
       fb.innerHTML = `<span class="zz">${dingIcon('faust', 40, '✊')}</span>`;
-      fb.title = 'Faust: Waffe wegstecken, nicht schießen (Taste X; nochmal = Waffe zurück)';
+      fb.title = tr('waffen.faust');
       fb.setAttribute('aria-label', fb.title);
       fb.setAttribute('aria-pressed', ich.faust ? 'true' : 'false');
       fb.addEventListener('pointerdown', e => e.stopPropagation());   // nicht zum Laufstick/Spielfeld durchreichen
@@ -4394,7 +4408,7 @@ class Ort extends Phaser.Scene {
       const b = document.createElement('button');
       b.className = 'platz' + (d ? '' : ' leer');
       b.innerHTML = d ? dingIcon(d, 32) + (n > 1 ? `<span class="stapelzahl">×${n}</span>` : '') : '';
-      b.title = d ? `${DINGE[d]?.name}${n > 1 ? ` ×${n}` : ''} (Taste ${i + 1})` : 'leer';
+      b.title = d ? `${DINGE[d]?.name}${n > 1 ? ` ×${n}` : ''} ${tr('rucksack.taste', { n: i + 1 })}` : tr('allgemein.leer');
       b.dataset.i = i;
       if (d) { b.onclick = e => { e.stopPropagation(); if (zieheJuengst) return; popupAuf(b, i, d); }; rucksackZiehen(b, i); }
       leiste.appendChild(b);
@@ -4452,19 +4466,19 @@ function popupAuf(knopf, platz, ding) {
   const titel = document.createElement('div');
   titel.className = 'titel'; titel.innerHTML = dingHtml(ding, 24);
   const nutzen = document.createElement('button');
-  nutzen.textContent = DINGE[ding]?.waffe ? 'In die Hand' : ding === 'munitionskiste' ? 'Öffnen (+30 Schuss)' : ding === 'granate' ? 'Werfen' : ding === 'radio' ? 'Einschalten' : ding === 'bretter' ? 'Wofür?' : 'Benutzen';
+  nutzen.textContent = tr(DINGE[ding]?.waffe ? 'rucksack.inDieHand' : ding === 'munitionskiste' ? 'rucksack.kisteOeffnen' : ding === 'granate' ? 'rucksack.werfen' : ding === 'radio' ? 'rucksack.einschalten' : ding === 'bretter' ? 'rucksack.wofuer' : 'rucksack.benutzen', { n: 30 });
   nutzen.onclick = () => { raum.send('benutze', { platz }); popupZu(); };
   const weg = document.createElement('button');
-  weg.textContent = 'Wegwerfen'; weg.className = 'zweit';
+  weg.textContent = tr('rucksack.wegwerfen'); weg.className = 'zweit';
   weg.onclick = () => { raum.send('wegwerfen', { platz }); popupZu(); };
   const x = document.createElement('button');
-  x.textContent = '✕'; x.className = 'zweit'; x.title = 'Schließen'; x.setAttribute('aria-label', 'Schließen'); x.style.cssText = 'float:right;padding:0 8px;margin-left:8px';
+  x.textContent = '✕'; x.className = 'zweit'; x.title = tr('allgemein.schliessen'); x.setAttribute('aria-label', tr('allgemein.schliessen')); x.style.cssText = 'float:right;padding:0 8px;margin-left:8px';
   x.onclick = popupZu;
   titel.prepend(x);
   p.append(titel);
   const anz = raum.state.spieler.get(meineId)?.rucksack.length ?? 0;
   const reihe = document.createElement('div'); reihe.style.cssText = 'display:flex;gap:6px';
-  [['◀', -1, 'Ein Fach nach links'], ['▶', 1, 'Ein Fach nach rechts']].forEach(([z, d, tip]) => {
+  [['◀', -1, tr('rucksack.links')], ['▶', 1, tr('rucksack.rechts')]].forEach(([z, d, tip]) => {
     const b = document.createElement('button');
     b.textContent = z; b.title = tip; b.setAttribute('aria-label', tip); b.className = 'zweit'; b.style.flex = '1';
     b.disabled = platz + d < 0 || platz + d >= anz;
@@ -4487,10 +4501,10 @@ function popupAuf(knopf, platz, ding) {
   });
   p.append(reihe);
   if (DINGE[ding]?.waffe || ding === 'granate') {   // Waffe/Handgranaten in einen Waffenplatz legen
-    ['Haupt', 'Neben', 'Ersatz'].forEach((n, i) => {
+    [tr('waffen.haupt'), tr('waffen.neben'), tr('waffen.ersatz')].forEach((n, i) => {
       const b = document.createElement('button');
       const inh = raum.state.spieler.get(meineId)?.['wp' + i];
-      b.innerHTML = `→ Platz ${i + 1} (${n}${inh && DINGE[inh] ? ': ' + dingIcon(inh, 20) : ''})`; b.className = 'zweit';
+      b.innerHTML = `→ ${tr('waffen.platz', { n: i + 1 })} (${n}${inh && DINGE[inh] ? ': ' + dingIcon(inh, 20) : ''})`; b.className = 'zweit';
       b.onclick = () => { raum.send('platz_aktion', { platz: i, aktion: 'tausch', rs: platz }); popupZu(); };
       p.append(b);
     });
@@ -4511,7 +4525,7 @@ function platzMenue(knopf, platz) {
   const name = ich['wp' + platz] || '', p = $('popup');
   p.innerHTML = '';
   const titel = document.createElement('div');
-  titel.className = 'titel'; titel.innerHTML = name ? `${['Platz 1', 'Platz 2'][platz]}: ${dingHtml(name, 24)}` : `${['Platz 1', 'Platz 2'][platz]}: leer`;
+  titel.className = 'titel'; titel.innerHTML = `${tr('waffen.platz', { n: platz + 1 })}: ${name ? dingHtml(name, 24) : tr('allgemein.leer')}`;
   p.append(titel);
   const knopfMit = (text, daten, zweit, html) => {
     const b = document.createElement('button');
@@ -4520,15 +4534,15 @@ function platzMenue(knopf, platz) {
     b.onclick = () => { raum.send('platz_aktion', { platz, ...daten }); popupZu(); };
     p.append(b);
   };
-  if (name && kannAufnehmen(ich.rucksack, ich.plaetze || RUCKSACK_PLAETZE, name === 'handgranate' ? 'granate' : name)) knopfMit('In den Rucksack', { aktion: 'rucksack' });
-  if (name) knopfMit('Fallen lassen', { aktion: 'fallen' }, true);
+  if (name && kannAufnehmen(ich.rucksack, ich.plaetze || RUCKSACK_PLAETZE, name === 'handgranate' ? 'granate' : name)) knopfMit(tr('waffen.inRucksack'), { aktion: 'rucksack' });
+  if (name) knopfMit(tr('waffen.fallen'), { aktion: 'fallen' }, true);
   const gesehen = new Set();
   [...ich.rucksack].forEach((e, rs) => {
     const d = dingId(e);
     if (!(DINGE[d]?.waffe || d === 'granate') || gesehen.has(d)) return;
     gesehen.add(d);
     const n = d === 'granate' ? ` (${zaehle(ich.rucksack, 'granate')})` : '';
-    knopfMit('', { aktion: 'tausch', rs }, true, `${name ? 'Tauschen mit' : 'Hierhin:'} ${dingHtml(d, 22)}${n}`);
+    knopfMit('', { aktion: 'tausch', rs }, true, `${tr(name ? 'waffen.tauschenMit' : 'waffen.hierhin')} ${dingHtml(d, 22)}${n}`);
   });
   const r = knopf.getBoundingClientRect();
   p.style.display = 'block';
@@ -4550,9 +4564,9 @@ function kisteZeigen(ich, safe) {
   const schluessel = [...kiste].join(',') + '|' + [...ich.rucksack].join(',');
   if (schluessel === kisteSchluessel) return;
   kisteSchluessel = schluessel;
-  $('kistetitel').textContent = `📦 Vorräte im ${safe.name}`;
+  $('kistetitel').textContent = tr('kiste.titelIn', { name: safe.name });
   const fuellen = (el, liste, max, richtung, titel) => {
-    el.innerHTML = `<div class="kopf">${titel} (${liste.length}/${max}) – antippen zum ${richtung === 'raus' ? 'Nehmen' : 'Ablegen'}</div>`;
+    el.innerHTML = `<div class="kopf">${titel} (${liste.length}/${max}) – ${tr(richtung === 'raus' ? 'kiste.nehmen' : 'kiste.ablegen')}</div>`;
     const raster = document.createElement('div'); raster.className = 'raster';
     [...liste].forEach((e, i) => {
       const b = document.createElement('button'), n = dingN(e);
@@ -4560,11 +4574,11 @@ function kisteZeigen(ich, safe) {
       b.onclick = () => raum.send('kiste', { richtung, platz: i });
       raster.appendChild(b);
     });
-    if (!liste.length) raster.innerHTML = '<span class="leer">leer</span>';
+    if (!liste.length) raster.innerHTML = `<span class="leer">${tr('allgemein.leer')}</span>`;
     el.appendChild(raster);
   };
-  fuellen($('kisteinhalt'), kiste, KISTE_PLAETZE, 'raus', 'Kiste');
-  fuellen($('kisterucksack'), ich.rucksack, ich.plaetze || RUCKSACK_PLAETZE, 'rein', 'Rucksack');
+  fuellen($('kisteinhalt'), kiste, KISTE_PLAETZE, 'raus', tr('kiste.kiste'));
+  fuellen($('kisterucksack'), ich.rucksack, ich.plaetze || RUCKSACK_PLAETZE, 'rein', tr('kiste.rucksack'));
 }
 
 // ---------- Handel mit Ärzten und Soldaten im Bundeswehr-Lager ----------
@@ -4578,26 +4592,26 @@ function handelZeigen(ich, sp) {
   const schluessel = handelOffen + '|' + [...ich.rucksack].join(',') + '|' + ich.munition + '|' + ich.plaetze;
   if (schluessel === handelSchluessel) return;
   handelSchluessel = schluessel;
-  $('handeltitel').textContent = `${h.zeichen} Mit dem ${h.name} tauschen`;
+  $('handeltitel').textContent = tr(handelOffen === 'arzt' ? 'handel.titelArzt' : 'handel.titelSoldat', { zeichen: h.zeichen });
   const anz = d => zaehle(ich.rucksack, d);
-  const habe = [...new Set(flach(ich.rucksack))].map(d => `${dingIcon(d, 20)} ${anz(d)}`).join('  ') || 'nichts';
-  $('handelhabe').innerHTML = `Du hast: ${habe}${ich.munition ? `  ${dingIcon('munition', 20)} ${ich.munition} Schuss` : ''}`;
+  const habe = [...new Set(flach(ich.rucksack))].map(d => `${dingIcon(d, 20)} ${anz(d)}`).join('  ') || tr('handel.nichts');
+  $('handelhabe').innerHTML = `${tr('handel.duHast')} ${habe}${ich.munition ? `  ${dingIcon('munition', 20)} ${tr('fund.schussZahl', { n: ich.munition })}` : ''}`;
   const box = $('handelangebote');
   box.innerHTML = '';
   for (const a of h.angebote) {
     const zeile = document.createElement('div'); zeile.className = 'angebot';
-    const gibt = a.gibt === 'munition' ? `${dingIcon('munition', 22)} ${a.menge} Schuss Munition` : `${dingIcon(a.gibt, 22)} ${a.menge > 1 ? a.menge + '× ' : ''}${DINGE[a.gibt].name}`;
-    const kostet = `${a.kostet.anzahl} beliebige aus ${a.kostet.aus.map(d => dingIcon(d, 20)).join(' ')}`;
+    const gibt = a.gibt === 'munition' ? `${dingIcon('munition', 22)} ${tr('handel.schussMunition', { n: a.menge })}` : `${dingIcon(a.gibt, 22)} ${a.menge > 1 ? a.menge + '× ' : ''}${DINGE[a.gibt].name}`;
+    const kostet = tr('handel.beliebige', { n: a.kostet.anzahl, aus: a.kostet.aus.map(d => dingIcon(d, 20)).join(' ') });
     const zahl = bezahlung(ich.rucksack, a.kostet);
     const platzOk = a.gibt === 'munition' ? ich.munition < MUNITION_MAX : (() => { const probe = [...ich.rucksack]; for (const d of zahl ?? []) entferneStueck(probe, d); return kannAufnehmen(probe, ich.plaetze, a.gibt, a.menge); })();
     const text = document.createElement('div'); text.className = 'text';
-    text.innerHTML = `<b>${gibt}</b><span>kostet ${kostet}</span>${zahl ? `<span class="zahlt">zahlt: ${zahl.map(d => dingIcon(d, 20)).join(' ')}</span>` : '<span class="fehlt">dafür fehlt dir etwas</span>'}`;
-    const knopf = document.createElement('button'); knopf.textContent = 'Tauschen';
+    text.innerHTML = `<b>${gibt}</b><span>${tr('handel.kostet', { was: kostet })}</span>${zahl ? `<span class="zahlt">${tr('handel.zahlt', { was: zahl.map(d => dingIcon(d, 20)).join(' ') })}</span>` : `<span class="fehlt">${tr('handel.fehlt')}</span>`}`;
+    const knopf = document.createElement('button'); knopf.textContent = tr('handel.tauschen');
     knopf.disabled = !zahl || !platzOk;
-    if (zahl && !platzOk) knopf.title = a.gibt === 'munition' ? 'Munition voll' : 'Rucksack voll';
+    if (zahl && !platzOk) knopf.title = a.gibt === 'munition' ? tr('handel.munitionVoll') : tr('handel.rucksackVoll');
     knopf.onclick = () => raum.send('handel', { wer: handelOffen, angebot: a.id });
-    const rknopf = document.createElement('button'); rknopf.textContent = `🎓 ${HANDEL_RAETSEL} Rätsel`;
-    rknopf.title = `Statt zu bezahlen: ${HANDEL_RAETSEL} Rätselfragen hintereinander richtig beantworten`;
+    const rknopf = document.createElement('button'); rknopf.textContent = tr('handel.raetselKnopf', { n: HANDEL_RAETSEL });
+    rknopf.title = tr('handel.raetselTitel', { n: HANDEL_RAETSEL });
     rknopf.disabled = !platzOk;
     rknopf.onclick = () => { handelAngebot = a.id; raum.send('handel_raetsel', { wer: handelOffen, angebot: a.id }); };
     zeile.append(text, knopf, rknopf); box.appendChild(zeile);
@@ -4609,10 +4623,10 @@ let tauschOffen = null;
 function zeigeTausch(m) {
   tauschOffen = m;
   $('tausch').style.display = 'block';
-  $('tauschtitel').textContent = `🤝 Tausch mit ${m.partner}`;
+  $('tauschtitel').textContent = tr('tausch.mit', { name: m.partner });
   const liste = (el, dinge, wenn) => {
     el.innerHTML = '';
-    if (!dinge.length) { el.innerHTML = '<span class="leer">nichts</span>'; return; }
+    if (!dinge.length) { el.innerHTML = `<span class="leer">${tr('handel.nichts')}</span>`; return; }
     dinge.forEach((d, i) => {
       const b = document.createElement('button'); b.className = 'ding'; b.innerHTML = dingHtml(d, 22);
       if (wenn) b.onclick = () => wenn(i); else b.disabled = true;
@@ -4621,7 +4635,7 @@ function zeigeTausch(m) {
   };
   liste($('tauschgeben'), m.meins, i => raum.send('tausch_zurueck', { index: i }));
   liste($('tauschbekommen'), m.seins, null);
-  $('tauschstatus').textContent = (m.meinOk ? '✔ Du bist einverstanden' : '') + (m.seinOk ? (m.meinOk ? ' · ' : '') + `✔ ${m.partner} ist einverstanden` : '');
+  $('tauschstatus').textContent = (m.meinOk ? tr('tausch.duOk') : '') + (m.seinOk ? (m.meinOk ? ' · ' : '') + tr('tausch.erOk', { name: m.partner }) : '');
   $('tauschok').disabled = m.meinOk;
   tauschRucksack();
 }
@@ -4645,7 +4659,7 @@ let raetselId = null, raetselTuer = false, raetselNoetig = 0, raetselTimer = nul
 function zeigeRaetsel(m) {
   clearTimeout(raetselTimer);
   raetselId = m.id; raetselTuer = !!m.tuer; raetselAlle = !!m.alle; raetselNoetig = m.noetig; raetselHandel = m.handel ? { wer: handelOffen, angebot: handelAngebot } : null;
-  $('raetseltitel').textContent = (m.alle ? `🔍 Alles durchsuchen – Frage ${m.alle.nr} von ${m.alle.von}` : m.handel ? `🎓 Rätsel-Tausch ${m.handel.nr + 1} von ${m.handel.von}` : m.tuer ? '🔐 Verschlossene Tür' : `🔐 Schloss ${m.geloest + 1} von ${m.noetig}`) + (m.thema ? ` · ${m.thema}` : '');
+  $('raetseltitel').textContent = (m.alle ? tr('raetsel.alle', { nr: m.alle.nr, von: m.alle.von }) : m.handel ? tr('raetsel.handel', { nr: m.handel.nr + 1, von: m.handel.von }) : m.tuer ? tr('raetsel.tuer') : tr('raetsel.schlossNr', { nr: m.geloest + 1, von: m.noetig })) + (m.thema ? ` · ${m.thema}` : '');
   $('raetselfrage').textContent = m.frage;
   const box = $('raetselantworten');
   box.innerHTML = '';
@@ -4670,10 +4684,11 @@ function zeigeAufloesung(m) {
     else if (b.classList.contains('gewaehlt')) b.classList.add('falsch');
   }
   const link = m.seite && wikiAdresse
-    ? ` <a href="${escapeHtml(wikiAdresse.replace(/\/$/, ''))}/doku.php?id=${encodeURIComponent(m.seite)}" target="_blank" rel="noopener">Mehr dazu im Wiki ↗</a>` : '';
+    ? ` <a href="${escapeHtml(wikiAdresse.replace(/\/$/, ''))}/doku.php?id=${encodeURIComponent(m.seite)}" target="_blank" rel="noopener">${tr('raetsel.wiki')}</a>` : '';
   const hd = m.handel;
   const al = m.alle;
-  $('raetselergebnis').innerHTML = (al ? (m.richtig ? (al.fertig ? '✅ Alle richtig! Die Türen gehen auf.' : `✅ Richtig! (${al.nr}/${al.von})`) : '❌ Falsch – richtig ist: <b>' + escapeHtml(m.loesung) + '</b>. Erst in 30 s wieder.') : hd ? (m.richtig ? `✅ Richtig! (${hd.nr}/${hd.von})${hd.text ? ' ' + escapeHtml(hd.text) : ''}` : '❌ Falsch – richtig ist: <b>' + escapeHtml(m.loesung) + '</b>. Die Serie beginnt von vorn.') : m.richtig ? '✅ Richtig! Das Schloss springt auf.' : `❌ Falsch – richtig ist: <b>${escapeHtml(m.loesung)}</b>. Die Zombies haben es gehört!`) + link;
+  const loesung = escapeHtml(m.loesung);
+  $('raetselergebnis').innerHTML = (al ? (m.richtig ? (al.fertig ? tr('raetsel.alleRichtig') : tr('raetsel.richtigNr', { nr: al.nr, von: al.von })) : tr('raetsel.falschWarten', { loesung, n: 30 })) : hd ? (m.richtig ? tr('raetsel.richtigNr', { nr: hd.nr, von: hd.von }) + (hd.text ? ' ' + escapeHtml(hd.text) : '') : tr('raetsel.falschSerie', { loesung })) : m.richtig ? tr('raetsel.richtigSchloss') : tr('raetsel.falschLaut', { loesung })) + link;
   if (m.richtig) {
     // kurze Bestätigung, dann von selbst weiter: nächste Frage am Tor (falls noch Schlösser offen) oder Fenster zu
     const id = raetselId;
@@ -4699,6 +4714,7 @@ function balkenSetzen(id, wert) {
 }
 // Aktionsknöpfe zeigen nur Text: Emojis/Symbole raus
 const nurText = t => String(t ?? '').replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '').replace(/\s+/g, ' ').trim();
+const LAUFENDE_AKTIONEN = new Set(['funk', 'barrikade', 'wegziehen', 'aufheben', 'aufbrechen', 'aufschliessen', 'tuer_auf', 'tuer_zu', 'ansprechen']);   // Hinweis „… läuft“: Schlüssel laeuft.<aktion>
 // Behälter, bei denen der Knopf „öffnen“ heißt (Schrank, Kiste, Kofferraum, Container …)
 const OEFFNEN = new Set(['schrank', 'kuehlschrank', 'spind', 'spind_belohnung', 'container', 'bw_kiste', 'kiste']);
 

@@ -7,6 +7,7 @@ import { fzPx } from './masse.mjs';
 import { imFussabdruck } from './evak.mjs';
 import { hat } from './stapel.mjs';
 import { aufParkAuto } from './fzkollision.mjs';
+import { t } from './i18n.mjs';
 
 export const PKW_ART = 'pkw';
 export const SCHLUESSEL = 'autoschluessel';
@@ -173,15 +174,14 @@ export function pkwKontext(welt, s, ich, x, y, richtungVon, plaetze = PKW_VORGAB
     const bid = pkwBehaelterId(id);
     const drin = [...(s.spieler?.values() ?? [])].filter(q => q.imBoxer && Math.abs(q.x - f.x) < 24 && Math.abs(q.y - f.y) < 24).map(q => ({ schluessel: fahrberechtigt(bid, q), bot: false }));
     if (!pkwEinsteigbar(drin, fahrberechtigt(bid, ich), plaetze)) continue;
-    const wagen = istStreife(bid) ? 'Streifenwagen' : 'Auto';
-    return { art: 'einsteigen', text: fahrberechtigt(bid, ich) && !drin.some(i => i.schluessel) ? `🚗 ${wagen} fahren` : '🚗 Einsteigen (mitfahren)' };
+    return { art: 'einsteigen', text: fahrberechtigt(bid, ich) && !drin.some(i => i.schluessel) ? t(istStreife(bid) ? 'auto.streifeFahren' : 'auto.autoFahren') : t('auto.mitfahren') };
   }
   const st = streifeBei(welt, x, y);   // Streifenwagen an einer Sperre: ohne Schlüssel fahrbar
-  if (st) return { art: 'einsteigen', text: '🚓 Streifenwagen fahren (Schlüssel steckt)' };
+  if (st) return { art: 'einsteigen', text: t('auto.streifeSchluessel') };
   if (!mein) return null;
   const b = parkAutoBei(welt, s, x, y);
   if (!b) return null;
-  const k = { art: 'einsteigen', text: '🚗 Auto fahren (Autoschlüssel)' };
-  if (s?.behaelter?.get?.(b.id)?.rest !== 0) k.zweit = { art: 'durchsuchen', text: hat(ich.rucksack, 'brechstange') ? 'Kofferraum aufbrechen' : 'Kofferraum (Brechstange nötig)' };
+  const k = { art: 'einsteigen', text: t('auto.autoSchluessel') };
+  if (s?.behaelter?.get?.(b.id)?.rest !== 0) k.zweit = { art: 'durchsuchen', text: hat(ich.rucksack, 'brechstange') ? t('auto.kofferraumAuf') : t('aktion.kofferraumNoetig') };
   return k;
 }

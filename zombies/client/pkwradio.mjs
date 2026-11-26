@@ -1,6 +1,7 @@
 // Autoradio im selbst gefahrenen Auto (pkw und Streifenwagen): Knopf „📻 Radio“ / Taste R schaltet das Live-Radio (Einstellung radioStream) nur für
 // den eigenen Spieler ein und aus; beim Aussteigen geht es von selbst aus; bei Sirene (Streifenwagen) spielt es leiser. Hier nur die Regeln
 // (reine Funktionen, getestet in tests/pkw_radio.test.mjs); der Ton selbst steckt in client/ton.mjs (autoradioInnen).
+import { t } from './i18n.mjs';
 export const RADIO_LEISE = 0.3;   // Lautstärkefaktor bei eingeschalteter Sirene
 
 // Knopf gedrückt: im Auto umschalten, außerhalb nie einschalten
@@ -10,7 +11,7 @@ export const radioSoll = (an, imAuto) => !!an && !!imAuto;
 // Lautstärkefaktor im Auto
 export const radioFaktor = sirene => (sirene ? RADIO_LEISE : 1);
 // Beschriftung des Knopfes
-export const radioText = an => (an ? '📻 Radio aus' : '📻 Radio');
+export const radioText = an => t(an ? 'auto.radioAus' : 'auto.radio');
 
 // Zustand je Bild: { an, spielt } → neuer Zustand + was zu tun ist ('start' | 'stopp' | null)
 export function radioAbgleich(an, imAuto, spielt) {
