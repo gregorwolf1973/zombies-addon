@@ -502,6 +502,7 @@ export class SpielRaum extends Room {
     this.state.torGeloest = Math.min(TOR_RAETSEL, Number(stand?.torGeloest) || 0);
     this.gestellt = new Set(stand?.gestellt ?? []);
     this.offeneRaetsel = new Map();   // sessionId → { id, richtigIndex, seite, richtig, bis }
+    this.sprachen = new Map();   // sessionId → 'de' | 'en': Sprache des Spielers (Beitritt, Nachricht 'spielSprache'), z. B. für die Quizfragen
 
     this.inhalte = new Map();     // Behälter-Id → verbliebene Gegenstände
     this.leichenInhalt = new Map(); // Leichen-Id → Gegenstände
@@ -661,6 +662,7 @@ export class SpielRaum extends Room {
     this.onMessage('kuehlschrank', client => this.kuehlschrank(client));
     this.onMessage('ausruhen', client => this.ausruhen(client));
     this.onMessage('antwort', (client, m) => this.antwort(client, m));
+    this.onMessage('spielSprache', (client, m) => this.sprachen.set(client.sessionId, m?.sprache === 'en' ? 'en' : 'de'));
     this.onMessage('raetsel_abbruch', (client, m) => this.raetselAbbruch(client, m));
     this.onMessage('fk_punkt', (client, m) => this.fkPunkt(client, m));
     this.onMessage('startwahl', (client, m) => this.startwahl(client, m));
@@ -705,6 +707,7 @@ export class SpielRaum extends Room {
   // ---------- Beitreten, Verlassen, Speichern ----------
 
   onJoin(client, optionen = {}, auth = null) {
+    this.sprachen.set(client.sessionId, optionen.sprache === 'en' ? 'en' : 'de');
     if (optionen.aussehen) optionen = { ...optionen, aussehen: aussehenMigriert(optionen.aussehen) };   // Mann/Frau gibt es nicht mehr (m→h, w→f)
     const spielerId = ID_MUSTER.test(String(optionen.spielerId ?? '')) ? optionen.spielerId : crypto.randomBytes(16).toString('hex');
     const name = sauberName(optionen.name);
@@ -2771,7 +2774,7 @@ export class SpielRaum extends Room {
   stelleRaetsel(client, zweck = null) {
     const offen = this.offeneRaetsel.get(client.sessionId);
     if (offen && offen.bis > Date.now()) return;   // schon eine Frage offen
-    const fragen = holeFragen();
+    const fragen = holeFragen(this.sprachen.get(client.sessionId));   // englische Fragen, sonst Rückfall Deutsch
     const f = waehleFrage(fragen, this.gestellt, this.rnd);
     if (!f) return client.send('meldung', { text: 'Das Schloss klemmt – keine Rätsel gefunden' });
     this.gestellt.add(f.id);

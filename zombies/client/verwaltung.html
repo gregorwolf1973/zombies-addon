@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Zombies in Oberbayern – Einstellungen</title>
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+<!-- Zweisprachig (de/en): Tabellen vw.* aus client/i18n/*.mjs, Übersetzungsschicht client/i18n_muster.mjs (server/verwaltung_texte.mjs) -->
+<script src="verwaltung_texte.js"></script>
 <style>
   :root {
     --bg: #f5f5f5;
@@ -103,6 +105,9 @@
     align-items: center;
   }
   a.spielen:hover { filter: brightness(1.08); }
+  .vw-sprachwahl { display: inline-flex; gap: 6px; margin: 10px 0 0 10px; vertical-align: middle; flex-wrap: wrap; }
+  .vw-sprachwahl button { min-height: 40px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; font: inherit; }
+  .vw-sprachwahl button.an { border-color: var(--akzent); box-shadow: inset 0 0 0 1px var(--akzent); font-weight: 600; }
   button {
     font: inherit;
     min-height: 40px;
@@ -518,6 +523,9 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
 //    gleichzeitige GET-Anfragen teilen sich eine Antwort)
 //  - feste Speicher-Statuszeile (unten): ✓ Gespeichert HH:MM / ⚠ Fehler …
 //  - Rückgängig: nach jedem Speichern 5 s lang, stellt die vorigen Werte per API wieder her
+window.vwT = window.vwT || function (k) { return k; };
+window.vwText = window.vwText || function (s) { return s; };
+window.vwSprache = window.vwSprache || 'de';
 (function () {
   'use strict';
   var origFetch = window.fetch.bind(window), origSI = window.setInterval.bind(window);
@@ -659,6 +667,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       <span class="version" id="versionAnzeige"></span>
     </h1>
     <a class="spielen" href="?spielen">▶ Hier spielen</a>
+    <span id="vwSprachwahl" class="vw-sprachwahl" role="group" aria-label="Sprache / Language" data-vw-nicht></span>
   </div>
 
   <!-- Gerade im Spiel -->
@@ -1881,8 +1890,8 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       f.forEach(function (e, i) {
         var r = zeichne(ctx, e[0], e[1], xs[i], y, e[2] * e[3] * e[4] * S, 0);
         ctx.fillStyle = '#fff';
-        ctx.fillText(e[5], xs[i], bh - 26);
-        if (r && r.b) ctx.fillText((i === 7 ? 'Länge ' + r.b : 'Breite ' + r.h) + ' px', xs[i], bh - 10);
+        ctx.fillText(window.vwText(e[5]), xs[i], bh - 26);   // Leinwand: nicht im DOM, darum selbst übersetzen
+        if (r && r.b) ctx.fillText(window.vwText((i === 7 ? 'Länge ' + r.b : 'Breite ' + r.h) + ' px'), xs[i], bh - 10);
       });
       ctx.shadowBlur = 0;
     }
@@ -2193,7 +2202,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   <label for="rsVorlauf">Stumm ab Spielbeginn (Sekunden, z. B. für Senderwerbung)</label>
   <div class="th-zeile"><input type="range" id="rsVorlauf" min="0" max="120" step="5"><span id="rsVorlaufWert"></span></div>
   <p class="tk-hinweis">Leer lassen = kein Live-Radio (es läuft nur die eigene Musik). Trage hier die https-Stream-Adresse eines Senders deiner Wahl ein; die Nutzungsbedingungen des Senders beachtest du selbst.</p>
-  <label for="rsDurchsage">Eilmeldung im Radio alle … Minuten (0 = aus; Dateien unter Geräusche › „Radio-Durchsage Level …“)</label>
+  <label for="rsDurchsage">Eilmeldung im Radio alle … Minuten (0 = aus; Dateien unter Geräusche › „Radio-Durchsage Level …“; englische Spieler hören eine Datei mit Endung _en, falls vorhanden, z. B. eilmeldung_allgemein_en.mp3)</label>
   <div class="th-zeile"><input type="range" id="rsDurchsage" min="0" max="30" step="1"><span id="rsDurchsageWert"></span></div>
   <label for="rsLaut">Lautstärke Live-Radio (%)</label>
   <div class="th-zeile"><input type="range" id="rsLaut" min="0" max="100" step="1"><span id="rsLautWert"></span></div>
@@ -4132,7 +4141,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
     r.dataset.sf = '1';
     var span = r.nextElementSibling && r.nextElementSibling.tagName === 'SPAN' ? r.nextElementSibling : null;
     var label = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
-    var name = label ? label.textContent.replace(/\s+/g, ' ').trim().slice(0, 80) : r.id;
+    var name = label ? window.vwText(label.textContent.replace(/\s+/g, ' ').trim()).slice(0, 80) : r.id;   // erst übersetzen, dann kürzen
     // Min/Max/Schritt des Schiebers sind nur die EMPFOHLENE Spanne: Eintippen geht auch darüber und darunter (der Server prüft nur technische Grenzen).
     // Echte Grenzen (Prozent-Wahrscheinlichkeit, Uhrzeit …) stehen in FESTE; dort bleibt es bei Min/Max des Schiebers.
     var empfMin = Number(r.min), empfMax = Number(r.max), schritt = Number(r.step) || 1;
@@ -4360,15 +4369,16 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var wert = function (id, vorgabe) { var e = $(id); var v = e ? Number(e.value) : NaN; return isFinite(v) ? v : vorgabe; };
-  var kommaZahl = function (v, st) { return String(Math.round(v * Math.pow(10, st || 0)) / Math.pow(10, st || 0)).replace('.', ','); };
+  var kommaZahl = function (v, st) { return String(Math.round(v * Math.pow(10, st || 0)) / Math.pow(10, st || 0)).replace('.', window.vwSprache === 'de' ? ',' : '.'); };
+  var T = function (k, w) { return window.vwT('vw.info.' + k, w); };
   // Überraschungsfaktor je Waffe (client/welt.mjs, WAFFEN[..].ueberraschung; tests/verwaltung.test.mjs prüft die Übereinstimmung)
   var UEB = { pistole: 1.5, gewehr: 1.5, schrotflinte: 1.5, mp: 1.5, mg: 1.5, armbrust: 2, scharfschuetze: 1.5, granatwerfer: 1, handgranate: 1, schlaeger: 3, sense: 3, messer: 4, faust: 2.5 };
   var NEBEN = { schrotflinte: 45 / 70 };   // Schrot: Nebenschaden an weiteren Zombies im Kegel, im Verhältnis zum Hauptschaden
   var KRIECHER = 0.35;                      // Kriecher hat 35 % der Zombie-Lebenspunkte (raum.mjs KRIECHER_HP)
   var KANONE = 100, FLAECHE = 60, SOLDAT = 100;   // stuetzpunkt.mjs (feste Werte)
   var treffer = function (hp, schaden) { return Math.max(1, Math.ceil(hp / Math.max(0.0001, schaden) - 1e-9)); };
-  var tText = function (n) { return n + ' Treffer'; };
-  var tDat = function (n) { return n + (n === 1 ? ' Treffer' : ' Treffern'); };
+  var tText = function (n) { return T('treffer', { n: n }); };
+  var tDat = function (n) { return T('trefferDat', { n: n }); };
   var dauer = function (minuten) {   // echte Minuten als Text
     if (minuten < 1) return kommaZahl(minuten * 60, 0) + ' s';
     if (minuten < 120) return kommaZahl(minuten, minuten < 10 ? 1 : 0) + ' min';
@@ -4376,44 +4386,43 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
   };
   function schadenInfo() {
     var hp = wert('tnZLeben', 100), kh = Math.max(1, Math.round(hp * KRIECHER));
-    if ($('tnZLebenHinweis')) $('tnZLebenHinweis').textContent = 'Gilt für neu auftauchende Zombies; vorhandene behalten ihr Leben. Kriecher: ' + kh + ' Leben. Spieler, die zum Zombie werden, haben immer 100 Leben.';
+    if ($('tnZLebenHinweis')) $('tnZLebenHinweis').textContent = T('zLeben', { kh: kh });
     Object.keys(UEB).forEach(function (k) {
       var p = $('wfInfo_' + k); if (!p) return;
       var s = wert('wfS_' + k, 1), pause = wert('wfP_' + k, 1);
       var t = treffer(hp, s), tu = treffer(hp, s * UEB[k]), tk = treffer(kh, s), tku = treffer(kh, s * UEB[k]);
-      var text = 'tötet einen Zombie mit ' + tDat(t) + ' (überrascht: ' + tu + ') · ' + kommaZahl(s / pause, 1) + ' Schaden/s';
-      text += ' · Kriecher: ' + tk + ' (überrascht: ' + tku + ')';
-      if (NEBEN[k]) { var ns = s * NEBEN[k]; text += ' · weitere Zombies im Streukegel: ' + kommaZahl(ns, 0) + ' Schaden, ' + tText(treffer(hp, ns)); }
-      if (k === 'sense') text += ' · trifft alle Zombies im Bogen';
+      var text = T('waffe', { t: tDat(t), tu: tu, sps: kommaZahl(s / pause, 1) });
+      text += T('waffeKriecher', { tk: tk, tku: tku });
+      if (NEBEN[k]) { var ns = s * NEBEN[k]; text += T('waffeStreu', { ns: kommaZahl(ns, 0), tr: tText(treffer(hp, ns)) }); }
+      if (k === 'sense') text += T('waffeSense');
       p.textContent = text;
     });
     var g = wert('wfS_gewehr', 100);
-    if ($('bwInfoMg')) $('bwInfoMg').textContent = 'MG-Nest (Gewehrschaden ' + g + '): tötet einen Zombie mit ' + tDat(treffer(hp, g)) + ' (80 % der Schüsse treffen, Salven à 3 Schuss, im Mittel ca. ' + kommaZahl(g * 0.8 * 3 / 1.4, 0) + ' Schaden/s). Soldaten an den Posten: fest ' + SOLDAT + ' Schaden, ' + tDat(treffer(hp, SOLDAT)) + '.';
+    if ($('bwInfoMg')) $('bwInfoMg').textContent = T('mgNest', { g: g, t: tDat(treffer(hp, g)), sps: kommaZahl(g * 0.8 * 3 / 1.4, 0), s: SOLDAT, ts: tDat(treffer(hp, SOLDAT)) });
     var pp = wert('tnPumaPause', 2.5);
-    if ($('bwInfoPuma')) $('bwInfoPuma').textContent = 'Panzer (Puma): Kanone ' + KANONE + ' Schaden, tötet einen Zombie mit ' + treffer(hp, KANONE) + (treffer(hp, KANONE) === 1 ? ' Schuss' : ' Schüssen') + ' (' + kommaZahl(KANONE / pp, 1) + ' Schaden/s); Splitterschaden ' + FLAECHE + ' im Umkreis ca. 4 m, ' + tText(treffer(hp, FLAECHE)) + '. Kanonen- und Soldatenschaden sind fest.';
-    if ($('bwInfoLeo')) { var ls = wert('tnLeoSchaden', 100), lp = wert('tnLeoPause', 0.4); $('bwInfoLeo').textContent = 'Leopard-MG: Schaden ' + ls + ', tötet einen Zombie mit ' + treffer(hp, ls) + (treffer(hp, ls) === 1 ? ' Treffer' : ' Treffern') + ' (80 % der Schüsse treffen, ca. ' + kommaZahl(ls * 0.8 / lp, 0) + ' Schaden/s). Überrollte Zombies sind sofort tot.'; }
-    if ($('wfHinweis')) $('wfHinweis').textContent = 'Zombie-Leben: ' + hp + ' (Einstellung unter Gegner › Zombies). Überrascht = der Zombie hat noch niemanden bemerkt (von hinten anschleichen). Fähigkeiten ändern den Waffenschaden nicht. Schaden/s = Schaden ÷ Pause zwischen den Schüssen (echte Sekunden). Ein Viertel der Zombies kriecht nach dem Tod mit '
-      + kh + ' Leben weiter. Granaten (150 Schaden) sind fest.';
+    if ($('bwInfoPuma')) $('bwInfoPuma').textContent = T('puma', { k: KANONE, n: treffer(hp, KANONE), sps: kommaZahl(KANONE / pp, 1), f: FLAECHE, tf: tText(treffer(hp, FLAECHE)) });
+    if ($('bwInfoLeo')) { var ls = wert('tnLeoSchaden', 100), lp = wert('tnLeoPause', 0.4); $('bwInfoLeo').textContent = T('leo', { ls: ls, n: treffer(hp, ls), sps: kommaZahl(ls * 0.8 / lp, 0) }); }
+    if ($('wfHinweis')) $('wfHinweis').textContent = T('wfHinweis', { hp: hp, kh: kh });
   }
   // Echtzeit je Spielzeit-Einheit: ein Spieltag = 1440 Spielminuten = tagMinuten echte Minuten
   function zeitNotizen() {
     var tm = wert('tnTag', 48), pro = tm / 1440;   // echte Minuten je Spielminute
     var spielh = dauer(pro * 60);
     var liste = [
-      ['tnTag', 'echte Minuten je Spieltag · 1 Spielstunde ≈ ' + spielh + ' echt'],
-      ['tnTagAb', 'Uhrzeit der Spieluhr · Übergang davor 1 Spielstunde ≈ ' + spielh + ' echt'],
-      ['tnNachtAb', 'Uhrzeit der Spieluhr · Übergang davor 1 Spielstunde ≈ ' + spielh + ' echt'],
-      ['tnAnst', 'Spielminuten · ' + wert('tnAnst', 30) + ' Spielminuten ≈ ' + dauer(wert('tnAnst', 30) * pro) + ' echt bei ' + tm + ' min/Spieltag'],
+      ['tnTag', T('zTag', { h: spielh })],
+      ['tnTagAb', T('zUhr', { h: spielh })],
+      ['tnNachtAb', T('zUhr', { h: spielh })],
+      ['tnAnst', T('zSpielmin', { n: wert('tnAnst', 30), d: dauer(wert('tnAnst', 30) * pro), tm: tm })],
       ['tnFeuer', 'echte Minuten · Abstand schwankt um ±40 %'],
       ['tnFeuerPhase', 'echte Minuten seit Weltbeginn'],
       ['tnVerkehrPhase', 'echte Minuten seit Weltbeginn'],
       ['tnUnfall', 'Spielminuten im Mittel · Abstand schwankt stark, 0 = aus'],
       ['hordeZiel', 'echte Minuten · schwankt um ±40 %'],
       ['hordeTrupp', 'Zombies · schwankt um ±30 %'],
-      ['agStunde', 'Uhrzeit der Spieluhr · ein Spieltag = ' + tm + ' echte min'],
+      ['agStunde', T('zBus', { tm: tm })],
       ['agWarteEcht', 'echte Minuten ab dem Halt'],
-      ['agWarte', 'Spielminuten · ' + wert('agWarte', 60) + ' Spielminuten ≈ ' + dauer(wert('agWarte', 60) * pro) + ' echt bei ' + tm + ' min/Spieltag'],
-      ['tnBwTage', 'Spieltage ab Weltbeginn · ' + (wert('tnBwTage', 3) ? wert('tnBwTage', 3) + ' Spieltage = ' + dauer(wert('tnBwTage', 3) * tm) + ' echt bei ' + tm + ' min/Spieltag' : 'nie')],
+      ['agWarte', T('zSpielmin', { n: wert('agWarte', 60), d: dauer(wert('agWarte', 60) * pro), tm: tm })],
+      ['tnBwTage', wert('tnBwTage', 3) ? T('zBw', { n: wert('tnBwTage', 3), d: dauer(wert('tnBwTage', 3) * tm), tm: tm }) : T('zBwNie')],
       ['tnPumaPause', 'echte Sekunden'],
       ['tnLeoPause', 'echte Sekunden']
     ];
@@ -4422,7 +4431,7 @@ a.knopf { display: inline-flex; align-items: center; padding: 6px 14px; border: 
       var l = document.querySelector('label[for="' + z[0] + '"]'); if (!l) return;
       var n = l.querySelector('.zeit-notiz');
       if (!n) { n = document.createElement('small'); n.className = 'zeit-notiz'; l.appendChild(n); }
-      var t = ' (' + z[1] + ')';
+      var t = ' (' + window.vwText(z[1]) + ')';   // schon übersetzt setzen: sonst schriebe der Takt jede Sekunde den deutschen Text neu
       if (n.textContent !== t) n.textContent = t;
     });
     // Hinweis unter dem Stützpunkt-Regler gibt es nicht extra; alles steht im Label

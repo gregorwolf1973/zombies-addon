@@ -47,7 +47,7 @@ export const TON_STANDARD = {
   hordeAkzent: { dateien: ['freesound_community-zombie-horde-87204.mp3'], laut: 80 },
   musikLevel5: { dateien: ['franzian-deo-apocalypse-469581.mp3'], laut: 100 },
   hundBellen: { dateien: ['dragon-studio-free-dog-bark-419014.mp3', 'dragon-studio-dog-bark-382732.mp3'], laut: 80 },
-  durchsageLevel1: { dateien: ['eilmeldung_allgemein.mp3'], laut: 100 },   // allgemeine Eilmeldung ohne Ortsnamen, Piper-Stimme
+  durchsageLevel1: { dateien: ['eilmeldung_allgemein.mp3'], laut: 100 },   // allgemeine Eilmeldung ohne Ortsnamen, Piper-Stimme; englische Spieler hören eilmeldung_allgemein_en.mp3 (Sprachvariante, client/tonlogik.mjs)
   durchsageLevel2: { dateien: ['eilmeldung_allgemein.mp3'], laut: 100 },
 };
 export const TON_DATEI = /^[\w][\w.()+\- ]{0,118}\.(mp3|ogg|wav|m4a)$/i;
@@ -109,7 +109,7 @@ export const EREIGNISSE = [
   { id: 'tuerZu', name: 'Tür fällt zu', beschreibung: 'Zimmertüren in Häusern', art: 'einmal', gruppe: 'tueren', kategorien: ['tueren'] },
   { id: 'autoMotor', name: 'Auto: Motor (selbst gefahren)', beschreibung: 'Motorgeräusch eines Autos, das ein Spieler mit dem Autoschlüssel fährt (Schleife, die Tonhöhe folgt dem Tempo); ohne Datei bleibt es still', art: 'schleife', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
   { id: 'autoVorbei', name: 'Auto fährt vorbei', beschreibung: 'Wenn ein fahrendes Auto oder der Bus dicht vorbeifährt', art: 'einmal', gruppe: 'fahrzeuge', kategorien: ['fahrzeuge'] },
-  ...[1, 2, 3, 4, 5].map(n => ({ id: 'durchsageLevel' + n, name: `Radio-Durchsage ${nrNamen(n)}`, beschreibung: `Nachrichtensprecher im Live-Radio (allgemeine Zombie-Eilmeldung) auf ${nrNamen(n, ' und ')}; unterbricht den Sender, kommt aus dem Autoradio – gehört zur Karte`, art: 'einmal', gruppe: 'musik', kategorien: ['musik'], lautVorgabe: 100 })),
+  ...[1, 2, 3, 4, 5].map(n => ({ id: 'durchsageLevel' + n, name: `Radio-Durchsage ${nrNamen(n)}`, beschreibung: `Nachrichtensprecher im Live-Radio (allgemeine Zombie-Eilmeldung) auf ${nrNamen(n, ' und ')}; unterbricht den Sender, kommt aus dem Autoradio – gehört zur Karte; englische Spieler hören die Variante mit Endung _en, falls vorhanden`, art: 'einmal', gruppe: 'musik', kategorien: ['musik'], lautVorgabe: 100 })),
   { id: 'autoradio', name: 'Autoradio', beschreibung: 'Läuft in jedem dritten fahrenden Auto, lauter beim Vorbeifahren', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
   { id: 'startmusik', name: 'Startmusik', beschreibung: 'Auf der Startseite (nach dem ersten Antippen), blendet beim Spielbeginn aus', art: 'schleife', gruppe: 'musik', kategorien: ['musik'] },
   { id: 'funkAnsage', name: 'Funk-Ansage Abholung', beschreibung: 'Sprachansage nach dem Funkspruch: „Alles klar, sichern Sie die notwendigen Gegenstände und halten Sie sich bereit, wir holen Sie da raus.“ (ohne Uhrzeit; ohne Datei bleibt es still)', art: 'einmal', gruppe: 'bundeswehr', kategorien: ['bundeswehr'] },
