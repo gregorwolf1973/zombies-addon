@@ -33,7 +33,7 @@ Der Quellcode steht unter der MIT-Lizenz (siehe LICENSE). Sie gilt **nur für de
 - Musik „Overdrive“ von MAITTRE und „Dominion“ von Hriday Talur, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) (über breakingcopyright.com).
 - Musik und Geräusche von [Pixabay](https://pixabay.com) unter der [Pixabay Content License](https://pixabay.com/service/license-summary/). Alle übrigen Töne sind selbst erzeugt.
 - Radio-Eilmeldung: gesprochen mit der freien Text-to-Speech-Software [Piper](https://github.com/rhasspy/piper), Stimme „Thorsten“ (de_DE-thorsten-medium, Thorsten Müller) – CC0 1.0.
-- Englische Radio-Eilmeldung (eilmeldung_allgemein_en.mp3): ebenfalls Piper, Stimme „lessac“ (en_US-lessac-high aus [piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/lessac/high)). Laut Modellkarte ist sie mit dem Lessac-Datensatz der Blizzard Challenge 2013 trainiert (Lessac Technologies/Voice Factory, CSTR Edinburgh); dessen [Lizenz](https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html) erlaubt nur Forschungszwecke und keine kommerzielle Nutzung. Die Aufnahme gehört wie alle Töne nicht zum Add-on.
+- Englische Radio-Eilmeldung (eilmeldung_allgemein_en.mp3): ebenfalls Piper, Stimme „ljspeech“ (en_US-ljspeech-high aus [piper-voices](https://huggingface.co/rhasspy/piper-voices), trainiert auf dem LJ Speech Dataset – Public Domain).
 - Live-Radio: Es ist kein Sender voreingestellt; wer einen Sender einträgt, ist für dessen Nutzungsbedingungen selbst verantwortlich.
 
 ## Quizfragen
