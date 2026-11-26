@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.92.0 – 26.11.2026
+
+- Zweisprachig: Spiel, Meldungen, Bots, Quizfragen und Einstellungsseite gibt es jetzt auf Deutsch und Englisch. Die Sprache folgt dem Browser und lässt sich auf der Startseite, im ⚙️-Menü und auf der Einstellungsseite umschalten. Jeder Spieler sieht Servermeldungen in seiner Sprache; Bots verstehen auch englische Befehle.
+- Englische Quizfragen kommen aus der englischen Wikiseite (en:krisenvorsorge:spielfragen), Rückfall Deutsch.
+- Englische Radio-Eilmeldung (Piper-Stimme „ljspeech“, gemeinfrei) für englische Spieler, sofern die Datei vorhanden ist.
+
 ## 0.91.5 – 26.11.2026
 
 - Spenden-Knöpfe (Buy Me a Coffee, Liberapay) jetzt gut sichtbar unter „Mitspielen“, im ⚙️-Menü der Spieler-Einstellungen und im Abspann nach dem Finale.
