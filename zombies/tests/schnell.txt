@@ -57,3 +57,4 @@ tests/pkw_radio.test.mjs
 tests/pkw_streife.test.mjs
 tests/impressum.test.mjs
 tests/level_geretsried_migration.test.mjs
+tests/i18n.test.mjs
